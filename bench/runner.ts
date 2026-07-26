@@ -5,6 +5,7 @@ import process from "node:process";
 import { Command } from "commander";
 
 import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
+import { HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
 import { countViolations, evaluateGroup } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
@@ -244,7 +245,14 @@ const main = async (): Promise<number> => {
           const workspace = createWorkspace(task, seed, REPO_ROOT, { seedRecords: condition.seed_records });
           workspaceDir = workspace.dir;
           const acceptedRecords = countSeededRecords(workspace.dir);
-          const injectedContext = assembleContext(workspace.dir, condition);
+          // Two delivery paths, and the arm decides. A hook plan runs the
+          // shipped injector per edit, path-scoped, the way the product does;
+          // without one the arm falls back to the harness's session-start
+          // block. See bench/hooks-settings.ts (#36).
+          const plan = HOOK_PLANS[condition.id] ?? {};
+          const settingsPath = writeArmSettings(plan);
+          const injectedContext =
+            settingsPath === null ? assembleContext(workspace.dir, condition) : null;
           const result: DriverResult = await driver.run({
             taskId: task.id,
             condition: condition.id,
@@ -255,6 +263,7 @@ const main = async (): Promise<number> => {
             maxTurns: Math.min(task.budget.turns, turnsOverride ?? task.budget.turns),
             maxTokens: Math.min(task.budget.tokens, remaining),
             timeoutMs,
+            ...(settingsPath === null ? {} : { settingsPath }),
             simulation: {
               ruledOutAlternatives: collectRuledOutAlternatives(task, REPO_ROOT),
               violationTokens: literalViolationTokens(task),

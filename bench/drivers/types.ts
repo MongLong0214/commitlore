@@ -20,6 +20,15 @@ export interface DriverRequest {
   /** Already clamped to whatever is left of the global token cap. */
   readonly maxTokens: number;
   readonly timeoutMs: number;
+  /**
+   * A settings file the harness wrote for this run, or undefined for none.
+   *
+   * This is how an arm gets hooks. The shipped injector is a PreToolUse hook
+   * that runs per edit and is path-scoped; `injectedContext` above can only
+   * deliver one block of text at session start. An arm that wants to measure
+   * what the product actually does has to go through here (#36, #37).
+   */
+  readonly settingsPath?: string;
   readonly simulation: SimulationHints;
 }
 

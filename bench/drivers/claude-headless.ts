@@ -172,6 +172,17 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       }
     }
 
+    // A settings file the harness wrote, carrying the arm's hooks.
+    //
+    // `--setting-sources ""` drops the operator's settings, which is what makes
+    // the run reproducible; `--settings` then adds back exactly one file that
+    // the harness controls. Without this the bench could only hand the agent a
+    // block of text at session start, while the shipped product delivers
+    // records per edit through a PreToolUse hook — two different delivery
+    // shapes, and only one of them is the product (#36).
+    const settings =
+      request.settingsPath === undefined ? [] : ["--settings", request.settingsPath];
+
     const args = [
       "-p",
       composePrompt(request),
@@ -180,6 +191,7 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       "--permission-mode",
       options.permissionMode ?? DEFAULT_PERMISSION_MODE,
       ...isolation,
+      ...settings,
       ...(options.model === undefined ? [] : ["--model", options.model]),
       ...(maxTurnsFlag ? ["--max-turns", String(request.maxTurns)] : []),
     ];
