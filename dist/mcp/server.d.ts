@@ -4,12 +4,19 @@
  *
  * ## One answer, not two
  *
- * The resource and `commitlore_query` return exactly what `commitlore context
- * --json` returns, because two renderings of one answer become two answers the
- * moment one of them is edited. `toJson` is therefore imported from
+ * The resource and `commitlore_query` return what `commitlore context --json`
+ * returns, because two renderings of one answer become two answers the moment
+ * one of them is edited. `toJson` is therefore imported from
  * `commands/query.ts` rather than re-derived here, even though it means this
  * module reaches sideways into the CLI layer. `commitlore_stale` does the same
  * with `buildReport` from `commands/stale.ts`.
+ *
+ * There is exactly one deliberate divergence, and it is named rather than
+ * quietly introduced: a record graded `blocked` keeps its identity here and
+ * loses its payload (`withheldBlocked`). The CLI prints that payload because a
+ * person is reading it and can disbelieve it; a tool result is read by a model
+ * as retrieved fact. Anything beyond this one rule belongs in `toJson`, where
+ * both routes get it.
  *
  * ## stdout belongs to the protocol
  *

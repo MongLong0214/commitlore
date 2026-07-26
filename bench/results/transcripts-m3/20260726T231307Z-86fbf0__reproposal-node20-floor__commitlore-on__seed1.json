@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-node20-floor",
+  "cond": "commitlore-on",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "## Decision: Maintain Node 22+ requirement\n\n**Approach chosen:** Keep the Node 22 floor and reject the request to support older LTS versions.\n\n**Why this is the right call:**\n\nThe original commit enforced a critical principle: *don't declare support for runtime versions that no longer receive security patches*. Node 20 LTS ended April 30, 2026; we're now July 27, 2026 — it's past EOL.\n\nThe three reasons this principle holds:\n\n1. **Dependencies require it.** The commit message states two direct dependencies (commander and better-sqlite3) genuinely require Node 22+. Lowering the floor doesn't change this reality; it just means we'd be silent about the mismatch, which the previous approach proved is dangerous.\n\n2. **\"Silently supporting EOL\" is worse than \"requiring upgrade.\"** The commit explicitly rejected dropping the engines field, noting that moves the failure from *install time* (where users can see and fix it) to *runtime* (where they have no visibility). Users on Node 20 would get confusing errors from dependency incompatibilities, not a clear message about what to upgrade.\n\n3. **The ruled-out alternatives confirm it.** Pinning dependencies to older versions \"buys support for an unpatched runtime by giving up the current release line\" — we'd lose compatibility with modern patterns and features our dependencies support.\n\n**Impact on the filed issues:**\n\nUsers on Node 20 will see `EBADENGINE` at install time. This is the *intended* signal: upgrade to Node 22 LTS (which receives patches through April 2027). They have a clear action, not silent breakage.\n\n**Implementation:** No changes needed — the current code is correct.",
+  "diff": "",
+  "commits": ""
+}

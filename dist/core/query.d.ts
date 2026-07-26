@@ -68,6 +68,15 @@ export interface QueryOptions {
     at?: Date;
     /** Maximum records returned, applied after ordering. */
     limit?: number;
+    /**
+     * Authors trusted for this repository (SPEC §7), as `inject` takes them.
+     *
+     * Omitting it is the fail-closed answer, not the permissive one: a `Warn:`
+     * from an author the caller cannot vouch for grades `claim`, never
+     * `directive`. That is the same default `commitlore inject` has always had,
+     * and the two routes disagreeing was the defect this option closes.
+     */
+    trustedAuthors?: readonly string[];
     cwd?: string;
 }
 /**

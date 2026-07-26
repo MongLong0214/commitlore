@@ -1,0 +1,15 @@
+conditions commitlore-guard, commitlore-on, commitlore-off
+runs       120 (4 seed(s) x 10 task(s) x 3 condition(s))
+
+[1/120] reproposal-index-server commitlore-guard seed=1 reproposed=true violations=0 turns=28 tokens=54588 stopped_by=over-turns
+[2/120] reproposal-index-server commitlore-on seed=1 reproposed=false violations=0 turns=24 tokens=42994 stopped_by=over-turns
+[3/120] reproposal-index-server commitlore-off seed=1 reproposed=true violations=0 turns=31 tokens=56109 stopped_by=over-turns
+[4/120] reproposal-jwt-sessions commitlore-guard seed=1 reproposed=false violations=1 turns=25 tokens=25472 stopped_by=over-turns
+[5/120] reproposal-jwt-sessions commitlore-on seed=1 reproposed=false violations=0 turns=20 tokens=29561 stopped_by=completed
+[6/120] reproposal-jwt-sessions commitlore-off seed=1 reproposed=false violations=0 turns=18 tokens=20569 stopped_by=completed
+[7/120] reproposal-llm-projection commitlore-guard seed=1 reproposed=false violations=0 turns=3 tokens=14558 stopped_by=completed
+[8/120] reproposal-llm-projection commitlore-on seed=1 reproposed=false violations=0 turns=11 tokens=21564 stopped_by=completed
+[9/120] reproposal-llm-projection commitlore-off seed=1 reproposed=false violations=0 turns=3 tokens=15374 stopped_by=completed
+[10/120] reproposal-node20-floor commitlore-guard seed=1 reproposed=true violations=1 turns=11 tokens=16597 stopped_by=completed
+[11/120] reproposal-node20-floor commitlore-on seed=1 reproposed=false violations=0 turns=18 tokens=30609 stopped_by=completed
+[12/120] reproposal-node20-floor commitlore-off seed=1 reproposed=true violations=1 turns=15 tokens=17862 stopped_by=completed

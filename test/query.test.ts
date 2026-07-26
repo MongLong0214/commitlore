@@ -465,12 +465,44 @@ describe('notes merge and dedupe', () => {
 describe('trust grading', () => {
   const dir = generalRepo();
 
-  it('demotes a reconstructed record to a claim and leaves the rest directives', () => {
-    const result = runQuery({ cwd: dir, keys: ['Warn'] });
-    const grades = Object.fromEntries(
-      result.records.map((entry) => [entry.recordId, entry.trust]),
+  const AUTHOR = 'test@example.invalid';
+
+  const gradesOf = (opts: QueryOptions = {}): Record<string, string | undefined> =>
+    Object.fromEntries(
+      runQuery({ cwd: dir, keys: ['Warn'], ...opts }).records.map((entry) => [
+        entry.recordId,
+        entry.trust,
+      ]),
     );
-    expect(grades).toEqual({ 'r-cc3333': 'claim', 'r-dd4444': 'directive' });
+
+  /**
+   * This route used to grade with a placeholder of its own, which called
+   * everything `directive` unless the record admitted to being reconstructed.
+   * `inject` and `guard` meanwhile went through `core/grade.ts`, so the same
+   * record was an instruction on the terminal and a claim in the hook. The
+   * grades below are `core/grade.ts`'s, and the point of the pair is that
+   * nothing is an instruction until a caller says whose word to take.
+   */
+  it('grades every record a claim when the caller vouches for nobody', () => {
+    expect(gradesOf()).toEqual({ 'r-cc3333': 'claim', 'r-dd4444': 'claim' });
+  });
+
+  it('promotes an authored record once its author is trusted', () => {
+    expect(gradesOf({ trustedAuthors: [AUTHOR] })).toEqual({
+      'r-cc3333': 'claim',
+      'r-dd4444': 'directive',
+    });
+  });
+
+  it('keeps a reconstructed record a claim however trusted its author', () => {
+    expect(gradesOf({ trustedAuthors: [AUTHOR] })['r-cc3333']).toBe('claim');
+  });
+
+  it('does not trust an author the caller did not name', () => {
+    expect(gradesOf({ trustedAuthors: ['someone@else.invalid'] })).toEqual({
+      'r-cc3333': 'claim',
+      'r-dd4444': 'claim',
+    });
   });
 
   it('parses Provenance: onto the structured axis of SPEC §7', () => {
@@ -598,11 +630,30 @@ describe('the four commands', () => {
     expect(run.stdout).not.toContain('refresh token');
   });
 
-  it('warnings shows the trust grade of each Warn:', () => {
+  it('warnings grades every Warn: a claim until the caller names a trusted author', () => {
     const run = runCommand(dir, ['warnings', AT, PINNED]);
     expect(run.code).toBe(0);
     expect(run.stdout).toContain('[claim]  the ordering here is load bearing');
+    expect(run.stdout).toContain('[claim]  do not widen the session TTL');
+  });
+
+  /**
+   * The flag exists on this route because grading moved to `core/grade.ts`,
+   * which cannot promote a record without being told whose word to take. Without
+   * it a user could never see `directive` from the CLI at all, which would make
+   * the grade a decoration rather than an answer.
+   */
+  it('warnings promotes an authored record when --trusted-author names its author', () => {
+    const run = runCommand(dir, [
+      'warnings',
+      AT,
+      PINNED,
+      '--trusted-author',
+      'test@example.invalid',
+    ]);
+    expect(run.code).toBe(0);
     expect(run.stdout).toContain('[directive]  do not widen the session TTL');
+    expect(run.stdout).toContain('[claim]  the ordering here is load bearing');
   });
 
   it('context leads with the active summary header and every kind', () => {
@@ -741,7 +792,7 @@ describe('--json', () => {
                 "value": "r-st2222",
               },
             ],
-            "trust": "directive",
+            "trust": "claim",
           },
           {
             "committedAt": "2026-01-01T00:00:00Z",
@@ -772,7 +823,7 @@ describe('--json', () => {
                 "value": "r-st1111",
               },
             ],
-            "trust": "directive",
+            "trust": "claim",
           },
         ],
         "scanned": 2,

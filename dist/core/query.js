@@ -45,6 +45,7 @@
  */
 import { execGit } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
+import { authorsOf, gradeRecord } from './grade.js';
 import { foldLifecycle } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
 export const LIMIT_KEY = 'Limit';
@@ -358,22 +359,34 @@ const parseProvenance = (value) => {
     return undefined;
 };
 /**
- * T-501 연동 지점 — the placeholder grade, and the whole of it.
+ * Grading is `core/grade.ts` — this route does not have its own rule.
  *
- * SPEC §7 grades a `Warn:` as an instruction only when provenance is
- * `authored` *and* the commit's author is trusted for the repository. Author
- * trust is `src/core/grade.ts` (T-501), which is being written in parallel and
- * is deliberately not imported here. Until it lands, everything except a
- * record that admits it was reconstructed or of unknown origin is graded
- * `directive` — more permissive than the spec, and the reason this function is
- * one call rather than a rule spread through the engine: T-501 replaces this
- * body and nothing else.
+ * It used to. A placeholder here graded every record `directive` unless it
+ * *admitted* to being reconstructed or of unknown origin, and `grade.ts` was
+ * reached only by `inject` and `guard`. CLI `query` and the MCP server both come
+ * through this function, so a `Warn:` written by anyone at all — including
+ * whoever opened the last pull request — was handed to an agent as an
+ * instruction, while the same record injected through the hook was correctly
+ * downgraded to a claim. Two implementations of one policy is one implementation
+ * and one hole.
+ *
+ * The author is fetched here rather than carried on `CommitRecord` because the
+ * index does not store it: one `git show -s` over the surviving shas costs a
+ * single spawn and cannot go stale against the commits it just read.
  */
-const gradeTrust = (provenanceValue) => {
-    const trimmed = provenanceValue?.trim();
-    if (trimmed === 'reconstructed' || trimmed === 'unknown')
-        return 'claim';
-    return 'directive';
+const gradeMerged = (merged, cwd, at, trustedAuthors) => {
+    if (merged.length === 0)
+        return;
+    const authors = authorsOf(cwd, merged.map((record) => record.sha));
+    for (const record of merged) {
+        const author = authors.get(record.sha);
+        const grade = gradeRecord({ trailers: record.trailers }, {
+            at,
+            ...(author === undefined ? {} : { author }),
+            ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
+        });
+        record.trust = grade.trust;
+    }
 };
 const oldestFirst = (a, b) => {
     if (a.committedTs !== b.committedTs)
@@ -426,7 +439,9 @@ const mergeByIdentity = (records, states) => {
             committedTs: latest.committedTs,
             lifecycle: state?.lifecycle ?? 'active',
             flags: state?.flags ?? [],
-            trust: gradeTrust(provenanceValue),
+            // `trust` is filled in by `gradeMerged` once the commit authors are
+            // known. Left unset here rather than defaulted: a record that has not
+            // been graded and a record graded `directive` must not look alike.
             ...(recordId === undefined ? {} : { recordId }),
             ...(provenance === undefined ? {} : { provenance }),
             ...(provenanceValue === undefined ? {} : { provenanceValue }),
@@ -482,6 +497,8 @@ export const runQuery = (opts = {}) => {
             .filter((record) => opts.allHistory === true || record.lifecycle === 'active')
             .filter((record) => carriesKey(record, opts.keys))
             .sort(compareRecords);
+        // After the filters, so the one `git show` prices only the records that survive.
+        gradeMerged(records, cwd, at, opts.trustedAuthors);
         return {
             records: opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
             fromIndex: source.fromIndex,

@@ -21,6 +21,7 @@
  * for what it cannot see. The load-bearing control is the grade, which does not
  * depend on recognising the attack at all.
  */
+import { execGit } from './git.js';
 import { foldLifecycle } from './stale.js';
 const PROVENANCE_KEY = 'Provenance';
 const WARN_KEY = 'Warn';
@@ -475,5 +476,51 @@ export const gradeAll = (records, ctx) => {
         graded.set(key, previous === undefined ? one : restrict(previous, one));
     });
     return graded;
+};
+// ---------------------------------------------------------------------------
+// Commit authorship — the input grading cannot be honest without
+// ---------------------------------------------------------------------------
+/** Commits per `git show`. Keeps the argument list well inside any exec limit. */
+const AUTHOR_BATCH = 200;
+const AUTHOR_RECORD_SEP = '\x01';
+const AUTHOR_FIELD_SEP = '\0';
+const AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
+/**
+ * `%x01`/`%x00` rather than the literal bytes: `spawnSync` refuses an argument
+ * containing a NUL, and these reach git as text and come back as bytes.
+ */
+const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>';
+/**
+ * Maps each commit to its **author** identity, `Name <email>`.
+ *
+ * Author, never committer: a fork PR is committed by whoever merged it, and
+ * grading on the committer would hand every outside contributor the merger's
+ * trust (`spec/contract-cases/grade-external-contributor.yaml`).
+ *
+ * A commit git cannot resolve simply has no entry, and a record with no known
+ * author grades as a `claim` — the fail-closed direction.
+ *
+ * This lives here rather than in `inject.ts`, where it was written, because
+ * grading is only as good as the authorship it sees: a consumer that cannot get
+ * the author cannot call `gradeRecord` and ends up writing its own weaker rule.
+ * `query.ts` did exactly that, and graded every record from every author
+ * `directive`.
+ */
+export const authorsOf = (cwd, shas) => {
+    const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
+    const authors = new Map();
+    for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
+        const batch = wanted.slice(start, start + AUTHOR_BATCH);
+        const result = execGit(['show', '-s', AUTHOR_FORMAT, ...batch], { cwd });
+        if (result.code !== 0)
+            continue;
+        for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+            const [sha = '', author = ''] = chunk.split(AUTHOR_FIELD_SEP);
+            if (sha === '')
+                continue;
+            authors.set(sha.trim(), author.trim());
+        }
+    }
+    return authors;
 };
 //# sourceMappingURL=grade.js.map

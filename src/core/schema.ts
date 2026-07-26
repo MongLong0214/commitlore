@@ -19,6 +19,8 @@ import { installedPath } from './paths.js';
 import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
+  EXTENSION_KEY_RE,
+  KNOWN_KEYS,
   SINGLE_VALUED,
   UNDO_VALUES,
   type Trailer,
@@ -95,8 +97,25 @@ const locate = (instancePath: string): { index: number; field: string } | null =
   return { index: Number(rawIndex), field };
 };
 
+/**
+ * Whether the key is one the protocol defines, or a well-formed extension.
+ *
+ * Asked directly rather than inferred from where AJV anchored its error. The
+ * schema checks cardinality with `contains`, and a `contains` probe emits a
+ * failure at `/trailers/N/key` for **every trailer that is not the key being
+ * counted** — those failures are the probe working, not a bad key. Reading the
+ * path alone turned one real cardinality violation into a phantom
+ * `unknown-key` for each unrelated trailer, so a record with two `Provenance:`
+ * lines reported that `Verified:` does not exist. Found by dogfooding: gitseed
+ * rendered three records into one commit and was told to stop using half the
+ * vocabulary.
+ */
+const isDefinedKey = (key: string): boolean =>
+  (KNOWN_KEYS as readonly string[]).includes(key) || EXTENSION_KEY_RE.test(key);
+
 const violationFor = (trailer: Trailer, field: string): Violation | null => {
   if (field === 'key') {
+    if (isDefinedKey(trailer.key)) return null;
     return {
       key: trailer.key,
       value: trailer.value,

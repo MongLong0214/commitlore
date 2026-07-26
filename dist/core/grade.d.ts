@@ -154,3 +154,20 @@ export declare const gradeRecord: (record: Record, ctx: GradeContext) => Grade;
  * hide it from a caller that filters on grade.
  */
 export declare const gradeAll: (records: AuthoredRecord[], ctx: GradeContext) => Map<string, Grade>;
+/**
+ * Maps each commit to its **author** identity, `Name <email>`.
+ *
+ * Author, never committer: a fork PR is committed by whoever merged it, and
+ * grading on the committer would hand every outside contributor the merger's
+ * trust (`spec/contract-cases/grade-external-contributor.yaml`).
+ *
+ * A commit git cannot resolve simply has no entry, and a record with no known
+ * author grades as a `claim` — the fail-closed direction.
+ *
+ * This lives here rather than in `inject.ts`, where it was written, because
+ * grading is only as good as the authorship it sees: a consumer that cannot get
+ * the author cannot call `gradeRecord` and ends up writing its own weaker rule.
+ * `query.ts` did exactly that, and graded every record from every author
+ * `directive`.
+ */
+export declare const authorsOf: (cwd: string, shas: readonly string[]) => Map<string, string>;

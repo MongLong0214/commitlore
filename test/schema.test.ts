@@ -147,4 +147,63 @@ describe('validateRecord', () => {
     const rendered = JSON.stringify(violations);
     expect(rendered).not.toMatch(/must be equal to one of|instancePath|schemaPath|allowedValues/);
   });
+  /**
+   * The schema counts single-valued keys with `contains`/`maxContains`, and a
+   * `contains` probe fails against every item that is not the key being
+   * counted. Those per-item failures land on `/trailers/N/key`, the same path a
+   * genuinely unknown key lands on. Reading the path alone reported that every
+   * unrelated trailer was an undefined key — dogfooding hit this with a commit
+   * carrying two `Provenance:` lines and was told `Verified:` does not exist.
+   */
+  describe('a cardinality violation does not invent unknown keys', () => {
+    const twoProvenance = [
+      { key: 'Verified', value: 'a' },
+      { key: 'Provenance', value: 'authored' },
+      { key: 'Verified', value: 'b' },
+      { key: 'Provenance', value: 'authored' },
+    ];
+
+    it('reports the duplicate and nothing else', () => {
+      const violations = validateRecord(twoProvenance);
+      expect(violations.map((v) => v.rule)).toEqual(['cardinality']);
+      expect(violations[0]?.key).toBe('Provenance');
+    });
+
+    it('never calls a key from SPEC §3 unknown', () => {
+      const violations = validateRecord(twoProvenance);
+      expect(violations.filter((v) => v.rule === 'unknown-key')).toEqual([]);
+    });
+
+    it('still rejects a key the protocol does not define', () => {
+      const violations = validateRecord([
+        { key: 'Bogus', value: 'x' },
+        { key: 'Provenance', value: 'authored' },
+        { key: 'Provenance', value: 'authored' },
+      ]);
+      expect(violations.map((v) => v.rule).sort()).toEqual(['cardinality', 'unknown-key']);
+      expect(violations.find((v) => v.rule === 'unknown-key')?.key).toBe('Bogus');
+    });
+
+    it('accepts an X- extension alongside a duplicate', () => {
+      const violations = validateRecord([
+        { key: 'X-Team', value: 'platform' },
+        { key: 'Undo', value: 'easy' },
+        { key: 'Undo', value: 'easy' },
+      ]);
+      expect(violations.map((v) => v.rule)).toEqual(['cardinality']);
+    });
+
+    it('reports every duplicated key once, not once per other trailer', () => {
+      const violations = validateRecord([
+        { key: 'Verified', value: 'a' },
+        { key: 'Unverified', value: 'b' },
+        { key: 'Evidence', value: 'docs/x.md' },
+        { key: 'Blast', value: 'local' },
+        { key: 'Blast', value: 'local' },
+        { key: 'Undo', value: 'easy' },
+        { key: 'Undo', value: 'easy' },
+      ]);
+      expect(violations.map((v) => v.key).sort()).toEqual(['Blast', 'Undo']);
+    });
+  });
 });

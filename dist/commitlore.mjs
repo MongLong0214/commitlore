@@ -11190,6 +11190,15 @@ var SINGLE_VALUED = /* @__PURE__ */ new Set([
   "Provenance",
   "CommitLore-Version"
 ]);
+var BOOKKEEPING_KEYS = /* @__PURE__ */ new Set([
+  "Record-Id",
+  "Supersedes",
+  "Follows",
+  "Expires",
+  "Provenance",
+  "Evidence",
+  "CommitLore-Version"
+]);
 var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
@@ -11233,8 +11242,10 @@ var locate = (instancePath) => {
   const [, rawIndex = "", field = ""] = match;
   return { index: Number(rawIndex), field };
 };
+var isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key);
 var violationFor = (trailer, field) => {
   if (field === "key") {
+    if (isDefinedKey(trailer.key)) return null;
     return {
       key: trailer.key,
       value: trailer.value,
@@ -14107,6 +14118,26 @@ var gradeRecord = (record2, ctx) => {
   const author = record2.author ?? ctx.author;
   return grade({ record: record2, author, folded: void 0 }, ctx);
 };
+var AUTHOR_BATCH = 200;
+var AUTHOR_RECORD_SEP = "";
+var AUTHOR_FIELD_SEP = "\0";
+var AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
+var AUTHOR_FORMAT = "--format=%x01%H%x00%an <%ae>";
+var authorsOf = (cwd, shas) => {
+  const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
+  const authors = /* @__PURE__ */ new Map();
+  for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
+    const batch = wanted.slice(start, start + AUTHOR_BATCH);
+    const result = execGit(["show", "-s", AUTHOR_FORMAT, ...batch], { cwd });
+    if (result.code !== 0) continue;
+    for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+      const [sha = "", author = ""] = chunk.split(AUTHOR_FIELD_SEP);
+      if (sha === "") continue;
+      authors.set(sha.trim(), author.trim());
+    }
+  }
+  return authors;
+};
 
 // src/core/query.ts
 var LIMIT_KEY = "Limit";
@@ -14305,10 +14336,24 @@ var parseProvenance = (value) => {
   }
   return void 0;
 };
-var gradeTrust = (provenanceValue) => {
-  const trimmed = provenanceValue?.trim();
-  if (trimmed === "reconstructed" || trimmed === "unknown") return "claim";
-  return "directive";
+var gradeMerged = (merged, cwd, at, trustedAuthors) => {
+  if (merged.length === 0) return;
+  const authors = authorsOf(
+    cwd,
+    merged.map((record2) => record2.sha)
+  );
+  for (const record2 of merged) {
+    const author = authors.get(record2.sha);
+    const grade2 = gradeRecord(
+      { trailers: record2.trailers },
+      {
+        at,
+        ...author === void 0 ? {} : { author },
+        ...trustedAuthors === void 0 ? {} : { trustedAuthors }
+      }
+    );
+    record2.trust = grade2.trust;
+  }
 };
 var oldestFirst = (a, b) => {
   if (a.committedTs !== b.committedTs) return a.committedTs - b.committedTs;
@@ -14353,7 +14398,9 @@ var mergeByIdentity = (records, states) => {
       committedTs: latest2.committedTs,
       lifecycle: state?.lifecycle ?? "active",
       flags: state?.flags ?? [],
-      trust: gradeTrust(provenanceValue),
+      // `trust` is filled in by `gradeMerged` once the commit authors are
+      // known. Left unset here rather than defaulted: a record that has not
+      // been graded and a record graded `directive` must not look alike.
       ...recordId === void 0 ? {} : { recordId },
       ...provenance === void 0 ? {} : { provenance },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
@@ -14394,6 +14441,7 @@ var runQuery = (opts = {}) => {
       })
     );
     const records = mergeByIdentity(visible, states).filter((record2) => opts.allHistory === true || record2.lifecycle === "active").filter((record2) => carriesKey(record2, opts.keys)).sort(compareRecords);
+    gradeMerged(records, cwd, at, opts.trustedAuthors);
     return {
       records: opts.limit === void 0 ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
       fromIndex: source.fromIndex,
@@ -15342,15 +15390,6 @@ var activeAblations = (ablation) => Object.keys(ablation).filter((name) => ablat
 var CHARS_PER_TOKEN2 = 4;
 var DEFAULT_BUDGET_TOKENS = 800;
 var TEMPLATE_VERSION = "commitlore-inject/1";
-var BOOKKEEPING_KEYS = /* @__PURE__ */ new Set([
-  "Record-Id",
-  "Supersedes",
-  "Follows",
-  "Expires",
-  "Provenance",
-  "Evidence",
-  "CommitLore-Version"
-]);
 var TIERS = [
   { name: "warn", label: "Warn", key: WARN_KEY2 },
   { name: "limit", label: "Limit", key: LIMIT_KEY },
@@ -15389,28 +15428,8 @@ var resolveInstant = (cwd, at) => {
   const parsed = Date.parse(result.stdout.trim());
   return Number.isNaN(parsed) ? EPOCH : new Date(parsed);
 };
-var SHA_RE = /^[0-9a-f]{4,40}$/;
-var AUTHOR_BATCH = 200;
-var RECORD_SEP3 = "";
-var FIELD_SEP3 = "\0";
-var AUTHOR_FORMAT = "--format=%x01%H%x00%an <%ae>";
-var authorsOf = (cwd, shas) => {
-  const wanted = [...new Set(shas)].filter((sha) => SHA_RE.test(sha)).sort();
-  const authors = /* @__PURE__ */ new Map();
-  for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
-    const batch = wanted.slice(start, start + AUTHOR_BATCH);
-    const result = execGit(["show", "-s", AUTHOR_FORMAT, ...batch], { cwd });
-    if (result.code !== 0) continue;
-    for (const chunk of result.stdout.split(RECORD_SEP3)) {
-      const [sha = "", author = ""] = chunk.split(FIELD_SEP3);
-      if (sha === "") continue;
-      authors.set(sha.trim(), author.trim());
-    }
-  }
-  return authors;
-};
 var TRUST_RANK = { directive: 0, claim: 1, blocked: 2 };
-var gradeMerged = (record2, authors, at, trustedAuthors) => {
+var gradeMerged2 = (record2, authors, at, trustedAuthors) => {
   const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
   let worst;
   for (const sha of shas) {
@@ -15624,7 +15643,7 @@ var buildInjection = (opts) => {
   const grades = new Map(
     active.map((record2) => [
       record2.recordId ?? `${record2.sha}:${record2.source}`,
-      ablation.noGrade ? ungraded(record2) : gradeMerged(record2, authors, at, opts.trustedAuthors)
+      ablation.noGrade ? ungraded(record2) : gradeMerged2(record2, authors, at, opts.trustedAuthors)
     ])
   );
   const { entries, withheld, withheldValues } = project(active, grades);
@@ -24635,6 +24654,7 @@ var SECTIONS = [
   { label: "warnings", key: WARN_KEY2 }
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
+var collect2 = (value, previous) => [...previous, value];
 var evaluationInstant3 = (raw) => {
   if (raw === void 0) return void 0;
   const parsed = new Date(raw);
@@ -24654,10 +24674,12 @@ var recordLimit = (raw) => {
 var queryOptions = (paths, options, keys) => {
   const at = evaluationInstant3(options.at);
   const limit = recordLimit(options.limit);
+  const trustedAuthors = options.trustedAuthor ?? [];
   return {
     paths,
     allHistory: options.allHistory === true,
     noIndex: options.index === false,
+    ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
     ...keys === void 0 ? {} : { keys },
     ...at === void 0 ? {} : { at },
     ...limit === void 0 ? {} : { limit }
@@ -24770,7 +24792,12 @@ var emit4 = (name, result, options, render2) => {
   );
 };
 var define = (program3, name, description, keys, render2) => {
-  program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").action((paths, options) => {
+  program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
+    "--trusted-author <author>",
+    "an author whose records may render as instructions (repeatable)",
+    collect2,
+    []
+  ).action((paths, options) => {
     try {
       emit4(name, runQuery(queryOptions(paths, options, keys)), options, render2);
     } catch (error2) {
@@ -24964,6 +24991,26 @@ var contextUriPath = (uri) => {
     throw new Error(`resource URI is not valid percent-encoding: ${uri}`);
   }
 };
+var withheldBlocked = (result) => {
+  if (!result.records.some((record2) => record2.trust === "blocked")) return result;
+  let withheld = 0;
+  const records = result.records.map((record2) => {
+    if (record2.trust !== "blocked") return record2;
+    withheld += 1;
+    return {
+      ...record2,
+      trailers: record2.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key))
+    };
+  });
+  return {
+    ...result,
+    records,
+    diagnostics: [
+      ...result.diagnostics,
+      `withheld the content of ${withheld} record(s) graded blocked: a Warn: matching an injection pattern is reported, never quoted (SPEC \xA77)`
+    ]
+  };
+};
 var contextJson = (root, kind, path2) => {
   const keys = KEYS_BY_KIND[kind];
   const result = runQuery({
@@ -24972,7 +25019,7 @@ var contextJson = (root, kind, path2) => {
     ...keys === void 0 ? {} : { keys }
   });
   for (const diagnostic of result.diagnostics) warn(diagnostic);
-  return toJson2(kind, result);
+  return toJson2(kind, withheldBlocked(result));
 };
 var asText = (value) => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }]

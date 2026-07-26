@@ -4,12 +4,19 @@
  *
  * ## One answer, not two
  *
- * The resource and `commitlore_query` return exactly what `commitlore context
- * --json` returns, because two renderings of one answer become two answers the
- * moment one of them is edited. `toJson` is therefore imported from
+ * The resource and `commitlore_query` return what `commitlore context --json`
+ * returns, because two renderings of one answer become two answers the moment
+ * one of them is edited. `toJson` is therefore imported from
  * `commands/query.ts` rather than re-derived here, even though it means this
  * module reaches sideways into the CLI layer. `commitlore_stale` does the same
  * with `buildReport` from `commands/stale.ts`.
+ *
+ * There is exactly one deliberate divergence, and it is named rather than
+ * quietly introduced: a record graded `blocked` keeps its identity here and
+ * loses its payload (`withheldBlocked`). The CLI prints that payload because a
+ * person is reading it and can disbelieve it; a tool result is read by a model
+ * as retrieved fact. Anything beyond this one rule belongs in `toJson`, where
+ * both routes get it.
  *
  * ## stdout belongs to the protocol
  *
@@ -54,7 +61,8 @@ import {
 import { toJson, type JsonOutput } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
 import { DEFAULT_THRESHOLD, guard } from '../core/guard.js';
-import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
+import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, type QueryResult } from '../core/query.js';
+import { BOOKKEEPING_KEYS } from '../core/types.js';
 
 export const SERVER_NAME = 'commitlore';
 
@@ -175,6 +183,45 @@ export const contextUriPath = (uri: string): string => {
 // ---------------------------------------------------------------------------
 
 /**
+ * Strips the payload of any record graded `blocked`, keeping the fact of it.
+ *
+ * `core/inject.ts` already does this — "the content of a blocked record is the
+ * attack. Only the fact is reported." — and this route did not, so the same
+ * record was withheld from the hook and handed over verbatim through MCP. The
+ * difference matters more here than anywhere: an injection payload printed to a
+ * terminal is read by a person who can disbelieve it, and the same bytes
+ * returned from a tool call land in a model's context as retrieved fact.
+ *
+ * The record is not dropped. An agent that asks what the repository says about a
+ * path and silently receives less than there is has no way to notice; a record
+ * whose trailers are replaced by the reason it was withheld is auditable, and
+ * `trust: "blocked"` is already in the schema for the client to branch on.
+ */
+const withheldBlocked = (result: QueryResult): QueryResult => {
+  if (!result.records.some((record) => record.trust === 'blocked')) return result;
+
+  let withheld = 0;
+  const records = result.records.map((record) => {
+    if (record.trust !== 'blocked') return record;
+    withheld += 1;
+    return {
+      ...record,
+      trailers: record.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key)),
+    };
+  });
+
+  return {
+    ...result,
+    records,
+    diagnostics: [
+      ...result.diagnostics,
+      `withheld the content of ${withheld} record(s) graded blocked: a Warn: matching an ` +
+        'injection pattern is reported, never quoted (SPEC §7)',
+    ],
+  };
+};
+
+/**
  * One consumer-route answer, in the schema `--json` prints. Diagnostics are
  * carried in that schema *and* mirrored to stderr: a client that only shows the
  * model the tool result still leaves the operator a record of how the answer
@@ -188,7 +235,7 @@ const contextJson = (root: string, kind: QueryKind, path: string): JsonOutput =>
     ...(keys === undefined ? {} : { keys }),
   });
   for (const diagnostic of result.diagnostics) warn(diagnostic);
-  return toJson(kind, result);
+  return toJson(kind, withheldBlocked(result));
 };
 
 const asText = (value: unknown): CallToolResult => ({

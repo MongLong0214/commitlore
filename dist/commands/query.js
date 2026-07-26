@@ -25,6 +25,8 @@ const SECTIONS = [
     { label: 'warnings', key: WARN_KEY },
 ];
 const SECTION_KEYS = SECTIONS.map((section) => section.key);
+/** Repeatable option accumulator, as `commands/inject.ts` uses. */
+const collect = (value, previous) => [...previous, value];
 // ---------------------------------------------------------------------------
 // Option parsing
 // ---------------------------------------------------------------------------
@@ -54,10 +56,15 @@ const recordLimit = (raw) => {
 const queryOptions = (paths, options, keys) => {
     const at = evaluationInstant(options.at);
     const limit = recordLimit(options.limit);
+    // Same spelling and same default as `commitlore inject`: with no trusted
+    // author, a `Warn:` grades `claim`. The two routes must answer alike, or the
+    // grade means one thing on the hook and another on the terminal.
+    const trustedAuthors = options.trustedAuthor ?? [];
     return {
         paths,
         allHistory: options.allHistory === true,
         noIndex: options.index === false,
+        ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
         ...(keys === undefined ? {} : { keys }),
         ...(at === undefined ? {} : { at }),
         ...(limit === undefined ? {} : { limit }),
@@ -196,6 +203,7 @@ const define = (program, name, description, keys, render) => {
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option('--limit <n>', 'return at most n records')
+        .option('--trusted-author <author>', 'an author whose records may render as instructions (repeatable)', collect, [])
         .action((paths, options) => {
         try {
             emit(name, runQuery(queryOptions(paths, options, keys)), options, render);

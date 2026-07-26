@@ -62,7 +62,7 @@
 import { createHash } from 'node:crypto';
 
 import { execGit } from './git.js';
-import { gradeRecord, type Grade, type Trust } from './grade.js';
+import { authorsOf, gradeRecord, type Grade, type Trust } from './grade.js';
 import {
   LIMIT_KEY,
   RULED_OUT_KEY,
@@ -70,7 +70,7 @@ import {
   runQuery,
   type GradedRecord,
 } from './query.js';
-import type { Trailer } from './types.js';
+import { BOOKKEEPING_KEYS, type Trailer } from './types.js';
 
 /**
  * The three guarantees of this module, individually removable.
@@ -230,21 +230,6 @@ export const DEFAULT_BUDGET_TOKENS = 800;
  */
 const TEMPLATE_VERSION = 'commitlore-inject/1';
 
-/**
- * Keys carried for the machinery, not for the reader. Identity, supersession
- * and provenance have already done their work by the time a record reaches
- * this module — reprinting them would spend the budget on bookkeeping.
- */
-const BOOKKEEPING_KEYS: ReadonlySet<string> = new Set([
-  'Record-Id',
-  'Supersedes',
-  'Follows',
-  'Expires',
-  'Provenance',
-  'Evidence',
-  'CommitLore-Version',
-]);
-
 interface TierSpec {
   name: Tier;
   /** Section heading in the rendered text. */
@@ -359,48 +344,6 @@ const resolveInstant = (cwd: string, at: Date | undefined): Date => {
 
 /** Object names as git writes them. Anything else never reaches a git argument. */
 const SHA_RE = /^[0-9a-f]{4,40}$/;
-
-/** Commits per `git show`. Keeps the argument list well inside any exec limit. */
-const AUTHOR_BATCH = 200;
-
-const RECORD_SEP = '\x01';
-const FIELD_SEP = '\0';
-
-/**
- * The same two bytes as `core/query.ts` uses, and for the same reason: they
- * cannot be written literally, because `spawnSync` refuses an argument
- * containing a NUL. `%x01`/`%x00` reach git as text and come back as bytes.
- */
-const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>';
-
-/**
- * Maps each commit to its **author** identity, `Name <email>`.
- *
- * Author, never committer: a fork PR is committed by whoever merged it, and
- * grading on the committer would hand every outside contributor the merger's
- * trust (`core/grade.ts`, `spec/contract-cases/grade-external-contributor.yaml`).
- *
- * A commit git cannot resolve simply has no entry, and a record with no known
- * author grades as a `claim` — the fail-closed direction.
- */
-const authorsOf = (cwd: string, shas: readonly string[]): Map<string, string> => {
-  const wanted = [...new Set(shas)].filter((sha) => SHA_RE.test(sha)).sort();
-  const authors = new Map<string, string>();
-
-  for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
-    const batch = wanted.slice(start, start + AUTHOR_BATCH);
-    const result = execGit(['show', '-s', AUTHOR_FORMAT, ...batch], { cwd });
-    if (result.code !== 0) continue;
-
-    for (const chunk of result.stdout.split(RECORD_SEP)) {
-      const [sha = '', author = ''] = chunk.split(FIELD_SEP);
-      if (sha === '') continue;
-      authors.set(sha.trim(), author.trim());
-    }
-  }
-
-  return authors;
-};
 
 // ---------------------------------------------------------------------------
 // Grading
