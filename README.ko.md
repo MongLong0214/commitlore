@@ -13,7 +13,7 @@
 >
 > **v0.1.0 릴리스됨.** CLI·MCP 서버·훅·GitHub Action 모두 구현이 끝났고 `main`에서 CI를 통과합니다. 배포는 git clone 하나 — 레지스트리도 계정도 publish 단계도 없습니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
-> **정직한 단서**: `dist/`는 저장소에 함께 들어 있지만 그 의존성은 아닙니다. 맨 clone은 CLI 실행 전 `npm ci` 한 번이 필요합니다. 단일 번들이 이를 닫으며 유일한 차단점은 이미 특정돼 있습니다([#38](https://github.com/MongLong0214/commitlore/issues/38)). 배포에서 레지스트리는 사라졌지만, 의존성 설치에는 아직 패키지 매니저가 필요합니다.
+> clone이 곧 설치입니다: `dist/commitlore.mjs`가 의존성을 함께 담고 있어 설치할 것도 빌드할 것도 없습니다.
 >
 > 이 README의 모든 주장은 지금 재현 가능하거나 계획임이 명시돼 있고, 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다. 이 저장소는 자기 프로토콜을 자기 히스토리에 CI에서 강제합니다 — [도그푸딩은 강제된다](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational) 참조.
 
@@ -105,7 +105,7 @@ git clone https://github.com/MongLong0214/commitlore ~/.commitlore
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }
@@ -113,7 +113,7 @@ git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 
 **기록은 그냥 커밋 트레일러로 쓴다** — 위 예제 그대로다. 더 배울 건 없다.
 
-셸에서 직접 쓸 때(`~/.commitlore/dist/cli.js`를 `commitlore`로 alias):
+셸에서 직접 쓸 때(`~/.commitlore/dist/commitlore.mjs`를 `commitlore`로 alias):
 
 ```bash
 commitlore context src/auth/                  # 이 경로가 결정한 것

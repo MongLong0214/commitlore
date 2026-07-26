@@ -122,13 +122,18 @@ jobs:
           set -euo pipefail
           clone_dir="$(mktemp -d)/commitlore"
           git clone --quiet --depth 1 "file://$PWD" "$clone_dir"
-          test -f "$clone_dir/dist/cli.js" || { echo "dist/ is not in the clone"; exit 1; }
-          node "$clone_dir/dist/cli.js" --version
-          # validate reads spec/schema/record.schema.json relative to the
-          # install, so this fails if the clone stops carrying spec/.
-          printf 'Subject\n\nBlast: wide\n' | node "$clone_dir/dist/cli.js" validate && {
+          test -f "$clone_dir/dist/commitlore.mjs" || { echo "the bundle is not in the clone"; exit 1; }
+          # No node_modules anywhere near it: the bundle carries its dependencies,
+          # which is the whole claim ADR-0011 makes and #38 closed.
+          test ! -d "$clone_dir/node_modules" || { echo "clone is contaminated with node_modules"; exit 1; }
+          node "$clone_dir/dist/commitlore.mjs" --version
+          # Reads spec/schema/record.schema.json through the package root walk in
+          # core/paths.ts, so this fails if the clone stops carrying spec/ or if
+          # a bundled module goes back to guessing its own depth.
+          printf 'Subject\n\nBlast: wide\n' | node "$clone_dir/dist/commitlore.mjs" validate && {
             echo "expected a violation to exit non-zero"; exit 1;
           } || test $? -eq 1
+          node "$clone_dir/dist/commitlore.mjs" doctor
           # The plugin resolves its entry point through this script, with
           # CLAUDE_PLUGIN_ROOT pointing at the clone.
           test -x "$clone_dir/scripts/commitlore-run.sh" || { echo "run script not executable"; exit 1; }

@@ -13,7 +13,7 @@
 >
 > **v0.1.0 リリース済み。** CLI・MCP サーバー・フック・GitHub Actions はすべて実装済みで `main` の CI を通過しています。配布は git clone のみ — レジストリもアカウントも publish 手順もありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
-> **正直な但し書き**: `dist/` は同梱されていますが、その依存関係は同梱されていません。素の clone は CLI を動かす前に一度 `npm ci` が必要です。単一バンドルがこれを塞ぎ、唯一の阻害要因はすでに特定済みです（[#38](https://github.com/MongLong0214/commitlore/issues/38)）。配布からレジストリは消えましたが、依存関係のインストールにはまだパッケージマネージャーが要ります。
+> clone がそのままインストールです: `dist/commitlore.mjs` が依存関係を同梱しているので、入れるものもビルドするものもありません。
 >
 > この README のすべての主張は、今すぐ再現可能か計画中と明示されているかのいずれかで、数値は [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) のログからのみ提示します。このリポジトリは自分のプロトコルを自分の履歴に対して CI で強制しています — [ドッグフーディングは強制される](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)を参照。
 
@@ -105,7 +105,7 @@ git clone https://github.com/MongLong0214/commitlore ~/.commitlore
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }

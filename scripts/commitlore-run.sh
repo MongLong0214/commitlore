@@ -16,11 +16,15 @@
 set -u
 
 resolve() {
-  # Shipped with the plugin. This is the normal case and needs no install.
-  # `node` is checked rather than assumed: without it `exec node` exits 127,
-  # which breaks rule 1 in the branch that looks too obvious to test.
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ] \
-     && command -v node >/dev/null 2>&1; then
+  command -v node >/dev/null 2>&1 || return 1   # without it `exec node` exits 127
+
+  # The bundle carries its own dependencies, so it runs from a clone that never
+  # had node_modules. It is tried first for that reason alone.
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs" ]; then
+    echo "node|$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs"; return 0
+  fi
+  # Unbundled build, which needs node_modules beside it.
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then
     echo "node|$CLAUDE_PLUGIN_ROOT/dist/cli.js"; return 0
   fi
   # Built from source, or on PATH by whatever means the user chose.

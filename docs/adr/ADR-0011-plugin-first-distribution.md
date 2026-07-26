@@ -19,12 +19,10 @@ npm을 채널로 두면 세 가지가 따라온다.
 
 - `dist/`를 저장소에 커밋한다. 빌드 단계가 없다.
 
-> ⚠️ **"clone이 곧 설치"는 아직 사실이 아니다** (2026-07-26 확인, `r-6f2a08`).
-> clone은 `dist/`를 주지만 `node_modules`를 주지 않고, `dist/`는 `commander`·
-> `ajv`·`ajv-formats`·`js-yaml`·MCP SDK를 import한다. 레지스트리 의존은 실제로
-> 사라졌으나(계정·publish·토큰 없음) **의존성 설치는 남아 있다.** 단일 번들이
-> 이를 닫는다 — #38. 유일한 차단점은 `schema.ts`의 `createRequire('ajv-formats')`
-> 로 특정돼 있다.
+> ✅ **닫혔다** (2026-07-26, #38). `dist/commitlore.mjs`는 esbuild 번들이라 의존성을
+> 함께 담는다. 의존성 없는 clone에서 `--version`·`validate`·`ruled-out`·`guard`·
+> `doctor`·`mcp`(도구 3종) 전부 실측 확인했다. `better-sqlite3`만 external이고,
+> 없으면 `--no-index`로 degrade한다.
 - Claude Code용으로 저장소 자체가 플러그인이자 마켓플레이스다(`.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`, `source: "./"`).
 - 그 외 모든 에이전트의 1급 표면은 **MCP 서버**(`commitlore mcp`, stdio, protocol 2024-11-05, 도구 3종)다. 클라이언트에 붙이는 설정은 어디서나 동일한 JSON 한 덩어리다.
 - 셸만 쓸 수 있는 에이전트를 위해 `AGENTS.md`를 제공한다. `AGENTS.md`는 Codex·Qwen·Kimi·Gemini·Cursor가 공유하는 사실상의 표준이다.

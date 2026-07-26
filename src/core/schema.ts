@@ -15,6 +15,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { AnySchemaObject, ErrorObject, ValidateFunction } from 'ajv/dist/2020.js';
 import type { FormatsPlugin } from 'ajv-formats';
 
+import { installedPath } from './paths.js';
 import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
@@ -25,19 +26,29 @@ import {
 } from './types.js';
 
 /**
- * ajv-formats is CommonJS and this package compiles without `esModuleInterop`,
- * under which TypeScript models the module's default export as the namespace
- * itself rather than as the plugin function. `createRequire` reaches the real
- * `module.exports` and keeps the binding typed.
+ * Static import so a bundler can follow it.
+ *
+ * `createRequire` reached the real `module.exports` and kept the binding
+ * typed, but it is opaque to esbuild: the dependency stayed external and a
+ * distribution without node_modules failed at load (ADR-0011, #38).
+ *
+ * ajv-formats is CommonJS whose declaration ends in `export default`, so under
+ * NodeNext the default import is the module namespace and the plugin sits on
+ * `.default`. The same expression works in three places for two reasons: Node
+ * hands ESM the CJS `module.exports`, which carries a `.default` from the
+ * package own dual export, and esbuild reproduces that interop when it inlines
+ * the module.
  */
-const addFormats: FormatsPlugin = createRequire(import.meta.url)('ajv-formats');
+import ajvFormats from "ajv-formats";
+
+const addFormats: FormatsPlugin = ajvFormats.default;
 
 /**
  * Resolved relative to this module so it works from `src/` under vitest and
  * from `dist/` after install — both sit one directory below the package root,
  * and `package.json#files` ships `spec/`.
  */
-const SCHEMA_PATH = fileURLToPath(new URL('../../spec/schema/record.schema.json', import.meta.url));
+const SCHEMA_PATH = installedPath('spec', 'schema', 'record.schema.json');
 
 /** `want` text for the three closed enums (SPEC §3.1). */
 const ENUM_WANT: Readonly<Record<string, string>> = {

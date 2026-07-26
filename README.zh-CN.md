@@ -13,7 +13,7 @@
 >
 > **v0.1.0 已发布。** CLI、MCP 服务器、钩子和 GitHub Actions 均已实现，并在 `main` 上通过 CI。分发方式只有 git clone —— 没有注册表、没有账号、没有发布步骤（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
-> **诚实的附注**：`dist/` 随仓库提供，但它的依赖不随仓库提供。裸 clone 在运行 CLI 前需要执行一次 `npm ci`。单文件打包会补上这一步，唯一的阻碍点已经定位（[#38](https://github.com/MongLong0214/commitlore/issues/38)）。分发中的注册表已经消失，但安装依赖仍需包管理器。
+> clone 就是完整安装：`dist/commitlore.mjs` 自带依赖，无需安装，也无需构建。
 >
 > 本 README 的每个论断要么现在可复现，要么明确标注为计划，数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。本仓库在 CI 中对自己的历史强制执行自己的协议 —— 见[狗粮是强制的](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)。
 
@@ -105,7 +105,7 @@ git clone https://github.com/MongLong0214/commitlore ~/.commitlore
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }

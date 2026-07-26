@@ -13,7 +13,7 @@
 >
 > **v0.1.0 is released.** The CLI, MCP server, hooks and GitHub Actions are implemented and green on `main`. Distribution is a git clone — no registry, no account, no publish step ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
-> **Honest caveat**: `dist/` ships in the repository, but its dependencies do not, so a bare clone needs `npm ci` once before the CLI runs. Bundling closes that and the single blocker is already located ([#38](https://github.com/MongLong0214/commitlore/issues/38)). The registry is gone from distribution; a package manager is still needed to install dependencies.
+> A clone is the whole installation: `dist/commitlore.mjs` carries its own dependencies, so nothing needs installing and nothing needs building.
 >
 > Every claim in this README is either reproducible now or explicitly marked as planned, and numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs. This repository runs its own protocol against its own history in CI — see [dogfooding is enforced](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational).
 
@@ -105,7 +105,7 @@ sees the decisions before it edits.
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }
@@ -114,7 +114,7 @@ sees the decisions before it edits.
 **You write records as ordinary commit trailers** — the example above. Nothing
 else to learn.
 
-From a shell, with `~/.commitlore/dist/cli.js` aliased to `commitlore`:
+From a shell, with `~/.commitlore/dist/commitlore.mjs` aliased to `commitlore`:
 
 ```bash
 commitlore context src/auth/                       # what this path decided

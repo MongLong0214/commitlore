@@ -34,8 +34,8 @@
  * `test/mcp.test.ts` asserts the absence rather than trusting it.
  */
 import { Console } from 'node:console';
-import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { packageVersion as readPackageVersion } from '../core/paths.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
@@ -78,8 +78,7 @@ const warn = (message) => {
  */
 const packageVersion = () => {
     try {
-        const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
-        return pkg.version ?? FALLBACK_VERSION;
+        return readPackageVersion() ?? FALLBACK_VERSION;
     }
     catch (error) {
         warn(`could not read the package version (${errorMessage(error)})`);

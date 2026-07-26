@@ -38,6 +38,7 @@ import { Console } from 'node:console';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
+import { packageVersion as readPackageVersion } from '../core/paths.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -108,10 +109,7 @@ const warn = (message: string): void => {
  */
 const packageVersion = (): string => {
   try {
-    const pkg = JSON.parse(
-      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-    ) as { version?: string };
-    return pkg.version ?? FALLBACK_VERSION;
+    return readPackageVersion() ?? FALLBACK_VERSION;
   } catch (error) {
     warn(`could not read the package version (${errorMessage(error)})`);
     return FALLBACK_VERSION;

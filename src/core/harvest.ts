@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { validateRecord } from './schema.js';
+import { installedPath } from './paths.js';
 import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
@@ -107,7 +108,7 @@ export interface VocabularyEntry {
  * from `dist/` after install — both sit one directory below the package root,
  * and `package.json#files` ships `spec/`. Same arrangement as `schema.ts`.
  */
-const SPEC_PATH = fileURLToPath(new URL('../../spec/SPEC.md', import.meta.url));
+const SPEC_PATH = installedPath('spec', 'SPEC.md');
 
 /**
  * The two SPEC §3 tables, in order. Their titles are load-bearing, not

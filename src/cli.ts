@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 
 import { register as registerBackfill } from './commands/backfill.js';
+import { packageVersion } from './core/paths.js';
 import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerGuard } from './commands/guard.js';
@@ -29,9 +30,7 @@ import { register as registerStale } from './commands/stale.js';
 import { register as registerValidate } from './commands/validate.js';
 import { parseCommitMessage, serializeTrailers } from './core/trailers.js';
 
-const pkg: { version?: string } = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-);
+const pkg: { version?: string } = { version: packageVersion() };
 
 const STDIN_FD = 0;
 

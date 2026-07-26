@@ -19,15 +19,15 @@
  * harvest agents).
  */
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { validateRecord } from './schema.js';
+import { installedPath } from './paths.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, KNOWN_KEYS, PROVENANCE_PREFIXES, RECORD_ID_RE, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
  * Resolved relative to this module so it works from `src/` under vitest and
  * from `dist/` after install — both sit one directory below the package root,
  * and `package.json#files` ships `spec/`. Same arrangement as `schema.ts`.
  */
-const SPEC_PATH = fileURLToPath(new URL('../../spec/SPEC.md', import.meta.url));
+const SPEC_PATH = installedPath('spec', 'SPEC.md');
 /**
  * The two SPEC §3 tables, in order. Their titles are load-bearing, not
  * decorative: §3.1 is what a record *claims* and therefore what evidence must
