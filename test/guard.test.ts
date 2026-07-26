@@ -18,8 +18,10 @@
  * replay, and byte-identical output for identical input.
  *
  * Fixtures live in `spec/fixtures/guard/`; the `redis-cache` record is the
- * AnnalsBench re-encounter task verbatim (T-701), so this suite and the
- * benchmark are arguing about the same rejection.
+ * CommitLoreBench re-encounter task verbatim (T-701), so this suite and the
+ * benchmark are arguing about the same rejection — though the benchmark has
+ * so far argued about it through injection rather than through this route
+ * (`bench/ROUTE-GAP.md`).
  *
  * Every repository is built under `os.tmpdir()`.
  */

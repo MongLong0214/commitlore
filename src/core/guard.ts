@@ -17,8 +17,16 @@
  *    A maintainer who thinks a flag is wrong must be able to see *which token
  *    hit*, which is why `GuardMatch.signals` exists and why a bare score would
  *    not be enough.
- * 3. AnnalsBench (T-702) measures the re-proposal rate this route suppresses.
- *    A stochastic matcher would make the metric measure the matcher.
+ * 3. A stochastic matcher would make any benchmark of this route measure the
+ *    matcher rather than the protocol.
+ *
+ * That third reason described a measurement that has not happened. T-702 ran
+ * the re-proposal matrix with `Ruled-out:` delivered as *injected context* —
+ * the route SPEC §5 assigns to `Limit:` and `Warn:` — and never invoked guard
+ * at all. This route, the one §5 actually assigns to `Ruled-out:`, is still
+ * unmeasured end to end. `bench/ROUTE-GAP.md` records what replaying the
+ * recorded runs through it showed, and #37 is the experiment that would close
+ * it.
  *
  * The cost is recall: this finds lexical revivals, not semantic ones. See
  * "What this cannot see" at the bottom of this comment.
