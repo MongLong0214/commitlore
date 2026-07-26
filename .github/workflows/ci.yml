@@ -11,6 +11,13 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor this package promises (ADR-0010) and the current Active LTS.
+        # Running only the floor misses breakage on newer runtimes; running only
+        # the newest makes the floor a claim nobody checks.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,10 +29,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - run: npm ci
+
+      # npm reports EBADENGINE as a warning and installs anyway, so a dependency
+      # that breaks the supported floor lands silently and surfaces later as
+      # something unrelated -- here, as test workers dying with no explanation.
+      - name: Dependencies support the supported Node floor
+        run: node scripts/check-engines.mjs
 
       - name: Typecheck
         run: npx tsc -p tsconfig.json --noEmit
@@ -67,7 +80,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Report git version
