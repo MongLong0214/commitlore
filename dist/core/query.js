@@ -46,6 +46,7 @@
 import { execGit } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeRecord } from './grade.js';
+import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
 export const LIMIT_KEY = 'Limit';
@@ -499,6 +500,14 @@ export const runQuery = (opts = {}) => {
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
         gradeMerged(records, cwd, at, opts.trustedAuthors);
+        // Config only — no network. Cheap enough to run on every answer, and the
+        // answer it qualifies is the empty one, which is the answer nobody inspects.
+        const notes = notesAvailability({ cwd });
+        if (notes === 'unfetched') {
+            diagnostics.push('the notes mirror has not been fetched here, so this answer may be missing records ' +
+                `that exist upstream (git fetch does not fetch ${NOTES_REF} by default). ` +
+                'fix: commitlore doctor --fix, then git fetch');
+        }
         return {
             records: opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
             fromIndex: source.fromIndex,
@@ -507,6 +516,7 @@ export const runQuery = (opts = {}) => {
             paths,
             aliases: scope.aliases,
             follow: scope.follow,
+            notes,
             diagnostics,
         };
     }

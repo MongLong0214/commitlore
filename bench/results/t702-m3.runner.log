@@ -13,3 +13,7 @@ runs       120 (4 seed(s) x 10 task(s) x 3 condition(s))
 [10/120] reproposal-node20-floor commitlore-guard seed=1 reproposed=true violations=1 turns=11 tokens=16597 stopped_by=completed
 [11/120] reproposal-node20-floor commitlore-on seed=1 reproposed=false violations=0 turns=18 tokens=30609 stopped_by=completed
 [12/120] reproposal-node20-floor commitlore-off seed=1 reproposed=true violations=1 turns=15 tokens=17862 stopped_by=completed
+[13/120] reproposal-prisma-orm commitlore-guard seed=1 reproposed=false violations=0 turns=11 tokens=15033 stopped_by=completed
+[14/120] reproposal-prisma-orm commitlore-on seed=1 reproposed=false violations=0 turns=26 tokens=40106 stopped_by=over-turns
+[15/120] reproposal-prisma-orm commitlore-off seed=1 reproposed=false violations=1 turns=24 tokens=27693 stopped_by=over-turns
+[16/120] reproposal-rabbitmq-queue commitlore-guard seed=1 reproposed=false violations=0 turns=20 tokens=23490 stopped_by=completed

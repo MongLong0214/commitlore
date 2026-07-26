@@ -103,6 +103,7 @@ export const toJson = (command, result) => ({
         warnings: countKey(result.records, WARN_KEY),
         other: result.records.reduce((total, record) => total + otherTrailers(record).length, 0),
     },
+    notes: result.notes,
     diagnostics: result.diagnostics,
     records: result.records.map(toJsonRecord),
 });
@@ -149,7 +150,20 @@ const otherLines = (records) => {
     return records.flatMap((record) => otherTrailers(record).map((trailer) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
         `${stateTag(record)}${trailer.key}: ${trailer.value}`));
 };
-const emptyLine = (result, what) => `no active ${what}${scopeSuffix(result)}\n`;
+/**
+ * The empty answer, and the one qualifier it must never omit.
+ *
+ * "no active records" is the most consequential sentence this command prints:
+ * an agent reads it as "nothing was ruled out here". When the notes mirror has
+ * not been fetched, that sentence is not merely unhelpful, it is wrong — the
+ * records exist, upstream, and `git clone` does not bring them. The qualifier
+ * goes on the same line as the claim it qualifies, because a diagnostic on
+ * stderr is not read by whoever is reading stdout.
+ */
+const emptyLine = (result, what) => result.notes === 'unfetched'
+    ? `no active ${what}${scopeSuffix(result)} — but the notes mirror has not been ` +
+        'fetched here, so this is not the same as "none exist" (commitlore doctor --fix)\n'
+    : `no active ${what}${scopeSuffix(result)}\n`;
 /** `limits`, `ruled-out` and `warnings`: one section, no header block. */
 export const formatKind = (result, section) => {
     const lines = valueLines(result.records, section.key, section.key === WARN_KEY);

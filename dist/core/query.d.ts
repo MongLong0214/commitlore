@@ -44,6 +44,7 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 import { type RecordSource } from './index-db.js';
+import { type NotesAvailability } from './notes.js';
 import { type Lifecycle, type Record } from './types.js';
 export declare const LIMIT_KEY = "Limit";
 export declare const RULED_OUT_KEY = "Ruled-out";
@@ -118,6 +119,18 @@ export interface QueryResult {
     aliases: string[];
     /** Whether renames were followed. `false` when several paths were given. */
     follow: boolean;
+    /**
+     * Whether the notes mirror could be read here, and if not, why.
+     *
+     * A typed field rather than only a diagnostic string, because the case it
+     * exists for is an *empty* answer: `git fetch` does not fetch notes, so a
+     * plain clone of a repository full of records answers "no active records" —
+     * byte-identical to the answer from a repository where nobody ever wrote one.
+     * An agent reads that as "nothing was ruled out", which is the most dangerous
+     * sentence this tool can produce. `unfetched` says the answer is unknown, not
+     * empty, and a consumer can branch on it without parsing prose.
+     */
+    notes: NotesAvailability;
     /** Anything the caller should be told about how the answer was produced. */
     diagnostics: string[];
 }

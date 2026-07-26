@@ -55,6 +55,7 @@ import {
   type TrailerQuery,
 } from './index-db.js';
 import { authorsOf, gradeRecord } from './grade.js';
+import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
 import { foldLifecycle, type RecordState, type StaleRecord } from './stale.js';
 import {
   SINGLE_VALUED,
@@ -161,6 +162,18 @@ export interface QueryResult {
   aliases: string[];
   /** Whether renames were followed. `false` when several paths were given. */
   follow: boolean;
+  /**
+   * Whether the notes mirror could be read here, and if not, why.
+   *
+   * A typed field rather than only a diagnostic string, because the case it
+   * exists for is an *empty* answer: `git fetch` does not fetch notes, so a
+   * plain clone of a repository full of records answers "no active records" —
+   * byte-identical to the answer from a repository where nobody ever wrote one.
+   * An agent reads that as "nothing was ruled out", which is the most dangerous
+   * sentence this tool can produce. `unfetched` says the answer is unknown, not
+   * empty, and a consumer can branch on it without parsing prose.
+   */
+  notes: NotesAvailability;
   /** Anything the caller should be told about how the answer was produced. */
   diagnostics: string[];
 }
@@ -661,6 +674,17 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
     // After the filters, so the one `git show` prices only the records that survive.
     gradeMerged(records, cwd, at, opts.trustedAuthors);
 
+    // Config only — no network. Cheap enough to run on every answer, and the
+    // answer it qualifies is the empty one, which is the answer nobody inspects.
+    const notes = notesAvailability({ cwd });
+    if (notes === 'unfetched') {
+      diagnostics.push(
+        'the notes mirror has not been fetched here, so this answer may be missing records ' +
+          `that exist upstream (git fetch does not fetch ${NOTES_REF} by default). ` +
+          'fix: commitlore doctor --fix, then git fetch',
+      );
+    }
+
     return {
       records:
         opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
@@ -670,6 +694,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       paths,
       aliases: scope.aliases,
       follow: scope.follow,
+      notes,
       diagnostics,
     };
   } finally {

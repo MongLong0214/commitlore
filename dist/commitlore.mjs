@@ -12682,6 +12682,29 @@ var listRecordShas = (opts = {}) => {
     return object3;
   }).filter((object3) => object3.length > 0);
 };
+var listRemotes = (opts) => {
+  const result = execGit(["remote"], gitOptions(opts));
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").filter((line) => line.length > 0);
+};
+var fetchRefspecs = (remote, opts) => {
+  const result = execGit(["config", "--get-all", `remote.${remote}.fetch`], gitOptions(opts));
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").filter((line) => line.length > 0);
+};
+var coversNotes = (refspec) => {
+  const [, destination = ""] = refspec.replace(/^\+/, "").split(":");
+  if (destination === NOTES_REF2) return true;
+  return destination.endsWith("/*") && NOTES_REF2.startsWith(destination.slice(0, -1));
+};
+var notesAvailability = (opts = {}) => {
+  const ref = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions(opts));
+  if (ref.code === 0) return "present";
+  const remotes = listRemotes(opts);
+  if (remotes.length === 0) return "absent";
+  const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+  return uncovered.length > 0 ? "unfetched" : "absent";
+};
 
 // src/core/backfill.ts
 var DEFAULT_LIMIT = 50;
@@ -13367,21 +13390,6 @@ var commitMsgStub = () => [
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
-var listRemotes = (opts) => {
-  const result = execGit(["remote"], gitOptions2(opts));
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").filter((line) => line.length > 0);
-};
-var fetchRefspecs = (remote, opts) => {
-  const result = execGit(["config", "--get-all", `remote.${remote}.fetch`], gitOptions2(opts));
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").filter((line) => line.length > 0);
-};
-var coversNotes = (refspec) => {
-  const [, destination = ""] = refspec.replace(/^\+/, "").split(":");
-  if (destination === NOTES_REF2) return true;
-  return destination.endsWith("/*") && NOTES_REF2.startsWith(destination.slice(0, -1));
-};
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
@@ -14442,6 +14450,12 @@ var runQuery = (opts = {}) => {
     );
     const records = mergeByIdentity(visible, states).filter((record2) => opts.allHistory === true || record2.lifecycle === "active").filter((record2) => carriesKey(record2, opts.keys)).sort(compareRecords);
     gradeMerged(records, cwd, at, opts.trustedAuthors);
+    const notes = notesAvailability({ cwd });
+    if (notes === "unfetched") {
+      diagnostics.push(
+        `the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF2} by default). fix: commitlore doctor --fix, then git fetch`
+      );
+    }
     return {
       records: opts.limit === void 0 ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
       fromIndex: source.fromIndex,
@@ -14450,6 +14464,7 @@ var runQuery = (opts = {}) => {
       paths,
       aliases: scope.aliases,
       follow: scope.follow,
+      notes,
       diagnostics
     };
   } finally {
@@ -24720,6 +24735,7 @@ var toJson2 = (command, result) => ({
     warnings: countKey(result.records, WARN_KEY2),
     other: result.records.reduce((total, record2) => total + otherTrailers(record2).length, 0)
   },
+  notes: result.notes,
   diagnostics: result.diagnostics,
   records: result.records.map(toJsonRecord)
 });
@@ -24753,7 +24769,8 @@ var otherLines = (records) => {
     )
   );
 };
-var emptyLine = (result, what) => `no active ${what}${scopeSuffix(result)}
+var emptyLine = (result, what) => result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
+` : `no active ${what}${scopeSuffix(result)}
 `;
 var formatKind = (result, section2) => {
   const lines = valueLines(result.records, section2.key, section2.key === WARN_KEY2);

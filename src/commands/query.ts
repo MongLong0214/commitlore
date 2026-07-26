@@ -148,6 +148,14 @@ export interface JsonOutput {
     warnings: number;
     other: number;
   };
+  /**
+   * `present` | `absent` | `unfetched` — whether the notes mirror could be read.
+   *
+   * A machine consumer needs this next to `counts.records`: zero records with
+   * `notes: "unfetched"` is an unknown, not an empty, and the two are otherwise
+   * the same bytes.
+   */
+  notes: string;
   diagnostics: string[];
   records: JsonRecord[];
 }
@@ -192,6 +200,7 @@ export const toJson = (command: string, result: QueryResult): JsonOutput => ({
     warnings: countKey(result.records, WARN_KEY),
     other: result.records.reduce((total, record) => total + otherTrailers(record).length, 0),
   },
+  notes: result.notes,
   diagnostics: result.diagnostics,
   records: result.records.map(toJsonRecord),
 });
@@ -270,8 +279,21 @@ const otherLines = (records: readonly GradedRecord[]): string[] => {
   );
 };
 
+/**
+ * The empty answer, and the one qualifier it must never omit.
+ *
+ * "no active records" is the most consequential sentence this command prints:
+ * an agent reads it as "nothing was ruled out here". When the notes mirror has
+ * not been fetched, that sentence is not merely unhelpful, it is wrong — the
+ * records exist, upstream, and `git clone` does not bring them. The qualifier
+ * goes on the same line as the claim it qualifies, because a diagnostic on
+ * stderr is not read by whoever is reading stdout.
+ */
 const emptyLine = (result: QueryResult, what: string): string =>
-  `no active ${what}${scopeSuffix(result)}\n`;
+  result.notes === 'unfetched'
+    ? `no active ${what}${scopeSuffix(result)} — but the notes mirror has not been ` +
+      'fetched here, so this is not the same as "none exist" (commitlore doctor --fix)\n'
+    : `no active ${what}${scopeSuffix(result)}\n`;
 
 /** `limits`, `ruled-out` and `warnings`: one section, no header block. */
 export const formatKind = (result: QueryResult, section: Section): string => {

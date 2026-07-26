@@ -57,3 +57,39 @@ export declare const readRecord: (sha: string, opts?: NotesOptions) => Trailer[]
  * fetched it yet, has no such ref — that yields `[]`, not an error.
  */
 export declare const listRecordShas: (opts?: NotesOptions) => string[];
+/**
+ * What a consumer route can conclude from an empty answer.
+ *
+ * - `present`    — the mirror ref exists here; an empty answer means empty
+ * - `absent`     — no mirror ref, and every remote already fetches one, so
+ *                  nobody has written records: an empty answer means empty
+ * - `unfetched`  — no mirror ref, and a remote exists that does not fetch it.
+ *                  Records may exist upstream. An empty answer means *unknown*.
+ *
+ * The third case is the one that matters and the reason this exists. `git fetch`
+ * does not fetch notes by default, so a plain `git clone` of a repository full
+ * of records reads zero of them — and "no active records" is the single most
+ * dangerous answer this tool can give, because an agent reads it as "nothing was
+ * ruled out and nothing is off limits". `commitlore doctor` has always warned
+ * about the missing refspec, but doctor is a command a person runs and the query
+ * is what an agent runs.
+ */
+export type NotesAvailability = 'present' | 'absent' | 'unfetched';
+export declare const listRemotes: (opts: NotesOptions) => string[];
+export declare const fetchRefspecs: (remote: string, opts: NotesOptions) => string[];
+/**
+ * Whether a configured refspec lands the mirror where we read it.
+ *
+ * `NOTES_REFSPEC` is what `doctor --fix` writes, but a repository that already
+ * fetches `refs/notes/*` — or all of `refs/*` — is equally configured and must
+ * not be told it is missing anything.
+ */
+export declare const coversNotes: (refspec: string) => boolean;
+/**
+ * Whether this repository can answer for the notes mirror, and if not, why.
+ *
+ * Reads git config only — no network, no fetch. A repository with no remote at
+ * all reports `absent`: there is nowhere for unseen records to be, so an empty
+ * answer is a true empty.
+ */
+export declare const notesAvailability: (opts?: NotesOptions) => NotesAvailability;

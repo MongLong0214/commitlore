@@ -55,6 +55,14 @@ export interface JsonOutput {
         warnings: number;
         other: number;
     };
+    /**
+     * `present` | `absent` | `unfetched` — whether the notes mirror could be read.
+     *
+     * A machine consumer needs this next to `counts.records`: zero records with
+     * `notes: "unfetched"` is an unknown, not an empty, and the two are otherwise
+     * the same bytes.
+     */
+    notes: string;
     diagnostics: string[];
     records: JsonRecord[];
 }

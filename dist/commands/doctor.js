@@ -19,38 +19,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
-import { NOTES_REF, NOTES_REFSPEC } from '../core/notes.js';
+import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import { HOOK_MARKER } from '../hooks/commit-msg.js';
 /** Probe message for the git capability check — one trailer of each shape. */
 const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
 const gitOptions = (opts) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
 const check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
-const listRemotes = (opts) => {
-    const result = execGit(['remote'], gitOptions(opts));
-    if (result.code !== 0)
-        return [];
-    return result.stdout.split('\n').filter((line) => line.length > 0);
-};
-const fetchRefspecs = (remote, opts) => {
-    // Exit 1 means "key not set", which is an answer, not a failure.
-    const result = execGit(['config', '--get-all', `remote.${remote}.fetch`], gitOptions(opts));
-    if (result.code !== 0)
-        return [];
-    return result.stdout.split('\n').filter((line) => line.length > 0);
-};
-/**
- * Whether a configured refspec lands the mirror where we read it. The exact
- * `NOTES_REFSPEC` is what `--fix` writes, but a repository that already fetches
- * `refs/notes/*` (or all of `refs/*`) is equally configured and must not be
- * told to add a redundant line.
- */
-const coversNotes = (refspec) => {
-    const [, destination = ''] = refspec.replace(/^\+/, '').split(':');
-    if (destination === NOTES_REF)
-        return true;
-    return destination.endsWith('/*') && NOTES_REF.startsWith(destination.slice(0, -1));
-};
 const checkRefspec = (opts) => {
     const title = 'notes fetch refspec';
     const remotes = listRemotes(opts);

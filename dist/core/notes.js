@@ -112,4 +112,47 @@ export const listRecordShas = (opts = {}) => {
     })
         .filter((object) => object.length > 0);
 };
+export const listRemotes = (opts) => {
+    const result = execGit(['remote'], gitOptions(opts));
+    if (result.code !== 0)
+        return [];
+    return result.stdout.split('\n').filter((line) => line.length > 0);
+};
+export const fetchRefspecs = (remote, opts) => {
+    // Exit 1 means "key not set", which is an answer, not a failure.
+    const result = execGit(['config', '--get-all', `remote.${remote}.fetch`], gitOptions(opts));
+    if (result.code !== 0)
+        return [];
+    return result.stdout.split('\n').filter((line) => line.length > 0);
+};
+/**
+ * Whether a configured refspec lands the mirror where we read it.
+ *
+ * `NOTES_REFSPEC` is what `doctor --fix` writes, but a repository that already
+ * fetches `refs/notes/*` — or all of `refs/*` — is equally configured and must
+ * not be told it is missing anything.
+ */
+export const coversNotes = (refspec) => {
+    const [, destination = ''] = refspec.replace(/^\+/, '').split(':');
+    if (destination === NOTES_REF)
+        return true;
+    return destination.endsWith('/*') && NOTES_REF.startsWith(destination.slice(0, -1));
+};
+/**
+ * Whether this repository can answer for the notes mirror, and if not, why.
+ *
+ * Reads git config only — no network, no fetch. A repository with no remote at
+ * all reports `absent`: there is nowhere for unseen records to be, so an empty
+ * answer is a true empty.
+ */
+export const notesAvailability = (opts = {}) => {
+    const ref = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
+    if (ref.code === 0)
+        return 'present';
+    const remotes = listRemotes(opts);
+    if (remotes.length === 0)
+        return 'absent';
+    const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+    return uncovered.length > 0 ? 'unfetched' : 'absent';
+};
 //# sourceMappingURL=notes.js.map

@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-prisma-orm",
+  "cond": "commitlore-guard",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Based on the current setup, I can see the core issue: you're using raw SQL strings with the `pg` driver, and TypeScript can't validate that queries match the actual database schema. When columns get renamed in migrations, the code continues to compile because TypeScript only sees strings.\n\n## Recommended Approach: **Inline SQL Type Safety with Schema Introspection**\n\nHere's what I propose: A lightweight system that generates TypeScript types from your Postgres schema and validates them against your queries.\n\n**Why this approach:**\n- **Keeps raw SQL** — You stay close to what you're writing; no query builder abstraction\n- **Fails at build time** — Schema changes trigger TypeScript errors before deployment\n- **Lightweight** — Just a Node script that reads your database schema and generates types\n- **Minimal tooling** — Uses only `pg` driver + native TypeScript, no heavy ORM\n\n**The architecture:**\n1. At build time, connect to Postgres and read table schemas\n2. Generate TypeScript type files (e.g., `src/db/schema.ts`) with exact column names, types, nullability\n3. Create wrapper functions that accept strongly-typed results\n4. Queries that reference wrong columns fail type-checking\n\n**For your 9+ tables:** You add one table definition to a config file, re-run schema generation, and all queries using that table are instantly type-safe.\n\n---\n\nShould I implement this? The main trade-off is that you'll need to run a build step to regenerate types when schema changes land—but this is already happening when migrations run, so it's a natural fit for your CI/CD.",
+  "diff": "",
+  "commits": ""
+}
