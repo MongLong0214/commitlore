@@ -645,12 +645,12 @@ const runBatches = (
   state: RunState,
   targets: readonly BackfillTarget[],
   batchSize: number,
-  process: (batch: readonly BackfillTarget[]) => number,
+  processBatch: (batch: readonly BackfillTarget[]) => number,
 ): void => {
   let empty = 0;
   for (const batch of chunked(targets, batchSize)) {
     state.report.batches += 1;
-    const produced = process(batch);
+    const produced = processBatch(batch);
     if (state.stopped !== null) return;
     if (produced > 0) {
       empty = 0;

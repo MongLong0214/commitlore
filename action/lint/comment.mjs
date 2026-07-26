@@ -52,8 +52,9 @@ const cell = (text) => String(text).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
 /** Inline code that survives a value containing backticks. */
 const code = (text) => {
   const value = String(text);
-  const fence = '`'.repeat(Math.max(1, ...[...value.matchAll(/`+/g)].map((m) => m[0].length)) + 1);
-  return `${fence}${value.includes('`') ? ` ${value} ` : value}${fence}`;
+  const runs = [...value.matchAll(/`+/g)].map((match) => match[0].length);
+  const fence = '`'.repeat(Math.max(0, ...runs) + 1);
+  return `${fence}${runs.length === 0 ? value : ` ${value} `}${fence}`;
 };
 
 const shortSha = (sha) => (typeof sha === 'string' ? sha.slice(0, 8) : '');
@@ -81,18 +82,25 @@ const secretRows = (secrets) =>
       `| ${cell(secret.description)} | ${cell(secret.redacted)} |`,
   );
 
-const constraintLines = (records, key) =>
+/**
+ * One line per trailer value rather than per record: a commit that recorded
+ * three limits constrains three things, and collapsing them would hide two
+ * (SPEC §2.1 B5). The trust grade rides along on warnings only, which is where
+ * `commitlore warnings` prints it — on every line it is noise, since most of a
+ * repository's records carry the same grade.
+ */
+const constraintLines = (records, key, withTrust) =>
   records.flatMap((record) =>
     (record.trailers ?? [])
       .filter((trailer) => trailer.key === key)
       .map((trailer) => {
         const id = record.recordId ?? '-';
-        const flags = [
+        const tags = [
           ...(record.lifecycle && record.lifecycle !== 'active' ? [record.lifecycle] : []),
           ...(record.flags ?? []),
-          ...(record.trust ? [record.trust] : []),
+          ...(withTrust && record.trust ? [record.trust] : []),
         ];
-        const tag = flags.length === 0 ? '' : ` _(${flags.join(', ')})_`;
+        const tag = tags.length === 0 ? '' : ` _(${tags.join(', ')})_`;
         return `- ${code(id)} ${shortSha(record.sha)}${tag} — ${trailer.value}`;
       }),
   );
@@ -209,7 +217,7 @@ export const buildComment = (input) => {
 
   const records = context?.records ?? [];
   const constraints = SECTIONS.flatMap((section) => {
-    const lines = constraintLines(records, section.key);
+    const lines = constraintLines(records, section.key, section.key === 'Warn');
     return lines.length === 0 ? [] : ['', `#### ${section.heading} (${lines.length})`, '', ...lines];
   });
 
@@ -271,7 +279,11 @@ const isForbidden = (error) => Number(error?.status) === FORBIDDEN;
  *
  * When several comments carry the marker — a run that crashed between create
  * and update, an older version of this action — the oldest wins, so the
- * comment's identity does not move around under a reader.
+ * comment's identity does not move around under a reader. One written by an
+ * app wins over one written by a person: the marker is an HTML comment, but a
+ * person who pastes it into their own review must not have it overwritten.
+ * The fallback matters for a workflow driven by a personal access token, where
+ * this action's own comment is authored by a user.
  */
 export const upsertComment = async ({ api, body, marker = MARKER }) => {
   if (!body.includes(marker)) {
@@ -282,9 +294,12 @@ export const upsertComment = async ({ api, body, marker = MARKER }) => {
 
   try {
     const comments = await api.list();
-    const existing = comments.find(
+    const marked = comments.filter(
       (comment) => typeof comment?.body === 'string' && comment.body.includes(marker),
     );
+    const existing =
+      marked.find((comment) => comment.user === undefined || comment.user?.type === 'Bot') ??
+      marked[0];
 
     if (existing) {
       const updated = await api.update(existing.id, body);

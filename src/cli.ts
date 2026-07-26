@@ -7,13 +7,14 @@
  * commands are built in parallel and a shared entry point that each one edits
  * is a merge conflict by construction.
  *
- * Still to land: `backfill` (T-801).
+ * Every ticketed command has landed.
  */
 
 import { readFileSync } from 'node:fs';
 
 import { Command } from 'commander';
 
+import { register as registerBackfill } from './commands/backfill.js';
 import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerGuard } from './commands/guard.js';
@@ -84,6 +85,7 @@ registerHarvestVerify(program);
 registerSquashPreserve(program);
 registerGuard(program);
 registerInject(program);
+registerBackfill(program);
 registerMcp(program);
 
 try {

@@ -62,7 +62,8 @@ const STOP_EXPLANATION: Readonly<Record<StopReason, string>> = {
     'two consecutive batches produced nothing, so the rest of the range was left alone',
 };
 
-const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
+const count = (n: number, singular: string, plural = `${singular}s`): string =>
+  `${n} ${n === 1 ? singular : plural}`;
 
 const nonNegativeInteger = (raw: string | undefined, flag: string): number | undefined => {
   if (raw === undefined) return undefined;
@@ -129,14 +130,15 @@ const summary = (report: BackfillReport): string => {
 
   if (report.mode === 'prompt-only') {
     lines.push(
-      `  prompts: ${count(report.prompts, 'prompt')} over ${count(report.batches, 'batch')}, ` +
+      `  prompts: ${count(report.prompts, 'prompt')} over ${count(report.batches, 'batch', 'batches')}, ` +
         `~${count(report.estimatedTokens, 'token')} estimated`,
     );
   }
   if (report.mode === 'apply') {
     lines.push(
-      `  records: ${would} ${count(report.attached, 'record')} over ${count(report.batches, 'batch')}, ` +
-        `all Provenance: reconstructed`,
+      `  records: ${would} ${count(report.attached, 'record')} ` +
+        `over ${count(report.batches, 'batch', 'batches')}` +
+        (report.attached === 0 ? '' : ', all Provenance: reconstructed'),
       `  discarded: ${count(report.discarded.length, 'record')} failed verification`,
     );
   }

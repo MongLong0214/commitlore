@@ -219,6 +219,16 @@ seeds. **Nothing may fire.** Three clauses did, and were fixed:
 `https?://` for call-shaped signatures only, and `enforcement-removed` gained a
 `(?!--)` lookahead.
 
+Worth being plain about the order this happened in: the correct-solution check
+above ran and passed *before* the measurement started, and it did not catch any
+of these three. It could not have. A reference solution exercises the matchers
+against one plausible diff; it says nothing about text the agent did not write,
+and the `---` header collision only appears when the correct solution happens to
+touch that exact file — which the reference one did not. **Checking a detector
+against the right answer is not the same as checking it against noise, and only
+the second one catches a matcher that fires on nothing at all.** The noise check
+was written after the run had begun, from auditing `matched[]` on the early rows.
+
 All three were `violation_if` clauses. **No `reproposed_if` clause fired on
 either noise source, for any of the ten tasks** — the primary metric was never
 exposed to this.

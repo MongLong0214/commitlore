@@ -233,8 +233,15 @@ describe('lint.mjs against a pull request range', () => {
   });
 });
 
+interface StubComment {
+  id: number;
+  body: string;
+  user?: { type: string };
+  html_url?: string;
+}
+
 /** The three calls `upsertComment` is allowed to make, and a log of them. */
-const stubApi = (comments: { id: number; body: string }[]) => {
+const stubApi = (comments: StubComment[]) => {
   const calls: string[] = [];
   return {
     calls,
@@ -273,6 +280,18 @@ describe('the pull request comment', () => {
     expect(api.calls).toEqual(['list', 'update:2']);
     expect(api.comments).toHaveLength(3);
     expect(api.comments[1]?.body).toContain('new body');
+  });
+
+  it('rewrites its own comment, not a person who pasted the marker', async () => {
+    const api = stubApi([
+      { id: 1, body: `${MARKER}\nquoted in a review`, user: { type: 'User' } },
+      { id: 2, body: `${MARKER}\nold body`, user: { type: 'Bot' } },
+    ]);
+
+    const result = await upsertComment({ api, body: `${MARKER}\nnew body` });
+
+    expect(result.id).toBe(2);
+    expect(api.comments[0]?.body).toContain('quoted in a review');
   });
 
   it('creates one when the pull request has none', async () => {
@@ -437,11 +456,21 @@ describe('action.yml', () => {
     expect(text).toContain('pull-requests: write');
   });
 
-  it('is dogfooded by a workflow that does not touch CI', () => {
-    const demo = readFileSync(DEMO_WORKFLOW, 'utf8');
-    expect(demo).toContain('uses: ./action/lint');
-    expect(demo).toContain('fetch-depth: 0');
-    expect(demo).toContain('pull-requests: write');
+  // A workflow file that does not parse is a workflow GitHub never runs, and
+  // the dogfooding would be a file in the repository rather than a check.
+  it('is dogfooded by a workflow that parses and does not touch CI', () => {
+    const text = readFileSync(DEMO_WORKFLOW, 'utf8');
+    const demo = load(text) as {
+      on: unknown;
+      permissions: Record<string, string>;
+      jobs: Record<string, { steps: ActionStep[] }>;
+    };
+
+    expect(demo.permissions).toEqual({ contents: 'read', 'pull-requests': 'write' });
+    expect(Object.keys(demo.jobs)).toHaveLength(1);
+    const steps = Object.values(demo.jobs)[0]?.steps ?? [];
+    expect(steps.some((step) => step.uses === './action/lint')).toBe(true);
+    expect(text).toContain('fetch-depth: 0');
   });
 });
 
