@@ -1,0 +1,123 @@
+name: CommitLore squash inheritance
+description: >-
+  Carry the records of a squash-merged branch onto the commit that squashed it,
+  and publish them to the notes mirror. Does nothing for a merge commit or a
+  rebase, where the records survived on their own.
+
+# What the caller has to get right, because this action deliberately does not
+# check out the repository for you -- doing that would silently replace the
+# caller's own checkout settings (submodules, LFS, a different ref):
+#
+#   - uses: actions/checkout@v4
+#     with:
+#       # a `pull_request: closed` event has no merge ref left to check out,
+#       # and the merge commit is on the base branch:
+#       ref: ${{ github.event.pull_request.base.ref }}
+#       fetch-depth: 0        # the branch the squash collapsed must still be here
+#
+#   # the mirror this action writes. Publishing from a checkout that never read
+#   # it forks the notes history, so the action stops rather than do that:
+#   - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+#
+#   # a squash merge usually deletes the branch, and then the only ref that
+#   # still reaches the commits carrying the records is the pull request's:
+#   - run: git fetch --no-tags --force origin
+#          '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+#
+# Gate the job on `github.event.pull_request.merged == true`. An unmerged pull
+# request still reports a `merge_commit_sha` -- GitHub's test-merge commit --
+# and that object is not in the repository.
+#
+# Permissions: `contents: write`, for the one push to refs/notes/commitlore.
+# Nothing more: this action makes no GitHub API call at all. It spawns git and
+# the commitlore CLI, and the only host it reaches is the git remote the
+# caller already cloned from.
+
+inputs:
+  base-ref:
+    description: >-
+      The branch the pull request targeted. Compared as `origin/<base-ref>`
+      when that resolves, so the base is the branch as it exists on the server;
+      a raw sha is accepted too. That it already carries the squash commit is
+      fine -- `<base>..<head>` is the branch's own commits either way.
+    required: false
+    default: ${{ github.event.pull_request.base.ref }}
+  head-ref:
+    description: >-
+      The tip of the branch that was squashed. Defaults to the pull request's
+      head sha, which outlives the branch through `refs/pull/<n>/head` -- the
+      branch itself is usually deleted by the merge.
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  merge-sha:
+    description: >-
+      The commit the merge produced. For a squash this is the squashed commit
+      on the base branch, which is what the inherited record is attached to.
+    required: false
+    default: ${{ github.event.pull_request.merge_commit_sha }}
+  push:
+    description: >-
+      Publish `refs/notes/commitlore` to origin. With `false` the record is
+      attached to the local mirror and nothing leaves the runner, which is what
+      a dry run of this action looks like.
+    required: false
+    default: 'true'
+  github-token:
+    description: >-
+      Fallback credential for the push, used only when the checkout did not
+      persist its own (`persist-credentials: false`). Needs `contents: write`.
+    required: false
+    default: ${{ github.token }}
+  cli-path:
+    description: >-
+      Path to a built `cli.js` to run instead of the published package. Set
+      this to inherit with the build in the repository being merged.
+    required: false
+    default: ''
+
+outputs:
+  action:
+    description: >-
+      `inherited`, `already-inherited`, `nothing-to-preserve`, `skipped`
+      (not a squash), or `push-failed`.
+    value: ${{ steps.preserve.outputs.action }}
+  merge-type:
+    description: '`squash`, `merge-commit`, `rebase`, `fast-forward`, or `unknown`.'
+    value: ${{ steps.preserve.outputs.merge-type }}
+  records:
+    description: Number of source records carried onto the merge commit.
+    value: ${{ steps.preserve.outputs.records }}
+  conflicts:
+    description: >-
+      Number of `Record-Id`s the branch declared twice with different content.
+      Reported, never resolved silently, and never a failure (T-302).
+    value: ${{ steps.preserve.outputs.conflicts }}
+  pushed:
+    description: Whether `refs/notes/commitlore` reached origin.
+    value: ${{ steps.preserve.outputs.pushed }}
+
+runs:
+  using: composite
+  steps:
+    # Three exit codes, and the step fails on two of them:
+    #
+    #   0  inherited, already inherited, nothing to inherit, or not a squash
+    #   1  the record was attached and could not be published -- a mirror that
+    #      never left the runner is not a second channel (ADR-0004)
+    #   2  the checkout cannot answer the question (shallow, missing ref, notes
+    #      left on the remote)
+    #
+    # There is no `fail-on-*` input. Unlike the lint, where a violation is a
+    # finding about somebody's pull request, everything this can report as a
+    # failure is a failure of the action's own job.
+    - id: preserve
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/preserve.mjs"
+      env:
+        COMMITLORE_BASE_REF: ${{ inputs.base-ref }}
+        COMMITLORE_HEAD_REF: ${{ inputs.head-ref }}
+        COMMITLORE_MERGE_SHA: ${{ inputs.merge-sha }}
+        COMMITLORE_PUSH: ${{ inputs.push }}
+        COMMITLORE_TOKEN: ${{ inputs.github-token }}
+        COMMITLORE_CLI: ${{ inputs.cli-path }}
+        COMMITLORE_WORKSPACE: ${{ github.workspace }}

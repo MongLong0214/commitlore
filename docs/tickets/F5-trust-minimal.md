@@ -1,7 +1,7 @@
 # F5 티켓 — Trust 최소분 (M3)
 
 > PRD: `docs/prd/PRD-F5-trust-minimal.md` · ADR: 0005
-> 모듈: `src/core/grade.ts`, `src/hooks/secret-guard.ts`
+> 모듈: `src/core/grade.ts`, `src/core/secret-guard.ts`, `src/hooks/secret-rules.ts`
 
 ---
 

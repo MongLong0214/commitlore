@@ -1,0 +1,78 @@
+name: Demo — squash inheritance
+
+# This repository runs its own inheritance action on its own merges, with the
+# build from the merged commit rather than the last release. The squash path is
+# the one defect (D3, ADR-0004) that cannot be proved by a unit test alone: it
+# only exists because of what GitHub does to a branch at merge time, so the
+# proof has to be a merge GitHub performed.
+#
+# Separate from ci.yml and demo-lint.yml on purpose: this job is the only one
+# in the repository that needs `contents: write`, and neither of those must
+# inherit it.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  # The one push to refs/notes/commitlore. The action makes no API call.
+  contents: write
+
+# One writer at a time for the shared notes ref. The action retries a rejected
+# push on its own -- it has to, because a queue here says nothing about what
+# another repository's tooling or a person at a terminal is doing to the same
+# ref -- but a queue turns the common case from a retry into a no-op.
+concurrency:
+  group: commitlore-notes-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    # A pull request that was closed without merging has nothing to inherit,
+    # and its `merge_commit_sha` names GitHub's test-merge commit, which is not
+    # in the repository.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `refs/pull/<n>/merge` is gone once the pull request is closed, so
+          # the default ref for this event does not resolve. The merge commit
+          # is on the base branch, which is what the action reads.
+          ref: ${{ github.event.pull_request.base.ref }}
+          # The action refuses a shallow clone rather than inherit from
+          # whatever subset of the branch the default depth happened to bring.
+          fetch-depth: 0
+
+      # actions/checkout does not bring git notes, and this action writes them.
+      # Publishing from a checkout that never read the mirror would fork it, so
+      # the action stops if origin has the ref and the checkout does not.
+      - name: Bring the record notes mirror, if there is one
+        run: |
+          if git ls-remote --exit-code origin refs/notes/commitlore >/dev/null 2>&1; then
+            git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+          else
+            echo "origin carries no refs/notes/commitlore yet -- this run may create it"
+          fi
+
+      # The squash deleted the branch. `refs/pull/<n>/head` is what still
+      # reaches the commits whose trailer blocks are being inherited; without
+      # this, head-ref resolves to nothing and the action stops.
+      - name: Bring the commits the squash collapsed
+        run: |
+          git fetch --no-tags --force origin \
+            '+refs/pull/${{ github.event.pull_request.number }}/head:refs/commitlore/pr-head'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # cli-path below points at this; without it the inheritance would run the
+      # published package against a merge that may be changing it.
+      - run: npm run build
+
+      - uses: ./action/preserve
+        with:
+          cli-path: dist/cli.js
