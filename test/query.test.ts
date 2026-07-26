@@ -49,6 +49,15 @@ const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-query-'));
   temporaries.push(dir);
   execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
+  // The same settings are also written into the repository, not only passed
+  // per invocation: production code called from these tests (`writeRecord`
+  // creating a notes commit, for one) runs its own git and never sees the `-c`
+  // flags. Without this the suite passes wherever the developer happens to have
+  // a global identity and fails on a clean CI runner with "Author identity
+  // unknown" -- which is exactly how it was found.
+  execGitOrThrow(['config', 'user.name', 'CommitLore Test'], { cwd: dir });
+  execGitOrThrow(['config', 'user.email', 'test@example.invalid'], { cwd: dir });
+  execGitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
   return dir;
 };
 

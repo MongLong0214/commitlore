@@ -235,6 +235,14 @@ describe('squash-preserve', () => {
         `r-bbb222 ${branchShas[1] ?? ''}`,
         branchShas[2] ?? '',
       ]);
+
+      // A second run does not quietly replace what the first one wrote.
+      const again = runSquashPreserve({ range, target: mergeSha, cwd: repo });
+      expect(again.code).toBe(2);
+      expect(again.stderr).toMatch(/exists|existing/i);
+      expect(readRecord(mergeSha, { cwd: repo })).toEqual(mirrored);
+
+      expect(runSquashPreserve({ range, target: mergeSha, force: true, cwd: repo }).code).toBe(0);
     },
     30_000,
   );
@@ -421,6 +429,19 @@ describe('squash-preserve', () => {
     expect(outcome.code).toBe(0);
     expect(outcome.stdout).toContain('Limit: the vendor caps us at 3 concurrent workers');
     expect(outcome.stderr).toContain('plan only');
+
+    const asJson = runSquashPreserve({ range, json: true, cwd: repo });
+    expect(asJson.code).toBe(0);
+    const payload: {
+      range: string;
+      sources: { sha: string }[];
+      merged: Trailer[];
+      applied: { messageFile: string | null; target: string | null };
+    } = JSON.parse(asJson.stdout);
+    expect(payload.range).toBe(range);
+    expect(payload.sources).toHaveLength(3);
+    expect(value(payload.merged, 'Undo')).toBe('costly');
+    expect(payload.applied).toEqual({ messageFile: null, target: null });
 
     expect(head(repo)).toBe(before.head);
     expect(git(repo, ['status', '--porcelain'])).toBe(before.status);
