@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T123520Z-64b089",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-off",
+  "seed": 3,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Done. Here's the approach I chose:\n\n**Using `setImmediate()` to defer writes** — This schedules the log write for the next iteration of the event loop, taking it off the request's critical path. The key advantages:\n\n1. **Breaks back-pressure** — When stdout's internal buffer fills, `process.stdout.write` blocks the event loop. By deferring with `setImmediate`, the request completes and frees resources before we attempt to write, preventing the queue buildup.\n\n2. **Preserves ordering** — All synchronous code in the current tick runs first (including all `log()` calls for that request), then `setImmediate` callbacks execute in order. Logs for a single request stay ordered.\n\n3. **No data loss** — We're not dropping logs, just writing them asynchronously. The audit trail is complete.\n\n4. **Minimal overhead** — No queuing logic, no batching state, no separate thread. A single function call that costs microseconds.\n\nThis approach is standard for deferring I/O in Node.js and directly addresses the latency spike — requests no longer wait for stdout flushes. Under peak load, logs will still write (eventually), but they won't block new incoming requests.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..9188007 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,5 @@\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  setImmediate(() => {\n+    process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  });\n };\n",
+  "commits": ""
+}

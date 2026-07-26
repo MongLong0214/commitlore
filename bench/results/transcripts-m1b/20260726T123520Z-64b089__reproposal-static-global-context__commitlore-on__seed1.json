@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T123520Z-64b089",
+  "task": "reproposal-static-global-context",
+  "cond": "commitlore-on",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": "## CommitLore — recorded decisions for this repository\n\nThese records were written by earlier commits in this repository. They are the\nconditions and rejected alternatives that the diff cannot show.\n\n### Ruled out — do not re-propose without new evidence\n- a checked-in repository-wide context file the agent loads once — it goes stale the moment the code moves and there is no path signal left to decide what is relevant, which measured worse than no context at all [r-1a77e5]\n- concatenating every record into one preamble at session start — the same loss of scope, paid on every session instead of every read [r-1a77e5]\n\n### Active limits\n- the injected block is scoped to the path under the tool call — a whole-repository dump is what the scoping exists to prevent\n\n### Warnings (instruction — authored by a trusted committer)\n- the hook runs on the user's critical path — a slow hook will be switched off, and a switched-off hook records nothing\n",
+  "transcript": "I see the CommitLore context for this repository. It looks like you're working on a system that injects recorded decisions scoped to specific paths, with constraints around:\n\n1. Avoiding stale, repository-wide context\n2. Keeping the injected block narrowly scoped to the path being read\n3. Dealing with the challenge that half the team uses editors without pre-tool-use hook interception\n\nThe warning notes a key tension: you need to get the records in front of users who don't have hook support, while also explaining the approach you've chosen.\n\nWhat would you like me to help with? Are you looking to:\n- Design an alternative approach to reach users without pre-tool-use hooks?\n- Implement or refine the current path-scoped injection?\n- Something else related to CommitLore?",
+  "diff": "",
+  "commits": ""
+}

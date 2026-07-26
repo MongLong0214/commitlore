@@ -91,6 +91,30 @@ const writeStub = (hookPath) => {
     chmodSync(temporary, HOOK_MODE);
     renameSync(temporary, hookPath);
 };
+/**
+ * Records the entry point this install ran from, in local git config.
+ *
+ * The hook's other three lookups — `COMMITLORE_BIN`, `PATH`, a `node_modules`
+ * walk — all assume the CLI arrived through a package manager. Since ADR-0011
+ * a clone is a complete installation, so the ordinary case is a checkout that
+ * satisfies none of them, and the first commit in a fresh repository fails with
+ * the hook unable to find the tool that had just written it.
+ *
+ * Local config rather than the stub's text so that `hooks status` keeps
+ * comparing bytes: a hook installed from another path stays `installed`, not
+ * `outdated`. Failure here is not fatal — the hook still has three other ways
+ * to resolve, and refusing to install because a config write failed would be
+ * worse than installing something slightly less able to find itself.
+ */
+const recordBinPath = (cwd) => {
+    const entry = process.argv[1];
+    if (entry === undefined || entry === '')
+        return;
+    execGit(['config', '--local', 'commitlore.bin', resolve(entry)], { cwd });
+    // The interpreter as well: the branch that reads these back runs in a hook
+    // whose PATH may not carry node, which is the whole reason it exists.
+    execGit(['config', '--local', 'commitlore.node', process.execPath], { cwd });
+};
 const describeChained = (status) => {
     if (!status.chained)
         return [];
@@ -118,6 +142,7 @@ export const installHook = (input = {}) => {
             renameSync(before.hookPath, before.chainedPath);
         }
         writeStub(before.hookPath);
+        recordBinPath(cwd);
     }
     catch (error) {
         return failure(`could not install the ${HOOK_NAME} hook: ${messageOf(error)}`);

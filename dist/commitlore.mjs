@@ -13319,9 +13319,35 @@ var commitMsgStub = () => [
   "  dir=${dir%/*}",
   "done",
   "",
+  "# Where `hooks install` was run from. A clone is a complete installation",
+  "# (ADR-0011), so the common case is a checkout that is on no PATH and in no",
+  "# node_modules \u2014 and the installer is the only thing that ever knew where it",
+  "# was. Recorded in local git config rather than in this file so the stub",
+  "# stays byte-identical wherever it came from, which is what `hooks status`",
+  "# compares against.",
+  "recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)",
+  'if [ -n "$recorded" ]; then',
+  '  case "$recorded" in',
+  "    *.mjs|*.js)",
+  "      # The interpreter is recorded as an absolute path too. A bare `node`",
+  "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
+  "      # same environment this whole branch exists to survive.",
+  "      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)",
+  '      if [ -x "$recorded_node" ]; then',
+  '        exec "$recorded_node" "$recorded" validate --message-file "$1"',
+  "      fi",
+  "      if command -v node >/dev/null 2>&1; then",
+  '        exec node "$recorded" validate --message-file "$1"',
+  "      fi",
+  "      ;;",
+  '    *) exec "$recorded" validate --message-file "$1" ;;',
+  "  esac",
+  "fi",
+  "",
   "# Passing silently here would report a clean record for a message nothing",
   "# ever read.",
-  'echo "commitlore: not found \u2014 install it (npm i -D commitlore) or set COMMITLORE_BIN" >&2',
+  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+  'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
   "exit 1",
   ""
 ].join("\n");
@@ -15058,6 +15084,12 @@ var writeStub = (hookPath) => {
   chmodSync(temporary, HOOK_MODE);
   renameSync(temporary, hookPath);
 };
+var recordBinPath = (cwd) => {
+  const entry = process.argv[1];
+  if (entry === void 0 || entry === "") return;
+  execGit(["config", "--local", "commitlore.bin", resolve3(entry)], { cwd });
+  execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
+};
 var describeChained = (status) => {
   if (!status.chained) return [];
   const note = status.chainedExecutable ? "runs before commitlore" : "not executable \u2014 git would not have run it either, so the stub skips it";
@@ -15082,6 +15114,7 @@ var installHook = (input = {}) => {
       renameSync(before.hookPath, before.chainedPath);
     }
     writeStub(before.hookPath);
+    recordBinPath(cwd);
   } catch (error2) {
     return failure(`could not install the ${HOOK_NAME} hook: ${messageOf2(error2)}`);
   }
