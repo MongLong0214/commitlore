@@ -102,6 +102,14 @@ export interface GuardOptions {
   at?: Date;
   cwd?: string;
   noIndex?: boolean;
+  /**
+   * Refuse to flag on a `Record-Id:` reference alone.
+   *
+   * The informational default is deliberate (see `RECORD_ID_WEIGHT`): naming a
+   * record is a good reason to print what it ruled out. A blocking hook needs
+   * the opposite, because citing a record is what compliance looks like.
+   */
+  requireContent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -462,8 +470,9 @@ const corroborated = (
   idHit: boolean,
   coverage: Coverage,
   similarity: number,
+  requireContent = false,
 ): boolean =>
-  idHit ||
+  (idHit && !requireContent) ||
   coverage.hits.length >= MIN_KEYWORD_HITS ||
   coverage.mass >= STRONG_KEYWORD_MASS ||
   similarity >= MIN_JACCARD;
@@ -511,19 +520,31 @@ interface Candidate {
   idHit: boolean;
 }
 
-const matchOne = (candidate: Candidate, proposal: Tokens, corpus: Corpus): GuardMatch | null => {
+const matchOne = (
+  candidate: Candidate,
+  proposal: Tokens,
+  corpus: Corpus,
+  requireContent = false,
+): GuardMatch | null => {
   const { record, parsed, tokens, idHit } = candidate;
 
   const similarity = jaccard(tokens.stems, proposal.stems);
   const coverage = keywordCoverage(tokens, proposal, corpus);
-  if (!corroborated(idHit, coverage, similarity)) return null;
+  if (!corroborated(idHit, coverage, similarity, requireContent)) return null;
 
+  // Under `requireContent` the record id contributes nothing to the score
+  // either. Naming a record is evidence that the proposal *refers* to it, and
+  // a well-behaved agent refers to it precisely when it is complying: measured
+  // against 30 recorded agent runs, the two highest-scoring flags were both an
+  // agent citing the record it was obeying — one wrote `Constraints (from
+  // r-2d55a9)`, the other used the id as a documentation example. Both scored
+  // 1.00 on the id alone with a token overlap of 0.01.
   const score = round(
     Math.min(
       1,
       JACCARD_WEIGHT * similarity +
         KEYWORD_WEIGHT * coverage.mass +
-        (idHit ? RECORD_ID_WEIGHT : 0),
+        (idHit && !requireContent ? RECORD_ID_WEIGHT : 0),
     ),
   );
 
@@ -598,7 +619,7 @@ export const guard = (opts: GuardOptions): GuardMatch[] => {
   const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
 
   return candidates
-    .map((candidate) => matchOne(candidate, proposal, corpus))
+    .map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false))
     .filter((match): match is GuardMatch => match !== null && match.score >= threshold)
     .sort(compareMatches);
 };

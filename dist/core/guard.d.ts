@@ -97,6 +97,14 @@ export interface GuardOptions {
     at?: Date;
     cwd?: string;
     noIndex?: boolean;
+    /**
+     * Refuse to flag on a `Record-Id:` reference alone.
+     *
+     * The informational default is deliberate (see `RECORD_ID_WEIGHT`): naming a
+     * record is a good reason to print what it ruled out. A blocking hook needs
+     * the opposite, because citing a record is what compliance looks like.
+     */
+    requireContent?: boolean;
 }
 /**
  * Weight on token Jaccard. Equal to `KEYWORD_WEIGHT` because the two signals

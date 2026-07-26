@@ -42,6 +42,7 @@ interface GuardCommandOptions {
   at?: string;
   /** Commander's negatable `--no-index`: `true` unless the flag was given. */
   index?: boolean;
+  requireContent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +181,10 @@ export const register = (program: Command): void => {
     .option('--threshold <n>', `match score required to flag (default: ${DEFAULT_THRESHOLD})`)
     .option('--json', 'emit the matches as JSON on stdout')
     .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
+    .option(
+      "--require-content",
+      "do not flag on a Record-Id reference alone — for blocking hooks, where citing a record is what compliance looks like",
+    )
     .option('--no-index', 'answer from git alone, without the SQLite index')
     .action((paths: string[], options: GuardCommandOptions) => {
       try {
@@ -191,6 +196,7 @@ export const register = (program: Command): void => {
           threshold,
           at,
           noIndex: options.index === false,
+      ...(options.requireContent === true ? { requireContent: true } : {}),
         });
 
         process.stderr.write(scopeCaveat(paths));

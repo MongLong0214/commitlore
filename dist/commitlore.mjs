@@ -14734,7 +14734,7 @@ var keywordCoverage = (alternative, proposal, corpus) => {
   }
   return { mass: total === 0 ? 0 : named / total, hits: hits.sort() };
 };
-var corroborated = (idHit, coverage, similarity) => idHit || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.mass >= STRONG_KEYWORD_MASS || similarity >= MIN_JACCARD;
+var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.mass >= STRONG_KEYWORD_MASS || similarity >= MIN_JACCARD;
 var collapse = (text) => text.replace(/\s+/g, " ").trim();
 var parseRuledOut = (value) => {
   const at = value.indexOf("|");
@@ -14751,15 +14751,15 @@ var compareMatches = (a, b) => {
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   return a.alternative < b.alternative ? -1 : a.alternative > b.alternative ? 1 : 0;
 };
-var matchOne = (candidate, proposal, corpus) => {
+var matchOne = (candidate, proposal, corpus, requireContent = false) => {
   const { record: record2, parsed, tokens, idHit } = candidate;
   const similarity = jaccard(tokens.stems, proposal.stems);
   const coverage = keywordCoverage(tokens, proposal, corpus);
-  if (!corroborated(idHit, coverage, similarity)) return null;
+  if (!corroborated(idHit, coverage, similarity, requireContent)) return null;
   const score = round(
     Math.min(
       1,
-      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.mass + (idHit ? RECORD_ID_WEIGHT : 0)
+      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.mass + (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)
     )
   );
   const signals = [
@@ -14806,7 +14806,7 @@ var guard = (opts) => {
     });
   });
   const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
-  return candidates.map((candidate) => matchOne(candidate, proposal, corpus)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches);
+  return candidates.map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches);
 };
 
 // src/commands/guard.ts
@@ -14869,7 +14869,10 @@ var register4 = (program3) => {
   program3.command("guard").description("flag a proposal that revives an alternative already ruled out").argument("[paths...]", "limit the check to records touching these paths").requiredOption(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin"
-  ).option("--threshold <n>", `match score required to flag (default: ${DEFAULT_THRESHOLD})`).option("--json", "emit the matches as JSON on stdout").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--no-index", "answer from git alone, without the SQLite index").action((paths, options) => {
+  ).option("--threshold <n>", `match score required to flag (default: ${DEFAULT_THRESHOLD})`).option("--json", "emit the matches as JSON on stdout").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option(
+    "--require-content",
+    "do not flag on a Record-Id reference alone \u2014 for blocking hooks, where citing a record is what compliance looks like"
+  ).option("--no-index", "answer from git alone, without the SQLite index").action((paths, options) => {
     try {
       const threshold = matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD;
       const at = evaluationInstant(options.at) ?? /* @__PURE__ */ new Date();
@@ -14878,7 +14881,8 @@ var register4 = (program3) => {
         paths,
         threshold,
         at,
-        noIndex: options.index === false
+        noIndex: options.index === false,
+        ...options.requireContent === true ? { requireContent: true } : {}
       });
       process.stderr.write(scopeCaveat(paths));
       if (options.json === true) {

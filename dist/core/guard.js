@@ -377,7 +377,7 @@ const keywordCoverage = (alternative, proposal, corpus) => {
  * None of the four can be reached by a single common word in a long
  * alternative, which is the whole shape of the false positive.
  */
-const corroborated = (idHit, coverage, similarity) => idHit ||
+const corroborated = (idHit, coverage, similarity, requireContent = false) => (idHit && !requireContent) ||
     coverage.hits.length >= MIN_KEYWORD_HITS ||
     coverage.mass >= STRONG_KEYWORD_MASS ||
     similarity >= MIN_JACCARD;
@@ -407,15 +407,22 @@ const compareMatches = (a, b) => {
         return a.sha < b.sha ? -1 : 1;
     return a.alternative < b.alternative ? -1 : a.alternative > b.alternative ? 1 : 0;
 };
-const matchOne = (candidate, proposal, corpus) => {
+const matchOne = (candidate, proposal, corpus, requireContent = false) => {
     const { record, parsed, tokens, idHit } = candidate;
     const similarity = jaccard(tokens.stems, proposal.stems);
     const coverage = keywordCoverage(tokens, proposal, corpus);
-    if (!corroborated(idHit, coverage, similarity))
+    if (!corroborated(idHit, coverage, similarity, requireContent))
         return null;
+    // Under `requireContent` the record id contributes nothing to the score
+    // either. Naming a record is evidence that the proposal *refers* to it, and
+    // a well-behaved agent refers to it precisely when it is complying: measured
+    // against 30 recorded agent runs, the two highest-scoring flags were both an
+    // agent citing the record it was obeying — one wrote `Constraints (from
+    // r-2d55a9)`, the other used the id as a documentation example. Both scored
+    // 1.00 on the id alone with a token overlap of 0.01.
     const score = round(Math.min(1, JACCARD_WEIGHT * similarity +
         KEYWORD_WEIGHT * coverage.mass +
-        (idHit ? RECORD_ID_WEIGHT : 0)));
+        (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)));
     const signals = [
         ...(idHit ? [`record-id:${record.recordId ?? ''}`] : []),
         ...coverage.hits.map((hit) => `keyword:${hit}`),
@@ -481,7 +488,7 @@ export const guard = (opts) => {
     });
     const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
     return candidates
-        .map((candidate) => matchOne(candidate, proposal, corpus))
+        .map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false))
         .filter((match) => match !== null && match.score >= threshold)
         .sort(compareMatches);
 };

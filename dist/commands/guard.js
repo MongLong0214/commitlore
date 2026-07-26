@@ -121,6 +121,7 @@ export const register = (program) => {
         .option('--threshold <n>', `match score required to flag (default: ${DEFAULT_THRESHOLD})`)
         .option('--json', 'emit the matches as JSON on stdout')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
+        .option("--require-content", "do not flag on a Record-Id reference alone — for blocking hooks, where citing a record is what compliance looks like")
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .action((paths, options) => {
         try {
@@ -132,6 +133,7 @@ export const register = (program) => {
                 threshold,
                 at,
                 noIndex: options.index === false,
+                ...(options.requireContent === true ? { requireContent: true } : {}),
             });
             process.stderr.write(scopeCaveat(paths));
             if (options.json === true) {
