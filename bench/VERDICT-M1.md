@@ -133,3 +133,31 @@ different decision.
 
 No recommendation is offered on (1). That is the direction-change decision
 ADR-0007 reserved for the owner.
+
+---
+
+## Amendment — the decision above was framed on incomplete information
+
+Appended after `bench/ROUTE-GAP.md`, which replayed these same 60 runs with no
+new model calls. Nothing above changes: p = 0.7480 stands, and so does every
+number. What changes is what the result is evidence *about*.
+
+SPEC §5 assigns `Ruled-out:` to `commitlore guard`, which blocks before
+execution. This matrix delivered it as injected context — the route the spec
+assigns to `Limit:` and `Warn:` — and never invoked guard at all. So the
+measurement is not evidence about `Ruled-out:`; it is evidence about advisory
+injection.
+
+And on that, it is sharper than "inconclusive": injection was delivered
+correctly to all 30 treatment runs and **four of the five re-proposals
+implemented an alternative named in the block the agent had just been given**.
+Replaying the same runs through guard catches three of those five before
+execution, against injection's zero — at a cost of five false alarms in
+twenty-five that has to be designed against, not assumed away.
+
+**This makes option 1 above the wrong question.** Spending 20–40 hours to
+resolve a ±6pp effect on the advisory route buys precision about the weaker of
+the two mechanisms while the one the product claim rests on stays unmeasured.
+The next experiment is #37, not a larger version of this one.
+
+Option 3 is unaffected: ship v0.1.0 with these numbers either way.
