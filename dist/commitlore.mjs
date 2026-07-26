@@ -13303,8 +13303,10 @@ var register = (program3) => {
 };
 
 // src/commands/doctor.ts
-import { existsSync as existsSync2, readFileSync as readFileSync5 } from "node:fs";
-import { resolve as resolve2 } from "node:path";
+import { spawnSync as spawnSync3 } from "node:child_process";
+import { existsSync as existsSync2, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync } from "node:fs";
+import { tmpdir as tmpdirPath } from "node:os";
+import { join as join2, resolve as resolve2 } from "node:path";
 
 // src/hooks/commit-msg.ts
 var HOOK_MARKER = "# commitlore:commit-msg:v1";
@@ -13339,26 +13341,20 @@ var commitMsgStub = () => [
   '  exec "$COMMITLORE_BIN" validate --message-file "$1"',
   "fi",
   "",
-  "if command -v commitlore >/dev/null 2>&1; then",
-  '  exec commitlore validate --message-file "$1"',
-  "fi",
-  "",
-  "# A local devDependency is not on PATH inside a hook, so resolve it the way",
-  "# node would: walk up from the working directory.",
-  "dir=$PWD",
-  'while [ -n "$dir" ]; do',
-  '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
-  '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
-  "  fi",
-  "  dir=${dir%/*}",
-  "done",
-  "",
   "# Where `hooks install` was run from. A clone is a complete installation",
   "# (ADR-0011), so the common case is a checkout that is on no PATH and in no",
   "# node_modules \u2014 and the installer is the only thing that ever knew where it",
   "# was. Recorded in local git config rather than in this file so the stub",
   "# stays byte-identical wherever it came from, which is what `hooks status`",
   "# compares against.",
+  "#",
+  "# Ahead of the PATH and node_modules searches below, because this is the only",
+  "# branch that also knows its *interpreter*. Those searches guess at an",
+  "# installation, and a guessed sibling used to win: a stale",
+  "# `node_modules/.bin/commitlore` in a parent directory shadowed the recorded",
+  "# path, and that shim's own first line is `exec node`, so it died with 127 in",
+  "# exactly the PATH-less environment this file exists to survive. A stale guess",
+  "# also validates commits with a different version than the one installed here.",
   "recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)",
   'if [ -n "$recorded" ]; then',
   '  case "$recorded" in',
@@ -13377,6 +13373,20 @@ var commitMsgStub = () => [
   '    *) exec "$recorded" validate --message-file "$1" ;;',
   "  esac",
   "fi",
+  "",
+  "if command -v commitlore >/dev/null 2>&1; then",
+  '  exec commitlore validate --message-file "$1"',
+  "fi",
+  "",
+  "# A local devDependency is not on PATH inside a hook, so resolve it the way",
+  "# node would: walk up from the working directory.",
+  "dir=$PWD",
+  'while [ -n "$dir" ]; do',
+  '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
+  '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
+  "  fi",
+  "  dir=${dir%/*}",
+  "done",
   "",
   "# Passing silently here would report a clean record for a message nothing",
   "# ever read.",
@@ -13500,6 +13510,86 @@ var checkGit = (opts) => {
   }
   return check(id, title, "ok", `${version2} parses trailers as the spec expects`);
 };
+var checkRuntime = (opts) => {
+  const title = "cli runtime";
+  const id = "cli-runtime";
+  const entry = installedPath("dist/cli.js");
+  if (!existsSync2(entry)) {
+    return check(
+      id,
+      title,
+      "fail",
+      `no built CLI at ${entry} \u2014 this checkout has not been built`,
+      "npm install && npm run build"
+    );
+  }
+  const run = spawnSync3(process.execPath, [entry, "--version"], {
+    shell: false,
+    encoding: "utf8",
+    ...gitOptions2(opts)
+  });
+  if (run.error !== void 0) {
+    return check(id, title, "fail", `could not run ${entry}: ${run.error.message}`, null);
+  }
+  if (run.status !== 0) {
+    const detail = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
+    return check(
+      id,
+      title,
+      "fail",
+      `${entry} exits ${String(run.status)}: ${detail}`,
+      // A bundle that loads but throws on import is nearly always a missing dep.
+      "npm install"
+    );
+  }
+  return check(id, title, "ok", `${entry} runs (${run.stdout.trim()})`);
+};
+var checkHookRuntime = (opts) => {
+  const title = "hook runtime";
+  const id = "hook-runtime";
+  const fix = "commitlore hooks install";
+  const cwd = opts.cwd ?? process.cwd();
+  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
+  const hook = resolve2(cwd, located.stdout.trim());
+  if (!existsSync2(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
+  const probe = join2(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+  try {
+    writeFileSync(probe, PROBE_MESSAGE);
+    const run = spawnSync3("/bin/sh", [hook, probe], {
+      shell: false,
+      encoding: "utf8",
+      cwd,
+      // No node, and no PATH entry that could supply one. `git` must stay
+      // reachable: the hook reads its own config through it.
+      env: { PATH: "/usr/bin:/bin", HOME: process.env["HOME"] ?? "" }
+    });
+    if (run.error !== void 0) {
+      return check(id, title, "fail", `could not run the hook: ${run.error.message}`, fix);
+    }
+    if (run.status !== 0) {
+      const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+      return check(
+        id,
+        title,
+        "fail",
+        `the hook fails when git's PATH carries no node: ${said || `exit ${String(run.status)}`}`,
+        fix
+      );
+    }
+    return check(id, title, "ok", "the hook runs and validates without node on PATH");
+  } catch (error2) {
+    return check(
+      id,
+      title,
+      "warn",
+      `could not probe the hook: ${error2 instanceof Error ? error2.message : String(error2)}`,
+      fix
+    );
+  } finally {
+    rmSync2(probe, { force: true });
+  }
+};
 var checkIndex = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   let handle;
@@ -13548,9 +13638,11 @@ var checkIndex = (opts) => {
 };
 var runDoctor = (opts = {}) => {
   const checks = [
+    checkRuntime(opts),
     checkRefspec(opts),
     checkPush(opts),
     checkHook(opts),
+    checkHookRuntime(opts),
     checkGit(opts),
     checkIndex(opts)
   ];
@@ -13582,7 +13674,7 @@ var register2 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync6, writeFileSync } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync2 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var skip2 = (reason) => ({
   stdout: "",
@@ -13601,7 +13693,7 @@ var readTextFile = (path2, label) => {
 var emit = (payload, out) => {
   if (out === void 0) return { stdout: payload, stderr: "", exitCode: 0 };
   try {
-    writeFileSync(out, payload);
+    writeFileSync2(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -15045,7 +15137,7 @@ var register4 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync8, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync8, writeFileSync as writeFileSync3 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
@@ -15087,7 +15179,7 @@ var recordsPayload = (records) => `${JSON.stringify({ records }, null, 2)}
 var emit2 = (payload, out) => {
   if (out === void 0) return payload;
   try {
-    writeFileSync2(out, payload);
+    writeFileSync3(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -15139,8 +15231,8 @@ var register5 = (program3) => {
 
 // src/commands/hooks.ts
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync9, renameSync, statSync, unlinkSync, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join2, resolve as resolve3 } from "node:path";
+import { chmodSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync9, renameSync, statSync, unlinkSync, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join3, resolve as resolve3 } from "node:path";
 var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure = (message) => ({
@@ -15183,8 +15275,8 @@ var readHookState = (hookPath) => {
 };
 var readHookStatus = (cwd = process.cwd()) => {
   const hooksDir = resolveHooksDir(cwd);
-  const hookPath = join2(hooksDir, HOOK_NAME);
-  const chainedPath = join2(hooksDir, CHAINED_HOOK_NAME);
+  const hookPath = join3(hooksDir, HOOK_NAME);
+  const chainedPath = join3(hooksDir, CHAINED_HOOK_NAME);
   return {
     hooksDir,
     hookPath,
@@ -15196,7 +15288,7 @@ var readHookStatus = (cwd = process.cwd()) => {
 };
 var writeStub = (hookPath) => {
   const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
-  writeFileSync3(temporary, commitMsgStub(), { mode: HOOK_MODE });
+  writeFileSync4(temporary, commitMsgStub(), { mode: HOOK_MODE });
   chmodSync(temporary, HOOK_MODE);
   renameSync(temporary, hookPath);
 };
@@ -15391,7 +15483,7 @@ var register7 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync11, realpathSync } from "node:fs";
-import { basename, dirname as dirname4, isAbsolute, join as join4, relative, resolve as resolve4 } from "node:path";
+import { basename, dirname as dirname4, isAbsolute, join as join5, relative, resolve as resolve4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -15689,13 +15781,13 @@ var buildInjection = (opts) => {
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync2, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname3, join as join3 } from "node:path";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { dirname as dirname3, join as join4 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
-var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
+var claudeSettingsPath = (cwd) => join4(cwd, ".claude", "settings.json");
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure2 = (settingsPath, message) => ({
@@ -15821,7 +15913,7 @@ var writeAtomic = (settingsPath, settings) => {
   const body = `${JSON.stringify(settings, null, 2)}
 `;
   try {
-    writeFileSync4(temporary, body, mode === void 0 ? {} : { mode });
+    writeFileSync5(temporary, body, mode === void 0 ? {} : { mode });
     renameSync2(temporary, settingsPath);
   } catch (error2) {
     try {
@@ -15977,7 +16069,7 @@ var canonical = (target) => {
   for (; ; ) {
     try {
       const real = realpathSync(current);
-      return tail.length === 0 ? real : join4(real, ...tail);
+      return tail.length === 0 ? real : join5(real, ...tail);
     } catch {
       const parent = dirname4(current);
       if (parent === current) return absolute;
@@ -25218,7 +25310,7 @@ var register11 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync12, writeFileSync as writeFileSync5 } from "node:fs";
+import { readFileSync as readFileSync12, writeFileSync as writeFileSync6 } from "node:fs";
 
 // src/core/squash.ts
 var RECORD_ID_KEY4 = "Record-Id";
@@ -25491,7 +25583,7 @@ var readDraft2 = (path2) => {
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync5(path2, text);
+    writeFileSync6(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf4(error2)}`);
   }

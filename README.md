@@ -64,7 +64,7 @@ This is a normal git commit. No tool is required to write it, and git itself can
 |---|---|---|
 | `Limit:` | External limit that shaped the decision | injection, `commitlore limits` |
 | `Record-Id:` | Stable identity — anchor for supersession | lifecycle fold |
-| `Ruled-out:` | `alternative \| reason` — what was tried and dropped | **`commitlore guard`** (re-proposal blocking) |
+| `Ruled-out:` | `alternative \| reason` — what was tried and dropped | **`commitlore guard`** (re-proposal review, advisory) |
 | `Certainty:` | `firm` \| `tentative` \| `guess` | review routing |
 | `Blast:` | `local` \| `module` \| `system` | approval gate routing |
 | `Undo:` | `easy` \| `costly` \| `permanent` | approval gate routing |
@@ -118,7 +118,7 @@ From a shell, with `~/.commitlore/dist/commitlore.mjs` aliased to `commitlore`:
 
 ```bash
 commitlore context src/auth/                       # what this path decided
-commitlore guard --proposal "switch to RabbitMQ"   # already rejected? exits non-zero
+commitlore guard --proposal "switch to RabbitMQ"   # already rejected? exits 2, with the reason
 ```
 
 **Honest expectation.** Records survive rebase, squash and rename, and queries

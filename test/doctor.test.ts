@@ -15,7 +15,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -26,6 +27,8 @@ import {
   runDoctor,
 } from '../src/commands/doctor.js';
 import { execGit } from '../src/core/git.js';
+
+const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
@@ -230,6 +233,76 @@ describe('doctor: commit-msg hook', () => {
   });
 });
 
+/**
+ * The environment a git hook actually gets, which is not the one you tested in.
+ *
+ * This project has shipped a bare `node` in a hook resolution branch three
+ * times. Each one was invisible to every check that read configuration, and each
+ * surfaced as a commit that silently skipped validation.
+ */
+describe('doctor: hook runtime', () => {
+  const installedHook = (repo: string): void => {
+    writeScript(hookPath(repo), commitMsgStub());
+    git(repo, ['config', '--local', 'commitlore.bin', resolve(PACKAGE_ROOT, 'dist/cli.js')]);
+    git(repo, ['config', '--local', 'commitlore.node', process.execPath]);
+  };
+
+  const runtimeCheck = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'hook-runtime');
+
+  it('reports ok when the hook validates with no node on PATH', () => {
+    const repo = initRepo('doctor-runtime-ok');
+    installedHook(repo);
+    expect(runtimeCheck(repo)?.status).toBe('ok');
+  });
+
+  it('says there is nothing to run when no hook is installed', () => {
+    // Not a second complaint about the missing hook: `commit-msg-hook` owns that.
+    expect(runtimeCheck(initRepo('doctor-runtime-none'))?.status).toBe('ok');
+  });
+
+  it('fails when the recorded interpreter is gone', () => {
+    const repo = initRepo('doctor-runtime-no-node');
+    installedHook(repo);
+    git(repo, ['config', '--local', 'commitlore.node', '/nonexistent/node']);
+
+    const check = runtimeCheck(repo);
+    expect(check?.status).toBe('fail');
+    expect(check?.fix).toContain('hooks install');
+  });
+
+  it('fails when the hook has no recorded path at all', () => {
+    const repo = initRepo('doctor-runtime-unrecorded');
+    writeScript(hookPath(repo), commitMsgStub());
+    expect(runtimeCheck(repo)?.status).toBe('fail');
+  });
+
+  /**
+   * The regression that motivated reordering the stub: a stale
+   * `node_modules/.bin/commitlore` beside the repository used to win over the
+   * recorded path, and that shim's own first line is `exec node`.
+   */
+  it('is not fooled by a sibling shim that assumes node on PATH', () => {
+    const repo = initRepo('doctor-runtime-shim');
+    installedHook(repo);
+    const bin = join(repo, 'node_modules', '.bin');
+    mkdirSync(bin, { recursive: true });
+    writeScript(join(bin, 'commitlore'), '#!/bin/sh\nexec node /nonexistent/cli.js "$@"\n');
+
+    expect(runtimeCheck(repo)?.status).toBe('ok');
+  });
+});
+
+describe('doctor: cli runtime', () => {
+  it('reports ok because this checkout is built', () => {
+    const check = runDoctor({ cwd: initRepo('doctor-cli-runtime') }).checks.find(
+      (entry) => entry.id === 'cli-runtime',
+    );
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('dist/cli.js');
+  });
+});
+
 describe('doctor: git capability and index', () => {
   it('verifies interpret-trailers by actually parsing a probe', () => {
     const { repo } = repoWithRemote('doctor-git');
@@ -295,9 +368,11 @@ describe('doctor: report', () => {
     const report = runDoctor({ cwd: repo });
 
     expect(report.checks.map((entry) => entry.id)).toEqual([
+      'cli-runtime',
       'notes-refspec',
       'notes-push',
       'commit-msg-hook',
+      'hook-runtime',
       'git-trailers',
       'index-health',
     ]);
@@ -317,7 +392,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(5);
+    expect(parsed.checks).toHaveLength(7);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

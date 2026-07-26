@@ -15,9 +15,12 @@
  * - The commit-msg hook is *reported*, never installed. `commitlore hooks
  *   install` (T-202) owns that file; doctor only reads it.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir as tmpdirPath } from 'node:os';
+import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
+import { installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
@@ -119,13 +122,101 @@ const checkGit = (opts) => {
     return check(id, title, 'ok', `${version} parses trailers as the spec expects`);
 };
 /**
- * The index is a derived cache (ADR-0003), so its absence is not a fault and
- * neither is a stale one -- both are a `warn` with the command that rebuilds
- * it. A corrupt or unreadable database is also only a warning, because every
- * query has a `--no-index` path that returns the same rows more slowly. The
- * only thing worth reporting loudly is that the operator cannot tell which
- * state they are in.
+ * Whether the CLI a hook would invoke actually runs.
+ *
+ * Every other check here reads configuration. This one executes, because the two
+ * installation failures this project has actually shipped were both invisible to
+ * configuration: a run script that assumed `node` was on the hook's PATH (it is
+ * not — git hooks run with a shell whose PATH is not the user's), and a fresh
+ * clone whose `dist/` was present but whose dependencies were never installed.
+ * Both left every config check green and every command broken.
+ *
+ * `--version` is the cheapest thing the CLI can be asked to do that still
+ * requires the runtime to resolve, the bundle to load and its imports to
+ * resolve.
  */
+const checkRuntime = (opts) => {
+    const title = 'cli runtime';
+    const id = 'cli-runtime';
+    const entry = installedPath('dist/cli.js');
+    if (!existsSync(entry)) {
+        return check(id, title, 'fail', `no built CLI at ${entry} — this checkout has not been built`, 'npm install && npm run build');
+    }
+    const run = spawnSync(process.execPath, [entry, '--version'], {
+        shell: false,
+        encoding: 'utf8',
+        ...gitOptions(opts),
+    });
+    if (run.error !== undefined) {
+        return check(id, title, 'fail', `could not run ${entry}: ${run.error.message}`, null);
+    }
+    if (run.status !== 0) {
+        const detail = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? `exit ${String(run.status)}`;
+        return check(id, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 
+        // A bundle that loads but throws on import is nearly always a missing dep.
+        'npm install');
+    }
+    return check(id, title, 'ok', `${entry} runs (${run.stdout.trim()})`);
+};
+/**
+ * Whether the installed hook actually runs, in the environment git gives it.
+ *
+ * Not a config read but an execution, against a probe message and a PATH that
+ * carries no node. That is the environment the hook really gets — git does not
+ * hand a hook the interactive shell's PATH — and it is the only way to catch the
+ * failure this project has now shipped three times: a resolution branch ending
+ * in a bare `node`.
+ *
+ * A config-only version of this check was written first and reported `ok` for a
+ * hook that failed the moment it ran, because it inspected `commitlore.node`
+ * while the hook was resolving through `node_modules/.bin` — a branch that had
+ * no interpreter of its own. Checking the inputs to a decision is not checking
+ * the decision.
+ *
+ * The probe message is valid, so a healthy hook exits 0. A hook that cannot find
+ * a runtime exits non-zero having parsed nothing, which is indistinguishable
+ * from "your message was fine" to everyone except this check.
+ */
+const checkHookRuntime = (opts) => {
+    const title = 'hook runtime';
+    const id = 'hook-runtime';
+    const fix = 'commitlore hooks install';
+    const cwd = opts.cwd ?? process.cwd();
+    const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
+    if (located.code !== 0)
+        return check(id, title, 'warn', 'not inside a git repository', fix);
+    const hook = resolve(cwd, located.stdout.trim());
+    // The hook's absence is `checkHook`'s finding; saying it twice teaches the
+    // reader to skim both.
+    if (!existsSync(hook))
+        return check(id, title, 'ok', 'no hook installed — nothing to run');
+    const probe = join(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+    try {
+        writeFileSync(probe, PROBE_MESSAGE);
+        const run = spawnSync('/bin/sh', [hook, probe], {
+            shell: false,
+            encoding: 'utf8',
+            cwd,
+            // No node, and no PATH entry that could supply one. `git` must stay
+            // reachable: the hook reads its own config through it.
+            env: { PATH: '/usr/bin:/bin', HOME: process.env['HOME'] ?? '' },
+        });
+        if (run.error !== undefined) {
+            return check(id, title, 'fail', `could not run the hook: ${run.error.message}`, fix);
+        }
+        if (run.status !== 0) {
+            const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+            return check(id, title, 'fail', `the hook fails when git's PATH carries no node: ${said || `exit ${String(run.status)}`}`, fix);
+        }
+        return check(id, title, 'ok', 'the hook runs and validates without node on PATH');
+    }
+    catch (error) {
+        return check(id, title, 'warn', `could not probe the hook: ${error instanceof Error ? error.message : String(error)}`, fix);
+    }
+    finally {
+        rmSync(probe, { force: true });
+    }
+};
 const checkIndex = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     let handle;
@@ -158,9 +249,11 @@ const checkIndex = (opts) => {
 };
 export const runDoctor = (opts = {}) => {
     const checks = [
+        checkRuntime(opts),
         checkRefspec(opts),
         checkPush(opts),
         checkHook(opts),
+        checkHookRuntime(opts),
         checkGit(opts),
         checkIndex(opts),
     ];
