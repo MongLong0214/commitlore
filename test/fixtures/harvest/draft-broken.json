@@ -1,0 +1,12 @@
+Here is the draft you asked for:
+
+```json
+{
+  "records": [
+    {
+      "trailers": [{ "key": "Warn", "value": "keep the retry budget under 25s" },],
+      "evidence": []
+    }
+  ]
+}
+```

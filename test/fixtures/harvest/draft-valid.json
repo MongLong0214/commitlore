@@ -1,0 +1,68 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Limit", "value": "the CDN times out at 30s, so the retry budget has to fit under that" },
+        { "key": "Ruled-out", "value": "queue worker | needs infrastructure the free tier does not have" },
+        { "key": "Warn", "value": "keep the total retry budget under 25s" },
+        { "key": "Blast", "value": "module" },
+        { "key": "Undo", "value": "easy" },
+        { "key": "Certainty", "value": "firm" },
+        { "key": "Verified", "value": "replayed the 503 fixture in test/uploader.test.ts" },
+        { "key": "Unverified", "value": "the 429 path has no fixture" },
+        { "key": "Record-Id", "value": "r-8f2c41" },
+        { "key": "Provenance", "value": "authored" }
+      ],
+      "evidence": [
+        {
+          "key": "Limit",
+          "source": "transcript",
+          "quote": "The CDN times out at 30s, so the whole retry budget has to fit under that.",
+          "locator": "L4-L4"
+        },
+        {
+          "key": "Ruled-out",
+          "source": "transcript",
+          "quote": "The queue worker needs infrastructure the free tier does not have, so I am ruling it out.",
+          "locator": "L3-L3"
+        },
+        {
+          "key": "Warn",
+          "source": "transcript",
+          "quote": "I capped the total retry budget at 25s",
+          "locator": "L5-L5"
+        },
+        {
+          "key": "Blast",
+          "source": "diff",
+          "quote": "export const upload = async (file: Blob): Promise<void> => {",
+          "locator": "@@ -8,6 +8,18 @@"
+        },
+        {
+          "key": "Undo",
+          "source": "diff",
+          "quote": "-  await putObject(file);",
+          "locator": "@@ -8,6 +8,18 @@"
+        },
+        {
+          "key": "Certainty",
+          "source": "transcript",
+          "quote": "5 attempts, 200ms base delay, full jitter",
+          "locator": "L5-L5"
+        },
+        {
+          "key": "Verified",
+          "source": "transcript",
+          "quote": "I replayed the 503 fixture in test/uploader.test.ts and the upload now completes.",
+          "locator": "L6-L6"
+        },
+        {
+          "key": "Unverified",
+          "source": "transcript",
+          "quote": "The 429 path is untested; we have no fixture for it.",
+          "locator": "L7-L7"
+        }
+      ]
+    }
+  ]
+}

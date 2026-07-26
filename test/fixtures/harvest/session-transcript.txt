@@ -1,0 +1,7 @@
+user: The uploader drops files when S3 answers 503. Fix it.
+assistant: Two options: exponential backoff with jitter in the client, or moving the upload to a queue worker.
+assistant: The queue worker needs infrastructure the free tier does not have, so I am ruling it out.
+user: Go with backoff. The CDN times out at 30s, so the whole retry budget has to fit under that.
+assistant: I capped the total retry budget at 25s -- 5 attempts, 200ms base delay, full jitter.
+assistant: I replayed the 503 fixture in test/uploader.test.ts and the upload now completes.
+assistant: The 429 path is untested; we have no fixture for it.

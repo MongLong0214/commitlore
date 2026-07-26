@@ -41,18 +41,31 @@ describe('commitlore CLI', () => {
     expect(readFileSync(CLI, 'utf8').startsWith('#!/usr/bin/env node\n')).toBe(true);
   });
 
-  it('names itself commitlore and lists only the parse command', () => {
+  // The point of these two is that the CLI advertises exactly what it can do.
+  // A command listed before it exists sends users down a dead end; a command
+  // that works but is unlisted is undiscoverable. Move a name from UNLANDED to
+  // LANDED in the same change that wires it into src/cli.ts.
+  const LANDED = ['parse', 'validate', 'hooks', 'stale', 'doctor', 'harvest'];
+  const UNLANDED = ['index', 'context', 'limits', 'ruled-out', 'warnings', 'guard', 'inject'];
+
+  it('names itself commitlore and lists every landed command', () => {
     const result = runCli(['--help']);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('commitlore');
-    expect(result.stdout).toContain('parse');
-    for (const later of ['validate', 'index', 'context', 'limits', 'ruled-out', 'stale', 'doctor']) {
-      expect(result.stdout).not.toContain(`  ${later} `);
+    for (const command of LANDED) {
+      expect(result.stdout, `${command} should be listed`).toContain(`  ${command} `);
     }
   });
 
-  it('rejects a command that does not exist yet', () => {
-    const result = runCli(['validate']);
+  it('does not advertise commands that have not landed', () => {
+    const result = runCli(['--help']);
+    for (const command of UNLANDED) {
+      expect(result.stdout, `${command} is not implemented yet`).not.toContain(`  ${command} `);
+    }
+  });
+
+  it('rejects a command that does not exist', () => {
+    const result = runCli(['definitely-not-a-command']);
     expect(result.status).not.toBe(0);
   });
 

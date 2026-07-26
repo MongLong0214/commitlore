@@ -2,14 +2,25 @@
 /**
  * `commitlore` entry point.
  *
- * T-201 ships `parse` only. `validate`, `index`, `context`, `limits`,
- * `ruled-out`, `warnings`, `guard`, `stale`, and `doctor` land in T-202+.
+ * Every command other than `parse` lives in its own module under
+ * `commands/` and exposes `register(program)`. This file only wires them up:
+ * commands are built in parallel and a shared entry point that each one edits
+ * is a merge conflict by construction.
+ *
+ * Still to land: `index` (T-203), `context` / `limits` / `ruled-out` /
+ * `warnings` (T-204), `guard` (T-405), `squash-preserve` (T-302), `mcp`
+ * (T-401), `inject` (T-402), `backfill` (T-801).
  */
 
 import { readFileSync } from 'node:fs';
 
 import { Command } from 'commander';
 
+import { register as registerDoctor } from './commands/doctor.js';
+import { register as registerHarvest } from './commands/harvest.js';
+import { register as registerHooks } from './commands/hooks.js';
+import { register as registerStale } from './commands/stale.js';
+import { register as registerValidate } from './commands/validate.js';
 import { parseCommitMessage, serializeTrailers } from './core/trailers.js';
 
 const pkg: { version?: string } = JSON.parse(
@@ -56,6 +67,12 @@ program
   .action((options: ParseOptions) => {
     runParse(options);
   });
+
+registerValidate(program);
+registerHooks(program);
+registerStale(program);
+registerDoctor(program);
+registerHarvest(program);
 
 try {
   program.parse(process.argv);

@@ -1,0 +1,22 @@
+diff --git a/src/uploader.ts b/src/uploader.ts
+index 3f1a2b4..8c7d9e0 100644
+--- a/src/uploader.ts
++++ b/src/uploader.ts
+@@ -8,6 +8,18 @@ import { putObject } from './s3.js';
+
++const MAX_ATTEMPTS = 5;
++const BASE_DELAY_MS = 200;
++const RETRY_BUDGET_MS = 25_000;
++
+ export const upload = async (file: Blob): Promise<void> => {
+-  await putObject(file);
++  const deadline = Date.now() + RETRY_BUDGET_MS;
++  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
++    const result = await putObject(file);
++    if (result.status !== 503) return;
++    const delay = Math.random() * BASE_DELAY_MS * 2 ** attempt;
++    if (Date.now() + delay > deadline) break;
++    await sleep(delay);
++  }
++  throw new Error('upload failed after exhausting the retry budget');
+ };

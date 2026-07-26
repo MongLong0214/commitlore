@@ -1,0 +1,37 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Blast", "value": "wide" },
+        { "key": "Undo", "value": "clean" }
+      ],
+      "evidence": [
+        {
+          "key": "Blast",
+          "source": "diff",
+          "quote": "export const upload = async (file: Blob): Promise<void> => {",
+          "locator": "@@ -8,6 +8,18 @@"
+        },
+        {
+          "key": "Undo",
+          "source": "diff",
+          "quote": "-  await putObject(file);",
+          "locator": "@@ -8,6 +8,18 @@"
+        }
+      ]
+    },
+    {
+      "trailers": [
+        { "key": "Certainty", "value": "firm" }
+      ],
+      "evidence": [
+        {
+          "key": "Certainty",
+          "source": "transcript",
+          "quote": "5 attempts, 200ms base delay, full jitter",
+          "locator": "L5-L5"
+        }
+      ]
+    }
+  ]
+}

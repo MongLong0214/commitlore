@@ -1,0 +1,15 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Warn", "value": "the retry budget must stay under the CDN timeout" }
+      ]
+    },
+    {
+      "trailers": [
+        { "key": "Limit", "value": "the free tier has no queue worker" }
+      ],
+      "evidence": []
+    }
+  ]
+}

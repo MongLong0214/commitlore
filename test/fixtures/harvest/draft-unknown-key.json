@@ -1,0 +1,24 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Constraint", "value": "the CDN times out at 30s" },
+        { "key": "Warn", "value": "keep the total retry budget under 25s" }
+      ],
+      "evidence": [
+        {
+          "key": "Constraint",
+          "source": "transcript",
+          "quote": "The CDN times out at 30s, so the whole retry budget has to fit under that.",
+          "locator": "L4-L4"
+        },
+        {
+          "key": "Warn",
+          "source": "transcript",
+          "quote": "I capped the total retry budget at 25s",
+          "locator": "L5-L5"
+        }
+      ]
+    }
+  ]
+}
