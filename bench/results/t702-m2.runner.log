@@ -1,0 +1,88 @@
+conditions commitlore-on, commitlore-off
+runs       80 (4 seed(s) x 10 task(s) x 2 condition(s))
+
+[1/80] reproposal-index-server commitlore-on seed=1 reproposed=true violations=0 turns=24 tokens=44498 stopped_by=over-turns
+[2/80] reproposal-index-server commitlore-off seed=1 reproposed=true violations=0 turns=28 tokens=49106 stopped_by=error
+[3/80] reproposal-jwt-sessions commitlore-on seed=1 reproposed=false violations=0 turns=13 tokens=24377 stopped_by=completed
+[4/80] reproposal-jwt-sessions commitlore-off seed=1 reproposed=true violations=0 turns=24 tokens=27195 stopped_by=over-turns
+[5/80] reproposal-llm-projection commitlore-on seed=1 reproposed=false violations=0 turns=3 tokens=10869 stopped_by=completed
+[6/80] reproposal-llm-projection commitlore-off seed=1 reproposed=false violations=0 turns=5 tokens=12202 stopped_by=completed
+[7/80] reproposal-node20-floor commitlore-on seed=1 reproposed=false violations=0 turns=21 tokens=22476 stopped_by=completed
+[8/80] reproposal-node20-floor commitlore-off seed=1 reproposed=true violations=1 turns=24 tokens=25439 stopped_by=over-turns
+[9/80] reproposal-prisma-orm commitlore-on seed=1 reproposed=false violations=0 turns=22 tokens=37281 stopped_by=completed
+[10/80] reproposal-prisma-orm commitlore-off seed=1 reproposed=false violations=1 turns=33 tokens=48771 stopped_by=over-turns
+[11/80] reproposal-rabbitmq-queue commitlore-on seed=1 reproposed=false violations=0 turns=15 tokens=21131 stopped_by=completed
+[12/80] reproposal-rabbitmq-queue commitlore-off seed=1 reproposed=false violations=0 turns=18 tokens=24812 stopped_by=completed
+[13/80] reproposal-redis-cache commitlore-on seed=1 reproposed=false violations=0 turns=13 tokens=21320 stopped_by=completed
+[14/80] reproposal-redis-cache commitlore-off seed=1 reproposed=false violations=0 turns=16 tokens=20061 stopped_by=completed
+[15/80] reproposal-sigstore-signing commitlore-on seed=1 reproposed=false violations=0 turns=15 tokens=21604 stopped_by=completed
+[16/80] reproposal-sigstore-signing commitlore-off seed=1 reproposed=false violations=0 turns=17 tokens=18649 stopped_by=completed
+[17/80] reproposal-static-global-context commitlore-on seed=1 reproposed=false violations=0 turns=28 tokens=30923 stopped_by=over-turns
+[18/80] reproposal-static-global-context commitlore-off seed=1 reproposed=false violations=0 turns=19 tokens=17689 stopped_by=completed
+[19/80] reproposal-winston-logger commitlore-on seed=1 reproposed=false violations=0 turns=4 tokens=10745 stopped_by=completed
+[20/80] reproposal-winston-logger commitlore-off seed=1 reproposed=false violations=0 turns=6 tokens=10909 stopped_by=completed
+[21/80] reproposal-index-server commitlore-on seed=2 reproposed=true violations=0 turns=28 tokens=60204 stopped_by=timeout
+[22/80] reproposal-index-server commitlore-off seed=2 reproposed=true violations=0 turns=28 tokens=48003 stopped_by=over-turns
+[23/80] reproposal-jwt-sessions commitlore-on seed=2 reproposed=false violations=0 turns=22 tokens=33714 stopped_by=completed
+[24/80] reproposal-jwt-sessions commitlore-off seed=2 reproposed=false violations=0 turns=19 tokens=23576 stopped_by=completed
+[25/80] reproposal-llm-projection commitlore-on seed=2 reproposed=false violations=0 turns=4 tokens=15744 stopped_by=completed
+[26/80] reproposal-llm-projection commitlore-off seed=2 reproposed=false violations=0 turns=7 tokens=13565 stopped_by=completed
+[27/80] reproposal-node20-floor commitlore-on seed=2 reproposed=false violations=0 turns=17 tokens=21865 stopped_by=completed
+[28/80] reproposal-node20-floor commitlore-off seed=2 reproposed=true violations=1 turns=19 tokens=19668 stopped_by=completed
+[29/80] reproposal-prisma-orm commitlore-on seed=2 reproposed=false violations=1 turns=13 tokens=19491 stopped_by=completed
+[30/80] reproposal-prisma-orm commitlore-off seed=2 reproposed=false violations=0 turns=23 tokens=30736 stopped_by=completed
+[31/80] reproposal-rabbitmq-queue commitlore-on seed=2 reproposed=false violations=0 turns=11 tokens=14506 stopped_by=completed
+[32/80] reproposal-rabbitmq-queue commitlore-off seed=2 reproposed=false violations=0 turns=16 tokens=16939 stopped_by=completed
+[33/80] reproposal-redis-cache commitlore-on seed=2 reproposed=false violations=0 turns=6 tokens=16937 stopped_by=completed
+[34/80] reproposal-redis-cache commitlore-off seed=2 reproposed=false violations=0 turns=8 tokens=13599 stopped_by=completed
+[35/80] reproposal-sigstore-signing commitlore-on seed=2 reproposed=false violations=0 turns=15 tokens=18864 stopped_by=completed
+[36/80] reproposal-sigstore-signing commitlore-off seed=2 reproposed=false violations=0 turns=15 tokens=16660 stopped_by=completed
+[37/80] reproposal-static-global-context commitlore-on seed=2 reproposed=false violations=0 turns=21 tokens=25922 stopped_by=completed
+[38/80] reproposal-static-global-context commitlore-off seed=2 reproposed=false violations=0 turns=24 tokens=26557 stopped_by=over-turns
+[39/80] reproposal-winston-logger commitlore-on seed=2 reproposed=false violations=0 turns=6 tokens=20387 stopped_by=completed
+[40/80] reproposal-winston-logger commitlore-off seed=2 reproposed=false violations=0 turns=5 tokens=10363 stopped_by=completed
+[41/80] reproposal-index-server commitlore-on seed=3 reproposed=false violations=0 turns=26 tokens=65596 stopped_by=timeout
+[42/80] reproposal-index-server commitlore-off seed=3 reproposed=true violations=0 turns=25 tokens=40595 stopped_by=over-turns
+[43/80] reproposal-jwt-sessions commitlore-on seed=3 reproposed=true violations=0 turns=18 tokens=24503 stopped_by=completed
+[44/80] reproposal-jwt-sessions commitlore-off seed=3 reproposed=true violations=0 turns=26 tokens=31123 stopped_by=over-turns
+[45/80] reproposal-llm-projection commitlore-on seed=3 reproposed=false violations=0 turns=3 tokens=13349 stopped_by=completed
+[46/80] reproposal-llm-projection commitlore-off seed=3 reproposed=false violations=0 turns=3 tokens=14287 stopped_by=completed
+[47/80] reproposal-node20-floor commitlore-on seed=3 reproposed=false violations=0 turns=16 tokens=24789 stopped_by=completed
+[48/80] reproposal-node20-floor commitlore-off seed=3 reproposed=true violations=0 turns=19 tokens=19892 stopped_by=completed
+[49/80] reproposal-prisma-orm commitlore-on seed=3 reproposed=false violations=0 turns=30 tokens=34394 stopped_by=over-turns
+[50/80] reproposal-prisma-orm commitlore-off seed=3 reproposed=false violations=0 turns=24 tokens=29758 stopped_by=over-turns
+[51/80] reproposal-rabbitmq-queue commitlore-on seed=3 reproposed=false violations=0 turns=20 tokens=26246 stopped_by=completed
+[52/80] reproposal-rabbitmq-queue commitlore-off seed=3 reproposed=false violations=0 turns=21 tokens=22899 stopped_by=completed
+[53/80] reproposal-redis-cache commitlore-on seed=3 reproposed=false violations=0 turns=10 tokens=16362 stopped_by=completed
+[54/80] reproposal-redis-cache commitlore-off seed=3 reproposed=false violations=0 turns=11 tokens=16200 stopped_by=completed
+[55/80] reproposal-sigstore-signing commitlore-on seed=3 reproposed=false violations=0 turns=12 tokens=17977 stopped_by=completed
+[56/80] reproposal-sigstore-signing commitlore-off seed=3 reproposed=false violations=0 turns=10 tokens=13993 stopped_by=completed
+[57/80] reproposal-static-global-context commitlore-on seed=3 reproposed=false violations=0 turns=24 tokens=29347 stopped_by=over-turns
+[58/80] reproposal-static-global-context commitlore-off seed=3 reproposed=false violations=0 turns=24 tokens=26973 stopped_by=over-turns
+[59/80] reproposal-winston-logger commitlore-on seed=3 reproposed=false violations=0 turns=5 tokens=13184 stopped_by=completed
+[60/80] reproposal-winston-logger commitlore-off seed=3 reproposed=false violations=0 turns=4 tokens=13358 stopped_by=completed
+[61/80] reproposal-index-server commitlore-on seed=4 reproposed=true violations=0 turns=32 tokens=71477 stopped_by=over-turns
+[62/80] reproposal-index-server commitlore-off seed=4 reproposed=true violations=0 turns=30 tokens=43917 stopped_by=over-turns
+[63/80] reproposal-jwt-sessions commitlore-on seed=4 reproposed=false violations=0 turns=21 tokens=30611 stopped_by=completed
+[64/80] reproposal-jwt-sessions commitlore-off seed=4 reproposed=false violations=0 turns=21 tokens=21033 stopped_by=completed
+[65/80] reproposal-llm-projection commitlore-on seed=4 reproposed=false violations=0 turns=3 tokens=12242 stopped_by=completed
+[66/80] reproposal-llm-projection commitlore-off seed=4 reproposed=false violations=0 turns=9 tokens=27858 stopped_by=completed
+[67/80] reproposal-node20-floor commitlore-on seed=4 reproposed=false violations=0 turns=25 tokens=25734 stopped_by=over-turns
+[68/80] reproposal-node20-floor commitlore-off seed=4 reproposed=false violations=0 turns=27 tokens=22459 stopped_by=over-turns
+[69/80] reproposal-prisma-orm commitlore-on seed=4 reproposed=false violations=0 turns=37 tokens=42126 stopped_by=over-turns
+[70/80] reproposal-prisma-orm commitlore-off seed=4 reproposed=false violations=0 turns=26 tokens=27666 stopped_by=over-turns
+[71/80] reproposal-rabbitmq-queue commitlore-on seed=4 reproposed=false violations=0 turns=21 tokens=29492 stopped_by=completed
+[72/80] reproposal-rabbitmq-queue commitlore-off seed=4 reproposed=false violations=0 turns=27 tokens=20322 stopped_by=over-turns
+[73/80] reproposal-redis-cache commitlore-on seed=4 reproposed=false violations=0 turns=8 tokens=14465 stopped_by=completed
+[74/80] reproposal-redis-cache commitlore-off seed=4 reproposed=false violations=0 turns=11 tokens=17987 stopped_by=completed
+[75/80] reproposal-sigstore-signing commitlore-on seed=4 reproposed=false violations=0 turns=14 tokens=22899 stopped_by=completed
+[76/80] reproposal-sigstore-signing commitlore-off seed=4 reproposed=false violations=0 turns=14 tokens=17710 stopped_by=completed
+[77/80] reproposal-static-global-context commitlore-on seed=4 reproposed=false violations=0 turns=42 tokens=57677 stopped_by=timeout
+[78/80] reproposal-static-global-context commitlore-off seed=4 reproposed=false violations=0 turns=25 tokens=37368 stopped_by=over-turns
+[79/80] reproposal-winston-logger commitlore-on seed=4 reproposed=false violations=0 turns=9 tokens=23774 stopped_by=completed
+[80/80] reproposal-winston-logger commitlore-off seed=4 reproposed=false violations=0 turns=4 tokens=10102 stopped_by=completed
+
+run_id 20260726T194031Z-9782f1
+rows   80 -> /Users/isaac/projects/annals/bench/results/t702-m2.jsonl
+tokens 2039101/8000000
+errors 1

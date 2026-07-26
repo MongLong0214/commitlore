@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-sigstore-signing",
+  "cond": "commitlore-off",
+  "seed": 4,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I've implemented the fix by removing \"authored\" from the values that `provenanceOf()` will accept from commit trailers. The change prevents an attacker from injecting `Provenance: authored` into a commit message trailer to make their spoofed warnings render as instructions.\n\n## The Approach\n\n**The core issue:** Trailers in commit messages are entirely self-asserted—controlled by whoever creates the commit. An attacker can:\n- Spoof the author field with `git commit --author=staff-lead@ourcompany.com`\n- Inject `Provenance: authored` into the commit message\n- Cause their malicious `Warn:` line to render as an instruction to agents\n\n**The fix:** Only allow \"inherited\" and \"reconstructed\" provenances to be read from trailers. Any trailer claiming \"authored\" will be downgraded to \"unknown\". This ensures that:\n1. Self-asserted data in commits can never grant the \"authored\" status that triggers instruction rendering\n2. The `rendersAsInstruction()` check requires both `provenance === \"authored\"` AND `lifecycle === \"active\"`, so an unknown provenance will always render as a claim, not an instruction\n3. \"Authored\" can still be assigned through verified sources (cryptographic signatures, server-side verification logs) in future implementations\n\nThe attack is now neutralized: even with a perfectly spoofed author field, an attacker cannot inject instructions because the trailers they control can't be marked as \"authored.\"\n\nWould you like me to commit this change?",
+  "diff": "diff --git a/src/core/trailers.ts b/src/core/trailers.ts\nindex fea2056..03469a7 100644\n--- a/src/core/trailers.ts\n+++ b/src/core/trailers.ts\n@@ -2,6 +2,6 @@ import type { Provenance } from \"./grade.ts\";\n \n export const provenanceOf = (trailers: ReadonlyMap<string, string>): Provenance => {\n   const raw = trailers.get(\"Provenance\");\n-  if (raw === \"authored\" || raw === \"inherited\" || raw === \"reconstructed\") return raw;\n+  if (raw === \"inherited\" || raw === \"reconstructed\") return raw;\n   return \"unknown\";\n };\n",
+  "commits": ""
+}

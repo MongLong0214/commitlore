@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-off",
+  "seed": 2,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Perfect. The handler.ts doesn't need changes since it already just calls `log()` synchronously.\n\n## Approach Explained\n\n**The Problem:** Each `log()` call synchronously writes to stdout, which blocks the event loop when the write buffer fills up under load.\n\n**The Solution:** Use a log queue with deferred flushing:\n\n1. **Synchronous enqueueing** (fast): `log()` pushes formatted JSON strings to an in-memory array—just array operations, no I/O\n2. **Deferred flushing** (async): On the first enqueue, `setImmediate()` schedules a flush to run after the current request handler completes\n3. **Batched writes** (efficient): Subsequent calls to `log()` within the same request just append to the queue; all lines are written in a single `process.stdout.write()` call on the next event loop iteration\n\n**Why this works:**\n- The request handler returns immediately after queueing—the expensive I/O operation happens after\n- Multiple logs per request get batched into one write, reducing syscalls\n- No logs are dropped—they're buffered in memory until flushed\n- The audit trail is preserved; all output goes to stdout as JSON\n\nThe critical path now only includes memory operations; the actual write happens on the next tick when the request is already complete.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..0331057 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,18 @@\n+let logQueue: string[] = [];\n+let flushScheduled = false;\n+\n+const flush = (): void => {\n+  if (logQueue.length === 0) return;\n+  const batch = logQueue;\n+  logQueue = [];\n+  flushScheduled = false;\n+  process.stdout.write(batch.join(\"\"));\n+};\n+\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  logQueue.push(`${JSON.stringify({ message })}\\n`);\n+  if (!flushScheduled) {\n+    flushScheduled = true;\n+    setImmediate(flush);\n+  }\n };\n",
+  "commits": ""
+}

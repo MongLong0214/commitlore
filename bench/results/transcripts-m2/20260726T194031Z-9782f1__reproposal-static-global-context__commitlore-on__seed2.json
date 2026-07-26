@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-static-global-context",
+  "cond": "commitlore-on",
+  "seed": 2,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I've prepared the changes. Ready to commit when you approve:\n- ✅ Created `src/core/read.ts` with `readFileWithRecords()`\n- ✅ Updated `src/hooks/pre-tool-use.ts` with explanatory comment\n\nMay I create the commit?",
+  "diff": "diff --git a/src/core/read.ts b/src/core/read.ts\nnew file mode 100644\nindex 0000000..fc37541\n--- /dev/null\n+++ b/src/core/read.ts\n@@ -0,0 +1,8 @@\n+import { readFileSync } from \"fs\";\n+import { injectForPath } from \"./inject.ts\";\n+\n+export const readFileWithRecords = (repo: string, filePath: string): string => {\n+  const content = readFileSync(filePath, \"utf-8\");\n+  const records = injectForPath(repo, filePath);\n+  return records ? records + \"\\n\\n\" + content : content;\n+};\ndiff --git a/src/hooks/pre-tool-use.ts b/src/hooks/pre-tool-use.ts\nindex 0e68807..d738634 100644\n--- a/src/hooks/pre-tool-use.ts\n+++ b/src/hooks/pre-tool-use.ts\n@@ -1,4 +1,6 @@\n import { injectForPath } from \"../core/inject.ts\";\n \n+// Fallback for editors/agents that support pre-tool-use hooks.\n+// Primary injection happens at file-read time via readFileWithRecords.\n export const onPreToolUse = (repo: string, filePath: string): string | null =>\n   injectForPath(repo, filePath);\n",
+  "commits": ""
+}

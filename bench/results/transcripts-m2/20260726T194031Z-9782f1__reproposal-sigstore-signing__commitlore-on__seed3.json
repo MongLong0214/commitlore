@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-sigstore-signing",
+  "cond": "commitlore-on",
+  "seed": 3,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I've implemented the fix. Here's the approach and what changed:\n\n## The Vulnerability\n\nThe system was reading the `Provenance` trailer directly from the commit message (via `trailers.get(\"Provenance\")`). But commit messages are entirely under the attacker's control—they can forge `Author`, `Provenance`, and any other field. This allowed an attacker to claim `Provenance: authored` on a commit they didn't write, making their warning render as an instruction to the agent.\n\n## The Root Cause\n\nEvery signal we currently grade on is self-asserted. Git's author, committer, and all commit message content are chosen by whoever runs `git commit --author=X`, not verified by Git itself.\n\n## The Fix\n\n**Stop reading provenance from the commit message.** The `provenanceOf()` function now always returns `\"unknown\"` instead of parsing the trailer.\n\nThis means:\n- All warnings now render as `claim:` not `instruction:`\n- An attacker cannot forge their way into rendering instructions\n- The system gracefully degrades to safe-by-default behavior\n\n## How Real Provenance Will Work Later\n\nThe provenance axis is designed as an extension point (per the design record r-9f0a3d). A real trust signal will eventually come from:\n- **Cryptographic signatures** over the record (not possible offline in v0.1, but feasible later)\n- **External verification** from the Git hosting provider (requires network; conflicts with offline requirement for v0.1)\n- **Provenance metadata stored outside the commit message** where it can't be forged\n\nFor now, with constraints of offline-only + no-key-management + no-signed-commit-requirement, the only safe approach is to trust nothing that the commit author self-asserted.\n\nReady to commit this fix—shall I proceed?",
+  "diff": "diff --git a/src/core/trailers.ts b/src/core/trailers.ts\nindex fea2056..f34e469 100644\n--- a/src/core/trailers.ts\n+++ b/src/core/trailers.ts\n@@ -1,7 +1,5 @@\n import type { Provenance } from \"./grade.ts\";\n \n export const provenanceOf = (trailers: ReadonlyMap<string, string>): Provenance => {\n-  const raw = trailers.get(\"Provenance\");\n-  if (raw === \"authored\" || raw === \"inherited\" || raw === \"reconstructed\") return raw;\n   return \"unknown\";\n };\n",
+  "commits": ""
+}

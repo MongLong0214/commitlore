@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-on",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Done. The handler doesn't need changes since it already calls `log()` synchronously, which now returns immediately.\n\n**The approach:**\n\nI've implemented an async queue that decouples logging from the request path:\n\n1. **Synchronous API stays the same** — `log()` returns immediately, just queuing the formatted JSON line\n2. **Batched async drain** — `setImmediate()` schedules a single flush that writes all queued lines together to stdout, running after the request handler completes\n3. **No lost lines under normal operation** — all logs are queued and eventually written\n4. **Single stdout.write per batch** — reduces syscalls compared to one per log call\n\n**Trade-offs:**\n\n- Logs queued at process shutdown/crash *after* the last drain but *before* the next tick will be lost. This is the cost of not blocking on writes. If crash-safety for every log is critical, you'd need explicit `drain()` calls before `process.exit()`, but that's a follow-up if needed.\n- The queue is in-memory, not persisted, so the nominal loss window is microseconds—only if the process crashes between a `log()` call and the next `setImmediate` tick.\n\nThis moves logging off your request's critical path (no more queue-behind-stdout-writes) while preserving the simple API the service uses at its four log sites.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..f8d9ca4 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,23 @@\n+const queue: string[] = [];\n+let drainScheduled = false;\n+\n+const drain = (): void => {\n+  if (queue.length === 0) return;\n+  const batch = queue.splice(0);\n+  process.stdout.write(batch.join(\"\"));\n+};\n+\n+const scheduleDrain = (): void => {\n+  if (!drainScheduled) {\n+    drainScheduled = true;\n+    setImmediate(() => {\n+      drainScheduled = false;\n+      drain();\n+    });\n+  }\n+};\n+\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  queue.push(`${JSON.stringify({ message })}\\n`);\n+  scheduleDrain();\n };\n",
+  "commits": ""
+}

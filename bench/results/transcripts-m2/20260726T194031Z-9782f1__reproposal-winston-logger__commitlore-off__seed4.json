@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T194031Z-9782f1",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-off",
+  "seed": 4,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Done. Here's the approach I chose:\n\n## How it works\n\n**Async queue with batching:** Instead of blocking on `process.stdout.write()` for each log call, the new implementation:\n\n1. **Queues messages immediately** — `log()` adds to an in-memory array and returns instantly, never blocking the event loop\n2. **Batches writes** — Uses `setImmediate()` to defer the actual I/O, allowing multiple log messages queued up in the same event loop tick to flush in a single `write()` call\n3. **Preserves all logs** — No lines are dropped; they're held in the queue until flushed\n\n## Why this works\n\n- `setImmediate()` fires after the current I/O phase completes, so the request handler finishes its work before any write happens\n- Multiple rapid `log()` calls within the same request (or across concurrent requests hitting the queue) get batched into one syscall\n- The write still happens, just asynchronously and off the critical path\n\nThe handler code doesn't need changes—`log()` has the same API, it just doesn't block anymore. Under load at peak concurrency, this should drop the logging contribution to latency from 8% to near-zero, with the side benefit that batching reduces the number of syscalls.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..f248749 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,18 @@\n+let queue: string[] = [];\n+let scheduled = false;\n+\n+const flush = (): void => {\n+  if (queue.length === 0) return;\n+  const batch = queue;\n+  queue = [];\n+  scheduled = false;\n+  process.stdout.write(batch.join(''));\n+};\n+\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  queue.push(`${JSON.stringify({ message })}\\n`);\n+  if (!scheduled) {\n+    scheduled = true;\n+    setImmediate(flush);\n+  }\n };\n",
+  "commits": ""
+}

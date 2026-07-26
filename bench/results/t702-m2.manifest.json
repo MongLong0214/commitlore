@@ -1,0 +1,71 @@
+{
+  "status": "final",
+  "status_note": "80 of 80 runs, four complete seeds at 20 each, 40 per arm before exclusions. One row excluded under section 3 (stopped_by: error), leaving 79 in the analysis set. Zero isolation warnings. Citable. The registered test does not reject at alpha 0.05 (p = 0.2247).",
+  "ticket": "M2 (PREREGISTRATION.md section 13)",
+  "purpose": "Third registered measurement, and the first through the delivery path the product actually uses: a PreToolUse hook that fires per edit and is scoped to the path being edited (#36). M1 and M1-b both handed the agent one block of text at session start.",
+
+  "results_file": "bench/results/t702-m2.jsonl",
+  "runner_log": "bench/results/t702-m2.runner.log",
+  "transcripts": "bench/results/transcripts-m2/",
+  "verdict": "bench/VERDICT-M2.md",
+
+  "rows": 80,
+  "planned": 80,
+  "analysis_set": 79,
+
+  "matrix": {
+    "tasks": 10,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3, 4],
+    "runs": 80
+  },
+
+  "integrity": {
+    "run_ids": ["20260726T194031Z-9782f1"],
+    "rows_per_seed": { "1": 20, "2": 20, "3": 20, "4": 20 },
+    "rows_per_condition": { "commitlore-on": 40, "commitlore-off": 40 },
+    "isolation_warnings": 0,
+    "tokens": "2039101 / 8000000"
+  },
+
+  "exclusions": {
+    "count": 1,
+    "detail": "reproposal-index-server seed 1 commitlore-off, stopped_by: error",
+    "note": "The excluded row was a control-arm re-proposal, so the rule removed a point favouring the hypothesis. Unfiltered the table is on 4/40, off 9/40, and p is unchanged to four places."
+  },
+
+  "model": "claude-haiku-4-5-20251001",
+
+  "environment": {
+    "repo_sha": "56407481a3a6549437caaf61e899373cbc2bcae8",
+    "delivery": "PreToolUse hook via --settings, running dist/cli.js inject --hook-input per edit",
+    "detector_surface": "code",
+    "isolation_warnings": 0
+  },
+
+  "result": {
+    "commitlore_on": "4/40",
+    "commitlore_off": "8/39",
+    "fisher_two_tailed_p": 0.2247,
+    "rate_difference_pp": -10.5,
+    "rate_difference_ci95_pp": [-26.7, 5.8],
+    "odds_ratio": 0.4306,
+    "verdict": "not significant at alpha 0.05"
+  },
+
+  "known_asymmetry": {
+    "timeouts": { "commitlore-on": 3, "commitlore-off": 0 },
+    "note": "The hook spawns a subprocess on every Edit, a cost the control never pays. A timeout truncates a run and so gives it fewer chances to re-propose, which flatters the treatment arm — the result is null anyway. Latency itself is unpriced by this benchmark."
+  },
+
+  "do_not_pool": "Different delivery path from M1 and M1-b, and a different n. Three measurements, not a series.",
+
+  "reproducibility": {
+    "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks --cond commitlore-on,commitlore-off --seed 1,2,3,4 --driver claude-headless --model claude-haiku-4-5-20251001 --max-tokens 8000000 --timeout-ms 300000 --save-transcripts bench/results/transcripts-m2 --out bench/results/t702-m2.jsonl"
+  },
+
+  "not_measured": {
+    "guard": "SPEC section 5 assigns Ruled-out: to guard. Every measurement so far has been of injection (#37).",
+    "hook_latency": "Visible only as three timeouts; never priced directly."
+  }
+}
