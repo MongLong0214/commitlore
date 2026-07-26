@@ -8,8 +8,8 @@
 
 ## Decision
 
-1. **squash 승계**: `annals squash-preserve`가 병합 전 브랜치 커밋들의 trailer를 집계해 (a) 병합 커밋 메시지의 정식 trailer 블록으로 재기록하고 (b) 동시에 notes 미러에 기록 단위로 부착한다. GitHub Action(T-602)이 이를 PR 병합 시 자동 실행.
-2. **notes 미러**: `refs/notes/annals`에 원자를 커밋 SHA 기준으로 미러링 — rebase/amend로 히스토리가 재작성돼도 원자가 생존하는 2차 채널.
+1. **squash 승계**: `commitlore squash-preserve`가 병합 전 브랜치 커밋들의 trailer를 집계해 (a) 병합 커밋 메시지의 정식 trailer 블록으로 재기록하고 (b) 동시에 notes 미러에 기록 단위로 부착한다. GitHub Action(T-602)이 이를 PR 병합 시 자동 실행.
+2. **notes 미러**: `refs/notes/commitlore`에 기록를 커밋 SHA 기준으로 미러링 — rebase/amend로 히스토리가 재작성돼도 기록가 생존하는 2차 채널.
 3. **경로 추적**: 모든 경로 스코프 조회는 `--follow` 기본. 승계·미러에는 `Provenance:` trailer로 원본 커밋 SHA를 남긴다.
 
 ## Ruled-out
@@ -21,4 +21,4 @@
 ## Consequences
 
 - notes 공유를 위해 doctor의 refspec 자동 설정이 선행 조건(ADR-0003).
-- 승계된 원자는 `Provenance: squashed-from <sha>`로 원본과 구분 — 신뢰 등급(ADR-0005) 입력이 된다.
+- 승계된 기록는 `Provenance: inherited <sha>`로 원본과 구분 — 신뢰 등급(ADR-0005) 입력이 된다.

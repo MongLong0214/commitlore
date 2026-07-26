@@ -13,7 +13,7 @@
 - 에이전트로서, 어휘 enum이 유일해 `Certainty: yes` 같은 형식 오류가 기계 거부된다.
 
 ## 요구사항
-1. trailer 어휘: v1 9종 + `Annals-Version` `Decision-Id` `Record-Id` `Supersedes` `Expires` `Evidence` `Provenance` + `X-` 확장 네임스페이스.
+1. trailer 어휘: v1 9종 + `CommitLore-Version` `Decision-Id` `Record-Id` `Supersedes` `Expires` `Evidence` `Provenance` + `X-` 확장 네임스페이스.
 2. enum 정본: `Certainty: firm|tentative|guess`, `Blast: local|module|system`, `Undo: easy|costly|permanent` (레포 계열 채택 — 이유: 이미 배포된 스킬 사용자와의 호환).
 3. 문법: git interpret-trailers 호환(멀티라인 폴딩 포함) + EBNF.
 4. **죽은 필드 금지**: 모든 어휘는 스펙에 소비자 라우트(쿼리·게이트·주입 규칙) 1개 이상을 명시.

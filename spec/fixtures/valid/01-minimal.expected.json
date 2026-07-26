@@ -1,0 +1,7 @@
+{
+  "description": "Smallest possible record: a single trailer, no body.",
+  "trailers": [
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "canonical": "Limit: shared Redis instance caps sustained writes at 500/sec\n"
+}

@@ -1,0 +1,9 @@
+{
+  "description": "unknown-key violation: 'Constraint' is not in SPEC §3 and is not X--prefixed, so it does not enter the record (SPEC §4.1, §6).",
+  "trailers": [
+    { "key": "Constraint", "value": "must ship by friday per the compliance deadline" }
+  ],
+  "violations": [
+    { "key": "Constraint", "value": "must ship by friday per the compliance deadline", "rule": "unknown-key", "got": "Constraint", "want": "a key from SPEC §3 or X-<Name>" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "description": "enum violation: 'wide' is a plausible synonym but not in the Blast enum (SPEC §3.3 names this exact example).",
+  "trailers": [
+    { "key": "Blast", "value": "wide" }
+  ],
+  "violations": [
+    { "key": "Blast", "value": "wide", "rule": "enum", "got": "wide", "want": "local|module|system" }
+  ]
+}

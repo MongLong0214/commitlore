@@ -1,0 +1,58 @@
+{
+  "description": "Broad record using almost every vocabulary key at once (one Follows/Supersedes-family key intentionally left to fixture 06, since Follows requires a real chain target).",
+  "trailers": [
+    {
+      "key": "Limit",
+      "value": "payment provider sandbox throttles test traffic at 20 req/min"
+    },
+    {
+      "key": "Ruled-out",
+      "value": "circuit breaker only | doesn't address the thundering herd on recovery"
+    },
+    {
+      "key": "Warn",
+      "value": "do not lower the jitter window below 200ms, it was tuned against the provider's own rate limiter"
+    },
+    {
+      "key": "Blast",
+      "value": "module"
+    },
+    {
+      "key": "Undo",
+      "value": "costly"
+    },
+    {
+      "key": "Certainty",
+      "value": "firm"
+    },
+    {
+      "key": "Verified",
+      "value": "replayed the incident traffic trace against the new policy in staging"
+    },
+    {
+      "key": "Unverified",
+      "value": "behavior under provider-side partial outages"
+    },
+    {
+      "key": "Record-Id",
+      "value": "r-8f2a91"
+    },
+    {
+      "key": "Expires",
+      "value": "2026-12-31"
+    },
+    {
+      "key": "Evidence",
+      "value": "docs/incidents/2026-06-payment-outage.md#root-cause"
+    },
+    {
+      "key": "Provenance",
+      "value": "authored"
+    },
+    {
+      "key": "CommitLore-Version",
+      "value": "2.0.0"
+    }
+  ],
+  "canonical": "Limit: payment provider sandbox throttles test traffic at 20 req/min\nRuled-out: circuit breaker only | doesn't address the thundering herd on recovery\nWarn: do not lower the jitter window below 200ms, it was tuned against the provider's own rate limiter\nBlast: module\nUndo: costly\nCertainty: firm\nVerified: replayed the incident traffic trace against the new policy in staging\nUnverified: behavior under provider-side partial outages\nRecord-Id: r-8f2a91\nExpires: 2026-12-31\nEvidence: docs/incidents/2026-06-payment-outage.md#root-cause\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+}

@@ -1,0 +1,21 @@
+route: trust-grade
+cases:
+  - id: grade-provenance-unknown-warn-is-claim
+    description: >
+      Provenance: unknown can never grade as instruction, even when the trailer's author is
+      trusted — SPEC §7 requires provenance authored AND a trusted author, both.
+    given:
+      - sha: c1
+        committed_at: "2026-01-10T00:00:00Z"
+        author: alice
+        trailers:
+          - {key: Record-Id, value: r-p7q8r9}
+          - {key: Provenance, value: unknown}
+          - {key: Warn, value: "Do not enable the legacy auth fallback; it silently drops MFA."}
+    when:
+      route: trust-grade
+      trusted_authors: [alice]
+    expect:
+      records:
+        - record_id: r-p7q8r9
+          warn_grade: claim

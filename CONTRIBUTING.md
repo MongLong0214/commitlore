@@ -1,4 +1,4 @@
-# Contributing to Annals
+# Contributing to CommitLore
 
 Thanks for looking. This project is MIT, free forever, and has no commercial tier — contributions stay in the commons.
 
@@ -15,12 +15,12 @@ A PR that says "should fix it" gets sent back. A PR that says "reproduced the fa
 ## Where to start
 
 1. Read [`docs/adr/`](docs/adr/) first — the ADRs carry the *why*, including what we deliberately rejected. Proposals that re-litigate a settled ADR need to address its Ruled-out list.
-2. Pick an [open issue](https://github.com/MongLong0214/annals/issues). Ticket specs live in [`docs/tickets/`](docs/tickets/) with module paths, signatures, and acceptance criteria — enough to implement from.
+2. Pick an [open issue](https://github.com/MongLong0214/commitlore/issues). Ticket specs live in [`docs/tickets/`](docs/tickets/) with module paths, signatures, and acceptance criteria — enough to implement from.
 3. Comment on the issue before starting anything large, so two people don't build the same thing.
 
 ## Commit messages: we dogfood the protocol
 
-This repo uses Annals trailers in its own history. Try it:
+This repo uses CommitLore trailers in its own history. Try it:
 
 ```bash
 git log --format='%h %(trailers:key=Ruled-out,valueonly)'
@@ -47,7 +47,7 @@ Trivial commits (typos, formatting) get no trailers — noise costs more than it
 
 ## Alternative implementations are welcome
 
-The conformance suite is the contract, not our code. If you want a Rust or Go implementation of the protocol, pass `spec/fixtures/` and `spec/contract-cases/` and it's a valid Annals implementation. Please open an issue so we can link it.
+The conformance suite is the contract, not our code. If you want a Rust or Go implementation of the protocol, pass `spec/fixtures/` and `spec/contract-cases/` and it's a valid CommitLore implementation. Please open an issue so we can link it.
 
 ## Pull requests
 
@@ -58,7 +58,7 @@ The conformance suite is the contract, not our code. If you want a Rust or Go im
 
 ## Reporting a security issue
 
-Annals's threat model treats commit messages as an untrusted instruction channel for agents ([ADR-0005](docs/adr/ADR-0005-trust-minimal.md)). If you find a way to get a hostile `Warn:` past the demotion rules or the injection heuristics, that's a security bug — please open a private security advisory on GitHub rather than a public issue.
+CommitLore's threat model treats commit messages as an untrusted instruction channel for agents ([ADR-0005](docs/adr/ADR-0005-trust-minimal.md)). If you find a way to get a hostile `Warn:` past the demotion rules or the injection heuristics, that's a security bug — please open a private security advisory on GitHub rather than a public issue.
 
 ## License
 

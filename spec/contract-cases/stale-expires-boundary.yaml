@@ -1,0 +1,38 @@
+route: stale-engine
+cases:
+  - id: stale-expires-boundary-still-active-on-expiry-date
+    description: >
+      Pins the inclusive/exclusive boundary of a date-form Expires: the stated date counts as
+      still active (Expires means "stops being active after the date", not "on the date").
+      Evaluating at the very start of the expiry date (00:00:00Z) must still yield active.
+    given:
+      - sha: c1
+        committed_at: "2026-01-01T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-m4n5o6}
+          - {key: Expires, value: "2026-02-15"}
+    when:
+      route: stale-engine
+      at: "2026-02-15T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-m4n5o6
+          lifecycle: active
+
+  - id: stale-expires-boundary-expired-day-after
+    description: >
+      Companion to the case above: once the expiry date has fully elapsed (evaluation instant
+      is 00:00:00Z on the following day), the record must be expired.
+    given:
+      - sha: c1
+        committed_at: "2026-01-01T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-m4n5o7}
+          - {key: Expires, value: "2026-02-15"}
+    when:
+      route: stale-engine
+      at: "2026-02-16T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-m4n5o7
+          lifecycle: expired

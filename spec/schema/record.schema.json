@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commitlore.dev/schema/record.schema.json",
+  "title": "CommitLore Record",
+  "description": "A parsed CommitLore record: the set of trailers attached to a single commit (SPEC.md §1, §3). This schema validates the output of `git interpret-trailers --parse`, not raw commit text.",
+  "$comment": "Enforceable here: unknown-key rejection, enum values, Record-Id/Ruled-out/Provenance/CommitLore-Version/Expires-as-date format, and single-valued cardinality (via contains/maxContains, mirroring SINGLE_VALUED in src/core/types.ts). NOT enforceable here, left to the validator (SPEC §6): dangling-ref (Follows/Supersedes must resolve against Record-Ids that exist elsewhere in git history — a cross-record, cross-commit check with no meaning inside a single record document) and repeatable-key-vs-history reasoning. The `format: date` keyword on Expires requires an AJV instance with ajv-formats' `date` format registered; without it, that branch degrades to pattern-only (digit-shape) checking.",
+  "type": "object",
+  "required": ["trailers"],
+  "additionalProperties": false,
+  "properties": {
+    "trailers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/trailer" },
+      "allOf": [
+        {
+          "$comment": "cardinality (SPEC §6): Blast is single-valued (types.ts SINGLE_VALUED).",
+          "contains": { "type": "object", "properties": { "key": { "const": "Blast" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "Undo" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "Certainty" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "Record-Id" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "Expires" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "Provenance" } } },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "CommitLore-Version" } } },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "knownKey": {
+      "enum": [
+        "Limit",
+        "Ruled-out",
+        "Warn",
+        "Blast",
+        "Undo",
+        "Certainty",
+        "Verified",
+        "Unverified",
+        "Record-Id",
+        "Follows",
+        "Supersedes",
+        "Expires",
+        "Evidence",
+        "Provenance",
+        "CommitLore-Version"
+      ]
+    },
+    "recordIdValue": {
+      "type": "string",
+      "pattern": "^r-[a-z0-9]{6,}$"
+    },
+    "trailer": {
+      "type": "object",
+      "required": ["key", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "anyOf": [
+            { "$ref": "#/$defs/knownKey" },
+            {
+              "$comment": "Organization extension (SPEC §3.2). Preserved, never interpreted by the core.",
+              "pattern": "^X-[A-Za-z][A-Za-z0-9-]*$"
+            }
+          ]
+        },
+        "value": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "key": { "const": "Blast" } } },
+          "then": { "properties": { "value": { "enum": ["local", "module", "system"] } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Undo" } } },
+          "then": { "properties": { "value": { "enum": ["easy", "costly", "permanent"] } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Certainty" } } },
+          "then": { "properties": { "value": { "enum": ["firm", "tentative", "guess"] } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Ruled-out" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^.+\\|.+$",
+                "$comment": "alternative | reason — the pipe separator is REQUIRED (SPEC §3.1)."
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Record-Id" } } },
+          "then": { "properties": { "value": { "$ref": "#/$defs/recordIdValue" } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Follows" } } },
+          "then": { "properties": { "value": { "$ref": "#/$defs/recordIdValue" } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Supersedes" } } },
+          "then": { "properties": { "value": { "$ref": "#/$defs/recordIdValue" } } }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Expires" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "anyOf": [
+                  {
+                    "$comment": "Date-shaped values are held to a real calendar date (rejects e.g. 2026-13-45).",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                    "format": "date"
+                  },
+                  {
+                    "$comment": "Anything not date-shaped is a free-text expiry condition (SPEC §3.2) and is unconstrained.",
+                    "not": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Evidence" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "anyOf": [
+                  { "$comment": "path#anchor", "pattern": "^[^\\s#]+#\\S+$" },
+                  { "$comment": "URL", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://\\S+$" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "key": { "const": "Provenance" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^(authored|reconstructed|unknown|inherited [0-9a-f]{7,40})$"
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "key": { "const": "CommitLore-Version" } } },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+(\\.[0-9A-Za-z.-]+)*)?(\\+[0-9A-Za-z.-]+(\\.[0-9A-Za-z.-]+)*)?$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

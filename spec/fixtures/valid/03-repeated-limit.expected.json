@@ -1,0 +1,9 @@
+{
+  "description": "Repeatable key: three Limit trailers, order preserved (SPEC §2.1 B5).",
+  "trailers": [
+    { "key": "Limit", "value": "nightly export must finish inside the 2h maintenance window" },
+    { "key": "Limit", "value": "export target bucket enforces a 5GB per-object cap" },
+    { "key": "Limit", "value": "shared DB replica used for reads is also used by the analytics team" }
+  ],
+  "canonical": "Limit: nightly export must finish inside the 2h maintenance window\nLimit: export target bucket enforces a 5GB per-object cap\nLimit: shared DB replica used for reads is also used by the analytics team\n"
+}

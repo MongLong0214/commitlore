@@ -1,0 +1,10 @@
+{
+  "description": "cardinality violation: Blast: is non-repeatable (SPEC §3.1, types.ts SINGLE_VALUED) but appears twice in one record.",
+  "trailers": [
+    { "key": "Blast", "value": "module" },
+    { "key": "Blast", "value": "system" }
+  ],
+  "violations": [
+    { "key": "Blast", "value": "system", "rule": "cardinality", "got": "2", "want": "at most 1" }
+  ]
+}

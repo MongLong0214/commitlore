@@ -1,0 +1,4 @@
+Evaluate caching strategies for the session store
+
+Ruled-out: in-process LRU cache | doesn't survive pod restarts, loses sessions on every deploy
+Ruled-out: client-side cookie session | payload too large for the auth claims we attach

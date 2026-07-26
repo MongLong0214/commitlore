@@ -1,11 +1,11 @@
 {
-  "name": "annals",
+  "name": "commitlore",
   "version": "0.1.0-dev",
   "description": "Git commit trailers as institutional memory for AI coding agents",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "annals": "dist/cli.js"
+    "commitlore": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -30,11 +30,18 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MongLong0214/annals.git"
+    "url": "git+https://github.com/MongLong0214/commitlore.git"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "commander": "^15.0.0",
+    "js-yaml": "^5.2.2"
   }
 }

@@ -1,0 +1,5 @@
+Document known constraints on the export job
+
+Limit: nightly export must finish inside the 2h maintenance window
+Limit: export target bucket enforces a 5GB per-object cap
+Limit: shared DB replica used for reads is also used by the analytics team

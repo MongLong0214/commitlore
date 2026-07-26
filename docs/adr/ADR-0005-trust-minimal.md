@@ -10,9 +10,9 @@
 
 v0.1은 **규칙 기반 등급 + 강등 렌더링**으로 최소 방어선을 구축한다.
 
-- 기록 등급 = provenance 축(`authored | squashed-from | reconstructed | unknown`) × lifecycle 축(`active | superseded | expired`).
+- 기록 등급 = provenance 축(`authored | inherited | reconstructed | unknown`) × lifecycle 축(`active | superseded | expired`).
 - **강등 규칙**: 주입·조회 출력에서 `Warn:`는 등급이 검증 가능한 경우에만 "지시"로, 그 외에는 "주장(claim)"으로 명시 표기해 전달한다. 외부 기여(포크 PR) 커밋의 Warn는 항상 주장으로 강등.
-- 명령형 인젝션 패턴(도구 호출 유도·정책 우회 문구) 휴리스틱 검출 시 해당 원자를 주입에서 제외하고 경고.
+- 명령형 인젝션 패턴(도구 호출 유도·정책 우회 문구) 휴리스틱 검출 시 해당 기록를 주입에서 제외하고 경고.
 - secret guard: pre-commit에서 자격증명·토큰·내부 URL 패턴 스캔 후 차단.
 
 ## Ruled-out

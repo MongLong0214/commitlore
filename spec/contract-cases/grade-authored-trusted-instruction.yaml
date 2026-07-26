@@ -1,0 +1,23 @@
+route: trust-grade
+cases:
+  - id: grade-authored-trusted-author-is-instruction
+    description: >
+      The positive counterpart to the other grade-*.yaml cases: Provenance: authored by a
+      trusted author must render Warn: as instruction. Without this case, an implementation
+      that always returns claim would trivially pass every other grade-*/route-injection-*
+      case in this suite.
+    given:
+      - sha: c1
+        committed_at: "2026-01-14T00:00:00Z"
+        author: alice
+        trailers:
+          - {key: Record-Id, value: r-b2c3d4}
+          - {key: Provenance, value: authored}
+          - {key: Warn, value: "Do not merge without running the full migration dry-run first."}
+    when:
+      route: trust-grade
+      trusted_authors: [alice, bob]
+    expect:
+      records:
+        - record_id: r-b2c3d4
+          warn_grade: instruction

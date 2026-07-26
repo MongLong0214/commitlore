@@ -1,0 +1,5 @@
+{
+  "description": "SPEC §2.1 B3: the last paragraph opens with a syntactically valid 'Note: value' line, but its second line is un-indented prose rather than a trailer or a folded continuation. Because not every line in the paragraph is a trailer or continuation, the whole paragraph is body prose — zero trailers, not a partial match.",
+  "trailers": [],
+  "canonical": ""
+}

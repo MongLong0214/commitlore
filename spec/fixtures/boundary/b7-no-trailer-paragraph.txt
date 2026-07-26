@@ -1,0 +1,4 @@
+Improve error message wording
+
+Make the invalid-config error easier to understand for first-time
+contributors reading the CLI output.

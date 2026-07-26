@@ -1,0 +1,23 @@
+route: stale-engine
+cases:
+  - id: stale-supersedes-retires-prior
+    description: A record with Supersedes pointing at an earlier Record-Id retires that earlier record.
+    given:
+      - sha: c1
+        committed_at: "2026-01-10T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-a1b2c3}
+          - {key: Blast, value: local}
+          - {key: Undo, value: easy}
+          - {key: Certainty, value: firm}
+      - sha: c2
+        committed_at: "2026-02-01T00:00:00Z"
+        trailers:
+          - {key: Supersedes, value: r-a1b2c3}
+    when:
+      route: stale-engine
+      at: "2026-03-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-a1b2c3
+          lifecycle: superseded

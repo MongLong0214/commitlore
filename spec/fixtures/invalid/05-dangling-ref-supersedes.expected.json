@@ -1,0 +1,10 @@
+{
+  "description": "dangling-ref violation: Supersedes: r-abc123 is syntactically a valid Record-Id (format is fine), but no record with that Record-Id exists anywhere in this fixture's (simulated) history, so the reference is dangling (SPEC §6). Note: this class is inherently cross-record/cross-commit and cannot be caught by record.schema.json in isolation — see its $comment.",
+  "trailers": [
+    { "key": "Supersedes", "value": "r-abc123" },
+    { "key": "Record-Id", "value": "r-9d4f20" }
+  ],
+  "violations": [
+    { "key": "Supersedes", "value": "r-abc123", "rule": "dangling-ref", "got": "r-abc123", "want": "an existing Record-Id in history" }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "description": "SPEC §2.1 B7: message has no trailer paragraph at all (the last paragraph is plain prose with no colon-shaped lines). Zero trailers, and this MUST NOT be treated as an error.",
+  "trailers": [],
+  "canonical": ""
+}

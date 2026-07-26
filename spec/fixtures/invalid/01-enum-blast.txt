@@ -1,0 +1,3 @@
+Widen the blast radius label on the migration commit
+
+Blast: wide

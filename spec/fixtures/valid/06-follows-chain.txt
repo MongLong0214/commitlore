@@ -1,0 +1,8 @@
+Extend the retry budget decision from the payment incident
+
+Follows this repo's earlier decision to move to exponential backoff,
+tightening the retry budget after a second, smaller incident.
+
+Follows: r-8f2a91
+Record-Id: r-3c7e04
+Certainty: tentative

@@ -3,7 +3,7 @@ dist/
 *.tsbuildinfo
 
 # derived index — never committed (ADR-0003)
-.git/annals/
+.git/commitlore/
 
 # local bench output
 bench/results/*.local.jsonl

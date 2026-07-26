@@ -1,0 +1,8 @@
+{
+  "description": "Expires: as a free-text condition rather than a date — stays active but is flagged for review (SPEC §3.2, contract case 3).",
+  "trailers": [
+    { "key": "Expires", "value": "once the upstream schema library ships a fix for issue #4821" },
+    { "key": "Warn", "value": "this relaxation only applies to the optional discount field" }
+  ],
+  "canonical": "Warn: this relaxation only applies to the optional discount field\nExpires: once the upstream schema library ships a fix for issue #4821\n"
+}

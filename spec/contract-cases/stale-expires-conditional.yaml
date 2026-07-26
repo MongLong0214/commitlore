@@ -1,0 +1,22 @@
+route: stale-engine
+cases:
+  - id: stale-expires-conditional-active-with-review-flag
+    description: >
+      A free-text (non-date) Expires condition never auto-expires — the record stays active
+      but is flagged for review, per SPEC §5 ("flags it for review on a condition"). The
+      evaluation instant is far in the future to prove the flag is not date-driven.
+    given:
+      - sha: c1
+        committed_at: "2026-01-05T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-g7h8i9}
+          - {key: Expires, value: "until the rate-limit vendor migration ships"}
+          - {key: Certainty, value: tentative}
+    when:
+      route: stale-engine
+      at: "2026-09-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-g7h8i9
+          lifecycle: active
+          review: true

@@ -1,0 +1,8 @@
+{
+  "description": "Provenance: inherited <sha> — record carried across a squash merge, sha is the origin commit (SPEC §3.2, §7 trust grading).",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited 9f86d081884c" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "canonical": "Limit: shared Redis instance caps sustained writes at 500/sec\nProvenance: inherited 9f86d081884c\n"
+}

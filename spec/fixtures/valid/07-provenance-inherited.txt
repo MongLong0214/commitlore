@@ -1,0 +1,4 @@
+Carry forward the rate limit note across the squash merge
+
+Provenance: inherited 9f86d081884c
+Limit: shared Redis instance caps sustained writes at 500/sec

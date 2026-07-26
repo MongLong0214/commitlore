@@ -1,0 +1,19 @@
+Rework payment retry policy
+
+Switched the payment retry policy from fixed backoff to exponential
+backoff with jitter, after the incident review flagged synchronized
+retries as a contributing cause of the outage.
+
+Limit: payment provider sandbox throttles test traffic at 20 req/min
+Ruled-out: circuit breaker only | doesn't address the thundering herd on recovery
+Warn: do not lower the jitter window below 200ms, it was tuned against the provider's own rate limiter
+Blast: module
+Undo: costly
+Certainty: firm
+Verified: replayed the incident traffic trace against the new policy in staging
+Unverified: behavior under provider-side partial outages
+Record-Id: r-8f2a91
+Expires: 2026-12-31
+Evidence: docs/incidents/2026-06-payment-outage.md#root-cause
+Provenance: authored
+CommitLore-Version: 2.0.0

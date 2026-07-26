@@ -1,0 +1,9 @@
+{
+  "description": "Verified: and Unverified: together — both repeatable, both present in the same record (SPEC §3.1, coverage query route).",
+  "trailers": [
+    { "key": "Verified", "value": "token refresh under concurrent requests from the same session" },
+    { "key": "Verified", "value": "token refresh after clock skew of up to 5 minutes" },
+    { "key": "Unverified", "value": "token refresh behavior during a partial identity provider outage" }
+  ],
+  "canonical": "Verified: token refresh under concurrent requests from the same session\nVerified: token refresh after clock skew of up to 5 minutes\nUnverified: token refresh behavior during a partial identity provider outage\n"
+}

@@ -1,0 +1,4 @@
+Relax the config validation error for a known upstream bug
+
+Expires: once the upstream schema library ships a fix for issue #4821
+Warn: this relaxation only applies to the optional discount field

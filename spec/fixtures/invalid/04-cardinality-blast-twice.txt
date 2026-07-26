@@ -1,0 +1,4 @@
+Conflicting blast radius labels on the same commit
+
+Blast: module
+Blast: system

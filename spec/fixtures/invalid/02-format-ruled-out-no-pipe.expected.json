@@ -1,0 +1,9 @@
+{
+  "description": "format violation: Ruled-out: value has no '|' separator, so the reason cannot be distinguished from the alternative (SPEC §3.1).",
+  "trailers": [
+    { "key": "Ruled-out", "value": "pointless without a pipe separator" }
+  ],
+  "violations": [
+    { "key": "Ruled-out", "value": "pointless without a pipe separator", "rule": "format", "got": "pointless without a pipe separator", "want": "alternative | reason" }
+  ]
+}

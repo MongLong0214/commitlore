@@ -1,8 +1,8 @@
-# Annals Protocol Specification
+# CommitLore Protocol Specification
 
 **Version 2.0** · Status: Draft · Canonical source for all implementations
 
-This document defines the Annals protocol: how decision context is inscribed into git commits as trailers, what each field means, and which route consumes it. An implementation that passes `spec/fixtures/` and `spec/contract-cases/` is a conforming Annals implementation, regardless of language.
+This document defines the CommitLore protocol: how decision context is inscribed into git commits as trailers, what each field means, and which route consumes it. An implementation that passes `spec/fixtures/` and `spec/contract-cases/` is a conforming CommitLore implementation, regardless of language.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted as described in RFC 2119.
 
@@ -10,12 +10,12 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted 
 
 ## 1. Overview
 
-An Annals **record** is the set of trailers attached to a single commit. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
+An CommitLore **record** is the set of trailers attached to a single commit. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
 
 Records live in two places, both inside git:
 
 - **Commit messages** — the trailer block of the commit that made the change.
-- **`refs/notes/annals`** — a mirror that survives history rewriting, and the destination for records inherited across squash merges or reconstructed from history.
+- **`refs/notes/commitlore`** — a mirror that survives history rewriting, and the destination for records inherited across squash merges or reconstructed from history.
 
 Nothing else is authoritative. Indexes, caches, and reports are derived and MUST be rebuildable from these two sources alone.
 
@@ -23,7 +23,7 @@ Nothing else is authoritative. Indexes, caches, and reports are derived and MUST
 
 ## 2. Grammar
 
-Annals trailers are ordinary git trailers. Parsing MUST be delegated to `git interpret-trailers --parse` (or an implementation that reproduces its behavior exactly), because git's own definition of "what is a trailer block" is the only definition that stays consistent with the rest of the git ecosystem.
+CommitLore trailers are ordinary git trailers. Parsing MUST be delegated to `git interpret-trailers --parse` (or an implementation that reproduces its behavior exactly), because git's own definition of "what is a trailer block" is the only definition that stays consistent with the rest of the git ecosystem.
 
 ### 2.1 Verified boundary behavior
 
@@ -88,7 +88,7 @@ Sixteen keys. Every key exists because a route consumes it — see §5.
 | `Expires:` | `YYYY-MM-DD` \| free-text condition | no | When this record stops being active |
 | `Evidence:` | `path#anchor` \| URL | yes | Link from a claim to its proof |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
-| `Annals-Version:` | semver | no | Protocol version this record targets |
+| `CommitLore-Version:` | semver | no | Protocol version this record targets |
 | `X-<Name>:` | free text | yes | Organization extension — preserved, never interpreted by the core |
 
 ### 3.3 Enum rationale
@@ -120,8 +120,8 @@ No key exists without a consumer. If a proposed key has no route, it does not en
 
 | Key | Route | Behavior the route produces |
 |---|---|---|
-| `Limit:` | path-scoped injection · `annals limits` | Surfaced before an agent edits the path it constrains |
-| `Ruled-out:` | **`annals guard`** | Blocks re-proposal: a proposal matching a ruled-out alternative is flagged before execution |
+| `Limit:` | path-scoped injection · `commitlore limits` | Surfaced before an agent edits the path it constrains |
+| `Ruled-out:` | **`commitlore guard`** | Blocks re-proposal: a proposal matching a ruled-out alternative is flagged before execution |
 | `Warn:` | graded injection | Delivered as an instruction when trusted, demoted to a claim when not (§7) |
 | `Blast:` | approval gate | `system` routes the change to human review |
 | `Undo:` | approval gate | `permanent` routes the change to human review |
@@ -133,14 +133,14 @@ No key exists without a consumer. If a proposed key has no route, it does not en
 | `Expires:` | stale engine | Marks the record inactive after the date, or flags it for review on a condition |
 | `Evidence:` | harvest verifier | The citation checked when a record is generated from a session |
 | `Provenance:` | trust grading | Determines whether `Warn:` renders as instruction or claim (§7) |
-| `Annals-Version:` | tooling | Compatibility check |
+| `CommitLore-Version:` | tooling | Compatibility check |
 | `X-<Name>:` | none in core | Preserved verbatim; organizations supply their own routes |
 
 ---
 
 ## 6. Validation
 
-`annals validate` MUST report violations as structured records — `{key, value, rule, got, want}` — not prose, because the repair loop consumes them programmatically.
+`commitlore validate` MUST report violations as structured records — `{key, value, rule, got, want}` — not prose, because the repair loop consumes them programmatically.
 
 Violation classes:
 
@@ -171,7 +171,7 @@ This is a minimum, not a solution: it makes trust auditable rather than assumed.
 
 ## 8. Versioning
 
-`Annals-Version:` follows semver. Within a major version, implementations MUST preserve unknown keys they cannot interpret, so that a newer producer does not lose data through an older consumer. Removing a key or narrowing an enum is a major-version change.
+`CommitLore-Version:` follows semver. Within a major version, implementations MUST preserve unknown keys they cannot interpret, so that a newer producer does not lose data through an older consumer. Removing a key or narrowing an enum is a major-version change.
 
 ---
 

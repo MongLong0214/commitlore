@@ -1,6 +1,6 @@
-# F7 티켓 — AnnalsBench (M1 골격·측정 / M4 어블레이션·리포트)
+# F7 티켓 — CommitLoreBench (M1 골격·측정 / M4 어블레이션·리포트)
 
-> PRD: `docs/prd/PRD-F7-annalsbench.md` · ADR: 0007
+> PRD: `docs/prd/PRD-F7-commitlorebench.md` · ADR: 0007
 > 배치: `bench/runner.ts`, `bench/tasks/*.yaml`, `bench/metrics.ts`, `bench/report.ts`, 결과 `bench/results/*.jsonl`(커밋)
 
 ---
@@ -8,7 +8,7 @@
 ## T-701 하니스 골격 (M) — #22 · 의존 없음 [M1]
 
 **구현 개요**
-- `bench/runner.ts`: 과제 시퀀스 러너. 조건 = `annals-on | annals-off`(+M4에서 어블레이션 3조건). 과제마다 격리 워크스페이스(임시 clone), 세션 간 상태 공유는 annals 채널만.
+- `bench/runner.ts`: 과제 시퀀스 러너. 조건 = `commitlore-on | commitlore-off`(+M4에서 어블레이션 3조건). 과제마다 격리 워크스페이스(임시 clone), 세션 간 상태 공유는 commitlore 채널만.
 - 과제 정의 `bench/tasks/*.yaml`: `{repo, setup(선행 커밋·기각 이력 주입), prompt, detect(재제안 판정 규칙: 금지 접근의 시그니처 문자열/AST 패턴), budget{turns, tokens}}`.
 - 이중 정지: 과제당 시도 상한 + 총 토큰 캡. seed 고정, 결과 JSONL(`{task, cond, reproposed, violations, turns, tokens}`).
 - 에이전트 드라이버: Claude Code headless(`claude -p`) 1종만 v0.1 지원.

@@ -4,12 +4,12 @@
 
 ## Context
 
-CLI·MCP 서버·훅·GitHub Action을 4주 안에 구현해야 한다. 배포 채널은 npm(`npx annals`)과 skills.sh 생태계. 오너 스택은 TypeScript 중심.
+CLI·MCP 서버·훅·GitHub Action을 4주 안에 구현해야 한다. 배포 채널은 npm(`npx commitlore`)과 skills.sh 생태계. 오너 스택은 TypeScript 중심.
 
 ## Decision
 
-- 언어: TypeScript (strict), 런타임: Node ≥ 20. 단일 패키지 `annals` (bin: `annals`).
-- 배포: npm publish + `npx annals <cmd>`. MCP 서버는 같은 패키지의 서브커맨드(`annals mcp`).
+- 언어: TypeScript (strict), 런타임: Node ≥ 20. 단일 패키지 `commitlore` (bin: `commitlore`).
+- 배포: npm publish + `npx commitlore <cmd>`. MCP 서버는 같은 패키지의 서브커맨드(`commitlore mcp`).
 - 인덱스 저장: better-sqlite3 (네이티브 의존 1개 허용 — ADR-0003의 파생 캐시이므로 실패 시 무인덱스 폴백 경로 유지).
 - git 접근: 자식 프로세스로 시스템 `git` 호출 (`interpret-trailers`, `log --format=%(trailers)`, `notes`). libgit2 바인딩 금지.
 

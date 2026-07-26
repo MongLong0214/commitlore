@@ -1,0 +1,3 @@
+Add a scheduling constraint note
+
+Constraint: must ship by friday per the compliance deadline

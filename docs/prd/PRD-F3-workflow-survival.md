@@ -7,15 +7,15 @@ squash·rebase·rename에서 지식이 죽지 않는다. "영구 보존" 주장�
 
 ## 사용자 스토리
 - squash-merge 팀의 에이전트로서, 병합 후에도 브랜치에서 축적된 Limit를 main에서 조회할 수 있다.
-- 리베이스 후에도 notes 미러를 통해 원자가 생존한다.
+- 리베이스 후에도 notes 미러를 통해 기록가 생존한다.
 
 ## 요구사항
-1. `annals squash-preserve <base>..<head>`: trailer 집계 → 병합 커밋 정식 trailer 블록 재기록 + notes 기록 부착. 중복 원자는 Record-Id/내용 해시로 dedupe.
-2. notes 미러: `refs/notes/annals` 읽기/쓰기 모듈, 조회 경로에 notes 기록 병합.
-3. 승계 기록 `Provenance: squashed-from <sha>` 필수.
+1. `commitlore squash-preserve <base>..<head>`: trailer 집계 → 병합 커밋 정식 trailer 블록 재기록 + notes 기록 부착. 중복 기록는 Record-Id/내용 해시로 dedupe.
+2. notes 미러: `refs/notes/commitlore` 읽기/쓰기 모듈, 조회 경로에 notes 기록 병합.
+3. 승계 기록 `Provenance: inherited <sha>` 필수.
 4. doctor: notes fetch refspec 자동 설정(ADR-0003).
 
 ## AC
-- [ ] D3 재현 시나리오: squash 병합 후 `annals constraints -- <path>`가 브랜치 원자를 반환
+- [ ] D3 재현 시나리오: squash 병합 후 `commitlore limits -- <path>`가 브랜치 기록를 반환
 - [ ] rebase -i(재작성) 후 notes 경유 조회 성공
 - [ ] clone 직후 doctor 1회 실행으로 팀원 간 notes 동기화 왕복 확인

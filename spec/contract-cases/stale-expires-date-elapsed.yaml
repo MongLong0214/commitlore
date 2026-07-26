@@ -1,0 +1,18 @@
+route: stale-engine
+cases:
+  - id: stale-expires-date-elapsed
+    description: A record with a date-form Expires becomes expired once the evaluation instant is past that date.
+    given:
+      - sha: c1
+        committed_at: "2026-01-05T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-d4e5f6}
+          - {key: Expires, value: "2026-02-01"}
+          - {key: Warn, value: "Do not remove the retry guard without re-checking the upstream rate limit."}
+    when:
+      route: stale-engine
+      at: "2026-03-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-d4e5f6
+          lifecycle: expired

@@ -1,0 +1,9 @@
+{
+  "description": "Follows: + Record-Id: chain — this record's own identity plus a reference to the prior record it extends (SPEC §3.2, §5 context assembly).",
+  "trailers": [
+    { "key": "Follows", "value": "r-8f2a91" },
+    { "key": "Record-Id", "value": "r-3c7e04" },
+    { "key": "Certainty", "value": "tentative" }
+  ],
+  "canonical": "Certainty: tentative\nRecord-Id: r-3c7e04\nFollows: r-8f2a91\n"
+}

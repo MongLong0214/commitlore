@@ -1,0 +1,5 @@
+Record verification coverage for the auth token refresh path
+
+Verified: token refresh under concurrent requests from the same session
+Verified: token refresh after clock skew of up to 5 minutes
+Unverified: token refresh behavior during a partial identity provider outage

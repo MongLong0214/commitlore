@@ -1,0 +1,25 @@
+route: trust-grade
+cases:
+  - id: grade-external-contributor-author-outranks-trusted-committer
+    description: >
+      The commit's committer (alice) is trusted, but the trailer's own author is an outside
+      contributor who is not. SPEC §7 grades on the commit's AUTHOR, never the committer — an
+      implementation that reads committer identity (e.g. `git log --format=%cn`) instead of
+      author identity (`%an`) would wrongly grade this as instruction. Outside-contributor
+      records always render as claims (SPEC §7, last sentence).
+    given:
+      - sha: c1
+        committed_at: "2026-01-12T00:00:00Z"
+        author: external-contributor@example.com
+        committer: alice
+        trailers:
+          - {key: Record-Id, value: r-s1t2u3}
+          - {key: Provenance, value: authored}
+          - {key: Warn, value: "Keep the write path behind the feature flag until the migration finishes."}
+    when:
+      route: trust-grade
+      trusted_authors: [alice, bob]
+    expect:
+      records:
+        - record_id: r-s1t2u3
+          warn_grade: claim

@@ -1,0 +1,3 @@
+Note an alternative considered for the queue backend
+
+Ruled-out: pointless without a pipe separator

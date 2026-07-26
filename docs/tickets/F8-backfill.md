@@ -7,7 +7,7 @@
 ## T-801 backfill MVP (L) — #26 · 의존 T-301, T-404
 
 **구현 개요**
-- `annals backfill [--limit N] [--with-prs] [--budget-tokens N]`
+- `commitlore backfill [--limit N] [--with-prs] [--budget-tokens N]`
   1. 대상: trailer 없는 최근 N 커밋(+`--with-prs`: gh CLI로 연결 PR 본문 수집, 옵트인)
   2. 재구성: 사용자 세션 위임 프롬프트로 커밋/PR 텍스트에서 기록 초안 → **T-404 검증자 필수 통과**(근거 = 원문 인용) → notes 부착, 전부 `Provenance: reconstructed`
   3. 무LLM 모드: LLM 미가용 시 trailer 이미 있는 과거 커밋 인덱싱만 수행(그것도 가치)

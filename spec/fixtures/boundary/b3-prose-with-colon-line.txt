@@ -1,0 +1,7 @@
+Simplify retry loop timing
+
+Refactored the shared retry helper for clarity and consolidated the
+backoff calculation into one place.
+
+Note: this touches the shared client wrapper, so double check
+downstream callers before merging the release.

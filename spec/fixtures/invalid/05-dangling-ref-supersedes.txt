@@ -1,0 +1,4 @@
+Retire the old rate limit decision
+
+Supersedes: r-abc123
+Record-Id: r-9d4f20

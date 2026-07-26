@@ -10,7 +10,7 @@
 | [F4-agent-fabric.md](F4-agent-fabric.md) | T-401 ~ T-406 (6) | M3 | #12–#17 |
 | [F5-trust-minimal.md](F5-trust-minimal.md) | T-501 ~ T-502 (2) | M3 | #18–#19 |
 | [F6-org-action.md](F6-org-action.md) | T-601 ~ T-602 (2) | M4 | #20–#21 |
-| [F7-annalsbench.md](F7-annalsbench.md) | T-701 ~ T-704 (4) | M1 / M4 | #22–#25 |
+| [F7-commitlorebench.md](F7-commitlorebench.md) | T-701 ~ T-704 (4) | M1 / M4 | #22–#25 |
 | [F8-backfill.md](F8-backfill.md) | T-801 (1, 스트레치) | M4 | #26 |
 | [release.md](release.md) | T-901 (1) | M4 | #27 |
 
@@ -27,4 +27,4 @@ T-701 → T-702 (M1, 독립 트랙 — 최우선)
 T-403 → T-404 → T-801(스트레치)
 ```
 
-주의: **T-701/T-702(AnnalsBench)는 다른 모든 것과 독립 — M1에서 병렬 최우선 실행** (효용 가설 조기 판별, ADR-0001).
+주의: **T-701/T-702(CommitLoreBench)는 다른 모든 것과 독립 — M1에서 병렬 최우선 실행** (효용 가설 조기 판별, ADR-0001).

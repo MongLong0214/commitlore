@@ -6,7 +6,7 @@
 콜드스타트 해소: 기존 저장소의 과거 커밋·PR 텍스트에서 결정 맥락을 소급 재구성해 도입 첫날부터 조회 가치를 만든다.
 
 ## 사용자 스토리
-- 신규 도입자로서, `annals backfill --limit 200`을 돌리면 과거 결정사가 notes에 재구성되어 즉시 조회된다.
+- 신규 도입자로서, `commitlore backfill --limit 200`을 돌리면 과거 결정사가 notes에 재구성되어 즉시 조회된다.
 
 ## 요구사항
 1. 입력: 최근 N 커밋(+연결된 PR 본문, gh CLI 옵트인). 출력: notes 기록, 전부 `Provenance: reconstructed`.

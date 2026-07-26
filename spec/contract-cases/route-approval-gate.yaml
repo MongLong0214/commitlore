@@ -1,0 +1,66 @@
+route: approval-gate
+cases:
+  - id: route-approval-gate-blast-system-and-undo-permanent-needs-approval
+    description: Both triggers present simultaneously — approval is required, and both are reported.
+    given:
+      - sha: c1
+        committed_at: "2026-01-15T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x6}
+          - {key: Blast, value: system}
+          - {key: Undo, value: permanent}
+    when:
+      route: approval-gate
+    expect:
+      approval_required: true
+      triggered_by: ["Blast:system", "Undo:permanent"]
+
+  - id: route-approval-gate-blast-system-only-needs-approval
+    description: >
+      Blast: system alone must trigger the gate — SPEC §5 lists Blast and Undo as two
+      independent rules, not a conjunction. Proves the gate is not implemented as an
+      AND of both conditions.
+    given:
+      - sha: c1
+        committed_at: "2026-01-15T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x7}
+          - {key: Blast, value: system}
+          - {key: Undo, value: easy}
+    when:
+      route: approval-gate
+    expect:
+      approval_required: true
+      triggered_by: ["Blast:system"]
+
+  - id: route-approval-gate-undo-permanent-only-needs-approval
+    description: "Undo: permanent alone must trigger the gate, independent of Blast."
+    given:
+      - sha: c1
+        committed_at: "2026-01-15T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x8}
+          - {key: Blast, value: local}
+          - {key: Undo, value: permanent}
+    when:
+      route: approval-gate
+    expect:
+      approval_required: true
+      triggered_by: ["Undo:permanent"]
+
+  - id: route-approval-gate-blast-local-undo-easy-no-approval-required
+    description: >
+      Negative case — neither trigger is present, so no approval is required. Without this
+      case, a gate that always returns true would still pass the positive cases above.
+    given:
+      - sha: c1
+        committed_at: "2026-01-15T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x9}
+          - {key: Blast, value: local}
+          - {key: Undo, value: easy}
+    when:
+      route: approval-gate
+    expect:
+      approval_required: false
+      triggered_by: []

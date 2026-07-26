@@ -1,0 +1,8 @@
+{
+  "description": "SPEC §2.1 B2: two Key: value-shaped paragraphs separated by a blank line. Only the last paragraph (Limit/Certainty) is a trailer block; the earlier Context/Source paragraph is body prose and contributes zero trailers, even though both its lines are individually well-formed 'Key: value' shapes.",
+  "trailers": [
+    { "key": "Limit", "value": "rate-limited external API at 50 req/min" },
+    { "key": "Certainty", "value": "firm" }
+  ],
+  "canonical": "Limit: rate-limited external API at 50 req/min\nCertainty: firm\n"
+}

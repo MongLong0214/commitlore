@@ -1,0 +1,7 @@
+{
+  "description": "X- extension key passes: preserved verbatim, never interpreted by the core (SPEC §3.2, §5).",
+  "trailers": [
+    { "key": "X-Priority", "value": "high" }
+  ],
+  "canonical": "X-Priority: high\n"
+}

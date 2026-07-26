@@ -1,0 +1,8 @@
+{
+  "description": "Repeatable key: two Ruled-out trailers, each satisfying the required pipe separator, order preserved.",
+  "trailers": [
+    { "key": "Ruled-out", "value": "in-process LRU cache | doesn't survive pod restarts, loses sessions on every deploy" },
+    { "key": "Ruled-out", "value": "client-side cookie session | payload too large for the auth claims we attach" }
+  ],
+  "canonical": "Ruled-out: in-process LRU cache | doesn't survive pod restarts, loses sessions on every deploy\nRuled-out: client-side cookie session | payload too large for the auth claims we attach\n"
+}

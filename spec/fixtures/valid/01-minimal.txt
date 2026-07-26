@@ -1,0 +1,3 @@
+Add rate limit guard to webhook receiver
+
+Limit: shared Redis instance caps sustained writes at 500/sec

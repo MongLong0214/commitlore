@@ -1,0 +1,30 @@
+route: stale-engine
+cases:
+  - id: stale-duplicate-record-id-latest-wins
+    description: >
+      The same Record-Id appears on two commits (e.g. a follow-up commit re-declares the same
+      record with updated context). The fold resolves non-repeatable keys to the latest
+      commit's values, per T-205's "Record-Id별 최신 상태" fold rule.
+    given:
+      - sha: c1
+        committed_at: "2026-01-01T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-j1k2l3}
+          - {key: Certainty, value: guess}
+          - {key: Blast, value: module}
+      - sha: c2
+        committed_at: "2026-01-20T00:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-j1k2l3}
+          - {key: Certainty, value: firm}
+          - {key: Blast, value: module}
+    when:
+      route: stale-engine
+      at: "2026-02-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-j1k2l3
+          lifecycle: active
+          resolved_trailers:
+            - {key: Certainty, value: firm}
+            - {key: Blast, value: module}

@@ -1,0 +1,8 @@
+{
+  "description": "SPEC §2.1 B4: Warn: value spans three physical lines; the two continuation lines (indented with two leading spaces) fold into the preceding trailer's value, joined with a single space each.",
+  "trailers": [
+    { "key": "Warn", "value": "retrying this test with a longer timeout hides a real race condition in the token refresh path. Investigate the underlying cause before increasing timeouts again." },
+    { "key": "Certainty", "value": "tentative" }
+  ],
+  "canonical": "Warn: retrying this test with a longer timeout hides a real race condition in the token refresh path. Investigate the underlying cause before increasing timeouts again.\nCertainty: tentative\n"
+}

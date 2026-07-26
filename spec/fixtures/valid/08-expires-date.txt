@@ -1,0 +1,4 @@
+Add temporary bypass for the legacy billing importer
+
+Expires: 2026-09-30
+Warn: remove this bypass once the legacy importer is decommissioned

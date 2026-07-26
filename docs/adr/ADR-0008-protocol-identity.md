@@ -1,6 +1,10 @@
 # ADR-0008: 프로토콜 정체성 — 이름과 어휘를 자체 설계로 확정
 
-- Status: Accepted (2026-07-26, 오너 결정)
+> ⚠️ **§1(명칭)은 [ADR-0009](ADR-0009-rename-commitlore.md)로 대체됐다.** 프로토콜 명칭은 `Annals`가 아니라 **CommitLore**이며, 패키지·바이너리·저장소는 `commitlore`다.
+> 이 문서에 남은 `Annals` 표기는 결정 이력이므로 의도적으로 보존한다 — 기계 치환하면 무엇이 왜 바뀌었는지가 사라진다.
+> **§2(어휘 재유도)와 그 근거는 그대로 유효하다.** 어휘·enum은 한 글자도 바뀌지 않았고, `Annals-Version:` → `CommitLore-Version:` 하나만 명칭 파생으로 따라 바뀌었다.
+
+- Status: Accepted (2026-07-26, 오너 결정) · §1 Superseded by ADR-0009 (2026-07-26)
 - Owner: CTO
 - Supersedes: 이전 문서에서 쓰이던 잠정 명칭·어휘 일체
 

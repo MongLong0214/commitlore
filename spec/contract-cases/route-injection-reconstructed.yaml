@@ -1,0 +1,24 @@
+route: injection
+cases:
+  - id: route-injection-reconstructed-always-claim-even-when-trusted
+    description: >
+      Provenance: reconstructed means the record was rebuilt from history, not directly
+      authored — the injection route must always deliver it as a claim, even when the
+      trailer's author is on the trusted list. This is a stronger invariant than the general
+      grading rule (grade-provenance-unknown.yaml): reconstructed short-circuits trust
+      entirely rather than merely failing the "authored" check.
+    given:
+      - sha: c1
+        committed_at: "2026-01-20T00:00:00Z"
+        author: alice
+        trailers:
+          - {key: Record-Id, value: r-y7z8a9}
+          - {key: Provenance, value: reconstructed}
+          - {key: Warn, value: "Re-run the migration dry-run before touching the schema again."}
+    when:
+      route: injection
+      trusted_authors: [alice]
+    expect:
+      records:
+        - record_id: r-y7z8a9
+          warn_grade: claim

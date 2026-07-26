@@ -1,0 +1,6 @@
+Fix flaky auth test
+
+Warn: retrying this test with a longer timeout hides a real race
+  condition in the token refresh path. Investigate the underlying
+  cause before increasing timeouts again.
+Certainty: tentative

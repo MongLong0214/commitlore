@@ -1,0 +1,8 @@
+{
+  "description": "Expires: in the YYYY-MM-DD date form (SPEC §3.2, stale engine deactivates after this date).",
+  "trailers": [
+    { "key": "Expires", "value": "2026-09-30" },
+    { "key": "Warn", "value": "remove this bypass once the legacy importer is decommissioned" }
+  ],
+  "canonical": "Warn: remove this bypass once the legacy importer is decommissioned\nExpires: 2026-09-30\n"
+}

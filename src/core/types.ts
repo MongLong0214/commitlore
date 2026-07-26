@@ -1,4 +1,4 @@
-/** Core types for the Annals protocol. See spec/SPEC.md §3. */
+/** Core types for the CommitLore protocol. See spec/SPEC.md §3. */
 
 /** Keys the core interprets. Anything else is either an extension or a violation. */
 export const KNOWN_KEYS = [
@@ -16,7 +16,7 @@ export const KNOWN_KEYS = [
   'Expires',
   'Evidence',
   'Provenance',
-  'Annals-Version',
+  'CommitLore-Version',
 ] as const;
 
 export type KnownKey = (typeof KNOWN_KEYS)[number];
@@ -29,7 +29,7 @@ export const SINGLE_VALUED: ReadonlySet<string> = new Set<string>([
   'Record-Id',
   'Expires',
   'Provenance',
-  'Annals-Version',
+  'CommitLore-Version',
 ]);
 
 export const BLAST_VALUES = ['local', 'module', 'system'] as const;

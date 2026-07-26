@@ -1,0 +1,7 @@
+Update rate limit config
+
+Context: previous limit caused throttling
+Source: incident-4821
+
+Limit: rate-limited external API at 50 req/min
+Certainty: firm
