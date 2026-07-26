@@ -22,6 +22,6 @@ coverage 명령(Backlog), 인터랙티브 commit 빌더(Backlog — `commitlore 
 
 ## AC
 - [ ] F1 적합성 스위트 + 라우트 계약 테스트 전부 통과
-- [ ] 10만 커밋 합성 저장소에서 경로 조회 p50 < 100ms (인덱스 on)
+- [x] 10만 커밋 합성 저장소에서 경로 조회 p50 < 100ms (인덱스 on) — **실측 p50 1.86ms** (2026-07-26). 10만 커밋 중 967개가 기록 보유. `--no-index` 폴백은 동일 결과에 105ms(2284배). `COMMITLORE_PERF_LARGE=1 npx vitest run test/index-perf.test.ts`
 - [ ] D2 오탐 재현 케이스에서 오탐 0 · D4 리네임 케이스에서 조회 성공
 - [ ] `--no-index` 폴백 동작 (기능 동일, 속도만 저하)

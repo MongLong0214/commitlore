@@ -64,6 +64,18 @@ jobs:
       - name: Conformance suite
         run: bash spec/verify.sh
 
+      # PRD-F2 AC 2 claims a path-scoped query stays under 100ms on a
+      # 100k-commit repository. The default suite runs this file against 2k
+      # commits, so without this step the acceptance criterion is asserted and
+      # never measured. Measured locally at p50 1.86ms -- 54x under the
+      # threshold -- so a CI runner would have to be fifty times slower before
+      # this went marginal, which is what makes it safe to gate on rather than
+      # merely report.
+      - name: PRD-F2 100k-commit query performance
+        env:
+          COMMITLORE_PERF_LARGE: "1"
+        run: npx vitest run test/index-perf.test.ts --reporter=basic
+
       # Every measured figure in the README is regenerated from bench/results/
       # through bench/report.ts and compared byte for byte, and a short list of
       # statistics is refused outside the generated block. A rate somebody typed,
