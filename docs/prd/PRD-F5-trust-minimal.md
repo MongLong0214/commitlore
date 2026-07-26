@@ -11,7 +11,7 @@
 
 ## 요구사항
 1. 등급 모델: provenance(authored|squashed-from|reconstructed|unknown) × lifecycle(active|superseded|expired) — 조회·주입 출력에 등급 필드 포함.
-2. 강등 렌더: 주입·`--json` 출력에서 Directive를 `warn`(신뢰) vs `claim`(강등)으로 분리 필드화. 외부 기여는 무조건 claim.
+2. 강등 렌더: 주입·`--json` 출력에서 Warn를 `warn`(신뢰) vs `claim`(강등)으로 분리 필드화. 외부 기여는 무조건 claim.
 3. 인젝션 휴리스틱: 명령형 우회 패턴 검출 시 주입 제외 + 경고 목록화.
 4. secret guard: gitleaks 계열 패턴 서브셋(자격증명·토큰·내부 URL) pre-commit 스캔.
 

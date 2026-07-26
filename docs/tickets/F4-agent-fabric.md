@@ -46,7 +46,7 @@
 ## T-404 수확 검증자 (M) — #15 · 의존 T-403
 
 **구현 개요**
-- `annals harvest-verify --draft <f> --transcript <f> --diff <f>` — **기계 검증**: ①evidence 인용이 실제 원문에 존재(문자열/해시 대조) ②Rejected는 기각 문맥 마커 검사 ③enum 유효(T-202 재사용). 실패 기록 폐기 + 사유 로그.
+- `annals harvest-verify --draft <f> --transcript <f> --diff <f>` — **기계 검증**: ①evidence 인용이 실제 원문에 존재(문자열/해시 대조) ②Ruled-out는 기각 문맥 마커 검사 ③enum 유효(T-202 재사용). 실패 기록 폐기 + 사유 로그.
 - 유계 수리: 실패 사유를 초안 생성기에 되먹임 ≤ 2회 → 최종 실패 시 기록 없이 진행(로그만, 커밋 비차단).
 - maker-checker 분리: verify는 LLM 무관 결정론 검사가 1차, (옵트인) 세션 내 적대 검증 프롬프트가 2차.
 
