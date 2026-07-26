@@ -88,9 +88,48 @@ registerInject(program);
 registerBackfill(program);
 registerMcp(program);
 
+/**
+ * Exit codes are a contract here: 0 clean, 1 the check found something, 2 the
+ * invocation was wrong. Hooks and CI branch on them, and every command already
+ * follows it -- `validate` returns 2 for mutually exclusive input flags, for
+ * one. Commander's own parse failures default to 1, which would make an
+ * unknown flag indistinguishable from a real finding, so they are mapped here.
+ *
+ * `--help` and `--version` also arrive as exceptions; those are a successful
+ * invocation and exit 0.
+ *
+ * One overload is deliberate and worth knowing about: `guard` uses 2 for "a
+ * ruled-out alternative matched", so a usage error there is indistinguishable
+ * from a warning. That resolves toward warning rather than toward silence,
+ * which is the safe direction for a command whose job is to interrupt.
+ */
+const USAGE_ERRORS = new Set([
+  'commander.unknownOption',
+  'commander.unknownCommand',
+  'commander.missingArgument',
+  'commander.missingMandatoryOptionValue',
+  'commander.optionMissingArgument',
+  'commander.invalidArgument',
+  'commander.excessArguments',
+  'commander.help',
+]);
+
+// exitOverride has to be set on every subcommand as well: commander applies it
+// to the command that fails, and a bad flag fails on the subcommand, not here.
+program.exitOverride();
+for (const command of program.commands) command.exitOverride();
+
 try {
   program.parse(process.argv);
 } catch (error) {
+  const code = (error as { code?: string }).code ?? '';
+  if (code === 'commander.helpDisplayed' || code === 'commander.version' || code === 'commander.help') {
+    process.exit(0);
+  }
+  if (USAGE_ERRORS.has(code)) {
+    // Commander has already written its own diagnostic and the usage line.
+    process.exit(2);
+  }
   process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
 }

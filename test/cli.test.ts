@@ -68,9 +68,18 @@ describe('commitlore CLI', () => {
     }
   });
 
-  it('rejects a command that does not exist', () => {
-    const result = runCli(['definitely-not-a-command']);
-    expect(result.status).not.toBe(0);
+  // 0 clean, 1 the check found something, 2 the invocation was wrong. Hooks and
+  // CI branch on these, and commander's own parse failures default to 1 --
+  // which would make a typo'd flag indistinguishable from a real finding.
+  it.each([
+    { args: ['--help'], code: 0, what: 'help' },
+    { args: ['--version'], code: 0, what: 'version' },
+    { args: ['validate', '--help'], code: 0, what: 'subcommand help' },
+    { args: ['definitely-not-a-command'], code: 2, what: 'unknown command' },
+    { args: ['validate', '--definitely-not-a-flag'], code: 2, what: 'unknown flag' },
+    { args: ['context', '--definitely-not-a-flag'], code: 2, what: 'unknown flag on another subcommand' },
+  ])('exits $code on $what', ({ args, code }) => {
+    expect(runCli(args).status).toBe(code);
   });
 
   it('parses a message from stdin into a canonical block', () => {
