@@ -1,5 +1,6 @@
 node_modules/
-dist/
+# dist/ is committed so this repo installs as a Claude Code plugin with no
+# registry and no publish step (ADR-0011). CI fails if it drifts from src/.
 *.tsbuildinfo
 
 # derived index — never committed (ADR-0003)

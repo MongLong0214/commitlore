@@ -6,13 +6,12 @@
 > 永久に無料。サーバーなし、DB なし、有料プランなし — **git が唯一の信頼できる情報源（SSOT）です。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_開発中-orange.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
+[![Status](https://img.shields.io/badge/status-v0.1.0_リリース済み-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **ステータス**: プロトコル自体は**今日から**素の git だけで使えます（[今すぐ使う](#今すぐ使う素の-git)参照）。
 >
-> CLI・MCP サーバー・フック・GitHub Actions は **実装済みで `main` の CI を通過しています**。ただしまだ**公開されていない**ため、v0.1.0（目標 2026-08-23）までは `npx commitlore` は動きません。それまではソースからビルドしてください: `npm ci && npm run build && node dist/cli.js --help`。
+> **v0.1.0 リリース済み。** CLI・MCP サーバー・フック・GitHub Actions はすべて実装済みで `main` の CI を通過しています。配布は git clone のみ — レジストリもアカウントも publish 手順もなく、`dist/` がリポジトリに同梱されているのでビルドも不要です（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
 > この README のすべての主張は、今すぐ再現可能か計画中と明示されているかのいずれかで、数値は [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) のログからのみ提示します。このリポジトリは自分のプロトコルを自分の履歴に対して CI で強制しています — [ドッグフーディングは強制される](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)を参照。
 
@@ -80,12 +79,34 @@ CommitLore-Version: 2.0.0
 
 ## クイックスタート
 
-コーディングエージェント前提で、3 行。
+レジストリもパッケージマネージャーもアカウントも要らない。コードを取得する:
 
 ```bash
-npm install -g commitlore
-commitlore hooks install                      # 不正な記録はコミット時に弾かれる
-claude mcp add commitlore -- commitlore mcp   # エージェントが記録をツールとして得る
+git clone https://github.com/MongLong0214/commitlore ~/.commitlore
+```
+
+あとは自分のエージェントの行を見るだけだ。どの行も行き着く先は同じ —
+エージェントが編集する**前に**そのパスの決定を見る。
+
+| エージェント | 設定 |
+|---|---|
+| **MCP クライアント全般** — Codex, Gemini CLI, Cursor, Cline, Windsurf, Zed, Qwen Coder, Kimi… | 下のサーバー設定を追加 |
+| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` → `/plugin install commitlore` |
+| **シェルを実行できるエージェント全般** | [`AGENTS.md`](AGENTS.md) を自分のリポジトリにコピー |
+| **エージェントなし** | 素の `git log` — [下記](#今すぐ使う素の-git) |
+
+**MCP サーバー設定** — MCP を話すどのクライアントでも同じ 3 ツール
+(`commitlore_query`, `commitlore_stale`, `commitlore_guard`):
+
+```json
+{
+  "mcpServers": {
+    "commitlore": {
+      "command": "node",
+      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+    }
+  }
+}
 ```
 
 セットアップはこれで全部だ。エージェントは編集前にそのパスで既に決まったことを読み、

@@ -8,7 +8,7 @@
 ## T-601 Action: PR lint + 활성 제약 코멘트 (M) — #20 · 의존 T-202, T-204
 
 **구현 개요**
-- composite action: checkout(fetch-depth 0 + notes refspec) → `npx commitlore validate --range origin/<base>..HEAD` → 변경 경로별 `commitlore context --json` → 단일 코멘트 업서트(마커 주석으로 갱신, 도배 금지).
+- composite action: checkout(fetch-depth 0 + notes refspec) → `node dist/cli.js validate --range origin/<base>..HEAD` → 변경 경로별 `commitlore context --json` → 단일 코멘트 업서트(마커 주석으로 갱신, 도배 금지).
 - 권한: `pull-requests: write`만. 외부 네트워크 호출 0(GitHub API 제외) — 코드 리뷰에서 fetch/axios 부재 검증.
 - 실패 정책: lint 위반 = check fail, 제약 요약은 정보성.
 

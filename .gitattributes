@@ -1,0 +1,11 @@
+# dist/ is committed on purpose: it is what makes this repository installable as
+# a Claude Code plugin with no npm registry, no publish step and no token. See
+# docs/adr/ADR-0011-plugin-first-distribution.md.
+#
+# It is generated, so it should not read as authored code: collapsed in review,
+# excluded from language stats, and never offered as a merge to resolve by hand.
+# CI rebuilds it and fails if a byte differs from src/, so the copy here is
+# checkable rather than trusted.
+dist/** linguist-generated=true
+dist/** -diff
+dist/** -merge

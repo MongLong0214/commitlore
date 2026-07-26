@@ -49,6 +49,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      # dist/ is committed because that is what makes this repository
+      # installable as a plugin with no registry (ADR-0011). A committed build
+      # that drifts from src/ ships stale code to every user, and the drift is
+      # invisible -- nothing fails, the wrong thing just runs. The build is
+      # deterministic, so rebuilding and diffing is a complete check.
+      - name: Committed dist/ matches src/
+        run: |
+          git diff --exit-code -- dist/ || {
+            echo "::error::dist/ is stale. Run 'npm run build' and commit the result."
+            exit 1
+          }
+
       - name: Unit and dogfooding tests
         run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-report.json
 
@@ -99,27 +111,32 @@ jobs:
       - name: doctor runs clean enough to report
         run: node dist/cli.js doctor
 
-      # The most common release failure is a package that works in its own
-      # repository and breaks once installed: a missing `files` entry, a path
-      # resolved relative to the source tree, a bin that is not executable.
-      # Pack it, install it somewhere else, and run it from there.
-      - name: The packaged tarball installs and runs
+      # Test what is actually shipped. Distribution is a git clone (ADR-0011),
+      # so the failure this has to catch is a clone that does not run: dist/
+      # missing a file, a path resolved against the source tree rather than the
+      # install, or a plugin entry point that is not executable. Cloning into a
+      # different directory is the whole test — if it works there, it works for
+      # a user.
+      - name: A fresh clone runs, and the plugin entry points resolve
         run: |
           set -euo pipefail
-          pack_dir="$(mktemp -d)"
-          npm pack --pack-destination "$pack_dir" >/dev/null
-          tarball="$(ls "$pack_dir"/*.tgz)"
-          install_dir="$(mktemp -d)"
-          cd "$install_dir"
-          npm init -y >/dev/null
-          npm install --no-audit --no-fund "$tarball" >/dev/null
-          bin=./node_modules/.bin/commitlore
-          "$bin" --version
-          # validate reads spec/schema/record.schema.json out of the installed
-          # package, so this fails if `files` stops shipping spec/.
-          printf 'Subject\n\nBlast: wide\n' | "$bin" validate && {
+          clone_dir="$(mktemp -d)/commitlore"
+          git clone --quiet --depth 1 "file://$PWD" "$clone_dir"
+          test -f "$clone_dir/dist/cli.js" || { echo "dist/ is not in the clone"; exit 1; }
+          node "$clone_dir/dist/cli.js" --version
+          # validate reads spec/schema/record.schema.json relative to the
+          # install, so this fails if the clone stops carrying spec/.
+          printf 'Subject\n\nBlast: wide\n' | node "$clone_dir/dist/cli.js" validate && {
             echo "expected a violation to exit non-zero"; exit 1;
           } || test $? -eq 1
+          # The plugin resolves its entry point through this script, with
+          # CLAUDE_PLUGIN_ROOT pointing at the clone.
+          test -x "$clone_dir/scripts/commitlore-run.sh" || { echo "run script not executable"; exit 1; }
+          CLAUDE_PLUGIN_ROOT="$clone_dir" "$clone_dir/scripts/commitlore-run.sh" --version
+          # Every plugin manifest must parse, or the plugin silently does nothing.
+          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json .mcp.json hooks/hooks.json; do
+            node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$clone_dir/$f"
+          done
 
   # git's own behavior is the substrate this protocol delegates to, so a git
   # version that parses trailers differently is a correctness problem, not a

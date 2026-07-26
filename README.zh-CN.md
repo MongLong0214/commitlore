@@ -6,13 +6,12 @@
 > 永久免费。无服务器、无数据库、无付费计划 —— **git 就是唯一事实来源（SSOT）。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_开发中-orange.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
+[![Status](https://img.shields.io/badge/status-v0.1.0_已发布-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **状态**：协议本身**今天**就能用纯 git 使用（见[立即使用](#立即使用纯-git)）。
 >
-> CLI、MCP 服务器、钩子和 GitHub Actions **已实现，并在 `main` 上通过 CI**。但尚未**发布**，因此在 v0.1.0（目标 2026-08-23）之前 `npx commitlore` 无法使用。在此之前请从源码构建：`npm ci && npm run build && node dist/cli.js --help`。
+> **v0.1.0 已发布。** CLI、MCP 服务器、钩子和 GitHub Actions 均已实现，并在 `main` 上通过 CI。分发方式只有 git clone —— 没有注册表、没有账号、没有发布步骤，且 `dist/` 随仓库一起提供，无需构建（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
 > 本 README 的每个论断要么现在可复现，要么明确标注为计划，数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。本仓库在 CI 中对自己的历史强制执行自己的协议 —— 见[狗粮是强制的](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)。
 
@@ -80,12 +79,34 @@ CommitLore-Version: 2.0.0
 
 ## 快速上手
 
-面向编码智能体，三行。
+不需要注册表、包管理器或账号。先拿到代码：
 
 ```bash
-npm install -g commitlore
-commitlore hooks install                      # 格式错误的记录在提交时被拒绝
-claude mcp add commitlore -- commitlore mcp   # 智能体把记录当作工具来用
+git clone https://github.com/MongLong0214/commitlore ~/.commitlore
+```
+
+然后只看你自己那一行。每一行的终点都一样 —— 智能体在动手改文件**之前**
+就看到这条路径上的决定。
+
+| 你的智能体 | 设置 |
+|---|---|
+| **所有 MCP 客户端** —— Codex、Gemini CLI、Cursor、Cline、Windsurf、Zed、Qwen Coder、Kimi… | 添加下面的服务器配置 |
+| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` → `/plugin install commitlore` |
+| **任何能执行 shell 的智能体** | 把 [`AGENTS.md`](AGENTS.md) 复制到你的仓库 |
+| **完全不用智能体** | 纯 `git log` —— 见[下文](#立即使用纯-git) |
+
+**MCP 服务器配置** —— 任何讲 MCP 的客户端里都是同样三个工具
+(`commitlore_query`、`commitlore_stale`、`commitlore_guard`)：
+
+```json
+{
+  "mcpServers": {
+    "commitlore": {
+      "command": "node",
+      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+    }
+  }
+}
 ```
 
 安装到此为止。智能体在动手改文件前会读取这条路径已经做过的决定；一旦提出被否决过

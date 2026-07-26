@@ -1,0 +1,26 @@
+{
+  "name": "commitlore",
+  "owner": {
+    "name": "MongLong0214",
+    "url": "https://github.com/MongLong0214"
+  },
+  "description": "Recorded decisions from git history, delivered to a coding agent before it edits.",
+  "plugins": [
+    {
+      "name": "commitlore",
+      "source": "./",
+      "displayName": "CommitLore",
+      "description": "Constraints, alternatives already ruled out, and warnings left by whoever was here last — injected before the agent edits the path they cover. Records are ordinary git trailers, so they survive rebase, squash and rename.",
+      "author": {
+        "name": "MongLong0214",
+        "url": "https://github.com/MongLong0214"
+      },
+      "homepage": "https://github.com/MongLong0214/commitlore#readme",
+      "repository": "https://github.com/MongLong0214/commitlore",
+      "license": "MIT",
+      "category": "development",
+      "keywords": ["git", "trailers", "decisions", "memory", "context", "guard"],
+      "tags": ["git", "context", "memory", "hooks", "mcp"]
+    }
+  ]
+}

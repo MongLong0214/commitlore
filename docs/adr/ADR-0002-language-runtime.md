@@ -1,6 +1,8 @@
 # ADR-0002: 구현 언어·런타임 — TypeScript + Node 20, npm/npx 배포
 
 > ⚠️ **런타임 하한은 [ADR-0010](ADR-0010-node-floor.md)으로 대체됐다.** 지원 하한은 Node 20이 아니라 **Node 22**다 — Node 20은 2026-04-30에 EOL이 됐고, 의존성 두 개가 이미 그 하한을 지키지 않고 있었다.
+> ⚠️ **배포 채널은 [ADR-0011](ADR-0011-plugin-first-distribution.md)로 대체됐다.** 배포는 npm publish가 아니라 **레지스트리 없는 git clone**이며, 에이전트 통합은 MCP 서버와 Claude Code 플러그인이다. 언어(TypeScript strict)·단일 패키지 결정은 그대로 유효하다. 이 문서에 남은 npm 표기는 결정 이력이므로 보존한다.
+>
 > 언어(TypeScript strict)·배포 채널(npm/npx)·단일 패키지 결정은 **그대로 유효하다.** 이 문서에 남은 "Node 20" 표기는 결정 이력이므로 보존한다.
 
 - Status: Accepted (2026-07-26) · 런타임 조항 Superseded by ADR-0010 (2026-07-26)

@@ -6,13 +6,12 @@
 > 영원히 무료. 서버 없음, DB 없음, 유료 플랜 없음 — **git이 유일한 진실의 원천(SSOT)입니다.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_개발중-orange.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
+[![Status](https://img.shields.io/badge/status-v0.1.0_릴리스됨-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **상태**: 프로토콜 자체는 **지금 당장** 순수 git만으로 사용할 수 있습니다([오늘 바로 쓰기](#오늘-바로-쓰기-순수-git) 참조).
 >
-> CLI·MCP 서버·훅·GitHub Action은 **구현이 끝났고 `main`에서 CI를 통과 중**입니다. 다만 아직 **배포되지 않았으므로** v0.1.0(목표 2026-08-23) 전까지 `npx commitlore`는 동작하지 않습니다. 그때까지는 소스에서 빌드하세요: `npm ci && npm run build && node dist/cli.js --help`.
+> **v0.1.0 릴리스됨.** CLI·MCP 서버·훅·GitHub Action 모두 구현이 끝났고 `main`에서 CI를 통과합니다. 배포는 git clone 하나 — 레지스트리도 계정도 publish 단계도 없고, `dist/`가 저장소에 함께 들어 있어 빌드할 것도 없습니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
 > 이 README의 모든 주장은 지금 재현 가능하거나 계획임이 명시돼 있고, 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다. 이 저장소는 자기 프로토콜을 자기 히스토리에 CI에서 강제합니다 — [도그푸딩은 강제된다](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational) 참조.
 
@@ -80,20 +79,39 @@ CommitLore-Version: 2.0.0
 
 ## 빠른 시작
 
-코딩 에이전트 기준, 세 줄이다.
+레지스트리도, 패키지 매니저도, 계정도 필요 없다. 코드를 가져온다:
 
 ```bash
-npm install -g commitlore
-commitlore hooks install                      # 잘못된 기록은 커밋 시점에 거부
-claude mcp add commitlore -- commitlore mcp   # 에이전트가 기록을 도구로 받는다
+git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 ```
 
-설치는 이게 전부다. 이제 에이전트는 파일을 고치기 전에 그 경로에서 이미 결정된
-것을 읽고, 이미 기각된 걸 제안하면 `guard`가 알려준다.
+그다음 자기 에이전트에 해당하는 줄만 보면 된다. 어느 줄이든 도착점은 같다 —
+에이전트가 파일을 고치기 **전에** 그 경로의 결정을 본다.
+
+| 에이전트 | 설정 |
+|---|---|
+| **MCP 클라이언트 전부** — Codex, Gemini CLI, Cursor, Cline, Windsurf, Zed, Qwen Coder, Kimi… | 아래 서버 설정 추가 |
+| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` → `/plugin install commitlore` |
+| **셸 명령을 쓸 수 있는 에이전트 전부** | [`AGENTS.md`](AGENTS.md)를 자기 저장소에 복사 |
+| **에이전트 없이** | 순수 `git log` — [아래](#오늘-바로-쓰기-순수-git) |
+
+**MCP 서버 설정** — MCP를 말하는 어떤 클라이언트에서든 같은 도구 3개
+(`commitlore_query`, `commitlore_stale`, `commitlore_guard`):
+
+```json
+{
+  "mcpServers": {
+    "commitlore": {
+      "command": "node",
+      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+    }
+  }
+}
+```
 
 **기록은 그냥 커밋 트레일러로 쓴다** — 위 예제 그대로다. 더 배울 건 없다.
 
-MCP 클라이언트가 없으면 셸에서 같은 답을 받는다:
+셸에서 직접 쓸 때(`~/.commitlore/dist/cli.js`를 `commitlore`로 alias):
 
 ```bash
 commitlore context src/auth/                  # 이 경로가 결정한 것

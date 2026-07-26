@@ -6,13 +6,12 @@
 > Free forever. No server, no database, no paid plan — **git is the single source of truth.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_in_development-orange.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
+[![Status](https://img.shields.io/badge/status-v0.1.0_released-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)).
 >
-> The CLI, MCP server, hooks and GitHub Actions are **implemented and green on `main`** — they are not yet **published**, so `npx commitlore` does not work until v0.1.0 is released (target 2026-08-23). Until then, build from source: `npm ci && npm run build && node dist/cli.js --help`.
+> **v0.1.0 is released.** The CLI, MCP server, hooks and GitHub Actions are implemented and green on `main`. Distribution is a git clone — no registry, no account, no publish step, and `dist/` ships in the repository so there is nothing to build ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
 > Every claim in this README is either reproducible now or explicitly marked as planned, and numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs. This repository runs its own protocol against its own history in CI — see [dogfooding is enforced](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational).
 
@@ -80,21 +79,40 @@ Design rule (["no dead fields"](docs/adr/ADR-0006-push-injection.md)): every tra
 
 ## Quickstart
 
-Three lines, for a coding agent:
+No registry, no package manager, no account. Get the code:
 
 ```bash
-npm install -g commitlore
-commitlore hooks install                      # malformed records rejected at commit
-claude mcp add commitlore -- commitlore mcp   # agent gets the records as tools
+git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 ```
 
-That is the whole setup. The agent now reads what a path already decided before
-it edits, and `guard` tells it when it is proposing something already rejected.
+Then pick the row for your agent. Every row ends in the same place: the agent
+sees the decisions before it edits.
+
+| Your agent | Setup |
+|---|---|
+| **Any MCP client** — Codex, Gemini CLI, Cursor, Cline, Windsurf, Zed, Qwen Coder, Kimi… | add the server config below |
+| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` then `/plugin install commitlore` |
+| **Any agent that runs shell commands** | copy [`AGENTS.md`](AGENTS.md) into your repo |
+| **No agent at all** | plain `git log` — see [below](#use-it-today-plain-git) |
+
+**MCP server config** — the same three tools (`commitlore_query`,
+`commitlore_stale`, `commitlore_guard`) in any client that speaks MCP:
+
+```json
+{
+  "mcpServers": {
+    "commitlore": {
+      "command": "node",
+      "args": ["~/.commitlore/dist/cli.js", "mcp"]
+    }
+  }
+}
+```
 
 **You write records as ordinary commit trailers** — the example above. Nothing
 else to learn.
 
-Without an MCP client, the same answers from the shell:
+From a shell, with `~/.commitlore/dist/cli.js` aliased to `commitlore`:
 
 ```bash
 commitlore context src/auth/                       # what this path decided
@@ -107,25 +125,35 @@ demonstrated is how much this changes an agent's behaviour — our own benchmark
 found no significant difference and we publish it anyway:
 [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md), [`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md).
 
-### Not a Node shop?
+### Not a JavaScript shop?
 
-npm is how *this CLI* ships. It is not how the protocol ships. A record is a git
-trailer, so any language reads it with git itself — no install, no runtime:
+Nothing here is distributed through a language package manager. There is no
+registry account between you and this tool, and there is no version of it that
+only JavaScript developers can install.
+
+**The protocol needs no runtime at all.** A record is a git trailer, so any
+language reads one with git itself:
 
 ```bash
 git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
 git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
-That covers reading and writing. Node buys you the index, `guard`, trust
-grading and the MCP server — and [ADR-0002](docs/adr/ADR-0002-language-runtime.md)
-chose npm on a four-week schedule, ruling out a single static binary for that
-reason alone and marking it for re-evaluation ([#38](https://github.com/MongLong0214/commitlore/issues/38)).
+That covers reading and writing, in any stack, with zero install.
 
-`spec/` ships **inside the npm package** on purpose: `spec/fixtures/` and
-`spec/contract-cases/` are the conformance suite, and an implementation in any
-language that passes them is a conforming implementation ([SPEC §9](spec/SPEC.md)).
-A Python port is an anticipated path, not a workaround.
+**The CLI needs Node**, and that is the one honest limit: the index, `guard`,
+trust grading and the MCP server are TypeScript.
+[ADR-0002](docs/adr/ADR-0002-language-runtime.md) chose that on a four-week
+schedule and ruled out a single static binary for that reason alone — it is
+tracked for re-evaluation in
+[#38](https://github.com/MongLong0214/commitlore/issues/38). A clone gives you a
+working CLI without a package manager, but it does not remove the runtime.
+
+**Another language can implement the whole thing.** `spec/fixtures/` and
+`spec/contract-cases/` are a conformance suite, not documentation: an
+implementation in any language that passes them is a conforming implementation
+([SPEC §9](spec/SPEC.md)). A Python or Go port is an anticipated path, not a
+workaround.
 
 ## Use it today (plain git)
 

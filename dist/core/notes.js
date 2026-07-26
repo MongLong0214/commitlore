@@ -1,0 +1,115 @@
+/**
+ * The notes mirror (SPEC §1, ADR-0004).
+ *
+ * Records live in two places: the commit message, and `refs/notes/commitlore`.
+ * The mirror exists because the message is destroyed by ordinary workflows —
+ * squash merges collapse it, `rebase -i` and `amend` rewrite it. Notes are
+ * keyed by object name and survive all of that.
+ *
+ * The note body is the canonical trailer block of SPEC §2.3, byte for byte:
+ * `serializeTrailers` writes it and `git interpret-trailers --parse` reads it,
+ * exactly as for a commit message. There is no second format.
+ */
+import { execGit, execGitOrThrow } from './git.js';
+import { parseCommitMessage, serializeTrailers } from './trailers.js';
+/** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
+export const NOTES_REF = 'refs/notes/commitlore';
+/**
+ * The fetch refspec a clone needs before it can see anyone else's records.
+ * `git fetch` does not fetch notes by default, so a fresh clone reads an empty
+ * mirror until this is configured — `commitlore doctor --fix` adds it.
+ */
+export const NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+/** `git notes --ref=` accepts a full ref; passing it avoids any expansion. */
+const REF_ARG = `--ref=${NOTES_REF}`;
+/**
+ * `git notes show` reports "no note for this object" with exit 1 and dies with
+ * 128 for everything else (bad repo, unreadable ref). The code is the
+ * discriminator rather than the stderr text, which git translates.
+ */
+const NO_NOTE_EXIT = 1;
+/**
+ * A note body is a bare trailer block, but `git interpret-trailers --parse`
+ * reads the first paragraph of its input as the subject and would return
+ * nothing for one. The block is parsed as the last paragraph of a synthetic
+ * message; the subject itself never appears in the output.
+ */
+const SYNTHETIC_SUBJECT = 'commitlore notes mirror';
+const gitOptions = (opts, stdin) => ({
+    ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
+    ...(stdin === undefined ? {} : { stdin }),
+});
+/**
+ * Resolves `sha` to a full object name, throwing if it names nothing in this
+ * repository. Every entry point resolves first, so a typo'd or absent object
+ * fails loudly instead of being reported as "this commit has no record", and
+ * so no caller-supplied string is ever passed to git where it could be read as
+ * an option (`--end-of-options` covers the resolve itself).
+ */
+const resolveObject = (sha, opts) => execGitOrThrow(['rev-parse', '--verify', '--end-of-options', `${sha}^{object}`], gitOptions(opts)).trim();
+/**
+ * Attaches `trailers` to `sha` in the mirror, as the canonical block.
+ *
+ * Fails if the object already carries a note, unless `force` is set: a record
+ * is a claim someone made, and replacing one silently would let a later write
+ * erase an earlier decision with no trace. Overwriting is available, but it
+ * has to be asked for.
+ *
+ * Writing an empty record is refused — `git notes add` reads an empty body as
+ * "delete this note", so an accidental empty write would remove the record it
+ * was meant to add. Deletion is not part of this module.
+ */
+export const writeRecord = (sha, trailers, opts = {}) => {
+    const body = serializeTrailers(trailers);
+    if (body === '') {
+        throw new Error(`refusing to write an empty record to ${NOTES_REF} for ${sha}: an empty note body deletes the note`);
+    }
+    const object = resolveObject(sha, opts);
+    const args = ['notes', REF_ARG, 'add'];
+    if (opts.force === true)
+        args.push('--force');
+    args.push('--file', '-', '--end-of-options', object);
+    const result = execGit(args, gitOptions(opts, body));
+    if (result.code !== 0) {
+        throw Object.assign(new Error(`failed to write the record for ${object} to ${NOTES_REF} (exit ${result.code}): ${result.stderr.trim()}`), { code: result.code, stderr: result.stderr });
+    }
+};
+/**
+ * Reads the record mirrored for `sha`, or `[]` when the object carries no note.
+ * An object with no note is not an error — most commits record nothing
+ * (SPEC §4).
+ *
+ * The returned trailers MAY duplicate the ones in the commit's own message:
+ * the mirror is a second channel for the same record, not a disjoint store.
+ * Merging the two sources and dropping duplicates belongs to the query engine
+ * (T-204) and the inheritance path (T-302), not here.
+ */
+export const readRecord = (sha, opts = {}) => {
+    const object = resolveObject(sha, opts);
+    const result = execGit(['notes', REF_ARG, 'show', '--end-of-options', object], gitOptions(opts));
+    if (result.code === NO_NOTE_EXIT)
+        return [];
+    if (result.code !== 0) {
+        throw Object.assign(new Error(`failed to read the record for ${object} from ${NOTES_REF} (exit ${result.code}): ${result.stderr.trim()}`), { code: result.code, stderr: result.stderr });
+    }
+    return parseCommitMessage(`${SYNTHETIC_SUBJECT}\n\n${result.stdout}`);
+};
+/**
+ * Every object name that carries a note, in `git notes list` order.
+ *
+ * A repository whose mirror has never been written, or one that has not
+ * fetched it yet, has no such ref — that yields `[]`, not an error.
+ */
+export const listRecordShas = (opts = {}) => {
+    const stdout = execGitOrThrow(['notes', REF_ARG, 'list'], gitOptions(opts));
+    return stdout
+        .split('\n')
+        .filter((line) => line.length > 0)
+        .map((line) => {
+        // `<note object> <annotated object>` — the second column is the commit.
+        const [, object = ''] = line.split(' ');
+        return object;
+    })
+        .filter((object) => object.length > 0);
+};
+//# sourceMappingURL=notes.js.map
