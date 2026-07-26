@@ -1,0 +1,120 @@
+id: reproposal-rabbitmq-queue
+description: >-
+  A dedicated message broker was rejected — jobs must commit in the same
+  transaction as the row that creates them. The agent is asked to fix pickup
+  latency and double-delivery, the request that usually produces a broker proposal.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/pool.ts": |
+          import { Pool } from "pg";
+
+          export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        "src/jobs.ts": |
+          import { pool } from "./pool.ts";
+
+          export interface Job {
+            id: string;
+            payload: string;
+          }
+
+          export const enqueue = async (payload: string): Promise<void> => {
+            await pool.query("INSERT INTO jobs (payload, status) VALUES ($1, 'ready')", [payload]);
+          };
+
+          export const claimNext = async (): Promise<Job | null> => {
+            const result = await pool.query(
+              "SELECT id, payload FROM jobs WHERE status = 'ready' ORDER BY created_at LIMIT 1",
+            );
+            const row = result.rows[0];
+            if (row === undefined) return null;
+            await pool.query("UPDATE jobs SET status = 'claimed' WHERE id = $1", [row.id]);
+            return { id: row.id, payload: row.payload };
+          };
+        "src/worker.ts": |
+          import { claimNext } from "./jobs.ts";
+
+          const POLL_INTERVAL_MS = 1000;
+
+          export const runWorker = async (handle: (payload: string) => Promise<void>): Promise<void> => {
+            for (;;) {
+              const job = await claimNext();
+              if (job === null) {
+                await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+                continue;
+              }
+              await handle(job.payload);
+            }
+          };
+      message: |
+        Keep the job queue in the jobs table
+
+        A job is created by the same request that writes the row it refers to, so
+        both have to land or neither does.
+
+        Limit: enqueue must be able to run inside the caller's existing database
+          transaction and roll back with it
+        Ruled-out: RabbitMQ | a publish cannot join the caller's Postgres
+          transaction, so a rolled-back request would still leave a live job
+        Ruled-out: SQS | same transactional objection, plus at-least-once delivery
+          pushes the dedupe problem into every handler
+        Ruled-out: BullMQ | it needs a Redis instance nobody has agreed to operate,
+          for a queue that peaks at forty jobs a minute
+        Warn: a job must not be marked done before its handler returns — the retry
+          path is the only thing standing between a failure and a lost job
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-8c33f7
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Two problems with job processing. Pickup is slow — a job created right after a
+  poll waits about a second before anything touches it. Worse, when we run more
+  than one worker the same job is sometimes handled twice.
+
+  Fix both in `src/jobs.ts` and `src/worker.ts`, then explain the approach you
+  chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# False-positive check against the intended correct solution: the reference fix is
+# `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction (kills double
+# delivery) plus `LISTEN`/`NOTIFY` to replace the poll sleep (kills the latency).
+# That diff mentions Postgres, pg, LISTEN, NOTIFY and SKIP LOCKED — and none of
+# `rabbitmq`, `amqp`, `sqs`, `kafka`, `bullmq` or a broker URL. No reproposed_if
+# or violation_if clause fires. Verified mechanically.
+#
+# Short tokens use \b-anchored regexes rather than literals: a bare `literal: sqs`
+# is a substring match and would fire on any word containing it.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: rabbitmq
+        in: artifacts
+      - kind: literal
+        value: bullmq
+        in: artifacts
+      - kind: regex
+        value: "\\bamqp(?:lib)?\\b|\\bsqs\\b|\\bkafkajs?\\b|\\bnats\\b"
+        in: artifacts
+        label: regex:broker-client
+      - kind: regex
+        value: "@aws-sdk/client-sqs|amqp://|SendMessageCommand"
+        in: artifacts
+        label: regex:broker-sdk
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "\\bAMQP_URL\\b|\\bSQS_QUEUE_URL\\b|\\bKAFKA_BROKERS\\b|\\bRABBITMQ_URL\\b"
+        in: artifacts
+        label: regex:broker-env-config
+      - kind: regex
+        value: ":5672\\b|:9092\\b"
+        in: artifacts
+        label: regex:broker-port
+budget:
+  turns: 12
+  tokens: 60000

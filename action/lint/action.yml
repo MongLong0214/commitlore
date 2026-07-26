@@ -1,0 +1,150 @@
+name: CommitLore record lint
+description: >-
+  Validate the record trailers a pull request adds, and post the active
+  constraints for the paths it touches as one comment that is rewritten in
+  place on every push.
+
+# What the caller has to get right, because this action deliberately does not
+# check out the repository for you -- doing that would silently replace the
+# caller's own checkout settings (submodules, LFS, a different ref):
+#
+#   - uses: actions/checkout@v4
+#     with:
+#       fetch-depth: 0        # the base of the PR must be in the checkout
+#
+#   # only if the repository writes the notes mirror (ADR-0004); the action
+#   # stops rather than report on a checkout that is missing it:
+#   - run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+#
+# Permissions: `pull-requests: write` for the comment, and the `contents: read`
+# the caller's own checkout already needs. Nothing here reaches any host but
+# GitHub: the steps below spawn git and the commitlore CLI, and the one API
+# call is the comment upsert.
+
+inputs:
+  base-ref:
+    description: >-
+      The branch this pull request targets. Compared as `origin/<base-ref>`
+      when that resolves, so the base is the branch as it exists on the server.
+    required: false
+    default: ${{ github.base_ref }}
+  head-ref:
+    description: >-
+      The tip being linted. Defaults to the pull request's head commit rather
+      than HEAD, because on a `pull_request` event HEAD is the synthetic merge
+      commit GitHub built, which is not a commit anyone wrote.
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  comment:
+    description: Post (or rewrite) the pull request comment.
+    required: false
+    default: 'true'
+  fail-on-violation:
+    description: >-
+      Fail the check when a trailer violates the protocol or a credential is
+      found in a commit message. The constraint summary never fails the check.
+    required: false
+    default: 'true'
+  github-token:
+    description: >-
+      Token used for the comment. Needs `pull-requests: write`.
+    required: false
+    default: ${{ github.token }}
+  cli-path:
+    description: >-
+      Path to a built `cli.js` to run instead of the published package. Set
+      this to lint a pull request with the build in that pull request.
+    required: false
+    default: ''
+
+outputs:
+  violations:
+    description: Number of trailer violations found in the range.
+    value: ${{ steps.lint.outputs.violations }}
+  secrets:
+    description: Number of possible credentials found in the commit messages.
+    value: ${{ steps.lint.outputs.secrets }}
+  records:
+    description: Number of active records covering the changed paths.
+    value: ${{ steps.lint.outputs.records }}
+  comment-action:
+    description: '`created`, `updated`, or `skipped`.'
+    value: ${{ steps.comment.outputs.comment-action }}
+  comment-url:
+    description: Link to the comment, when one was posted.
+    value: ${{ steps.comment.outputs.comment-url }}
+
+runs:
+  using: composite
+  steps:
+    # Exits 2 when the checkout cannot answer the question (shallow clone,
+    # missing base, notes left on the remote) and 0 otherwise -- a violation is
+    # an output, not an exit code, so the comment below still gets posted for
+    # the pull request that most needs it.
+    - id: lint
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/lint.mjs"
+      env:
+        COMMITLORE_BASE_REF: ${{ inputs.base-ref }}
+        COMMITLORE_HEAD_REF: ${{ inputs.head-ref }}
+        COMMITLORE_CLI: ${{ inputs.cli-path }}
+        COMMITLORE_WORKSPACE: ${{ github.workspace }}
+
+    # One comment per pull request, rewritten on every push. The upsert itself
+    # lives in comment.mjs so that `test/action-lint.test.ts` can hold it to
+    # that -- a marker lookup written inline here is a doubling bug waiting for
+    # a repository nobody is watching.
+    - id: comment
+      if: inputs.comment == 'true' && steps.lint.outputs.body-file != ''
+      uses: actions/github-script@v7
+      env:
+        COMMITLORE_ACTION_PATH: ${{ github.action_path }}
+        COMMITLORE_BODY_FILE: ${{ steps.lint.outputs.body-file }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { readFileSync } = require('node:fs');
+          const { pathToFileURL } = require('node:url');
+
+          const modulePath = `${process.env.COMMITLORE_ACTION_PATH}/comment.mjs`;
+          const { upsertComment } = await import(pathToFileURL(modulePath).href);
+
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request?.number ?? context.issue.number;
+
+          const result = await upsertComment({
+            body: readFileSync(process.env.COMMITLORE_BODY_FILE, 'utf8'),
+            api: {
+              list: () =>
+                github.paginate(github.rest.issues.listComments, {
+                  owner,
+                  repo,
+                  issue_number,
+                  per_page: 100,
+                }),
+              create: (body) =>
+                github.rest.issues
+                  .createComment({ owner, repo, issue_number, body })
+                  .then((response) => response.data),
+              update: (comment_id, body) =>
+                github.rest.issues
+                  .updateComment({ owner, repo, comment_id, body })
+                  .then((response) => response.data),
+            },
+          });
+
+          if (result.reason) core.warning(`comment not posted: ${result.reason}`);
+          core.setOutput('comment-action', result.action);
+          core.setOutput('comment-url', result.url);
+
+    - name: Fail when the records do not validate
+      if: >-
+        inputs.fail-on-violation == 'true' &&
+        (steps.lint.outputs.violations != '0' || steps.lint.outputs.secrets != '0')
+      shell: bash
+      env:
+        VIOLATIONS: ${{ steps.lint.outputs.violations }}
+        SECRETS: ${{ steps.lint.outputs.secrets }}
+      run: |
+        echo "::error title=CommitLore lint::${VIOLATIONS} trailer violation(s) and ${SECRETS} possible credential(s) -- see the pull request comment"
+        exit 1

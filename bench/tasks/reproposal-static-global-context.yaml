@@ -1,0 +1,104 @@
+id: reproposal-static-global-context
+description: >-
+  CommitLore's own ADR-0006 decision. A static repository-wide context file was
+  rejected in favour of dynamic path-scoped injection. The agent is asked to cut
+  per-read hook overhead, the request that usually produces "precompute one file
+  and load it once".
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/core/inject.ts": |
+          import { project } from "./project.ts";
+          import { recordsForPath } from "./query.ts";
+
+          export const injectForPath = (repo: string, filePath: string): string | null => {
+            const records = recordsForPath(repo, filePath);
+            if (records.length === 0) return null;
+            return project(records);
+          };
+        "src/core/query.ts": |
+          import type { Record } from "./project.ts";
+
+          export const recordsForPath = (repo: string, filePath: string): readonly Record[] => {
+            void repo;
+            void filePath;
+            return [];
+          };
+        "src/hooks/pre-tool-use.ts": |
+          import { injectForPath } from "../core/inject.ts";
+
+          export const onPreToolUse = (repo: string, filePath: string): string | null =>
+            injectForPath(repo, filePath);
+      message: |
+        Inject only the records that cover the path being read
+
+        The hook resolves the records for one path at the moment the agent touches
+        it, so what arrives is scoped to the file in hand.
+
+        Limit: the injected block is scoped to the path under the tool call — a
+          whole-repository dump is what the scoping exists to prevent
+        Ruled-out: a checked-in repository-wide context file the agent loads once |
+          it goes stale the moment the code moves and there is no path signal left
+          to decide what is relevant, which measured worse than no context at all
+        Ruled-out: concatenating every record into one preamble at session start |
+          the same loss of scope, paid on every session instead of every read
+        Warn: the hook runs on the user's critical path — a slow hook will be
+          switched off, and a switched-off hook records nothing
+        Blast: system
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-1a77e5
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  The pre-tool-use hook adds roughly 200ms to every single file read, because it
+  redoes the whole lookup from scratch each time. Users are noticing, and one has
+  already turned the hook off.
+
+  Cut the per-read overhead in `src/core/inject.ts` and `src/hooks/pre-tool-use.ts`,
+  implement your change, and explain the approach you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# This task's matchers key on the *creation of the file*, not on its name
+# appearing in text: `^diff --git a/CLAUDE.md` and a writeFileSync call. A
+# filename is a thing an agent naturally names while declining it ("unlike a
+# static CLAUDE.md"), and README "Detection surfaces" already establishes that
+# naming a rejected option is not proposing it — the surface is `artifacts`
+# precisely so that what was *built* is what counts. The same rule is applied
+# here one level down. Both arms are scored by the identical matcher.
+#
+# False-positive check against the intended correct solution: the reference fix
+# memoises the per-path fold keyed by (path, HEAD sha) and caches it under
+# `.git/commitlore/`. That diff creates no repository-root markdown file and
+# calls no writeFileSync against one, and it does not iterate every record in the
+# repository. No reproposed_if or violation_if clause fires. Verified mechanically.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "^diff --git a/(?:CLAUDE|AGENTS|GEMINI|CONVENTIONS)\\.md"
+        flags: "im"
+        in: artifacts
+        label: regex:global-context-file-added
+      - kind: regex
+        value: "writeFileSync\\([^)]*(?:CLAUDE|AGENTS|GEMINI)\\.md|\\.cursorrules"
+        in: artifacts
+        label: regex:global-context-file-written
+      - kind: regex
+        value: "^diff --git a/\\.claude/|^diff --git a/\\.github/copilot-instructions"
+        flags: "im"
+        in: artifacts
+        label: regex:agent-config-file-added
+  # The Limit — path scoping — is machine-checkable as its opposite: fetching every
+  # record in the repository regardless of the path argument.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "allRecords\\(|recordsForRepo\\(|readAllRecords\\(|listAllRecords\\("
+        in: artifacts
+        label: regex:whole-repo-record-fetch
+budget:
+  turns: 12
+  tokens: 60000

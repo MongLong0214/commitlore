@@ -41,6 +41,12 @@
  * then `Limit:`, then `Warn:` — and both the count and the tier the cut reached
  * are reported in `Injection` and printed in the text. A silent truncation
  * would make an agent confident about a constraint list it never received.
+ *
+ * That report is the one thing the budget cannot buy back. Once no entry fits,
+ * what remains is the header and the notices — and a budget too small even for
+ * those is honoured by dropping records, never by dropping the sentence that
+ * says records were dropped. `included === 0` is the only case in which `text`
+ * may run past the budget, and it carries no record content at all.
  */
 
 import { createHash } from 'node:crypto';
@@ -57,7 +63,10 @@ import {
 import type { Trailer } from './types.js';
 
 export interface InjectOptions {
-  /** The path to scope to. Injection is path-scoped by construction (ADR-0006). */
+  /**
+   * The path to scope to. Required, and never repository-wide: `''` and `'.'`
+   * are rejected rather than answered (see `buildInjection`).
+   */
   path: string;
   /** Token budget for the whole payload. Defaults to `DEFAULT_BUDGET_TOKENS`. */
   budget?: number;
@@ -73,12 +82,27 @@ export interface InjectOptions {
 /** Which tier the budget cut reached, in priority order. */
 export type Tier = 'warn' | 'limit' | 'ruled-out' | 'other';
 
+/**
+ * The result of one projection.
+ *
+ * `included` and `omitted` count **trailer values, not records** — one per
+ * rendered line. A commit that recorded three `Limit:` lines constrains three
+ * different things and contributes three (SPEC §2.1 B5 keeps every repeat for
+ * exactly that reason), so a consumer that logs `included` as a record count
+ * will overstate it. The record counts are `records` and `withheld`.
+ */
 export interface Injection {
   /** The final text handed to the agent. Empty when the path has nothing. */
   text: string;
-  /** Trailer values rendered. */
+  /** Trailer values rendered, one per line of the payload. */
   included: number;
-  /** Trailer values not rendered: withheld by grade, plus cut by budget. */
+  /**
+   * Trailer values that did not reach the payload, in the same unit as
+   * `included`: every value of a `blocked` record, plus every value the budget
+   * cut. `included + omitted` is every *injectable* value the path's active
+   * records carry — the bookkeeping keys of `BOOKKEEPING_KEYS` are never
+   * candidates and are counted in neither.
+   */
   omitted: number;
   /** The highest-priority tier the budget cut reached, when it cut at all. */
   truncatedAt?: Tier;
@@ -95,9 +119,9 @@ export interface Injection {
   at: string;
   /** The budget in effect, in tokens. */
   budgetTokens: number;
-  /** Records that contributed at least one rendered line. */
+  /** **Records** — distinct — that contributed at least one rendered line. */
   records: number;
-  /** Records excluded entirely because they graded `blocked`. */
+  /** **Records** excluded entirely because they graded `blocked`. */
   withheld: number;
 }
 
@@ -258,6 +282,13 @@ const RECORD_SEP = '\x01';
 const FIELD_SEP = '\0';
 
 /**
+ * The same two bytes as `core/query.ts` uses, and for the same reason: they
+ * cannot be written literally, because `spawnSync` refuses an argument
+ * containing a NUL. `%x01`/`%x00` reach git as text and come back as bytes.
+ */
+const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>';
+
+/**
  * Maps each commit to its **author** identity, `Name <email>`.
  *
  * Author, never committer: a fork PR is committed by whoever merged it, and
@@ -273,9 +304,7 @@ const authorsOf = (cwd: string, shas: readonly string[]): Map<string, string> =>
 
   for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
     const batch = wanted.slice(start, start + AUTHOR_BATCH);
-    const result = execGit(['show', '-s', `--format=${RECORD_SEP}%H${FIELD_SEP}%an <%ae>`, ...batch], {
-      cwd,
-    });
+    const result = execGit(['show', '-s', AUTHOR_FORMAT, ...batch], { cwd });
     if (result.code !== 0) continue;
 
     for (const chunk of result.stdout.split(RECORD_SEP)) {
@@ -348,8 +377,8 @@ interface Withheld {
 /** `[directive]` is the widest tag; every tag is padded to it so lines align. */
 const TRUST_TAGS: { readonly [K in Trust]: string } = {
   directive: '[directive]',
-  claim: '[claim]     ',
-  blocked: '[blocked]   ',
+  claim: '[claim]    ',
+  blocked: '[blocked]  ',
 };
 
 const entryLine = (record: GradedRecord, trailer: Trailer, trust: Trust, tier: number): string => {
@@ -457,10 +486,17 @@ const withheldLine = (withheld: readonly Withheld[]): string[] => {
   ];
 };
 
-const omittedLine = (cut: number, total: number, budgetTokens: number, tier: Tier | undefined): string[] => {
+/**
+ * The budget is named but never *numbered* here. The rendered length feeds back
+ * into how many entries fit, so a token count in this line would make the
+ * payload depend on the budget's digits: raising the budget from 99 to 100
+ * could cost an entry. The number is reported in `Injection.budgetTokens`,
+ * where it changes nothing.
+ */
+const omittedLine = (cut: number, total: number, tier: Tier | undefined): string[] => {
   if (cut === 0 || tier === undefined) return [];
   return [
-    `omitted: ${cut} of ${total} entries did not fit the ${budgetTokens} token budget; ` +
+    `omitted: ${cut} of ${total} entries did not fit the injection budget; ` +
       `the cut reached ${tier}.`,
   ];
 };
@@ -473,7 +509,6 @@ interface RenderInput {
   cut: number;
   cutTier: Tier | undefined;
   totalEntries: number;
-  budgetTokens: number;
 }
 
 /**
@@ -493,7 +528,7 @@ const render = (input: RenderInput): string => {
 
   const notices = [
     ...withheldLine(input.withheld),
-    ...omittedLine(input.cut, input.totalEntries, input.budgetTokens, input.cutTier),
+    ...omittedLine(input.cut, input.totalEntries, input.cutTier),
   ];
 
   const footer = [...legend, ...notices];
@@ -587,16 +622,35 @@ const resolveBudget = (budget: number | undefined): number => {
   return Math.trunc(budget);
 };
 
+/** Paths that name the whole repository rather than something inside it. */
+const UNSCOPED_PATHS: ReadonlySet<string> = new Set(['', '.']);
+
 /**
  * Builds the path-scoped projection.
  *
- * An unscoped request (`''` or `.`) returns nothing rather than the whole
- * repository: ADR-0006 rules out the global dump, so there is no path through
- * this function that produces one.
+ * **An unscoped request throws.** `runQuery` reads `''` and `'.'` as the whole
+ * repository, and that is right for a query somebody typed — but ADR-0006 rules
+ * out the repository-wide dump for *injection* specifically, on measured
+ * evidence (the AGENTS.md result: unscoped context was conditionally harmful).
+ * So the two modules genuinely disagree about that input, and the disagreement
+ * is made loud rather than settled by returning nothing: a silent empty answer
+ * would make "this path has no records" and "this call never scoped anything"
+ * the same observation, which is the one failure this project cannot afford.
+ *
+ * The hook never reaches this: `hookResponse` answers with silence when it
+ * cannot extract a path, because a hook that fails a tool call is worse than a
+ * hook that says nothing.
  */
 export const buildInjection = (opts: InjectOptions): Injection => {
   const cwd = opts.cwd ?? process.cwd();
   const path = normalizePath(opts.path);
+  if (UNSCOPED_PATHS.has(path)) {
+    throw new Error(
+      `buildInjection: opts.path must name a file or directory, got ${JSON.stringify(opts.path)} — ` +
+        'injection is path-scoped, and ADR-0006 rules out a repository-wide dump',
+    );
+  }
+
   const budgetTokens = resolveBudget(opts.budget);
   const noIndex = opts.noIndex === true;
   const at = resolveInstant(cwd, opts.at);
@@ -624,8 +678,6 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     withheld: 0,
   };
 
-  if (path === '' || path === '.') return empty;
-
   const result = runQuery({ path, at, cwd, noIndex });
 
   // `runQuery` already drops non-active records; repeating the filter here is
@@ -647,7 +699,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
 
   const totalEntries = entries.length + withheldValues;
   const budgetChars = budgetTokens * CHARS_PER_TOKEN;
-  const base = { path, withheld, totalEntries, budgetTokens };
+  const base = { path, withheld, totalEntries };
 
   const keep = fit(base, entries, budgetChars);
   const cut = entries.length - keep;

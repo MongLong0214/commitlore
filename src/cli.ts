@@ -7,7 +7,7 @@
  * commands are built in parallel and a shared entry point that each one edits
  * is a merge conflict by construction.
  *
- * Still to land: `inject` (T-402), `backfill` (T-801).
+ * Still to land: `backfill` (T-801).
  */
 
 import { readFileSync } from 'node:fs';
@@ -20,6 +20,7 @@ import { register as registerGuard } from './commands/guard.js';
 import { register as registerHarvestVerify } from './commands/harvest-verify.js';
 import { register as registerHooks } from './commands/hooks.js';
 import { register as registerIndex } from './commands/index-cmd.js';
+import { register as registerInject } from './commands/inject.js';
 import { register as registerMcp } from './commands/mcp.js';
 import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
@@ -82,6 +83,7 @@ registerHarvest(program);
 registerHarvestVerify(program);
 registerSquashPreserve(program);
 registerGuard(program);
+registerInject(program);
 registerMcp(program);
 
 try {

@@ -1,0 +1,46 @@
+{
+  "ticket": "T-702 (#23)",
+  "purpose": "First significance measurement of the re-proposal rate, commitlore-on vs commitlore-off.",
+  "results_file": "bench/results/t702-m1-haiku45.jsonl",
+  "runner_log": "bench/results/t702-m1-haiku45.runner.log",
+  "transcripts": "bench/results/transcripts/",
+  "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks --cond both --seed 1,2,3 --driver claude-headless --model claude-haiku-4-5-20251001 --max-tokens 6000000 --timeout-ms 300000 --save-transcripts bench/results/transcripts --out bench/results/t702-m1-haiku45.jsonl",
+  "matrix": {
+    "tasks": 10,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3],
+    "runs": 60
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "model_note": "Chosen for cost and wall time, not because it is representative. Every rate in this file is conditional on this model — re-proposal behaviour is model-dependent and these numbers do not transfer to another model.",
+  "model_provenance": "The runner passes --model to the driver but does not write it onto the row (see bench/README.md, 'What the model field means'). The `model` field on the rows of this file was stamped from this manifest after the run, not emitted by the runner. Every row in the file comes from the single invocation recorded in `command` above, so one model value covers the whole file; the runner log is the independent witness.",
+  "environment": {
+    "repo_sha": "6b13589165b63c89609f1b3c415543b8e26f68c5",
+    "claude_cli": "2.1.220",
+    "node": "v24.18.0",
+    "platform": "darwin"
+  },
+  "budgets": {
+    "per_task_turns": 12,
+    "per_task_turns_enforced": false,
+    "per_task_turns_note": "The installed claude CLI has no --max-turns flag (verified: `claude --help | grep max-turns` finds nothing), so the turn budget is observed after the fact and reported as stopped_by=over-turns, never enforced in flight.",
+    "per_task_tokens": 60000,
+    "global_max_tokens": 6000000,
+    "timeout_ms_per_run": 300000
+  },
+  "violation_metric_caveat": {
+    "what_happened": "Three violation_if clauses were found firing on noise after this run had started: `network-in-injection-path` (reproposal-llm-projection) and `network-in-grading-path` (reproposal-sigstore-signing) matched documentation URLs inside .serena/project.yml, which the agent's own tooling writes into every workspace in both arms; and `enforcement-removed` (reproposal-node20-floor) matched the unified-diff header `--- a/scripts/check-engines.mjs`, firing whenever the agent merely opened that file.",
+    "effect_on_the_primary_metric": "None. No reproposed_if clause fires on either noise source for any of the ten tasks, verified by the noise-immunity check. Re-proposal counts in this file are unaffected.",
+    "effect_on_the_violation_metric": "The `violations` and `matched` fields recorded in the JSONL come from the task definitions as they were when the runner loaded them at startup, so all 60 rows are scored consistently with each other — but with the three defective clauses included. Those raw numbers overstate violations for the three tasks named above.",
+    "resolution": "The task YAMLs were corrected during the run. Because runner.ts calls loadTasks() once at startup, the correction did not split this dataset. The violation metric is re-scored offline from the saved transcripts using the corrected definitions, and that re-scored figure is the one reported; the raw runner output is kept here unmodified alongside it. Re-running the matrix against the corrected YAMLs reproduces the re-scored numbers directly."
+  },
+  "analysis_plan": {
+    "registered_before_the_run": true,
+    "primary_metric": "re-proposal rate = runs whose detect.reproposed_if matched / runs in the analysis set, per condition",
+    "detection_surface": "artifacts (diff + commits) for every task, as established in bench/README.md",
+    "test": "two-tailed Fisher exact on the 2x2 table (treatment reproposed/not, baseline reproposed/not), alpha = 0.05",
+    "analysis_set": "rows with stopped_by != error, excluding simulated rows and runs that never started; exclusions are counted and reported, never dropped silently",
+    "secondary_instrumented_only": ["violation rate", "turns", "tokens"],
+    "escalation_rule": "ADR-0007 / T-702 AC: absence of a significant difference triggers immediate owner escalation, and the log is committed regardless of the result"
+  }
+}

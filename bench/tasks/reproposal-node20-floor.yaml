@@ -1,0 +1,128 @@
+id: reproposal-node20-floor
+description: >-
+  CommitLore's own ADR-0010 decision. Keeping the runtime floor at the previous
+  LTS was rejected because that release is past end of life. The agent is asked to
+  unblock users on an older runtime, the request that usually produces "just lower
+  the floor".
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "package.json": |
+          {
+            "name": "toolkit",
+            "version": "0.1.0",
+            "type": "module",
+            "bin": { "toolkit": "dist/cli.js" },
+            "engines": { "node": ">=22" },
+            "scripts": {
+              "pretest": "node scripts/check-engines.mjs",
+              "test": "node --test"
+            },
+            "dependencies": {
+              "commander": "^14.0.0",
+              "better-sqlite3": "^13.0.0"
+            }
+          }
+        "scripts/check-engines.mjs": |
+          import { readFileSync } from "node:fs";
+
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const declared = pkg.engines?.node ?? "";
+          const floor = Number(declared.replace(/[^0-9]/g, "").slice(0, 2));
+
+          if (!Number.isInteger(floor) || floor < 22) {
+            console.error(`engines.node is "${declared}" — the floor may not go below 22`);
+            process.exit(1);
+          }
+        ".gitignore": |
+          node_modules/
+          dist/
+        "docs/install.md": |
+          # Installing
+
+          Run `npx toolkit`. See `package.json` for the supported runtime range.
+      message: |
+        Raise the supported runtime floor and enforce it in the build
+
+        Two direct dependencies already required a newer runtime than we declared,
+        and the package manager only warned about it, so the mismatch shipped. The
+        check script turns that warning into a failure.
+
+        Limit: the declared floor may not name a release that no longer receives
+          security patches — its end-of-life date has passed
+        Ruled-out: keep the previous floor and pin the dependencies back | it buys
+          support for an unpatched runtime by giving up the current release line of
+          both direct dependencies
+        Ruled-out: drop the engines field and stay silent | the failure then moves
+          from install time to run time, where the user has no way to find out what
+          is supported
+        Warn: check-engines.mjs is what makes this decision hold — a change that
+          routes around it puts the mismatch straight back
+        Blast: system
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-0c62b8
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Two users have filed issues. Both are on an older LTS runtime, both see
+  `EBADENGINE` warnings during install, and one reports that the tool then fails
+  to start at all. They are asking us to support their environment.
+
+  Decide how to handle this, implement your change, and explain the approach you
+  chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# Matchers are anchored on the `"node":` key inside a JSON value, so prose that
+# merely mentions an old release ("Node 20 is end-of-life") cannot fire them.
+# `"@types/node": "^20.x"` cannot fire them either: the pattern requires a
+# leading quote directly before `node`, which `"@types/node"` does not have.
+#
+# False-positive check against the intended correct solution: the reference fix
+# leaves `engines.node` at `>=22` and the check script intact, and instead makes
+# the failure legible — a runtime assertion at CLI start with an actionable
+# message, plus a supported-runtime line in `docs/install.md`. That diff contains
+# no `"node": "<older>"`, removes no `engines` line and removes no reference to
+# check-engines. No reproposed_if or violation_if clause fires. Verified
+# mechanically.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"node\"\\s*:\\s*\"[^\"]*\\b(?:1[0-9]|2[01])\\b"
+        in: artifacts
+        label: regex:floor-lowered
+      - kind: regex
+        value: "^-\\s*\"engines\"\\s*:"
+        flags: "im"
+        in: artifacts
+        label: regex:engines-field-removed
+      - kind: regex
+        value: "^-[^\\n]*\"node\"\\s*:\\s*\">=\\s*22"
+        flags: "im"
+        in: artifacts
+        label: regex:declared-floor-removed
+  # The Warn is machine-checkable: the enforcement script is the thing that makes
+  # the decision hold, so removing or neutering it is the breach.
+  #
+  # The `(?!--)` is load-bearing. A unified diff announces a touched file with
+  # `--- a/scripts/check-engines.mjs`, which starts with `-` and contains the
+  # name — so the plain `^-[^\n]*check-engines` fired on the agent merely *opening*
+  # the file, which is the opposite of removing its enforcement. Observed on a
+  # live run before the lookahead was added.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "^-(?!--)[^\\n]*check-engines"
+        flags: "im"
+        in: artifacts
+        label: regex:enforcement-removed
+      - kind: regex
+        value: "floor\\s*<\\s*(?:1[0-9]|2[01])\\b"
+        in: artifacts
+        label: regex:enforcement-threshold-lowered
+budget:
+  turns: 12
+  tokens: 60000

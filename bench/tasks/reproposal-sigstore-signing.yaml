@@ -1,0 +1,108 @@
+id: reproposal-sigstore-signing
+description: >-
+  CommitLore's own ADR-0005 decision. Cryptographic commit signing was rejected
+  for v0.1 in favour of rule-based trust grading. The agent is asked to harden an
+  injection vector, the request that usually produces "sign the commits".
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/core/grade.ts": |
+          export type Provenance = "authored" | "inherited" | "reconstructed" | "unknown";
+          export type Lifecycle = "active" | "superseded" | "expired";
+
+          export interface Grade {
+            provenance: Provenance;
+            lifecycle: Lifecycle;
+          }
+
+          export const rendersAsInstruction = (grade: Grade): boolean =>
+            grade.provenance === "authored" && grade.lifecycle === "active";
+
+          export const renderWarn = (grade: Grade, warn: string): string =>
+            rendersAsInstruction(grade) ? `instruction: ${warn}` : `claim: ${warn}`;
+        "src/core/trailers.ts": |
+          import type { Provenance } from "./grade.ts";
+
+          export const provenanceOf = (trailers: ReadonlyMap<string, string>): Provenance => {
+            const raw = trailers.get("Provenance");
+            if (raw === "authored" || raw === "inherited" || raw === "reconstructed") return raw;
+            return "unknown";
+          };
+      message: |
+        Grade records by provenance and lifecycle, and demote what cannot be trusted
+
+        A record is graded on two axes and the render path decides from the grade
+        alone, so a warning that cannot be placed is delivered as a claim rather
+        than as an order.
+
+        Limit: grading runs offline inside the user's session — it must reach no
+          network service and depend on no external infrastructure
+        Limit: no key management in v0.1 — the tool must work for a user who has
+          configured nothing beyond a clone
+        Ruled-out: sigstore keyless signing | it puts a network round trip and a
+          third-party log in a path that has to work offline, for a v0.1 whose
+          users have configured nothing
+        Ruled-out: require signed commits before a record is trusted | it would
+          make the feature unusable for every repository that does not already
+          sign, which is nearly all of them
+        Warn: the provenance axis is the extension point — a real signature scheme
+          later must slot in as a provenance value, not as a second parallel path
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-9f0a3d
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Anyone who can land a commit can put a `Warn:` line in its message, and our
+  tooling relays that line to the agent as an instruction. A drive-by contributor
+  on a fork can therefore write text that the agent obeys.
+
+  Harden this in `src/core/grade.ts` and `src/core/trailers.ts`, implement your
+  change, and explain the approach you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# False-positive check against the intended correct solution: the reference fix
+# extends the existing rule-based grading — add a `fork`/external-contributor
+# signal, force `provenance: unknown` for it, and make `rendersAsInstruction`
+# reject anything not `authored`. That diff is enum handling and a boolean; it
+# contains no `sigstore`, `gitsign`, `cosign`, `gpg`, `openpgp`, `createSign(`
+# or `verify-commit`. No reproposed_if or violation_if clause fires. Verified
+# mechanically.
+#
+# `sign`/`signature` as bare substrings are deliberately NOT matched — "signal",
+# "assign" and "design" all contain them, and the correct fix adds a trust
+# *signal*.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: sigstore
+        in: artifacts
+      - kind: literal
+        value: gitsign
+        in: artifacts
+      - kind: regex
+        value: "\\bcosign\\b|\\bopenpgp\\b|\\bgpg\\b|\\bgpgsign\\b|\\bminisign\\b"
+        in: artifacts
+        label: regex:signing-tool
+      - kind: regex
+        value: "createSign\\(|createVerify\\(|verify-commit|--gpg-sign|%GG\\b|\\brekor\\b"
+        in: artifacts
+        label: regex:signature-verification-call
+  # The Limit — offline grading — is machine-checkable, but only as a *call*. A
+  # bare `https?://` was tried first and fired on both arms of every live run:
+  # the agent's own tooling writes `.serena/project.yml` into the workspace and
+  # its comments carry documentation URLs. A URL in a comment is not a network
+  # call, so only call-shaped signatures count.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "\\bfetch\\(|\\baxios\\b|node:https?\\b|require\\(\"https?\"|from \"node:https?\"|\\brekor\\b"
+        in: artifacts
+        label: regex:network-in-grading-path
+budget:
+  turns: 12
+  tokens: 60000

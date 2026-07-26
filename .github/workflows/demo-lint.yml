@@ -1,0 +1,53 @@
+name: Demo — PR lint
+
+# This repository runs its own PR lint action on its own pull requests, with
+# the build from the pull request rather than the last release. An action whose
+# only proof is a demo repository is an action nobody has run in anger; this is
+# the same gate that CI applies to the CLI (`.github/workflows/ci.yml`), moved
+# one layer out to the thing users install.
+#
+# Separate from ci.yml on purpose: this job needs `pull-requests: write` and
+# only runs on pull requests, and CI must not inherit either.
+on: pull_request
+
+permissions:
+  # The action asks for nothing beyond the comment; the read is the checkout's.
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The action refuses a shallow clone rather than lint whatever
+          # subset of history the default depth happened to bring.
+          fetch-depth: 0
+
+      # actions/checkout does not bring git notes, and a record that survived a
+      # squash lives in the mirror (ADR-0004). The action stops if origin has
+      # the ref and the checkout does not, so fetching it here is what keeps
+      # this workflow from being the thing that fails.
+      - name: Bring the record notes mirror, if there is one
+        run: |
+          if git ls-remote --exit-code origin refs/notes/commitlore >/dev/null 2>&1; then
+            git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+          else
+            echo "origin carries no refs/notes/commitlore yet -- nothing to mirror"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # cli-path below points at this; without it the lint would be running the
+      # published package against a pull request that may be changing it.
+      - run: npm run build
+
+      - uses: ./action/lint
+        with:
+          cli-path: dist/cli.js

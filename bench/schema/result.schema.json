@@ -75,6 +75,11 @@
       "type": "string",
       "minLength": 1
     },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The agent model that produced the run, e.g. claude-haiku-4-5-20251001. Re-proposal behaviour is model-dependent, so every rate derived from these rows is conditional on this value, and a set of rows that does not carry it cannot be compared across models once several JSONL files are aggregated. NOT YET REQUIRED: runner.ts passes --model to the driver but does not put it on the row, so making it required would reject every row the shipped runner writes. T-702 reported that change upstream; this property is here so the rows validate the moment the runner emits it, and metrics.ts reports a missing model as \"(unrecorded)\" rather than silently averaging across unknown models."
+    },
     "started_at": {
       "type": "string",
       "format": "date-time"

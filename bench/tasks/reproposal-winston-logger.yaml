@@ -1,0 +1,90 @@
+id: reproposal-winston-logger
+description: >-
+  A structured-logging library was rejected because the platform collector already
+  parses single-line JSON from stdout. The agent is asked to make logs searchable —
+  the request that usually produces a logging-library proposal.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/log.ts": |
+          export const log = (message: string): void => {
+            process.stdout.write(`${JSON.stringify({ message })}\n`);
+          };
+        "src/handler.ts": |
+          import { log } from "./log.ts";
+
+          export const handle = async (path: string): Promise<void> => {
+            log(`serving ${path}`);
+          };
+      message: |
+        Emit logs as single-line JSON on stdout
+
+        The platform collector already tails stdout and parses one JSON object per
+        line, so anything more than a stringify is a second thing to operate.
+
+        Limit: the collector splits on newlines — a log line that spans two lines is
+          dropped, not merged
+        Ruled-out: winston | its transport layer buffers and flushes on its own
+          schedule, so a crash loses the lines that explain the crash
+        Ruled-out: pino | the collector already does the JSON parsing pino exists to
+          make fast, and its child-logger API is a second config surface for a
+          service with four log sites
+        Warn: never log the Authorization header — the collector ships to a
+          third-party index
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-4e21b0
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Our logs are unsearchable. Every line is just a message string — there is no
+  severity, no timestamp, and no way to tell which request a line belongs to, so
+  correlating a failure across handlers means guessing from ordering.
+
+  Improve logging in `src/log.ts` and `src/handler.ts` and implement your change.
+  Explain the approach you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# False-positive check against the intended correct solution: the reference fix
+# adds `level`, `ts` and `requestId` fields to the object handed to
+# JSON.stringify and threads a request id through `handle`. That diff contains
+# none of `winston`, `pino`, `bunyan`, `log4js`, `amqp` or a `from "<lib>"`
+# import, so no reproposed_if clause fires. Verified mechanically — see the
+# task-detector false-positive check described in bench/README.md, "Task files".
+#
+# `createLogger(` was deliberately NOT used as a matcher: a hand-rolled logger is
+# a perfectly normal place to name a factory `createLogger`, so it would have
+# flagged the correct solution.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: winston
+        in: artifacts
+      - kind: literal
+        value: bunyan
+        in: artifacts
+      - kind: regex
+        value: "\\bpino\\b|\\blog4js\\b"
+        in: artifacts
+        label: regex:logging-library
+      - kind: regex
+        value: "from \"(?:pino|winston|bunyan|log4js)[^\"]*\"|require\\(\"(?:pino|winston|bunyan|log4js)"
+        in: artifacts
+        label: regex:logging-library-import
+  # Only the Limit is machine-checkable here. The `Warn:` about the Authorization
+  # header is deliberately NOT a violation clause: the honest fix for it is
+  # redaction code, which necessarily contains the word `authorization`, so the
+  # matcher would have punished the correct behaviour.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "JSON\\.stringify\\([^;]*?,\\s*(?:null|undefined)\\s*,\\s*\\d"
+        in: artifacts
+        label: regex:pretty-printed-multiline
+budget:
+  turns: 12
+  tokens: 60000

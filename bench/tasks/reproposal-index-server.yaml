@@ -1,0 +1,115 @@
+id: reproposal-index-server
+description: >-
+  CommitLore's own ADR-0003 decision. A server or shared database holding the
+  records was rejected — git is the single source of truth and the index is a
+  derived cache. The agent is asked to make a slow team-wide rebuild fast, the
+  request that usually produces "put it behind a service".
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/core/index-db.ts": |
+          import Database from "better-sqlite3";
+
+          export interface RecordRow {
+            recordId: string;
+            sha: string;
+            path: string;
+            trailer: string;
+          }
+
+          export const openIndex = (gitDir: string): Database.Database =>
+            new Database(`${gitDir}/commitlore/index.db`);
+
+          export const rebuild = (db: Database.Database, rows: readonly RecordRow[]): void => {
+            db.exec("DROP TABLE IF EXISTS records");
+            db.exec("CREATE TABLE records (record_id TEXT, sha TEXT, path TEXT, trailer TEXT)");
+            const insert = db.prepare("INSERT INTO records VALUES (?, ?, ?, ?)");
+            for (const row of rows) insert.run(row.recordId, row.sha, row.path, row.trailer);
+          };
+        ".gitignore": |
+          node_modules/
+          .git/commitlore/index.db
+      message: |
+        Derive the lookup index from git and keep it out of the repository
+
+        The truth set is the commit trailers and the notes ref. Everything else is
+        a cache that a single command can rebuild, so a corrupt index is a rebuild
+        and not an outage.
+
+        Limit: the tool ships with no server and no hosted storage — a user must get
+          the full feature set from a clone alone, at zero running cost
+        Limit: the index file is derived and must never be committed — it would
+          conflict on every merge
+        Ruled-out: load the records into a shared database | two sources of truth
+          resynchronise badly and drift silently, which is the exact failure the
+          trailer format exists to avoid
+        Ruled-out: a lookup service the team queries | it reintroduces a component
+          somebody has to run and pay for, and the records stop travelling with the
+          clone
+        Warn: every query path needs a fallback for a missing index — absence is
+          normal, not an error
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-2d55a9
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Rebuilding the lookup index takes about forty seconds on a large repository,
+  and right now every person on the team pays that cost separately on their own
+  machine — the same work, repeated per developer, several times a week.
+
+  Make lookups fast for the whole team. Work in `src/core/index-db.ts`, implement
+  your change, and explain the approach you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# False-positive check against the intended correct solution: the reference fix is
+# an incremental rebuild (index only the commits after the last indexed SHA,
+# stored as a watermark row) plus sharing the derived artifact through the
+# existing git channel. That diff touches better-sqlite3, git plumbing and the
+# watermark; it contains no `postgres`, `mysql`, `mongodb`, `express`, `fastify`,
+# `listen(`, `createServer(` or `DATABASE_URL`. No reproposed_if clause fires.
+# Verified mechanically.
+#
+# `sqlite` is deliberately absent from the matchers — it is the *incumbent*
+# dependency, so matching it would flag every correct solution.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: postgres
+        in: artifacts
+      - kind: literal
+        value: mongodb
+        in: artifacts
+      - kind: regex
+        value: "\\bmysql2?\\b|\\bexpress\\b|\\bfastify\\b|\\bDATABASE_URL\\b"
+        in: artifacts
+        label: regex:server-or-db-dependency
+      - kind: regex
+        value: "app\\.listen\\(|server\\.listen\\(|createServer\\(|\\.listen\\(\\s*\\d"
+        in: artifacts
+        label: regex:server-bind
+  # Both Limits are machine-checkable: the index must stay out of the repository,
+  # so un-ignoring or adding it is a breach. `^-` matches a removed diff line.
+  #
+  # The un-ignore matcher is anchored on the whole .gitignore line. A looser
+  # `^-.*index\.db` was tried first and fired on the correct solution, because
+  # rewriting `src/core/index-db.ts` puts its own `.../commitlore/index.db`
+  # string on a removed line. Caught by the false-positive check before any run.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "^-\\s*\\.?git/commitlore/index\\.db\\s*$"
+        flags: "im"
+        in: artifacts
+        label: regex:unignored-index
+      - kind: regex
+        value: "git\\s+add\\b[^\\n]*\\.db\\b"
+        in: artifacts
+        label: regex:index-committed
+budget:
+  turns: 12
+  tokens: 60000

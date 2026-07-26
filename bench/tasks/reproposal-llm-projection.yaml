@@ -1,0 +1,103 @@
+id: reproposal-llm-projection
+description: >-
+  CommitLore's own ADR-0006 decision. Generating the injected summary with an LLM
+  was rejected — the projection must be a deterministic fold at zero token cost.
+  The agent is asked to shrink a bloated summary, the request that usually
+  produces "just summarise it with a model".
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/core/project.ts": |
+          export interface Record {
+            recordId: string;
+            path: string;
+            ruledOut: readonly string[];
+            limits: readonly string[];
+            warns: readonly string[];
+          }
+
+          export const project = (records: readonly Record[]): string => {
+            const lines: string[] = [];
+            for (const record of records) {
+              for (const entry of record.ruledOut) lines.push(`- ruled out: ${entry}`);
+              for (const limit of record.limits) lines.push(`- limit: ${limit}`);
+              for (const warn of record.warns) lines.push(`- warn: ${warn}`);
+            }
+            return lines.join("\n");
+          };
+      message: |
+        Fold the record stream into the injected summary deterministically
+
+        The summary is a pure function of the records on the path, so the same
+        history always produces the same block and the result can be cached by
+        content hash.
+
+        Limit: the injection path runs inside the user's editor session on every
+          file read — it must make no network call and cost no tokens of its own
+        Ruled-out: summarise the records with a model call | it prices a per-read
+          hook at a per-read API charge, and two runs over the same history stop
+          agreeing with each other
+        Ruled-out: embed the records and retrieve by similarity | same runtime cost
+          objection, and it turns a deterministic fold into a ranking nobody can
+          reproduce from the commit history alone
+        Warn: the summary is cached by content hash — any change to the fold must
+          change the hash or stale blocks will be served
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-6b90c4
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  On a busy path the injected block runs to about nine hundred tokens, and most
+  of it is repetition — the same limit restated by four records, near-duplicate
+  wordings of the same rejected option.
+
+  Make the block substantially shorter without losing the entries that matter.
+  Work in `src/core/project.ts`, implement your change, and explain the approach
+  you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces".
+#
+# False-positive check against the intended correct solution: the reference fix
+# dedupes entries by normalised text, ranks them (ruled-out before limit before
+# warn), and truncates to a token budget. That diff is string handling and a
+# Set — it contains no `anthropic`, `openai`, `messages.create`, `fetch(` or an
+# API-key env name. No reproposed_if or violation_if clause fires. Verified
+# mechanically.
+#
+# The word `summarise`/`summary` is deliberately NOT matched: the incumbent code
+# is already called a summary, so it would flag every correct solution. Only the
+# machinery of a model call is matched.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: anthropic
+        in: artifacts
+      - kind: literal
+        value: openai
+        in: artifacts
+      - kind: regex
+        value: "messages\\.create\\(|chat\\.completions|\\bembeddings?\\b|\\bcosine\\s*similarity\\b"
+        in: artifacts
+        label: regex:model-call
+      - kind: regex
+        value: "\\b(?:ANTHROPIC|OPENAI)_API_KEY\\b|@anthropic-ai/|\\bclaude-[a-z0-9-]+\\b|\\bgpt-[0-9]"
+        in: artifacts
+        label: regex:model-identifier
+  # The Limit — no network call in the injection path — is machine-checkable, but
+  # only as a *call*. A bare `https?://` was tried first and fired on both arms of
+  # every live run: the agent's own tooling writes `.serena/project.yml` into the
+  # workspace, and its comments carry documentation URLs. A URL in a comment is
+  # not a network call, so only call-shaped signatures count.
+  violation_if:
+    any_of:
+      - kind: regex
+        value: "\\bfetch\\(|\\baxios\\b|node:https?\\b|require\\(\"https?\"|from \"node:https?\""
+        in: artifacts
+        label: regex:network-in-injection-path
+budget:
+  turns: 12
+  tokens: 60000
