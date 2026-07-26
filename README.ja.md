@@ -78,6 +78,34 @@ CommitLore-Version: 2.0.0
 
 設計ルール（[「死にフィールド禁止」](docs/adr/ADR-0006-push-injection.md)）: すべての trailer は最低 1 つの消費ルート（クエリ・ゲート・注入規則）を持ちます。誰も読まない語彙は仕様から削除されます。
 
+## クイックスタート
+
+コーディングエージェント前提で、3 行。
+
+```bash
+npm install -g commitlore
+commitlore hooks install                      # 不正な記録はコミット時に弾かれる
+claude mcp add commitlore -- commitlore mcp   # エージェントが記録をツールとして得る
+```
+
+セットアップはこれで全部だ。エージェントは編集前にそのパスで既に決まったことを読み、
+却下済みの案を出せば `guard` が知らせる。
+
+**記録は普通のコミットトレーラーとして書く** — 上の例のままだ。覚えることはない。
+
+MCP クライアントがなければ、シェルから同じ答えが得られる:
+
+```bash
+commitlore context src/auth/                       # このパスが決めたこと
+commitlore guard --proposal "RabbitMQ に置き換え"   # 却下済みなら非ゼロで終了
+```
+
+**期待値は正直に。** 記録は rebase・squash・リネームを越えて生き残り、大きな履歴でも
+速い（10 万コミットで p50 1.86ms）。**実証されていないのは**、これがエージェントの
+振る舞いをどれだけ変えるかだ。自前のベンチマークは有意差なしで返り、そのまま公開して
+いる: [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md)、
+[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md)。
+
 ## 今すぐ使う（素の git）
 
 プロトコルにツールは一切不要です。コミットに trailer を書き（エージェントへの指示に任せても OK）、git 自身で照会します:

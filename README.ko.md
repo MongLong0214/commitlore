@@ -78,6 +78,34 @@ CommitLore-Version: 2.0.0
 
 설계 규칙(["죽은 필드 금지"](docs/adr/ADR-0006-push-injection.md)): 모든 trailer는 소비자 라우트(쿼리·게이트·주입 규칙)를 최소 1개 갖습니다. 아무도 읽지 않는 어휘는 스펙에서 삭제됩니다.
 
+## 빠른 시작
+
+코딩 에이전트 기준, 세 줄이다.
+
+```bash
+npm install -g commitlore
+commitlore hooks install                      # 잘못된 기록은 커밋 시점에 거부
+claude mcp add commitlore -- commitlore mcp   # 에이전트가 기록을 도구로 받는다
+```
+
+설치는 이게 전부다. 이제 에이전트는 파일을 고치기 전에 그 경로에서 이미 결정된
+것을 읽고, 이미 기각된 걸 제안하면 `guard`가 알려준다.
+
+**기록은 그냥 커밋 트레일러로 쓴다** — 위 예제 그대로다. 더 배울 건 없다.
+
+MCP 클라이언트가 없으면 셸에서 같은 답을 받는다:
+
+```bash
+commitlore context src/auth/                  # 이 경로가 결정한 것
+commitlore guard --proposal "RabbitMQ로 교체"  # 이미 기각? 0이 아닌 코드로 종료
+```
+
+**기대치는 정직하게.** 기록은 rebase·squash·이름 변경을 넘어 살아남고, 큰
+히스토리에서도 빠르다(10만 커밋 p50 1.86ms). **입증되지 않은 것**은 이것이
+에이전트 행동을 얼마나 바꾸는가다 — 자체 벤치마크는 유의차 없이 돌아왔고 그대로
+싣는다: [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md),
+[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md).
+
 ## 오늘 바로 쓰기 (순수 git)
 
 프로토콜에는 도구가 전혀 필요 없습니다. 커밋에 trailer를 쓰고(에이전트 지침에 맡겨도 됩니다), git으로 조회하세요:

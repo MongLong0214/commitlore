@@ -78,6 +78,34 @@ CommitLore-Version: 2.0.0
 
 设计规则（["禁止死字段"](docs/adr/ADR-0006-push-injection.md)）：每个 trailer 至少有一个消费路由 —— 查询、门禁或注入规则。没人读的词汇会从规范中删除。
 
+## 快速上手
+
+面向编码智能体，三行。
+
+```bash
+npm install -g commitlore
+commitlore hooks install                      # 格式错误的记录在提交时被拒绝
+claude mcp add commitlore -- commitlore mcp   # 智能体把记录当作工具来用
+```
+
+安装到此为止。智能体在动手改文件前会读取这条路径已经做过的决定；一旦提出被否决过
+的方案，`guard` 会告诉它。
+
+**记录就写成普通的提交 trailer** —— 就是上面的例子，没有别的要学。
+
+没有 MCP 客户端时，用命令行拿到同样的答案：
+
+```bash
+commitlore context src/auth/                     # 这条路径决定过什么
+commitlore guard --proposal "换成 RabbitMQ"       # 已被否决？以非零状态退出
+```
+
+**诚实地说说预期。** 记录能挺过 rebase、squash 与重命名，在大型历史上依然很快
+（10 万次提交下 p50 1.86ms）。**尚未被证明的**是它能在多大程度上改变智能体的行为
+—— 我们自己的基准测试没有跑出显著差异，我们照样公开：
+[`bench/VERDICT-M1.md`](bench/VERDICT-M1.md)、
+[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md)。
+
 ## 立即使用（纯 git）
 
 协议零工具依赖。在提交里写 trailer（或交给智能体的指令去写），然后用 git 本身查询：

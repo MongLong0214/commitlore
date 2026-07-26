@@ -78,6 +78,35 @@ This is a normal git commit. No tool is required to write it, and git itself can
 
 Design rule (["no dead fields"](docs/adr/ADR-0006-push-injection.md)): every trailer has at least one consumer route — a query, a gate, or an injection rule. Vocabulary that nothing reads gets deleted from the spec.
 
+## Quickstart
+
+Three lines, for a coding agent:
+
+```bash
+npm install -g commitlore
+commitlore hooks install                      # malformed records rejected at commit
+claude mcp add commitlore -- commitlore mcp   # agent gets the records as tools
+```
+
+That is the whole setup. The agent now reads what a path already decided before
+it edits, and `guard` tells it when it is proposing something already rejected.
+
+**You write records as ordinary commit trailers** — the example above. Nothing
+else to learn.
+
+Without an MCP client, the same answers from the shell:
+
+```bash
+commitlore context src/auth/                       # what this path decided
+commitlore guard --proposal "switch to RabbitMQ"   # already rejected? exits non-zero
+```
+
+**Honest expectation.** Records survive rebase, squash and rename, and queries
+stay fast on large histories (p50 1.86ms over 100k commits). What is *not*
+demonstrated is how much this changes an agent's behaviour — our own benchmark
+found no significant difference and we publish it anyway:
+[`bench/VERDICT-M1.md`](bench/VERDICT-M1.md), [`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md).
+
 ## Use it today (plain git)
 
 The protocol needs zero tooling. Write trailers in your commits (or let your agent's instructions do it), then query with git itself:
