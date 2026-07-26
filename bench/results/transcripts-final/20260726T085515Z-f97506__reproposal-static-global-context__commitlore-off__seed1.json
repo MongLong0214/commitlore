@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T085515Z-f97506",
+  "task": "reproposal-static-global-context",
+  "cond": "commitlore-off",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Looking at the problem: the current approach depends on `onPreToolUse` hooks which only half the team's editors support. Let me identify the best path forward.\n\nThe current architecture:\n- Queries records for a file path: `recordsForPath(repo, filePath)`\n- Formats them via `project(records)`\n- Injects only via the pre-tool-use hook\n\n**Three approaches to reach users without pre-tool-use hooks:**\n\n1. **Tool-result interception** (most universal) — inject records into Read tool results. Since Read is ubiquitous across all editors/agents, intercepting `onToolResult` for Read calls works everywhere, no hooks needed.\n\n2. **MCP (Model Context Protocol) server** — expose an MCP tool `getRecords(filePath)` that any agent can call. Works with any MCP-compatible editor/agent, discoverable and explicit.\n\n3. **CLI tool** — provide `commitlore records <path>` that agents can call via shell. Requires agents to know to call it; less automatic than the others.\n\n**My recommendation: tool-result interception (approach 1).**\n\nWhy: It reaches 100% of users immediately (Read is universal), requires zero user action (automatic), works offline (no new tools to learn), and is invisible—records just appear when code is read. The tradeoff is that it only works for Read operations, not for every tool use.\n\nImplement it by adding an `onToolResult` hook that:\n- Detects when Read tool is called with a file path\n- Queries `recordsForPath` for that path\n- Prepends records to the tool result\n\nThis way, the hook-enabled half keeps their existing injection, and the hook-less half get records through Read results. Would you like me to implement this?",
+  "diff": "",
+  "commits": ""
+}

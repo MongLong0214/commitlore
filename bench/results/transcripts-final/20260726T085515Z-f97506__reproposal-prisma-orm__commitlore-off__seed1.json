@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T085515Z-f97506",
+  "task": "reproposal-prisma-orm",
+  "cond": "commitlore-off",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I can see the issue: raw SQL strings with no type checking against your actual schema. Here's my recommendation:\n\n**Build a lightweight codegen system** that:\n1. Introspects your Postgres schema at build time\n2. Parses your SQL queries in `src/db/`\n3. Generates TypeScript types for each query's result shape\n4. Provides typed wrapper functions that replace `pool.query()` calls\n\nThis keeps your existing approach (direct pg driver, hand-written SQL) while catching schema mismatches at compile time instead of production.\n\n**Why this beats the alternatives:**\n- **vs. Prisma/TypeORM**: You already chose raw SQL intentionally; no need for an ORM\n- **vs. Kysely/Query builders**: Same reason—your queries are explicit and readable\n- **vs. sqlc**: Lighter weight, stays in your TypeScript ecosystem, simpler migration\n\nThe workflow would be:\n```\nmigration applied → schema changes in Postgres → `npm run codegen` → \nTypeScript types updated → query breaks at compile time (not production)\n```\n\nReady to implement? I'll:\n1. Create a schema introspection script (queries Postgres `information_schema`)\n2. Build a SQL parser to extract column references from your queries\n3. Generate typed query wrappers\n4. Add a build step\n\nShould I proceed with this approach?",
+  "diff": "",
+  "commits": ""
+}

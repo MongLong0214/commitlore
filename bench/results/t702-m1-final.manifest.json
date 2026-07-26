@@ -1,0 +1,57 @@
+{
+  "status": "final",
+  "status_note": "60 of 60 runs, all three seeds complete at 20 rows each, zero isolation warnings, zero errors, zero timeouts, zero simulated rows, and 60 distinct (task, condition, seed) cells with no duplicates. The runner printed its closing summary after run 60/60, so this was a clean completion; no RUNNER_EXIT marker exists because the launch command never captured one, which is missing instrumentation rather than a failed exit. Citable. `final` describes the run, not the outcome — the result is null, and a clean registered run that fails to support its hypothesis is exactly what this status is for.",
+  "ticket": "T-702 (#23)",
+  "purpose": "The registered measurement of the re-proposal rate, run against frozen code under a controlled environment. Supersedes the pilot at bench/results/t702-pilot-haiku45-superseded.jsonl, whose value was its design findings rather than its numbers.",
+
+  "results_file": "bench/results/t702-m1-final.jsonl",
+  "runner_log": "bench/results/t702-m1-final.runner.log",
+  "transcripts": "bench/results/transcripts-final/",
+
+  "rows": 60,
+  "planned": 60,
+
+  "matrix": {
+    "tasks": 10,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3],
+    "runs": 60
+  },
+
+  "integrity": {
+    "run_ids": ["20260726T085515Z-f97506"],
+    "rows_per_seed": { "1": 20, "2": 20, "3": 20 },
+    "rows_per_condition": { "commitlore-on": 30, "commitlore-off": 30 },
+    "distinct_cells": 60,
+    "duplicate_cells": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "simulated_rows": 0,
+    "tokens": "1297903 / 6000000"
+  },
+
+  "model": "claude-haiku-4-5-20251001",
+  "model_note": "One model and one CLI version. Re-proposal is a behaviour, and behaviours differ between models, so nothing here generalises across models (PREREGISTRATION.md section 11-4).",
+
+  "environment": {
+    "repo_sha": "a376808c58c1359644332a8d4c5ac3559dd16433",
+    "freeze_commit_subject": "Take the operator's machine out of the benchmark",
+    "isolation_flags": ["--strict-mcp-config", "--mcp-config <empty>", "--setting-sources ''", "--no-session-persistence"],
+    "isolation_note": "The pilot inherited the operator's MCP servers, one of which was a memory server that carried state between runs. That breaks the independence the design assumes, so it invalidates rather than explains a result. The driver probes for the isolation flags and warns on stderr if any is unavailable.",
+    "isolation_warnings": 0,
+    "commits_during_run": "Documentation, ablation fixtures, and one source-hygiene change to files outside the runner's import graph. Verified: `git diff a376808..HEAD` is empty for bench/runner.ts, bench/context.ts, bench/detect.ts, bench/git.ts, bench/task-loader.ts, bench/types.ts, bench/workspace.ts, bench/drivers and bench/tasks. bench/metrics.ts is not reachable from bench/runner.ts and no src/ file is reachable from bench at all, so nothing the runner loaded changed while it ran."
+  },
+
+  "reproducibility": {
+    "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks --cond commitlore-on,commitlore-off --seed 1,2,3 --driver claude-headless --model claude-haiku-4-5-20251001 --max-tokens 6000000 --timeout-ms 300000 --save-transcripts bench/results/transcripts-final --out bench/results/t702-m1-final.jsonl",
+    "note": "Re-running reproduces the matrix, not the token counts — the model is sampled. PRD-F7's reproducibility criterion is read as the matrix and the detector verdicts, not byte-identical transcripts."
+  },
+
+  "analysis": "Per bench/PREREGISTRATION.md sections 1-11. The raw counts are commitlore-on 5/30 and commitlore-off 7/30; the registered test and the verdict are produced from the pre-registration, not from this file.",
+
+  "known_limitations_ref": "bench/PREREGISTRATION.md section 11, including the withdrawal of limitation 1 for this task set.",
+  "not_measured": {
+    "cpaa": "No denominator. harvest carries no model by design, so its cost is never charged to a bench row; harvest_tokens and verify_tokens are absent from every row here. metrics.ts reports undefined_because: not-instrumented rather than inventing a value. See docs/prd/PRD-F7-commitlorebench.md.",
+    "route_scoping": "bench/context.ts assembles every record in the workspace and never path-scopes, so this matrix measures records against no records — not scoped injection against unscoped. The no-scope arm is inert for the same reason (#36)."
+  }
+}

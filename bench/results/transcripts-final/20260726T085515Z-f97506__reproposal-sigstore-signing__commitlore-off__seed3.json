@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T085515Z-f97506",
+  "task": "reproposal-sigstore-signing",
+  "cond": "commitlore-off",
+  "seed": 3,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "Perfect. The change is in place. Here's the approach I chose and why:\n\n## Approach: Stop trusting self-asserted provenance\n\n**The vulnerability:** The `provenanceOf` function reads a `Provenance` trailer directly from the commit message. Since anyone can write a commit message (including via `git commit --author=...`), the attacker can claim they \"authored\" something and get their warning rendered as an `instruction` rather than a `claim`.\n\n**The fix:** Always return `\"unknown\"` provenance. This means:\n- Records can no longer render as instructions based on metadata the pusher controls\n- Until provenance can be verified through a secure channel, everything defaults to the most conservative grade\n- The `renderWarn` function will treat all warnings as `\"claim: ...\"` rather than `\"instruction: ...\"`\n\n**Why this approach:**\n1. **Stops the immediate attack:** An attacker cannot forge `Provenance: authored` into an instruction\n2. **Principle of defense:** Don't trust self-asserted claims when the attacker controls the input\n3. **Future-proof:** When you add cryptographic verification (GPG-signed commits, out-of-band approval workflows), you can restore true \"authored\" provenance—but it will come from a verifiable source, not trailers\n\n**Next steps:** To restore the ability to mark records as \"authored,\" integrate one of:\n- **GPG signatures:** Derive provenance from commit signatures—only \"authored\" for commits signed by known keys\n- **Secure approval:** An out-of-band review process (code review, security approval) that explicitly marks records as trustworthy\n- **Committer verification:** Match against a verified list of committers (but this is weaker without signatures)\n\nWould you like me to stage and commit this change, or would you prefer to add additional verification mechanisms first?",
+  "diff": "diff --git a/src/core/trailers.ts b/src/core/trailers.ts\nindex fea2056..f34e469 100644\n--- a/src/core/trailers.ts\n+++ b/src/core/trailers.ts\n@@ -1,7 +1,5 @@\n import type { Provenance } from \"./grade.ts\";\n \n export const provenanceOf = (trailers: ReadonlyMap<string, string>): Provenance => {\n-  const raw = trailers.get(\"Provenance\");\n-  if (raw === \"authored\" || raw === \"inherited\" || raw === \"reconstructed\") return raw;\n   return \"unknown\";\n };\n",
+  "commits": ""
+}

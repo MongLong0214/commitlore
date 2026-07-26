@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T085515Z-f97506",
+  "task": "reproposal-redis-cache",
+  "cond": "commitlore-off",
+  "seed": 3,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I need your permission to commit the changes. May I proceed with:\n```\ngit add src/cache.ts\ngit commit -m \"Persist session cache to disk instead of in-memory only\"\n```\n\nThis will record the fix for tracking.",
+  "diff": "diff --git a/src/cache.ts b/src/cache.ts\nindex 9fa8c53..ce62856 100644\n--- a/src/cache.ts\n+++ b/src/cache.ts\n@@ -1,12 +1,43 @@\n+import { readFileSync, writeFileSync, mkdirSync } from \"fs\";\n+import { join } from \"path\";\n+\n interface Entry {\n   value: string;\n   expiresAt: number;\n }\n \n-const store = new Map<string, Entry>();\n+const cacheDir = \".cache\";\n+const cacheFile = join(cacheDir, \"sessions.json\");\n+\n+const ensureCacheDir = (): void => {\n+  try {\n+    mkdirSync(cacheDir, { recursive: true });\n+  } catch {\n+    // Directory already exists\n+  }\n+};\n+\n+const loadStore = (): Map<string, Entry> => {\n+  try {\n+    const data = readFileSync(cacheFile, \"utf-8\");\n+    const obj = JSON.parse(data);\n+    return new Map(Object.entries(obj) as [string, Entry][]);\n+  } catch {\n+    return new Map();\n+  }\n+};\n+\n+const saveStore = (store: Map<string, Entry>): void => {\n+  ensureCacheDir();\n+  const obj = Object.fromEntries(store);\n+  writeFileSync(cacheFile, JSON.stringify(obj));\n+};\n+\n+let store = loadStore();\n \n export const put = (key: string, value: string, ttlMs: number): void => {\n   store.set(key, { value, expiresAt: Date.now() + ttlMs });\n+  saveStore(store);\n };\n \n export const get = (key: string): string | null => {\n@@ -14,6 +45,7 @@ export const get = (key: string): string | null => {\n   if (entry === undefined) return null;\n   if (entry.expiresAt < Date.now()) {\n     store.delete(key);\n+    saveStore(store);\n     return null;\n   }\n   return entry.value;\n",
+  "commits": ""
+}
