@@ -73,7 +73,32 @@ type DatabaseConstructor = new (
   options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number },
 ) => BetterSqlite3.Database;
 
-const DatabaseCtor = createRequire(import.meta.url)('better-sqlite3') as DatabaseConstructor;
+/**
+ * Resolved on first use, not at import.
+ *
+ * ADR-0003 makes the index a derived cache and ADR-0002 requires the CLI to
+ * degrade to `--no-index` when better-sqlite3 is unavailable. Requiring it at
+ * module scope broke both: importing this file threw before any caller could
+ * choose the fallback, so a missing native module took down `validate`,
+ * `guard` and `parse` — none of which touch the index at all.
+ *
+ * That is not hypothetical. It is what a distribution without node_modules
+ * does, which is exactly the shape this project now ships (ADR-0011).
+ */
+let cachedCtor: DatabaseConstructor | null = null;
+
+const loadDatabaseCtor = (): DatabaseConstructor => {
+  if (cachedCtor !== null) return cachedCtor;
+  try {
+    cachedCtor = createRequire(import.meta.url)('better-sqlite3') as DatabaseConstructor;
+    return cachedCtor;
+  } catch (cause) {
+    throw new Error(
+      'the SQLite index needs better-sqlite3, which is not installed here — rerun with --no-index, ' +
+        `or install it to get the index back (${cause instanceof Error ? cause.message : String(cause)})`,
+    );
+  }
+};
 
 export type IndexDatabase = BetterSqlite3.Database;
 
@@ -619,7 +644,7 @@ const healthProblem = (db: IndexDatabase): string | null => {
 };
 
 const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
-  const db = new DatabaseCtor(path, { readonly });
+  const db = new (loadDatabaseCtor())(path, { readonly });
   if (!readonly) {
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
