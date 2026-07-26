@@ -1,4 +1,4 @@
-# Lore
+# Annals
 
 **English** | [한국어](README.ko.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
@@ -6,11 +6,11 @@
 > Free forever. No server, no database, no paid plan — **git is the single source of truth.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_in_development-orange.svg)](https://github.com/MongLong0214/lore/milestones)
-[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/lore/milestone/4)
+[![Status](https://img.shields.io/badge/status-v0.1.0_in_development-orange.svg)](https://github.com/MongLong0214/annals/milestones)
+[![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/annals/milestone/4)
 [![Protocol](https://img.shields.io/badge/protocol-Lore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
-> ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)). The CLI, MCP server, hooks, and GitHub Actions ship with **v0.1.0 (target 2026-08-23)**. Every claim in this README is either reproducible now or explicitly marked as planned — numbers will only ever come from [LoreBench](docs/prd/PRD-F7-lorebench.md) logs.
+> ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)). The CLI, MCP server, hooks, and GitHub Actions ship with **v0.1.0 (target 2026-08-23)**. Every claim in this README is either reproducible now or explicitly marked as planned — numbers will only ever come from [AnnalsBench](docs/prd/PRD-F7-annalsbench.md) logs.
 
 ---
 
@@ -20,13 +20,13 @@ AI coding agents now write a large share of commits. While working, an agent hol
 
 The next session (or the next agent, or the next teammate) re-derives everything — and routinely **re-proposes the exact approach that was rejected three weeks ago**, because nothing recorded that it was rejected, or why.
 
-For forty years this was called the *design rationale capture problem*, and it stayed unsolved for one reason: humans wouldn't pay the cost of writing the rationale down. **Agents change the economics.** The rationale is already sitting in the agent's context at commit time. Serializing it costs a few hundred tokens. Lore is the protocol for where to put it.
+For forty years this was called the *design rationale capture problem*, and it stayed unsolved for one reason: humans wouldn't pay the cost of writing the rationale down. **Agents change the economics.** The rationale is already sitting in the agent's context at commit time. Serializing it costs a few hundred tokens. Annals is the protocol for where to put it.
 
 ## The idea in three lines
 
 1. **Capture is free** — the agent already knows why; it writes structured *git trailers* into the commit it was making anyway. A verifier rejects any trailer that can't cite its evidence.
 2. **Consumption is push, not pull** — when an agent touches a file, the active constraints and past rejections for *that path* are injected automatically. Nobody has to remember to ask.
-3. **Git is the single source of truth** — atoms live in commit messages and `refs/notes/lore`. Everything else (index, dashboards) is a derived, throwaway cache. `git clone` carries the entire memory.
+3. **Git is the single source of truth** — atoms live in commit messages and `refs/notes/annals`. Everything else (index, dashboards) is a derived, throwaway cache. `git clone` carries the entire memory.
 
 ## What it looks like
 
@@ -37,18 +37,18 @@ The auth service returns inconsistent status codes on token
 expiry, so the interceptor catches all 4xx responses and
 triggers an inline refresh.
 
-Constraint: Auth service does not support token introspection
-Constraint-Id: c-auth-01
-Rejected: Extend token TTL to 24h | security policy violation
-Rejected: Background refresh on timer | race condition
-Confidence: high
-Scope-risk: narrow
-Reversibility: clean
-Directive: 4xx handling is intentionally broad
+Limit: Auth service does not support token introspection
+Record-Id: c-auth-01
+Ruled-out: Extend token TTL to 24h | security policy violation
+Ruled-out: Background refresh on timer | race condition
+Certainty: high
+Blast: narrow
+Undo: clean
+Warn: 4xx handling is intentionally broad
   -- do not narrow without verifying upstream behavior
-Tested: Single expired token refresh (unit)
-Not-tested: Auth service cold-start > 500ms behavior
-Lore-Version: 2.0
+Verified: Single expired token refresh (unit)
+Unverified: Auth service cold-start > 500ms behavior
+Annals-Version: 2.0
 ```
 
 This is a normal git commit. No tool is required to write it, and git itself can parse it — trailers are a native git feature (`Signed-off-by`, Gerrit's `Change-Id`, and Conventional Commits footers are the same mechanism).
@@ -57,20 +57,20 @@ This is a normal git commit. No tool is required to write it, and git itself can
 
 | Trailer | Purpose | Consumed by |
 |---|---|---|
-| `Constraint:` | External limit that shaped the decision | injection, `lore constraints` |
-| `Constraint-Id:` | Stable identity — anchor for supersession | lifecycle fold |
-| `Rejected:` | `alternative \| reason` — what was tried and dropped | **`lore guard`** (re-proposal blocking) |
-| `Confidence:` | `high` \| `medium` \| `low` | review routing |
-| `Scope-risk:` | `narrow` \| `moderate` \| `broad` | approval gate routing |
-| `Reversibility:` | `clean` \| `moderate` \| `difficult` | approval gate routing |
-| `Directive:` | Warning for future modifiers | injection (trust-graded) |
-| `Tested:` / `Not-tested:` | What was / wasn't verified | coverage queries |
-| `Related:` | Linked commits forming a decision chain | context assembly |
-| `Supersedes:` | Retires an earlier Constraint-Id | **stale engine** |
+| `Limit:` | External limit that shaped the decision | injection, `annals constraints` |
+| `Record-Id:` | Stable identity — anchor for supersession | lifecycle fold |
+| `Ruled-out:` | `alternative \| reason` — what was tried and dropped | **`annals guard`** (re-proposal blocking) |
+| `Certainty:` | `firm` \| `tentative` \| `guess` | review routing |
+| `Blast:` | `local` \| `module` \| `system` | approval gate routing |
+| `Undo:` | `easy` \| `costly` \| `permanent` | approval gate routing |
+| `Warn:` | Warning for future modifiers | injection (trust-graded) |
+| `Verified:` / `Unverified:` | What was / wasn't verified | coverage queries |
+| `Follows:` | Linked commits forming a decision chain | context assembly |
+| `Supersedes:` | Retires an earlier Record-Id | **stale engine** |
 | `Expires:` | Date or condition that ends a constraint | stale engine |
 | `Evidence:` | Link from claim to proof (`path#anchor`) | harvest verifier |
 | `Provenance:` | `authored` \| `squashed-from <sha>` \| `reconstructed` | **trust grading** |
-| `Decision-Id:` / `Lore-Version:` / `X-*` | Identity, versioning, extensions | tooling |
+| `Decision-Id:` / `Annals-Version:` / `X-*` | Identity, versioning, extensions | tooling |
 
 Design rule (["no dead fields"](docs/adr/ADR-0006-push-injection.md)): every trailer has at least one consumer route — a query, a gate, or an injection rule. Vocabulary that nothing reads gets deleted from the spec.
 
@@ -80,13 +80,13 @@ The protocol needs zero tooling. Write trailers in your commits (or let your age
 
 ```bash
 # extract constraint values, machine-readable — git's native trailer parser
-git log --format='%h %(trailers:key=Constraint,valueonly,separator=%x3B)'
+git log --format='%h %(trailers:key=Limit,valueonly,separator=%x3B)'
 
 # full parsed trailer block of a commit
 git log -1 --format=%B <sha> | git interpret-trailers --parse
 
 # constraints that touched a path (rename-aware)
-git log --follow --format='%h %(trailers:key=Constraint,valueonly)' -- src/auth/
+git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
 > Note: use `%(trailers:...)`, not `--grep`. Text-grepping matches prose false-positives and breaks on multiline folding — we [reproduced this failure mode](docs/tickets/F2-core-cli.md) and the CLI exists partly to make it impossible.
@@ -95,29 +95,29 @@ git log --follow --format='%h %(trailers:key=Constraint,valueonly)' -- src/auth/
 
 | Layer | Deliverable | Milestone |
 |---|---|---|
-| **L0 Protocol** | `SPEC.md`, JSON Schema, conformance fixtures, route contract tests | [M1](https://github.com/MongLong0214/lore/milestone/1) |
-| **L1 Core CLI** | `lore validate / context / constraints / rejected / directives / stale / index / doctor` — SQLite incremental index, `--no-index` fallback, 100k-commit p50 < 100ms target | [M2](https://github.com/MongLong0214/lore/milestone/2) |
-| **L1 Survival** | `lore squash-preserve` (squash-merge inheritance), `refs/notes/lore` mirror (rebase survival), `--follow` by default | [M2](https://github.com/MongLong0214/lore/milestone/2) |
-| **L2 Agent Fabric** | `lore mcp` (MCP server), auto-injection hook (path-scoped, budgeted, deterministic), transcript harvesting + **evidence-checking verifier**, `lore guard`, clean-room skills | [M3](https://github.com/MongLong0214/lore/milestone/3) |
-| **L3 Trust** | provenance × lifecycle grading, **Directive demotion** (unverified directives render as *claims*, never instructions), injection heuristics, secret guard | [M3](https://github.com/MongLong0214/lore/milestone/3) |
-| **L4 Org** | GitHub Actions: PR lint + active-constraints comment, squash-inheritance automation — runs on *your* CI, zero external calls | [M4](https://github.com/MongLong0214/lore/milestone/4) |
-| **L5 LoreBench** | re-proposal rate (Lore on/off), noise ablations, cost-per-accepted-atom — all README numbers regenerate from logs | [M1](https://github.com/MongLong0214/lore/milestone/1) / [M4](https://github.com/MongLong0214/lore/milestone/4) |
+| **L0 Protocol** | `SPEC.md`, JSON Schema, conformance fixtures, route contract tests | [M1](https://github.com/MongLong0214/annals/milestone/1) |
+| **L1 Core CLI** | `annals validate / context / constraints / rejected / directives / stale / index / doctor` — SQLite incremental index, `--no-index` fallback, 100k-commit p50 < 100ms target | [M2](https://github.com/MongLong0214/annals/milestone/2) |
+| **L1 Survival** | `annals squash-preserve` (squash-merge inheritance), `refs/notes/annals` mirror (rebase survival), `--follow` by default | [M2](https://github.com/MongLong0214/annals/milestone/2) |
+| **L2 Agent Fabric** | `annals mcp` (MCP server), auto-injection hook (path-scoped, budgeted, deterministic), transcript harvesting + **evidence-checking verifier**, `annals guard`, clean-room skills | [M3](https://github.com/MongLong0214/annals/milestone/3) |
+| **L3 Trust** | provenance × lifecycle grading, **Warn demotion** (unverified directives render as *claims*, never instructions), injection heuristics, secret guard | [M3](https://github.com/MongLong0214/annals/milestone/3) |
+| **L4 Org** | GitHub Actions: PR lint + active-constraints comment, squash-inheritance automation — runs on *your* CI, zero external calls | [M4](https://github.com/MongLong0214/annals/milestone/4) |
+| **L5 AnnalsBench** | re-proposal rate (Annals on/off), noise ablations, cost-per-accepted-atom — all README numbers regenerate from logs | [M1](https://github.com/MongLong0214/annals/milestone/1) / [M4](https://github.com/MongLong0214/annals/milestone/4) |
 
-Full plan: [ADRs](docs/adr/) · [PRDs](docs/prd/) · [ticket specs](docs/tickets/TICKETS.md) · [issues](https://github.com/MongLong0214/lore/issues)
+Full plan: [ADRs](docs/adr/) · [PRDs](docs/prd/) · [ticket specs](docs/tickets/TICKETS.md) · [issues](https://github.com/MongLong0214/annals/issues)
 
 ## Why not just…
 
 | Alternative | Why it isn't enough |
 |---|---|
 | **ADRs / wikis / Notion** | Separate files drift from code and rot. Trailers live in the same commit object as the diff — desync is structurally impossible, and `git clone` carries them. |
-| **RAG over Slack/docs** | Read-time search over low-signal artifacts. Lore *generates* high-signal knowledge at write time, bound to the exact code it explains. |
-| **Agent memory frameworks** (vector stores) | Uncurated episodic memory measurably *hurts* SE agents (noise). Lore atoms are typed, evidence-verified, path-scoped, and lifecycle-managed — each a direct answer to a published failure mode. |
-| **Static context files** (CLAUDE.md / AGENTS.md) | Global dumps, mixed empirical results. Lore injects *per-path*, *graded*, *active-only* context under a token budget. |
+| **RAG over Slack/docs** | Read-time search over low-signal artifacts. Annals *generates* high-signal knowledge at write time, bound to the exact code it explains. |
+| **Agent memory frameworks** (vector stores) | Uncurated episodic memory measurably *hurts* SE agents (noise). Annals atoms are typed, evidence-verified, path-scoped, and lifecycle-managed — each a direct answer to a published failure mode. |
+| **Static context files** (CLAUDE.md / AGENTS.md) | Global dumps, mixed empirical results. Annals injects *per-path*, *graded*, *active-only* context under a token budget. |
 | **A knowledge-base SaaS** | Your decision history shouldn't live in someone else's database. Here there is no server to die and no subscription to cancel — the repo *is* the database. |
 
 ## Security model (honest version)
 
-Commit messages become an instruction channel for agents — which makes them an injection surface. Lore v0.1 ships the minimum honest defense: **unverified `Directive:` trailers are demoted to "claims"** in every injection and query output (external contributions always demote), injection-pattern heuristics quarantine hostile atoms, and a secret guard blocks credentials from being permanently inscribed. Cryptographic signing (sigstore) is [planned](https://github.com/MongLong0214/lore/issues/28), and the grading model is designed so signatures slot in without breaking consumers.
+Commit messages become an instruction channel for agents — which makes them an injection surface. Annals v0.1 ships the minimum honest defense: **unverified `Warn:` trailers are demoted to "claims"** in every injection and query output (external contributions always demote), injection-pattern heuristics quarantine hostile atoms, and a secret guard blocks credentials from being permanently inscribed. Cryptographic signing (sigstore) is [planned](https://github.com/MongLong0214/annals/issues/28), and the grading model is designed so signatures slot in without breaking consumers.
 
 ## Design principles
 
@@ -130,17 +130,17 @@ Commit messages become an instruction channel for agents — which makes them an
 
 **Is it really free?** Yes — MIT, everything, forever. No cloud version exists or is planned. Sustainability comes from standard adoption, not sales ([ADR](docs/adr/ADR-0001-scope-v010.md)).
 
-**Which agents does it work with?** Anything that can run shell commands reads the protocol today. v0.1.0 integration targets: Claude Code (hooks + skills) and any MCP-capable agent via `lore mcp`. The commit format works with every agent that writes commits, including none (humans welcome).
+**Which agents does it work with?** Anything that can run shell commands reads the protocol today. v0.1.0 integration targets: Claude Code (hooks + skills) and any MCP-capable agent via `annals mcp`. The commit format works with every agent that writes commits, including none (humans welcome).
 
-**We squash-merge everything. Doesn't that destroy the trailers?** By default, yes — we reproduced it. That's why `lore squash-preserve` + the notes mirror + the GitHub Action exist ([ADR-0004](docs/adr/ADR-0004-workflow-survival.md)).
+**We squash-merge everything. Doesn't that destroy the trailers?** By default, yes — we reproduced it. That's why `annals squash-preserve` + the notes mirror + the GitHub Action exist ([ADR-0004](docs/adr/ADR-0004-workflow-survival.md)).
 
-**What about huge repos?** The index is an incremental SQLite cache under `.git/lore/`, rebuildable with one command, never committed. Target: p50 < 100ms path queries on 100k commits — measured in CI, not promised.
+**What about huge repos?** The index is an incremental SQLite cache under `.git/annals/`, rebuildable with one command, never committed. Target: p50 < 100ms path queries on 100k commits — measured in CI, not promised.
 
-**Where did this come from?** The protocol concept builds on the *Lore* paper (Stetsenko, [arXiv:2603.15566](https://arxiv.org/abs/2603.15566)) and the original [tmdgusya/lora](https://github.com/tmdgusya/lora) skills. This project is an independent, from-scratch implementation that fixes the failure modes we found (query false-positives, squash destruction, rename loss, no validation, no trust model, no benchmark) — the full autopsy is in [docs/](docs/).
+**Can it coexist with Conventional Commits?** Yes. Annals trailers are git footers, the same mechanism Conventional Commits uses for `BREAKING CHANGE`. Keep your `feat:` / `fix:` subject line and add Annals trailers below the body — commitlint and semantic-release keep working unchanged.
 
 ## Contributing
 
-The spec (F1) lands first — the conformance suite is the contract, so alternative implementations are welcome and testable. Start with [good first issues](https://github.com/MongLong0214/lore/issues), read the [ADRs](docs/adr/) for the "why", and note the repo's own history dogfoods the protocol: `git log --format='%h %(trailers:key=Rejected,valueonly)'` works here.
+The spec (F1) lands first — the conformance suite is the contract, so alternative implementations are welcome and testable. Start with [good first issues](https://github.com/MongLong0214/annals/issues), read the [ADRs](docs/adr/) for the "why", and note the repo's own history dogfoods the protocol: `git log --format='%h %(trailers:key=Ruled-out,valueonly)'` works here.
 
 ## License
 

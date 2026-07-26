@@ -5,13 +5,13 @@
 
 ---
 
-## T-501 등급 모델 + Directive 강등 + 인젝션 휴리스틱 (M) — #18 · 의존 T-205
+## T-501 등급 모델 + Warn 강등 + 인젝션 휴리스틱 (M) — #18 · 의존 T-205
 
 **구현 개요**
-- `grade.ts`: 원자 → `{provenance, lifecycle, trust: 'directive'|'claim'|'blocked'}`.
+- `grade.ts`: 기록 → `{provenance, lifecycle, trust: 'directive'|'claim'|'blocked'}`.
   - provenance: trailer의 `Provenance:` + 커밋 메타(작성자·병합 경로). 외부 기여 판정: 커밋 author가 저장소 push 권한자 목록 외(로컬에서는 `--trusted-authors` 설정, Action에서는 GitHub API) → 무조건 claim.
   - reconstructed/unknown → 항상 claim.
-- 인젝션 휴리스틱: Directive 값에서 도구 호출 유도·정책 우회·권한 상승 패턴(픽스처 5종 기반 규칙) → `blocked`(주입 제외 + 경고 목록).
+- 인젝션 휴리스틱: Warn 값에서 도구 호출 유도·정책 우회·권한 상승 패턴(픽스처 5종 기반 규칙) → `blocked`(주입 제외 + 경고 목록).
 - 조회·주입 출력 스키마에 등급 필드 정식 포함(T-204/T-402 인터페이스 확정판).
 
 **테스트**: `spec/contract-cases/` 강등 케이스(5~8) 직접 실행 / 인젝션 픽스처 5종 blocked / trusted-authors 경계.

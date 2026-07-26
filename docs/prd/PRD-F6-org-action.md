@@ -13,8 +13,8 @@
 - squash-merge 시 Action이 trailer 승계를 자동 수행해 지식 소실이 없다.
 
 ## 요구사항
-1. Action 1: `lore validate` + 대상 경로 활성 제약 요약을 PR 코멘트로 게시(사용자 GITHUB_TOKEN, 외부 전송 없음).
-2. Action 2: 병합 이벤트에서 `lore squash-preserve` 실행 + notes push.
+1. Action 1: `annals validate` + 대상 경로 활성 제약 요약을 PR 코멘트로 게시(사용자 GITHUB_TOKEN, 외부 전송 없음).
+2. Action 2: 병합 이벤트에서 `annals squash-preserve` 실행 + notes push.
 3. 배포: 이 레포의 `action.yml` 재사용 워크플로우로 제공, README 설치 3줄.
 
 ## AC

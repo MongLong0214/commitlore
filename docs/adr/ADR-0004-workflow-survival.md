@@ -8,11 +8,11 @@
 
 ## Decision
 
-1. **squash 승계**: `lore squash-preserve`가 병합 전 브랜치 커밋들의 trailer를 집계해 (a) 병합 커밋 메시지의 정식 trailer 블록으로 재기록하고 (b) 동시에 notes 미러에 원자 단위로 부착한다. GitHub Action(T-602)이 이를 PR 병합 시 자동 실행.
-2. **notes 미러**: `refs/notes/lore`에 원자를 커밋 SHA 기준으로 미러링 — rebase/amend로 히스토리가 재작성돼도 원자가 생존하는 2차 채널.
+1. **squash 승계**: `annals squash-preserve`가 병합 전 브랜치 커밋들의 trailer를 집계해 (a) 병합 커밋 메시지의 정식 trailer 블록으로 재기록하고 (b) 동시에 notes 미러에 기록 단위로 부착한다. GitHub Action(T-602)이 이를 PR 병합 시 자동 실행.
+2. **notes 미러**: `refs/notes/annals`에 원자를 커밋 SHA 기준으로 미러링 — rebase/amend로 히스토리가 재작성돼도 원자가 생존하는 2차 채널.
 3. **경로 추적**: 모든 경로 스코프 조회는 `--follow` 기본. 승계·미러에는 `Provenance:` trailer로 원본 커밋 SHA를 남긴다.
 
-## Rejected
+## Ruled-out
 
 - 서버 측 보존(외부 DB) | ADR-0003 위반
 - squash 금지 정책 강요 | 팀 워크플로우를 프로토콜이 강제할 수 없음 — 도구가 워크플로우에 적응해야 한다

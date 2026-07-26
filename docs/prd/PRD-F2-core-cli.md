@@ -6,11 +6,11 @@
 논문이 명세만 한 CLI를 실제로 배달한다. 오탐 0(D2), 전 히스토리 조회, 형식 오류의 기계 거부(D5), 제약 라이프사이클(D6).
 
 ## 비목표
-coverage 명령(Backlog), 인터랙티브 commit 빌더(Backlog — `lore commit --from-json`은 포함).
+coverage 명령(Backlog), 인터랙티브 commit 빌더(Backlog — `annals commit --from-json`은 포함).
 
 ## 사용자 스토리
-- 에이전트로서, `lore context src/auth/`로 그 경로의 활성 결정사를 1초 안에 받는다.
-- CI로서, `lore validate` 비정상 종료 코드로 기형 trailer 커밋을 거부한다.
+- 에이전트로서, `annals context src/auth/`로 그 경로의 활성 결정사를 1초 안에 받는다.
+- CI로서, `annals validate` 비정상 종료 코드로 기형 trailer 커밋을 거부한다.
 
 ## 요구사항
 1. 파서: `git interpret-trailers --parse` 위임 + 스키마 검증. `--grep` 스캔 금지.
