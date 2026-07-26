@@ -140,7 +140,7 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
     const tokens = sumTokens(parsed?.usage);
 
     if (outcome.timedOut) {
-      return { transcript, turns, tokens, stoppedBy: "error", error: `timed out after ${request.timeoutMs}ms` };
+      return { transcript, turns, tokens, stoppedBy: "timeout", error: `timed out after ${request.timeoutMs}ms` };
     }
     if (outcome.code !== 0 || parsed === null || parsed.is_error === true) {
       const detail = parsed === null ? outcome.stderr.trim().slice(0, 500) : String(parsed.subtype ?? "is_error");
@@ -153,9 +153,11 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       };
     }
 
-    // Without --max-turns the CLI cannot be capped in-flight, so the budget is
-    // enforced after the fact and the row records why the run ended.
-    const stoppedBy = turns >= request.maxTurns ? "turns" : tokens >= request.maxTokens ? "tokens" : "completed";
+    // The installed CLI has no --max-turns (probed above), so the turn budget
+    // cannot be applied in flight. The run ends on its own and the overrun is
+    // observed here -- hence `over-turns`, not `turns`: nothing stopped it.
+    const stoppedBy =
+      turns >= request.maxTurns ? "over-turns" : tokens >= request.maxTokens ? "over-tokens" : "completed";
     return { transcript, turns, tokens, stoppedBy };
   };
 

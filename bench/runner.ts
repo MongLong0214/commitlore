@@ -178,7 +178,7 @@ const main = async (): Promise<number> => {
             violations: 0,
             turns: 0,
             tokens: 0,
-            stopped_by: "tokens",
+            stopped_by: "over-tokens",
             duration_ms: 0,
             driver: driver.name,
             started_at: startedAt,

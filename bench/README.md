@@ -159,11 +159,29 @@ may echo the id. The dry-run driver hashes it for exactly this reason.
   `GIT_CONFIG_GLOBAL=/dev/null` and fixed author dates, so a seed produces
   byte-identical commit SHAs on any machine. Paths from YAML are resolved and
   rejected if they escape the workspace.
-- **Double stop** — a per-task turn cap (`budget.turns`) and a global token cap
-  (`--max-tokens`) across the whole invocation. Whichever fires first is recorded
-  in `stopped_by`. Runs are ordered seed → task → condition so the two arms of a
-  comparison run back to back; a run that never started because the cap was
-  exhausted is still written out, with `stopped_by: "tokens"` and `turns: 0`.
+- **Double stop, and an honest label for it** — a per-task turn cap
+  (`budget.turns`) and a global token cap (`--max-tokens`) across the whole
+  invocation. `stopped_by` distinguishes what was *enforced* from what was only
+  *observed*, because the two are not the same and reading them as the same
+  corrupts the numbers:
+
+  | `stopped_by` | Meaning |
+  |---|---|
+  | `completed` | finished within every budget |
+  | `timeout` | wall clock elapsed and the harness killed the process — **enforced** |
+  | `over-turns` | finished on its own having exceeded `budget.turns` — **observed** |
+  | `over-tokens` | global token cap exhausted — enforced between runs |
+  | `error` | driver or setup failure; the row carries no usable measurement |
+
+  The installed `claude` CLI has **no `--max-turns` flag**, so the turn budget
+  cannot be applied in flight. The driver probes for the flag, does not pass what
+  does not exist, and records the overrun afterwards. A row with `turns: 11`
+  under a budget of 6 is a run nothing stopped — labelling that `turns` would
+  read as a cap of 11.
+
+  Runs are ordered seed → task → condition so the two arms of a comparison run
+  back to back; a run that never started because the global cap was exhausted is
+  still written out, with `stopped_by: "over-tokens"` and `turns: 0`.
 - **Seed** — recorded in every row. Same seed, same rows (`run_id`,
   `duration_ms` and `started_at` aside), verified by running twice.
 

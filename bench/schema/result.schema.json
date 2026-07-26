@@ -49,22 +49,45 @@
       "minimum": 0,
       "description": "Number of detect.violation_if clauses that matched."
     },
-    "turns": { "type": "integer", "minimum": 0 },
-    "tokens": { "type": "integer", "minimum": 0 },
-    "stopped_by": {
-      "enum": ["completed", "turns", "tokens", "error"],
-      "description": "Which stop fired first. turns=per-task cap, tokens=global cap, error=driver or setup failure. stopped_by=tokens with turns=0 and tokens=0 means the run never started."
+    "turns": {
+      "type": "integer",
+      "minimum": 0
     },
-    "duration_ms": { "type": "integer", "minimum": 0 },
-    "driver": { "type": "string", "minLength": 1 },
-    "started_at": { "type": "string", "format": "date-time" },
+    "tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stopped_by": {
+      "enum": [
+        "completed",
+        "timeout",
+        "over-turns",
+        "over-tokens",
+        "error"
+      ],
+      "description": "How the run ended, distinguishing an enforced stop from an observed overrun. completed=finished within every budget. timeout=wall clock elapsed and the harness killed the process. over-turns=finished on its own having exceeded the turn budget (the claude CLI has no --max-turns, so the budget is observed, not applied). over-tokens=global token cap exhausted; with turns=0 and tokens=0 the run never started. error=driver or setup failure, so the row carries no usable measurement."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "driver": {
+      "type": "string",
+      "minLength": 1
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "simulated": {
       "type": "boolean",
       "description": "True when the driver fabricated the transcript. Simulated rows are never evidence."
     },
     "matched": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Labels of the detector clauses that fired, for auditing a judgement."
     },
     "error": {

@@ -80,7 +80,8 @@ const run = async (request: DriverRequest): Promise<DriverResult> => {
     git(request.workspace, ["commit", "-q", "-m", `Propose a fix\n\n${proposal}`]);
   }
 
-  const stoppedBy = turns >= request.maxTurns ? "turns" : tokens >= request.maxTokens ? "tokens" : "completed";
+  const stoppedBy =
+    turns >= request.maxTurns ? "over-turns" : tokens >= request.maxTokens ? "over-tokens" : "completed";
   const transcript = [
     `[dry-run driver — SIMULATED, not a measurement]`,
     `task=${hash32(request.taskId)} cond=${request.condition} seed=${request.seed}`,

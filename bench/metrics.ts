@@ -97,7 +97,13 @@ const mean = (values: readonly number[]): number | null =>
 const ratio = (numerator: number, denominator: number): number | null =>
   denominator === 0 ? null : numerator / denominator;
 
-const emptyStopCounts = (): Record<StopReason, number> => ({ completed: 0, turns: 0, tokens: 0, error: 0 });
+const emptyStopCounts = (): Record<StopReason, number> => ({
+  completed: 0,
+  timeout: 0,
+  "over-turns": 0,
+  "over-tokens": 0,
+  error: 0,
+});
 
 const summarizeCondition = (cond: string, rows: readonly RunRecord[]): ConditionSummary => {
   const stopped = emptyStopCounts();
@@ -172,8 +178,9 @@ export const formatSummary = (summary: Summary): string => {
     lines.push(`   mean turns       ${showMean(condition.mean_turns)}`);
     lines.push(`   mean tokens      ${showMean(condition.mean_tokens)}`);
     lines.push(
-      `   stopped_by       completed=${condition.stopped_by.completed} turns=${condition.stopped_by.turns} ` +
-        `tokens=${condition.stopped_by.tokens} error=${condition.stopped_by.error}`,
+      `   stopped_by       completed=${condition.stopped_by.completed} ` +
+        `timeout=${condition.stopped_by.timeout} over-turns=${condition.stopped_by["over-turns"]} ` +
+        `over-tokens=${condition.stopped_by["over-tokens"]} error=${condition.stopped_by.error}`,
     );
     lines.push("");
   }

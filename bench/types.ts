@@ -1,4 +1,20 @@
-export type StopReason = "completed" | "turns" | "tokens" | "error";
+/**
+ * How a run ended.
+ *
+ * The distinction between an *enforced* stop and an *observed* overrun is
+ * deliberate. The installed `claude` CLI has no `--max-turns`, so a per-task
+ * turn budget cannot be applied in flight: the run finishes on its own and the
+ * harness notices afterwards that it went over. Labelling that `turns` read as
+ * "the cap stopped it", which is how a row with turns=11 under a cap of 6 gets
+ * misread as a cap of 11.
+ *
+ * - `completed`   — the agent finished within every budget
+ * - `timeout`     — wall clock elapsed and the harness killed the process (enforced)
+ * - `over-turns`  — finished on its own, having exceeded the turn budget (observed)
+ * - `over-tokens` — the global token cap was exhausted (enforced between runs, observed within one)
+ * - `error`       — driver or setup failure; the run produced no usable measurement
+ */
+export type StopReason = "completed" | "timeout" | "over-turns" | "over-tokens" | "error";
 
 export type MatcherKind = "literal" | "regex";
 
