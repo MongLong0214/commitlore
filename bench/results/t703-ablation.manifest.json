@@ -1,0 +1,52 @@
+{
+  "status": "final",
+  "status_note": "21 of 21 runs, clean exit, zero isolation warnings, zero errors, zero timeouts, zero simulated rows, 21 distinct (task, condition) cells with no duplicate. The run executed exactly as designed. `final` describes the run; the result is uninformative, which is a property of the task set rather than of the execution.",
+  "ticket": "T-703 (#24)",
+  "purpose": "Ablation lite: commitlore-on against no-grade and no-lifecycle on a dedicated seven-task fixture set, to attribute behaviour to the grading and lifecycle guarantees rather than to the harness.",
+
+  "results_file": "bench/results/t703-ablation.jsonl",
+  "runner_log": "bench/results/t703-ablation.runner.log",
+  "transcripts": "bench/results/transcripts-ablation/",
+
+  "rows": 21,
+  "planned": 21,
+
+  "matrix": {
+    "tasks": 7,
+    "conditions": ["commitlore-on", "no-grade", "no-lifecycle"],
+    "seeds": [1],
+    "runs": 21
+  },
+
+  "integrity": {
+    "run_ids": ["20260726T101840Z-e3923a"],
+    "rows_per_condition": { "commitlore-on": 7, "no-grade": 7, "no-lifecycle": 7 },
+    "distinct_cells": 21,
+    "duplicate_cells": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "simulated_rows": 0,
+    "isolation_warnings": 0,
+    "runner_exit": 0
+  },
+
+  "model": "claude-haiku-4-5-20251001",
+
+  "result": {
+    "reproposal": { "commitlore-on": "0/7", "no-grade": "0/7", "no-lifecycle": "0/7" },
+    "violation_runs": { "commitlore-on": "2/7", "no-grade": "1/7", "no-lifecycle": "0/7" },
+    "reading": "Every arm is at zero re-proposal, so the arms cannot be told apart on the registered outcome. The ablations remove protections and should therefore raise re-proposal above the baseline; none did, because no arm produced the behaviour at all. All seven tasks are silent in every condition. The violation counts run backwards — the baseline has more than the ablated arms — at n=7 with p = 1.0000 and p = 0.4615, which is noise. Nothing here supports or refutes anything about grading or lifecycle.",
+    "entry_condition_note": "The set was admitted on evidence that each ablation changes the injected payload (0 of 7 inert, verified by byte and by meaning). That is necessary but not sufficient: a payload difference only matters if the task elicits the behaviour being measured. It did not. The sufficient condition is the discriminating property already stated in bench/README.md, and these seven tasks do not meet it any more than the four silent tasks in the primary set do."
+  },
+
+  "not_measured": {
+    "no_scope": "Not run. Inert by construction: bench/context.ts never path-scopes, so the commitlore-on baseline is already unscoped and there is nothing for the arm to remove. The planted off-path record r-lock05 (docs/publishing.md) was confirmed present in the baseline's own payload. Measurable only after #36.",
+    "cpaa": "No denominator. harvest carries no model by design, so its cost is never charged to a bench row; harvest_tokens and verify_tokens are absent from every row. metrics.ts reports undefined_because: not-instrumented rather than inventing a value."
+  },
+
+  "do_not_pool": "This set is a different synthetic repository from bench/tasks. Its commitlore-on arm must never be pooled with, or compared against, the primary matrix's commitlore-on arm.",
+
+  "reproducibility": {
+    "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks-ablation --cond commitlore-on,no-grade,no-lifecycle --seed 1 --driver claude-headless --model claude-haiku-4-5-20251001 --timeout-ms 540000 --max-tokens 2000000 --save-transcripts bench/results/transcripts-ablation --out bench/results/t703-ablation.jsonl"
+  }
+}

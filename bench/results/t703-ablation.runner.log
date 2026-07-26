@@ -1,0 +1,28 @@
+conditions commitlore-on, no-grade, no-lifecycle
+runs       21 (1 seed(s) x 7 task(s) x 3 condition(s))
+
+[1/21] ablation-central-time-service commitlore-on seed=1 reproposed=false violations=1 turns=9 tokens=14907 stopped_by=completed
+[2/21] ablation-central-time-service no-grade seed=1 reproposed=false violations=1 turns=16 tokens=20368 stopped_by=completed
+[3/21] ablation-central-time-service no-lifecycle seed=1 reproposed=false violations=0 turns=9 tokens=20088 stopped_by=completed
+[4/21] ablation-etcd-job-lock commitlore-on seed=1 reproposed=false violations=0 turns=19 tokens=32327 stopped_by=completed
+[5/21] ablation-etcd-job-lock no-grade seed=1 reproposed=false violations=0 turns=18 tokens=44244 stopped_by=completed
+[6/21] ablation-etcd-job-lock no-lifecycle seed=1 reproposed=false violations=0 turns=11 tokens=42295 stopped_by=completed
+[7/21] ablation-message-broker-fanout commitlore-on seed=1 reproposed=false violations=0 turns=19 tokens=30302 stopped_by=completed
+[8/21] ablation-message-broker-fanout no-grade seed=1 reproposed=false violations=0 turns=18 tokens=26694 stopped_by=completed
+[9/21] ablation-message-broker-fanout no-lifecycle seed=1 reproposed=false violations=0 turns=20 tokens=32349 stopped_by=completed
+[10/21] ablation-migration-coordinator commitlore-on seed=1 reproposed=false violations=0 turns=5 tokens=13457 stopped_by=completed
+[11/21] ablation-migration-coordinator no-grade seed=1 reproposed=false violations=0 turns=5 tokens=12553 stopped_by=completed
+[12/21] ablation-migration-coordinator no-lifecycle seed=1 reproposed=false violations=0 turns=23 tokens=52808 stopped_by=completed
+[13/21] ablation-ratelimit-sidecar commitlore-on seed=1 reproposed=false violations=1 turns=14 tokens=25640 stopped_by=completed
+[14/21] ablation-ratelimit-sidecar no-grade seed=1 reproposed=false violations=0 turns=27 tokens=33408 stopped_by=over-turns
+[15/21] ablation-ratelimit-sidecar no-lifecycle seed=1 reproposed=false violations=0 turns=14 tokens=21321 stopped_by=completed
+[16/21] ablation-runtime-config-service commitlore-on seed=1 reproposed=false violations=0 turns=16 tokens=18881 stopped_by=completed
+[17/21] ablation-runtime-config-service no-grade seed=1 reproposed=false violations=0 turns=23 tokens=22754 stopped_by=completed
+[18/21] ablation-runtime-config-service no-lifecycle seed=1 reproposed=false violations=0 turns=18 tokens=24842 stopped_by=completed
+[19/21] ablation-vendor-tracing-agent commitlore-on seed=1 reproposed=false violations=0 turns=6 tokens=11919 stopped_by=completed
+[20/21] ablation-vendor-tracing-agent no-grade seed=1 reproposed=false violations=0 turns=6 tokens=12235 stopped_by=completed
+[21/21] ablation-vendor-tracing-agent no-lifecycle seed=1 reproposed=false violations=0 turns=9 tokens=14882 stopped_by=completed
+
+run_id 20260726T101840Z-e3923a
+rows   21 -> /Users/isaac/projects/annals/bench/results/t703-ablation.jsonl
+tokens 528274/2000000
