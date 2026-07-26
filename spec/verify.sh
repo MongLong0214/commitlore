@@ -108,10 +108,35 @@ for txt in "$SCRIPT_DIR"/fixtures/invalid/*.txt; do
   check_fixture "invalid" "$txt"
 done
 
+# 4. README의 대표 예제는 픽스처와 바이트 단위로 같아야 한다.
+#    README가 자기 스펙을 위반한 채 배포되는 것이 이 프로젝트에서 가장 비싼 결함이다
+#    (실제로 Certainty: high / Blast: narrow / Undo: clean 이 실려 있었고, 셋 다 우리
+#    자신의 거부 픽스처 값이었다). 예제를 픽스처로 승격하고 동기화를 기계로 강제한다.
+README_FIXTURE="$SCRIPT_DIR/fixtures/valid/11-readme-example.txt"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+for readme in "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md; do
+  [ -f "$readme" ] || continue
+  if ! node -e '
+    const fs = require("fs");
+    const md = fs.readFileSync(process.argv[1], "utf8");
+    const fixture = fs.readFileSync(process.argv[2], "utf8");
+    const m = md.match(/```text\n([\s\S]*?)\n```/);
+    if (!m) { console.error("no ```text example block"); process.exit(1); }
+    if (m[1] + "\n" !== fixture) {
+      console.error("README example drifted from spec/fixtures/valid/11-readme-example.txt");
+      process.exit(1);
+    }
+  ' "$readme" "$README_FIXTURE" 2>/tmp/commitlore-readme-err.$$; then
+    fail "$(basename "$readme"): 대표 예제가 픽스처와 다르다 — README가 스펙을 위반할 수 있다"
+    cat /tmp/commitlore-readme-err.$$ >&2
+  fi
+  rm -f /tmp/commitlore-readme-err.$$
+done
+
 if [ "$fail_count" -gt 0 ]; then
   echo "FAILED: $fail_count of $checked_count fixtures" >&2
   exit 1
 fi
 
-echo "OK: $checked_count fixtures"
+echo "OK: $checked_count fixtures + README example sync"
 exit 0

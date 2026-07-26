@@ -38,17 +38,17 @@ expiry, so the interceptor catches all 4xx responses and
 triggers an inline refresh.
 
 Limit: Auth service does not support token introspection
-Record-Id: c-auth-01
+Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
 Ruled-out: Background refresh on timer | race condition
-Certainty: high
-Blast: narrow
-Undo: clean
+Certainty: firm
+Blast: module
+Undo: easy
 Warn: 4xx handling is intentionally broad
   -- do not narrow without verifying upstream behavior
 Verified: Single expired token refresh (unit)
 Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0
+CommitLore-Version: 2.0.0
 ```
 
 这是一个普通的 git 提交。书写无需任何工具，git 自身即可解析 —— trailer 是 git 原生特性（`Signed-off-by`、Gerrit 的 `Change-Id`、Conventional Commits 的 footer 用的是同一机制）。
@@ -70,7 +70,7 @@ CommitLore-Version: 2.0
 | `Expires:` | 约束终止的日期或条件 | 过期引擎 |
 | `Evidence:` | 论断→证据链接（`路径#锚点`） | 收获验证器 |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **信任分级** |
-| `Decision-Id:` / `CommitLore-Version:` / `X-*` | 身份、版本、扩展 | 工具链 |
+| `CommitLore-Version:` / `X-*` | 身份、版本、扩展 | 工具链 |
 
 设计规则（["禁止死字段"](docs/adr/ADR-0006-push-injection.md)）：每个 trailer 至少有一个消费路由 —— 查询、门禁或注入规则。没人读的词汇会从规范中删除。
 
@@ -96,7 +96,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | 层 | 交付物 | 里程碑 |
 |---|---|---|
 | **L0 协议** | `SPEC.md`、JSON Schema、一致性夹具、路由契约测试 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 核心 CLI** | `commitlore validate / context / constraints / rejected / directives / stale / index / doctor` —— SQLite 增量索引、`--no-index` 回退、10 万提交 p50 < 100ms 目标 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
+| **L1 核心 CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` —— SQLite 增量索引、`--no-index` 回退、10 万提交 p50 < 100ms 目标 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L1 存续** | `commitlore squash-preserve`（squash 合并继承）、`refs/notes/commitlore` 镜像（rebase 存活）、默认 `--follow` | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L2 智能体织物** | `commitlore mcp`（MCP 服务器）、自动注入钩子（按路径、限预算、确定性）、transcript 收获 + **证据校验器**、`commitlore guard`、洁净室 skills | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
 | **L3 信任** | provenance × lifecycle 分级、**Warn 降级**（未验证指令只渲染为*主张*，绝不作为指令）、注入启发式、secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |

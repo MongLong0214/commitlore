@@ -38,17 +38,17 @@ expiry, so the interceptor catches all 4xx responses and
 triggers an inline refresh.
 
 Limit: Auth service does not support token introspection
-Record-Id: c-auth-01
+Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
 Ruled-out: Background refresh on timer | race condition
-Certainty: high
-Blast: narrow
-Undo: clean
+Certainty: firm
+Blast: module
+Undo: easy
 Warn: 4xx handling is intentionally broad
   -- do not narrow without verifying upstream behavior
 Verified: Single expired token refresh (unit)
 Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0
+CommitLore-Version: 2.0.0
 ```
 
 이건 평범한 git 커밋입니다. 작성에 도구가 필요 없고 git이 스스로 파싱합니다 — trailer는 git 네이티브 기능입니다(`Signed-off-by`, Gerrit의 `Change-Id`, Conventional Commits footer가 같은 메커니즘).
@@ -70,7 +70,7 @@ CommitLore-Version: 2.0
 | `Expires:` | 제약이 끝나는 날짜·조건 | 스테일 엔진 |
 | `Evidence:` | 주장→증거 링크 (`경로#앵커`) | 수확 검증자 |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **신뢰 등급** |
-| `Decision-Id:` / `CommitLore-Version:` / `X-*` | 신원·버전·확장 | 도구 |
+| `CommitLore-Version:` / `X-*` | 신원·버전·확장 | 도구 |
 
 설계 규칙(["죽은 필드 금지"](docs/adr/ADR-0006-push-injection.md)): 모든 trailer는 소비자 라우트(쿼리·게이트·주입 규칙)를 최소 1개 갖습니다. 아무도 읽지 않는 어휘는 스펙에서 삭제됩니다.
 
@@ -96,7 +96,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | 계층 | 배달물 | 마일스톤 |
 |---|---|---|
 | **L0 Protocol** | `SPEC.md`, JSON Schema, 적합성 픽스처, 라우트 계약 테스트 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 Core CLI** | `commitlore validate / context / constraints / rejected / directives / stale / index / doctor` — SQLite 증분 인덱스, `--no-index` 폴백, 10만 커밋 p50 < 100ms 목표 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
+| **L1 Core CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` — SQLite 증분 인덱스, `--no-index` 폴백, 10만 커밋 p50 < 100ms 목표 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L1 생존** | `commitlore squash-preserve`(squash 병합 승계), `refs/notes/commitlore` 미러(rebase 생존), `--follow` 기본 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L2 Agent Fabric** | `commitlore mcp`(MCP 서버), 자동 주입 훅(경로 스코프·예산·결정론), transcript 수확 + **근거 검증자**, `commitlore guard`, 클린룸 스킬 | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
 | **L3 Trust** | provenance × lifecycle 등급, **Warn 강등**(미검증 지시는 명령이 아닌 *주장*으로만 렌더), 인젝션 휴리스틱, secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |

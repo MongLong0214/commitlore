@@ -26,7 +26,7 @@
   3. `--target`: 병합 커밋 SHA의 notes에 기록 부착(`Provenance: inherited <원본sha>` 개별 표기)
 - Action(T-602)에서 재사용할 수 있게 코어 로직은 함수로 분리.
 
-**테스트**: D3 재현 스크립트를 그대로 테스트화 — squash 후 `constraints -- <path>` 성공 / `rebase -i` 재작성 후 notes 경유 생존 / dedupe·충돌 케이스.
+**테스트**: D3 재현 스크립트를 그대로 테스트화 — squash 후 `commitlore limits -- <path>` 성공 / `rebase -i` 재작성 후 notes 경유 생존 / dedupe·충돌 케이스.
 **AC**: PRD-F3 AC 1·2.
 
 ---

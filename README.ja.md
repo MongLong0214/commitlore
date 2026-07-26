@@ -38,17 +38,17 @@ expiry, so the interceptor catches all 4xx responses and
 triggers an inline refresh.
 
 Limit: Auth service does not support token introspection
-Record-Id: c-auth-01
+Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
 Ruled-out: Background refresh on timer | race condition
-Certainty: high
-Blast: narrow
-Undo: clean
+Certainty: firm
+Blast: module
+Undo: easy
 Warn: 4xx handling is intentionally broad
   -- do not narrow without verifying upstream behavior
 Verified: Single expired token refresh (unit)
 Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0
+CommitLore-Version: 2.0.0
 ```
 
 これは普通の git コミットです。書くのに道具は不要で、git 自身がパースできます — trailer は git ネイティブ機能です（`Signed-off-by`、Gerrit の `Change-Id`、Conventional Commits の footer と同じ仕組み）。
@@ -70,7 +70,7 @@ CommitLore-Version: 2.0
 | `Expires:` | 制約が終わる日付・条件 | stale エンジン |
 | `Evidence:` | 主張→証拠リンク（`パス#アンカー`） | 収穫検証器 |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **信頼グレーディング** |
-| `Decision-Id:` / `CommitLore-Version:` / `X-*` | 同一性・バージョン・拡張 | ツール群 |
+| `CommitLore-Version:` / `X-*` | 同一性・バージョン・拡張 | ツール群 |
 
 設計ルール（[「死にフィールド禁止」](docs/adr/ADR-0006-push-injection.md)）: すべての trailer は最低 1 つの消費ルート（クエリ・ゲート・注入規則）を持ちます。誰も読まない語彙は仕様から削除されます。
 
@@ -96,7 +96,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | レイヤー | 成果物 | マイルストーン |
 |---|---|---|
 | **L0 プロトコル** | `SPEC.md`、JSON Schema、適合性フィクスチャ、ルート契約テスト | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 コア CLI** | `commitlore validate / context / constraints / rejected / directives / stale / index / doctor` — SQLite 増分インデックス、`--no-index` フォールバック、10 万コミット p50 < 100ms 目標 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
+| **L1 コア CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` — SQLite 増分インデックス、`--no-index` フォールバック、10 万コミット p50 < 100ms 目標 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L1 生存** | `commitlore squash-preserve`（squash マージ継承）、`refs/notes/commitlore` ミラー（rebase 生存）、`--follow` デフォルト | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L2 エージェントファブリック** | `commitlore mcp`（MCP サーバー）、自動注入フック（パススコープ・予算制・決定論的）、transcript 収穫 + **証拠検証器**、`commitlore guard`、クリーンルーム skills | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
 | **L3 信頼** | provenance × lifecycle グレーディング、**Warn 降格**（未検証の指示は*主張*としてのみレンダリング、決して命令にしない）、注入ヒューリスティクス、secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |

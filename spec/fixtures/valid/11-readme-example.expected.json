@@ -1,0 +1,50 @@
+{
+  "description": "README의 대표 예제 커밋. README가 자기 스펙을 위반하지 않는지 기계로 강제한다 (spec/verify.sh가 README 원문과 바이트 일치까지 확인).",
+  "trailers": [
+    {
+      "key": "Limit",
+      "value": "Auth service does not support token introspection"
+    },
+    {
+      "key": "Record-Id",
+      "value": "r-4b7e21"
+    },
+    {
+      "key": "Ruled-out",
+      "value": "Extend token TTL to 24h | security policy violation"
+    },
+    {
+      "key": "Ruled-out",
+      "value": "Background refresh on timer | race condition"
+    },
+    {
+      "key": "Certainty",
+      "value": "firm"
+    },
+    {
+      "key": "Blast",
+      "value": "module"
+    },
+    {
+      "key": "Undo",
+      "value": "easy"
+    },
+    {
+      "key": "Warn",
+      "value": "4xx handling is intentionally broad -- do not narrow without verifying upstream behavior"
+    },
+    {
+      "key": "Verified",
+      "value": "Single expired token refresh (unit)"
+    },
+    {
+      "key": "Unverified",
+      "value": "Auth service cold-start > 500ms behavior"
+    },
+    {
+      "key": "CommitLore-Version",
+      "value": "2.0.0"
+    }
+  ],
+  "canonical": "Limit: Auth service does not support token introspection\nRuled-out: Extend token TTL to 24h | security policy violation\nRuled-out: Background refresh on timer | race condition\nWarn: 4xx handling is intentionally broad -- do not narrow without verifying upstream behavior\nBlast: module\nUndo: easy\nCertainty: firm\nVerified: Single expired token refresh (unit)\nUnverified: Auth service cold-start > 500ms behavior\nRecord-Id: r-4b7e21\nCommitLore-Version: 2.0.0\n"
+}

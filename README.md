@@ -38,17 +38,17 @@ expiry, so the interceptor catches all 4xx responses and
 triggers an inline refresh.
 
 Limit: Auth service does not support token introspection
-Record-Id: c-auth-01
+Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
 Ruled-out: Background refresh on timer | race condition
-Certainty: high
-Blast: narrow
-Undo: clean
+Certainty: firm
+Blast: module
+Undo: easy
 Warn: 4xx handling is intentionally broad
   -- do not narrow without verifying upstream behavior
 Verified: Single expired token refresh (unit)
 Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0
+CommitLore-Version: 2.0.0
 ```
 
 This is a normal git commit. No tool is required to write it, and git itself can parse it — trailers are a native git feature (`Signed-off-by`, Gerrit's `Change-Id`, and Conventional Commits footers are the same mechanism).
@@ -70,7 +70,7 @@ This is a normal git commit. No tool is required to write it, and git itself can
 | `Expires:` | Date or condition that ends a constraint | stale engine |
 | `Evidence:` | Link from claim to proof (`path#anchor`) | harvest verifier |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **trust grading** |
-| `Decision-Id:` / `CommitLore-Version:` / `X-*` | Identity, versioning, extensions | tooling |
+| `CommitLore-Version:` / `X-*` | Identity, versioning, extensions | tooling |
 
 Design rule (["no dead fields"](docs/adr/ADR-0006-push-injection.md)): every trailer has at least one consumer route — a query, a gate, or an injection rule. Vocabulary that nothing reads gets deleted from the spec.
 
@@ -96,7 +96,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | Layer | Deliverable | Milestone |
 |---|---|---|
 | **L0 Protocol** | `SPEC.md`, JSON Schema, conformance fixtures, route contract tests | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 Core CLI** | `commitlore validate / context / constraints / rejected / directives / stale / index / doctor` — SQLite incremental index, `--no-index` fallback, 100k-commit p50 < 100ms target | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
+| **L1 Core CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` — SQLite incremental index, `--no-index` fallback, 100k-commit p50 < 100ms target | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L1 Survival** | `commitlore squash-preserve` (squash-merge inheritance), `refs/notes/commitlore` mirror (rebase survival), `--follow` by default | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
 | **L2 Agent Fabric** | `commitlore mcp` (MCP server), auto-injection hook (path-scoped, budgeted, deterministic), transcript harvesting + **evidence-checking verifier**, `commitlore guard`, clean-room skills | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
 | **L3 Trust** | provenance × lifecycle grading, **Warn demotion** (unverified directives render as *claims*, never instructions), injection heuristics, secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
