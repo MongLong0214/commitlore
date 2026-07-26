@@ -310,6 +310,21 @@ are noise in *that* set's `commitlore-on`, by construction and at a known size.
 Five primary tasks abstain rather than counting as zero or as one: their prompts
 name no file at all, so this method cannot decide them and does not pretend to.
 
+Reading the records instead of extracting paths decides all ten, and they agree:
+every record in every primary task concerns the subject its own prompt is about,
+including the five this method abstains on. Two look like exceptions and are
+not — `reproposal-prisma-orm`'s records sit under the `src/db/` directory its
+prompt names, and `reproposal-jwt-sessions` seeds `r-5b8c31`, a `reconstructed`
+record chained by `Follows:` whose purpose is to exercise grading rather than to
+add scope noise.
+
+The share column above is measured over **assembled payload** characters.
+`PREREGISTRATION.md` §11 quotes 16.6% for the same set because it measures
+**trailer-block characters in the fixtures** (SPEC §2.1 B1), which is
+reproducible without running the injector. The two are near but not
+interchangeable — the payload adds framing and drops whatever grading and
+lifecycle withhold — so name the basis whenever the number is quoted.
+
 A caution for anyone repeating this, because the first attempt got it wrong in
 both directions at once and reported 74%. Counting a task whose prompt names no
 file as *fully* off-path inflates it; matching record files against prompt paths
@@ -912,20 +927,34 @@ Fisher exact also treats runs as independent, while the design is paired by
 registered, and on paired data it is the conservative choice rather than the
 most powerful one.
 
-### Two things that make the measured effect a floor
+### What makes the measured effect a floor — one thing, not two
 
-Both push the same way, and neither is a reason to adjust a number upward:
+**Silent tasks.** A task where neither arm re-proposes contributes nothing and
+dilutes the difference toward zero. A significant result therefore understates
+the effect, and a null result is weaker evidence against the hypothesis than it
+looks. This is a limit on the number, never a correction to it.
 
-- **Silent tasks.** A task where neither arm re-proposes contributes nothing and
-  dilutes the difference toward zero.
-- **Irrelevant records in the injected context.** The treatment arm has been
-  observed receiving records scoped to paths the task never touches. That is
-  noise the control arm never sees, so it works against the treatment arm — a
-  correctly scoped injector would show a larger effect, not a smaller one.
+There was briefly a second floor argument here — that the treatment arm receives
+records scoped to paths the task never touches, which would be noise only it
+pays for. **It was withdrawn before any result was seen, because it is false for
+this task set.** Reading all twelve records in `bench/tasks/` against their
+prompts, one at a time, gives **zero off-path records**. The claim came from
+`bench/tasks-ablation/`, where off-path records are seeded deliberately (7 of 35,
+16.6% of trailer-block characters) and where it remains true. Two apparent
+exceptions in the main set are not exceptions: `reproposal-prisma-orm`'s records
+sit under `src/db/`, which its prompt names as a directory, and
+`reproposal-jwt-sessions`'s `r-5b8c31` is a `reconstructed` record linked by
+`Follows:` whose purpose is to exercise grading.
 
-So a significant result understates the effect, and a null result is weaker
-evidence against the hypothesis than it looks. Report both as limits on the
-number, never as corrections to it.
+So for the primary matrix there is **one** floor argument, not two.
+
+A related scope limit follows from the same fact, and cuts the other way. The
+harness's placeholder injector (`bench/context.ts`) does not path-scope at all —
+it assembles every record in the workspace's history. That is harmless here only
+because each synthetic workspace contains nothing but its own task's records.
+**The consequence is that this matrix does not test route-scoping.** It measures
+records versus no records. Whether scoped injection beats unscoped injection is
+what the `no-scope` arm exists for, and it cannot be read off this result.
 
 ### What the numbers are conditional on
 
