@@ -37,7 +37,13 @@ jobs:
         run: npm run build
 
       - name: Unit and dogfooding tests
-        run: npm test
+        run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-report.json
+
+      # A worker that dies removes its file from the report without failing the
+      # run, so a green summary can be hiding an untested module. Compare the
+      # files on disk to the files in the report.
+      - name: Every test file actually ran
+        run: node scripts/check-test-files-ran.mjs vitest-report.json
 
       # Fixture conformance, README example sync, and the README vocabulary
       # table vs SPEC section 3. Documentation claims that can be checked by
