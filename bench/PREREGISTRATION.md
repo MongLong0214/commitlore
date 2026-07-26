@@ -331,3 +331,41 @@ Registered before the run, so they cannot be selected after it.
 5. **The pilot is not comparable.** It ran without environment control (§5-b),
    so its rates cannot be quoted beside this run's. Only its design findings
    carry over.
+
+### Correction to 11-1 — it does not apply to this matrix
+
+Appended while the matrix was still collecting and before any outcome was
+aggregated. Limitation 1 above was written from an observation made in
+`bench/tasks-ablation/`, and then stated as though it held for `bench/tasks/`.
+It does not. Both task sets were read record by record against their prompts:
+
+| set | tasks | records | off-path records | off-path share of trailer-block characters |
+|---|---|---|---|---|
+| `bench/tasks` (this matrix) | 10 | 12 | **0** | **0%** |
+| `bench/tasks-ablation` | 7 | 35 | 7 (one per task, deliberate) | 16.6% |
+
+The share is measured over trailer-block characters in the fixtures themselves
+(SPEC §2.1 B1: the last paragraph of each seed commit), so it is reproducible
+from the task files without running the injector. A figure measured over the
+assembled payload instead comes out near but not equal to this one, because the
+payload adds framing and drops what grading and lifecycle withhold.
+
+Every record in every primary task concerns the subject its own prompt is
+about. Two cases look like exceptions and are not: `reproposal-prisma-orm`'s
+records sit under `src/db/`, which the prompt names as a directory rather than
+a file, and `reproposal-jwt-sessions` carries `r-5b8c31`, a `reconstructed`
+record chained to the main decision by `Follows:` whose purpose is to exercise
+grading. Neither is unscoped noise. The `docs/publishing.md` record that
+prompted the original claim is `r-lock05`, which exists only in the ablation
+set.
+
+**So limitation 1 is withdrawn for this matrix.** The floor argument in §7
+(silent-task dilution) is unaffected and still stands on its own; there is
+simply no second, additive floor from unscoped injection here. This correction
+removes a reason to read the number as an underestimate, which makes the
+registered claim weaker rather than stronger — it is recorded here rather than
+in the verdict so that it cannot be mistaken for a result-driven revision.
+
+Limitation 1 continues to hold for `bench/tasks-ablation`, where the off-path
+records are planted on purpose and reach every arm, because the harness's
+injector does not scope (#36).
