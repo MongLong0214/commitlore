@@ -1,0 +1,73 @@
+{
+  "status": "final",
+  "status_note": "60 of 60 runs, three complete seeds at 20 each, 30 per arm, 60 distinct (task, condition, seed) cells with no duplicate, zero isolation warnings, zero errors, zero timeouts, zero simulated rows. Citable. `final` describes the run; the registered test does not reject at alpha 0.05 (p = 0.0522).",
+  "ticket": "T-707 (§12 corrected detector)",
+  "purpose": "Second registered measurement of the re-proposal rate, with reproposed_if moved from the `artifacts` surface to `code`. M1 scored an agent explaining its compliance as a re-proposal, three times in the treatment arm and never in the control arm (bench/DETECTOR-DEFECT.md). This is a fresh run, not a re-score.",
+
+  "results_file": "bench/results/t702-m1b.jsonl",
+  "runner_log": "bench/results/t702-m1b.runner.log",
+  "transcripts": "bench/results/transcripts-m1b/",
+  "verdict": "bench/VERDICT-M1b.md",
+
+  "rows": 60,
+  "planned": 60,
+
+  "matrix": {
+    "tasks": 10,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3],
+    "runs": 60
+  },
+
+  "integrity": {
+    "run_ids": ["20260726T123520Z-64b089"],
+    "rows_per_seed": { "1": 20, "2": 20, "3": 20 },
+    "rows_per_condition": { "commitlore-on": 30, "commitlore-off": 30 },
+    "distinct_cells": 60,
+    "duplicate_cells": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "simulated_rows": 0,
+    "isolation_warnings": 0,
+    "tokens": "1356714 / 6000000"
+  },
+
+  "model": "claude-haiku-4-5-20251001",
+  "model_note": "One model and one CLI version. Re-proposal is a behaviour and behaviours differ between models.",
+
+  "environment": {
+    "repo_sha": "1d82a5bf13e5711311957a1fdf7065acd430d73c",
+    "isolation_flags": ["--strict-mcp-config", "--mcp-config <empty>", "--setting-sources ''", "--no-session-persistence"],
+    "isolation_warnings": 0,
+    "detector_surface": "code — added diff lines with documentation files and comment lines removed (bench/detect.ts codeText)"
+  },
+
+  "result": {
+    "commitlore_on": "0/30",
+    "commitlore_off": "5/30",
+    "fisher_two_tailed_p": 0.0522,
+    "rate_difference_pp": -16.7,
+    "rate_difference_ci95_pp": [-33.6, -2.0],
+    "odds_ratio": "not estimable (cell a is zero)",
+    "registered_threshold": "with the treatment arm at zero the control arm needed 6/30 for p < 0.05 (6/30 -> 0.0237). It produced 5.",
+    "verdict": "not significant at alpha 0.05 — the registered test is Fisher exact (section 2) and it does not reject"
+  },
+
+  "per_arm_false_positive_check": {
+    "requirement": "PREREGISTRATION.md section 12 requires the false-positive rate to be reported per arm, because a detector whose error rate differs by arm biases the comparison at any magnitude.",
+    "commitlore_off": "5 flags, 5 of 5 carry an implementation line — http.createServer x3, an express dependency, and \"engines\": { \"node\": \">=20\" } x2. Zero prose.",
+    "commitlore_on": "0 flags."
+  },
+
+  "do_not_pool": "Different instrument from bench/results/t702-m1-final.jsonl. M1-b's numbers must not be quoted beside M1's, and M1's p = 0.7480 is not revised by this run.",
+
+  "reproducibility": {
+    "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks --cond commitlore-on,commitlore-off --seed 1,2,3 --driver claude-headless --model claude-haiku-4-5-20251001 --max-tokens 6000000 --timeout-ms 300000 --save-transcripts bench/results/transcripts-m1b --out bench/results/t702-m1b.jsonl"
+  },
+
+  "known_limitations_ref": "bench/PREREGISTRATION.md section 11 as amended, including the withdrawal of 11-1.",
+  "not_measured": {
+    "route_scoping": "bench/context.ts never path-scopes, so this measures records against no records rather than scoped injection against unscoped (#36).",
+    "cpaa": "No denominator: harvest carries no model by design, so no bench row prices it."
+  }
+}
