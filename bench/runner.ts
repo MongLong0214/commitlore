@@ -8,9 +8,10 @@ import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
 import { countViolations, evaluateGroup } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
+import { readCommits } from "./git.ts";
 import { loadTasks } from "./task-loader.ts";
 import type { ConditionSpec, RunRecord, Task } from "./types.ts";
-import { CONDITIONS, SUPPORTED_CONDITIONS } from "./types.ts";
+import { CONDITIONS, PRIMARY_CONDITIONS, SUPPORTED_CONDITIONS } from "./types.ts";
 import { collectSurfaces, createWorkspace, destroyWorkspace } from "./workspace.ts";
 
 const BENCH_DIR = import.meta.dirname;
@@ -59,27 +60,58 @@ const parseSeeds = (raw: string): readonly number[] => {
   return seeds;
 };
 
+/**
+ * `both` is the primary comparison and `all` is every arm that exists.
+ *
+ * Until T-703 these were the same list, because the ablation arms were
+ * `planned` and "supported" meant "one of the two v0.1 arms". They are spelled
+ * out separately now: `--cond both` still runs the two arms of the registered
+ * hypothesis test, and a re-run of the M1 matrix costs what it cost before.
+ */
+const expandAlias = (raw: string): readonly string[] => {
+  if (raw === "both") return PRIMARY_CONDITIONS;
+  if (raw === "all") return SUPPORTED_CONDITIONS;
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+};
+
 const resolveConditions = (raw: string): readonly ConditionSpec[] => {
-  const requested =
-    raw === "both" || raw === "all"
-      ? SUPPORTED_CONDITIONS
-      : raw
-          .split(",")
-          .map((part) => part.trim())
-          .filter((part) => part !== "");
+  const requested = expandAlias(raw);
   if (requested.length === 0) throw new Error("--cond must name at least one condition");
 
+  const seen = new Set<string>();
   return requested.map((id) => {
     const condition = CONDITIONS[id];
     if (condition === undefined) {
       throw new Error(`unknown condition \`${id}\` (known: ${Object.keys(CONDITIONS).join(", ")})`);
     }
     if (condition.status !== "supported") {
-      throw new Error(`condition \`${id}\` is an M4 ablation arm (T-703) and is not implemented in v0.1`);
+      throw new Error(
+        `condition \`${id}\` is registered but not implemented: ${condition.description}`,
+      );
     }
+    // A duplicate would double one arm's weight in every rate derived from the
+    // file, and nothing downstream can tell that from a genuinely larger arm.
+    if (seen.has(id)) throw new Error(`--cond names \`${id}\` more than once`);
+    seen.add(id);
     return condition;
   });
 };
+
+/**
+ * Records in the repository the agent is about to be handed — CPAA's
+ * denominator (`RunRecord.accepted_records`).
+ *
+ * Read after seeding and **before** the driver runs: a record the agent writes
+ * during its own run is not one the harvest pipeline paid to produce, and
+ * counting it would shrink a cost-per-record that nothing had spent. One
+ * commit carrying at least one trailer is one record, which is the unit
+ * `context.ts` assembles from.
+ */
+const countSeededRecords = (dir: string): number =>
+  readCommits(dir).filter((commit) => commit.trailers.length > 0).length;
 
 const selectTasks = (all: readonly Task[], filter: string | undefined): readonly Task[] => {
   if (filter === undefined) return all;
@@ -111,7 +143,12 @@ const main = async (): Promise<number> => {
     .description("Run the CommitLore re-proposal benchmark and write one JSONL row per run")
     .option("--tasks <dir>", "task directory", path.join(BENCH_DIR, "tasks"))
     .option("--task <ids>", "comma-separated task ids to run (default: all)")
-    .option("--cond <list>", `\`both\`, \`all\`, or a comma-separated list of ${SUPPORTED_CONDITIONS.join(", ")}`, "both")
+    .option(
+      "--cond <list>",
+      `\`both\` (${PRIMARY_CONDITIONS.join(", ")}), \`all\` (${SUPPORTED_CONDITIONS.length} arms), ` +
+        `or a comma-separated list of ${SUPPORTED_CONDITIONS.join(", ")}`,
+      "both",
+    )
     .option("--seed <list>", "comma-separated integer seeds", "1")
     .option("--driver <name>", `agent driver (${DRIVER_NAMES.join(", ")})`, "dry-run")
     .option("--out <file>", "JSONL output path (default: bench/results/<run-id>.jsonl)")
@@ -150,6 +187,17 @@ const main = async (): Promise<number> => {
   }
 
   const total = seeds.length * tasks.length * conditions.length;
+
+  // Printed before the first run, not inferred from the row labels afterwards.
+  // `--cond all` went from two arms to five when T-703 landed, and against a
+  // live driver the difference between those two invocations is money — so the
+  // resolved arms and the run count are stated while there is still time to
+  // interrupt.
+  process.stderr.write(
+    `conditions ${conditions.map((condition) => condition.id).join(", ")}\n` +
+      `runs       ${total} (${seeds.length} seed(s) x ${tasks.length} task(s) x ${conditions.length} condition(s))\n\n`,
+  );
+
   const kept: string[] = [];
   let index = 0;
   let tokensUsed = 0;
@@ -195,6 +243,7 @@ const main = async (): Promise<number> => {
         try {
           const workspace = createWorkspace(task, seed, REPO_ROOT, { seedRecords: condition.seed_records });
           workspaceDir = workspace.dir;
+          const acceptedRecords = countSeededRecords(workspace.dir);
           const injectedContext = assembleContext(workspace.dir, condition);
           const result: DriverResult = await driver.run({
             taskId: task.id,
@@ -259,6 +308,7 @@ const main = async (): Promise<number> => {
             started_at: startedAt,
             simulated: driver.simulated,
             matched: [...reproposed.labels, ...violations.labels],
+            accepted_records: acceptedRecords,
             ...(result.error === undefined ? {} : { error: result.error }),
           };
         } catch (error) {

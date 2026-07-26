@@ -6,6 +6,9 @@ already rejected?
 
 - Design: `docs/adr/ADR-0007-commitlorebench.md`
 - Requirements: `docs/prd/PRD-F7-commitlorebench.md`
+- **Pre-registration for the M1 measurement: `bench/PREREGISTRATION.md`** — the
+  task set, detection rules, run parameters, analysis set and verdict rules, all
+  fixed before the run. Read it before quoting any number from `bench/results/`.
 - This directory implements **T-701** (harness skeleton). T-702 adds the tasks
   and the significance test, T-703 the ablation arms, T-704 the report.
 
@@ -59,10 +62,18 @@ Conditions are an open string enum, so M4 adds arms without touching the runner.
 |---|---|---|---|
 | `commitlore-on` | supported | yes | yes, route-scoped, lifecycle + grading applied |
 | `commitlore-off` | supported | **no** | no |
+| `no-scope` | supported (T-703) | yes | yes, **every** record, not just the path's |
+| `no-grade` | supported (T-703) | yes | yes, all as instructions, nothing withheld |
+| `no-lifecycle` | supported (T-703) | yes | yes, superseded and expired included |
 | `records-uninjected` | planned | yes | no |
-| `no-scope` / `no-grade` / `no-lifecycle` | planned (T-703) | yes | yes, one guarantee removed |
 
 Planned arms are rejected at CLI parse time with a pointer to their ticket.
+
+`--cond both` is the two arms of the primary comparison and `--cond all` is
+every supported arm. Until T-703 those were the same list; they are not any
+more, and against a live driver the difference is two arms or five. The runner
+prints the arms it resolved and the run count before the first run for that
+reason.
 
 ### Why the control arm has no records in history
 
@@ -82,6 +93,154 @@ refuses to start if a control arm still carries a `Record-Id`.
 This leaves a real question for ADR-0007: `commitlore-on` differs from the
 control both by having records in history *and* by injection. `records-uninjected`
 would separate the two. It is registered as `planned` pending that decision.
+
+### The ablation arms, and the baseline they are read against
+
+ADR-0007's *어블레이션 lite*: `commitlore-on` minus one guarantee, everything
+else held fixed, so a difference in behaviour can be attributed to the
+guarantee rather than to the harness.
+
+| Arm | Removed | What the agent sees instead |
+|---|---|---|
+| `no-scope` | the routed projection (**not** the path scope — see below) | every trailer raw, per commit, bookkeeping keys included |
+| `no-grade` | trust routing (SPEC §7) | every record as an instruction — including the ones grading withheld |
+| `no-lifecycle` | the staleness filter (SPEC §5) | superseded and expired records alongside the active ones |
+
+Two of these are inert on most of the current tasks and one is misnamed. Read
+*What each arm can and cannot see today* below **before** quoting any number
+from them.
+
+**The one property the arms depend on is that the baseline did not move.** An
+arm is read as a difference from `commitlore-on`, so an ablation that changed
+what `commitlore-on` produces would leave every comparison measuring the change
+to the harness. `AblationFlags` therefore defaults every flag to `false`, and a
+projection built without an `ablation` is byte-identical — payload, counters and
+`cacheKey` — to one built before the flags existed. The ablation joins the cache
+key only when a flag is set, so an ordinary caller's cached projections are not
+invalidated to record a feature they cannot reach.
+
+Three things are worth knowing before a number from these arms is quoted.
+
+**`no-grade` injects the attack.** Grading does two jobs: it tags a record
+`[directive]` or `[claim]`, and it withholds the content of a record whose
+`Warn:` matches an injection pattern. Removing the routing removes both — the
+prompt-injection payload reaches the agent. An arm that kept withholding it
+would be ablating the tag on the line rather than the guarantee, and would
+understate what grading is worth. This is why the flags exist on
+`InjectOptions` and nowhere else: `src/commands/inject.ts` builds that object
+field by field from parsed flags, so there is no path from a command line, a
+hook payload or a settings file into an ablation.
+
+**`no-lifecycle` and `no-grade` overlap.** SPEC §7 grades a superseded record as
+a claim — "no longer directs anything" — so `no-lifecycle` alone injects stale
+records *labelled as claims*. Anything read off that arm is a lower bound on
+what the lifecycle filter prevents; the two flags together are what removes both
+defences. The runner accepts any combination, and `test/inject.test.ts` walks
+all eight.
+
+**The payload never says which arm it is.** An agent told it is inside an
+experiment is a second treatment nobody registered, so the rendered text carries
+no marker. What it does do is stop overstating itself: the header drops the word
+"active" under `no-lifecycle`, and names the repository rather than the path
+under `no-scope`, because a payload that misdescribes its own contents is worse
+than one that says less.
+
+#### Running the matrix, and reading it
+
+```bash
+node bench/runner.ts --tasks bench/tasks \
+  --cond commitlore-on,commitlore-off,no-scope,no-grade,no-lifecycle \
+  --seed 1,2,3 --driver claude-headless --model <model> \
+  --timeout-ms 540000 --max-tokens 4000000 \
+  --save-transcripts bench/results/transcripts-ablation \
+  --out bench/results/t703-ablation.jsonl
+node bench/verify.mjs bench/results/t703-ablation.jsonl
+node bench/metrics.ts bench/results/t703-ablation.jsonl
+```
+
+`metrics.ts` prints a per-condition table for all five arms, but its
+significance test compares exactly two: it picks `commitlore-on` against
+`commitlore-off` whenever both are present. To test one ablation arm against the
+treatment, aggregate a file that contains only those two conditions — with
+`commitlore-on` and `no-scope` it reads `no-scope` as the treatment and
+`commitlore-on` as the baseline. Splitting the file is a `grep`, and it keeps
+each test to the pair it is about.
+
+The power table under *What 60 runs can and cannot detect* applies to each of
+those pairs unchanged: three seeds × ten tasks is 30 runs per arm, so an
+ablation that costs less than roughly 30 points of re-proposal rate will not
+reach significance here. Read the per-arm rates as the direction check ADR-0007
+asked for, not as five independent hypothesis tests.
+
+#### Two implementations, and the decision to keep them apart
+
+The ablation exists twice, and they are not the same code:
+
+- `src/core/inject.ts` — `AblationFlags` on the shipped projection. This is what
+  T-402 ships and what `test/inject.test.ts` pins.
+- `bench/context.ts` — `assembleContext`, which the runner actually calls, and
+  which honours the same three axes off `ConditionSpec`
+  (`injection_scope` / `apply_grading` / `apply_lifecycle`). **This is the one
+  the numbers come from.**
+
+**Owner decision, 2026-07-26: the ablation arms cut `bench/context.ts` down,
+the primary arms keep the behaviour they were measured with, and "measure the
+shipped injector instead" is a Backlog issue.** The reasons, in the order they
+matter:
+
+1. Re-defining `commitlore-on` mid-programme would break the comparison the
+   re-run exists to make, and would invalidate the discriminating-task analysis
+   the pilot produced.
+2. `buildInjection` **requires a path and refuses the repository-wide request**
+   (ADR-0006). `assembleContext` runs once, before the agent has been given the
+   task, when no path exists. Wiring the shipped injector in means inventing a
+   path-selection policy per task — an ADR decision, not a wiring change.
+3. The gap between the harness injector and the shipped one is not what this
+   benchmark is measuring.
+
+The cost is real and is stated rather than hidden: **the measured ablation is an
+ablation of the harness's re-implementation.** It differs from the shipped
+injector in at least one respect that matters — the bench has no
+injection-pattern scanner, so its `no-grade` arm cannot inject a withheld
+payload, because it never withheld one.
+
+#### What each arm can and cannot see today
+
+Verified by running all four arms over all ten tasks under `--driver dry-run`
+and diffing the `injected_context` each one produced:
+
+| Arm | Payload identical to `commitlore-on` | Why |
+|---|---|---|
+| `no-scope` | 0/10 tasks | differs — but see below |
+| `no-grade` | **9/10 tasks** | only `jwt-sessions` seeds a non-`authored` record |
+| `no-lifecycle` | **9/10 tasks** | only `prisma-orm` seeds a `Supersedes:`/`Expires:` |
+
+Across all ten tasks the fixtures carry eleven `Provenance: authored` records
+and **one** `reconstructed`; **one** task declares a supersession or an expiry.
+An arm that removes a guarantee the fixture never exercises injects the same
+bytes as the treatment, and a run of that arm measures the seed data, not
+CommitLore. **Both arms need richer fixtures before their numbers mean
+anything**: a non-trusted or `reconstructed` record for `no-grade`, and a
+superseded plus an expired record for `no-lifecycle`. That is a `bench/tasks/`
+change, and since no ablation has been measured yet it is fixture design rather
+than a post-hoc adjustment.
+
+**`no-scope` is misnamed, and the name is the smaller problem.** It differs on
+every task, but not by scope: both renderings start from every record in the
+repository, and the arm swaps the routed projection (grouped by `Ruled-out` /
+`Limit` / `Warn`, bookkeeping keys dropped) for a raw per-commit trailer dump.
+Measured on `reproposal-redis-cache`, the two payloads are 733 and 789 bytes and
+carry **exactly the same records** — the extra bytes are `Blast:`, `Undo:`,
+`Certainty:`, `Record-Id:`, `Provenance:` and `CommitLore-Version:` becoming
+visible.
+
+So what it ablates is the **projection** (ADR-0006 decision 2), which is a real
+guarantee and worth measuring — just not the one on the label. Path scoping
+cannot be ablated here at all, because a pre-prompt injection never had a path
+to scope to; measuring it requires per-path injection at tool time, which means
+installing the `PreToolUse` hook into each workspace and running the shipped
+injector. That is the Backlog issue above. Until then, read a `no-scope` number
+as *"routed projection vs. raw dump"* and nothing more.
 
 ## Detection surfaces
 
@@ -173,6 +332,64 @@ choice any public repository makes. Five and five:
 Each prompt describes only the symptom. None of them names the rejected approach:
 a prompt that did would be measuring reading comprehension.
 
+### The property that decides whether a task measures anything
+
+Most of these tasks do not discriminate, and the reason is a design rule that
+was not obvious until the transcripts were read:
+
+> **A task measures nothing unless its symptom is unfixable without confronting
+> the rejected decision.**
+
+Two counts, and they are not the same measure:
+
+- **7 of 10 tasks were silent** — neither arm re-proposed on any seed, so the
+  task contributed nothing in either direction.
+- **8 of 10 failed the property** — judged from what the *control* arm did, not
+  from whether anything fired. `reproposal-sigstore-signing` was not silent (the
+  treatment arm re-proposed once) yet still fails: its control arm reached the
+  correct answer unaided, so the record had nothing to prevent there either.
+
+The property verdict is the one that drives the rewrites, because silence is a
+symptom and control-arm behaviour is the cause.
+
+In the control transcripts the rejected approach was usually absent *entirely* —
+not narrowly missed by the matchers, but not present under a deliberately wide
+natural-language probe (`orm`, `prisma`, `drizzle`, `kysely`, `query builder`,
+`jwt`, `stateless`, `refresh token`, `llm`, `embedding`, `similarity`, `broker`,
+`rabbit`, `sqs`, `kafka`, `redis`, `amqp`, `shared database`, `central`,
+`hosted`, …). What the control did instead was fix the stated symptom locally,
+inside the file the prompt pointed at:
+
+| Task | What the control arm did with no records at all |
+|---|---|
+| `reproposal-prisma-orm` | extracted a `USER_COLUMNS` constant |
+| `reproposal-jwt-sessions` | added a short-TTL in-memory session cache |
+| `reproposal-rabbitmq-queue` | wrapped the claim in `SELECT ... FOR UPDATE` |
+| `reproposal-llm-projection` | deduplicated the entries with a `Map`/`Set` |
+| `reproposal-index-server` | hashed the git state and cached against it |
+
+Each of those is, near enough, the reference "correct solution" used to calibrate
+the detector. **The control arm reached the right answer without the records, so
+the records had nothing to prevent.** A task like that cannot show an effect in
+either direction; including it only dilutes the measured difference toward zero.
+
+The two tasks that did discriminate share the missing property — their symptom
+has no local remedy:
+
+- `reproposal-redis-cache` — "sessions vanish on restart or on another instance"
+  is cross-process state, which cannot be fixed inside one process. The control
+  arm went straight to *"Redis-backed session storage with in-memory fallback"*;
+  the treatment arm on the same task and seed chose *"file-based persistence"*.
+- `reproposal-node20-floor` — "users on an older runtime cannot install" leaves
+  the declared floor as the only lever. The control arm lowered `engines.node`
+  from `>=22` to `>=18` **and** rewrote the enforcement script's threshold to 18
+  so its own change would pass.
+
+This is a property of the task, not of the arm: it applies to tasks written for
+this repository and to tasks ported from anywhere else. Any task added for T-703
+should be checked against it before it is allowed into the set, and the tasks
+above that fail it should be rewritten so that the symptom forces the decision.
+
 ### Calibrating a detector before it is allowed to score anything
 
 A detector that fires on the correct solution manufactures re-proposals, and one
@@ -253,6 +470,99 @@ the same rule as *Detection surfaces* above, one level down: naming a rejected
 option is not proposing it, and a filename is unusually easy to name while
 declining it. The identical matcher scores both arms.
 
+### A known false positive, left in place on purpose
+
+`whole-repo-record-fetch` in `reproposal-static-global-context` is wrong and is
+**still in the task file**. It fired on this, which does not violate anything:
+
+```ts
+if (!cache.has(repo)) cache.set(repo, loadRecordsForRepo(repo));
+const allRecords = cache.get(repo)!;
+return allRecords.filter(r => r.path === filePath);   // still path-scoped
+```
+
+The Limit is about what gets *injected*, and this filters by path on the very
+next line. The clause matched `loadRecordsForRepo(` — matchers default to
+case-insensitive — and the underlying mistake is that it keys on a **function
+name**, which is the author's free choice rather than a semantic signature. That
+is the identical error as `createLogger(`, which was rejected for exactly this
+reason two tasks earlier.
+
+It is documented rather than fixed because it was found after the measurement had
+started, and changing a condition partway through a matrix breaks the comparison
+the matrix exists to support. The consequence is bounded and stated here: the
+violation count for this task is not trustworthy. Neither the re-proposal metric
+nor the significance test is affected — this is a `violation_if` clause, and
+violations are instrumented only.
+
+Note the pattern across all four defects found in this run: **every one was a
+`violation_if` clause, and none was a `reproposed_if` clause.** The re-proposal
+matchers are literal technology names and import shapes, which are hard to get
+wrong. The violation matchers try to encode *"the agent broke a stated
+constraint"*, which is a much harder thing to express as a regex over a diff, and
+three of the four failures came from matching incidental text — a URL in a
+comment, a diff header, a function name — rather than a decision.
+
+## Pilot and measurement are different things
+
+The first full matrix is a **pilot**. What a pilot produces is not numbers, it is
+design defects — tasks that cannot discriminate, detectors that fire on noise,
+budgets that do not match reality, harness bugs. All four turned up here.
+
+The line that has to hold:
+
+| A pilot may change | A pilot may never change |
+|---|---|
+| a task, to satisfy a stated **property** | which tasks to keep, based on which showed an effect |
+| a detector that fires on the wrong thing | a detector widened to raise the measured rate |
+| a budget, against measured usage | the analysis set, chosen after seeing the data |
+
+Both columns are "changing things after looking at data". The difference is
+whether the reason is a property fixed in advance or an outcome observed
+afterwards. The first is how a pilot is supposed to work; the second is how a
+null result quietly becomes a positive one.
+
+So the changes are enumerated with their justifications in
+`bench/PREREGISTRATION.md` §6, and the measurement is registered in full before
+it runs. Pilot results carry `"status": "pilot — superseded"` in their manifest
+and are not citable; **no p-value is computed from pilot data.**
+
+## Freeze the code a long run reads
+
+A results file is only evidence if the code that produced it still exists. The
+first 60-run matrix lost that property while it was running: `bench/runner.ts`
+and `bench/types.ts` were edited on disk at 17:24, 43 runs in, by work that
+legitimately owned those files.
+
+Two things are worth separating, because they lead to different conclusions.
+
+**What did not happen.** The runs did not split into "before" and "after". Node
+resolves the runner's imports once at process start and does not hot-reload;
+every import in `bench/` is static (no `await import`, no `require`), and
+`loadTasks()` is called once in `main()`. The process that produced the file
+started at 16:41:11 and never restarted, so **all 60 runs executed one code
+version** — the one loaded at 16:41:11. The edits never reached it. `src/core/inject.ts`
+was edited too, and that one is irrelevant twice over: the bench never imports
+from `src/` at all (the injector it uses is `bench/context.ts`, which was last
+touched an hour before the run began).
+
+**What did happen.** The code on disk no longer matches the code that produced
+the file. Nobody can re-run and get those numbers back, so PRD-F7's
+"re-running the whole runner reproduces the numbers (fixed seed)" is permanently
+unsatisfiable for that file. That is enough to make it uncitable on its own, and
+it is the actual reason the matrix was demoted to a pilot — not a mid-flight
+behaviour change, which did not occur.
+
+The rule this produces:
+
+> **Before starting a long measurement, declare every file that run will read as
+> frozen until it finishes.** File ownership is usually split by who *edits* a
+> file. A run in flight also owns what it *executes*.
+
+And once it has happened, do not revert — reverting is another change. Demote the
+run to a pilot, freeze, and re-run. Record the frozen commit SHA in the manifest
+so the next incident is traceable rather than reconstructed.
+
 ## Isolation, stopping and reproducibility
 
 - **Workspace** — one `git init` per (task, condition, seed) under
@@ -284,6 +594,22 @@ declining it. The identical matcher scores both arms.
   Runs are ordered seed → task → condition so the two arms of a comparison run
   back to back; a run that never started because the global cap was exhausted is
   still written out, with `stopped_by: "over-tokens"` and `turns: 0`.
+
+  Ordering seed-major has a second use: runs 1–20 are a complete balanced matrix
+  over all ten tasks and both arms at seed 1, 21–40 the same at seed 2, and so
+  on. A run stopped at a seed boundary is a smaller experiment, not a broken one.
+
+  **What the budgets actually did in the live run:** nothing. Across the measured
+  runs there were zero timeouts and zero errors; the longest run took 105s
+  against a 300s wall clock, and the heaviest used 39k tokens against a 60k
+  per-task budget. `stopped_by: "over-turns"` was the majority label, but since
+  the CLI has no `--max-turns` that label stopped nothing — every run ended when
+  the agent decided it was finished, including the several that finished in three
+  turns. This matters for reading a null result: **no run was cut off before it
+  could reach the decision point.** `budget.turns: 12` is nonetheless unrealistic
+  against an observed 3–22, and should be raised for the label to carry
+  information; it was deliberately left alone mid-run, because changing a
+  condition partway through breaks the comparison it exists to support.
 - **Seed** — recorded in every row. Same seed, same rows (`run_id`,
   `duration_ms` and `started_at` aside), verified by running twice.
 
@@ -327,6 +653,60 @@ never started because the global token cap was already gone — and every droppe
 row is counted by reason in the output. Nothing is dropped silently, and the
 **All rows** block above it always shows the unfiltered picture.
 
+### CPAA — cost per accepted annal
+
+ADR-0007's operational metric, reported per arm and over the analysis set:
+
+```
+CPAA = (harvest tokens + verify tokens) / accepted records
+```
+
+It prices the pipeline that *writes* records, which is not the pipeline every
+other number in this file measures — those all describe an agent solving a task.
+Three optional row fields carry it: `harvest_tokens`, `verify_tokens` and
+`accepted_records`.
+
+**A row counts only if it carries all three.** A row with a denominator and no
+numerator would add accepted records at a cost of nothing and drag the ratio
+down — the same shape of error as leaving a crashed run in a re-proposal
+denominator, and pointing the same way: it would make CommitLore look cheaper
+than anything measured it to be. Partly instrumented rows are counted separately
+and reported.
+
+CPAA is never `NaN`, never `Infinity` and never `0` by accident. It has two
+distinct undefined states, and they are different findings printed as different
+sentences:
+
+| State | Means |
+|---|---|
+| `not instrumented` | no row recorded what a record cost. A gap in the measurement |
+| `undefined — 0 records accepted` | rows did record it, and nothing was accepted. A measurement |
+
+The second is the control arm's honest answer on every run: `commitlore-off`
+strips the trailer block, so its workspace holds no records and a cost per
+record has no value.
+
+**What is instrumented today, and what is not.** The runner writes
+`accepted_records` — counted from the seeded workspace after seeding and before
+the agent runs, because a record the agent writes during its own run is not one
+the harvest pipeline paid for. It does **not** write `harvest_tokens` or
+`verify_tokens`, and it does not fabricate them as zero: the bench seeds records
+from task YAML rather than harvesting them, so no model token was ever spent
+producing them, and a zero there would price CommitLore's record-writing
+pipeline as free. Every CPAA this harness prints today therefore reads
+`not instrumented`, naming the missing field.
+
+Two things would close it, in order of size:
+
+1. Run the real harvest pipeline over each run's own transcript and diff, and
+   record what it spent. That is the measurement ADR-0007 asked for. It needs a
+   model call per run, so it is a cost decision, not just a wiring one.
+2. Note that `verify_tokens` is structurally **0** for the shipped verifier —
+   `src/core/harvest-verify.ts` is deterministic and calls no model. That term
+   of the numerator is free by design and will stay free unless verification
+   grows a model. The field is written only when the step actually ran, because
+   a measured zero and an absent field are different claims.
+
 ### Significance
 
 `bench/stats.ts` implements a two-tailed Fisher exact test, chosen in ADR-0007
@@ -343,8 +723,46 @@ possible 30-per-arm tables, and the invariants — row swap, column swap,
 transpose, p ∈ [0,1], empty margins giving p = 1 rather than manufactured
 significance.
 
+Both sides of this experiment's decision boundary are pinned as regressions, so a
+future change cannot move the verdict without moving a test:
+`[[0,30],[5,25]]` → p = 0.0521855 (does not clear α) and `[[0,30],[6,24]]` →
+p = 0.0237207 (does).
+
 `metrics.ts` applies it to the 2×2 table of (condition × re-proposed) and prints
-p and the odds ratio. An odds ratio below 1 means the treatment re-proposed less.
+p, the rate difference, and the odds ratio when one exists.
+
+### Why the headline effect size is a rate difference, not an odds ratio
+
+`oddsRatio` is `null` whenever **any** cell is 0, and the reason is recorded in
+`oddsRatioReason`.
+
+Only half of that is a division by zero. With the treatment arm at 0 events the
+arithmetic is perfectly finite and returns **0** — and an odds ratio of 0 reads
+as *the treatment never re-proposes*, which 30 runs cannot establish. What was
+actually observed is zero events in thirty trials, and the honest upper bound on
+that rate is **11.4%** (Wilson, 95%), not zero. Reporting a boundary estimate as
+a point estimate is precisely the overstatement this benchmark exists to prevent,
+so no number is given.
+
+This is the table the experiment actually produces, so it is not a hypothetical:
+an earlier version returned `oddsRatio: 0` for `[[0,30],[6,24]]`, and it took a
+cross-check to catch it.
+
+The effect size is therefore the **difference in re-proposal rates**, in
+proportion points, with a 95% Newcombe interval built from two Wilson intervals.
+It stays defined at zero and it carries its own uncertainty, so the magnitude
+claim is bounded rather than asserted:
+
+```
+   Fisher exact (two-tailed)  p = 0.0237
+   rate difference            -20.0pp   95% CI [-37.3pp, -4.5pp]
+   odds ratio                 not estimable
+                              cell a (treatment, re-proposed) is 0 …
+```
+
+**Headline any result with the p-value and the rate difference. Quote the odds
+ratio only when it is estimable, and never state how large the effect is without
+the interval.**
 
 ### What 60 runs can and cannot detect
 

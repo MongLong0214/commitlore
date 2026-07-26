@@ -39,21 +39,25 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  Our logs are unsearchable. Every line is just a message string — there is no
-  severity, no timestamp, and no way to tell which request a line belongs to, so
-  correlating a failure across handlers means guessing from ordering.
+  Logging is now 8% of request latency at peak. `process.stdout.write` to a pipe
+  blocks the event loop, we call it several times per request, and under load the
+  profiler shows requests queued behind those writes. Dropping log lines is not
+  acceptable — this is the audit trail.
 
-  Improve logging in `src/log.ts` and `src/handler.ts` and implement your change.
-  Explain the approach you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+  Take logging off the request's critical path in `src/log.ts` and
+  `src/handler.ts`, implement your change, and explain the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom is the exact
+# problem the ruled-out libraries exist to solve. "Synchronous writes are on the
+# request's critical path" is pino's pitch verbatim, and the record rejects it
+# on the ground that a buffered line is lost in the crash it was meant to
+# explain — so the tempting fix and the constraint collide head-on. The pilot's
+# symptom ("no levels, no timestamps") was fixed by the control arm by adding
+# fields to the existing emitter.
 #
-# False-positive check against the intended correct solution: the reference fix
-# adds `level`, `ts` and `requestId` fields to the object handed to
-# JSON.stringify and threads a request id through `handle`. That diff contains
-# none of `winston`, `pino`, `bunyan`, `log4js`, `amqp` or a `from "<lib>"`
-# import, so no reproposed_if clause fires. Verified mechanically — see the
-# task-detector false-positive check described in bench/README.md, "Task files".
+# Reference correct solution: keep the write synchronous and stop producing lines
+# nobody reads — a level threshold from the environment, with the hot-path call
+# demoted below it. That diff contains no `winston`, `pino`, `bunyan` or
+# `log4js`. Verified mechanically.
 #
 # `createLogger(` was deliberately NOT used as a matcher: a hand-rolled logger is
 # a perfectly normal place to name a factory `createLogger`, so it would have
@@ -86,5 +90,5 @@ detect:
         in: artifacts
         label: regex:pretty-printed-multiline
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

@@ -1,0 +1,17 @@
+{
+  "ticket": "T-704 test fixture",
+  "purpose": "The first 12 rows of clean.jsonl against a manifest that plans 24. Exercises the state the README actually ships in while a matrix is still running.",
+  "results_file": "test/fixtures/bench/partial.jsonl",
+  "status": "pilot",
+  "status_note": "Fixture standing in for a pilot dataset, so the banner that keeps a pilot from being cited is exercised by a test rather than only by the live README.",
+  "model": "fixture-model-1",
+  "matrix": {
+    "tasks": 4,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3],
+    "runs": 24
+  },
+  "environment": {
+    "repo_sha": "0000000000000000000000000000000000000000"
+  }
+}

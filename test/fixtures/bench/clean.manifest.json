@@ -1,0 +1,19 @@
+{
+  "ticket": "T-704 test fixture",
+  "purpose": "A complete, synthetic 4-task x 2-arm x 3-seed matrix used to test bench/report.ts. Not a measurement of anything — the rows were written by hand.",
+  "results_file": "test/fixtures/bench/clean.jsonl",
+  "status": "final",
+  "model": "fixture-model-1",
+  "model_note": "Fixture data. Every rate derived from this file is conditional on a model that does not exist, which is the point: the report must carry the model forward even when the rows do not.",
+  "matrix": {
+    "tasks": 4,
+    "conditions": ["commitlore-on", "commitlore-off"],
+    "seeds": [1, 2, 3],
+    "runs": 24
+  },
+  "environment": {
+    "repo_sha": "0000000000000000000000000000000000000000",
+    "node": "fixture",
+    "platform": "fixture"
+  }
+}

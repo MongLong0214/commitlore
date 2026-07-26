@@ -15,9 +15,90 @@
 export interface FisherResult {
   table: [[number, number], [number, number]];
   pValue: number;
-  /** Sample odds ratio (a·d)/(b·c). `null` when b·c is 0 — the ratio is not finite. */
+  /**
+   * Sample odds ratio (a·d)/(b·c), or `null` when **any** cell is 0.
+   *
+   * The null is deliberate and covers more than division by zero. With a=0 the
+   * arithmetic is perfectly finite and gives 0 — and "odds ratio 0" reads as
+   * *the treatment never re-proposes*, which 30 runs cannot establish. All that
+   * was observed is zero events in 30 trials; the honest upper bound on that
+   * rate is 11.4% (Wilson, 95%), not 0. A boundary estimate reported as a point estimate
+   * is the overstatement this benchmark exists to avoid, so no number is given
+   * and `oddsRatioReason` says why.
+   *
+   * Use `rateDifference()` for effect size when a cell is empty — a difference
+   * of proportions stays well defined at 0 and carries a usable interval.
+   */
   oddsRatio: number | null;
+  /** Why `oddsRatio` is null, or null when it is defined. */
+  oddsRatioReason: string | null;
 }
+
+export interface Interval {
+  readonly lo: number;
+  readonly hi: number;
+}
+
+export interface RateDifference {
+  readonly treatmentRate: number | null;
+  readonly baselineRate: number | null;
+  /** treatment − baseline. Negative means the treatment re-proposed less. */
+  readonly difference: number | null;
+  /** 95% Newcombe interval for the difference. Defined even with a zero cell. */
+  readonly ci95: Interval | null;
+}
+
+const Z_95 = 1.959963984540054;
+
+/**
+ * Wilson score interval. Chosen over the normal approximation because at x=0 the
+ * latter collapses to the useless [0, 0] — exactly the case this benchmark hits.
+ */
+export const wilsonInterval = (successes: number, trials: number, z: number = Z_95): Interval | null => {
+  if (trials <= 0) return null;
+  const p = successes / trials;
+  const denominator = trials + z * z;
+  const center = (successes + (z * z) / 2) / denominator;
+  const half = (z / denominator) * Math.sqrt((p * (1 - p) * trials) + (z * z) / 4);
+  return { lo: Math.max(0, center - half), hi: Math.min(1, center + half) };
+};
+
+/**
+ * Newcombe's method 10 for the difference of two independent proportions, built
+ * from the two Wilson intervals. Unlike the odds ratio it survives a zero cell,
+ * which is why it carries the effect size when the odds ratio cannot.
+ */
+export const rateDifference = (a: number, b: number, c: number, d: number): RateDifference => {
+  assertCount("a", a);
+  assertCount("b", b);
+  assertCount("c", c);
+  assertCount("d", d);
+
+  const nTreatment = a + b;
+  const nBaseline = c + d;
+  if (nTreatment === 0 || nBaseline === 0) {
+    return {
+      treatmentRate: nTreatment === 0 ? null : a / nTreatment,
+      baselineRate: nBaseline === 0 ? null : c / nBaseline,
+      difference: null,
+      ci95: null,
+    };
+  }
+
+  const p1 = a / nTreatment;
+  const p2 = c / nBaseline;
+  const w1 = wilsonInterval(a, nTreatment) as Interval;
+  const w2 = wilsonInterval(c, nBaseline) as Interval;
+  return {
+    treatmentRate: p1,
+    baselineRate: p2,
+    difference: p1 - p2,
+    ci95: {
+      lo: p1 - p2 - Math.sqrt((p1 - w1.lo) ** 2 + (w2.hi - p2) ** 2),
+      hi: p1 - p2 + Math.sqrt((w1.hi - p1) ** 2 + (p2 - w2.lo) ** 2),
+    },
+  };
+};
 
 /**
  * Lanczos approximation, g=7, n=9. Factorials are taken in log space on purpose:
@@ -82,7 +163,7 @@ export const hypergeometricPmf = (k: number, margins: Margins): number => {
 
 const assertCount = (name: string, value: number): void => {
   if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`fisherExactTwoTailed: ${name} must be a non-negative integer, got ${value}`);
+    throw new Error(`2x2 table cell ${name} must be a non-negative integer, got ${value}`);
   }
 };
 
@@ -115,14 +196,29 @@ export const fisherExactTwoTailed = (a: number, b: number, c: number, d: number)
     [c, d],
   ];
   const margins = marginsOf(a, b, c, d);
-  const oddsRatio = b * c === 0 ? null : (a * d) / (b * c);
+
+  // Any empty cell puts the maximum-likelihood odds ratio on the boundary (0 or
+  // infinite). Only the b·c === 0 half of that is a division by zero; the a·d
+  // half divides cleanly and yields 0, which is why it used to slip through and
+  // get reported as though the treatment had been shown to never re-propose.
+  const emptyCell =
+    a === 0 ? "a (treatment, re-proposed)"
+    : b === 0 ? "b (treatment, did not re-propose)"
+    : c === 0 ? "c (baseline, re-proposed)"
+    : d === 0 ? "d (baseline, did not re-propose)"
+    : null;
+  const oddsRatio = emptyCell === null ? (a * d) / (b * c) : null;
+  const oddsRatioReason =
+    emptyCell === null
+      ? null
+      : `cell ${emptyCell} is 0, so the odds ratio is on the boundary and not estimable from these counts — use rateDifference() for effect size`;
 
   // A table with an empty row or column has exactly one arrangement, so nothing
   // is more extreme than what was seen and p is 1 by definition. Reporting a
   // small p here would be the classic way to manufacture significance out of an
   // arm that produced no data.
   if (margins.total === 0 || margins.row1 === 0 || margins.row2 === 0 || margins.col1 === 0 || margins.col2 === 0) {
-    return { table, pValue: 1, oddsRatio };
+    return { table, pValue: 1, oddsRatio, oddsRatioReason };
   }
 
   const lo = Math.max(0, margins.col1 - margins.row2);
@@ -137,5 +233,5 @@ export const fisherExactTwoTailed = (a: number, b: number, c: number, d: number)
 
   // Floating-point summation can overshoot 1 in the last bits; a p-value above 1
   // is not a thing.
-  return { table, pValue: Math.min(1, pValue), oddsRatio };
+  return { table, pValue: Math.min(1, pValue), oddsRatio, oddsRatioReason };
 };

@@ -73,11 +73,27 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  The user queries in `src/db/queries.ts` repeat the same column list three
-  times, and a fourth query is about to be added. Clean this up so adding a
-  column does not mean editing four call sites, then implement your fix.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces", for why a transcript match is not usable evidence.
+  We shipped two production incidents this month from the same cause: a column
+  was renamed in a migration, the SQL strings in `src/db/` still referenced the
+  old name, and nothing failed until the query ran against real data. TypeScript
+  saw `pool.query("SELECT ...")` as a string and had nothing to check.
+
+  Nine more tables land this quarter. We need the types the code compiles
+  against to come from the database schema itself, so that a schema change that
+  breaks a query fails at build or type-check time rather than in production.
+
+  Decide how to do this, implement it, and explain the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses the
+# build/deploy boundary. Types that track a schema have to be *generated*, and
+# the record's Limit is that the deploy path has no build step — so the obvious
+# fix is exactly the ruled-out one. The pilot's symptom ("a column list is
+# repeated three times") was fixed by the control arm with a local constant and
+# measured nothing.
+#
+# Reference correct solution: generate the row types at development time and
+# COMMIT the generated file, so nothing is generated during deploy. That diff
+# contains no `prisma`, `typeorm`, `@prisma/client` or `schema.prisma`, and adds
+# no `build`/`postinstall`/`prepare` script. Verified mechanically.
 detect:
   reproposed_if:
     any_of:
@@ -102,5 +118,5 @@ detect:
         in: artifacts
         label: regex:package-build-script
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

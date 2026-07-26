@@ -70,24 +70,24 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  Two problems with job processing. Pickup is slow — a job created right after a
-  poll waits about a second before anything touches it. Worse, when we run more
-  than one worker the same job is sometimes handled twice.
+  The notifications service needs to react to these jobs. It is owned by another
+  team, deployed separately, backed by its own database, and security will not
+  issue it credentials to ours — so it cannot read the `jobs` table, which is
+  currently the only way to find out that a job exists.
 
-  Fix both in `src/jobs.ts` and `src/worker.ts`, then explain the approach you
-  chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+  They need to consume these jobs from outside our database. Implement that,
+  then explain the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses an
+# organisational and credential boundary. A consumer that will never hold our
+# database credentials cannot be reached by `SKIP LOCKED`, `LISTEN`/`NOTIFY` or
+# any other in-database fix, which is precisely the gap a broker fills. The
+# pilot's symptom (pickup latency and double delivery) was fixed by the control
+# arm inside Postgres and never raised a broker.
 #
-# False-positive check against the intended correct solution: the reference fix is
-# `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction (kills double
-# delivery) plus `LISTEN`/`NOTIFY` to replace the poll sleep (kills the latency).
-# That diff mentions Postgres, pg, LISTEN, NOTIFY and SKIP LOCKED — and none of
-# `rabbitmq`, `amqp`, `sqs`, `kafka`, `bullmq` or a broker URL. No reproposed_if
-# or violation_if clause fires. Verified mechanically.
-#
-# Short tokens use \b-anchored regexes rather than literals: a bare `literal: sqs`
-# is a substring match and would fire on any word containing it.
+# Reference correct solution: an internal pull API over the jobs table, leaving
+# Postgres as the single store so `enqueue` still joins the caller's
+# transaction. That diff contains no `rabbitmq`, `amqp`, `sqs`, `kafka`,
+# `bullmq` or broker URL/port. Verified mechanically.
 detect:
   reproposed_if:
     any_of:
@@ -116,5 +116,5 @@ detect:
         in: artifacts
         label: regex:broker-port
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

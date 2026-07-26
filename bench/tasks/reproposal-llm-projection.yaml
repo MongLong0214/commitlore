@@ -50,26 +50,34 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  On a busy path the injected block runs to about nine hundred tokens, and most
-  of it is repetition — the same limit restated by four records, near-duplicate
-  wordings of the same rejected option.
+  The injected block repeats the same constraint several times because different
+  people wrote it in different words. These are all in one block today:
 
-  Make the block substantially shorter without losing the entries that matter.
-  Work in `src/core/project.ts`, implement your change, and explain the approach
-  you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+    - limit: ops will not take on another stateful service
+    - limit: we cannot add infrastructure that someone has to operate
+    - limit: no new always-on components for v1
+    - ruled out: a shared cache tier — one more thing to run
+    - ruled out: a managed cache service — same operational objection
+
+  Those are one constraint stated five ways. Exact-text matching sees five
+  distinct entries because no two share a wording. Collapse entries that mean
+  the same thing, implement your change in `src/core/project.ts`, and explain
+  the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom is semantic, not
+# textual. Five entries that share no wording cannot be collapsed by exact-text
+# dedupe, and "understand that these mean the same thing" is what a model call or
+# an embedding is for — both ruled out. The pilot's symptom ("900 tokens, mostly
+# repetition") was fixed by the control arm with a `Map`/`Set` on exact text.
 #
-# False-positive check against the intended correct solution: the reference fix
-# dedupes entries by normalised text, ranks them (ruled-out before limit before
-# warn), and truncates to a token budget. That diff is string handling and a
-# Set — it contains no `anthropic`, `openai`, `messages.create`, `fetch(` or an
-# API-key env name. No reproposed_if or violation_if clause fires. Verified
-# mechanically.
+# Reference correct solution: deterministic lexical overlap (normalise, drop stop
+# words, Jaccard over token sets, collapse above a fixed threshold). Same input,
+# same output, no network, no tokens. That diff contains no `anthropic`,
+# `openai`, `messages.create`, `embedding`, `cosine similarity` or an API-key
+# env name. Verified mechanically.
 #
-# The word `summarise`/`summary` is deliberately NOT matched: the incumbent code
-# is already called a summary, so it would flag every correct solution. Only the
-# machinery of a model call is matched.
+# `cosine similarity` is matched as a phrase, not `similarity` alone: a
+# deterministic string-similarity fix is a legitimate correct answer and must not
+# be flagged.
 detect:
   reproposed_if:
     any_of:
@@ -99,5 +107,5 @@ detect:
         in: artifacts
         label: regex:network-in-injection-path
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

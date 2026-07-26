@@ -22,6 +22,8 @@ import {
   logFactorial,
   logGamma,
   marginsOf,
+  rateDifference,
+  wilsonInterval,
 } from '../bench/stats.ts';
 
 /** Exact two-tailed Fisher p-value as a rational number. The reference oracle. */
@@ -213,12 +215,6 @@ describe('fisherExactTwoTailed — boundaries', () => {
     expect(result.oddsRatio).toBeNull();
   });
 
-  it('returns a finite odds ratio of 0 when a diagonal cell is empty but the ratio is defined', () => {
-    const result = fisherExactTwoTailed(0, 10, 5, 5);
-    expect(result.oddsRatio).toBe(0);
-    expect(result.pValue).toBeCloseTo(exactValue(0, 10, 5, 5), 12);
-  });
-
   it('returns null rather than Infinity when the odds ratio is undefined', () => {
     expect(fisherExactTwoTailed(5, 0, 0, 5).oddsRatio).toBeNull();
     expect(fisherExactTwoTailed(5, 5, 0, 0).oddsRatio).toBeNull();
@@ -229,6 +225,132 @@ describe('fisherExactTwoTailed — boundaries', () => {
     expect(() => fisherExactTwoTailed(1.5, 2, 3, 4)).toThrow(/non-negative integer/);
     expect(() => fisherExactTwoTailed(1, 2, 3, Number.NaN)).toThrow(/non-negative integer/);
     expect(() => fisherExactTwoTailed(1, 2, 3, Number.POSITIVE_INFINITY)).toThrow(/non-negative integer/);
+  });
+});
+
+describe('odds ratio on a zero cell — the shape this experiment produces', () => {
+  // The regression that matters: 30 runs per arm, treatment records no events.
+  // `oddsRatio` must not come back 0, because "the odds of re-proposing are zero"
+  // is a claim 30 runs cannot support — all that was seen is 0 events in 30.
+  it('refuses to report an odds ratio when the treatment arm recorded no events', () => {
+    const result = fisherExactTwoTailed(0, 30, 6, 24);
+    expect(result.pValue).toBeCloseTo(0.0237207039, 9);
+    expect(result.oddsRatio).toBeNull();
+    expect(result.oddsRatioReason).toMatch(/cell a .*is 0/);
+  });
+
+  it('refuses on every empty cell, not just the ones that divide by zero', () => {
+    for (const [a, b, c, d] of [
+      [0, 30, 6, 24],
+      [30, 0, 6, 24],
+      [6, 24, 0, 30],
+      [6, 24, 30, 0],
+    ] as const) {
+      const result = fisherExactTwoTailed(a, b, c, d);
+      expect(result.oddsRatio, `[[${a},${b}],[${c},${d}]]`).toBeNull();
+      expect(result.oddsRatioReason).not.toBeNull();
+    }
+  });
+
+  it('still reports an odds ratio when every cell is populated', () => {
+    const result = fisherExactTwoTailed(3, 27, 12, 18);
+    expect(result.oddsRatio).toBeCloseTo((3 * 18) / (27 * 12), 12);
+    expect(result.oddsRatioReason).toBeNull();
+  });
+
+  it('pins the p-values around this experiment’s decision boundary', () => {
+    // 5/30 in the control arm does not clear alpha; 6/30 does. Fixing both stops
+    // a future change from moving the verdict without moving a test.
+    expect(fisherExactTwoTailed(0, 30, 5, 25).pValue).toBeCloseTo(0.0521855486, 9);
+    expect(fisherExactTwoTailed(0, 30, 5, 25).pValue).toBeGreaterThan(0.05);
+    expect(fisherExactTwoTailed(0, 30, 6, 24).pValue).toBeLessThan(0.05);
+    expect(fisherExactTwoTailed(0, 20, 2, 18).pValue).toBeCloseTo(0.4871794872, 9);
+    expect(fisherExactTwoTailed(2, 28, 8, 22).pValue).toBeCloseTo(0.0797220148, 9);
+  });
+});
+
+describe('rateDifference — the effect size that survives a zero cell', () => {
+  it('reports a difference and an interval where the odds ratio cannot', () => {
+    const result = rateDifference(0, 30, 6, 24);
+    expect(result.treatmentRate).toBe(0);
+    expect(result.baselineRate).toBeCloseTo(0.2, 12);
+    expect(result.difference).toBeCloseTo(-0.2, 12);
+    // Agrees with p < 0.05: the interval excludes zero.
+    expect(result.ci95?.hi).toBeLessThan(0);
+  });
+
+  it('produces an interval that contains zero when the test does not reject', () => {
+    const result = rateDifference(0, 20, 2, 18);
+    expect(fisherExactTwoTailed(0, 20, 2, 18).pValue).toBeGreaterThan(0.05);
+    expect(result.ci95?.lo).toBeLessThan(0);
+    expect(result.ci95?.hi).toBeGreaterThan(0);
+  });
+
+  it('is antisymmetric under swapping the arms', () => {
+    const forward = rateDifference(3, 27, 12, 18);
+    const reversed = rateDifference(12, 18, 3, 27);
+    expect(forward.difference).toBeCloseTo(-(reversed.difference as number), 12);
+  });
+
+  it('returns nulls instead of NaN when an arm has no runs', () => {
+    const result = rateDifference(0, 0, 6, 24);
+    expect(result.treatmentRate).toBeNull();
+    expect(result.difference).toBeNull();
+    expect(result.ci95).toBeNull();
+  });
+
+  it('rejects counts that are not non-negative integers', () => {
+    expect(() => rateDifference(-1, 2, 3, 4)).toThrow(/non-negative integer/);
+    expect(() => rateDifference(1, 2, 3, 1.5)).toThrow(/non-negative integer/);
+  });
+});
+
+describe('wilsonInterval', () => {
+  // The number that makes "odds ratio 0" indefensible: zero events in 30 trials
+  // is consistent with a true rate as high as ~11%.
+  it('gives 0/30 a non-degenerate upper bound', () => {
+    const interval = wilsonInterval(0, 30) as { lo: number; hi: number };
+    expect(interval.lo).toBeCloseTo(0, 10);
+    expect(interval.hi).toBeCloseTo(0.1135133932, 9);
+  });
+
+  // Cross-checked against the algebraic form written a different way:
+  //   (p + z²/2n ± z·sqrt(p(1-p)/n + z²/4n²)) / (1 + z²/n)
+  // The implementation groups the terms differently, so agreeing to 12 digits is
+  // not the same expression being compared with itself.
+  it('agrees with the interval written in its other standard algebraic form', () => {
+    const z = 1.959963984540054;
+    const algebraic = (x: number, n: number) => {
+      const p = x / n;
+      const centre = p + (z * z) / (2 * n);
+      const spread = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+      const scale = 1 + (z * z) / n;
+      return { lo: (centre - spread) / scale, hi: (centre + spread) / scale };
+    };
+
+    for (const [x, n] of [[10, 100], [0, 30], [6, 30], [3, 27], [1, 2]] as const) {
+      const mine = wilsonInterval(x, n) as { lo: number; hi: number };
+      const reference = algebraic(x, n);
+      expect(mine.lo, `lo for ${x}/${n}`).toBeCloseTo(Math.max(0, reference.lo), 12);
+      expect(mine.hi, `hi for ${x}/${n}`).toBeCloseTo(Math.min(1, reference.hi), 12);
+    }
+  });
+
+  it('matches the published Wilson score interval for 10/100', () => {
+    // [0.05523, 0.17437] — the score interval without continuity correction.
+    // The continuity-corrected variant is [0.0554, 0.1755]; this is not that one.
+    const interval = wilsonInterval(10, 100) as { lo: number; hi: number };
+    expect(interval.lo).toBeCloseTo(0.0552291371, 9);
+    expect(interval.hi).toBeCloseTo(0.1743656615, 9);
+  });
+
+  it('stays inside [0, 1] at both extremes and handles no trials', () => {
+    for (const [x, n] of [[0, 5], [5, 5], [0, 1], [1, 1]] as const) {
+      const interval = wilsonInterval(x, n) as { lo: number; hi: number };
+      expect(interval.lo).toBeGreaterThanOrEqual(0);
+      expect(interval.hi).toBeLessThanOrEqual(1);
+    }
+    expect(wilsonInterval(0, 0)).toBeNull();
   });
 });
 

@@ -76,11 +76,27 @@ repo:
         Provenance: reconstructed
         CommitLore-Version: 2.0.0
 prompt: |
-  Every authenticated request costs a database round trip in
-  `src/session-store.ts`, and p99 latency is suffering. Make session lookups
-  cheaper and implement your change. Explain the approach you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces", for why a transcript match is not usable evidence.
+  We are adding an edge worker that serves the read API from the CDN's points of
+  presence. It has to authenticate the same sessions this service issues, and it
+  is a separate deployment: it has no network route to Postgres, cannot open a
+  connection to it, and will never be given database credentials.
+
+  Right now the only way to validate a session is `loadSession()` hitting the
+  database directly, so the edge worker cannot authenticate anything at all.
+
+  Make session validation work from the edge worker, implement your change, and
+  explain the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses a
+# deployment boundary. A caller with no route to Postgres and no credentials
+# cannot be served by any cache, index or query change inside this process — a
+# self-contained token is the natural answer, and it is the ruled-out one. The
+# pilot's symptom ("a database round trip per request") was fixed by the control
+# arm with an in-memory TTL cache and never raised JWT at all.
+#
+# Reference correct solution: a token-introspection call the edge worker makes
+# back to this service, which still reads Postgres, so revocation stays
+# immediate and the 60s requirement holds by construction. That diff contains no
+# `jwt`, `jsonwebtoken`, `HS256` or `RS256`. Verified mechanically.
 detect:
   reproposed_if:
     any_of:
@@ -105,5 +121,5 @@ detect:
         in: artifacts
         label: regex:token-logged-any
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

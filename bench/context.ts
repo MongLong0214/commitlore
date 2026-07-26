@@ -85,10 +85,39 @@ export interface ContextOptions {
 }
 
 /**
- * v0.1 placeholder for the real injector (T-402). It reproduces the SPEC §5
- * routes the bench depends on — Ruled-out, Limit, Warn — from git history alone,
- * so the harness can measure before the injector exists. T-703 replaces the body
- * of this function with a call into the shipped injector.
+ * The bench's own injector. It reproduces the SPEC §5 routes the bench depends
+ * on — Ruled-out, Limit, Warn — from git history alone.
+ *
+ * ## It is not `src/core/inject.ts`, and T-703 decided to keep it that way
+ *
+ * This function's header used to say that T-703 would replace its body with a
+ * call into the shipped injector. That did not happen, and the reasons are
+ * recorded here because the next person will ask.
+ *
+ * `bench/tsconfig.json` sets `rootDir: "."`, so nothing under `bench/` can
+ * import `src/` — but that is the smaller obstacle. The real one is shape:
+ * `buildInjection` answers *"what must be known about this path"* and requires
+ * one, refusing the repository-wide request outright (ADR-0006). **This
+ * function is called once, before the agent has been given the task, when no
+ * path exists yet.** There is nothing to scope to. Wiring the shipped injector
+ * in would mean inventing a path-selection policy per task, which is an ADR
+ * decision rather than a wiring change, and it would redefine the treatment arm
+ * in the middle of a measurement programme.
+ *
+ * So the owner's decision (2026-07-26) is: the ablation arms cut *this*
+ * function down, the primary arms keep the behaviour they were measured with,
+ * and "measure the shipped injector instead" is a Backlog issue.
+ *
+ * ## What that costs, stated plainly
+ *
+ * `injection_scope` selects a **rendering**, not a path filter. Both branches
+ * below start from `readRecords(dir)` — every record in the repository — so the
+ * `no-scope` arm removes the projection (grouping by route, dropping
+ * bookkeeping keys), not the scope. Path scoping cannot be ablated from a
+ * pre-prompt injection that never had a path. Measuring it needs per-path
+ * injection at tool time, i.e. the `PreToolUse` hook installed in the
+ * workspace — the Backlog issue above. `bench/README.md` carries the same
+ * warning next to the arm.
  */
 export const assembleContext = (
   dir: string,

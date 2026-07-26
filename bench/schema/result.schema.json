@@ -34,7 +34,14 @@
     "cond": {
       "type": "string",
       "minLength": 1,
-      "description": "Condition arm. v0.1: commitlore-on | commitlore-off. M4 adds the ablation arms."
+      "examples": [
+        "commitlore-on",
+        "commitlore-off",
+        "no-scope",
+        "no-grade",
+        "no-lifecycle"
+      ],
+      "description": "Condition arm. commitlore-on and commitlore-off are the two arms of the primary comparison; no-scope, no-grade and no-lifecycle are the T-703 ablation arms, each the treatment minus one guarantee. Deliberately NOT an enum: bench/types.ts registers conditions as an open string set so an arm can be added without a schema change, and closing it here would reject rows from a run whose arm is already registered (records-uninjected is the next one). The arms that exist are listed in `examples` and in bench/README.md; a typo'd arm is caught by the runner at parse time, which is where it can still be fixed for free."
     },
     "seed": {
       "type": "integer",
@@ -98,6 +105,21 @@
     "error": {
       "type": "string",
       "description": "Failure detail, or why a run was skipped."
+    },
+    "harvest_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "CPAA numerator, first term: model tokens the harvest step spent drafting records for this run. Optional — the harness records it only when a harvest actually ran, because a fabricated 0 would price CommitLore's record-writing pipeline as free."
+    },
+    "verify_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "CPAA numerator, second term: model tokens the verification step spent checking those drafts. Structurally 0 for the shipped verifier (src/core/harvest-verify.ts is deterministic and calls no model), but a measured 0 is a different claim from an absent field, so it is written only when the step ran."
+    },
+    "accepted_records": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "CPAA denominator: records present in the repository this run started from, counted after seeding and before the agent ran. The control arm strips the trailer block, so it reports 0 — which is why metrics.ts reports CPAA as undefined rather than dividing by it. metrics.ts uses a row only when it carries all three of harvest_tokens, verify_tokens and accepted_records; a denominator with no numerator would price accepted records at zero."
     }
   }
 }

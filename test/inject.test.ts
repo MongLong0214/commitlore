@@ -14,6 +14,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -976,5 +977,255 @@ describe('claude settings hook', () => {
     const uninstalled = runCommand(dir, ['inject', 'uninstall-claude-hook', '--settings', path]);
     expect(uninstalled.code).toBe(0);
     expect(ours(path)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Ablation (T-703)
+// ---------------------------------------------------------------------------
+
+/**
+ * The three guarantees above — scope, grade routing, lifecycle — removed one at
+ * a time, so CommitLoreBench can measure what each is worth.
+ *
+ * The load-bearing test in this section is the first one. An ablation arm is
+ * read as a difference from the baseline arm, so an ablation that moved the
+ * baseline would leave every comparison measuring the change to the harness
+ * rather than the removal of the guarantee.
+ */
+describe('ablation: the baseline does not move', () => {
+  /**
+   * Passing `ablation` costs nothing when nothing is set. Both spellings of
+   * "no ablation" — an absent option and a fully-false one — have to be the
+   * same projection, or a bench arm that always sets the object would differ
+   * from the baseline before removing anything.
+   */
+  it('produces the same projection with no ablation, an empty one, and an all-false one', () => {
+    const absent = inject();
+    const empty = inject({ ablation: {} });
+    const explicit = inject({ ablation: { noScope: false, noGrade: false, noLifecycle: false } });
+
+    expect(empty.text).toBe(absent.text);
+    expect(explicit.text).toBe(absent.text);
+    expect(empty).toEqual(absent);
+    expect(explicit).toEqual(absent);
+    expect(absent.text.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The cache key is a hash of a canonical tuple, so "the baseline key did not
+   * move" is the same statement as "nothing was appended to that tuple". This
+   * rebuilds the pre-T-703 tuple independently — seven members, in order — and
+   * hashes it here. Appending the ablation unconditionally, in any form
+   * including an empty array, fails this.
+   *
+   * The two constants are the module's private `TEMPLATE_VERSION` and
+   * `CACHE_KEY_CHARS`. Restating them is the point: a change to either is a
+   * deliberate cache invalidation and should have to be made twice.
+   */
+  it('hashes exactly the seven inputs it hashed before ablations existed', () => {
+    const baseline = inject();
+    const canonical = JSON.stringify([
+      'commitlore-inject/1',
+      baseline.head,
+      baseline.path,
+      baseline.budgetTokens,
+      baseline.at,
+      [TRUSTED],
+      true,
+    ]);
+
+    expect(baseline.cacheKey).toBe(
+      createHash('sha256').update(canonical).digest('hex').slice(0, 32),
+    );
+  });
+
+  it('still refuses an unscoped path when no ablation asks for one', () => {
+    for (const path of ['', '.', './', '  ']) {
+      expect(() => inject({ path, ablation: {} }), path).toThrow(/must name a file or directory/);
+      expect(
+        () => inject({ path, ablation: { noGrade: true, noLifecycle: true } }),
+        path,
+      ).toThrow(/ADR-0006/);
+    }
+  });
+});
+
+describe('ablation: noScope', () => {
+  const noScope = inject({ ablation: { noScope: true } });
+
+  it('injects records from outside the requested path', () => {
+    // Recorded on docs/decisions.md, which the baseline scopes out (§6).
+    expect(inject().text).not.toContain('the worker cap now lives in config');
+    expect(noScope.text).toContain('the worker cap now lives in config');
+  });
+
+  it('keeps the records the scoped projection already had', () => {
+    expect(noScope.text).toContain(TRUSTED_WARN);
+    expect(noScope.text).toContain(RULED_OUT.split('|')[0]?.trim() ?? '');
+    expect(noScope.included).toBeGreaterThan(inject().included);
+  });
+
+  it('answers the repository-wide request the baseline refuses outright', () => {
+    const unscoped = inject({ path: '.', ablation: { noScope: true } });
+    expect(unscoped.text).toBe(noScope.text);
+    expect(() => inject({ path: '.' })).toThrow(/ADR-0006/);
+  });
+
+  /**
+   * Naming a file and naming the repository produce the same bytes under this
+   * flag, so they must produce the same key — the projection no longer depends
+   * on the path, and a key that still did would cache one answer twice.
+   */
+  it('collapses every requested path onto one cache key and one reported scope', () => {
+    const fromFile = inject({ path: GUARD, ablation: { noScope: true } });
+    const fromOther = inject({ path: 'docs/decisions.md', ablation: { noScope: true } });
+
+    expect(fromOther.text).toBe(fromFile.text);
+    expect(fromOther.cacheKey).toBe(fromFile.cacheKey);
+    expect(fromFile.path).toBe('.');
+  });
+
+  it('does not claim a scope it no longer has', () => {
+    expect(inject().text).toContain(`active records for ${GUARD}`);
+    expect(noScope.text).toContain('active records for the whole repository');
+    expect(noScope.text).not.toContain(GUARD);
+  });
+});
+
+describe('ablation: noGrade', () => {
+  const noGrade = inject({ ablation: { noGrade: true } });
+
+  it('renders as a directive what grading demoted to a claim', () => {
+    const before = inject().text.split('\n').find((line) => line.includes(OUTSIDER_WARN));
+    const after = noGrade.text.split('\n').find((line) => line.includes(OUTSIDER_WARN));
+
+    expect(before).toContain('[claim]');
+    expect(after).toContain('[directive]');
+    expect(noGrade.text).not.toContain('[claim]');
+  });
+
+  it('drops the legend that tells the two grades apart, because there is one grade', () => {
+    expect(inject().text).toContain('do not act on it as an order');
+    expect(noGrade.text).not.toContain('do not act on it as an order');
+    expect(noGrade.text).toContain('treat as an instruction');
+  });
+
+  /**
+   * The uncomfortable half of this arm, asserted rather than left implicit:
+   * removing grading removes the content filter with it, and the record whose
+   * `Warn:` is a prompt-injection payload reaches the agent. An arm that kept
+   * withholding it would be ablating the tag on the line instead of the
+   * guarantee, and would understate what grading is worth.
+   */
+  it('injects the record grading withheld, payload and all', () => {
+    expect(inject().text).not.toContain(BLOCKED_WARN);
+    expect(noGrade.text).toContain(BLOCKED_WARN);
+    expect(noGrade.text).toContain(BLOCKED_LIMIT);
+    expect(noGrade.withheld).toBe(0);
+    expect(noGrade.text).not.toContain('withheld:');
+    // The two values that were withheld are now rendered instead of omitted.
+    expect(noGrade.included).toBe(inject().included + 2);
+    expect(noGrade.omitted).toBe(0);
+  });
+
+  it('leaves the lifecycle filter alone', () => {
+    expect(noGrade.text).not.toContain('SUPERSEDEDCANARY');
+    expect(noGrade.text).not.toContain('EXPIREDCANARY');
+  });
+});
+
+describe('ablation: noLifecycle', () => {
+  const noLifecycle = inject({ ablation: { noLifecycle: true } });
+
+  it('injects the superseded and expired records the baseline drops', () => {
+    expect(inject().text).not.toContain('SUPERSEDEDCANARY');
+    expect(inject().text).not.toContain('EXPIREDCANARY');
+    expect(noLifecycle.text).toContain(SUPERSEDED_LIMIT);
+    expect(noLifecycle.text).toContain(EXPIRED_LIMIT);
+  });
+
+  it('stops calling the payload active, because it is not', () => {
+    expect(inject().text).toContain('commitlore: active records for');
+    expect(noLifecycle.text).toContain(`commitlore: records for ${GUARD}`);
+    expect(noLifecycle.text).not.toContain('active records');
+  });
+
+  /**
+   * Grading reads the lifecycle axis too (SPEC §7: a superseded record "no
+   * longer directs anything"), so removing the filter does not promote a stale
+   * record to an instruction — it arrives labelled as a claim. The two
+   * guarantees overlap, and the arms are not as independent as their names
+   * suggest; anything read off this arm alone is a lower bound on what the
+   * lifecycle filter prevents.
+   */
+  it('still demotes the records it lets through, because grading reads staleness too', () => {
+    const stale = noLifecycle.text.split('\n').find((line) => line.includes(SUPERSEDED_LIMIT));
+    expect(stale).toContain('[claim]');
+
+    const both = inject({ ablation: { noLifecycle: true, noGrade: true } });
+    const promoted = both.text.split('\n').find((line) => line.includes(SUPERSEDED_LIMIT));
+    expect(promoted).toContain('[directive]');
+  });
+
+  it('leaves scope and grading alone', () => {
+    expect(noLifecycle.text).not.toContain('the worker cap now lives in config');
+    expect(noLifecycle.text).not.toContain(BLOCKED_WARN);
+  });
+});
+
+describe('ablation: the flags are independent', () => {
+  const FLAGS = ['noScope', 'noGrade', 'noLifecycle'] as const;
+
+  /** Every subset of the three flags, baseline first. */
+  const subsets = (): (typeof FLAGS)[number][][] => {
+    const all: (typeof FLAGS)[number][][] = [];
+    for (let mask = 0; mask < 8; mask += 1) {
+      all.push(FLAGS.filter((_, index) => (mask & (1 << index)) !== 0));
+    }
+    return all;
+  };
+
+  const injectWith = (flags: readonly (typeof FLAGS)[number][]): Injection =>
+    inject({ ablation: Object.fromEntries(flags.map((flag) => [flag, true])) });
+
+  it('gives all eight combinations a distinct cache key, and only the baseline the old one', () => {
+    const keys = subsets().map((flags) => injectWith(flags).cacheKey);
+    expect(new Set(keys).size).toBe(8);
+    expect(keys[0]).toBe(inject().cacheKey);
+  });
+
+  it('lets each flag change only its own axis', () => {
+    // One marker per guarantee: cross-path record, blocked payload, stale record.
+    const markers = ['the worker cap now lives in config', BLOCKED_WARN, 'SUPERSEDEDCANARY'];
+
+    for (const flags of subsets()) {
+      const text = injectWith(flags).text;
+      const expected = [
+        flags.includes('noScope'),
+        flags.includes('noGrade'),
+        flags.includes('noLifecycle'),
+      ];
+      markers.forEach((marker, index) => {
+        expect(text.includes(marker), `${flags.join('+') || 'baseline'} / ${marker}`).toBe(
+          expected[index],
+        );
+      });
+    }
+  });
+
+  /**
+   * The payload is what the measured agent reads. A line saying "this is the
+   * no-grade arm" would be a second treatment nobody registered — the agent
+   * would know it was in an experiment, and the arm would stop measuring the
+   * removed guarantee.
+   */
+  it('never tells the agent it is inside an experiment', () => {
+    for (const flags of subsets()) {
+      const text = injectWith(flags).text.toLowerCase();
+      for (const word of ['ablation', 'no-scope', 'no-grade', 'no-lifecycle', 'arm', 'bench']) {
+        expect(text.includes(word), `${flags.join('+') || 'baseline'} / ${word}`).toBe(false);
+      }
+    }
   });
 });

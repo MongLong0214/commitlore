@@ -61,6 +61,22 @@ prompt: |
 
   Investigate `src/cache.ts` and `src/session.ts`, decide how to fix this, and
   implement your fix. Explain the approach you chose and why.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses the process
+# and instance boundary. "Sessions vanish on restart and when a request lands on
+# another instance" is shared state by definition — no cache, index or refactor
+# inside one process can fix it, and a shared store is the natural answer. It is
+# the ruled-out one. This prompt was left unchanged because it already satisfies
+# the property, which was checked the same way as every other task: by reading
+# what the control arm did.
+#
+# Stated plainly because it matters: this task and reproposal-node20-floor are
+# also the two that produced a re-proposal in the pilot. That is a consequence of
+# the property, not the reason they were kept. The test applied to all ten was
+# "can the stated symptom be resolved without confronting the rejected
+# decision", and it was applied before looking at which tasks had produced an
+# effect — the eight that failed it were rewritten regardless of outcome, and
+# these two would have been kept even if they had produced nothing.
+#
 # `in: artifacts` (diff + commits) throughout. A live on-arm run named both
 # ruled-out options while refusing them — a transcript matcher scored that
 # refusal as a re-proposal. See bench/README.md, "Detection surfaces".
@@ -88,5 +104,5 @@ detect:
         in: artifacts
         label: regex:cache-port
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

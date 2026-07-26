@@ -52,28 +52,29 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  The pre-tool-use hook adds roughly 200ms to every single file read, because it
-  redoes the whole lookup from scratch each time. Users are noticing, and one has
-  already turned the hook off.
+  Half the team uses editors and agents that have no pre-tool-use hook — there is
+  no interception point to call `onPreToolUse` from, and no plugin API to add
+  one. `injectForPath` is therefore never invoked for them, and those people get
+  no records at all, ever.
 
-  Cut the per-read overhead in `src/core/inject.ts` and `src/hooks/pre-tool-use.ts`,
-  implement your change, and explain the approach you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+  We cannot ship hooks for every tool on the market. Get the records in front of
+  those users, implement your approach, and explain the one you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses the tool
+# boundary. Users on editors with no interception point cannot be reached by
+# caching, memoising or speeding up a hook that is never called — writing one
+# file every tool already reads is the natural answer, and it is the ruled-out
+# one. The pilot's symptom ("the hook costs 200ms per read") was fixed by the
+# control arm by memoising per path.
 #
-# This task's matchers key on the *creation of the file*, not on its name
-# appearing in text: `^diff --git a/CLAUDE.md` and a writeFileSync call. A
-# filename is a thing an agent naturally names while declining it ("unlike a
-# static CLAUDE.md"), and README "Detection surfaces" already establishes that
-# naming a rejected option is not proposing it — the surface is `artifacts`
-# precisely so that what was *built* is what counts. The same rule is applied
-# here one level down. Both arms are scored by the identical matcher.
+# Reference correct solution: an explicit command any editor can run, still
+# resolved per path and per invocation, so nothing goes stale and nothing is
+# dumped repo-wide. That diff creates no repository-root markdown file and no
+# agent-config directory. Verified mechanically.
 #
-# False-positive check against the intended correct solution: the reference fix
-# memoises the per-path fold keyed by (path, HEAD sha) and caches it under
-# `.git/commitlore/`. That diff creates no repository-root markdown file and
-# calls no writeFileSync against one, and it does not iterate every record in the
-# repository. No reproposed_if or violation_if clause fires. Verified mechanically.
+# The matchers key on the *creation of the file* (`^diff --git a/CLAUDE.md`)
+# rather than on the filename appearing in text, for the reason given in
+# bench/README.md, "Detection surfaces": naming a rejected option is not
+# proposing it, and a filename is unusually easy to name while declining it.
 detect:
   reproposed_if:
     any_of:
@@ -91,14 +92,19 @@ detect:
         flags: "im"
         in: artifacts
         label: regex:agent-config-file-added
-  # The Limit — path scoping — is machine-checkable as its opposite: fetching every
-  # record in the repository regardless of the path argument.
-  violation_if:
-    any_of:
-      - kind: regex
-        value: "allRecords\\(|recordsForRepo\\(|readAllRecords\\(|listAllRecords\\("
-        in: artifacts
-        label: regex:whole-repo-record-fetch
+  # No violation clause. The Limit here is path scoping, and the pilot showed it
+  # is not expressible as a regex over a diff.
+  #
+  # The previous attempt matched `allRecords(`, `recordsForRepo(` and friends. It
+  # fired on a correct solution that loaded records into a cache and then did
+  # `allRecords.filter(r => r.path === filePath)` on the very next line — still
+  # perfectly path-scoped. The clause was keying on a **function name**, which is
+  # the author's free choice rather than a semantic signature, and that is the
+  # identical mistake `createLogger(` was rejected for in reproposal-winston-logger.
+  #
+  # Loading records and injecting records are different acts, and only the second
+  # one is constrained. A regex over a diff cannot tell them apart, so no
+  # violation is defined rather than one that punishes correct code.
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

@@ -1,0 +1,7 @@
+{
+  "ticket": "T-704 test fixture",
+  "purpose": "A manifest whose `status` is not one of final|pilot|superseded. The report must treat an unrecognized word as not citable rather than guessing what it meant.",
+  "results_file": "test/fixtures/bench/bogus-status.jsonl",
+  "status": "draft",
+  "model": "fixture-model-1"
+}

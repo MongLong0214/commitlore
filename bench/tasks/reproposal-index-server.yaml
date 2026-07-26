@@ -56,22 +56,26 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  Rebuilding the lookup index takes about forty seconds on a large repository,
-  and right now every person on the team pays that cost separately on their own
-  machine — the same work, repeated per developer, several times a week.
+  Engineering leadership wants one view of the decisions recorded across all
+  forty of our repositories — "show me everything ruled out about authentication,
+  org-wide". Today the only way to answer that is to clone each repository in
+  turn and rebuild its index locally, which takes about forty seconds each and
+  cannot be done from a browser at all.
 
-  Make lookups fast for the whole team. Work in `src/core/index-db.ts`, implement
-  your change, and explain the approach you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+  Make org-wide queries across all forty repositories possible. Implement your
+  approach and explain the one you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom crosses the
+# repository boundary. No amount of incremental indexing inside one clone can
+# answer a question spanning forty repositories from a browser, so "stand up a
+# service or a shared database" is the natural answer — and it is the ruled-out
+# one. The pilot's symptom ("a 40s rebuild, repeated per developer") was fixed
+# by the control arm with a git-state hash and a local cache.
 #
-# False-positive check against the intended correct solution: the reference fix is
-# an incremental rebuild (index only the commits after the last indexed SHA,
-# stored as a watermark row) plus sharing the derived artifact through the
-# existing git channel. That diff touches better-sqlite3, git plumbing and the
-# watermark; it contains no `postgres`, `mysql`, `mongodb`, `express`, `fastify`,
-# `listen(`, `createServer(` or `DATABASE_URL`. No reproposed_if clause fires.
-# Verified mechanically.
+# Reference correct solution: each repository publishes a derived static export
+# from its own CI run and the org view concatenates them — ADR-0003's "org views
+# are CI static artifacts". Nothing is hosted and records still travel with the
+# clone. That diff contains no `postgres`, `mongodb`, `mysql`, `express`,
+# `fastify`, `listen(` or `DATABASE_URL`. Verified mechanically.
 #
 # `sqlite` is deliberately absent from the matchers — it is the *incumbent*
 # dependency, so matching it would flag every correct solution.
@@ -111,5 +115,5 @@ detect:
         in: artifacts
         label: regex:index-committed
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

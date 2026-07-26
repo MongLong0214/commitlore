@@ -1,0 +1,79 @@
+{
+  "status": "pilot — superseded, not citable",
+  "ticket": "T-702 (#23)",
+  "purpose": "First measurement attempt of the re-proposal rate. Demoted to a pilot. Its value is the design defects it exposed, not its numbers.",
+  "DO_NOT_QUOTE": "No number in this file may be quoted as a result — not in the README, not in a release note, not anywhere. No p-value has been or may be computed from it. Aggregates may be shown only when labelled 'pilot'. The measurement that supersedes it is registered in bench/PREREGISTRATION.md and has not been run yet.",
+
+  "results_file": "bench/results/t702-pilot-haiku45-superseded.jsonl",
+  "runner_log": "bench/results/t702-pilot-haiku45-superseded.runner.log",
+  "transcripts": "bench/results/transcripts/",
+
+  "rows": 57,
+  "planned": 60,
+  "terminated": "runner process died at 57/60; no RUNNER_EXIT was recorded, so this was not a clean exit. The file was sealed at 57 rows rather than resumed.",
+  "why_not_resumed": "Restarting the runner starts a NEW process, which loads the edited code from disk. Rows 1-57 came from the code as of 16:41:11; rows 58-60 would have come from the current working tree. That would be genuine contamination — two code versions in one file — where none exists today. Sealing is the only option that keeps the file internally consistent.",
+
+  "imbalance": {
+    "rows_per_seed": { "1": 20, "2": 20, "3": 17 },
+    "note": "Seed 3 is incomplete: 17 of 20. The design is unbalanced across seeds and no seed-to-seed comparison is valid. Seeds 1 and 2 are complete 10-task x 2-arm matrices; seed 3 is missing its last three runs."
+  },
+
+  "why_superseded": {
+    "established_reason": "The code that produced these rows is no longer in the working tree. bench/runner.ts and bench/types.ts were edited on disk at 17:24:11, 43 runs in, by work that legitimately owned those files. Nobody can re-run and reproduce this file, so PRD-F7's acceptance criterion — 're-running the whole runner reproduces the numbers with a fixed seed' — is permanently unsatisfiable for it. That alone makes it uncitable.",
+    "explicitly_NOT_the_reason": "The data is NOT contaminated and did NOT split into 'before' and 'after' halves. That was the initial diagnosis and it was wrong.",
+    "evidence_that_no_split_occurred": [
+      "Single continuous process: PID 26336, started 16:41:11, never restarted — verified with ps while the run was still in flight.",
+      "Every import under bench/ is static. `grep -rn 'await import|require(' bench/` returns zero dynamic loads, so modules are resolved and cached once at process start. Node does not hot-reload.",
+      "loadTasks() is called once, in main() (bench/runner.ts:130).",
+      "All 57 rows therefore executed the code as loaded at 16:41:11. The 17:24 edits never reached the running process.",
+      "One run_id across all 57 rows (20260726T074111Z-0f5492) — a restart would have produced a second."
+    ],
+    "src_core_inject_is_irrelevant": "src/core/inject.ts was edited too, and it is not in this measurement's path at all: `grep -rn 'from \"../src' bench/` returns nothing. The bench's injector is bench/context.ts, whose mtime is 15:38:12 — an hour before the run began — and which was not modified during it.",
+    "independently_confirmed": "The no-split finding was raised by T-702 against the initial diagnosis and then independently re-verified by the team lead (grep for src/ imports, bench/context.ts mtime, absence of dynamic imports, single continuous PID). Both parties agree the data is uncontaminated and that the reproducibility failure is the disqualifying defect."
+  },
+
+  "command": "node --experimental-strip-types bench/runner.ts --tasks bench/tasks --cond both --seed 1,2,3 --driver claude-headless --model claude-haiku-4-5-20251001 --max-tokens 6000000 --timeout-ms 300000 --save-transcripts bench/results/transcripts --out bench/results/t702-m1-haiku45.jsonl",
+  "command_note": "The --out path above is the file's original name. It was renamed to t702-pilot-haiku45-superseded.jsonl when the pilot was sealed, so no later run can be confused with it.",
+
+  "model": "claude-haiku-4-5-20251001",
+  "model_note": "Chosen for cost and wall time, not because it is representative. Every rate here is conditional on this model — re-proposal is a behaviour, behaviours differ between models, and these numbers do not transfer.",
+  "model_provenance": "The runner passes --model to the driver but does not write it onto the row (bench/runner.ts builds RunRecord without it, and RunRecord has no such field). The `model` field on these rows was stamped from this manifest AFTER the run, not emitted by the runner. All 57 rows share one run_id from the single invocation in `command`, so one model value covers the file; the runner log is the independent witness.",
+
+  "environment": {
+    "repo_sha_at_start": "6b13589165b63c89609f1b3c415543b8e26f68c5",
+    "repo_sha_note": "Recorded when the run started, but the working tree was NOT frozen and was edited mid-run. This SHA therefore does not identify the code that produced these rows. Recording a SHA is necessary but not sufficient — the freeze is what makes it meaningful. bench/PREREGISTRATION.md now specifies both, plus a post-run check that the freeze held.",
+    "claude_cli": "2.1.220",
+    "node": "v24.18.0",
+    "platform": "darwin"
+  },
+
+  "budgets_as_run": {
+    "per_task_turns": 12,
+    "per_task_turns_enforced": false,
+    "per_task_turns_note": "The installed claude CLI has no --max-turns flag, so the turn budget was observed after the fact and reported as stopped_by=over-turns, never enforced. Observed turns: min 3, median 14, p95 24, max 29 — at a budget of 12 the label fired on roughly 60% of runs and carried no information. Raised to 24 for the registered run.",
+    "per_task_tokens": 60000,
+    "global_max_tokens": 6000000,
+    "timeout_ms_per_run": 300000,
+    "observed_headroom": "Zero timeouts and zero errors. Longest run 126s against a 300s wall clock; heaviest 40,779 tokens against a 60,000 per-task budget. No run was cut off by any budget — every one ended when the agent decided it had finished."
+  },
+
+  "detector_defects_found": {
+    "summary": "Four defects surfaced during the pilot. ALL FOUR were violation_if clauses; NOT ONE was a reproposed_if clause. The re-proposal metric — the one the hypothesis rests on — was never affected by any of them.",
+    "1_network_in_injection_path": "reproposal-llm-projection: a bare `https?://` matched documentation URLs inside .serena/project.yml, which the agent's own tooling writes into every workspace in both arms. Fixed after the run started: call-shaped signatures only.",
+    "2_network_in_grading_path": "reproposal-sigstore-signing: same defect, same fix.",
+    "3_enforcement_removed": "reproposal-node20-floor: `^-[^\\n]*check-engines` matched the unified-diff header `--- a/scripts/check-engines.mjs`, firing whenever the agent merely opened the file — the opposite of what it measured. Fixed with a `(?!--)` lookahead.",
+    "4_whole_repo_record_fetch": "reproposal-static-global-context: matched `loadRecordsForRepo(` in code that filtered by path on the very next line. It keyed on a function name, which is the author's free choice rather than a semantic signature — the identical mistake `createLogger(` was rejected for. NOT fixed during the pilot, because conditions must not change mid-matrix; removed entirely afterwards, since loading records and injecting them are different acts that a regex over a diff cannot separate.",
+    "effect_on_this_file": "The violations and matched fields here were scored with the task definitions as loaded at runner startup, so all 57 rows are internally consistent with each other — but with defects 1, 2 and 4 still active. Violation counts for those three tasks are overstated. Re-proposal verdicts are unaffected, and were confirmed to reproduce exactly when re-scored from the saved transcripts."
+  },
+
+  "what_the_pilot_established": [
+    "The discriminative property: a task measures nothing unless its symptom is unfixable without confronting the rejected decision. Eight of ten tasks failed it — the control arm solved the stated symptom locally, arriving at essentially the reference correct solution, so the records had nothing to prevent. Evidence is in the control-arm transcripts under bench/results/transcripts/.",
+    "Four detector defects, all in violation_if, none in reproposed_if.",
+    "Realistic turn usage (3-29, p95 24) and ample token and wall-clock headroom.",
+    "Exact power of the design: at 30 runs per arm and alpha=0.05 it finds only large effects, and below a 0.20 control rate no effect size reaches 80% power.",
+    "That a run in flight owns the files it executes, not only the files someone is editing.",
+    "That a long-running measurement can die silently — this one did, at 57/60, without even writing its wrapper's exit line."
+  ],
+
+  "superseded_by": "bench/PREREGISTRATION.md — registered, not yet run."
+}

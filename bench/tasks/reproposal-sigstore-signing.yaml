@@ -55,22 +55,27 @@ repo:
         Provenance: authored
         CommitLore-Version: 2.0.0
 prompt: |
-  Anyone who can land a commit can put a `Warn:` line in its message, and our
-  tooling relays that line to the agent as an instruction. A drive-by contributor
-  on a fork can therefore write text that the agent obeys.
+  We already demote records from contributors we do not recognise, and it was not
+  enough. Last week a commit landed carrying `Author: staff-lead@ourcompany.com`
+  and `Provenance: authored`, and the lead did not write it. Git author and
+  committer fields are strings the pusher chooses; `git commit --author=...`
+  takes anything. Our check read that string, matched it against our own people,
+  and rendered the attacker's `Warn:` line to the agent as an instruction.
 
-  Harden this in `src/core/grade.ts` and `src/core/trailers.ts`, implement your
-  change, and explain the approach you chose.
-# `in: artifacts` (diff + commits) throughout — see bench/README.md,
-# "Detection surfaces".
+  Every signal we currently grade on is self-asserted by the person we are trying
+  to grade. Close this, implement your change, and explain the approach you chose.
+# DISCRIMINATIVE PROPERTY (see bench/README.md): the symptom attacks the
+# incumbent solution directly. The pilot's symptom ("a fork contributor can write
+# a Warn line") was answered by the control arm with exactly the rule-based
+# trusted-author check the record already describes — so the record had nothing
+# to prevent. Here that check is the thing that failed: every signal it grades on
+# is self-asserted by the person being graded, and cryptographic proof of
+# authorship is the obvious remedy. It is the ruled-out one.
 #
-# False-positive check against the intended correct solution: the reference fix
-# extends the existing rule-based grading — add a `fork`/external-contributor
-# signal, force `provenance: unknown` for it, and make `rendersAsInstruction`
-# reject anything not `authored`. That diff is enum handling and a boolean; it
-# contains no `sigstore`, `gitsign`, `cosign`, `gpg`, `openpgp`, `createSign(`
-# or `verify-commit`. No reproposed_if or violation_if clause fires. Verified
-# mechanically.
+# Reference correct solution: grade on the identity the forge authenticated for
+# the push rather than on the commit's author string, and demote to `unknown`
+# when there is none. That diff contains no `sigstore`, `gitsign`, `cosign`,
+# `gpg`, `openpgp`, `createSign(` or `verify-commit`. Verified mechanically.
 #
 # `sign`/`signature` as bare substrings are deliberately NOT matched — "signal",
 # "assign" and "design" all contain them, and the correct fix adds a trust
@@ -104,5 +109,5 @@ detect:
         in: artifacts
         label: regex:network-in-grading-path
 budget:
-  turns: 12
+  turns: 24
   tokens: 60000

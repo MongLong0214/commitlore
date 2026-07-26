@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { fisherExactTwoTailed } from "./stats.ts";
+import { fisherExactTwoTailed, rateDifference } from "./stats.ts";
+import type { Interval } from "./stats.ts";
 import type { RunRecord, StopReason } from "./types.ts";
 
 /**
@@ -39,6 +40,110 @@ export const exclusionReason = (row: RunRecord): string | null => {
 
 export const isUsable = (row: RunRecord): boolean => exclusionReason(row) === null;
 
+// ---------------------------------------------------------------------------
+// CPAA — cost per accepted annal (ADR-0007 "운영 지표", PRD-F7 requirement 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a CPAA has no value. Absent when it has one.
+ *
+ * The two reasons are not the same finding and are never collapsed:
+ * `not-instrumented` says the harness did not record what a record cost, and
+ * `no-accepted-records` says it did and nothing was accepted. The first is a
+ * gap in the measurement; the second is a measurement.
+ */
+export type CpaaUndefined = "not-instrumented" | "no-accepted-records";
+
+export interface Cpaa {
+  /** Tokens per accepted record, or null — never NaN, never Infinity, never 0. */
+  readonly cpaa: number | null;
+  /** Why `cpaa` is null. Null when it is not. */
+  readonly undefined_because: CpaaUndefined | null;
+  readonly harvest_tokens: number;
+  readonly verify_tokens: number;
+  readonly accepted_records: number;
+  /** Rows carrying all three fields — the only ones that contributed. */
+  readonly rows_instrumented: number;
+  /** Rows that carried some of the three but not all: counted, never summed. */
+  readonly rows_partial: number;
+}
+
+const nonNegative = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+
+/**
+ * Computes CPAA over a set of rows.
+ *
+ * A row contributes only when it carries **all three** instruments. A row with
+ * `accepted_records` and no `harvest_tokens` would otherwise add records to the
+ * denominator at a cost of zero and drag the ratio down — the same class of
+ * error as leaving a crashed run in a re-proposal denominator, and it points the
+ * same direction: it makes CommitLore look cheaper than it was measured to be.
+ * Partially instrumented rows are counted and reported instead.
+ *
+ * Division by zero is not reachable: with no accepted records the ratio has no
+ * value, and that is returned as one, rather than as an `Infinity` that
+ * survives `JSON.stringify` as `null` and reads downstream as "free".
+ */
+export const computeCpaa = (rows: readonly RunRecord[]): Cpaa => {
+  let harvest = 0;
+  let verify = 0;
+  let accepted = 0;
+  let instrumented = 0;
+  let partial = 0;
+
+  for (const row of rows) {
+    const rowHarvest = nonNegative(row.harvest_tokens);
+    const rowVerify = nonNegative(row.verify_tokens);
+    const rowAccepted = nonNegative(row.accepted_records);
+    if (rowHarvest === null || rowVerify === null || rowAccepted === null) {
+      if (rowHarvest !== null || rowVerify !== null || rowAccepted !== null) partial += 1;
+      continue;
+    }
+    harvest += rowHarvest;
+    verify += rowVerify;
+    accepted += rowAccepted;
+    instrumented += 1;
+  }
+
+  const totals = {
+    harvest_tokens: harvest,
+    verify_tokens: verify,
+    accepted_records: accepted,
+    rows_instrumented: instrumented,
+    rows_partial: partial,
+  };
+
+  if (instrumented === 0) return { cpaa: null, undefined_because: "not-instrumented", ...totals };
+  if (accepted === 0) return { cpaa: null, undefined_because: "no-accepted-records", ...totals };
+  return { cpaa: (harvest + verify) / accepted, undefined_because: null, ...totals };
+};
+
+/** The sentence printed in place of a number, naming what is missing. */
+export const explainCpaa = (cpaa: Cpaa): string => {
+  if (cpaa.undefined_because === null) {
+    return (
+      `${cpaa.cpaa?.toFixed(1)} tokens/record ` +
+      `((${cpaa.harvest_tokens} harvest + ${cpaa.verify_tokens} verify) / ${cpaa.accepted_records} accepted, ` +
+      `${cpaa.rows_instrumented} row(s))`
+    );
+  }
+  if (cpaa.undefined_because === "no-accepted-records") {
+    return (
+      `undefined — 0 records accepted across ${cpaa.rows_instrumented} instrumented row(s), ` +
+      `so a cost per accepted record has no value (not 0, not infinite)`
+    );
+  }
+  const partial =
+    cpaa.rows_partial === 0
+      ? ""
+      : `; ${cpaa.rows_partial} row(s) carry some of harvest_tokens/verify_tokens/accepted_records but not all`;
+  return (
+    "undefined — not instrumented: no row carries all of harvest_tokens, verify_tokens " +
+    `and accepted_records, so nothing priced what a record cost to produce${partial}`
+  );
+};
+
 export interface ConditionSummary {
   readonly cond: string;
   readonly n: number;
@@ -52,6 +157,8 @@ export interface ConditionSummary {
   readonly mean_turns: number | null;
   readonly mean_tokens: number | null;
   readonly stopped_by: Readonly<Record<StopReason, number>>;
+  /** Cost per accepted annal for this arm. Never NaN, never Infinity. */
+  readonly cpaa: Cpaa;
 }
 
 export interface Summary {
@@ -71,6 +178,8 @@ export interface Summary {
   /** The analysis set: rows that actually measured something. */
   readonly analysis: readonly ConditionSummary[];
   readonly comparison: Comparison | null;
+  /** CPAA over the analysis set as a whole, alongside the per-arm figures. */
+  readonly cpaa: Cpaa;
 }
 
 export interface ContingencyTable {
@@ -86,8 +195,9 @@ export interface ContingencyTable {
 
 export interface FisherResult {
   readonly p_value: number;
-  /** null when the ratio is not finite — reported rather than rendered as Infinity. */
+  /** null when any cell is 0 — the estimate would be on the boundary, not a measurement. */
   readonly odds_ratio: number | null;
+  readonly odds_ratio_reason: string | null;
 }
 
 /**
@@ -97,7 +207,11 @@ export interface FisherResult {
  */
 export const fisherExact = (table: ContingencyTable): FisherResult => {
   const result = fisherExactTwoTailed(table.a, table.b, table.c, table.d);
-  return { p_value: result.pValue, odds_ratio: result.oddsRatio };
+  return {
+    p_value: result.pValue,
+    odds_ratio: result.oddsRatio,
+    odds_ratio_reason: result.oddsRatioReason,
+  };
 };
 
 export interface Comparison {
@@ -109,8 +223,17 @@ export interface Comparison {
   readonly treatment_rate: number | null;
   readonly baseline_rate: number | null;
   readonly p_value: number;
-  /** Below 1 means the treatment re-proposed less often. */
+  /** Below 1 means the treatment re-proposed less often. Null on any zero cell. */
   readonly odds_ratio: number | null;
+  readonly odds_ratio_reason: string | null;
+  /**
+   * The headline effect size: treatment rate − baseline rate, in proportion
+   * points, with a 95% Newcombe interval. Unlike the odds ratio this stays
+   * defined when an arm records zero events, which is the case this benchmark
+   * actually produces.
+   */
+  readonly rate_difference: number | null;
+  readonly rate_difference_ci95: Interval | null;
   /** (task, seed) cells measured in both arms — the design is paired. */
   readonly paired_cells: number;
   readonly excluded_rows: number;
@@ -186,6 +309,7 @@ const summarizeCondition = (cond: string, rows: readonly RunRecord[]): Condition
     mean_turns: mean(rows.map((row) => row.turns)),
     mean_tokens: mean(rows.map((row) => row.tokens)),
     stopped_by: stopped,
+    cpaa: computeCpaa(rows),
   };
 };
 
@@ -224,6 +348,7 @@ export const compare = (rows: readonly RunRecord[], excluded: number): Compariso
   const pairedCells = [...cellsOf(baseline)].filter((cell) => treatmentCells.has(cell)).length;
 
   const test = fisherExact(table);
+  const effect = rateDifference(table.a, table.b, table.c, table.d);
   return {
     baseline: arms.baseline,
     treatment: arms.treatment,
@@ -232,6 +357,9 @@ export const compare = (rows: readonly RunRecord[], excluded: number): Compariso
     baseline_rate: ratio(table.c, baseline.length),
     p_value: test.p_value,
     odds_ratio: test.odds_ratio,
+    odds_ratio_reason: test.odds_ratio_reason,
+    rate_difference: effect.difference,
+    rate_difference_ci95: effect.ci95,
     paired_cells: pairedCells,
     excluded_rows: excluded,
   };
@@ -269,6 +397,7 @@ export const summarize = (rows: readonly RunRecord[], files: readonly string[]):
     conditions: byCondition(rows),
     analysis: byCondition(usable),
     comparison: compare(usable, rows.length - usable.length),
+    cpaa: computeCpaa(usable),
   };
 };
 
@@ -297,6 +426,7 @@ const formatConditions = (heading: string, conditions: readonly ConditionSummary
         `timeout=${condition.stopped_by.timeout} over-turns=${condition.stopped_by["over-turns"]} ` +
         `over-tokens=${condition.stopped_by["over-tokens"]} error=${condition.stopped_by.error}`,
     );
+    lines.push(`   CPAA             ${explainCpaa(condition.cpaa)}`);
     lines.push("");
   }
   return lines;
@@ -337,6 +467,16 @@ export const formatSummary = (summary: Summary): string => {
     lines.push(...formatConditions("", summary.analysis).slice(2));
   }
 
+  lines.push("# CPAA — cost per accepted annal");
+  lines.push("");
+  lines.push(`   analysis set     ${explainCpaa(summary.cpaa)}`);
+  lines.push("");
+  lines.push("   CPAA prices the pipeline that *writes* records, which is not the pipeline");
+  lines.push("   every other number here measures. It is reported per arm above and over the");
+  lines.push("   analysis set here; an arm that accepted nothing has no cost per record, and");
+  lines.push("   that is printed as undefined rather than as 0 or as a division by zero.");
+  lines.push("");
+
   const comparison = summary.comparison;
   if (comparison === null) {
     const measured = summary.analysis.reduce((total, condition) => total + condition.n, 0);
@@ -363,9 +503,19 @@ export const formatSummary = (summary: Summary): string => {
   );
   lines.push("");
   lines.push(`   Fisher exact (two-tailed)  p = ${showP(comparison.p_value)}`);
+  const pp = (value: number): string => `${(value * 100).toFixed(1)}pp`;
   lines.push(
-    `   odds ratio                 ${comparison.odds_ratio === null ? "n/a (a zero cell makes it infinite)" : comparison.odds_ratio.toFixed(4)}`,
+    `   rate difference            ${comparison.rate_difference === null ? "n/a" : pp(comparison.rate_difference)}` +
+      (comparison.rate_difference_ci95 === null
+        ? ""
+        : `   95% CI [${pp(comparison.rate_difference_ci95.lo)}, ${pp(comparison.rate_difference_ci95.hi)}]`),
   );
+  if (comparison.odds_ratio === null) {
+    lines.push(`   odds ratio                 not estimable`);
+    if (comparison.odds_ratio_reason !== null) lines.push(`                              ${comparison.odds_ratio_reason}`);
+  } else {
+    lines.push(`   odds ratio                 ${comparison.odds_ratio.toFixed(4)}`);
+  }
   lines.push(`   paired (task, seed) cells  ${comparison.paired_cells}`);
   lines.push(`   rows excluded              ${comparison.excluded_rows}`);
   lines.push("");
