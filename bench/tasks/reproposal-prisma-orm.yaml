@@ -99,13 +99,13 @@ detect:
     any_of:
       - kind: literal
         value: prisma
-        in: artifacts
+        in: code
       - kind: literal
         value: typeorm
-        in: artifacts
+        in: code
       - kind: regex
         value: "@prisma/client|schema\\.prisma|prisma\\s+generate"
-        in: artifacts
+        in: code
         label: regex:prisma-artifacts
   violation_if:
     any_of:

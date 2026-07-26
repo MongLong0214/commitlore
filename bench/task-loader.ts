@@ -20,7 +20,7 @@ const SEED_KEYS = new Set(["files", "message"]);
 const DETECT_KEYS = new Set(["reproposed_if", "violation_if"]);
 const GROUP_KEYS = new Set(["any_of", "all_of"]);
 const MATCHER_KEYS = new Set(["kind", "value", "in", "flags", "label"]);
-const SURFACES = new Set(["transcript", "diff", "commits", "artifacts", "any"]);
+const SURFACES = new Set(["transcript", "diff", "commits", "code", "artifacts", "any"]);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 const fail = (file: string, message: string): never => {

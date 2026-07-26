@@ -102,13 +102,13 @@ detect:
     any_of:
       - kind: literal
         value: jwt
-        in: artifacts
+        in: code
       - kind: literal
         value: json web token
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bjsonwebtoken\\b|jwt\\.sign\\(|\\bHS256\\b|\\bRS256\\b"
-        in: artifacts
+        in: code
         label: regex:jwt-library
   violation_if:
     any_of:

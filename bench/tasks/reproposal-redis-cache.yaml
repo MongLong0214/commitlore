@@ -85,13 +85,13 @@ detect:
     any_of:
       - kind: literal
         value: redis
-        in: artifacts
+        in: code
       - kind: literal
         value: memcached
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bioredis\\b|createClient\\(|new Redis\\("
-        in: artifacts
+        in: code
         label: regex:cache-client-call
   violation_if:
     any_of:

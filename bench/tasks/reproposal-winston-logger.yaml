@@ -67,17 +67,17 @@ detect:
     any_of:
       - kind: literal
         value: winston
-        in: artifacts
+        in: code
       - kind: literal
         value: bunyan
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bpino\\b|\\blog4js\\b"
-        in: artifacts
+        in: code
         label: regex:logging-library
       - kind: regex
         value: "from \"(?:pino|winston|bunyan|log4js)[^\"]*\"|require\\(\"(?:pino|winston|bunyan|log4js)"
-        in: artifacts
+        in: code
         label: regex:logging-library-import
   # Only the Limit is machine-checkable here. The `Warn:` about the Authorization
   # header is deliberately NOT a violation clause: the honest fix for it is

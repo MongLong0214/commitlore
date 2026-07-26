@@ -85,17 +85,17 @@ detect:
     any_of:
       - kind: literal
         value: sigstore
-        in: artifacts
+        in: code
       - kind: literal
         value: gitsign
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bcosign\\b|\\bopenpgp\\b|\\bgpg\\b|\\bgpgsign\\b|\\bminisign\\b"
-        in: artifacts
+        in: code
         label: regex:signing-tool
       - kind: regex
         value: "createSign\\(|createVerify\\(|verify-commit|--gpg-sign|%GG\\b|\\brekor\\b"
-        in: artifacts
+        in: code
         label: regex:signature-verification-call
   # The Limit — offline grading — is machine-checkable, but only as a *call*. A
   # bare `https?://` was tried first and fired on both arms of every live run:

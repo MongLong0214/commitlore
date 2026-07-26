@@ -84,17 +84,17 @@ detect:
     any_of:
       - kind: literal
         value: postgres
-        in: artifacts
+        in: code
       - kind: literal
         value: mongodb
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bmysql2?\\b|\\bexpress\\b|\\bfastify\\b|\\bDATABASE_URL\\b"
-        in: artifacts
+        in: code
         label: regex:server-or-db-dependency
       - kind: regex
         value: "app\\.listen\\(|server\\.listen\\(|createServer\\(|\\.listen\\(\\s*\\d"
-        in: artifacts
+        in: code
         label: regex:server-bind
   # Both Limits are machine-checkable: the index must stay out of the repository,
   # so un-ignoring or adding it is a breach. `^-` matches a removed diff line.

@@ -81,16 +81,16 @@ detect:
       - kind: regex
         value: "^diff --git a/(?:CLAUDE|AGENTS|GEMINI|CONVENTIONS)\\.md"
         flags: "im"
-        in: artifacts
+        in: code
         label: regex:global-context-file-added
       - kind: regex
         value: "writeFileSync\\([^)]*(?:CLAUDE|AGENTS|GEMINI)\\.md|\\.cursorrules"
-        in: artifacts
+        in: code
         label: regex:global-context-file-written
       - kind: regex
         value: "^diff --git a/\\.claude/|^diff --git a/\\.github/copilot-instructions"
         flags: "im"
-        in: artifacts
+        in: code
         label: regex:agent-config-file-added
   # No violation clause. The Limit here is path scoping, and the pilot showed it
   # is not expressible as a regex over a diff.

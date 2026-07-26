@@ -369,3 +369,68 @@ in the verdict so that it cannot be mistaken for a result-driven revision.
 Limitation 1 continues to hold for `bench/tasks-ablation`, where the off-path
 records are planted on purpose and reach every arm, because the harness's
 injector does not scope (#36).
+
+---
+
+## 12. Second measurement (M1-b) — corrected detector
+
+Registered before the run, after the M1 result was known. The M1 result is not
+revised: `p = 0.7480` stands as the registered outcome of that measurement. This
+is a **new** measurement with a changed instrument, and it is reported as such.
+
+### What changed and why
+
+M1's `reproposed_if` matchers read the `artifacts` surface — diff plus commit
+messages. An agent writes its reasoning into commit messages, markdown and code
+comments, so a run that avoided the ruled-out alternative *and explained that it
+had* scored as a re-proposal. That was three of the treatment arm's five flags
+and none of the control arm's seven, because only the treatment arm is told the
+names it then mentions (`bench/DETECTOR-DEFECT.md`).
+
+`reproposed_if` now reads a new `code` surface: added diff lines, with
+documentation files (`.md`, `.markdown`, `.txt`, `.rst`, `.adoc`) and comment
+lines removed. Implementing an alternative leaves a manifest entry, an import, a
+construction or a configured endpoint; explaining that it was avoided leaves a
+sentence. `violation_if` is unchanged and stays instrumented-only.
+
+### What is not permitted
+
+- **The existing transcripts are not re-scored into a result.** Re-labelling
+  data whose outcome is already known is the move §4 exists to forbid. The
+  recorded runs were used only to check the surface behaves as intended, and
+  those counts are calibration, not findings.
+- **No comparison against M1's rates.** Different instrument, different
+  measurement. M1-b's numbers stand alone.
+- **§4 still holds.** One test on the full analysis set. No subset p-values.
+
+### Hypothesis, unchanged
+
+`commitlore-on` re-proposes a ruled-out alternative less often than
+`commitlore-off`. Two-tailed Fisher exact on the 2×2, α = 0.05.
+
+### Matrix
+
+10 tasks × 2 conditions × seeds 1,2,3 = 60 runs, `claude-haiku-4-5-20251001`,
+the environment controls of §5-b, against frozen code.
+
+### Detector requirements, registered
+
+1. **Calibrated against compliance.** The calibration set includes the case the
+   original three-way calibration lacked: a correct fix that explains what it
+   avoided. `test/bench-detect.test.ts` carries two of the M1 failures verbatim.
+2. **False-positive rate reported per arm.** A detector whose error rate differs
+   by arm biases the comparison at any magnitude, so the verdict states both.
+3. **Fresh run.** Not a re-score.
+
+### Verdict rules
+
+As §9, with one addition: if the arms differ, the verdict must state how many
+flags in each arm carry an implementation line, so that a repeat of the M1
+defect is visible in the report rather than only in the p-value.
+
+### Known limitations carried forward
+
+§11 as amended, including the withdrawal of §11-1. `code` inherits the honest
+limit of every lexical surface: an alternative implemented under a different
+name is invisible to it, and one named in a string literal or a variable name is
+counted. Both were true of `artifacts` too.

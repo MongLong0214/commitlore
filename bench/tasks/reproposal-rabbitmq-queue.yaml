@@ -93,17 +93,17 @@ detect:
     any_of:
       - kind: literal
         value: rabbitmq
-        in: artifacts
+        in: code
       - kind: literal
         value: bullmq
-        in: artifacts
+        in: code
       - kind: regex
         value: "\\bamqp(?:lib)?\\b|\\bsqs\\b|\\bkafkajs?\\b|\\bnats\\b"
-        in: artifacts
+        in: code
         label: regex:broker-client
       - kind: regex
         value: "@aws-sdk/client-sqs|amqp://|SendMessageCommand"
-        in: artifacts
+        in: code
         label: regex:broker-sdk
   violation_if:
     any_of:

@@ -21,10 +21,53 @@ export interface DetectionResult {
 export const normalize = (text: string): string =>
   text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 
+/** Documentation, where naming a technology is discussion rather than use. */
+const DOC_FILE = /\.(md|markdown|txt|rst|adoc)$/i;
+
+/** A line whose content is a comment in any of the languages these tasks use. */
+const COMMENT_LINE = /^\s*(\/\/|\/\*|\*|#|<!--|--)/;
+
+/**
+ * Added lines that are code: the diff's `+` lines, minus documentation files
+ * and minus comments.
+ *
+ * `artifacts` was introduced to stop a transcript matcher scoring a refusal as
+ * a re-proposal, and it did not go far enough. An agent writes its reasoning
+ * into commit messages, into markdown, and into comments, and all three are
+ * artifacts — so a run that avoided RabbitMQ *and said so* scored as having
+ * proposed it. Measured on the M1 matrix, that was three of the treatment arm's
+ * five flags and none of the control arm's seven, because only the treatment
+ * arm is told the names it then mentions (`bench/DETECTOR-DEFECT.md`).
+ *
+ * Implementing an alternative leaves a manifest entry, an import, a
+ * construction or a configured endpoint. Explaining that it was avoided leaves
+ * a sentence. This surface keeps the first and drops the second.
+ */
+const codeText = (diff: string): string => {
+  const kept: string[] = [];
+  let inDocFile = false;
+  for (const line of diff.split("\n")) {
+    // `+++ b/path` opens a file; `--- a/path` is its pair and carries the same
+    // path on a rename, so the `+++` side is the one that decides.
+    if (line.startsWith("+++ ")) {
+      inDocFile = DOC_FILE.test(line.slice(4).replace(/^b\//, "").trim());
+      continue;
+    }
+    if (line.startsWith("--- ") || line.startsWith("diff --git") || line.startsWith("@@")) continue;
+    if (!line.startsWith("+")) continue;
+    if (inDocFile) continue;
+    const body = line.slice(1);
+    if (COMMENT_LINE.test(body)) continue;
+    kept.push(body);
+  }
+  return kept.join("\n");
+};
+
 const surfaceText = (surfaces: Surfaces, where: Matcher["in"]): string => {
   if (where === "transcript") return surfaces.transcript;
   if (where === "diff") return surfaces.diff;
   if (where === "commits") return surfaces.commits;
+  if (where === "code") return codeText(surfaces.diff);
   if (where === "artifacts") return [surfaces.diff, surfaces.commits].join("\n");
   return [surfaces.transcript, surfaces.diff, surfaces.commits].join("\n");
 };

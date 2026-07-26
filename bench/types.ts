@@ -24,7 +24,13 @@ export type MatcherKind = "literal" | "regex";
  * transcript match cannot tell "use Redis" from "Redis was ruled out, so I will
  * not", and that false positive only ever fires in the injected arm.
  */
-export type MatchSurface = "transcript" | "diff" | "commits" | "artifacts" | "any";
+/**
+ * `code` is the surface a re-proposal detector should use: added diff lines
+ * with documentation files and comments removed, so that implementing an
+ * alternative counts and explaining that it was avoided does not. See
+ * `codeText` in `detect.ts` and `bench/DETECTOR-DEFECT.md`.
+ */
+export type MatchSurface = "transcript" | "diff" | "commits" | "code" | "artifacts" | "any";
 
 export interface Matcher {
   readonly kind: MatcherKind;
