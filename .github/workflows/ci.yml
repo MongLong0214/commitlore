@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The conformance suite and the dogfooding gate are the two things that make
+# this repository's claims checkable. Neither is optional, and neither is
+# allowed to pass by being skipped.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # test/dogfood.test.ts validates this repository's own commit history.
+          # A shallow clone would truncate it, and the suite is written to fail
+          # loudly rather than silently check nothing -- but there is no reason
+          # to make it do that on every run.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck bench
+        run: npx tsc -p bench/tsconfig.json --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit and dogfooding tests
+        run: npm test
+
+      # Fixture conformance, README example sync, and the README vocabulary
+      # table vs SPEC section 3. Documentation claims that can be checked by
+      # machine are checked by machine.
+      - name: Conformance suite
+        run: bash spec/verify.sh
+
+  # git's own behavior is the substrate this protocol delegates to, so a git
+  # version that parses trailers differently is a correctness problem, not a
+  # compatibility footnote. SPEC section 2.1 was derived empirically from one
+  # build; this job is where that assumption gets tested against others.
+  git-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Report git version
+        run: git --version
+      - name: Conformance suite
+        run: bash spec/verify.sh
