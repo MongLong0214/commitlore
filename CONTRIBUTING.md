@@ -43,7 +43,25 @@ Verified: <what you actually verified>
 Unverified: <known gaps>
 ```
 
-Trivial commits (typos, formatting) get no trailers — noise costs more than it returns. The full vocabulary is in [`spec/SPEC.md`](spec/) once F1 lands; until then the [README table](README.md#protocol-v2-vocabulary) is canonical.
+Trivial commits (typos, formatting) get no trailers — noise costs more than it returns. The full vocabulary is in [`spec/SPEC.md`](spec/SPEC.md).
+
+### Dogfooding is enforced, not aspirational
+
+`test/dogfood.test.ts` runs the validator over this repository's real history and fails the build on any violation. It checks that every in-scope record validates clean, carries a unique `Record-Id`, resolves its `Follows:`/`Supersedes:` references, and cites `Evidence:` paths that actually exist.
+
+The in-scope range is **derived, not configured**: it starts at the oldest commit whose record declares `CommitLore-Version:`. Nothing needs updating as history grows, because a hand-maintained cutoff is the first thing to go stale.
+
+**When it fails there are exactly two honest resolutions**, and either way the reasoning gets recorded in the fixing commit:
+
+| The commit was wrong | The rule was wrong |
+|---|---|
+| Fix the practice. Amend if unpushed; otherwise land a correcting record that `Supersedes:` it. | Change `spec/SPEC.md`, change the schema, **add a fixture that locks in the new rule**, and say in the commit why the old rule was wrong. |
+
+Editing the test to look away is neither. If you find yourself weakening an assertion to get green, that is the signal to pick one of the two columns instead.
+
+This loop has already changed the spec once: `Evidence:` originally required a `#anchor`, and the first records written against the spec — in this repository — hit that rule immediately. Citing a whole file is a normal citation and is exactly as checkable, so the grammar was relaxed and [`spec/fixtures/valid/12-evidence-bare-path.txt`](spec/fixtures/valid/12-evidence-bare-path.txt) plus [`spec/fixtures/invalid/06-format-evidence-not-a-citation.txt`](spec/fixtures/invalid/06-format-evidence-not-a-citation.txt) now pin both sides of the new boundary.
+
+The same loop covers the README: its example commit is [a fixture](spec/fixtures/valid/11-readme-example.txt), and `spec/verify.sh` fails if the two drift apart or if the vocabulary table stops matching SPEC §3. Documentation claims that can be checked by machine are checked by machine.
 
 ## Alternative implementations are welcome
 

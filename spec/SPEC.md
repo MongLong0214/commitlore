@@ -86,7 +86,7 @@ Sixteen keys. Every key exists because a route consumes it — see §5.
 | `Follows:` | `Record-Id` | yes | The prior record in a decision chain |
 | `Supersedes:` | `Record-Id` | yes | Retires an earlier record |
 | `Expires:` | `YYYY-MM-DD` \| free-text condition | no | When this record stops being active |
-| `Evidence:` | `path#anchor` \| URL | yes | Link from a claim to its proof |
+| `Evidence:` | `path` \| `path#anchor` \| URL | yes | Link from a claim to its proof |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
 | `CommitLore-Version:` | semver | no | Protocol version this record targets |
 | `X-<Name>:` | free text | yes | Organization extension — preserved, never interpreted by the core |
@@ -96,6 +96,8 @@ Sixteen keys. Every key exists because a route consumes it — see §5.
 Enum values name **what to do**, not an abstract grade. `Undo: permanent` tells an approval gate to stop; `Undo: level-3` would need a lookup every time. Any value outside the listed set is a violation (§6), including plausible synonyms — `Blast: wide`, `Undo: clean`, and `Certainty: high` MUST be rejected.
 
 `Record-Id` is a random-looking identifier, not a hash of anything: it must stay stable when the commit is rebased, amended, or squashed, which a content hash would not. `Follows:` and `Supersedes:` therefore reference `Record-Id`, never a commit SHA.
+
+`Evidence:` accepts a bare path. An earlier draft required an anchor, and the first records written against this spec — the ones in this repository's own history — hit that rule immediately: citing a whole file is a normal thing to do, and the harvest verifier can check a bare path exactly as well as an anchored one. Requiring an anchor only pressures authors to invent one.
 
 ---
 

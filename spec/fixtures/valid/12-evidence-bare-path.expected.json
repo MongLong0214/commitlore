@@ -1,0 +1,34 @@
+{
+  "description": "Evidence는 맨 경로·앵커 있는 경로·URL 세 형태를 모두 받는다. 앵커 강제는 가짜 앵커를 만들게 했다 (SPEC §3.3).",
+  "trailers": [
+    {
+      "key": "Limit",
+      "value": "the harvest verifier can only check citations it can resolve, so the grammar must not admit forms it cannot follow"
+    },
+    {
+      "key": "Evidence",
+      "value": "docs/adr/ADR-0009-rename-commitlore.md"
+    },
+    {
+      "key": "Evidence",
+      "value": "spec/SPEC.md#3-vocabulary"
+    },
+    {
+      "key": "Evidence",
+      "value": "https://example.org/reports/2026-07-audit"
+    },
+    {
+      "key": "Certainty",
+      "value": "firm"
+    },
+    {
+      "key": "Record-Id",
+      "value": "r-3c9f70"
+    },
+    {
+      "key": "CommitLore-Version",
+      "value": "2.0.0"
+    }
+  ],
+  "canonical": "Limit: the harvest verifier can only check citations it can resolve, so the grammar must not admit forms it cannot follow\nCertainty: firm\nRecord-Id: r-3c9f70\nEvidence: docs/adr/ADR-0009-rename-commitlore.md\nEvidence: spec/SPEC.md#3-vocabulary\nEvidence: https://example.org/reports/2026-07-audit\nCommitLore-Version: 2.0.0\n"
+}

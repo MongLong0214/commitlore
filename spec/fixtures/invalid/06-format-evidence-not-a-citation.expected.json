@@ -1,0 +1,34 @@
+{
+  "description": "Evidence 완화가 자유 서술까지 허용하지는 않는다. 공백이 있는 값은 수확 검증자가 해석할 수 없다.",
+  "trailers": [
+    {
+      "key": "Limit",
+      "value": "relaxing path#anchor to allow a bare path must not turn Evidence into free text -- the harvest verifier has to be able to resolve it"
+    },
+    {
+      "key": "Evidence",
+      "value": "see the design doc we discussed last week"
+    },
+    {
+      "key": "Certainty",
+      "value": "firm"
+    },
+    {
+      "key": "Record-Id",
+      "value": "r-6b1d82"
+    },
+    {
+      "key": "CommitLore-Version",
+      "value": "2.0.0"
+    }
+  ],
+  "violations": [
+    {
+      "key": "Evidence",
+      "value": "see the design doc we discussed last week",
+      "rule": "format",
+      "got": "see the design doc we discussed last week",
+      "want": "path, path#anchor, or a URL"
+    }
+  ]
+}

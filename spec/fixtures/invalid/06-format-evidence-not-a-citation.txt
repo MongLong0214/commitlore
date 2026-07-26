@@ -1,0 +1,8 @@
+Guard the relaxed Evidence grammar against over-permissiveness
+
+Limit: relaxing path#anchor to allow a bare path must not turn Evidence
+  into free text -- the harvest verifier has to be able to resolve it
+Evidence: see the design doc we discussed last week
+Certainty: firm
+Record-Id: r-6b1d82
+CommitLore-Version: 2.0.0

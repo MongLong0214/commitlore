@@ -1,0 +1,13 @@
+Relax the Evidence grammar to accept a bare path
+
+Citing a whole file is a normal citation, and the harvest verifier can
+check it exactly as well as an anchored one.
+
+Limit: the harvest verifier can only check citations it can resolve, so
+  the grammar must not admit forms it cannot follow
+Evidence: docs/adr/ADR-0009-rename-commitlore.md
+Evidence: spec/SPEC.md#3-vocabulary
+Evidence: https://example.org/reports/2026-07-audit
+Certainty: firm
+Record-Id: r-3c9f70
+CommitLore-Version: 2.0.0
