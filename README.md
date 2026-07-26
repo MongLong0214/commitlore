@@ -10,7 +10,11 @@
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
-> ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)). The CLI, MCP server, hooks, and GitHub Actions ship with **v0.1.0 (target 2026-08-23)**. Every claim in this README is either reproducible now or explicitly marked as planned — numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs.
+> ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)).
+>
+> The CLI, MCP server, hooks and GitHub Actions are **implemented and green on `main`** — they are not yet **published**, so `npx commitlore` does not work until v0.1.0 is released (target 2026-08-23). Until then, build from source: `npm ci && npm run build && node dist/cli.js --help`.
+>
+> Every claim in this README is either reproducible now or explicitly marked as planned, and numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs. This repository runs its own protocol against its own history in CI — see [dogfooding is enforced](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational).
 
 ---
 

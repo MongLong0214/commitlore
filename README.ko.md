@@ -10,7 +10,11 @@
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
-> ⚠️ **상태**: 프로토콜 자체는 **지금 당장** 순수 git만으로 사용할 수 있습니다([오늘 바로 쓰기](#오늘-바로-쓰기-순수-git) 참조). CLI·MCP 서버·훅·GitHub Action은 **v0.1.0(목표 2026-08-23)** 에서 배송됩니다. 이 README의 모든 주장은 지금 재현 가능하거나, 계획임이 명시돼 있습니다 — 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다.
+> ⚠️ **상태**: 프로토콜 자체는 **지금 당장** 순수 git만으로 사용할 수 있습니다([오늘 바로 쓰기](#오늘-바로-쓰기-순수-git) 참조).
+>
+> CLI·MCP 서버·훅·GitHub Action은 **구현이 끝났고 `main`에서 CI를 통과 중**입니다. 다만 아직 **배포되지 않았으므로** v0.1.0(목표 2026-08-23) 전까지 `npx commitlore`는 동작하지 않습니다. 그때까지는 소스에서 빌드하세요: `npm ci && npm run build && node dist/cli.js --help`.
+>
+> 이 README의 모든 주장은 지금 재현 가능하거나 계획임이 명시돼 있고, 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다. 이 저장소는 자기 프로토콜을 자기 히스토리에 CI에서 강제합니다 — [도그푸딩은 강제된다](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational) 참조.
 
 ---
 

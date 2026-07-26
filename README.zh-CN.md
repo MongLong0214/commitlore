@@ -10,7 +10,11 @@
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/commitlore/milestone/4)
 [![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
-> ⚠️ **状态**：协议本身**今天**就能用纯 git 使用（见[立即使用](#立即使用纯-git)）。CLI、MCP 服务器、钩子和 GitHub Actions 将随 **v0.1.0（目标 2026-08-23）** 交付。本 README 的每个论断要么现在可复现，要么明确标注为计划 —— 数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。
+> ⚠️ **状态**：协议本身**今天**就能用纯 git 使用（见[立即使用](#立即使用纯-git)）。
+>
+> CLI、MCP 服务器、钩子和 GitHub Actions **已实现，并在 `main` 上通过 CI**。但尚未**发布**，因此在 v0.1.0（目标 2026-08-23）之前 `npx commitlore` 无法使用。在此之前请从源码构建：`npm ci && npm run build && node dist/cli.js --help`。
+>
+> 本 README 的每个论断要么现在可复现，要么明确标注为计划，数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。本仓库在 CI 中对自己的历史强制执行自己的协议 —— 见[狗粮是强制的](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)。
 
 ---
 
