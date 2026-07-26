@@ -107,6 +107,26 @@ demonstrated is how much this changes an agent's behaviour — our own benchmark
 found no significant difference and we publish it anyway:
 [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md), [`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md).
 
+### Not a Node shop?
+
+npm is how *this CLI* ships. It is not how the protocol ships. A record is a git
+trailer, so any language reads it with git itself — no install, no runtime:
+
+```bash
+git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
+git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
+```
+
+That covers reading and writing. Node buys you the index, `guard`, trust
+grading and the MCP server — and [ADR-0002](docs/adr/ADR-0002-language-runtime.md)
+chose npm on a four-week schedule, ruling out a single static binary for that
+reason alone and marking it for re-evaluation ([#38](https://github.com/MongLong0214/commitlore/issues/38)).
+
+`spec/` ships **inside the npm package** on purpose: `spec/fixtures/` and
+`spec/contract-cases/` are the conformance suite, and an implementation in any
+language that passes them is a conforming implementation ([SPEC §9](spec/SPEC.md)).
+A Python port is an anticipated path, not a workaround.
+
 ## Use it today (plain git)
 
 The protocol needs zero tooling. Write trailers in your commits (or let your agent's instructions do it), then query with git itself:
