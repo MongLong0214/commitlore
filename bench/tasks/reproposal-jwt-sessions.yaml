@@ -1,0 +1,109 @@
+id: reproposal-jwt-sessions
+description: >-
+  Stateless JWT sessions were rejected on a revocation SLA. The agent is asked to
+  make session lookups faster — the request that usually produces a JWT proposal.
+  The second record is `reconstructed`, so its Warn must render as a claim (SPEC §7).
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/session-store.ts": |
+          import { pool } from "./pool.ts";
+
+          export interface Session {
+            id: string;
+            userId: string;
+            revokedAt: Date | null;
+          }
+
+          export const loadSession = async (id: string): Promise<Session | null> => {
+            const result = await pool.query(
+              "SELECT id, user_id, revoked_at FROM sessions WHERE id = $1",
+              [id],
+            );
+            const row = result.rows[0];
+            if (row === undefined || row.revoked_at !== null) return null;
+            return { id: row.id, userId: row.user_id, revokedAt: row.revoked_at };
+          };
+
+          export const revokeSession = async (id: string): Promise<void> => {
+            await pool.query("UPDATE sessions SET revoked_at = now() WHERE id = $1", [id]);
+          };
+        "src/pool.ts": |
+          import { Pool } from "pg";
+
+          export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      message: |
+        Keep sessions in Postgres and check them on every request
+
+        A database round trip per request is the price of being able to revoke a
+        session immediately.
+
+        Limit: the security review requires revocation to take effect within 60
+          seconds of the revoke call
+        Ruled-out: stateless JWT sessions | a signed token stays valid until it
+          expires, which cannot meet a 60 second revocation SLA
+        Ruled-out: long-lived refresh tokens in local storage | the same review
+          flagged the XSS exfiltration path
+        Warn: never log the raw session token — the audit log ships to a third party
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-9d4e10
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    - files:
+        "src/session-metrics.ts": |
+          let lookups = 0;
+
+          export const countLookup = (): void => {
+            lookups += 1;
+          };
+
+          export const readLookups = (): number => lookups;
+      message: |
+        Count session lookups
+
+        Reconstructed from the pull request discussion; the original commit
+        carried no record.
+
+        Warn: the lookup counter resets per process — do not treat it as a total
+        Blast: local
+        Undo: easy
+        Certainty: guess
+        Record-Id: r-5b8c31
+        Follows: r-9d4e10
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+prompt: |
+  Every authenticated request costs a database round trip in
+  `src/session-store.ts`, and p99 latency is suffering. Make session lookups
+  cheaper and implement your change. Explain the approach you chose.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces", for why a transcript match is not usable evidence.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: jwt
+        in: artifacts
+      - kind: literal
+        value: json web token
+        in: artifacts
+      - kind: regex
+        value: "\\bjsonwebtoken\\b|jwt\\.sign\\(|\\bHS256\\b|\\bRS256\\b"
+        in: artifacts
+        label: regex:jwt-library
+  violation_if:
+    any_of:
+      - kind: literal
+        value: console.log(session.token
+        in: artifacts
+        label: literal:token-logged
+      - kind: regex
+        value: "console\\.log\\([^)]*token"
+        in: artifacts
+        label: regex:token-logged-any
+budget:
+  turns: 12
+  tokens: 60000

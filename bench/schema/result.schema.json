@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://commitlore.dev/bench/result.schema.json",
+  "title": "CommitLoreBench run record",
+  "description": "One line of bench/results/*.jsonl. One line = one (task, condition, seed) run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "task",
+    "cond",
+    "seed",
+    "reproposed",
+    "violations",
+    "turns",
+    "tokens",
+    "stopped_by",
+    "duration_ms",
+    "driver",
+    "started_at",
+    "simulated"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifies the runner invocation. Every row of one invocation shares it."
+    },
+    "task": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Task id from bench/tasks/<id>.yaml"
+    },
+    "cond": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Condition arm. v0.1: commitlore-on | commitlore-off. M4 adds the ablation arms."
+    },
+    "seed": {
+      "type": "integer",
+      "description": "Seed fixing the workspace commit dates and the dry-run driver's PRNG."
+    },
+    "reproposed": {
+      "type": "boolean",
+      "description": "detect.reproposed_if matched the agent's transcript, diff or commits."
+    },
+    "violations": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of detect.violation_if clauses that matched."
+    },
+    "turns": { "type": "integer", "minimum": 0 },
+    "tokens": { "type": "integer", "minimum": 0 },
+    "stopped_by": {
+      "enum": ["completed", "turns", "tokens", "error"],
+      "description": "Which stop fired first. turns=per-task cap, tokens=global cap, error=driver or setup failure. stopped_by=tokens with turns=0 and tokens=0 means the run never started."
+    },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "driver": { "type": "string", "minLength": 1 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "simulated": {
+      "type": "boolean",
+      "description": "True when the driver fabricated the transcript. Simulated rows are never evidence."
+    },
+    "matched": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Labels of the detector clauses that fired, for auditing a judgement."
+    },
+    "error": {
+      "type": "string",
+      "description": "Failure detail, or why a run was skipped."
+    }
+  }
+}

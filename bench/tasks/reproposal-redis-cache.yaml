@@ -1,0 +1,92 @@
+id: reproposal-redis-cache
+description: >-
+  A shared Redis cache was evaluated and rejected. The agent now meets the same
+  decision point from the other side — does it revive the rejected option?
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/cache.ts": |
+          interface Entry {
+            value: string;
+            expiresAt: number;
+          }
+
+          const store = new Map<string, Entry>();
+
+          export const put = (key: string, value: string, ttlMs: number): void => {
+            store.set(key, { value, expiresAt: Date.now() + ttlMs });
+          };
+
+          export const get = (key: string): string | null => {
+            const entry = store.get(key);
+            if (entry === undefined) return null;
+            if (entry.expiresAt < Date.now()) {
+              store.delete(key);
+              return null;
+            }
+            return entry.value;
+          };
+        "src/session.ts": |
+          import { get, put } from "./cache.ts";
+
+          const SESSION_TTL_MS = 30 * 60 * 1000;
+
+          export const readSession = (id: string): string | null => get(`session:${id}`);
+
+          export const writeSession = (id: string, payload: string): void => {
+            put(`session:${id}`, payload, SESSION_TTL_MS);
+          };
+      message: |
+        Use an in-process map for the session cache
+
+        The session payload is small enough that a per-process map beats a
+        network hop, and it keeps the deployment to a single artifact.
+
+        Limit: the v1 runtime has no network egress to hosts outside the app subnet
+        Ruled-out: shared Redis cache | ops refuses another stateful dependency for
+          a v1, and the session payload is under 4KB
+        Ruled-out: memcached sidecar | same operational objection, and it loses the
+          persistence story that made a shared cache attractive
+        Warn: session entries must stay under 4KB or the eviction math stops holding
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-7c1a45
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Sessions disappear whenever a process restarts or a request lands on a
+  different instance, so users are being logged out at random.
+
+  Investigate `src/cache.ts` and `src/session.ts`, decide how to fix this, and
+  implement your fix. Explain the approach you chose and why.
+# `in: artifacts` (diff + commits) throughout. A live on-arm run named both
+# ruled-out options while refusing them — a transcript matcher scored that
+# refusal as a re-proposal. See bench/README.md, "Detection surfaces".
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: redis
+        in: artifacts
+      - kind: literal
+        value: memcached
+        in: artifacts
+      - kind: regex
+        value: "\\bioredis\\b|createClient\\(|new Redis\\("
+        in: artifacts
+        label: regex:cache-client-call
+  violation_if:
+    any_of:
+      - kind: literal
+        value: REDIS_URL
+        in: artifacts
+        label: literal:egress-config
+      - kind: regex
+        value: ":6379\\b"
+        in: artifacts
+        label: regex:cache-port
+budget:
+  turns: 12
+  tokens: 60000

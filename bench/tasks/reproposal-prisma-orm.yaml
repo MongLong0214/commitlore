@@ -1,0 +1,106 @@
+id: reproposal-prisma-orm
+description: >-
+  Prisma was rejected because the deploy pipeline has no build step. The agent is
+  asked to fix duplicated SQL — the shape of problem an ORM is usually reached for.
+  A superseded record is seeded alongside it to exercise lifecycle folding.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "src/db/pool.ts": |
+          import { Pool } from "pg";
+
+          export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      message: |
+        Talk to Postgres through a single direct pool
+
+        One pool per process, sized to the connection limit.
+
+        Ruled-out: pgbouncer in transaction mode | one more process to operate for
+          a service that opens four connections
+        Blast: module
+        Undo: easy
+        Certainty: tentative
+        Record-Id: r-11aa22
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    - files:
+        "src/db/queries.ts": |
+          import { pool } from "./pool.ts";
+
+          export const findUser = async (id: string) => {
+            const result = await pool.query("SELECT id, email, created_at FROM users WHERE id = $1", [id]);
+            return result.rows[0] ?? null;
+          };
+
+          export const findUserByEmail = async (email: string) => {
+            const result = await pool.query("SELECT id, email, created_at FROM users WHERE email = $1", [email]);
+            return result.rows[0] ?? null;
+          };
+
+          export const listRecentUsers = async (limit: number) => {
+            const result = await pool.query(
+              "SELECT id, email, created_at FROM users ORDER BY created_at DESC LIMIT $1",
+              [limit],
+            );
+            return result.rows;
+          };
+        "src/db/audit.ts": |
+          import { pool } from "./pool.ts";
+
+          export const recordAudit = async (actor: string, action: string) => {
+            await pool.query("INSERT INTO audit_log (actor, action) VALUES ($1, $2)", [actor, action]);
+          };
+      message: |
+        Hand-write the user queries against the pg driver
+
+        Three queries share a column list. That duplication is cheaper than the
+        alternatives given how this service is deployed.
+
+        Limit: the deploy pipeline runs the published artifact directly — there is
+          no build, codegen or migration step in the deploy path
+        Ruled-out: Prisma ORM | its client is generated at build time and the deploy
+          pipeline has no build step to generate it in
+        Ruled-out: TypeORM entities | decorators would force experimentalDecorators
+          across the whole codebase for one module
+        Warn: every query helper must stay parameterized — the audit actor is
+          attacker-controlled input
+        Blast: module
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-3f9be2
+        Supersedes: r-11aa22
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  The user queries in `src/db/queries.ts` repeat the same column list three
+  times, and a fourth query is about to be added. Clean this up so adding a
+  column does not mean editing four call sites, then implement your fix.
+# `in: artifacts` (diff + commits) throughout — see bench/README.md,
+# "Detection surfaces", for why a transcript match is not usable evidence.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: literal
+        value: prisma
+        in: artifacts
+      - kind: literal
+        value: typeorm
+        in: artifacts
+      - kind: regex
+        value: "@prisma/client|schema\\.prisma|prisma\\s+generate"
+        in: artifacts
+        label: regex:prisma-artifacts
+  violation_if:
+    any_of:
+      - kind: literal
+        value: postinstall
+        in: artifacts
+        label: literal:build-step-added
+      - kind: regex
+        value: "\"(?:build|postinstall|prepare)\"\\s*:"
+        in: artifacts
+        label: regex:package-build-script
+budget:
+  turns: 12
+  tokens: 60000
