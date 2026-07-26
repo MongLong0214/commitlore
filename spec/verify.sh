@@ -133,10 +133,20 @@ for readme in "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md; do
   rm -f /tmp/commitlore-readme-err.$$
 done
 
+# 5. README의 어휘표가 SPEC §3과 일치하는가.
+#    표에 스펙에 없는 키가 실리면 사용자가 그걸 쓰고 검증기에 거부당한다.
+if ! node "$SCRIPT_DIR/schema/readme-vocab-check.mjs" \
+  "$SCRIPT_DIR/SPEC.md" "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md \
+  >/tmp/commitlore-vocab.$$ 2>&1; then
+  fail "README 어휘표가 SPEC §3과 다르다"
+  cat /tmp/commitlore-vocab.$$ >&2
+fi
+rm -f /tmp/commitlore-vocab.$$
+
 if [ "$fail_count" -gt 0 ]; then
   echo "FAILED: $fail_count of $checked_count fixtures" >&2
   exit 1
 fi
 
-echo "OK: $checked_count fixtures + README example sync"
+echo "OK: $checked_count fixtures + README example sync + vocab table"
 exit 0
