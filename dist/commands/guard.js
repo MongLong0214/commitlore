@@ -112,23 +112,89 @@ const scopeCaveat = (paths) => paths.length > 1
     ? 'commitlore: renames are not followed for several paths; ' +
         'a record whose file was renamed may not be checked\n'
     : '';
+/**
+ * PreToolUse: flag a proposal that revives a ruled-out alternative, at the
+ * moment the agent proposes it.
+ *
+ * **The proposal is the edit, not the file.** `GUARD-CANNOT-BLOCK.md` measured
+ * both: matching prose produced nine false alarms in twenty-five against five on
+ * diffs, and every one of the prose failures was an agent *citing* the record it
+ * was obeying. `new_string` is the closest thing a PreToolUse payload has to a
+ * diff — it is what the agent is about to add, and nothing it is merely
+ * discussing.
+ *
+ * Advisory, never blocking. The same measurement showed true and false positives
+ * occupying one score band, so the only precision-safe threshold catches one in
+ * five. This surfaces what it found and lets the edit through; a hook that
+ * blocked one compliant edit in five would be removed within a day.
+ */
+const runAsHook = async (options) => {
+    let raw = '';
+    for await (const chunk of process.stdin)
+        raw += chunk;
+    let payload;
+    try {
+        payload = JSON.parse(raw || '{}');
+    }
+    catch {
+        return; // malformed payload: say nothing rather than guess
+    }
+    const proposal = payload.tool_input?.new_string;
+    const filePath = payload.tool_input?.file_path;
+    if (typeof proposal !== 'string' || proposal.trim() === '')
+        return;
+    const matches = guard({
+        proposal,
+        ...(typeof filePath === 'string' && filePath !== '' ? { paths: [filePath] } : {}),
+        threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
+        at: evaluationInstant(options.at) ?? new Date(),
+        noIndex: options.index === false,
+        // A hook fires on compliance too, so the citation signal is off here for the
+        // reason it exists: naming a record is what obeying one looks like.
+        requireContent: true,
+    });
+    if (matches.length === 0)
+        return;
+    const lines = matches.map((match) => `- ${match.alternative} — ruled out: ${match.reason} [${match.recordId ?? match.sha.slice(0, 8)}]`);
+    const context = [
+        'commitlore guard: this edit resembles an alternative already ruled out.',
+        '',
+        ...lines,
+        '',
+        'If the rejection no longer holds, say what changed. Not knowing is not a reason.',
+    ].join('\n');
+    process.stdout.write(`${JSON.stringify({
+        hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: context },
+    })}\n`);
+};
 export const register = (program) => {
     program
         .command('guard')
         .description('flag a proposal that revives an alternative already ruled out')
         .argument('[paths...]', 'limit the check to records touching these paths')
-        .requiredOption('--proposal <text>', 'the proposal to check; @<file> reads a file, @- reads stdin')
+        // Not `requiredOption`: under `--hook-input` the proposal arrives on stdin
+        // as part of the payload, and commander rejects the invocation before the
+        // action can say so. `inject` resolves `--path` the same way.
+        .option('--proposal <text>', 'the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)')
         .option('--threshold <n>', `match score required to flag (default: ${DEFAULT_THRESHOLD})`)
         .option('--json', 'emit the matches as JSON on stdout')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option("--require-content", "do not flag on a Record-Id reference alone — for blocking hooks, where citing a record is what compliance looks like")
         .option('--no-index', 'answer from git alone, without the SQLite index')
-        .action((paths, options) => {
+        .option('--hook-input', 'read a PreToolUse payload on stdin and answer as hook JSON, scoping the proposal to the edit')
+        .action(async (paths, options) => {
         try {
+            if (options.hookInput === true) {
+                await runAsHook(options);
+                return;
+            }
             const threshold = matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD;
             const at = evaluationInstant(options.at) ?? new Date();
             const matches = guard({
-                proposal: readProposal(options.proposal),
+                proposal: readProposal(options.proposal ??
+                    (() => {
+                        throw new Error("--proposal is required (or --hook-input, to read it from a hook payload)");
+                    })()),
                 paths,
                 threshold,
                 at,

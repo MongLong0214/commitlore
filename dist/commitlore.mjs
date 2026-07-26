@@ -14891,19 +14891,72 @@ var formatMatches = (matches) => {
 `;
 };
 var scopeCaveat = (paths) => paths.length > 1 ? "commitlore: renames are not followed for several paths; a record whose file was renamed may not be checked\n" : "";
+var runAsHook = async (options) => {
+  let raw = "";
+  for await (const chunk of process.stdin) raw += chunk;
+  let payload;
+  try {
+    payload = JSON.parse(raw || "{}");
+  } catch {
+    return;
+  }
+  const proposal = payload.tool_input?.new_string;
+  const filePath = payload.tool_input?.file_path;
+  if (typeof proposal !== "string" || proposal.trim() === "") return;
+  const matches = guard({
+    proposal,
+    ...typeof filePath === "string" && filePath !== "" ? { paths: [filePath] } : {},
+    threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
+    at: evaluationInstant(options.at) ?? /* @__PURE__ */ new Date(),
+    noIndex: options.index === false,
+    // A hook fires on compliance too, so the citation signal is off here for the
+    // reason it exists: naming a record is what obeying one looks like.
+    requireContent: true
+  });
+  if (matches.length === 0) return;
+  const lines = matches.map(
+    (match) => `- ${match.alternative} \u2014 ruled out: ${match.reason} [${match.recordId ?? match.sha.slice(0, 8)}]`
+  );
+  const context = [
+    "commitlore guard: this edit resembles an alternative already ruled out.",
+    "",
+    ...lines,
+    "",
+    "If the rejection no longer holds, say what changed. Not knowing is not a reason."
+  ].join("\n");
+  process.stdout.write(
+    `${JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: context }
+    })}
+`
+  );
+};
 var register4 = (program3) => {
-  program3.command("guard").description("flag a proposal that revives an alternative already ruled out").argument("[paths...]", "limit the check to records touching these paths").requiredOption(
+  program3.command("guard").description("flag a proposal that revives an alternative already ruled out").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
-    "the proposal to check; @<file> reads a file, @- reads stdin"
+    "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
   ).option("--threshold <n>", `match score required to flag (default: ${DEFAULT_THRESHOLD})`).option("--json", "emit the matches as JSON on stdout").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option(
     "--require-content",
     "do not flag on a Record-Id reference alone \u2014 for blocking hooks, where citing a record is what compliance looks like"
-  ).option("--no-index", "answer from git alone, without the SQLite index").action((paths, options) => {
+  ).option("--no-index", "answer from git alone, without the SQLite index").option(
+    "--hook-input",
+    "read a PreToolUse payload on stdin and answer as hook JSON, scoping the proposal to the edit"
+  ).action(async (paths, options) => {
     try {
+      if (options.hookInput === true) {
+        await runAsHook(options);
+        return;
+      }
       const threshold = matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD;
       const at = evaluationInstant(options.at) ?? /* @__PURE__ */ new Date();
       const matches = guard({
-        proposal: readProposal(options.proposal),
+        proposal: readProposal(
+          options.proposal ?? (() => {
+            throw new Error(
+              "--proposal is required (or --hook-input, to read it from a hook payload)"
+            );
+          })()
+        ),
         paths,
         threshold,
         at,
