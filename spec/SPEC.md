@@ -38,8 +38,11 @@ The following were verified empirically against `git interpret-trailers --parse`
 | B5 | Same key repeated | Every occurrence is preserved, in order |
 | B6 | `Key:value` (no space after colon) | Parsed; the value is normalized to `Key: value` on output |
 | B7 | Message with no trailer paragraph | Zero trailers; MUST NOT error |
+| B8 | Message whose **only** paragraph is a trailer block (no subject) | Zero trailers — the block is read as the subject |
 
 > B3 is the reason implementations MUST NOT identify trailers by line-matching (`grep '^Key:'`). Prose containing a colon-prefixed line would be counted as a record, producing false context for agents.
+>
+> B8 follows from the grammar — `message = subject , [ blank , body ] , [ blank , trailer-block ]` puts a subject before any trailer block — but it surfaces as a surprise, so it is stated. A tool that serializes a record and feeds the block straight back through a parser gets nothing back. Round-tripping a canonical block therefore requires a subject line in front of it; `spec/schema/roundtrip.mjs` prepends one for exactly this reason.
 
 ### 2.2 EBNF
 

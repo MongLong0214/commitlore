@@ -32,6 +32,10 @@
     "type": "git",
     "url": "git+https://github.com/MongLong0214/commitlore.git"
   },
+  "homepage": "https://github.com/MongLong0214/commitlore#readme",
+  "bugs": {
+    "url": "https://github.com/MongLong0214/commitlore/issues"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
