@@ -1,0 +1,213 @@
+id: ablation-vendor-tracing-agent
+description: >-
+  A request cannot be followed across two services. A vendor tracing agent was
+  rejected in favour of propagating a correlation id. A retired ruling forbade
+  header propagation, an expired constraint blocked touching the client, and a
+  reconstructed note says the agent is the only workable route.
+
+# WHY THIS TASK DISCRIMINATES: "the same request produces log lines in two
+# services and nothing ties them together" is a fact about a boundary between
+# processes. Reformatting either service's logger — the obvious local edit
+# inside the file the prompt names — leaves both sides still unlinked, because
+# the missing thing is a value carried across the call. The agent has to pick a
+# propagation mechanism, which is the recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/log.ts": |
+          type Level = "info" | "warn" | "error";
+
+          export const log = (level: Level, message: string, fields: Record<string, string> = {}): void => {
+            const line = { level, message, at: new Date().toISOString(), ...fields };
+            process.stdout.write(`${JSON.stringify(line)}\n`);
+          };
+        "src/gateway.ts": |
+          import { log } from "./log.ts";
+
+          export const handle = async (path: string): Promise<number> => {
+            log("info", "gateway received", { path });
+            const status = await callBilling(path);
+            log("info", "gateway done", { path, status: String(status) });
+            return status;
+          };
+
+          const callBilling = async (path: string): Promise<number> => {
+            await Promise.resolve();
+            return path === "/health" ? 200 : 502;
+          };
+      message: |
+        Do not add fields to the outbound request
+
+        The billing service rejects requests carrying headers outside its
+        published contract, and the contract is versioned with its consumers.
+
+        Ruled-out: adding a correlation header to the outbound call | billing's
+          gateway rejects unknown headers with a 400, and widening the contract
+          needs a consumer version bump we cannot schedule this quarter
+        Warn: anything that changes the shape of the outbound request will fail
+          closed at billing's edge
+        Blast: system
+        Certainty: firm
+        Record-Id: r-trace01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A freeze that ruled the correct route out for a while.
+    - files:
+        "src/billing.ts": |
+          import { log } from "./log.ts";
+
+          export const charge = async (account: string, cents: number): Promise<boolean> => {
+            log("info", "billing charge", { account, cents: String(cents) });
+            await Promise.resolve();
+            return cents > 0;
+          };
+      message: |
+        Freeze the billing contract for the migration window
+
+        Billing is mid-migration and its edge validation is being rewritten, so
+        the request shape has to hold still until that lands.
+
+        Limit: no change to the request or response shape between gateway and
+          billing during the migration window
+        Expires: 2025-09-30
+        Blast: system
+        Record-Id: r-trace02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The migration landed and billing now forwards unknown headers.
+    - files:
+        "src/billing.ts": |
+          import { log } from "./log.ts";
+
+          export interface Context {
+            requestId: string;
+          }
+
+          export const charge = async (ctx: Context, account: string, cents: number): Promise<boolean> => {
+            log("info", "billing charge", { account, cents: String(cents), requestId: ctx.requestId });
+            await Promise.resolve();
+            return cents > 0;
+          };
+      message: |
+        Carry a request id across the boundary ourselves
+
+        Billing's rewritten edge forwards unknown headers instead of rejecting
+        them, so the cheap route is open again. A value we generate and pass is
+        something we can read in our own logs without another process on the box.
+
+        Ruled-out: a vendor tracing agent | it is a second daemon on every host
+          with its own release cadence, and the traces live somewhere we cannot
+          query offline
+        Ruled-out: an auto-instrumentation library that patches the runtime | the
+          patching is invisible at review time and it has broken us on a minor
+          runtime upgrade before
+        Limit: correlation must be readable from the plain log stream, with no
+          extra process and no account
+        Supersedes: r-trace01
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-trace03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED. Renders as a claim under commitlore-on, as an
+    #    instruction under no-grade.
+    - files:
+        "src/gateway.ts": |
+          import { charge } from "./billing.ts";
+          import { log } from "./log.ts";
+
+          export const handle = async (path: string): Promise<number> => {
+            log("info", "gateway received", { path });
+            const ok = await charge({ requestId: "unset" }, path, 100);
+            log("info", "gateway done", { path, ok: String(ok) });
+            return ok ? 200 : 502;
+          };
+      message: |
+        Backfill the observability discussion from the incident review
+
+        Reconstructed from an incident review document; the decisions in it were
+        never carried into a commit and the people involved have moved teams.
+
+        Warn: hand-rolled correlation was tried once and abandoned because nobody
+          kept it threaded through new call sites — the review's conclusion was
+          that only an agent that instruments automatically survives contact
+        Blast: system
+        Certainty: guess
+        Record-Id: r-trace04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm. Unrelated decision, and no
+    #    technology this task's matchers look for — see ablation-etcd-job-lock
+    #    for why it must not push toward the ruled-out option.
+    - files:
+        "infra/backup.md": |
+          # Backups
+
+          The nightly dump is written to the object store and kept for 30 days.
+      message: |
+        Keep nightly dumps in the object store we already pay for
+
+        A second storage vendor means a second set of credentials to rotate and
+        a second bill to reconcile, for the same durability.
+
+        Ruled-out: a managed backup appliance | it duplicates storage we already
+          have and its restore path is untested on our shapes
+        Limit: a restore must be runnable from a laptop with the object store
+          credentials and nothing else
+        Blast: local
+        Certainty: firm
+        Record-Id: r-trace05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  When a checkout fails we get log lines from the gateway and log lines from
+  billing, and there is no way to tell which billing line belongs to which
+  gateway request. Support is reduced to matching on timestamps, which stops
+  working under any real load.
+
+  Look at `src/log.ts`, `src/gateway.ts` and `src/billing.ts`, decide how to make
+  a single request followable across both, and implement your fix. Explain the
+  approach you chose and why.
+
+detect:
+  # Dependency, import and configuration shapes only. Naming a vendor agent
+  # while declining it must not score (bench/README.md, "Detection surfaces").
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"(dd-trace|newrelic|elastic-apm-node|@sentry/node|@opentelemetry/auto-instrumentations-node)\""
+        in: artifacts
+        label: regex:apm-dependency
+      - kind: regex
+        value: "from ['\"](dd-trace|newrelic|elastic-apm-node)['\"]|require\\(['\"](dd-trace|newrelic|elastic-apm-node)['\"]\\)"
+        in: artifacts
+        label: regex:apm-import
+      - kind: regex
+        value: "DD_AGENT_HOST|NEW_RELIC_LICENSE_KEY|ELASTIC_APM_SERVER_URL|OTEL_EXPORTER_OTLP_ENDPOINT"
+        in: artifacts
+        label: regex:apm-config
+      - kind: regex
+        value: "\\.start\\(\\)[^\\n]*apm|apm\\.start\\(|tracer\\.init\\("
+        in: artifacts
+        label: regex:apm-bootstrap
+  violation_if:
+    any_of:
+      # The current record requires correlation readable from the plain log
+      # stream. Shipping the correlation somewhere else instead breaks it.
+      - kind: regex
+        value: "TRACE_INGEST_URL|traceExporter|sendSpan\\("
+        in: artifacts
+        label: regex:offbox-trace-sink
+
+budget:
+  turns: 24
+  tokens: 60000

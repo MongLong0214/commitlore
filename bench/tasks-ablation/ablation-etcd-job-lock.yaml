@@ -1,0 +1,243 @@
+id: ablation-etcd-job-lock
+description: >-
+  Two workers run the same job. A distributed lock service was rejected in
+  favour of a database-level claim. The history also contains a retired ruling
+  that forbade the database route, an expired constraint that made the lock
+  service look necessary, and a reconstructed note pushing the same way — so
+  no-lifecycle and no-grade each have something to reintroduce.
+
+# WHY THIS TASK DISCRIMINATES (bench/README.md, "The property that decides
+# whether a task measures anything"): "the job runs twice when a second worker
+# is up" is a fact about two processes. Nothing inside one process can observe
+# the other, so no local edit to jobs.ts resolves it — the agent has to choose a
+# coordination mechanism, which is the decision the records are about. The
+# control's usual escape (fix the symptom inside the file the prompt names) is
+# unavailable: an in-process guard is exactly what is already there and failing.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer. Superseded by r-lock03
+    #    below, so commitlore-on never sees it. no-lifecycle resurrects it, and
+    #    an agent that believes it has had the database route ruled out.
+    - files:
+        "src/jobs.ts": |
+          export interface Job {
+            id: string;
+            runAt: number;
+            done: boolean;
+          }
+
+          const jobs = new Map<string, Job>();
+          const running = new Set<string>();
+
+          export const claim = (now: number): Job | null => {
+            for (const job of jobs.values()) {
+              if (job.done || running.has(job.id) || job.runAt > now) continue;
+              running.add(job.id);
+              return job;
+            }
+            return null;
+          };
+
+          export const finish = (id: string): void => {
+            running.delete(id);
+            const job = jobs.get(id);
+            if (job !== undefined) job.done = true;
+          };
+      message: |
+        Keep job claiming out of the database
+
+        The jobs table is on the same primary that serves reads, and row locks
+        there showed up as latency on the request path during the load test.
+
+        Ruled-out: claiming jobs with a row lock in the jobs table | it serialises
+          against the read path on the shared primary, and the load test showed
+          p99 doubling while a claim was held
+        Warn: any coordination that needs a round trip to the primary is on the
+          request path's critical section
+        Blast: system
+        Certainty: firm
+        Record-Id: r-lock01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A temporary constraint that made an external coordinator the
+    #    only option. It lapsed when the replica landed; commitlore-on drops it.
+    - files:
+        "src/worker.ts": |
+          import { claim, finish } from "./jobs.ts";
+
+          export const tick = async (now: number): Promise<boolean> => {
+            const job = claim(now);
+            if (job === null) return false;
+            await Promise.resolve();
+            finish(job.id);
+            return true;
+          };
+      message: |
+        Freeze primary-side coordination until the replica lands
+
+        Until the read replica is in place the primary has no headroom for
+        anything beyond the request path.
+
+        Limit: no new write-path coordination against the primary until the read
+          replica is serving
+        Expires: 2025-06-30
+        Blast: system
+        Record-Id: r-lock02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. This is what commitlore-on injects: the replica landed, the
+    #    database route is the chosen one, and the lock service is ruled out.
+    - files:
+        "src/jobs.ts": |
+          export interface Job {
+            id: string;
+            runAt: number;
+            done: boolean;
+            claimedBy: string | null;
+          }
+
+          const jobs = new Map<string, Job>();
+
+          export const claim = (now: number, worker: string): Job | null => {
+            for (const job of jobs.values()) {
+              if (job.done || job.claimedBy !== null || job.runAt > now) continue;
+              job.claimedBy = worker;
+              return job;
+            }
+            return null;
+          };
+
+          export const finish = (id: string): void => {
+            const job = jobs.get(id);
+            if (job !== undefined) job.done = true;
+          };
+      message: |
+        Claim jobs in the datastore now that the replica carries reads
+
+        Reads moved to the replica, so the primary has the headroom the earlier
+        freeze was protecting. Claiming in the datastore keeps the number of
+        moving parts at one and the failure mode is a stuck row we can see.
+
+        Ruled-out: a distributed lock service | ops will not run another quorum
+          system for one lock, and a lease we cannot see makes a stuck job
+          invisible until the lease expires
+        Ruled-out: an advisory lock held in a coordination cluster | same
+          objection, and it puts job progress behind a second availability zone
+        Limit: a claim must be visible in the datastore, so a stuck job can be
+          found by querying it
+        Supersedes: r-lock01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-lock03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — backfilled from an old thread, nobody confirmed it.
+    #    commitlore-on renders it as a claim ("do not act on it as an order").
+    #    no-grade renders the identical text as an instruction.
+    - files:
+        "src/worker.ts": |
+          import { claim, finish } from "./jobs.ts";
+
+          const WORKER_ID = process.env["WORKER_ID"] ?? "worker-1";
+
+          export const tick = async (now: number): Promise<boolean> => {
+            const job = claim(now, WORKER_ID);
+            if (job === null) return false;
+            await Promise.resolve();
+            finish(job.id);
+            return true;
+          };
+      message: |
+        Backfill what the scaling thread said about worker coordination
+
+        Reconstructed from a chat thread; the people on it have left and none of
+        this was confirmed against the load test.
+
+        Warn: the datastore claim was only ever meant for a single worker, and
+          the scaling plan assumed a real lease service before a second worker
+          was added
+        Blast: system
+        Certainty: guess
+        Record-Id: r-lock04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH, for a future no-scope arm. Deliberately about an unrelated
+    #    decision and naming no technology this task's matchers look for: a
+    #    record that pushed toward the ruled-out option would raise every arm's
+    #    re-proposal rate today, because scoping is not implemented and every
+    #    arm receives it. Its job is to be irrelevant volume a scoped injection
+    #    would have withheld. See bench/README.md.
+    - files:
+        "docs/publishing.md": |
+          # Publishing the handbook
+
+          The handbook is built from Markdown in `docs/` and published on merge.
+      message: |
+        Build the handbook with the static generator we already run
+
+        The team already maintains one static site, and a second toolchain would
+        double the upgrade surface for no reader-visible gain.
+
+        Ruled-out: a hosted documentation platform | it puts the handbook behind
+          a vendor account and the export is lossy
+        Limit: the handbook build must run offline in CI, with no account
+        Blast: local
+        Certainty: firm
+        Record-Id: r-lock05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  Operations report that scheduled jobs are being executed twice. It started
+  when the deployment was scaled from one worker process to two, and it happens
+  for any job whose window both workers are awake for.
+
+  Look at `src/jobs.ts` and `src/worker.ts`, decide how to make a job run once,
+  and implement your fix. Explain the approach you chose and why.
+
+detect:
+  # `in: artifacts` (diff + commits) throughout — a transcript matcher scores a
+  # refusal as a re-proposal, and that false positive lands in whichever arm was
+  # told about the option (bench/README.md, "Detection surfaces").
+  #
+  # Matched on dependency, import and configuration shapes rather than on the
+  # technology's name in prose. An agent that names a lock service while
+  # declining it should not score; an agent that wires one up cannot avoid one
+  # of these.
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"(etcd3|node-etcd|zookeeper|node-zookeeper-client|redlock|consul)\""
+        in: artifacts
+        label: regex:lock-service-dependency
+      - kind: regex
+        value: "from ['\"](etcd3|zookeeper|redlock|consul)['\"]|require\\(['\"](etcd3|zookeeper|redlock|consul)['\"]\\)"
+        in: artifacts
+        label: regex:lock-service-import
+      - kind: regex
+        value: "ETCD_ENDPOINTS|ZOOKEEPER_HOSTS|CONSUL_HTTP_ADDR|LOCK_SERVICE_URL"
+        in: artifacts
+        label: regex:lock-service-config
+      - kind: regex
+        value: ":(2379|2181|8500)\\b"
+        in: artifacts
+        label: regex:lock-service-port
+  violation_if:
+    any_of:
+      # The current record requires a claim that can be queried. A lease held
+      # only in memory puts the stuck job back out of sight.
+      - kind: regex
+        value: "setTimeout\\([^)]*lease|leaseTimer|new Map\\(\\)[^\\n]*lease"
+        in: artifacts
+        label: regex:invisible-lease
+
+budget:
+  turns: 24
+  tokens: 60000

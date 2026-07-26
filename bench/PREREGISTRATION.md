@@ -126,6 +126,42 @@ node bench/verify.mjs bench/results/t702-m1-final.jsonl      # schema gate
 node --experimental-strip-types bench/metrics.ts bench/results/t702-m1-final.jsonl
 ```
 
+## 5-b. Environment control — fixed now
+
+The agent under test runs with the operator's machine taken out of the
+measurement:
+
+```
+--strict-mcp-config --mcp-config <empty> --setting-sources "" --no-session-persistence
+```
+
+This was added after the first attempt at this matrix was stopped at row 1. Every
+run had been loading eight MCP servers from the operator's global configuration —
+a code-search server, a docs server, a web-search server and a **memory** server
+among them. Three consequences, in increasing order of seriousness:
+
+1. **Cost.** Runs took roughly three minutes each instead of ~51 seconds.
+2. **Generalisability.** The numbers would have described one laptop's toolset.
+   Nobody else could reproduce them.
+3. **Independence.** A memory server persists across invocations. That is a
+   channel between runs which this experiment assumes does not exist.
+
+The third would have invalidated the result rather than merely explaining it.
+
+The difference is not cosmetic: the same task, arm and seed
+(`reproposal-redis-cache` / `commitlore-off` / 1) used 20,017 tokens across
+**1 turn** under the inherited configuration and 15,704 tokens across **11
+turns** under the controlled one. The environment was changing what the agent
+did, not just how long it took.
+
+The driver probes for each flag and, if the installed CLI lacks any of them,
+prints a warning and proceeds **uncontrolled** rather than failing to spawn. A
+run whose log carries that warning is not environment-controlled and must say so.
+
+**The pilot was not environment-controlled.** Its observations about task
+discriminating power stand — the property it identified is about task design,
+not about tooling — but its rates are not comparable to this run's.
+
 ## 6. What changed since the pilot, and why
 
 The distinction that matters: **the pilot is allowed to fix the design; it is not

@@ -1,4 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { AgentDriver, DriverOptions, DriverRequest, DriverResult } from "./types.ts";
 import { composePrompt } from "./types.ts";
@@ -103,12 +106,71 @@ const parseHeadlessJson = (stdout: string): HeadlessResult | null => {
   }
 };
 
+/**
+ * An empty MCP configuration, written once per driver. Paired with
+ * `--strict-mcp-config` it is what makes the measured agent a *clean* agent.
+ */
+const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+
+/**
+ * Flags that take the operator's machine out of the measurement.
+ *
+ * Without them the agent under test inherits whatever the person running the
+ * benchmark happens to have configured. Observed on the first attempt at this
+ * matrix: every run loaded eight MCP servers from the operator's global config
+ * -- a code-search server, a docs server, a web-search server, and a *memory*
+ * server among them. Three consequences, in increasing order of seriousness:
+ *
+ *   1. Startup cost. Runs took ~3 minutes each instead of ~9 seconds.
+ *   2. Generalisability. The numbers would describe one laptop's toolset, and
+ *      nobody else could reproduce them.
+ *   3. Independence. A memory server persists across invocations, which is a
+ *      channel between runs that the experiment assumes does not exist.
+ *
+ * The third is the one that would have invalidated the result rather than
+ * merely explaining it.
+ *
+ * Each flag is probed before use, so an older CLI degrades to an uncontrolled
+ * -- but reported -- environment rather than failing to spawn.
+ */
+const ISOLATION_FLAGS = [
+  "--strict-mcp-config",
+  "--setting-sources",
+  "--no-session-persistence",
+] as const;
+
 export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDriver => {
   const executable = options.executable ?? DEFAULT_EXECUTABLE;
   let maxTurnsFlag: boolean | null = null;
+  let isolation: string[] | null = null;
 
   const run = async (request: DriverRequest): Promise<DriverResult> => {
     if (maxTurnsFlag === null) maxTurnsFlag = supportsFlag(executable, "--max-turns");
+    if (isolation === null) {
+      const missing = ISOLATION_FLAGS.filter((flag) => !supportsFlag(executable, flag));
+      if (missing.length > 0) {
+        process.stderr.write(
+          `!! ${executable} does not support ${missing.join(", ")} — the agent under test will
+` +
+            `!! inherit this machine's MCP servers and settings. The run is not environment-controlled.
+`,
+        );
+        isolation = [];
+      } else {
+        const mcpPath = join(mkdtempSync(join(tmpdir(), "commitlore-bench-mcp-")), "mcp.json");
+        writeFileSync(mcpPath, EMPTY_MCP_CONFIG);
+        // `--setting-sources ""` drops user, project and local settings: no
+        // CLAUDE.md, no skills, no plugins, no hooks.
+        isolation = [
+          "--strict-mcp-config",
+          "--mcp-config",
+          mcpPath,
+          "--setting-sources",
+          "",
+          "--no-session-persistence",
+        ];
+      }
+    }
 
     const args = [
       "-p",
@@ -117,6 +179,7 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       "json",
       "--permission-mode",
       options.permissionMode ?? DEFAULT_PERMISSION_MODE,
+      ...isolation,
       ...(options.model === undefined ? [] : ["--model", options.model]),
       ...(maxTurnsFlag ? ["--max-turns", String(request.maxTurns)] : []),
     ];
