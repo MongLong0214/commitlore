@@ -1,0 +1,444 @@
+/**
+ * The stdio MCP server (T-401) — SPEC §5's consumer routes, addressed by an
+ * agent instead of a shell.
+ *
+ * ## One answer, not two
+ *
+ * The resource and `commitlore_query` return exactly what `commitlore context
+ * --json` returns, because two renderings of one answer become two answers the
+ * moment one of them is edited. `toJson` is therefore imported from
+ * `commands/query.ts` rather than re-derived here, even though it means this
+ * module reaches sideways into the CLI layer. `commitlore_stale` does the same
+ * with `buildReport` from `commands/stale.ts`.
+ *
+ * ## stdout belongs to the protocol
+ *
+ * A stdio server speaks newline-delimited JSON-RPC on stdout. One stray
+ * `console.log` — from this code, a dependency, or a native module's warning —
+ * lands in the middle of a frame, and the client disconnects with a parse error
+ * that names none of them. `startStdioServer` rebinds the console's
+ * stdout-bound methods onto stderr before it connects, and every diagnostic
+ * this module writes goes to stderr by hand.
+ *
+ * ## The low-level `Server`, not `McpServer`
+ *
+ * `McpServer.registerTool` takes a Zod schema, and Zod is not a dependency of
+ * this package — it arrives only underneath the SDK. Declaring tools in the
+ * wire's own JSON Schema keeps that transitive package out of our imports, and
+ * keeps the schema in this file byte-identical to the one the client is handed.
+ *
+ * ## Nothing leaves the machine
+ *
+ * Every answer comes from `git` and the local index, and the repository is the
+ * process's own working directory. There is no network client here, and
+ * `test/mcp.test.ts` asserts the absence rather than trusting it.
+ */
+
+import { Console } from 'node:console';
+import { readFileSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+  type CallToolResult,
+  type Tool,
+} from '@modelcontextprotocol/sdk/types.js';
+
+import { toJson, type JsonOutput } from '../commands/query.js';
+import { buildReport, collectRecords } from '../commands/stale.js';
+import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
+
+export const SERVER_NAME = 'commitlore';
+
+/** Used when the package manifest cannot be read — a version is not an answer. */
+const FALLBACK_VERSION = '0.0.0';
+
+const JSON_MIME = 'application/json';
+
+/** The four consumer routes of SPEC §5, under the names the CLI uses. */
+export const QUERY_KINDS = ['context', 'limits', 'ruled-out', 'warnings'] as const;
+
+export type QueryKind = (typeof QUERY_KINDS)[number];
+
+/** `context` asks for every key, which `runQuery` spells as no key filter. */
+const KEYS_BY_KIND: Record<QueryKind, readonly string[] | undefined> = {
+  context: undefined,
+  limits: [LIMIT_KEY],
+  'ruled-out': [RULED_OUT_KEY],
+  warnings: [WARN_KEY],
+};
+
+export const QUERY_TOOL = 'commitlore_query';
+export const STALE_TOOL = 'commitlore_stale';
+export const GUARD_TOOL = 'commitlore_guard';
+
+/**
+ * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
+ * expansion (`{+path}`) so a client fills it with a real path rather than one
+ * whose separators have been percent-escaped into a single opaque segment —
+ * though `readContext` accepts either.
+ */
+export const CONTEXT_URI_PREFIX = 'commitlore://context/';
+export const CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
+
+/**
+ * What `commitlore_guard` says until T-405 lands. It is deliberately an error
+ * result: a tool that answered "nothing matched" would be read as "this
+ * proposal is not ruled out", which is the one wrong answer guard exists to
+ * prevent.
+ */
+export const GUARD_NOT_WIRED =
+  `${GUARD_TOOL} is declared but not wired: the Ruled-out matcher (T-405, src/core/guard.ts) ` +
+  'has not landed yet, so no match was computed. Do not read this as "no ruled-out record ' +
+  `matches this proposal" — nothing was checked. Use ${QUERY_TOOL} with kind "ruled-out" to ` +
+  'read the records directly in the meantime.';
+
+export interface McpServerOptions {
+  /** The repository to answer about. Defaults to the process's own directory. */
+  cwd?: string;
+}
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/** Diagnostics never touch stdout; that stream carries JSON-RPC and nothing else. */
+const warn = (message: string): void => {
+  process.stderr.write(`commitlore mcp: ${message}\n`);
+};
+
+/**
+ * The package's version, for the `serverInfo` the client sees. Two levels up
+ * from this module is the package root from both `src/` and `dist/`.
+ */
+const packageVersion = (): string => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as { version?: string };
+    return pkg.version ?? FALLBACK_VERSION;
+  } catch (error) {
+    warn(`could not read the package version (${errorMessage(error)})`);
+    return FALLBACK_VERSION;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Paths — the repository is the boundary
+// ---------------------------------------------------------------------------
+
+/**
+ * Turns a caller-supplied path into one this server will answer about, or
+ * throws.
+ *
+ * The repository root is the process's working directory (T-401), so a path
+ * that resolves outside it is not a query this server can answer — it is a
+ * request to read somewhere else, and `..` is all it takes to write one. The
+ * check is on the *resolved* path rather than on the presence of `..`, so
+ * `src/../src` is allowed (it names the repository) while `../other` is not.
+ *
+ * The empty string and `.` both mean the whole repository, which is what
+ * `runQuery` already understands them to mean.
+ */
+export const resolveRepoPath = (root: string, raw: string): string => {
+  if (raw === '' || raw === '.') return '';
+  // git arguments cannot carry a NUL: `spawnSync` rejects the argument outright,
+  // which would surface as a spawn failure rather than as the bad input it is.
+  if (raw.includes('\0')) throw new Error('path contains a NUL byte');
+  if (isAbsolute(raw)) {
+    throw new Error(`path must be relative to the repository root: ${raw}`);
+  }
+
+  const resolved = resolve(root, raw);
+  if (resolved !== root && !resolved.startsWith(`${root}${sep}`)) {
+    throw new Error(`path escapes the repository root: ${raw}`);
+  }
+  return relative(root, resolved);
+};
+
+/**
+ * The path inside a `commitlore://context/...` URI.
+ *
+ * Matching the prefix literally, rather than parsing the URI, is what keeps a
+ * host that differs only in case (`commitlore://Context/...`, which WHATWG
+ * parsing preserves for a non-special scheme) from being served as if it were
+ * the resource this server declares.
+ */
+export const contextUriPath = (uri: string): string => {
+  const bare = uri === CONTEXT_URI_PREFIX.slice(0, -1);
+  if (!bare && !uri.startsWith(CONTEXT_URI_PREFIX)) {
+    throw new Error(`unknown resource: ${uri} (this server serves ${CONTEXT_URI_TEMPLATE})`);
+  }
+  const encoded = bare ? '' : uri.slice(CONTEXT_URI_PREFIX.length);
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    throw new Error(`resource URI is not valid percent-encoding: ${uri}`);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// The answers themselves
+// ---------------------------------------------------------------------------
+
+/**
+ * One consumer-route answer, in the schema `--json` prints. Diagnostics are
+ * carried in that schema *and* mirrored to stderr: a client that only shows the
+ * model the tool result still leaves the operator a record of how the answer
+ * was produced.
+ */
+const contextJson = (root: string, kind: QueryKind, path: string): JsonOutput => {
+  const keys = KEYS_BY_KIND[kind];
+  const result = runQuery({
+    cwd: root,
+    ...(path === '' ? {} : { paths: [path] }),
+    ...(keys === undefined ? {} : { keys }),
+  });
+  for (const diagnostic of result.diagnostics) warn(diagnostic);
+  return toJson(kind, result);
+};
+
+const asText = (value: unknown): CallToolResult => ({
+  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+});
+
+// ---------------------------------------------------------------------------
+// Tool declarations — the JSON Schema the client is handed
+// ---------------------------------------------------------------------------
+
+/** Every tool here reads; none of them touches anything outside the machine. */
+const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
+
+const TOOLS: readonly Tool[] = [
+  {
+    name: QUERY_TOOL,
+    description:
+      'Active CommitLore records for a path: the constraints, ruled-out alternatives and ' +
+      'warnings recorded in git history. Same answer as `commitlore <kind> --json`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: [...QUERY_KINDS],
+          description:
+            'context = every kind at once; limits = Limit:; ruled-out = Ruled-out:; warnings = Warn:',
+        },
+        path: {
+          type: 'string',
+          description:
+            'repository-relative path to scope the answer to (renames are followed); ' +
+            'omit for the whole repository',
+        },
+      },
+      required: ['kind'],
+      additionalProperties: false,
+    },
+    annotations: { ...READS_ONLY, title: 'Query CommitLore records' },
+  },
+  {
+    name: STALE_TOOL,
+    description:
+      'Records that are no longer carrying their weight: superseded, past a date-form ' +
+      'Expires:, or flagged for review by a condition-form one. Same answer as ' +
+      '`commitlore stale --json`.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { ...READS_ONLY, title: 'List stale CommitLore records' },
+  },
+  {
+    name: GUARD_TOOL,
+    description:
+      'Check a proposal against the Ruled-out records for a path. NOT WIRED YET (T-405): ' +
+      'every call returns an error saying so, and never a verdict.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proposal: {
+          type: 'string',
+          description: 'the proposed approach, in the words it would be carried out in',
+        },
+        path: {
+          type: 'string',
+          description: 'repository-relative path whose Ruled-out records to check against',
+        },
+      },
+      required: ['proposal'],
+      additionalProperties: false,
+    },
+    annotations: { ...READS_ONLY, title: 'Guard a proposal against ruled-out alternatives' },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Tool arguments — validated here, because the transport does not
+// ---------------------------------------------------------------------------
+
+type ToolArgs = Record<string, unknown>;
+
+const stringArg = (args: ToolArgs, name: string): string | undefined => {
+  const value = args[name];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new Error(`${name} must be a string`);
+  return value;
+};
+
+const requiredString = (args: ToolArgs, name: string): string => {
+  const value = stringArg(args, name);
+  if (value === undefined || value.trim() === '') {
+    throw new Error(`${name} is required and must be a non-empty string`);
+  }
+  return value;
+};
+
+const kindArg = (args: ToolArgs): QueryKind => {
+  const raw = requiredString(args, 'kind');
+  const kind = QUERY_KINDS.find((candidate) => candidate === raw);
+  if (kind === undefined) {
+    throw new Error(`kind must be one of ${QUERY_KINDS.join(', ')}; got ${raw}`);
+  }
+  return kind;
+};
+
+const pathArg = (root: string, args: ToolArgs): string =>
+  resolveRepoPath(root, stringArg(args, 'path') ?? '');
+
+// ---------------------------------------------------------------------------
+// Assembly
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the server, wired to one repository.
+ *
+ * A tool that fails on its input answers with `isError`, not with a JSON-RPC
+ * error: the protocol reserves error responses for failures in *finding* the
+ * tool, and a model that never sees the message cannot correct the call that
+ * caused it. A request naming a tool that does not exist is the other case, and
+ * throws.
+ */
+export const createServer = (opts: McpServerOptions = {}): Server => {
+  const root = resolve(opts.cwd ?? process.cwd());
+
+  const server = new Server(
+    { name: SERVER_NAME, version: packageVersion() },
+    {
+      capabilities: { resources: {}, tools: {} },
+      instructions:
+        'CommitLore serves the decision record kept in this repository\'s git trailers. Read ' +
+        `${CONTEXT_URI_TEMPLATE} before editing a path, and treat an active Limit: as a ` +
+        'constraint on the change you are about to make.',
+    },
+  );
+
+  const handlers: Record<string, (args: ToolArgs) => CallToolResult> = {
+    [QUERY_TOOL]: (args) => {
+      const kind = kindArg(args);
+      return asText(contextJson(root, kind, pathArg(root, args)));
+    },
+    [STALE_TOOL]: () => asText(buildReport(collectRecords({ cwd: root }), new Date())),
+    [GUARD_TOOL]: (args) => {
+      // The contract is enforced even though nothing consumes it yet: a caller
+      // that gets its arguments wrong should hear about that, not about T-405.
+      requiredString(args, 'proposal');
+      pathArg(root, args);
+
+      // T-405 연동 지점 — replace this body with the matcher from
+      // `core/guard.ts` (`{matched, sha, reason}`) once it lands. Until then
+      // this returns no verdict of any kind, by design.
+      return { content: [{ type: 'text', text: GUARD_NOT_WIRED }], isError: true };
+    },
+  };
+
+  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
+
+  server.setRequestHandler(CallToolRequestSchema, (request) => {
+    const handler = handlers[request.params.name];
+    if (handler === undefined) throw new Error(`unknown tool: ${request.params.name}`);
+    try {
+      return handler(request.params.arguments ?? {});
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `commitlore: ${errorMessage(error)}` }],
+        isError: true,
+      };
+    }
+  });
+
+  /**
+   * The repository as a whole is the one resource that can be enumerated.
+   * Every path in the tree is addressable, but listing them would be a listing
+   * of the repository rather than of what has been recorded about it — the
+   * template below is how a client discovers the path form.
+   */
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    resources: [
+      {
+        uri: CONTEXT_URI_PREFIX,
+        name: 'commitlore-context',
+        title: 'CommitLore context (whole repository)',
+        description:
+          'Every active CommitLore record in this repository, in the schema `commitlore ' +
+          'context --json` prints.',
+        mimeType: JSON_MIME,
+      },
+    ],
+  }));
+
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({
+    resourceTemplates: [
+      {
+        uriTemplate: CONTEXT_URI_TEMPLATE,
+        name: 'commitlore-context-path',
+        title: 'CommitLore context for a path',
+        description:
+          'Active CommitLore records scoped to one repository-relative path, renames followed.',
+        mimeType: JSON_MIME,
+      },
+    ],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => {
+    const { uri } = request.params;
+    const path = resolveRepoPath(root, contextUriPath(uri));
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: JSON_MIME,
+          text: JSON.stringify(contextJson(root, 'context', path), null, 2),
+        },
+      ],
+    };
+  });
+
+  return server;
+};
+
+/**
+ * Routes everything the console would have put on stdout to stderr.
+ *
+ * This is not defensive tidiness: stdout is the JSON-RPC frame stream, and a
+ * single line written to it by anything in the process corrupts the session.
+ * The methods are rebound rather than silenced, because a diagnostic that
+ * vanishes is its own kind of failure.
+ */
+const routeConsoleToStderr = (): void => {
+  const stderrConsole = new Console({ stdout: process.stderr, stderr: process.stderr });
+  console.log = stderrConsole.log.bind(stderrConsole);
+  console.info = stderrConsole.info.bind(stderrConsole);
+  console.debug = stderrConsole.debug.bind(stderrConsole);
+  console.dir = stderrConsole.dir.bind(stderrConsole);
+  console.table = stderrConsole.table.bind(stderrConsole);
+};
+
+/** Connects the server to this process's stdin/stdout. Resolves once listening. */
+export const startStdioServer = async (opts: McpServerOptions = {}): Promise<Server> => {
+  routeConsoleToStderr();
+  const server = createServer(opts);
+  await server.connect(new StdioServerTransport());
+  return server;
+};

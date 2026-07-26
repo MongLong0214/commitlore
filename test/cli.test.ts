@@ -48,8 +48,9 @@ describe('commitlore CLI', () => {
   const LANDED = [
     'parse', 'validate', 'hooks', 'index', 'context', 'limits',
     'ruled-out', 'warnings', 'stale', 'doctor', 'harvest',
+    'harvest-verify', 'squash-preserve',
   ];
-  const UNLANDED = ['guard', 'inject', 'squash-preserve', 'harvest-verify', 'mcp', 'backfill'];
+  const UNLANDED = ['guard', 'inject', 'mcp', 'backfill'];
 
   it('names itself commitlore and lists every landed command', () => {
     const result = runCli(['--help']);
