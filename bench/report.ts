@@ -77,16 +77,34 @@ export interface DeclaredSource {
  */
 export const README_SOURCES: readonly DeclaredSource[] = [
   {
-    file: "bench/results/t702-m1-haiku45.jsonl",
-    status: "superseded",
+    file: "bench/results/t702-m1-final.jsonl",
+    status: "final",
     status_note:
-      "`bench/runner.ts` and `src/core/inject.ts` were edited while the matrix was running, so the code that " +
-      "produced these rows is no longer in the repository and the run cannot be reproduced from it. The rows are " +
-      "not split across two versions — the matrix ran as one process whose import graph is entirely static, so the " +
-      "edits never reached the running code — but a number nobody can regenerate is not a result. The measurement " +
-      "is being re-run against frozen code.",
+      "The registered M1 measurement, run against frozen code `a376808` under the environment controls of " +
+      "PREREGISTRATION.md §5-b. The verdict is bench/VERDICT-M1.md. Each file's own manifest is the authority " +
+      "on its status; these declarations are the fallback.",
   },
 ];
+
+/*
+ * The ablation log is deliberately NOT listed above.
+ *
+ * `bench/results/t703-ablation.jsonl` is a different synthetic repository with
+ * its own `commitlore-on` arm. Adding it here pools that arm with the primary
+ * matrix's: n goes to 37, the task count to 17, and the headline Fisher test
+ * silently becomes 5/37 against 7/30 — p = 0.3487 instead of the registered
+ * 5/30 against 7/30, p = 0.7480. That is not a hypothetical: both files were
+ * listed here once, the generator pooled them, and the wrong p-value reached
+ * the working tree before it was caught and never got committed. The warning
+ * sits in the code that would cause it rather than only in the manifest that
+ * forbids it, because the manifest is not what a future editor of this list
+ * will be reading.
+ *
+ * `readSources` unions every file it is handed and groups by condition alone —
+ * it has no notion of which repository a row came from. Until a report can
+ * report per-dataset, the ablation belongs in bench/README.md and the manifest,
+ * not in the block CI regenerates.
+ */
 
 export const MARKER_BEGIN = "<!-- BENCH:BEGIN -->";
 export const MARKER_END = "<!-- BENCH:END -->";

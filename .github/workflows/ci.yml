@@ -64,6 +64,15 @@ jobs:
       - name: Conformance suite
         run: bash spec/verify.sh
 
+      # Every measured figure in the README is regenerated from bench/results/
+      # through bench/report.ts and compared byte for byte, and a short list of
+      # statistics is refused outside the generated block. A rate somebody typed,
+      # or one generated honestly and then left behind when the matrix grew,
+      # fails here. This ran without --write on purpose: CI checks, it never
+      # rewrites, so a branch that skipped the regeneration still fails.
+      - name: README measured numbers are regenerable
+        run: node scripts/check-readme-numbers.mjs
+
       # test/dogfood.test.ts exercises the library. This exercises the binary a
       # user actually installs, against this repository's own history, which is
       # the only way the packaged entry point, its schema lookup from dist/, and
