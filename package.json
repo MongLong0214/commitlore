@@ -33,14 +33,17 @@
     "url": "git+https://github.com/MongLong0214/commitlore.git"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "better-sqlite3": "^13.0.1",
     "commander": "^15.0.0",
     "js-yaml": "^5.2.2"
   }
