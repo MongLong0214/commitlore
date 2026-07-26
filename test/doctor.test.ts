@@ -27,6 +27,7 @@ import {
 } from '../src/commands/doctor.js';
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
+import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { commitMsgStub } from '../src/hooks/commit-msg.js';
@@ -262,13 +263,28 @@ describe('doctor: git capability and index', () => {
     expect(report.exitCode).toBe(1);
   });
 
-  it('reports the index check as skipped until T-203 lands', () => {
+  it('warns rather than fails when a repository has no index yet', () => {
+    // The index is a derived cache (ADR-0003) and every query has a --no-index
+    // path, so its absence costs speed, not correctness. Reporting it as a
+    // failure would train people to ignore doctor's exit code.
     const { repo } = repoWithRemote('doctor-index');
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'index-health');
 
-    expect(check?.status).toBe('skipped');
-    expect(check?.detail).toContain('T-203');
+    expect(check?.status).toBe('warn');
+    expect(check?.fix).toContain('commitlore index');
+  });
+
+  it('reports the index as ok once it is current with HEAD', () => {
+    const { repo } = repoWithRemote('doctor-index-built');
+    const handle = openIndex({ cwd: repo });
+    rebuildIndex(handle);
+    closeIndex(handle);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'index-health');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('current with HEAD');
   });
 });
 
@@ -316,6 +332,6 @@ describe('doctor: report', () => {
     expect(text.endsWith('\n')).toBe(true);
     expect(text).toContain('notes fetch refspec');
     expect(text).toContain(`fix: git config --add remote.origin.fetch '${NOTES_REFSPEC}'`);
-    expect(text).toContain('skipped');
+    expect(text).toContain('index health');
   });
 });

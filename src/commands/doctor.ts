@@ -22,6 +22,7 @@ import { resolve } from 'node:path';
 import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
+import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import { HOOK_MARKER } from '../hooks/commit-msg.js';
@@ -246,12 +247,72 @@ const checkGit = (opts: DoctorOptions): DoctorCheck => {
   return check(id, title, 'ok', `${version} parses trailers as the spec expects`);
 };
 
-/** Placeholder until the index lands (T-203); reported, never guessed at. */
-const checkIndex = (): DoctorCheck =>
-  check('index-health', 'index health', 'skipped', 'the index is not implemented yet (T-203)');
+/**
+ * The index is a derived cache (ADR-0003), so its absence is not a fault and
+ * neither is a stale one -- both are a `warn` with the command that rebuilds
+ * it. A corrupt or unreadable database is also only a warning, because every
+ * query has a `--no-index` path that returns the same rows more slowly. The
+ * only thing worth reporting loudly is that the operator cannot tell which
+ * state they are in.
+ */
+const checkIndex = (opts: DoctorOptions): DoctorCheck => {
+  const cwd = opts.cwd ?? process.cwd();
+  let handle;
+  try {
+    handle = openIndex({ cwd, readonly: true });
+  } catch {
+    return check(
+      'index-health',
+      'index health',
+      'warn',
+      'no index yet — queries fall back to scanning the history',
+      'commitlore index --rebuild',
+    );
+  }
+  try {
+    const info = indexInfo(handle);
+    const head = execGit(['rev-parse', 'HEAD'], gitOptions(opts));
+    const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
+    const fts = info.fts ? 'FTS5' : 'no FTS5 (value search falls back to LIKE)';
+    return behind
+      ? check(
+          'index-health',
+          'index health',
+          'warn',
+          `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`,
+          'commitlore index',
+        )
+      : check(
+          'index-health',
+          'index health',
+          'ok',
+          `${info.trailers} trailers over ${info.commits} commits, current with HEAD — ${fts}`,
+        );
+  } catch (error) {
+    return check(
+      'index-health',
+      'index health',
+      'warn',
+      `index unreadable (${error instanceof Error ? error.message : String(error)}) — queries still work without it`,
+      'commitlore index --rebuild',
+    );
+  } finally {
+    try {
+      closeIndex(handle);
+    } catch {
+      // A close failure on a read-only handle changes nothing the caller can act on.
+    }
+  }
+};
 
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
-  const checks = [checkRefspec(opts), checkPush(opts), checkHook(opts), checkGit(opts), checkIndex()];
+  const checks = [
+    checkRefspec(opts),
+    checkPush(opts),
+    checkHook(opts),
+    checkGit(opts),
+    checkIndex(opts),
+  ];
   return {
     checks,
     exitCode: checks.some((entry) => entry.status === 'fail') ? 1 : 0,
