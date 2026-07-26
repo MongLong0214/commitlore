@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# derived index — never committed (ADR-0003)
+.git/annals/
+
+# local bench output
+bench/results/*.local.jsonl
+
+.DS_Store

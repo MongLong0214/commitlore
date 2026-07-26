@@ -1,0 +1,40 @@
+{
+  "name": "annals",
+  "version": "0.1.0-dev",
+  "description": "Git commit trailers as institutional memory for AI coding agents",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "annals": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "spec"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "git",
+    "git-trailers",
+    "ai-agents",
+    "commit-messages",
+    "knowledge-management",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MongLong0214/annals.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

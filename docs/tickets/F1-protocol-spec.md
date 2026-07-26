@@ -12,13 +12,13 @@
 **구현 개요**
 - `spec/SPEC.md` 구성: ①개요 ②문법(EBNF — git interpret-trailers 호환 서브셋, 멀티라인 폴딩 = 연속줄 선행 공백) ③어휘표 ④enum 정본 ⑤확장(`X-`) ⑥소비자 라우트 표 ⑦버저닝(`Annals-Version: 2.0`).
 - 어휘 16종과 값 문법:
-  - v1 계승: `Limit` `Ruled-out`(`alt | reason` 필수) `Certainty`(high|medium|low) `Blast`(narrow|moderate|broad) `Undo`(clean|moderate|difficult) `Warn` `Tested` `Unverified` `Related`
-  - v2 신규: `Annals-Version`(semver) `Decision-Id`(`d-[a-z0-9]{6,}`) `Record-Id`(`c-[a-z0-9-]{2,}`) `Supersedes`(Record-Id) `Expires`(`YYYY-MM-DD | 조건서술`) `Evidence`(경로#앵커 또는 URL) `Provenance`(authored|squashed-from <sha>|reconstructed|unknown)
-- **소비자 라우트 표(죽은 필드 금지)**: 어휘마다 {소비 라우트, 산출 행동} 1개 이상 명기. 예: `Blast=broad ∧ Undo=difficult → 승인 게이트 라우팅(F5/F6)`, `Ruled-out → annals guard 매치(F4)`, `Supersedes/Expires → stale 폴드(F2)`.
+  - 결정 맥락: `Limit` `Ruled-out`(`alt | reason` 필수) `Warn` `Certainty`(firm|tentative|guess) `Blast`(local|module|system) `Undo`(easy|costly|permanent) `Verified` `Unverified` `Follows`(Record-Id 참조)
+  - 신원·수명·근거: `Annals-Version`(semver) `Record-Id`(`r-[a-z0-9]{6,}`) `Supersedes`(Record-Id) `Expires`(`YYYY-MM-DD | 조건서술`) `Evidence`(경로#앵커 또는 URL) `Provenance`(authored|inherited <sha>|reconstructed|unknown)
+- **소비자 라우트 표(죽은 필드 금지)**: 어휘마다 {소비 라우트, 산출 행동} 1개 이상 명기. 예: `Blast=system ∧ Undo=permanent → 승인 게이트 라우팅(F5/F6)`, `Ruled-out → annals guard 매치(F4)`, `Supersedes/Expires → stale 폴드(F2)`.
 
 **세부 작업**
 - [ ] EBNF 초안 → `git interpret-trailers --parse` 실동작과 대조(경계: 콜론 뒤 공백, 폴딩, 중복 키)
-- [ ] enum 채택 근거 각주(D1 드리프트 종결 — 레포 계열 채택 이유 명시)
+- [ ] enum 값이 행동을 지시하는 단어인지 확인(ADR-0008 설계 결정 3)
 - [ ] 라우트 표 작성 + 소비자 없는 어휘 0 확인
 
 **테스트/검증**: SPEC 예제 블록 전부를 T-102 픽스처에 수록해 기계 검증되게 함.
