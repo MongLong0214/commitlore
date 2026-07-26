@@ -1,0 +1,7 @@
+Pin a mistyped date as an error, not an expiry condition
+
+Limit: Expires accepts free text, so a date typo has somewhere to hide
+  unless near-miss shapes are excluded from the free-text branch
+Expires: 2026-2-15
+Record-Id: r-4d8a13
+CommitLore-Version: 2.0.0

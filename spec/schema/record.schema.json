@@ -293,14 +293,14 @@
                 "type": "string",
                 "anyOf": [
                   {
-                    "$comment": "Date-shaped values are held to a real calendar date (rejects e.g. 2026-13-45).",
+                    "$comment": "A well-formed calendar date. ajv-formats rejects e.g. 2026-13-45 and 2026-02-30.",
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
                     "format": "date"
                   },
                   {
-                    "$comment": "Anything not date-shaped is a free-text expiry condition (SPEC §3.2) and is unconstrained.",
+                    "$comment": "A free-text expiry condition (SPEC §3.2). Values that merely *look* like a date -- including near-misses such as 2026-2-15 -- are excluded, so a mistyped date is reported as a format error instead of silently becoming a condition that never expires.",
                     "not": {
-                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      "pattern": "^\\d{4}-\\d{1,2}-\\d{1,2}$"
                     }
                   }
                 ]

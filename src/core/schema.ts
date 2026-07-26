@@ -53,7 +53,7 @@ const FORMAT_WANT: Readonly<Record<string, string>> = {
   Follows: 'r-[a-z0-9]{6,}',
   Supersedes: 'r-[a-z0-9]{6,}',
   Expires: 'YYYY-MM-DD or a free-text condition',
-  Evidence: 'path#anchor or a URL',
+  Evidence: 'path, path#anchor, or a URL',
   Provenance: 'authored | inherited <sha> | reconstructed | unknown',
   'CommitLore-Version': 'semver',
 };

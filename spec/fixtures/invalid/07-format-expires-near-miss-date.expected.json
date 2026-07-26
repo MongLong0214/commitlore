@@ -1,0 +1,30 @@
+{
+  "description": "2026-2-15 는 날짜꼴 근접 오타다. 조건 서술로 통과시키면 그 기록은 영원히 만료되지 않는다.",
+  "trailers": [
+    {
+      "key": "Limit",
+      "value": "Expires accepts free text, so a date typo has somewhere to hide unless near-miss shapes are excluded from the free-text branch"
+    },
+    {
+      "key": "Expires",
+      "value": "2026-2-15"
+    },
+    {
+      "key": "Record-Id",
+      "value": "r-4d8a13"
+    },
+    {
+      "key": "CommitLore-Version",
+      "value": "2.0.0"
+    }
+  ],
+  "violations": [
+    {
+      "key": "Expires",
+      "value": "2026-2-15",
+      "rule": "format",
+      "got": "2026-2-15",
+      "want": "YYYY-MM-DD or a free-text condition"
+    }
+  ]
+}

@@ -99,6 +99,8 @@ Enum values name **what to do**, not an abstract grade. `Undo: permanent` tells 
 
 `Evidence:` accepts a bare path. An earlier draft required an anchor, and the first records written against this spec — the ones in this repository's own history — hit that rule immediately: citing a whole file is a normal thing to do, and the harvest verifier can check a bare path exactly as well as an anchored one. Requiring an anchor only pressures authors to invent one.
 
+`Expires:` accepts free text, which gives a mistyped date somewhere to hide: `Expires: 2026-2-15` is a typo, but read as a condition it becomes a record that never expires and is flagged for review forever. Any value shaped like a date — `\d{4}-\d{1,2}-\d{1,2}` — is therefore held to `YYYY-MM-DD` and rejected as a `format` violation if it is not a real calendar date. Conditions that do not resemble a date (`Q3 2026`, `when the vendor ships v3`) are unconstrained.
+
 ---
 
 ## 4. Records
