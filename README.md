@@ -11,7 +11,9 @@
 
 > ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)).
 >
-> **v0.1.0 is released.** The CLI, MCP server, hooks and GitHub Actions are implemented and green on `main`. Distribution is a git clone — no registry, no account, no publish step, and `dist/` ships in the repository so there is nothing to build ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+> **v0.1.0 is released.** The CLI, MCP server, hooks and GitHub Actions are implemented and green on `main`. Distribution is a git clone — no registry, no account, no publish step ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+>
+> **Honest caveat**: `dist/` ships in the repository, but its dependencies do not, so a bare clone needs `npm ci` once before the CLI runs. Bundling closes that and the single blocker is already located ([#38](https://github.com/MongLong0214/commitlore/issues/38)). The registry is gone from distribution; a package manager is still needed to install dependencies.
 >
 > Every claim in this README is either reproducible now or explicitly marked as planned, and numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs. This repository runs its own protocol against its own history in CI — see [dogfooding is enforced](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational).
 
@@ -146,7 +148,7 @@ trust grading and the MCP server are TypeScript.
 [ADR-0002](docs/adr/ADR-0002-language-runtime.md) chose that on a four-week
 schedule and ruled out a single static binary for that reason alone — it is
 tracked for re-evaluation in
-[#38](https://github.com/MongLong0214/commitlore/issues/38). A clone gives you a
+[#39](https://github.com/MongLong0214/commitlore/issues/39). A clone gives you a
 working CLI without a package manager, but it does not remove the runtime.
 
 **Another language can implement the whole thing.** `spec/fixtures/` and

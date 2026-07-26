@@ -17,7 +17,14 @@ npm을 채널로 두면 세 가지가 따라온다.
 
 **배포는 git clone이다. 레지스트리를 쓰지 않는다.**
 
-- `dist/`를 저장소에 커밋한다. clone이 곧 설치이고 빌드 단계가 없다.
+- `dist/`를 저장소에 커밋한다. 빌드 단계가 없다.
+
+> ⚠️ **"clone이 곧 설치"는 아직 사실이 아니다** (2026-07-26 확인, `r-6f2a08`).
+> clone은 `dist/`를 주지만 `node_modules`를 주지 않고, `dist/`는 `commander`·
+> `ajv`·`ajv-formats`·`js-yaml`·MCP SDK를 import한다. 레지스트리 의존은 실제로
+> 사라졌으나(계정·publish·토큰 없음) **의존성 설치는 남아 있다.** 단일 번들이
+> 이를 닫는다 — #38. 유일한 차단점은 `schema.ts`의 `createRequire('ajv-formats')`
+> 로 특정돼 있다.
 - Claude Code용으로 저장소 자체가 플러그인이자 마켓플레이스다(`.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`, `source: "./"`).
 - 그 외 모든 에이전트의 1급 표면은 **MCP 서버**(`commitlore mcp`, stdio, protocol 2024-11-05, 도구 3종)다. 클라이언트에 붙이는 설정은 어디서나 동일한 JSON 한 덩어리다.
 - 셸만 쓸 수 있는 에이전트를 위해 `AGENTS.md`를 제공한다. `AGENTS.md`는 Codex·Qwen·Kimi·Gemini·Cursor가 공유하는 사실상의 표준이다.
@@ -34,6 +41,6 @@ npm을 채널로 두면 세 가지가 따라온다.
 
 - **릴리스 = 태그 push.** publish 계정도 토큰도 없다. 플러그인 버전은 `plugin.json`의 `version`, 혹은 생략 시 git 커밋 SHA로 해석된다.
 - **`dist/` drift가 새 위험이다.** 커밋된 빌드 산출물이 `src/`와 어긋나면 낡은 코드가 배포된다. 빌드가 결정적임을 확인했고(동일 입력 → 동일 해시), CI가 재빌드해 한 바이트라도 다르면 실패시킨다. `.gitattributes`가 `dist/**`를 generated로 표시해 리뷰 diff를 오염시키지 않는다.
-- **Node 런타임 의존은 남는다.** 이 ADR이 없앤 것은 레지스트리이지 런타임이 아니다. 인덱스·guard·등급·MCP는 TypeScript다. 단일 정적 바이너리는 ADR-0002가 일정 때문에 기각했고 #38에서 재평가한다.
+- **Node 런타임 의존은 남는다.** 이 ADR이 없앤 것은 레지스트리이지 런타임이 아니다. 인덱스·guard·등급·MCP는 TypeScript다. 단일 정적 바이너리는 ADR-0002가 일정 때문에 기각했고 #39에서 재평가한다.
 - **`package.json`은 남는다.** 빌드·의존성·타입체크에 필요한 개발 산출물이며 배포 채널이 아니다. `files`/`bin` 필드는 레지스트리를 쓰지 않는 한 아무 효과가 없다.
 - 다른 언어 구현 경로는 강화된다 — `spec/fixtures/`와 `spec/contract-cases/`가 적합성 스위트이고, 이제 그것을 얻는 데 어떤 패키지 매니저도 필요 없다.

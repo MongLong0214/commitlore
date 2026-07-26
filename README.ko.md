@@ -11,7 +11,9 @@
 
 > ⚠️ **상태**: 프로토콜 자체는 **지금 당장** 순수 git만으로 사용할 수 있습니다([오늘 바로 쓰기](#오늘-바로-쓰기-순수-git) 참조).
 >
-> **v0.1.0 릴리스됨.** CLI·MCP 서버·훅·GitHub Action 모두 구현이 끝났고 `main`에서 CI를 통과합니다. 배포는 git clone 하나 — 레지스트리도 계정도 publish 단계도 없고, `dist/`가 저장소에 함께 들어 있어 빌드할 것도 없습니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+> **v0.1.0 릴리스됨.** CLI·MCP 서버·훅·GitHub Action 모두 구현이 끝났고 `main`에서 CI를 통과합니다. 배포는 git clone 하나 — 레지스트리도 계정도 publish 단계도 없습니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+>
+> **정직한 단서**: `dist/`는 저장소에 함께 들어 있지만 그 의존성은 아닙니다. 맨 clone은 CLI 실행 전 `npm ci` 한 번이 필요합니다. 단일 번들이 이를 닫으며 유일한 차단점은 이미 특정돼 있습니다([#38](https://github.com/MongLong0214/commitlore/issues/38)). 배포에서 레지스트리는 사라졌지만, 의존성 설치에는 아직 패키지 매니저가 필요합니다.
 >
 > 이 README의 모든 주장은 지금 재현 가능하거나 계획임이 명시돼 있고, 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다. 이 저장소는 자기 프로토콜을 자기 히스토리에 CI에서 강제합니다 — [도그푸딩은 강제된다](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational) 참조.
 
