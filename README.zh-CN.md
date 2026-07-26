@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-v0.1.0_开发中-orange.svg)](https://github.com/MongLong0214/annals/milestones)
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/annals/milestone/4)
-[![Protocol](https://img.shields.io/badge/protocol-Lore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+[![Protocol](https://img.shields.io/badge/protocol-Annals_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **状态**：协议本身**今天**就能用纯 git 使用（见[立即使用](#立即使用纯-git)）。CLI、MCP 服务器、钩子和 GitHub Actions 将随 **v0.1.0（目标 2026-08-23）** 交付。本 README 的每个论断要么现在可复现，要么明确标注为计划 —— 数字只会来自 [AnnalsBench](docs/prd/PRD-F7-annalsbench.md) 日志。
 

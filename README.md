@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-v0.1.0_in_development-orange.svg)](https://github.com/MongLong0214/annals/milestones)
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/annals/milestone/4)
-[![Protocol](https://img.shields.io/badge/protocol-Lore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+[![Protocol](https://img.shields.io/badge/protocol-Annals_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **Status**: the protocol is usable **today** with plain git (see [Use it today](#use-it-today-plain-git)). The CLI, MCP server, hooks, and GitHub Actions ship with **v0.1.0 (target 2026-08-23)**. Every claim in this README is either reproducible now or explicitly marked as planned — numbers will only ever come from [AnnalsBench](docs/prd/PRD-F7-annalsbench.md) logs.
 

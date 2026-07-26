@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-v0.1.0_개발중-orange.svg)](https://github.com/MongLong0214/annals/milestones)
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/annals/milestone/4)
-[![Protocol](https://img.shields.io/badge/protocol-Lore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+[![Protocol](https://img.shields.io/badge/protocol-Annals_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **상태**: 프로토콜 자체는 **지금 당장** 순수 git만으로 사용할 수 있습니다([오늘 바로 쓰기](#오늘-바로-쓰기-순수-git) 참조). CLI·MCP 서버·훅·GitHub Action은 **v0.1.0(목표 2026-08-23)** 에서 배송됩니다. 이 README의 모든 주장은 지금 재현 가능하거나, 계획임이 명시돼 있습니다 — 수치는 오직 [AnnalsBench](docs/prd/PRD-F7-annalsbench.md) 로그에서만 나옵니다.
 

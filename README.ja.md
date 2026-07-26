@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-v0.1.0_開発中-orange.svg)](https://github.com/MongLong0214/annals/milestones)
 [![Target](https://img.shields.io/badge/v0.1.0-2026--08--23-blue.svg)](https://github.com/MongLong0214/annals/milestone/4)
-[![Protocol](https://img.shields.io/badge/protocol-Lore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+[![Protocol](https://img.shields.io/badge/protocol-Annals_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
 
 > ⚠️ **ステータス**: プロトコル自体は**今日から**素の git だけで使えます（[今すぐ使う](#今すぐ使う素の-git)参照）。CLI・MCP サーバー・フック・GitHub Actions は **v0.1.0（目標 2026-08-23）** で出荷されます。この README のすべての主張は、今すぐ再現可能か、計画中と明示されているかのいずれかです — 数値は [AnnalsBench](docs/prd/PRD-F7-annalsbench.md) のログからのみ提示します。
 
