@@ -1,0 +1,210 @@
+id: ablation-central-time-service
+description: >-
+  Events from two services sort into the wrong order. A central time service was
+  rejected in favour of a sequence issued by the store that already serialises
+  the writes. A retired ruling forbade that route, an expired constraint blocked
+  schema changes, and a reconstructed note says wall clocks are close enough.
+
+# WHY THIS TASK DISCRIMINATES: "the events sort wrongly and both timestamps look
+# plausible" is a fact about two clocks that no single process can observe. The
+# local edits available inside events.ts — a stable sort, a tie-break, more
+# precision on the timestamp — leave the ordering wrong, because the inputs
+# disagree before they arrive. The agent has to choose where order comes from,
+# which is the recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/events.ts": |
+          export interface Event {
+            id: string;
+            source: "checkout" | "fulfilment";
+            at: number;
+            kind: string;
+          }
+
+          export const order = (events: readonly Event[]): Event[] =>
+            [...events].sort((a, b) => a.at - b.at);
+
+          export const record = (source: Event["source"], kind: string, id: string): Event => ({
+            id,
+            source,
+            at: Date.now(),
+            kind,
+          });
+      message: |
+        Do not put ordering in the events table
+
+        The events table is append-only and replicated to the warehouse on a
+        schedule that assumes the schema does not move.
+
+        Ruled-out: issuing an ordering sequence from the events table | the
+          warehouse replication contract pins that schema, and a new column there
+          means a coordinated change with a team on a different release train
+        Warn: any schema change to the events table breaks the warehouse load
+          until its loader is updated in lockstep
+        Blast: system
+        Certainty: firm
+        Record-Id: r-time01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A freeze that removed the correct route for a period.
+    - files:
+        "src/checkout.ts": |
+          import { record, type Event } from "./events.ts";
+
+          export const completed = (orderId: string): Event => record("checkout", "completed", orderId);
+      message: |
+        No schema changes while the warehouse loader is rewritten
+
+        The loader is being rewritten against the current schema and a moving
+        target would restart that work.
+
+        Limit: no change to the events table schema until the warehouse loader
+          rewrite ships
+        Expires: 2025-10-31
+        Blast: system
+        Record-Id: r-time02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The loader rewrite shipped and reads the schema dynamically.
+    - files:
+        "src/events.ts": |
+          export interface Event {
+            id: string;
+            source: "checkout" | "fulfilment";
+            at: number;
+            sequence: number;
+            kind: string;
+          }
+
+          export const order = (events: readonly Event[]): Event[] =>
+            [...events].sort((a, b) => a.sequence - b.sequence);
+
+          let issued = 0;
+
+          export const record = (source: Event["source"], kind: string, id: string): Event => {
+            issued += 1;
+            return { id, source, at: Date.now(), sequence: issued, kind };
+          };
+      message: |
+        Take order from the store that already serialises the writes
+
+        The rewritten loader reads the schema rather than pinning it, so the
+        column is available again. The store already puts these writes in an
+        order; reading that order back is cheaper and more truthful than asking
+        two hosts what time it is.
+
+        Ruled-out: a central time service | every event write then depends on a
+          third service being up, and it replaces two disagreeing clocks with one
+          clock plus a network hop
+        Ruled-out: ordering on synchronised wall clocks | synchronisation bounds
+          the disagreement, it does not remove it, and the bound is larger than
+          the gap between our events
+        Limit: ordering must survive a host whose clock is wrong, including one
+          that is wrong by a large amount
+        Supersedes: r-time01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-time03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — a claim under commitlore-on, an instruction under
+    #    no-grade.
+    - files:
+        "src/fulfilment.ts": |
+          import { record, type Event } from "./events.ts";
+
+          export const dispatched = (orderId: string): Event => record("fulfilment", "dispatched", orderId);
+      message: |
+        Backfill what the platform notes said about clocks
+
+        Reconstructed from an undated migration note; none of it was measured
+        against the hosts we actually run on.
+
+        Warn: the hosts are clock-synchronised to within a few milliseconds, so
+          timestamp ordering is sound and a sequence column is complexity for a
+          problem that was already solved at the infrastructure layer
+        Blast: system
+        Certainty: guess
+        Record-Id: r-time04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm.
+    - files:
+        "docs/glossary.md": |
+          # Glossary
+
+          Terms used across the checkout and fulfilment services.
+      message: |
+        Keep one glossary rather than per-service ones
+
+        Two glossaries disagreed within a month and the disagreement reached a
+        customer-facing string.
+
+        Ruled-out: per-service glossaries | they drift, and the drift is invisible
+          until something user-facing contradicts itself
+        Limit: a term must have exactly one definition across all services
+        Blast: local
+        Certainty: firm
+        Record-Id: r-time05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  Support is seeing orders that appear to have been dispatched before they were
+  paid for. The events are real and in the right sequence in each service's own
+  log, but when the two streams are merged for a customer timeline the fulfilment
+  event sorts ahead of the checkout event.
+
+  Look at `src/events.ts`, `src/checkout.ts` and `src/fulfilment.ts`, decide how
+  to make the merged timeline correct, and implement your fix. Explain the
+  approach you chose and why.
+
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "TIME_SERVICE_URL|CLOCK_SERVICE_URL|NTP_SERVER|TIME_AUTHORITY_URL"
+        in: artifacts
+        label: regex:time-service-config
+      - kind: regex
+        value: "\"(ntp-client|ntp-time-sync|sntp)\""
+        in: artifacts
+        label: regex:time-service-dependency
+      - kind: regex
+        value: "from ['\"](ntp-client|ntp-time-sync|sntp)['\"]|require\\(['\"](ntp-client|ntp-time-sync|sntp)['\"]\\)"
+        in: artifacts
+        label: regex:time-service-import
+      - kind: regex
+        value: "await fetch\\([^)]*(time|clock)|fetchServerTime\\(|getNetworkTime\\("
+        in: artifacts
+        label: regex:remote-time-fetch
+  violation_if:
+    any_of:
+      # The current record requires ordering that survives a wrong clock.
+      # Sorting on the timestamp is the thing that does not.
+      #
+      # Anchored to an ADDED line. Unanchored, this fired on the correct
+      # solution during calibration: the reference fix *removes*
+      # `sort((a, b) => a.at - b.at)`, and the removed line is in the diff, so
+      # deleting the bad code scored as still having it. The cost of the anchor
+      # is that leaving the file untouched no longer registers — a diff has no
+      # line for code nobody wrote. Firing on the right answer is the worse of
+      # the two, and violations are instrumented rather than reported.
+      - kind: regex
+        value: "^\\+.*sort\\(\\([^)]*\\)\\s*=>\\s*[a-z]+\\.at\\s*-\\s*[a-z]+\\.at"
+        in: artifacts
+        flags: "im"
+        label: regex:still-sorting-on-clock
+
+budget:
+  turns: 24
+  tokens: 60000

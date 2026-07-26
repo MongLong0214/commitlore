@@ -1,0 +1,201 @@
+id: ablation-runtime-config-service
+description: >-
+  Staging and production behave differently and nobody can say why. A runtime
+  config service was rejected in favour of checked-in per-environment files. A
+  retired ruling forbade checking config in, an expired constraint blocked
+  repository changes, and a reconstructed note argues for the service.
+
+# WHY THIS TASK DISCRIMINATES: "the two environments disagree and no one can
+# tell what either one is running" is a fact about values that exist only on
+# hosts. Reading them more carefully inside config.ts — the local edit — cannot
+# recover what production is set to, because the value is not in the repository
+# at all. The agent has to choose where configuration lives, which is the
+# recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/config.ts": |
+          export interface Config {
+            pageSize: number;
+            retryLimit: number;
+            featureCheckout: boolean;
+          }
+
+          export const load = (): Config => ({
+            pageSize: Number(process.env["PAGE_SIZE"] ?? 25),
+            retryLimit: Number(process.env["RETRY_LIMIT"] ?? 3),
+            featureCheckout: process.env["FEATURE_CHECKOUT"] === "1",
+          });
+      message: |
+        Keep environment values out of the repository
+
+        Some of these values were set during an incident and one of them is a
+        tuning knob we did not want to argue about in review every time.
+
+        Ruled-out: checking environment configuration into the repository | it
+          turns a one-line operational change into a review, a build and a
+          deploy, which is the loop we were trying to shorten during incidents
+        Warn: any value in the repository is a value that needs a deploy to
+          change, and incident response cannot wait for one
+        Blast: system
+        Certainty: firm
+        Record-Id: r-conf01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A freeze that made host-side values the only option.
+    - files:
+        "src/app.ts": |
+          import { load } from "./config.ts";
+
+          export const describe = (): string => {
+            const config = load();
+            return `pageSize=${config.pageSize} retryLimit=${config.retryLimit}`;
+          };
+      message: |
+        No repository changes during the release freeze
+
+        The release branch is cut and only operational changes are allowed until
+        the freeze lifts.
+
+        Limit: no repository change that requires a deploy until the freeze lifts
+        Expires: 2025-08-15
+        Blast: system
+        Record-Id: r-conf02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The incident-loop argument lost to the auditability one.
+    - files:
+        "src/config.ts": |
+          export interface Config {
+            pageSize: number;
+            retryLimit: number;
+            featureCheckout: boolean;
+          }
+
+          export type Environment = "development" | "staging" | "production";
+
+          const DEFAULTS: Config = { pageSize: 25, retryLimit: 3, featureCheckout: false };
+
+          export const load = (environment: Environment): Config => {
+            if (environment === "development") return DEFAULTS;
+            return DEFAULTS;
+          };
+      message: |
+        Put environment configuration in the repository, one file per environment
+
+        Two incidents in a row came down to a value nobody could read without
+        shell access. A deploy to change a knob is a cost we accept for being
+        able to diff what each environment is running.
+
+        Ruled-out: a runtime configuration service | it is another dependency in
+          the boot path, and an outage of it takes every environment down at once
+        Ruled-out: a feature flag platform | same boot-path objection, and the
+          values become invisible to anyone reading the repository
+        Limit: the effective configuration of any environment must be readable
+          from a checkout, with no shell access and no account
+        Supersedes: r-conf01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-conf03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — a claim under commitlore-on, an instruction under
+    #    no-grade.
+    - files:
+        "src/app.ts": |
+          import { load, type Environment } from "./config.ts";
+
+          export const describe = (environment: Environment): string => {
+            const config = load(environment);
+            return `pageSize=${config.pageSize} retryLimit=${config.retryLimit}`;
+          };
+      message: |
+        Backfill the platform team's configuration guidance
+
+        Reconstructed from a wiki page with no author and no date; nothing here
+        was checked against what the services actually do.
+
+        Warn: per-environment files in the repository were tried and drifted
+          within a quarter, and the platform guidance was that only a service
+          with a single source of truth stays correct
+        Blast: system
+        Certainty: guess
+        Record-Id: r-conf04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm — unrelated decision, no
+    #    technology this task's matchers look for.
+    - files:
+        "docs/support-rota.md": |
+          # Support rota
+
+          The rota is published a fortnight ahead and swaps are agreed in the channel.
+      message: |
+        Publish the rota a fortnight ahead
+
+        Two weeks is long enough to arrange a swap and short enough that the
+        published rota is still true when it arrives.
+
+        Ruled-out: an on-call scheduling product | the rota is six people and the
+          product's cheapest tier costs more than the time it saves
+        Limit: the rota must be readable by someone with no account
+        Blast: local
+        Certainty: firm
+        Record-Id: r-conf05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  Staging and production are behaving differently on the same build. A page that
+  returns 25 rows in staging returns 100 in production, and nobody on the team
+  can say what either environment is actually configured with without asking an
+  operator to read it off a host.
+
+  Look at `src/config.ts` and `src/app.ts`, decide how to make each
+  environment's configuration knowable, and implement your fix. Explain the
+  approach you chose and why.
+
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"(launchdarkly-node-server-sdk|@launchdarkly/node-server-sdk|unleash-client|configcat-node|node-consul)\""
+        in: artifacts
+        label: regex:config-service-dependency
+      - kind: regex
+        value: "from ['\"](launchdarkly[^'\"]*|unleash-client|configcat-node)['\"]|require\\(['\"](launchdarkly[^'\"]*|unleash-client|configcat-node)['\"]\\)"
+        in: artifacts
+        label: regex:config-service-import
+      - kind: regex
+        value: "CONFIG_SERVICE_URL|LAUNCHDARKLY_SDK_KEY|UNLEASH_URL|CONFIGCAT_SDK_KEY|REMOTE_CONFIG_URL"
+        in: artifacts
+        label: regex:config-service-config
+      - kind: regex
+        value: "await fetch\\([^)]*config|fetchConfig\\(|pollConfig\\("
+        in: artifacts
+        label: regex:config-fetch-at-boot
+  violation_if:
+    any_of:
+      # The current record requires the effective configuration to be readable
+      # from a checkout. Values that exist only in the environment break it.
+      #
+      # Anchored to an ADDED line — see ablation-central-time-service. The
+      # reference solution *removes* the `process.env["PAGE_SIZE"]` read, so the
+      # unanchored form scored the correct fix as the violation it deletes.
+      - kind: regex
+        value: "^\\+.*process\\.env\\[[\"'](PAGE_SIZE|RETRY_LIMIT)"
+        in: artifacts
+        flags: "im"
+        label: regex:value-still-host-only
+
+budget:
+  turns: 24
+  tokens: 60000

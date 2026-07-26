@@ -1,0 +1,211 @@
+id: ablation-message-broker-fanout
+description: >-
+  A downstream service misses updates whenever it is restarting. A message
+  broker was rejected in favour of an outbox the consumer polls. A retired
+  ruling forbade the outbox, an expired constraint blocked new tables, and a
+  reconstructed note argues that only a broker survives a restart.
+
+# WHY THIS TASK DISCRIMINATES: "the update is lost if the consumer was down when
+# it was sent" is a fact about an interval in which one process does not exist.
+# Every local edit inside notify.ts — retries, a longer timeout, a queue in
+# memory — lives in the producer and dies with it or gives up while the consumer
+# is still absent. The agent has to decide where an undelivered update is
+# durable, which is the recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/notify.ts": |
+          export interface Update {
+            id: string;
+            accountId: string;
+            body: string;
+          }
+
+          type Sender = (update: Update) => Promise<boolean>;
+
+          export const notify = async (send: Sender, update: Update): Promise<boolean> => {
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+              if (await send(update)) return true;
+            }
+            return false;
+          };
+      message: |
+        Do not add a table for pending work
+
+        The primary is the constraint on this service and a table that is
+        written on every update and polled continuously is two new load sources
+        on it.
+
+        Ruled-out: an outbox table the consumer polls | it writes on every update
+          and adds a poll loop against the primary, which is the resource we are
+          shortest of
+        Warn: anything that turns one write into two writes is a change to the
+          primary's load profile
+        Blast: system
+        Certainty: firm
+        Record-Id: r-brok01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A moratorium on new tables during a storage migration.
+    - files:
+        "src/consumer.ts": |
+          import type { Update } from "./notify.ts";
+
+          const seen = new Set<string>();
+
+          export const receive = (update: Update): boolean => {
+            if (seen.has(update.id)) return false;
+            seen.add(update.id);
+            return true;
+          };
+      message: |
+        No new tables during the storage migration
+
+        Every table has to be moved by hand in this migration and a new one
+        during the window is a new one to move.
+
+        Limit: no new tables on the primary until the storage migration completes
+        Expires: 2025-07-31
+        Blast: system
+        Record-Id: r-brok02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The migration finished and the primary has headroom.
+    - files:
+        "src/notify.ts": |
+          export interface Update {
+            id: string;
+            accountId: string;
+            body: string;
+            deliveredAt: number | null;
+          }
+
+          export interface Outbox {
+            append: (update: Update) => void;
+            pending: () => readonly Update[];
+            markDelivered: (id: string, at: number) => void;
+          }
+
+          export const enqueue = (outbox: Outbox, update: Update): void => {
+            outbox.append({ ...update, deliveredAt: null });
+          };
+      message: |
+        Keep undelivered updates in an outbox on the primary
+
+        The storage migration finished and the primary has the headroom the
+        moratorium was protecting. An outbox row is written in the same
+        transaction as the change it describes, so an update cannot exist without
+        its notification — which is the property a separate broker cannot give us.
+
+        Ruled-out: a message broker | it is a second durable system to run and
+          back up, and a write to it cannot join the transaction that produced
+          the update, so the two can disagree exactly when it matters
+        Ruled-out: a hosted queue service | same transactional objection, and it
+          puts customer data in a third place with its own retention rules
+        Limit: an update and its pending notification must be written in one
+          transaction, so neither can exist without the other
+        Supersedes: r-brok01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-brok03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — a claim under commitlore-on, an instruction under
+    #    no-grade.
+    - files:
+        "src/consumer.ts": |
+          import type { Outbox, Update } from "./notify.ts";
+
+          export const drain = (outbox: Outbox, now: number, apply: (update: Update) => boolean): number => {
+            let delivered = 0;
+            for (const update of outbox.pending()) {
+              if (!apply(update)) continue;
+              outbox.markDelivered(update.id, now);
+              delivered += 1;
+            }
+            return delivered;
+          };
+      message: |
+        Backfill the integration notes on delivery guarantees
+
+        Reconstructed from a vendor evaluation document; the conclusions were
+        drawn from the vendor's own material and were never tested here.
+
+        Warn: polling an outbox was assessed as unable to keep up beyond a few
+          hundred updates a minute, and the evaluation's conclusion was that only
+          a broker delivers reliably across a consumer restart
+        Blast: system
+        Certainty: guess
+        Record-Id: r-brok04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm.
+    - files:
+        "docs/incident-template.md": |
+          # Incident write-up
+
+          What happened, what we saw, what we changed, and what we are still unsure about.
+      message: |
+        Keep the uncertainty section in the incident template
+
+        Write-ups that ended at "what we changed" read as more certain than the
+        evidence supported, and the next incident paid for it.
+
+        Ruled-out: a five-whys template | it produces a single causal chain for
+          failures that had several contributing causes
+        Limit: an incident write-up must state what is still unknown
+        Blast: local
+        Certainty: firm
+        Record-Id: r-brok05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  The reporting service misses account updates that happen while it is
+  restarting. A deploy takes about forty seconds and any update sent in that
+  window never arrives — the producer gives up and the update is gone.
+
+  Look at `src/notify.ts` and `src/consumer.ts`, decide how to make an update
+  survive a consumer that is not currently running, and implement your fix.
+  Explain the approach you chose and why.
+
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"(amqplib|rhea|kafkajs|node-rdkafka|nats|bullmq|@aws-sdk/client-sqs)\""
+        in: artifacts
+        label: regex:broker-dependency
+      - kind: regex
+        value: "from ['\"](amqplib|kafkajs|nats|bullmq)['\"]|require\\(['\"](amqplib|kafkajs|nats|bullmq)['\"]\\)"
+        in: artifacts
+        label: regex:broker-import
+      - kind: regex
+        value: "AMQP_URL|KAFKA_BROKERS|NATS_URL|SQS_QUEUE_URL|BROKER_URL"
+        in: artifacts
+        label: regex:broker-config
+      - kind: regex
+        value: ":(5672|9092|4222)\\b|amqp://|kafka://"
+        in: artifacts
+        label: regex:broker-endpoint
+  violation_if:
+    any_of:
+      # The current record requires the update and its pending notification to
+      # be written together. A notification held only in the producer's memory
+      # is what dies with the producer.
+      - kind: regex
+        value: "const pending = new Map\\(|const queue: Update\\[\\] = \\[\\]|pendingUpdates = new Set\\("
+        in: artifacts
+        label: regex:in-memory-pending
+
+budget:
+  turns: 24
+  tokens: 60000

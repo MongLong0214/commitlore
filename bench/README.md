@@ -145,32 +145,116 @@ no marker. What it does do is stop overstating itself: the header drops the word
 under `no-scope`, because a payload that misdescribes its own contents is worse
 than one that says less.
 
-#### Running the matrix, and reading it
+#### `bench/tasks-ablation/` — a separate fixture set, and why
+
+The ablation arms do not run on `bench/tasks/`. They have their own seven tasks
+in `bench/tasks-ablation/`, and the reason is the table above: on the primary
+set, `no-grade` and `no-lifecycle` inject a payload **byte-identical** to
+`commitlore-on` on nine tasks out of ten. An arm that removes a guarantee the
+fixture never exercises is not measuring CommitLore, it is measuring the seed
+data — and three nulls produced that way would read as *"these guarantees do not
+matter"*.
+
+Fixing the primary set instead was rejected: those tasks define the treatment
+arm of the primary hypothesis test, which is mid-measurement. A separate set
+costs nothing and changes nothing that is already being measured.
+
+Every task in it seeds five records, and each one exists to give an arm
+something to do:
+
+| Record | Lifecycle / provenance | What it is for |
+|---|---|---|
+| the retired ruling | superseded by the current record | **`no-lifecycle`** — it *forbids the correct answer*, so resurrecting it pushes the agent toward the ruled-out option |
+| the expired constraint | `Expires:` in the past | **`no-lifecycle`** — a limit that made the rejected option look necessary, and no longer applies |
+| the current decision | active, `Provenance: authored` | what `commitlore-on` injects: `Ruled-out:` naming the option, plus the constraint the fix has to satisfy |
+| the reconstructed note | `Provenance: reconstructed` | **`no-grade`** — unreliable advice pointing at the ruled-out option. A claim under grading, an instruction without it |
+| the off-path record | active, on `docs/` or `infra/` | a future `no-scope` arm |
+
+Two design rules that are easy to get wrong:
+
+- **The retired records must be wrong, not merely old.** A superseded record
+  that still gives good advice makes `no-lifecycle` a no-op in behaviour even
+  when it is not one in bytes. Each retired ruling here forbids the route the
+  current record chose, so an agent that believes it has to go elsewhere.
+- **The off-path record must not push toward the ruled-out option.** Scoping is
+  not implemented (see below), so every arm receives it — a record that argued
+  for the rejected approach would raise *every* arm's re-proposal rate and mask
+  the two effects that can be measured. Each one is therefore a genuine decision
+  about an unrelated concern, naming no technology the task's matchers look for.
+
+Verified before the set was allowed to run, by diffing the `injected_context` of
+each arm under `--driver dry-run`:
+
+| | `no-grade` | `no-lifecycle` |
+|---|---|---|
+| payload identical to `commitlore-on` | **0/7 tasks** | **0/7 tasks** |
+| what changes | the reconstructed record moves from the claim section to the instruction section | +3 entries: the retired ruling, the expired limit, the retired warning |
+
+Each task also carries a comment naming why its symptom cannot be fixed without
+confronting the decision — the discriminating property from *The property that
+decides whether a task measures anything*, which applies to an ablation task
+exactly as it does to a primary one.
+
+##### Detector calibration for this set
+
+Run in all three directions before the set was used, the way *Calibrating a
+detector* and *Noise immunity* require: every matcher against `.serena` hunks
+harvested from real transcripts plus synthetic diff scaffolding for every seeded
+path; every `reproposed_if` against a reference correct solution; and every
+`reproposed_if` against a genuine re-proposal. `reproposed_if` was clean in all
+three directions on the first run.
+
+**Four `violation_if` clauses were not, and all four had the same defect.**
+Written unanchored, they matched the *removed* line in the diff — so an agent
+deleting the bad code scored as still having it, and the correct solution
+produced a violation. This is the removed-line trap from *Noise immunity* one
+step further on: not a `--- a/` header this time, but the content of a line the
+fix deletes. All four are now anchored to `^\+` with `flags: "im"`, and each
+carries a comment saying what fired and why. The cost of the anchor is stated
+there too: code nobody edited produces no diff line, so leaving a file untouched
+no longer registers as a violation. Firing on the right answer is the worse of
+the two errors, and violations are instrumented rather than reported.
+
+Note where the defects landed, again: **four `violation_if` clauses, zero
+`reproposed_if` clauses** — the same split the pilot produced. The primary
+metric's matchers are technology names and import shapes; the violation matchers
+try to say "the agent broke a stated constraint", which is much harder to write
+against a diff.
+
+#### Running the ablation matrix
 
 ```bash
-node bench/runner.ts --tasks bench/tasks \
-  --cond commitlore-on,commitlore-off,no-scope,no-grade,no-lifecycle \
-  --seed 1,2,3 --driver claude-headless --model <model> \
-  --timeout-ms 540000 --max-tokens 4000000 \
+node bench/runner.ts --tasks bench/tasks-ablation \
+  --cond commitlore-on,no-grade,no-lifecycle \
+  --seed 1 --driver claude-headless --model <the model the primary run used> \
+  --timeout-ms 540000 --max-tokens 2000000 \
   --save-transcripts bench/results/transcripts-ablation \
   --out bench/results/t703-ablation.jsonl
 node bench/verify.mjs bench/results/t703-ablation.jsonl
 node bench/metrics.ts bench/results/t703-ablation.jsonl
 ```
 
-`metrics.ts` prints a per-condition table for all five arms, but its
-significance test compares exactly two: it picks `commitlore-on` against
-`commitlore-off` whenever both are present. To test one ablation arm against the
-treatment, aggregate a file that contains only those two conditions — with
-`commitlore-on` and `no-scope` it reads `no-scope` as the treatment and
-`commitlore-on` as the baseline. Splitting the file is a `grep`, and it keeps
-each test to the pair it is about.
+Twenty-one runs. `no-scope` is deliberately absent — see below. `commitlore-off`
+is not an ablation arm and is not needed here; the comparison each arm is read
+against is `commitlore-on` **on this same fixture set**, never the primary set's
+`commitlore-on`, which is a different repository.
 
-The power table under *What 60 runs can and cannot detect* applies to each of
-those pairs unchanged: three seeds × ten tasks is 30 runs per arm, so an
-ablation that costs less than roughly 30 points of re-proposal rate will not
-reach significance here. Read the per-arm rates as the direction check ADR-0007
-asked for, not as five independent hypothesis tests.
+`metrics.ts` prints a per-condition table for every arm, but its significance
+test compares exactly two conditions. To test one ablation arm against the
+treatment, aggregate a file containing only those two — with `commitlore-on` and
+`no-grade` it reads `no-grade` as the treatment and `commitlore-on` as the
+baseline:
+
+```bash
+grep -E '"cond":"(commitlore-on|no-grade)"' bench/results/t703-ablation.jsonl > /tmp/on-vs-nograde.jsonl
+node bench/metrics.ts /tmp/on-vs-nograde.jsonl
+```
+
+Seven runs per arm at one seed detects only a very large effect — smaller than
+the primary matrix, which *What 60 runs can and cannot detect* already describes
+as underpowered for anything moderate. This is the direction check ADR-0007
+asked for. It is not two hypothesis tests, and a null from it is a statement
+about twenty-one runs.
 
 #### Two implementations, and the decision to keep them apart
 
@@ -203,6 +287,37 @@ ablation of the harness's re-implementation.** It differs from the shipped
 injector in at least one respect that matters — the bench has no
 injection-pattern scanner, so its `no-grade` arm cannot inject a withheld
 payload, because it never withheld one.
+
+##### How much off-path noise the treatment arm actually receives
+
+`assembleContext` injects every record in the repository, so `commitlore-on`
+can receive records about files the task never asks it to touch — noise the
+shipped injector would withhold. Measured by taking the files each prompt names
+in backticks and asking, for each record, whether the commit carrying it touched
+any file at or under one of them:
+
+| Task set | Tasks measurable | Off-path records | Share of injected characters |
+|---|---|---|---|
+| `bench/tasks` | 5 of 10 | **0** | **0%** |
+| `bench/tasks-ablation` | 7 of 7 | 7 (one per task) | 15.6% |
+
+**The primary matrix is not affected.** Every record its measurable tasks seed
+is about a file the prompt names, so path scoping would withhold nothing and the
+treatment arm carries no noise. The only off-path records anywhere are the seven
+seeded deliberately in `bench/tasks-ablation/` for a future `no-scope` arm; they
+are noise in *that* set's `commitlore-on`, by construction and at a known size.
+
+Five primary tasks abstain rather than counting as zero or as one: their prompts
+name no file at all, so this method cannot decide them and does not pretend to.
+
+A caution for anyone repeating this, because the first attempt got it wrong in
+both directions at once and reported 74%. Counting a task whose prompt names no
+file as *fully* off-path inflates it; matching record files against prompt paths
+*exactly* inflates it again, because a prompt that says `src/db/` covers
+`src/db/pool.ts`. And the backtick extraction has to reject things that are not
+paths — `pool.query("SELECT ...")` and `Author: staff-lead@ourcompany.com` are
+both inside backticks in these prompts. The error was found by opening the
+prompts and reading them.
 
 #### What each arm can and cannot see today
 
@@ -239,8 +354,17 @@ guarantee and worth measuring — just not the one on the label. Path scoping
 cannot be ablated here at all, because a pre-prompt injection never had a path
 to scope to; measuring it requires per-path injection at tool time, which means
 installing the `PreToolUse` hook into each workspace and running the shipped
-injector. That is the Backlog issue above. Until then, read a `no-scope` number
-as *"routed projection vs. raw dump"* and nothing more.
+injector. That is the Backlog issue above.
+
+**So `no-scope` is registered and implemented, and is not run.** Seeding it
+something to leak would not help: `commitlore-on` is already unscoped, so the
+contrast stays zero no matter what the fixtures contain. Making it real means
+redefining the treatment arm, which is an ADR decision rather than a fixture
+change. The arm stays in `CONDITIONS` so the code path does not rot, the
+off-path record is seeded in every ablation task so the fixtures are ready, and
+T-704 reports it as **not measurable with this harness**, with the byte
+comparison above as the evidence. Excluding it costs nothing — it is a name
+absent from `--cond`, not a code change.
 
 ## Detection surfaces
 
@@ -787,6 +911,21 @@ Fisher exact also treats runs as independent, while the design is paired by
 (task, seed). The output says so. The test is the one ADR-0007 and T-702
 registered, and on paired data it is the conservative choice rather than the
 most powerful one.
+
+### Two things that make the measured effect a floor
+
+Both push the same way, and neither is a reason to adjust a number upward:
+
+- **Silent tasks.** A task where neither arm re-proposes contributes nothing and
+  dilutes the difference toward zero.
+- **Irrelevant records in the injected context.** The treatment arm has been
+  observed receiving records scoped to paths the task never touches. That is
+  noise the control arm never sees, so it works against the treatment arm — a
+  correctly scoped injector would show a larger effect, not a smaller one.
+
+So a significant result understates the effect, and a null result is weaker
+evidence against the hypothesis than it looks. Report both as limits on the
+number, never as corrections to it.
 
 ### What the numbers are conditional on
 

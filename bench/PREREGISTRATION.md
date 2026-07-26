@@ -274,3 +274,60 @@ With the treatment arm at 0/30, the control arm must reach **6/30** for p < 0.05
 (6/30 → p = 0.0237; 5/30 → p = 0.0522). This design finds large effects only. A
 non-significant result here is a statement about 60 runs before it is a statement
 about CommitLore.
+
+### If the run is truncated at a seed boundary
+
+Registered in advance so a shortened run is read correctly rather than
+generously. Truncation is permitted **only** at a completed seed boundary, which
+keeps the arms balanced; the runner's seed → task → condition ordering makes runs
+1–20 a complete matrix at seed 1, 21–40 at seed 2, and 41–60 at seed 3.
+
+Power with the treatment arm at a true 0%, by achieved n:
+
+| true control rate | n=10/arm (1 seed) | n=20/arm (2 seeds) | n=30/arm (3 seeds) |
+|---|---|---|---|
+| 0.20 | 0.03 | 0.37 | 0.57 |
+| 0.30 | 0.15 | 0.76 | 0.92 |
+| 0.40 | 0.37 | 0.95 | 0.99 |
+| 0.50 | 0.62 | 0.99 | 1.00 |
+
+And the observed count the control arm must reach for p < 0.05, given a treatment
+arm observed at zero:
+
+| achieved n per arm | control must reach |
+|---|---|
+| 10 | 5/10 (50%) |
+| 20 | 5/20 (25%) |
+| 30 | 6/30 (20%) |
+
+**One seed is not a smaller version of this experiment — it is a different one.**
+At n=10 per arm the control has to re-propose in half of all runs before any
+difference can clear α, which is far outside anything the pilot suggested is
+plausible. A one-seed result that comes back non-significant carries almost no
+information about the hypothesis.
+
+The achieved n and the number of completed seeds go in **the first line of the
+verdict**, and the power row for that n is quoted with it.
+
+## 11. Known limitations that bound this result
+
+Registered before the run, so they cannot be selected after it.
+
+1. **Injection includes irrelevant records.** The treatment arm's assembled
+   context has been observed to carry records scoped to paths the task never
+   touches. Every such entry is noise the control arm does not receive, so it can
+   only work against the treatment. **The measured effect is therefore an
+   underestimate of what a correctly scoped injector would produce** — in the
+   same direction as, and additional to, the silent-task dilution in §7. Neither
+   is a reason to adjust the number; both are reasons the number is a floor.
+2. **The turn budget is not enforced.** The installed CLI has no `--max-turns`,
+   so `budget.turns: 24` is observed and reported, never applied. `over-turns`
+   means "finished on its own past the budget", not "stopped".
+3. **Fisher exact ignores the pairing.** The design is paired by (task, seed);
+   the registered test treats runs as independent, which is conservative here.
+4. **Everything is conditional on one model** (`claude-haiku-4-5-20251001`) and
+   one CLI version. Re-proposal is a behaviour and behaviours differ between
+   models.
+5. **The pilot is not comparable.** It ran without environment control (§5-b),
+   so its rates cannot be quoted beside this run's. Only its design findings
+   carry over.

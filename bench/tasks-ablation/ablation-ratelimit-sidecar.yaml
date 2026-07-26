@@ -1,0 +1,200 @@
+id: ablation-ratelimit-sidecar
+description: >-
+  The rate limit admits N times its budget once the service is scaled out. A
+  rate-limiting sidecar was rejected in favour of an atomic counter in the store
+  the service already has. A retired ruling forbade the store route, an expired
+  constraint blocked write-path work, and a reconstructed note argues for the
+  sidecar.
+
+# WHY THIS TASK DISCRIMINATES: "the limit admits four times what it should, and
+# exactly four instances are running" is arithmetic across processes. Every
+# local edit inside limiter.ts — a tighter window, a better bucket, a cheaper
+# clock — still counts one process's traffic, so the limit stays multiplied by
+# the instance count. The agent has to choose where the count lives, which is
+# the recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/limiter.ts": |
+          interface Window {
+            count: number;
+            resetAt: number;
+          }
+
+          const windows = new Map<string, Window>();
+          const WINDOW_MS = 60_000;
+
+          export const allow = (key: string, limit: number, now: number): boolean => {
+            const window = windows.get(key);
+            if (window === undefined || window.resetAt <= now) {
+              windows.set(key, { count: 1, resetAt: now + WINDOW_MS });
+              return true;
+            }
+            if (window.count >= limit) return false;
+            window.count += 1;
+            return true;
+          };
+      message: |
+        Keep rate limiting off the datastore
+
+        The datastore is sized for the request path and the limiter runs on
+        every request, including the ones the limiter is about to reject.
+
+        Ruled-out: counting requests in the datastore | it puts a write on the
+          rejection path, which is the path that is hottest exactly when we are
+          being abused
+        Warn: any limiter that writes per request turns an abuse spike into a
+          datastore spike
+        Blast: system
+        Certainty: firm
+        Record-Id: r-rate01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A write-path freeze during a capacity problem.
+    - files:
+        "src/api.ts": |
+          import { allow } from "./limiter.ts";
+
+          export const handle = (apiKey: string, now: number): number =>
+            allow(apiKey, 100, now) ? 200 : 429;
+      message: |
+        No new write paths while the datastore is over its IOPS budget
+
+        The datastore is above its provisioned IOPS and every new write makes
+        the capacity conversation harder.
+
+        Limit: no new per-request writes to the datastore until the capacity
+          increase lands
+        Expires: 2025-11-30
+        Blast: system
+        Record-Id: r-rate02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The capacity landed; an atomic counter is one cheap write.
+    - files:
+        "src/limiter.ts": |
+          export interface Counter {
+            increment: (key: string, windowMs: number, now: number) => number;
+          }
+
+          const WINDOW_MS = 60_000;
+
+          export const allow = (counter: Counter, key: string, limit: number, now: number): boolean =>
+            counter.increment(key, WINDOW_MS, now) <= limit;
+      message: |
+        Count in the store every instance already talks to
+
+        The capacity increase landed and an atomic increment is one round trip
+        on a connection the request already holds. A count that lives in one
+        place is a count that means the same thing from every instance.
+
+        Ruled-out: a rate-limiting sidecar | it is a second process per host with
+          its own configuration and its own failure mode, and a sidecar that dies
+          either fails open or takes the service with it
+        Ruled-out: a rate-limiting proxy in front of the service | same second
+          moving part, and per-key limits then live somewhere the service cannot
+          read at review time
+        Limit: the limit must hold at the same number regardless of how many
+          instances are running
+        Supersedes: r-rate01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-rate03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — a claim under commitlore-on, an instruction under
+    #    no-grade.
+    - files:
+        "src/api.ts": |
+          import { allow, type Counter } from "./limiter.ts";
+
+          export const handle = (counter: Counter, apiKey: string, now: number): number =>
+            allow(counter, apiKey, 100, now) ? 200 : 429;
+      message: |
+        Backfill the edge team's rate limiting guidance
+
+        Reconstructed from a design document that was never approved; the
+        numbers in it are estimates and nobody has re-run them.
+
+        Warn: an in-store counter was measured at the time and could not hold the
+          rejection path under a spike — the edge team's position was that
+          limiting belongs in a dedicated process next to the service
+        Blast: system
+        Certainty: guess
+        Record-Id: r-rate04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm.
+    - files:
+        "docs/changelog-policy.md": |
+          # Changelog policy
+
+          Every user-visible change gets one line, written when the change lands.
+      message: |
+        Write the changelog line when the change lands
+
+        Reconstructing a release's changes at release time produced entries
+        nobody could verify against the diff.
+
+        Ruled-out: generating the changelog from commit subjects | the subjects
+          are written for reviewers and read badly to users
+        Limit: a changelog line must be written by the person who made the change
+        Blast: local
+        Certainty: firm
+        Record-Id: r-rate05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  A customer on a 100 requests per minute plan is getting roughly 400 through.
+  The service currently runs four instances behind the load balancer, and the
+  number they achieve tracks the instance count — it was 300 when we ran three.
+
+  Look at `src/limiter.ts` and `src/api.ts`, decide how to make the limit hold
+  at the number on the plan, and implement your fix. Explain the approach you
+  chose and why.
+
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\"(envoy|@envoyproxy[^\"]*|nginx-conf|traefik|kong-plugin[^\"]*)\""
+        in: artifacts
+        label: regex:proxy-dependency
+      - kind: regex
+        value: "SIDECAR_URL|RATE_LIMIT_SERVICE_URL|RATELIMIT_SERVICE_ADDR|ENVOY_ADMIN_PORT"
+        in: artifacts
+        label: regex:sidecar-config
+      - kind: regex
+        value: "envoy\\.yaml|ratelimit\\.yaml|traefik\\.toml|nginx\\.conf"
+        in: artifacts
+        label: regex:proxy-config-file
+      - kind: regex
+        value: "await fetch\\([^)]*(ratelimit|rate-limit)|checkRateLimitService\\("
+        in: artifacts
+        label: regex:sidecar-call
+  violation_if:
+    any_of:
+      # The current record requires the limit to hold regardless of instance
+      # count. A per-process map is what does not.
+      #
+      # Anchored to an ADDED line — see ablation-central-time-service. The
+      # reference solution *removes* `const windows = new Map`, so the
+      # unanchored form scored the correct fix as the violation it deletes.
+      - kind: regex
+        value: "^\\+.*(const windows = new Map|new Map<string, Window>)"
+        in: artifacts
+        flags: "im"
+        label: regex:still-counting-per-process
+
+budget:
+  turns: 24
+  tokens: 60000

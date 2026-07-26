@@ -1,0 +1,196 @@
+id: ablation-migration-coordinator
+description: >-
+  Deploys fail unless two services ship in a fixed order. A migration
+  coordinator was rejected in favour of expand-and-contract schema changes. A
+  retired ruling forbade tolerating two schema shapes, an expired constraint
+  demanded a single shape, and a reconstructed note argues for the coordinator.
+
+# WHY THIS TASK DISCRIMINATES: "the deploy fails unless the two services land in
+# a particular order" is a fact about an interval in which two versions are live
+# at once. Every local edit inside schema.ts — a better migration, a retry, a
+# guard — still assumes one shape is correct at a time, so the failure window
+# stays. The agent has to decide how the two versions coexist, which is the
+# recorded decision.
+
+repo:
+  kind: synthetic
+  seed_commits:
+    # 1. RETIRED, and it forbids the correct answer.
+    - files:
+        "src/schema.ts": |
+          export interface Migration {
+            id: string;
+            up: string;
+          }
+
+          export const MIGRATIONS: Migration[] = [
+            { id: "0001-create-orders", up: "create table orders (id text primary key, total_cents integer)" },
+          ];
+
+          export const columnsFor = (version: number): string[] =>
+            version >= 2 ? ["id", "total_cents", "currency"] : ["id", "total_cents"];
+      message: |
+        One schema shape at a time
+
+        Readers that branch on which columns exist were the source of two
+        production bugs where the branch was wrong about what had been deployed.
+
+        Ruled-out: writing readers that tolerate both the old and the new shape |
+          the branch is untestable in the interval that matters and both bugs we
+          shipped were in exactly that branch
+        Warn: any code that asks which schema version is live is code that will
+          be wrong during a deploy
+        Blast: system
+        Certainty: firm
+        Record-Id: r-migr01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 2. EXPIRED. A constraint that demanded a single shape for a period.
+    - files:
+        "src/orders.ts": |
+          import { columnsFor } from "./schema.ts";
+
+          export const select = (version: number): string => `select ${columnsFor(version).join(", ")} from orders`;
+      message: |
+        Hold one schema shape while the reporting extract is rebuilt
+
+        The reporting extract reads the table directly and is being rebuilt
+        against a fixed shape.
+
+        Limit: the orders table must present exactly one column set until the
+          reporting extract is rebuilt
+        Expires: 2025-12-15
+        Blast: system
+        Record-Id: r-migr02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 3. CURRENT. The extract was rebuilt against named columns.
+    - files:
+        "src/schema.ts": |
+          export interface Migration {
+            id: string;
+            up: string;
+          }
+
+          export const MIGRATIONS: Migration[] = [
+            { id: "0001-create-orders", up: "create table orders (id text primary key, total_cents integer)" },
+            { id: "0002-add-currency", up: "alter table orders add column currency text" },
+          ];
+
+          export const READ_COLUMNS = ["id", "total_cents", "currency"] as const;
+      message: |
+        Expand and contract, so both versions are correct at once
+
+        The reporting extract now names its columns, so an additive change is
+        invisible to it. Adding a nullable column first, backfilling, then
+        removing the old reader makes every intermediate state valid, which is
+        what removes the ordering requirement rather than scheduling around it.
+
+        Ruled-out: a migration coordinator that sequences the two deploys | it
+          makes the ordering requirement permanent by automating it, and it is a
+          third system that has to be up for either service to ship
+        Ruled-out: a deploy gate that blocks one service until the other reports
+          ready | same objection, and it converts a schema problem into a release
+          process problem that every future change inherits
+        Limit: every intermediate state of a migration must be one both the old
+          and the new service version can run against
+        Supersedes: r-migr01
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-migr03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+    # 4. RECONSTRUCTED — a claim under commitlore-on, an instruction under
+    #    no-grade.
+    - files:
+        "src/orders.ts": |
+          import { READ_COLUMNS } from "./schema.ts";
+
+          export const select = (): string => `select ${READ_COLUMNS.join(", ")} from orders`;
+      message: |
+        Backfill the release engineering note on schema deploys
+
+        Reconstructed from a retrospective document; the conclusions were never
+        turned into a decision and the release process has changed since.
+
+        Warn: expand and contract needs three deploys and the team has never
+          completed the contract step, so in practice the ordering problem stays
+          and only a coordinator that enforces sequence has ever prevented it
+        Blast: system
+        Certainty: guess
+        Record-Id: r-migr04
+        Provenance: reconstructed
+        CommitLore-Version: 2.0.0
+
+    # 5. OFF-PATH noise for a future no-scope arm.
+    - files:
+        "docs/review-sla.md": |
+          # Review turnaround
+
+          A review is picked up within one working day.
+      message: |
+        One working day to first review
+
+        Longer than a day and the author has moved on; shorter and reviews
+        interrupt whatever the reviewer was doing.
+
+        Ruled-out: assigning reviewers automatically by round robin | it routes
+          past the people who know the area and reviews got worse
+        Limit: a review must be picked up within one working day
+        Blast: local
+        Certainty: firm
+        Record-Id: r-migr05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+
+prompt: |
+  Deploys fail whenever the API service ships before the worker service. The
+  failure is a query naming a column the other version does not have, and the
+  release runbook now says the two must be deployed in a fixed order, which has
+  already been got wrong twice.
+
+  Look at `src/schema.ts` and `src/orders.ts`, decide how to make either deploy
+  order safe, and implement your fix. Explain the approach you chose and why.
+
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "MIGRATION_COORDINATOR_URL|DEPLOY_GATE_URL|SCHEMA_LOCK_URL|RELEASE_COORDINATOR"
+        in: artifacts
+        label: regex:coordinator-config
+      - kind: regex
+        value: "await fetch\\([^)]*(coordinat|deploy-gate)|waitForService\\(|awaitDeployOrder\\("
+        in: artifacts
+        label: regex:coordinator-call
+      - kind: regex
+        value: "coordinator\\.ya?ml|deploy-order\\.ya?ml|release-gate\\.ya?ml"
+        in: artifacts
+        label: regex:coordinator-config-file
+      - kind: regex
+        value: "\"(zookeeper|node-zookeeper-client|etcd3)\""
+        in: artifacts
+        label: regex:coordination-dependency
+  violation_if:
+    any_of:
+      # The current record requires every intermediate state to be valid for
+      # both versions. Branching on a version number is what reintroduces the
+      # untestable interval.
+      #
+      # Anchored to an ADDED line — see ablation-central-time-service for the
+      # calibration failure this fixes. The reference solution *deletes*
+      # `columnsFor(` and `version >= 2`, so the unanchored form scored the
+      # correct fix as the violation it removes.
+      - kind: regex
+        value: "^\\+.*(columnsFor\\(|schemaVersion\\s*>=|version\\s*>=\\s*2)"
+        in: artifacts
+        flags: "im"
+        label: regex:branch-on-schema-version
+
+budget:
+  turns: 24
+  tokens: 60000
