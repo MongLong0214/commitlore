@@ -78,6 +78,28 @@ jobs:
       - name: doctor runs clean enough to report
         run: node dist/cli.js doctor
 
+      # The most common release failure is a package that works in its own
+      # repository and breaks once installed: a missing `files` entry, a path
+      # resolved relative to the source tree, a bin that is not executable.
+      # Pack it, install it somewhere else, and run it from there.
+      - name: The packaged tarball installs and runs
+        run: |
+          set -euo pipefail
+          pack_dir="$(mktemp -d)"
+          npm pack --pack-destination "$pack_dir" >/dev/null
+          tarball="$(ls "$pack_dir"/*.tgz)"
+          install_dir="$(mktemp -d)"
+          cd "$install_dir"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$tarball" >/dev/null
+          bin=./node_modules/.bin/commitlore
+          "$bin" --version
+          # validate reads spec/schema/record.schema.json out of the installed
+          # package, so this fails if `files` stops shipping spec/.
+          printf 'Subject\n\nBlast: wide\n' | "$bin" validate && {
+            echo "expected a violation to exit non-zero"; exit 1;
+          } || test $? -eq 1
+
   # git's own behavior is the substrate this protocol delegates to, so a git
   # version that parses trailers differently is a correctness problem, not a
   # compatibility footnote. SPEC section 2.1 was derived empirically from one
