@@ -64,6 +64,20 @@ jobs:
       - name: Conformance suite
         run: bash spec/verify.sh
 
+      # test/dogfood.test.ts exercises the library. This exercises the binary a
+      # user actually installs, against this repository's own history, which is
+      # the only way the packaged entry point, its schema lookup from dist/, and
+      # the range walk get covered together.
+      #
+      # The range is derived rather than pinned -- a hardcoded cutoff goes stale
+      # and a stale cutoff reads as passing, which is the same rule the library
+      # path follows.
+      - name: The CLI validates this repository's own history
+        run: node dist/cli.js validate --range "$(node scripts/adoption-range.mjs)"
+
+      - name: doctor runs clean enough to report
+        run: node dist/cli.js doctor
+
   # git's own behavior is the substrate this protocol delegates to, so a git
   # version that parses trailers differently is a correctness problem, not a
   # compatibility footnote. SPEC section 2.1 was derived empirically from one
