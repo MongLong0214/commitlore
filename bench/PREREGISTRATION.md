@@ -434,3 +434,62 @@ defect is visible in the report rather than only in the p-value.
 limit of every lexical surface: an alternative implemented under a different
 name is invisible to it, and one named in a string literal or a variable name is
 counted. Both were true of `artifacts` too.
+
+---
+
+## 13. Third measurement (M2) — the shipped delivery path, at n = 40
+
+Registered before the run. M1 (p = 0.7480) and M1-b (p = 0.0522) are not
+revised. This is a third measurement with a **different delivery path**, and its
+numbers stand alone.
+
+### What changed, and why it is not a tweak
+
+M1 and M1-b both handed the agent one block of text at session start, assembled
+by `bench/context.ts`. **The product does not work that way.**
+`src/core/inject.ts` is a PreToolUse hook: it fires per edit, it is scoped to
+the path being edited, and it refuses an unscoped path outright.
+
+M2 delivers through that hook, via a settings file the harness writes
+(`bench/hooks-settings.ts`). Every arm now exercises the shipped injector. Two
+consequences follow and both are intended:
+
+- The treatment arm receives records **only for paths it actually edits**, and
+  receives them **at the moment it edits**, rather than everything up front.
+- `no-scope` becomes a real arm for the first time. It was inert because the
+  harness never scoped, so removing scope removed nothing (#36).
+
+`bench/context.ts` remains only as the fallback for an arm with no hook plan.
+
+### Sample size
+
+**4 seeds, n = 40 per arm, 80 runs.** §10's power table put n = 30 per arm at
+0.57 power against a true control rate of 0.20, and M1-b missed α by a single
+run at n = 30. Registering the larger n *before* seeing M2 is the difference
+between a design choice and a retry until significance.
+
+With the treatment arm at zero, the control arm needs **6 of 40** for p < 0.05
+(6/40 → p = 0.0264; 5/40 → p = 0.0547). Registered now.
+
+### Hypothesis, test, analysis set
+
+Unchanged from §1–§4. One 2×2 over all tasks and all seeds, two-tailed Fisher
+exact, α = 0.05. No subset p-values.
+
+### Matrix
+
+10 tasks × 2 conditions × seeds 1,2,3,4 = 80 runs,
+`claude-haiku-4-5-20251001`, §5-b environment controls, frozen code.
+Detection surface `code` (§12).
+
+### What this run cannot answer
+
+It measures **injection delivered as the product delivers it**. It does not
+measure `guard`, which SPEC §5 assigns to `Ruled-out:` and which
+`bench/GUARD-CANNOT-BLOCK.md` showed cannot block at usable precision. #37 is
+narrowed to whether an *advisory* guard at edit time beats this, and it is a
+separate registration.
+
+### Verdict rules
+
+As §9 and §12, including the per-arm false-positive report.
