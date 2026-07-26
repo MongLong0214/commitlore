@@ -1,0 +1,132 @@
+{
+  "description": "Proposal texts for the `commitlore guard` suite, against spec/fixtures/guard/records.json. `reproposals` must be flagged; `unrelated` must not. The unrelated set is the false-positive measurement the ticket AC names: ten proposals a competent engineer could make in this same repository on the same afternoon, none of which revives anything that was ruled out. They are deliberately adjacent to the records — caches, sessions, expiry, queues — because ten proposals about unrelated subject matter would measure nothing.",
+  "reproposals": [
+    {
+      "id": "redis-named",
+      "text": "let's add Redis for the session cache",
+      "expectRecordId": "r-7c1a45",
+      "expectAlternative": "shared Redis cache",
+      "why": "the plainest re-proposal: the rejected product, named"
+    },
+    {
+      "id": "redis-reworded",
+      "text": "use a redis instance to store sessions",
+      "expectRecordId": "r-7c1a45",
+      "expectAlternative": "shared Redis cache",
+      "why": "shares one word out of six with the alternative — Jaccard alone would miss it"
+    },
+    {
+      "id": "record-id-reference",
+      "text": "I want to revisit r-7c1a45 and put the cache behind a network service.",
+      "expectRecordId": "r-7c1a45",
+      "expectAlternative": "memcached sidecar",
+      "why": "names the record, so everything that record ruled out is surfaced"
+    },
+    {
+      "id": "ssr-marketing",
+      "text": "let's render the marketing pages on the server so the copy team stops waiting for a deploy",
+      "expectRecordId": "r-3f0d81",
+      "expectAlternative": "server-side rendering for the marketing pages",
+      "why": "path-scoped: docs/ only, so a check scoped to src/ must not see it"
+    },
+    {
+      "id": "rabbitmq-broker",
+      "text": "let's run a rabbitmq broker for the job queue",
+      "expectRecordId": "r-aa1122",
+      "expectAlternative": "a RabbitMQ broker",
+      "why": "retired by r-bb3344, so it must flag only when replayed before the supersession"
+    },
+    {
+      "id": "redis-session-store",
+      "text": "add a shared redis cache for the session store",
+      "expectRecordId": "r-7c1a45",
+      "expectAlternative": "shared Redis cache",
+      "why": "CTO gate: must keep firing after the IDF rework"
+    }
+  ],
+  "unrelated": [
+    {
+      "id": "retry-jitter",
+      "text": "Add a retry with jitter around the outbound webhook call so a single 502 does not drop the event."
+    },
+    {
+      "id": "rename-config-key",
+      "text": "Rename the config key SESSION_TTL to SESSION_TTL_MS and update the two call sites."
+    },
+    {
+      "id": "extract-expiry-helper",
+      "text": "Extract the expiry arithmetic in src/cache.ts into a small helper so the eviction test can call it directly."
+    },
+    {
+      "id": "cover-expired-branch",
+      "text": "Write a unit test that covers the branch where the entry has already expired."
+    },
+    {
+      "id": "bump-node-engine",
+      "text": "Bump the Node engine field to 22 and drop the polyfill import."
+    },
+    {
+      "id": "not-found-status",
+      "text": "Return a 404 instead of a 500 when the profile lookup finds nothing."
+    },
+    {
+      "id": "structured-log-line",
+      "text": "Add a structured log line with the request id so the p99 latency can be attributed to a route."
+    },
+    {
+      "id": "session-store-seam",
+      "text": "Move readSession and writeSession behind an interface so the tests can substitute a fake."
+    },
+    {
+      "id": "debounce-settings-form",
+      "text": "Debounce the settings form so we stop firing a save on every keystroke."
+    },
+    {
+      "id": "document-eviction-rule",
+      "text": "Document the eviction rule in the README and link it from the module header."
+    }
+  ],
+  "dogfood": {
+    "description": "Measured against CommitLore's own history, which is the only corpus large enough to show the failure that a seeded four-record repository hides: dozens of real rejections, so ordinary words like `rename`, `document`, `readme` and `regex` recur across many of them and stop being evidence. The first four `clean` entries are the CTO's verbatim reproduction cases, which scored 0.46–0.54 under the flat keyword rule and flagged; the rest are plausible work in this repository on any given afternoon. `flagged` are real re-proposals of rejections this repository actually recorded, keyed by `Record-Id:` rather than sha because identity survives rebase (SPEC §3.3) and a sha does not.",
+    "clean": [
+      { "id": "rename-variable", "text": "rename a variable for clarity in the formatter", "was": 0.4833 },
+      { "id": "fixture-helper", "text": "extract a shared helper for reading fixture files", "was": 0.4556 },
+      { "id": "document-exit-codes", "text": "document the exit codes in the README", "was": 0.5429 },
+      { "id": "cache-compiled-regex", "text": "cache the compiled regex instead of rebuilding it", "was": 0.4833 },
+      { "id": "retry-jitter-webhook", "text": "Add a retry with jitter around the outbound webhook call so a single 502 does not drop the event.", "was": 0.4417 },
+      { "id": "bump-eslint", "text": "Bump eslint to the latest major and fix the two new rule violations.", "was": 0 },
+      { "id": "quiet-flag", "text": "Add a --quiet flag that suppresses the progress output.", "was": 0 },
+      { "id": "raise-test-timeout", "text": "Raise the test timeout for the slow index suite.", "was": 0 },
+      { "id": "spinner-while-indexing", "text": "Show a spinner while the index is being rebuilt.", "was": 0 },
+      { "id": "threshold-from-config", "text": "Read the default threshold from a config file instead of a constant.", "was": 0.4455 }
+    ],
+    "flagged": [
+      {
+        "id": "hardcode-adoption-sha",
+        "text": "let's hardcode the adoption commit sha so the range is stable",
+        "expectRecordId": "r-1f4b26",
+        "expectAlternative": "hardcode the adoption commit sha"
+      },
+      {
+        "id": "print-credential",
+        "text": "we should print the matched credential so the author can find it",
+        "expectRecordId": "r-2d6f83",
+        "expectAlternative": "print the matched credential so the author can find it"
+      }
+    ]
+  },
+  "adjacent": [
+    {
+      "id": "wrap-in-transaction",
+      "text": "Wrap the two writes in a transaction so they land together or not at all.",
+      "expectFlag": false,
+      "why": "shares `transaction` with `pgbouncer in transaction mode` and nothing else — the near miss"
+    },
+    {
+      "id": "pgbouncer-in-front",
+      "text": "Put pgbouncer in front of the pool so the connection count stops climbing.",
+      "expectFlag": true,
+      "why": "same record, the distinctive token actually named"
+    }
+  ]
+}

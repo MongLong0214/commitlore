@@ -52,6 +52,7 @@ import {
 
 import { toJson, type JsonOutput } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
+import { DEFAULT_THRESHOLD, guard } from '../core/guard.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 
 export const SERVER_NAME = 'commitlore';
@@ -87,17 +88,6 @@ export const GUARD_TOOL = 'commitlore_guard';
 export const CONTEXT_URI_PREFIX = 'commitlore://context/';
 export const CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
 
-/**
- * What `commitlore_guard` says until T-405 lands. It is deliberately an error
- * result: a tool that answered "nothing matched" would be read as "this
- * proposal is not ruled out", which is the one wrong answer guard exists to
- * prevent.
- */
-export const GUARD_NOT_WIRED =
-  `${GUARD_TOOL} is declared but not wired: the Ruled-out matcher (T-405, src/core/guard.ts) ` +
-  'has not landed yet, so no match was computed. Do not read this as "no ruled-out record ' +
-  `matches this proposal" — nothing was checked. Use ${QUERY_TOOL} with kind "ruled-out" to ` +
-  'read the records directly in the meantime.';
 
 export interface McpServerOptions {
   /** The repository to answer about. Defaults to the process's own directory. */
@@ -253,8 +243,10 @@ const TOOLS: readonly Tool[] = [
   {
     name: GUARD_TOOL,
     description:
-      'Check a proposal against the Ruled-out records for a path. NOT WIRED YET (T-405): ' +
-      'every call returns an error saying so, and never a verdict.',
+      'Check a proposal against the Ruled-out records for a path before acting on it. ' +
+      'Returns every record whose alternative matches, with the reason it was rejected. ' +
+      'An empty `matched` array means the check ran and found nothing — it is a verdict, ' +
+      'not an absence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -341,15 +333,17 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
     },
     [STALE_TOOL]: () => asText(buildReport(collectRecords({ cwd: root }), new Date())),
     [GUARD_TOOL]: (args) => {
-      // The contract is enforced even though nothing consumes it yet: a caller
-      // that gets its arguments wrong should hear about that, not about T-405.
-      requiredString(args, 'proposal');
-      pathArg(root, args);
-
-      // T-405 연동 지점 — replace this body with the matcher from
-      // `core/guard.ts` (`{matched, sha, reason}`) once it lands. Until then
-      // this returns no verdict of any kind, by design.
-      return { content: [{ type: 'text', text: GUARD_NOT_WIRED }], isError: true };
+      const proposal = requiredString(args, 'proposal');
+      const path = pathArg(root, args);
+      const matches = guard({
+        proposal,
+        cwd: root,
+        ...(path === undefined ? {} : { paths: [path] }),
+      });
+      // No match is an answer, not an absence: an agent that gets nothing back
+      // should be able to tell "checked, nothing ruled this out" from "the
+      // check did not run".
+      return asText({ proposal_checked: true, threshold: DEFAULT_THRESHOLD, matched: matches });
     },
   };
 

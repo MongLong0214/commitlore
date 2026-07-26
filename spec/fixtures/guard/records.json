@@ -1,0 +1,48 @@
+{
+  "description": "Seed commits for the `commitlore guard` suite. The `redis-cache` record is the commit message from bench/tasks/reproposal-redis-cache.yaml verbatim, so the unit suite and the AnnalsBench re-encounter task (T-701/T-702) measure the same rejection. The other three exist to pin the properties bench cannot exercise from a single arm: path scope, the lifecycle fold, and the `--at` replay. `precisionRecords` is seeded into its own repository — it is the `direct-pool` record from bench/tasks/reproposal-prisma-orm.yaml, whose rejected alternative is mostly generic vocabulary, and it exists to measure the *near* miss rather than the far one. File bodies are stubs — guard reads trailers and the commit's touched paths, never file contents; the bench tasks own the real sources.",
+  "records": [
+    {
+      "id": "redis-cache",
+      "committedAt": "2026-01-05T09:00:00Z",
+      "files": {
+        "src/cache.ts": "export const put = (key: string, value: string): void => {};",
+        "src/session.ts": "export const readSession = (id: string): string | null => null;"
+      },
+      "message": "Use an in-process map for the session cache\n\nThe session payload is small enough that a per-process map beats a\nnetwork hop, and it keeps the deployment to a single artifact.\n\nLimit: the v1 runtime has no network egress to hosts outside the app subnet\nRuled-out: shared Redis cache | ops refuses another stateful dependency for\n  a v1, and the session payload is under 4KB\nRuled-out: memcached sidecar | same operational objection, and it loses the\n  persistence story that made a shared cache attractive\nWarn: session entries must stay under 4KB or the eviction math stops holding\nBlast: module\nUndo: easy\nCertainty: firm\nRecord-Id: r-7c1a45\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    },
+    {
+      "id": "static-marketing",
+      "committedAt": "2026-01-06T09:00:00Z",
+      "files": {
+        "docs/marketing.md": "# Marketing pages\n"
+      },
+      "message": "Ship the marketing pages as static HTML\n\nRuled-out: server-side rendering for the marketing pages | it puts a runtime on\n  the critical path for four pages that change twice a year\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-3f0d81\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    },
+    {
+      "id": "postgres-queue",
+      "committedAt": "2026-01-07T09:00:00Z",
+      "files": {
+        "src/queue.ts": "export const enqueue = (job: string): void => {};"
+      },
+      "message": "Run jobs off a Postgres queue table\n\nRuled-out: a RabbitMQ broker | one more stateful service to operate for a queue\n  that never exceeds ten jobs a minute\nBlast: module\nUndo: easy\nCertainty: tentative\nRecord-Id: r-aa1122\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    },
+    {
+      "id": "queue-outgrew",
+      "committedAt": "2026-01-12T09:00:00Z",
+      "files": {
+        "src/queue.ts": "export const enqueue = (job: string): void => {};\nexport const drain = (): void => {};"
+      },
+      "message": "Move jobs onto a dedicated broker after all\n\nThe volume outgrew what a table can poll for, so the objection no longer\nholds and the rejection it produced is retired with it.\n\nSupersedes: r-aa1122\nBlast: system\nUndo: costly\nCertainty: firm\nRecord-Id: r-bb3344\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    }
+  ],
+  "precisionRecords": [
+    {
+      "id": "direct-pool",
+      "committedAt": "2026-01-05T09:00:00Z",
+      "files": {
+        "src/db/pool.ts": "export const pool = { query: (sql: string) => sql };"
+      },
+      "message": "Talk to Postgres through a single direct pool\n\nOne pool per process, sized to the connection limit.\n\nRuled-out: pgbouncer in transaction mode | one more process to operate for\n  a service that opens four connections\nBlast: module\nUndo: easy\nCertainty: tentative\nRecord-Id: r-11aa22\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    }
+  ]
+}

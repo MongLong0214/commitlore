@@ -33,23 +33,39 @@
  *   proposal and the alternative, over normalized, stopworded, lightly stemmed
  *   token sets. Symmetric, so it rewards a short focused proposal and decays on
  *   a long one.
- * - **Distinctive-keyword coverage** (`KEYWORD_WEIGHT`) — the fraction of the
- *   alternative's *distinctive* tokens (see `GENERIC_TERMS`) that appear in the
- *   proposal. This is containment rather than similarity, which is what
+ * - **Distinctive-keyword mass** (`KEYWORD_WEIGHT`) — how much of the
+ *   alternative's *identity* the proposal names: its distinctive tokens (see
+ *   `GENERIC_TERMS`), weighted by how rare each one is across the rejection
+ *   corpus (see `Corpus`). Containment rather than similarity, which is what
  *   survives a proposal the size of a diff: "redis" is still in there.
  * - **`Record-Id:` hit** (`RECORD_ID_WEIGHT`) — the proposal names the record
  *   itself. Not similarity at all; an explicit reference.
  *
- * Jaccard alone answers "is this the same sentence"; coverage alone answers "is
- * the rejected thing named in here". Either question answered wrongly on its
- * own is a bad guard, which is why both are weighted and neither is a gate.
+ * Jaccard alone answers "is this the same sentence"; mass alone answers "is the
+ * rejected thing named in here". Either question answered wrongly on its own is
+ * a bad guard, which is why both are weighted.
+ *
+ * ## Why the score is not the whole decision
+ *
+ * A weighted sum is an average, and an average cannot tell "one common word
+ * matched hard" from "this is the same idea". Measured on this repository's own
+ * history, a flat keyword rule flagged four of ten ordinary proposals — `rename
+ * a variable`, `document the exit codes` — each on a single word that recurs
+ * across dozens of rejections. Raising the threshold does not fix that; it
+ * trades a discrimination problem for a sensitivity one, since real matches sat
+ * in the same band. So a flag needs two things: a score at or above
+ * `DEFAULT_THRESHOLD`, and corroboration (see `corroborated`).
  *
  * ## What this cannot see
  *
  * A revival phrased without any of the rejected alternative's words — "let's
  * put the sessions in a service both boxes can reach", for a ruled-out
- * `shared Redis cache` — scores zero here. That is the honest limit of lexical
- * matching, and the reason `guard` is a warning route rather than a block.
+ * `shared Redis cache` — scores zero here. So does a rename: an alternative
+ * written `SessionStore` is one token, and a proposal saying "session store" is
+ * two. And corroboration costs recall of its own: a proposal that names one
+ * word of a long rejected alternative, and nothing else, is now let through.
+ * All three are the honest limit of lexical matching, and the reason `guard`
+ * warns rather than blocks.
  */
 
 import { normalizeForMatch } from './grade.js';
@@ -97,6 +113,40 @@ export const JACCARD_WEIGHT = 0.5;
 export const KEYWORD_WEIGHT = 0.5;
 
 /**
+ * Distinct distinctive tokens that corroborate a flag on count alone.
+ *
+ * Two is the smallest number that cannot be reached by one common word, and
+ * every false positive measured on this repository's history was one word:
+ * `rename`, `document`, `readme`, `regex`.
+ */
+export const MIN_KEYWORD_HITS = 2;
+
+/**
+ * The share of an alternative's IDF-weighted identity that corroborates a flag
+ * on its own, so that a *single* word can still be enough when the alternative
+ * is essentially that word.
+ *
+ * The line sits at half because the two populations separate there, measured:
+ * across the ten unrelated proposals in `spec/fixtures/guard/proposals.json`,
+ * the highest mass any of them reaches against any rejection in this
+ * repository's history is **0.37** (`regex` against "regex trailer parsing");
+ * `fixture` reaches 0.25 and `documents` 0.27. Across the re-proposals that
+ * must fire, one word carries **1.00** — `redis` is the whole of "shared Redis
+ * cache". `rabbitmq` at 0.50 of "a RabbitMQ broker" is the intended boundary
+ * case: naming half of a two-word alternative is a re-proposal.
+ */
+export const STRONG_KEYWORD_MASS = 0.5;
+
+/**
+ * The token overlap that corroborates a flag with no keyword evidence at all —
+ * the two texts are restatements of each other. Measured, the highest Jaccard
+ * any of the ten unrelated proposals reaches against any rejection in this
+ * repository is 0.29 ("document the exit codes in the README" against "rename
+ * code and spec first, documents later"), so 0.4 clears the whole population.
+ */
+export const MIN_JACCARD = 0.4;
+
+/**
  * Weight on a `Record-Id:` hit. Above `DEFAULT_THRESHOLD` on its own: a
  * proposal that names `r-7c1a45` is discussing that record, and printing what
  * it ruled out and why is the correct response whether the proposal is reviving
@@ -110,24 +160,30 @@ export const RECORD_ID_WEIGHT = 0.6;
  * The score at which a proposal is flagged. Comparison is `>=`: this is the
  * minimum score that fires, not a value that must be exceeded.
  *
- * 0.35 was chosen to sit in the gap the three weights create, and the gap is
- * wide:
+ * The threshold is the *second* of two conditions. `corroborated` runs first,
+ * and it is what separates a re-proposal from a proposal that happens to share
+ * a word; the threshold only decides how strong a corroborated match must be.
+ * Raising the threshold alone was tried and rejected — the four false positives
+ * measured on this repository sat at 0.44–0.54, and a threshold above them also
+ * excludes real matches at 0.54.
  *
- * - **Fires.** One distinctive token, present (coverage 1.0) → 0.50, before any
- *   Jaccard. This is the floor case the ticket requires: `shared Redis cache`
- *   against "use a redis instance to store sessions" scores 0.58 — the wording
- *   shares one word out of six, and it must still fire.
- * - **Does not fire.** Coverage 1/3 — one of three distinctive tokens — is
- *   0.167, and needs Jaccard ≥ 0.37 to reach the threshold, i.e. more than a
- *   third of the combined vocabulary shared. `pgbouncer in transaction mode`
- *   against "wrap the writes in a transaction" scores 0.27.
- * - **Does not fire.** Jaccard alone must reach 0.70 — near restatement — to
- *   flag a proposal that names none of the alternative's distinctive tokens.
+ * At 0.35 the corroborated cases land like this:
  *
- * Measured against the ten unrelated proposals in `spec/fixtures/guard/`, the
- * highest score is 0.10 (`test/guard.test.ts`), leaving 0.25 of headroom. The
- * threshold was not tuned down to that measurement: room above the noise is
- * what keeps a hook that runs on every Edit from being disabled.
+ * - **0.58** — `shared Redis cache` against "use a redis instance to store
+ *   sessions". One word shared out of six, but that word is the whole identity
+ *   of the alternative (`STRONG_KEYWORD_MASS`), so it fires and must.
+ * - **0.60** — a `Record-Id:` reference alone.
+ * - **0.83, 1.00** — the two re-proposals measured against this repository's
+ *   own history (`hardcode the adoption commit sha`, `print the matched
+ *   credential…`), which are what the ceiling looks like.
+ *
+ * Measured against the thirteen unrelated proposals in
+ * `spec/fixtures/guard/proposals.json` — ten against this repository's real
+ * rejection corpus, three against the seeded fixtures — none is corroborated
+ * at all, so the noise floor is not a low score but no match (`test/guard.test.ts`
+ * prints the table). The threshold was not tuned down to that measurement:
+ * room above the noise is what keeps a hook that runs on every Edit from being
+ * switched off.
  */
 export const DEFAULT_THRESHOLD = 0.35;
 
@@ -186,8 +242,8 @@ const GENERIC_TERMS: readonly string[] = [
   'package', 'page', 'path', 'pool', 'process', 'query', 'queue', 'remote', 'request', 'response',
   'route', 'row', 'schema', 'script', 'server', 'service', 'session', 'set', 'shared', 'simple',
   'size', 'slow', 'small', 'state', 'storage', 'store', 'string', 'system', 'table', 'task', 'test',
-  'thread', 'time', 'timeout', 'token', 'tool', 'type', 'update', 'url', 'user', 'value', 'version',
-  'view', 'worker',
+  'thread', 'time', 'timeout', 'token', 'tool', 'transaction', 'type', 'update', 'url', 'user',
+  'value', 'version', 'view', 'worker',
 ];
 
 /**
@@ -230,9 +286,6 @@ const GENERIC_STEMS = stemsOf(GENERIC_TERMS);
  */
 const RECORD_ID_SCAN = 'r-[a-z0-9]{6,}';
 
-/** Words glued together by camelCase carry meaning: `SessionStore` is two tokens. */
-const splitCamel = (text: string): string => text.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
-
 interface Tokens {
   /** Stemmed content tokens, deduplicated. */
   stems: ReadonlySet<string>;
@@ -249,12 +302,17 @@ const EMPTY_TOKENS: Tokens = { stems: new Set(), surface: new Map() };
  * case, accents and confusables. Reusing it means a proposal written with a
  * Cyrillic `е` in "redis" tokenizes the same as one without — the same evasion
  * the injection scanner already had to defend against.
+ *
+ * camelCase is deliberately *not* split. Splitting would make `MongoDB` two
+ * tokens and `mongodb` one, so the two spellings of the same product would stop
+ * matching — and product names are what ruled-out alternatives are made of.
+ * The price is that `SessionStore` does not match "session store".
  */
 const tokenize = (text: string): Tokens => {
   const stems = new Set<string>();
   const surface = new Map<string, string>();
 
-  for (const raw of normalizeForMatch(splitCamel(text)).split(/[^a-z0-9]+/)) {
+  for (const raw of normalizeForMatch(text).split(/[^a-z0-9]+/)) {
     if (raw.length < 2) continue;
     const stemmed = stem(raw);
     if (STOPWORD_STEMS.has(raw) || STOPWORD_STEMS.has(stemmed)) continue;
@@ -279,32 +337,128 @@ const jaccard = (left: ReadonlySet<string>, right: ReadonlySet<string>): number 
 /** Four places: enough to order matches, few enough that the output is stable text. */
 const round = (value: number): number => Math.round(value * 10000) / 10000;
 
+/**
+ * Token weights derived from the corpus of ruled-out alternatives in scope.
+ *
+ * `GENERIC_TERMS` is a fixed list and cannot know what *this* repository says
+ * often. In CommitLore's own history `rename`, `document`, `readme` and `spec`
+ * are spread across dozens of rejections; a proposal that says "rename" has
+ * named nothing. Document frequency over the rejection corpus is the only
+ * signal that adapts, and it needs no data the guard is not already holding —
+ * the corpus is exactly the record set the query returned.
+ *
+ * The cost, stated plainly: a token's weight now depends on the other records
+ * in scope, so the same proposal can score differently under `-- src/auth` than
+ * unscoped. That is real, and it is the price of discrimination that scales
+ * past a hand-maintained word list. The corroboration gate below is written not
+ * to depend on it, so a one-record scope cannot turn the guard into a
+ * single-word tripwire.
+ */
+interface Corpus {
+  /** How many alternatives the frequencies were counted over. */
+  size: number;
+  /** Smoothed, normalized inverse document frequency in 0..1. Rare → 1. */
+  weight: (stem: string) => number;
+}
+
+/**
+ * `ln((N + 1) / (df + 0.5))`, normalized by its own maximum.
+ *
+ * Smoothed because the unsmoothed form collapses on the small corpora that are
+ * normal here: a repository with one rejection has `ln(1/1) = 0` for every
+ * token, and every score would be zero. With the offsets, a lone alternative
+ * still weights its tokens at 1, and a token in every alternative approaches 0.
+ */
+const buildCorpus = (alternatives: readonly Tokens[]): Corpus => {
+  const seen = new Map<string, number>();
+  for (const tokens of alternatives) {
+    for (const token of tokens.stems) seen.set(token, (seen.get(token) ?? 0) + 1);
+  }
+
+  const size = alternatives.length;
+  const ceiling = Math.log((size + 1) / 1.5);
+  return {
+    size,
+    // An empty corpus produces no candidates to score, so the guard here is
+    // only about never dividing by a non-positive ceiling.
+    weight: (token) => {
+      if (ceiling <= 0) return 1;
+      const documents = seen.get(token) ?? 1;
+      const value = Math.log((size + 1) / (documents + 0.5)) / ceiling;
+      return Math.min(1, Math.max(0, value));
+    },
+  };
+};
+
 interface Coverage {
-  fraction: number;
+  /** The IDF-weighted share of the alternative's identity the proposal named. */
+  mass: number;
   /** Surface forms of the distinctive tokens that hit, alphabetical. */
   hits: string[];
 }
 
 /**
- * The fraction of the alternative's distinctive tokens present in the proposal.
+ * How much of what makes this alternative *this* alternative the proposal named.
+ *
+ * Weighted by `Corpus`, not counted: "hardcode the adoption commit sha" is
+ * carried by `hardcode` and `adoption`, and a proposal that says only `commit`
+ * — a word half the rejections in this repository contain — has named almost
+ * none of it. The plain hit fraction cannot tell those apart, and that is
+ * exactly how `rename`, `document`, `readme` and `regex` produced four false
+ * positives on this repository's own history.
  *
  * Falling back to every content token when nothing survives `GENERIC_STEMS` is
  * not a formality: `shared cache` and `in-process map` are real rejected
  * alternatives made entirely of generic words, and dropping them from the guard
  * would mean the vaguer the rejection, the weaker the protection.
  */
-const keywordCoverage = (alternative: Tokens, proposal: Tokens): Coverage => {
+const keywordCoverage = (alternative: Tokens, proposal: Tokens, corpus: Corpus): Coverage => {
   const distinctive = [...alternative.stems].filter((token) => !GENERIC_STEMS.has(token));
   const considered = distinctive.length === 0 ? [...alternative.stems] : distinctive;
-  if (considered.length === 0) return { fraction: 0, hits: [] };
+  if (considered.length === 0) return { mass: 0, hits: [] };
 
-  const hits = considered
-    .filter((token) => proposal.stems.has(token))
-    .map((token) => alternative.surface.get(token) ?? token)
-    .sort();
+  let total = 0;
+  let named = 0;
+  const hits: string[] = [];
+  for (const token of considered) {
+    const weight = corpus.weight(token);
+    total += weight;
+    if (!proposal.stems.has(token)) continue;
+    named += weight;
+    hits.push(alternative.surface.get(token) ?? token);
+  }
 
-  return { fraction: hits.length / considered.length, hits };
+  return { mass: total === 0 ? 0 : named / total, hits: hits.sort() };
 };
+
+/**
+ * Whether anything corroborates the score, and the reason a high score is not
+ * on its own enough to flag.
+ *
+ * Weighted sums are averages, and an average cannot distinguish "one common
+ * word matched hard" from "this is the same idea". Both reach 0.45 on this
+ * repository, and only one of them is a re-proposal. So the flag needs a second
+ * opinion, and any one of four will do:
+ *
+ * - the proposal named the record itself;
+ * - it named two distinct distinctive tokens (`MIN_KEYWORD_HITS`);
+ * - the tokens it named carry most of the alternative's identity
+ *   (`STRONG_KEYWORD_MASS`) — one word is enough when the alternative *is* that
+ *   word, which is why `shared Redis cache` still fires on "redis";
+ * - or the two texts overlap enough to be restatements (`MIN_JACCARD`).
+ *
+ * None of the four can be reached by a single common word in a long
+ * alternative, which is the whole shape of the false positive.
+ */
+const corroborated = (
+  idHit: boolean,
+  coverage: Coverage,
+  similarity: number,
+): boolean =>
+  idHit ||
+  coverage.hits.length >= MIN_KEYWORD_HITS ||
+  coverage.mass >= STRONG_KEYWORD_MASS ||
+  similarity >= MIN_JACCARD;
 
 /** `alternative | reason` (SPEC §3.1). Only the first `|` separates. */
 interface RuledOut {
@@ -341,22 +495,26 @@ const compareMatches = (a: GuardMatch, b: GuardMatch): number => {
   return a.alternative < b.alternative ? -1 : a.alternative > b.alternative ? 1 : 0;
 };
 
-const matchOne = (
-  record: GradedRecord,
-  value: string,
-  proposal: Tokens,
-  idHit: boolean,
-): GuardMatch => {
-  const { alternative, reason, malformed } = parseRuledOut(value);
-  const tokens = alternative === '' ? EMPTY_TOKENS : tokenize(alternative);
+/** One `Ruled-out:` value, parsed and tokenized once so the corpus can count it. */
+interface Candidate {
+  record: GradedRecord;
+  parsed: RuledOut;
+  tokens: Tokens;
+  idHit: boolean;
+}
+
+const matchOne = (candidate: Candidate, proposal: Tokens, corpus: Corpus): GuardMatch | null => {
+  const { record, parsed, tokens, idHit } = candidate;
 
   const similarity = jaccard(tokens.stems, proposal.stems);
-  const coverage = keywordCoverage(tokens, proposal);
+  const coverage = keywordCoverage(tokens, proposal, corpus);
+  if (!corroborated(idHit, coverage, similarity)) return null;
+
   const score = round(
     Math.min(
       1,
       JACCARD_WEIGHT * similarity +
-        KEYWORD_WEIGHT * coverage.fraction +
+        KEYWORD_WEIGHT * coverage.mass +
         (idHit ? RECORD_ID_WEIGHT : 0),
     ),
   );
@@ -364,14 +522,18 @@ const matchOne = (
   const signals = [
     ...(idHit ? [`record-id:${record.recordId ?? ''}`] : []),
     ...coverage.hits.map((hit) => `keyword:${hit}`),
+    // The share of the alternative's identity those keywords carry. Printed
+    // because two matches with the same keyword count are not equally strong,
+    // and the reader cannot see which is which from the score alone.
+    ...(coverage.hits.length === 0 ? [] : [`identity:${round(coverage.mass).toFixed(2)}`]),
     ...(similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : []),
-    ...(malformed ? ['malformed:no-separator'] : []),
+    ...(parsed.malformed ? ['malformed:no-separator'] : []),
   ];
 
   return {
     sha: record.sha,
-    alternative,
-    reason,
+    alternative: parsed.alternative,
+    reason: parsed.reason,
     score,
     signals,
     ...(record.recordId === undefined ? {} : { recordId: record.recordId }),
@@ -409,13 +571,26 @@ export const guard = (opts: GuardOptions): GuardMatch[] => {
     ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
   });
 
-  return result.records
-    .flatMap((record) => {
-      const idHit = record.recordId !== undefined && ids.has(record.recordId);
-      return valuesOf(record, RULED_OUT_KEY).map((value) =>
-        matchOne(record, value, proposal, idHit),
-      );
-    })
-    .filter((match) => match.score >= threshold)
+  // Two passes, because the weight of a token is a property of the corpus:
+  // every alternative is parsed and tokenized first, then scored against
+  // frequencies counted over all of them.
+  const candidates: Candidate[] = result.records.flatMap((record) => {
+    const idHit = record.recordId !== undefined && ids.has(record.recordId);
+    return valuesOf(record, RULED_OUT_KEY).map((value) => {
+      const parsed = parseRuledOut(value);
+      return {
+        record,
+        parsed,
+        tokens: parsed.alternative === '' ? EMPTY_TOKENS : tokenize(parsed.alternative),
+        idHit,
+      };
+    });
+  });
+
+  const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
+
+  return candidates
+    .map((candidate) => matchOne(candidate, proposal, corpus))
+    .filter((match): match is GuardMatch => match !== null && match.score >= threshold)
     .sort(compareMatches);
 };
