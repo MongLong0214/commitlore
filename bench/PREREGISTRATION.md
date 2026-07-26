@@ -493,3 +493,62 @@ separate registration.
 ### Verdict rules
 
 As §9 and §12, including the per-arm false-positive report.
+
+---
+
+## 14. Fourth measurement (M3) — the guard route
+
+Registered before the run. M1, M1-b and M2 are not revised.
+
+### Why this arm exists
+
+SPEC §5 assigns `Ruled-out:` to `commitlore guard`, and every measurement so far
+has been of **injection**. The route the protocol names for the key the whole
+hypothesis rests on has never been run (`bench/ROUTE-GAP.md`).
+
+### What is compared
+
+| arm | PreToolUse hook | in M2 |
+|---|---|---|
+| `commitlore-off` | none | 8/39 |
+| `commitlore-on` | `inject --hook-input` | 4/40 |
+| `commitlore-guard` | `guard --hook-input` | new |
+
+**The primary test is `commitlore-guard` against `commitlore-on`.** Both get a
+hook, both are scoped to the path being edited, and they differ only in which
+route `Ruled-out:` travels. `commitlore-off` runs as a reference and is **not**
+the primary comparison — guard against nothing would confound the route with the
+presence of records at all.
+
+Two-tailed Fisher exact, α = 0.05, one table over all tasks and seeds. §4 holds.
+
+### Sample size
+
+4 seeds × 10 tasks × 3 arms = **120 runs**, n = 40 per arm.
+
+### What guard does, fixed now
+
+Advisory: it prints what it matched and lets the edit through. It matches
+`tool_input.new_string` with `--require-content`, so naming a record does not
+flag. Blocking was excluded on measured evidence
+(`bench/GUARD-CANNOT-BLOCK.md`) — true and false positives occupy one score
+band and the only precision-safe threshold catches one in five.
+
+### Pre-check, already run, not part of the analysis
+
+Replaying M2's recorded treatment runs through the matcher on added code: **3 of
+4 real re-proposals flagged, 2 of 34 compliant runs flagged.** A go/no-go signal
+that the arm has something to measure, not an effect size.
+
+### Cost, expected before the numbers exist
+
+M2 put all three of its timeouts in the arm that ran a hook. Both hooked arms
+are expected to show some, and counts are reported per arm. A timeout truncates
+a run and so gives it fewer chances to re-propose, which **flatters** whichever
+arm suffers it — stated here, before the data.
+
+### Verdict rules
+
+As §9 and §12: per-arm false-positive report, achieved n in the first line. If
+the arms do not differ, that is the result. Three null measurements and a fourth
+would be the finding, not a reason for a fifth.

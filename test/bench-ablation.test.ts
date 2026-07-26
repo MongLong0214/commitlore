@@ -72,22 +72,26 @@ const ONE_TASK = ['--task', 'reproposal-redis-cache', '--seed', '1', '--driver',
 // ---------------------------------------------------------------------------
 
 describe('runner: ablation conditions', () => {
-  it('registers exactly three ablation arms alongside the two primary ones', () => {
+  it('registers three ablation arms and the guard route alongside the two primary ones', () => {
     expect([...PRIMARY_CONDITIONS]).toEqual(['commitlore-on', 'commitlore-off']);
     expect([...ABLATION_CONDITIONS].sort()).toEqual(['no-grade', 'no-lifecycle', 'no-scope']);
     expect([...SUPPORTED_CONDITIONS].sort()).toEqual([
+      'commitlore-guard',
       'commitlore-off',
       'commitlore-on',
       'no-grade',
       'no-lifecycle',
       'no-scope',
     ]);
+    // Not an ablation: nothing is removed from it. It sends Ruled-out: through
+    // the route SPEC 5 assigns to that key instead of through injection.
+    expect([...ABLATION_CONDITIONS]).not.toContain('commitlore-guard');
   });
 
-  it('accepts all five arms and writes each one onto its own row', () => {
+  it('accepts all six arms and writes each one onto its own row', () => {
     const rows = runRunner([...ONE_TASK, '--cond', SUPPORTED_CONDITIONS.join(',')]);
 
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(6);
     expect(rows.map((row) => row.cond)).toEqual([...SUPPORTED_CONDITIONS]);
     for (const row of rows) {
       expect(row.task).toBe('reproposal-redis-cache');

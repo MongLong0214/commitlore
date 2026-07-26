@@ -136,6 +136,18 @@ export const CONDITIONS: Readonly<Record<string, ConditionSpec>> = {
     apply_grading: true,
     apply_lifecycle: true,
   },
+  "commitlore-guard": {
+    id: "commitlore-guard",
+    status: "supported",
+    description:
+      "Records in history, delivered through `commitlore guard` at edit time — the route SPEC §5 assigns to `Ruled-out:` and the only one never measured. Advisory: it reports what an edit revives and lets the edit through. `inject_records` is false because this arm injects nothing; the records reach the agent as a guard warning or not at all.",
+    seed_records: true,
+    inject_records: false,
+    injection_scope: "route-scoped",
+    apply_grading: true,
+    apply_lifecycle: true,
+  },
+
   "no-scope": {
     id: "no-scope",
     status: "supported",
@@ -188,9 +200,25 @@ export const SUPPORTED_CONDITIONS: readonly string[] = Object.values(CONDITIONS)
  */
 export const PRIMARY_CONDITIONS: readonly string[] = ["commitlore-on", "commitlore-off"];
 
-/** The ablation arms (T-703): the projection minus one guarantee each. */
+/**
+ * Alternative delivery routes: the same records, reaching the agent another way.
+ *
+ * `commitlore-guard` is not an ablation. Nothing is removed from it — it sends
+ * `Ruled-out:` through the route SPEC §5 assigns to that key instead of through
+ * injection (§14, #37).
+ */
+export const ROUTE_CONDITIONS: readonly string[] = ["commitlore-guard"];
+
+/**
+ * The ablation arms (T-703): the projection minus one guarantee each.
+ *
+ * Named rather than derived as "everything that is not primary". That
+ * derivation was correct while ablations were the only other kind of arm, and
+ * it silently reclassified the guard route as an ablation the moment one was
+ * added — which would have put a route comparison into an ablation report.
+ */
 export const ABLATION_CONDITIONS: readonly string[] = SUPPORTED_CONDITIONS.filter(
-  (id) => !PRIMARY_CONDITIONS.includes(id),
+  (id) => !PRIMARY_CONDITIONS.includes(id) && !ROUTE_CONDITIONS.includes(id),
 );
 
 /** One line of `bench/results/*.jsonl`. Field names are the serialized names. */

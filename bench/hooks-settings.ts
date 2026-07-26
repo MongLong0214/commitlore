@@ -131,6 +131,7 @@ export const writeArmSettings = (plan: HookPlan): string | null => {
 export const HOOK_PLANS: Readonly<Record<string, HookPlan>> = {
   "commitlore-on": { preToolUse: "inject", args: ["--hook-input"] },
   "commitlore-off": {},
+  "commitlore-guard": { preToolUse: "guard", args: ["--hook-input"] },
   "no-scope": { ablation: { noScope: true } },
   "no-grade": { ablation: { noGrade: true } },
   "no-lifecycle": { ablation: { noLifecycle: true } },
