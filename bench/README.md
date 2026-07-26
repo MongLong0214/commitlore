@@ -201,7 +201,27 @@ result.
 Drivers sit behind `bench/drivers/types.ts` so more can be added.
 
 **`claude-headless`** — spawns `claude -p --output-format json` in the workspace.
-Verified end to end against the live CLI (four runs). Known limits:
+Verified end to end against the live CLI (four runs).
+
+```bash
+node bench/runner.ts --task reproposal-redis-cache --cond both --seed 1 \
+  --driver claude-headless --timeout-ms 540000 \
+  --save-transcripts bench/results/transcripts \
+  --out bench/results/live.jsonl
+```
+
+Prerequisites:
+
+- `claude` on `PATH` and already authenticated — the driver never prompts, so an
+  unauthenticated CLI surfaces as `stopped_by: "error"` rows, not as a hang.
+- It costs money and wall time: observed runs took **110–300 s** and **40k–70k
+  tokens each**, so a full 10-task × 2-arm × 3-seed matrix is a real bill. Test
+  the wiring with `--driver dry-run` first.
+- Set `--timeout-ms` above the slowest expected run. The default is 600000; at
+  240000 an observed run was killed mid-flight and recorded as an error.
+- Use `--save-transcripts` for anything that will be quoted.
+
+Known limits:
 
 - The installed CLI has **no `--max-turns`**, so the turn budget cannot be
   enforced in flight. The driver probes `--help` once, passes the flag if it
