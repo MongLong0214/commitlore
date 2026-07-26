@@ -335,7 +335,7 @@ const collectRows = (source: RowSource, aliases: readonly string[]): IndexedTrai
   const rows: IndexedTrailer[] = [];
   for (const alias of aliases) {
     for (const row of source.fetch({ path: alias })) {
-      const identity = `${row.sha} ${row.source} ${row.seq}`;
+      const identity = `${row.sha}\u0000${row.source}\u0000${row.seq}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
       rows.push(row);
@@ -347,7 +347,7 @@ const collectRows = (source: RowSource, aliases: readonly string[]): IndexedTrai
 const groupByCommit = (rows: readonly IndexedTrailer[]): CommitRecord[] => {
   const found = new Map<string, CommitRecord>();
   for (const row of rows) {
-    const key = `${row.sha} ${row.source}`;
+    const key = `${row.sha}\u0000${row.source}`;
     const existing = found.get(key);
     if (existing === undefined) {
       found.set(key, {
@@ -399,7 +399,7 @@ const dropMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => 
   for (const record of records) {
     if (record.source !== 'commit') continue;
     const contents = commitTrailers.get(record.sha) ?? new Set<string>();
-    for (const trailer of record.trailers) contents.add(`${trailer.key} ${trailer.value}`);
+    for (const trailer of record.trailers) contents.add(`${trailer.key}\u0000${trailer.value}`);
     commitTrailers.set(record.sha, contents);
   }
 
@@ -408,7 +408,7 @@ const dropMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => 
     const contents = commitTrailers.get(record.sha);
     if (contents === undefined) return true;
     return !record.trailers.every((trailer) =>
-      contents.has(`${trailer.key} ${trailer.value}`),
+      contents.has(`${trailer.key}\u0000${trailer.value}`),
     );
   });
 };

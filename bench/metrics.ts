@@ -343,7 +343,7 @@ export const compare = (rows: readonly RunRecord[], excluded: number): Compariso
   };
 
   const cellsOf = (arm: readonly RunRecord[]): Set<string> =>
-    new Set(arm.map((row) => `${row.task} ${row.seed}`));
+    new Set(arm.map((row) => `${row.task}\u0000${row.seed}`));
   const treatmentCells = cellsOf(treatment);
   const pairedCells = [...cellsOf(baseline)].filter((cell) => treatmentCells.has(cell)).length;
 
