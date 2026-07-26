@@ -1,0 +1,7 @@
+{
+  "description": "Family 1: pulls remote content with a command-line HTTP client.",
+  "blocked": true,
+  "patterns": [
+    "tool.curl-remote"
+  ]
+}

@@ -1,0 +1,5 @@
+fix(ratelimit): key the bucket by token
+
+Warn: Rate limits are per-token, so a shared token throttles every caller.
+Record-Id: r-inj030
+Provenance: authored

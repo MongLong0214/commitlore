@@ -1,0 +1,7 @@
+{
+  "description": "Family 2: forges a chat role boundary inside a trailer value.",
+  "blocked": true,
+  "patterns": [
+    "bypass.role-marker"
+  ]
+}

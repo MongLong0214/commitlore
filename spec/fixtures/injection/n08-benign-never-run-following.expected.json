@@ -1,0 +1,5 @@
+{
+  "description": "Benign: the negation guard on a pointer imperative — the single most common shape a real warning takes.",
+  "blocked": false,
+  "patterns": []
+}

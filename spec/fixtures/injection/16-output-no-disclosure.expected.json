@@ -1,0 +1,7 @@
+{
+  "description": "Family 5: suppresses disclosure. The negation is part of the attack, so the negation guard must not disarm it.",
+  "blocked": true,
+  "patterns": [
+    "output.no-disclosure"
+  ]
+}

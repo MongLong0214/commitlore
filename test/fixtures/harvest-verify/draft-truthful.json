@@ -1,0 +1,68 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Limit", "value": "the report API caps a single response at 5 MB" },
+        { "key": "Ruled-out", "value": "background worker | needs a second deploy target" },
+        { "key": "Warn", "value": "keep a page under 4 MB so the 5 MB cap is never what fails" },
+        { "key": "Blast", "value": "module" },
+        { "key": "Undo", "value": "easy" },
+        { "key": "Certainty", "value": "firm" },
+        { "key": "Verified", "value": "replayed the 180k-row export against the fixture" },
+        { "key": "Unverified", "value": "the 5 MB cap on the streaming endpoint has no fixture" },
+        { "key": "Record-Id", "value": "r-3d91c7" },
+        { "key": "Provenance", "value": "authored" }
+      ],
+      "evidence": [
+        {
+          "key": "Limit",
+          "source": "transcript",
+          "quote": "The report API caps a single response at 5 MB.",
+          "locator": "L4-L4"
+        },
+        {
+          "key": "Ruled-out",
+          "source": "transcript",
+          "quote": "A background worker means a second deploy target, and we are rejecting that.",
+          "locator": "L3-L3"
+        },
+        {
+          "key": "Warn",
+          "source": "transcript",
+          "quote": "I page at 2000 rows and stop at 4 MB so the cap is never what fails.",
+          "locator": "L5-L5"
+        },
+        {
+          "key": "Blast",
+          "source": "diff",
+          "quote": "export const exportNightly = async (): Promise<Buffer> => {",
+          "locator": "@@ -12,7 +12,16 @@"
+        },
+        {
+          "key": "Undo",
+          "source": "diff",
+          "quote": "-  const rows = await fetchRows();",
+          "locator": "@@ -12,7 +12,16 @@"
+        },
+        {
+          "key": "Certainty",
+          "source": "transcript",
+          "quote": "it finished in 41s",
+          "locator": "L6-L6"
+        },
+        {
+          "key": "Verified",
+          "source": "transcript",
+          "quote": "I replayed last night's 180k-row export against the fixture and it finished in 41s.",
+          "locator": "L6-L6"
+        },
+        {
+          "key": "Unverified",
+          "source": "transcript",
+          "quote": "The 5 MB cap on the streaming endpoint is untested; we have no fixture for it.",
+          "locator": "L7-L7"
+        }
+      ]
+    }
+  ]
+}

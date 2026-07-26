@@ -1,0 +1,5 @@
+fix(logging): redact the api key
+
+Warn: Do not print the API key in logs; use the redacted logger.
+Record-Id: r-inj025
+Provenance: authored

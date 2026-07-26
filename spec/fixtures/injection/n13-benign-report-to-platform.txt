@@ -1,0 +1,5 @@
+feat(schema): add the tenant column
+
+Warn: Report this to the platform team before shipping another schema change.
+Record-Id: r-inj034
+Provenance: authored

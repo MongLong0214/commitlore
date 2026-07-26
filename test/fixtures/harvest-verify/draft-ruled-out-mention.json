@@ -1,0 +1,17 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Ruled-out", "value": "Redis caching | nobody has looked at it" }
+      ],
+      "evidence": [
+        {
+          "key": "Ruled-out",
+          "source": "transcript",
+          "quote": "Redis caching came up in passing and nobody has looked at it yet.",
+          "locator": "L9-L9"
+        }
+      ]
+    }
+  ]
+}

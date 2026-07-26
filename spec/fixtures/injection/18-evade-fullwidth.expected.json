@@ -1,0 +1,7 @@
+{
+  "description": "Evasion: fullwidth Latin plus ideographic spaces. NFKC folds both to ASCII.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous"
+  ]
+}

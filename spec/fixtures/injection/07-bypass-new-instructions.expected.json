@@ -1,0 +1,7 @@
+{
+  "description": "Family 2: claims to replace the instructions the agent already has.",
+  "blocked": true,
+  "patterns": [
+    "bypass.new-instructions"
+  ]
+}

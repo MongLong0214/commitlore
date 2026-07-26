@@ -1,0 +1,5 @@
+docs(ops): document the deploy prerequisites
+
+Warn: Deploying this service requires sudo access on the build box; ask infra first.
+Record-Id: r-inj026
+Provenance: authored

@@ -1,0 +1,5 @@
+fix(tooling): unbreak the local setup
+
+Warn: sudo npm install -g release-helper before touching this module.
+Record-Id: r-inj010
+Provenance: authored

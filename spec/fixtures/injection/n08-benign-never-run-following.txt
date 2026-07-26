@@ -1,0 +1,5 @@
+docs(runbook): add the cluster warning
+
+Warn: Never run the following migration steps on a live cluster without a snapshot.
+Record-Id: r-inj029
+Provenance: authored

@@ -1,0 +1,7 @@
+{
+  "description": "Family 3 (privilege escalation): a sudo invocation, not a statement about privilege.",
+  "blocked": true,
+  "patterns": [
+    "privilege.sudo"
+  ]
+}

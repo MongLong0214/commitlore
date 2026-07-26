@@ -28,6 +28,7 @@ import { execGit } from '../core/git.js';
 import { validateRecord } from '../core/schema.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import { SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
+import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
 
 /**
  * A violation plus where it was found. `line` is 1-based and counts lines of
@@ -56,6 +57,12 @@ export interface ValidateResult {
   stdout: string;
   stderr: string;
   violations: LocatedViolation[];
+  /**
+   * Credentials found in the message. Separate from `violations` because they
+   * are not a protocol violation -- the record can be perfectly well-formed and
+   * still be inscribing a secret into history permanently (ADR-0005).
+   */
+  secrets: SecretFinding[];
 }
 
 /** One commit message to check, with its sha when the input mode knows one. */
@@ -82,6 +89,7 @@ const usageError = (message: string): ValidateResult => ({
   stdout: '',
   stderr: `commitlore: ${message}\n${USAGE}\n`,
   violations: [],
+  secrets: [],
 });
 
 const messageOf = (error: unknown): string =>
@@ -292,29 +300,53 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   const cwd = input.cwd ?? process.cwd();
 
   let violations: LocatedViolation[];
+  let secrets: SecretFinding[];
   try {
-    violations = collectSources(input, cwd).flatMap(locateViolations);
+    const sources = collectSources(input, cwd);
+    violations = sources.flatMap(locateViolations);
+    // A credential in a commit message is inscribed permanently -- rewriting
+    // history does not reach the clones and forks that already have it. So the
+    // scan runs on the same path as validation, which is what the commit-msg
+    // hook calls, and blocks before the message is ever written (ADR-0005).
+    secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error) {
     return usageError(messageOf(error));
   }
 
+  const failed = violations.length > 0 || secrets.length > 0;
+
   if (input.json === true) {
     return {
-      code: violations.length === 0 ? 0 : 1,
-      stdout: `${JSON.stringify({ violations })}\n`,
+      code: failed ? 1 : 0,
+      stdout: `${JSON.stringify({ violations, secrets })}\n`,
       stderr: '',
       violations,
+      secrets,
     };
   }
 
-  if (violations.length === 0) return { code: 0, stdout: '', stderr: '', violations };
+  if (!failed) return { code: 0, stdout: '', stderr: '', violations, secrets };
 
-  const plural = violations.length === 1 ? '' : 's';
+  const parts: string[] = [];
+  if (violations.length > 0) parts.push(violations.map(formatViolation).join('\n'));
+  if (secrets.length > 0) parts.push(formatFindings(secrets));
+
+  const notes: string[] = [];
+  if (violations.length > 0) {
+    const plural = violations.length === 1 ? '' : 's';
+    notes.push(`${violations.length} violation${plural} (SPEC §6)`);
+  }
+  if (secrets.length > 0) {
+    const plural = secrets.length === 1 ? '' : 's';
+    notes.push(`${secrets.length} possible credential${plural} (ADR-0005)`);
+  }
+
   return {
     code: 1,
-    stdout: `${violations.map(formatViolation).join('\n')}\n`,
-    stderr: `commitlore: ${violations.length} violation${plural} (SPEC §6) — the message was not modified\n`,
+    stdout: `${parts.join('\n')}\n`,
+    stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
     violations,
+    secrets,
   };
 };
 

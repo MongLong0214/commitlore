@@ -1,0 +1,8 @@
+{
+  "description": "Family 1: the classic curl-to-shell pipeline, tripping two patterns at once.",
+  "blocked": true,
+  "patterns": [
+    "tool.curl-remote",
+    "tool.pipe-to-shell"
+  ]
+}

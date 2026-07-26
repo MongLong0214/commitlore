@@ -1,0 +1,7 @@
+{
+  "description": "Evasion: a leading negation that does not govern the imperative. The guard reads only the two words before the match, so this still blocks.",
+  "blocked": true,
+  "patterns": [
+    "tool.run-the-following"
+  ]
+}

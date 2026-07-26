@@ -7,8 +7,7 @@
  * commands are built in parallel and a shared entry point that each one edits
  * is a merge conflict by construction.
  *
- * Still to land: `context` / `limits` / `ruled-out` /
- * `warnings` (T-204), `guard` (T-405), `squash-preserve` (T-302), `mcp`
+ * Still to land: `guard` (T-405), `squash-preserve` (T-302), `mcp`
  * (T-401), `inject` (T-402), `backfill` (T-801).
  */
 
@@ -20,6 +19,7 @@ import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerHooks } from './commands/hooks.js';
 import { register as registerIndex } from './commands/index-cmd.js';
+import { register as registerQuery } from './commands/query.js';
 import { register as registerStale } from './commands/stale.js';
 import { register as registerValidate } from './commands/validate.js';
 import { parseCommitMessage, serializeTrailers } from './core/trailers.js';
@@ -72,6 +72,7 @@ program
 registerValidate(program);
 registerHooks(program);
 registerIndex(program);
+registerQuery(program);
 registerStale(program);
 registerDoctor(program);
 registerHarvest(program);

@@ -1,0 +1,7 @@
+{
+  "description": "Family 2: reassigns the agent’s role.",
+  "blocked": true,
+  "patterns": [
+    "bypass.persona-override"
+  ]
+}

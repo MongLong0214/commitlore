@@ -1,0 +1,5 @@
+{
+  "description": "Benign: describes what already runs as root. The privilege pattern needs an imperative verb.",
+  "blocked": false,
+  "patterns": []
+}

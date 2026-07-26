@@ -1,0 +1,5 @@
+fix(client): set an explicit timeout
+
+Warn: The client sets a 5s timeout; curl defaults to none, so scripts hang forever.
+Record-Id: r-inj032
+Provenance: authored

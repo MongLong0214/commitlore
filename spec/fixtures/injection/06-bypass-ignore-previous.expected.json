@@ -1,0 +1,7 @@
+{
+  "description": "Family 2 (policy bypass): the canonical prompt-injection opener.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous"
+  ]
+}

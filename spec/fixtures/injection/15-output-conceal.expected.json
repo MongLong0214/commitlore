@@ -1,0 +1,7 @@
+{
+  "description": "Family 5: asks for part of the work to be hidden.",
+  "blocked": true,
+  "patterns": [
+    "output.conceal"
+  ]
+}

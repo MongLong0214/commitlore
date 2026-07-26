@@ -1,0 +1,5 @@
+{
+  "description": "Benign: names curl with no URL to fetch.",
+  "blocked": false,
+  "patterns": []
+}

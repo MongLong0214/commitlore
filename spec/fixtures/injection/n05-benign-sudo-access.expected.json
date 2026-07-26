@@ -1,0 +1,5 @@
+{
+  "description": "Benign: a statement about sudo, not an invocation of it.",
+  "blocked": false,
+  "patterns": []
+}

@@ -241,13 +241,14 @@ describe('validate — --json', () => {
           want: 'local|module|system',
         },
       ],
+      secrets: [],
     });
   });
 
   it('emits an empty violation list for a clean record', () => {
     const result = runValidate({ readStdin: () => 'Subject\n\nBlast: local\n', json: true });
     expect(result.code).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ violations: [] });
+    expect(JSON.parse(result.stdout)).toEqual({ violations: [], secrets: [] });
   });
 });
 

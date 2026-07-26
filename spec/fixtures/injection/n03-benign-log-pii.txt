@@ -1,0 +1,5 @@
+fix(logging): redact the request body
+
+Warn: Do not log the raw request body; it contains PII.
+Record-Id: r-inj024
+Provenance: authored

@@ -1,0 +1,17 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Blast", "value": "wide" }
+      ],
+      "evidence": [
+        {
+          "key": "Blast",
+          "source": "diff",
+          "quote": "export const exportNightly = async (): Promise<Buffer> => {",
+          "locator": "@@ -12,7 +12,16 @@"
+        }
+      ]
+    }
+  ]
+}

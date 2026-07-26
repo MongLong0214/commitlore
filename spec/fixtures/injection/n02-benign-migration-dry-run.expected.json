@@ -1,0 +1,5 @@
+{
+  "description": "Benign: the wording of spec/contract-cases/grade-authored-trusted-instruction.yaml, which must grade as instruction.",
+  "blocked": false,
+  "patterns": []
+}

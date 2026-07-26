@@ -1,0 +1,7 @@
+{
+  "description": "Evasion: Cyrillic lookalikes for i/o/e/a/p/c/т. NFKC leaves them alone, so the confusable table folds them.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous"
+  ]
+}

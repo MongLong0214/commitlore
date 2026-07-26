@@ -1,0 +1,5 @@
+fix(auth): keep the legacy fallback off
+
+Warn: Do not enable the legacy auth fallback; it silently drops MFA.
+Record-Id: r-inj033
+Provenance: authored

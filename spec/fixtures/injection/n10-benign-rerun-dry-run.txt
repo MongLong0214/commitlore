@@ -1,0 +1,5 @@
+fix(schema): correct the column type
+
+Warn: Re-run the migration dry-run before touching the schema again.
+Record-Id: r-inj031
+Provenance: authored

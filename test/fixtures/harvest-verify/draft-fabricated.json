@@ -1,0 +1,37 @@
+{
+  "records": [
+    {
+      "trailers": [
+        { "key": "Limit", "value": "the export must finish inside 30 seconds" },
+        { "key": "Warn", "value": "the pager fires if the nightly run overruns" }
+      ],
+      "evidence": [
+        {
+          "key": "Limit",
+          "source": "transcript",
+          "quote": "We agreed the export must finish inside 30 seconds or the pager fires.",
+          "locator": "L4-L4"
+        },
+        {
+          "key": "Warn",
+          "source": "transcript",
+          "quote": "We agreed the export must finish inside 30 seconds or the pager fires.",
+          "locator": "L4-L4"
+        }
+      ]
+    },
+    {
+      "trailers": [
+        { "key": "Warn", "value": "keep a page under 4 MB so the 5 MB cap is never what fails" }
+      ],
+      "evidence": [
+        {
+          "key": "Warn",
+          "source": "transcript",
+          "quote": "I page at 2000 rows and stop at 4 MB so the cap is never what fails.",
+          "locator": "L5-L5"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+fix(daemon): keep the socket path stable
+
+Warn: The daemon runs as root by default; changing the user breaks the socket path.
+Record-Id: r-inj027
+Provenance: authored

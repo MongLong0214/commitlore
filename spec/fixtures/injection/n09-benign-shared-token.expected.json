@@ -1,0 +1,5 @@
+{
+  "description": "Benign: mentions tokens with no exfiltration verb.",
+  "blocked": false,
+  "patterns": []
+}

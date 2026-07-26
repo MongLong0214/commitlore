@@ -1,0 +1,7 @@
+{
+  "description": "Family 1 (tool invocation): points the agent at a payload to execute.",
+  "blocked": true,
+  "patterns": [
+    "tool.run-the-following"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "description": "Family 1: asks for the trailer value to be typed into a shell.",
+  "blocked": true,
+  "patterns": [
+    "tool.shell-invocation"
+  ]
+}

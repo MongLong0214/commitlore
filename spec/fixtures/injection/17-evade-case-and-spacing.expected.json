@@ -1,0 +1,7 @@
+{
+  "description": "Evasion: upper case and padded whitespace. Normalization folds both before matching.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous"
+  ]
+}

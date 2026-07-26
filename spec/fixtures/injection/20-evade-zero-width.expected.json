@@ -1,0 +1,7 @@
+{
+  "description": "Evasion: zero-width spaces splitting the keywords. They are stripped before matching.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous"
+  ]
+}

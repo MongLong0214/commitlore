@@ -1,0 +1,7 @@
+{
+  "description": "Family 5 (output manipulation): pre-commits the agent to an answer.",
+  "blocked": true,
+  "patterns": [
+    "output.always-comply"
+  ]
+}

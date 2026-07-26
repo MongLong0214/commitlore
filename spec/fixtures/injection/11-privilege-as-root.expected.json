@@ -1,0 +1,7 @@
+{
+  "description": "Family 3: asks for the work to be done with elevated privileges.",
+  "blocked": true,
+  "patterns": [
+    "privilege.as-root"
+  ]
+}

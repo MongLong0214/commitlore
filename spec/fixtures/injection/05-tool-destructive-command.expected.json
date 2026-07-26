@@ -1,0 +1,7 @@
+{
+  "description": "Family 1: names a destructive command verbatim, with no negation in front of it.",
+  "blocked": true,
+  "patterns": [
+    "tool.destructive-command"
+  ]
+}

@@ -1,0 +1,5 @@
+fix(git): recover from a corrupt pack
+
+Warn: To clear the corrupt pack, rm -rf .git/objects and re-clone.
+Record-Id: r-inj005
+Provenance: authored

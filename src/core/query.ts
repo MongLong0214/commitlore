@@ -223,6 +223,13 @@ const openSource = (cwd: string, noIndex: boolean): RowSource => {
 const RECORD_SEP = '\x01';
 const FIELD_SEP = '\0';
 
+/**
+ * The same two bytes as git's own format escapes. They cannot be written
+ * literally: `spawnSync` refuses an argument containing a NUL, so the
+ * separators reach git as `%x01`/`%x00` and come back as bytes.
+ */
+const LOG_FORMAT = '--format=%x01%H%x00';
+
 interface Scope {
   aliases: string[];
   follow: boolean;
@@ -237,10 +244,9 @@ interface Scope {
  * leading `\n` stripped here.
  */
 const followedNames = (cwd: string, path: string): string[] => {
-  const result = execGit(
-    ['log', '--follow', '-z', '--name-only', `--format=${RECORD_SEP}%H${FIELD_SEP}`, '--', path],
-    { cwd },
-  );
+  const result = execGit(['log', '--follow', '-z', '--name-only', LOG_FORMAT, '--', path], {
+    cwd,
+  });
   // A path git cannot resolve, or a repository with no commits, is not an
   // error here: it is a scope that no record falls into.
   if (result.code !== 0) return [];

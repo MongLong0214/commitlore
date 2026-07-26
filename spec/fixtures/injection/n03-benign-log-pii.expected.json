@@ -1,0 +1,5 @@
+{
+  "description": "Benign: \"do not log ...\" must not read as output suppression — the disclosure pattern needs a disclosure verb and a target.",
+  "blocked": false,
+  "patterns": []
+}

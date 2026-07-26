@@ -1,0 +1,5 @@
+{
+  "description": "Benign: the negation guard on a destructive command named in a warning.",
+  "blocked": false,
+  "patterns": []
+}

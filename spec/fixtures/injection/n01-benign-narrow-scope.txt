@@ -1,0 +1,5 @@
+refactor(query): tighten the filter
+
+Warn: Do not narrow this without checking upstream.
+Record-Id: r-inj022
+Provenance: authored

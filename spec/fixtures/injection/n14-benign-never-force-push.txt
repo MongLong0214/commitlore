@@ -1,0 +1,5 @@
+docs(contributing): document the branch policy
+
+Warn: Never git push --force to main; the release tags are cut from it.
+Record-Id: r-inj035
+Provenance: authored

@@ -1,0 +1,21 @@
+diff --git a/src/export.ts b/src/export.ts
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/export.ts
++++ b/src/export.ts
+@@ -12,7 +12,16 @@ import { fetchRows } from './db.js';
+
++const PAGE_ROWS = 2000;
++const MAX_BYTES = 4_000_000;
++
+ export const exportNightly = async (): Promise<Buffer> => {
+-  const rows = await fetchRows();
+-  return serialize(rows);
++  const pages: Buffer[] = [];
++  let bytes = 0;
++  for await (const page of fetchRows({ pageSize: PAGE_ROWS })) {
++    if (bytes + page.byteLength > MAX_BYTES) break;
++    bytes += page.byteLength;
++    pages.push(page);
++  }
++  return Buffer.concat(pages);
+ };

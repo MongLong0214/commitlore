@@ -1,0 +1,9 @@
+user: The nightly export keeps timing out and the report never lands.
+assistant: Two ways out: page the rows, or hand the whole export to a background worker.
+assistant: A background worker means a second deploy target, and we are rejecting that.
+user: Page it, then. The report API caps a single response at 5 MB.
+assistant: I page at 2000 rows and stop at 4 MB so the cap is never what fails.
+assistant: I replayed last night's 180k-row export against the fixture and it finished in 41s.
+assistant: The 5 MB cap on the streaming endpoint is untested; we have no fixture for it.
+user: Someone mentioned Redis caching in standup.
+assistant: Redis caching came up in passing and nobody has looked at it yet.

@@ -45,8 +45,11 @@ describe('commitlore CLI', () => {
   // A command listed before it exists sends users down a dead end; a command
   // that works but is unlisted is undiscoverable. Move a name from UNLANDED to
   // LANDED in the same change that wires it into src/cli.ts.
-  const LANDED = ['parse', 'validate', 'hooks', 'index', 'stale', 'doctor', 'harvest'];
-  const UNLANDED = ['context', 'limits', 'ruled-out', 'warnings', 'guard', 'inject'];
+  const LANDED = [
+    'parse', 'validate', 'hooks', 'index', 'context', 'limits',
+    'ruled-out', 'warnings', 'stale', 'doctor', 'harvest',
+  ];
+  const UNLANDED = ['guard', 'inject', 'squash-preserve', 'harvest-verify', 'mcp', 'backfill'];
 
   it('names itself commitlore and lists every landed command', () => {
     const result = runCli(['--help']);

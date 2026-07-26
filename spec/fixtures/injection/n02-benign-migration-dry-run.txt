@@ -1,0 +1,5 @@
+feat(db): add the accounts migration
+
+Warn: Do not merge without running the full migration dry-run first.
+Record-Id: r-inj023
+Provenance: authored
