@@ -14,7 +14,7 @@ coverage 명령(Backlog), 인터랙티브 commit 빌더(Backlog — `commitlore 
 
 ## 요구사항
 1. 파서: `git interpret-trailers --parse` 위임 + 스키마 검증. `--grep` 스캔 금지.
-2. 조회: `context | constraints | rejected | directives` — 경로 스코프, `--follow` 기본, `--json` 출력.
+2. 조회: `context | limits | ruled-out | warnings` — 경로 스코프, `--follow` 기본, `--json` 출력.
 3. `validate`: enum·형식·근거 규칙 검사, 위반 상세 출력(유계 수리 루프의 입력), commit-msg 훅 설치 서브커맨드.
 4. 인덱스: SQLite 증분(신규 커밋만 스캔), 손상 시 `--rebuild`, 부재 시 무인덱스 폴백.
 5. `stale`: Supersedes/Expires 기반 활성 집합 계산.

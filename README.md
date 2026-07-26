@@ -85,7 +85,7 @@ git log --format='%h %(trailers:key=Limit,valueonly,separator=%x3B)'
 # full parsed trailer block of a commit
 git log -1 --format=%B <sha> | git interpret-trailers --parse
 
-# constraints that touched a path (rename-aware)
+# limits that touched a path (rename-aware)
 git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
