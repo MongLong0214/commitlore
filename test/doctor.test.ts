@@ -91,13 +91,22 @@ const writeScript = (path: string, contents: string): void => {
   writeFileSync(path, contents);
 };
 
+/**
+ * `root` defaults to this project's own install root, matching where the
+ * default `bin` actually lives — the same thing a real `hooks install` would
+ * have recorded. Callers that pass an out-of-root `bin` (simulating a
+ * `.git/config` edit after install, #71) get that mismatch for free: `root`
+ * still reflects the legitimate install, `bin` no longer sits under it.
+ */
 const recordHookTarget = (
   repo: string,
   bin = resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'),
   node = process.execPath,
+  root = realpathSync(PACKAGE_ROOT),
 ): void => {
   git(repo, ['config', '--local', 'commitlore.bin', bin]);
   git(repo, ['config', '--local', 'commitlore.node', node]);
+  git(repo, ['config', '--local', 'commitlore.root', root]);
 };
 
 describe('doctor: notes fetch refspec', () => {
@@ -326,7 +335,14 @@ describe('doctor: a stale stub', () => {
     expect(check?.detail).toContain('commitlore.node:');
   });
 
-  it('warns for a byte-current hook whose recorded CLI is outside the package root', () => {
+  /**
+   * Before #71's install-root enforcement, a recorded CLI outside the package
+   * root was merely `warn` — a fact worth noting, not something the stub acted
+   * on, because it would run the file either way. Now the stub refuses it, so
+   * in the PATH-less environment `hook-runtime` probes with, the hook genuinely
+   * cannot resolve a CLI: `fail`, not `warn`, is the honest status.
+   */
+  it('fails for a byte-current hook whose recorded CLI is outside the package root', () => {
     const { repo } = repoWithRemote('doctor-hook-external-target');
     writeScript(hookPath(repo), commitMsgStub());
     const outside = join(tempDir('doctor-external-target'), 'commitlore.mjs');
@@ -334,7 +350,7 @@ describe('doctor: a stale stub', () => {
     recordHookTarget(repo, outside);
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
-    expect(check?.status).toBe('warn');
+    expect(check?.status).toBe('fail');
     expect(check?.detail).toContain(outside);
     expect(check?.detail).toContain(process.execPath);
     expect(check?.fix).toContain('hooks install');
@@ -365,6 +381,7 @@ describe('doctor: hook runtime', () => {
     writeScript(hookPath(repo), commitMsgStub());
     git(repo, ['config', '--local', 'commitlore.bin', resolve(PACKAGE_ROOT, 'dist/cli.js')]);
     git(repo, ['config', '--local', 'commitlore.node', process.execPath]);
+    git(repo, ['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)]);
   };
 
   const runtimeCheck = (repo: string) =>
