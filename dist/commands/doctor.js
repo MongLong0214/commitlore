@@ -20,7 +20,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execGit, hasShallowHistory } from '../core/git.js';
-import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { describeRecordedHookTarget, hasAllowedBinExtension, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
@@ -131,7 +131,14 @@ const checkHook = (opts, runtime) => {
     }
     const problems = [
         ...target.problems,
-        ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+        ...(override === undefined || override === ''
+            ? []
+            : hasAllowedBinExtension(override)
+                ? ['COMMITLORE_BIN override is active']
+                : [
+                    'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
+                        'ignores it and falls through to the remaining resolution steps',
+                ]),
     ];
     if (runtime.status !== 'ok') {
         return check(id, title, runtime.status, `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`, install);

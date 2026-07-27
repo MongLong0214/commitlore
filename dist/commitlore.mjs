@@ -13395,6 +13395,7 @@ var isInsidePackage = (path2) => {
   const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path2));
   return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
 };
+var hasAllowedBinExtension = (path2) => path2.endsWith(".js") || path2.endsWith(".mjs");
 var readRecordedHookTarget = (cwd) => {
   const bin = configValue(cwd, "commitlore.bin");
   const node = configValue(cwd, "commitlore.node");
@@ -13402,7 +13403,7 @@ var readRecordedHookTarget = (cwd) => {
   if (bin === "") problems.push("commitlore.bin is not recorded");
   else {
     const binPath = resolve3(cwd, bin);
-    if (!bin.endsWith(".js") && !bin.endsWith(".mjs")) {
+    if (!hasAllowedBinExtension(bin)) {
       problems.push("commitlore.bin is not a .js or .mjs file");
     }
     if (!isFile(binPath)) problems.push("commitlore.bin does not exist");
@@ -14668,7 +14669,13 @@ var commitMsgStub = () => [
   "fi",
   "",
   'if [ -n "${COMMITLORE_BIN:-}" ]; then',
-  '  exec "$COMMITLORE_BIN" validate --message-file "$1"',
+  "  # Same allowlist as the recorded commitlore.bin case below: any executable",
+  "  # here used to run unchecked, which is exactly the gap an env var is for.",
+  '  case "$COMMITLORE_BIN" in',
+  "    *.mjs|*.js)",
+  '      exec "$COMMITLORE_BIN" validate --message-file "$1"',
+  "      ;;",
+  "  esac",
   "fi",
   "",
   "# Where `hooks install` was run from. A clone is a complete installation",
@@ -14693,8 +14700,20 @@ var commitMsgStub = () => [
   "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
   "      # same environment this whole branch exists to survive.",
   "      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)",
-  '      if [ -x "$recorded_node" ]; then',
-  '        exec "$recorded_node" "$recorded" validate --message-file "$1"',
+  "      recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)",
+  "      # An extension match alone lets a config edit after install point this",
+  "      # at any .js file, anywhere. `doctor` has warned about a recorded path",
+  "      # outside the install root since the extension check was added; this is",
+  "      # that same fact enforced here instead of only reported. `-L` closes the",
+  "      # gap a directory-only containment check would leave open: a symlink",
+  "      # planted inside the root but pointing outside it.",
+  '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
+  '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
+  '        case "$recorded_dir" in',
+  '          "$recorded_root"|"$recorded_root"/*)',
+  '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
+  "            ;;",
+  "        esac",
   "      fi",
   "      ;;",
   "  esac",
@@ -14862,7 +14881,9 @@ var checkHook = (opts, runtime) => {
   }
   const problems = [
     ...target.problems,
-    ...override === void 0 || override === "" ? [] : ["COMMITLORE_BIN override is active"]
+    ...override === void 0 || override === "" ? [] : hasAllowedBinExtension(override) ? ["COMMITLORE_BIN override is active"] : [
+      "COMMITLORE_BIN override is active, but is not a .js or .mjs file \u2014 the hook ignores it and falls through to the remaining resolution steps"
+    ]
   ];
   if (runtime.status !== "ok") {
     return check(
@@ -15960,7 +15981,17 @@ var register5 = (program3) => {
 
 // src/commands/hooks.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
-import { chmodSync, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync3, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import {
+  chmodSync,
+  existsSync as existsSync5,
+  mkdirSync as mkdirSync3,
+  readFileSync as readFileSync10,
+  realpathSync as realpathSync2,
+  renameSync as renameSync2,
+  statSync as statSync3,
+  unlinkSync as unlinkSync2,
+  writeFileSync as writeFileSync5
+} from "node:fs";
 import { join as join4, resolve as resolve5 } from "node:path";
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
@@ -16027,6 +16058,10 @@ var recordBinPath = (cwd) => {
   if (entry === void 0 || entry === "") return;
   execGit(["config", "--local", "commitlore.bin", resolve5(entry)], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
+  try {
+    execGit(["config", "--local", "commitlore.root", realpathSync2(PACKAGE_ROOT)], { cwd });
+  } catch {
+  }
 };
 var describeChained = (status) => {
   if (!status.chained) return [];
@@ -16215,7 +16250,7 @@ var register7 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync11, realpathSync as realpathSync2 } from "node:fs";
+import { readFileSync as readFileSync11, realpathSync as realpathSync3 } from "node:fs";
 import { basename, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
@@ -16594,7 +16629,7 @@ var canonical = (target) => {
   let current = absolute;
   for (; ; ) {
     try {
-      const real = realpathSync2(current);
+      const real = realpathSync3(current);
       return tail.length === 0 ? real : join5(real, ...tail);
     } catch {
       const parent = dirname5(current);
