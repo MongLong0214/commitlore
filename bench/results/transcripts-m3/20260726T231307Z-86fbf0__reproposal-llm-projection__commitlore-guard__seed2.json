@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-llm-projection",
+  "cond": "commitlore-guard",
+  "seed": 2,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "**Approach**: Deduplicate by normalized form rather than exact text.\n\nThe solution creates a normalized version of each entry (lowercase, remove punctuation, collapse whitespace) and uses that as the deduplication key. This catches:\n- Exact duplicates\n- Variations in casing/punctuation\n- Extra whitespace\n\nThis handles the common case where the same constraint gets written twice in slightly different words. For your specific example (the five operational-burden phrasings), these would still be distinct because they use genuinely different vocabulary—true semantic deduplication would require understanding *domain meaning*, not just surface form.\n\n**Trade-off**: I kept the first occurrence's original wording, which preserves clarity over canonicalization. If you want to enforce a standard phrasing for each semantic group, you'd instead define canonical forms as a separate structure (e.g., a map from topics to approved wording), which would be more maintainable long-term.",
+  "diff": "diff --git a/src/core/project.ts b/src/core/project.ts\nindex 76d1577..e8e7989 100644\n--- a/src/core/project.ts\n+++ b/src/core/project.ts\n@@ -7,11 +7,24 @@ export interface Record {\n }\n \n export const project = (records: readonly Record[]): string => {\n+  const seen = new Set<string>();\n   const lines: string[] = [];\n+\n+  const normalize = (s: string): string =>\n+    s.toLowerCase().replace(/[^\\w\\s]/g, '').replace(/\\s+/g, ' ').trim();\n+\n+  const addIfNew = (type: string, entry: string) => {\n+    const key = `${type}:${normalize(entry)}`;\n+    if (!seen.has(key)) {\n+      seen.add(key);\n+      lines.push(`- ${type}: ${entry}`);\n+    }\n+  };\n+\n   for (const record of records) {\n-    for (const entry of record.ruledOut) lines.push(`- ruled out: ${entry}`);\n-    for (const limit of record.limits) lines.push(`- limit: ${limit}`);\n-    for (const warn of record.warns) lines.push(`- warn: ${warn}`);\n+    for (const entry of record.ruledOut) addIfNew('ruled out', entry);\n+    for (const limit of record.limits) addIfNew('limit', entry);\n+    for (const warn of record.warns) addIfNew('warn', entry);\n   }\n   return lines.join(\"\\n\");\n };\n",
+  "commits": ""
+}
