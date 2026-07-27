@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### `parse` recognizes every record block, not only the message's own — bug-issue-89
+
+`commitlore parse` still answered from `parseCommitMessage` alone after
+bug-issue-60 taught `context`, `validate` and the index to recognize every
+record block a message carries (SPEC §2.4): for a message with more than one
+block, `parse` reported only the message's own last paragraph, while
+`context` correctly reported all of them — the exact pre-#86 answer next to
+the exact post-#86 one, for the same message. `parse --help` describes
+itself as "the command" for asking this question, so it is the one place a
+human or agent was still guaranteed a wrong answer.
+
+`parse` now reports every block (`core/trailers.ts` `labelRecordBlocks`),
+labeled `own` (the message's own last paragraph, SPEC §2.1 B1) or `earlier`
+(a block the grammar recovered). A single-block message is unaffected —
+verified byte-for-byte identical, text and `--json`, against the previously
+shipped `dist/commitlore.mjs`, across every fixture in `spec/fixtures/`. The
+multi-block form is additive: `--json`'s `trailers` key keeps meaning what it
+always meant (the message's own block), with a new `blocks` array alongside
+it only when there is more than one.
+
+Also checked: two blocks in one message declaring the same `Record-Id`.
+Neither `commitlore context --json` nor `commitlore validate` flags this
+today — `core/stale.ts`'s `findIdCollisions` (the mechanism behind
+`identityCollision`) only fires when a *notes*-sourced record disagrees with
+a commit's own content; a group with no `notes` record in it, which is what
+two same-message commit blocks are, never reaches it, and the two blocks are
+silently merged instead. `parse` now detects this itself — a check local to
+the one message being parsed, independent of `findIdCollisions` — and
+reports it on stdout (`identityCollision: true` per block in `--json`, a
+`Record-Id collision` marker in text) and stderr. Whether `context`/`validate`
+should also catch the same-message case is open; SPEC and those commands are
+unchanged here.
+
 ### Multi-record grammar (SPEC §2.4) — bug-issue-60
 
 A message MAY now carry more than one record block. `squash-preserve` used to
