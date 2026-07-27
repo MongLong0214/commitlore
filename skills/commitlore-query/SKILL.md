@@ -51,7 +51,7 @@ commitlore limits src/core/types.ts
 ```
 
 All four take zero or more paths (`commitlore context a.ts b.ts` answers for
-both). One path follows its rename lineage; with multiple paths Git cannot
+both). One path can follow a detected rename lineage; with multiple paths Git cannot
 follow renames, so query each path separately when historical names matter.
 They share these flags:
 
