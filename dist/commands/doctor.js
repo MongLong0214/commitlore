@@ -18,13 +18,15 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
-import { installedPath } from '../core/paths.js';
+import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
+import { runQuery } from '../core/query.js';
+import { claudeSettingsPath, readClaudeHookStatus } from '../hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
 /** Probe message for the git capability check — one trailer of each shape. */
 const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
@@ -241,6 +243,59 @@ const checkHookRuntime = (opts) => {
         rmSync(probe, { force: true });
     }
 };
+const checkInjectRuntime = (opts) => {
+    const title = 'PreToolUse hook runtime';
+    const id = 'inject-runtime';
+    const fix = 'commitlore inject install-claude-hook';
+    const cwd = opts.cwd ?? process.cwd();
+    const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
+    if (settings.state !== 'installed') {
+        const detail = settings.state === 'absent'
+            ? `not installed in ${settings.settingsPath}`
+            : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
+        return check(id, title, 'warn', detail, fix);
+    }
+    const path = runQuery({ cwd, noIndex: true }).records
+        .flatMap((record) => record.paths)
+        .find((candidate) => candidate !== '' && candidate !== '.');
+    if (path === undefined) {
+        return check(id, title, 'skipped', 'no recorded path is available for a runtime probe');
+    }
+    const configuredRoot = process.env['CLAUDE_PLUGIN_ROOT'];
+    const pluginRoot = configuredRoot === undefined || configuredRoot === ''
+        ? PACKAGE_ROOT
+        : resolve(process.cwd(), configuredRoot);
+    const payload = JSON.stringify({
+        session_id: 'commitlore-doctor',
+        cwd,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: resolve(cwd, path) },
+    });
+    const run = spawnSync('/bin/bash', [installedPath('scripts/commitlore-run.sh'), 'inject', '--hook-input'], {
+        shell: false,
+        encoding: 'utf8',
+        cwd,
+        input: payload,
+        env: {
+            PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+            HOME: process.env['HOME'] ?? '',
+            CLAUDE_PLUGIN_ROOT: pluginRoot,
+        },
+    });
+    if (run.error !== undefined) {
+        return check(id, title, 'fail', `could not run the PreToolUse hook: ${run.error.message}`, fix);
+    }
+    if (run.status !== 0) {
+        const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+        return check(id, title, 'fail', `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`, fix);
+    }
+    if (`${run.stdout ?? ''}`.trim() === '') {
+        const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+        return check(id, title, 'fail', `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`, fix);
+    }
+    return check(id, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+};
 const checkIndex = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     let handle;
@@ -278,6 +333,7 @@ export const runDoctor = (opts = {}) => {
         checkPush(opts),
         checkHook(opts),
         checkHookRuntime(opts),
+        checkInjectRuntime(opts),
         checkGit(opts),
         checkIndex(opts),
     ];

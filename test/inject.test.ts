@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { Command } from 'commander';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { hookResponse, register } from '../src/commands/inject.js';
+import { hookResponse, hookResult, register } from '../src/commands/inject.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import {
   buildInjection,
@@ -777,17 +777,19 @@ describe('commitlore inject', () => {
 // ---------------------------------------------------------------------------
 
 describe('PreToolUse payload', () => {
-  const payload = (toolInput: { [key: string]: unknown }): string =>
+  const payload = (toolInput: { [key: string]: unknown }, toolName = 'Read'): string =>
     JSON.stringify({
       session_id: 'test',
       cwd: REPO,
       hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
+      tool_name: toolName,
       tool_input: toolInput,
     });
 
   const respond = (raw: string): string =>
     hookResponse(raw, { cwd: REPO, at: AT, noIndex: true, trustedAuthors: [TRUSTED] });
+  const result = (raw: string) =>
+    hookResult(raw, { cwd: REPO, at: AT, noIndex: true, trustedAuthors: [TRUSTED] });
 
   it('answers an absolute file_path with additionalContext', () => {
     const response = respond(payload({ file_path: join(REPO, GUARD) }));
@@ -799,14 +801,59 @@ describe('PreToolUse payload', () => {
     expect(parsed.hookSpecificOutput.additionalContext).toBe(inject().text);
   });
 
-  it('says nothing for a path outside the repository', () => {
-    expect(respond(payload({ file_path: '/etc/hosts' }))).toBe('');
+  it.each([
+    [
+      'unparseable JSON',
+      'not json at all',
+      'commitlore: injection hook: unparseable JSON; no context was injected\n',
+    ],
+    [
+      'a missing file_path',
+      payload({}),
+      'commitlore: injection hook: file_path is missing or null; no context was injected\n',
+    ],
+    [
+      'a null file_path',
+      payload({ file_path: null }),
+      'commitlore: injection hook: file_path is missing or null; no context was injected\n',
+    ],
+    [
+      'an absolute outside path',
+      payload({ file_path: '/etc/hosts' }),
+      'commitlore: injection hook: file_path resolves outside the repository; no context was injected\n',
+    ],
+    [
+      'a relative outside path',
+      payload({ file_path: '../../../../etc/passwd' }),
+      'commitlore: injection hook: file_path resolves outside the repository; no context was injected\n',
+    ],
+    [
+      'an unexpected tool',
+      payload({ file_path: join(REPO, GUARD) }, 'Bash'),
+      'commitlore: injection hook: unexpected tool "Bash"; no context was injected\n',
+    ],
+    [
+      'an overlong path',
+      payload({ file_path: Array.from({ length: 10_000 }, () => 'x').join('/') }),
+      'commitlore: injection hook: file_path is too long; no context was injected\n',
+    ],
+    [
+      'a newline in file_path',
+      payload({ file_path: `${GUARD}\n/etc/passwd` }),
+      'commitlore: injection hook: file_path contains a line break; no context was injected\n',
+    ],
+  ])('diagnoses %s, preserves empty stdout, and exits 0', (_label, raw, stderr) => {
+    expect(result(raw)).toEqual({ stdout: '', stderr, exitCode: 0 });
   });
 
-  it('says nothing for a tool with no path, an empty payload, or broken JSON', () => {
-    expect(respond(payload({ command: 'ls' }))).toBe('');
-    expect(respond('')).toBe('');
-    expect(respond('{ not json')).toBe('');
+  it('keeps a valid no-record answer silent on both streams', () => {
+    for (const filePath of ['src/nothing/here.ts', '..inside-the-repository.ts']) {
+      expect(result(payload({ file_path: filePath })), filePath).toEqual({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      });
+    }
   });
 
   /**

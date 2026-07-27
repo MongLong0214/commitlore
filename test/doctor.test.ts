@@ -34,6 +34,10 @@ import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import {
+  claudeSettingsPath,
+  installClaudeHook,
+} from '../src/hooks/claude-settings.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
@@ -358,6 +362,60 @@ describe('doctor: hook runtime', () => {
   });
 });
 
+describe('doctor: PreToolUse hook runtime', () => {
+  const recordedRepo = (label: string): string => {
+    const repo = initRepo(label);
+    writeFileSync(join(repo, 'probe.ts'), 'export const probe = true;\n');
+    git(repo, ['add', 'probe.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      'Add doctor injection probe\n\nLimit: doctor injection probe\nRecord-Id: r-doctorprobe',
+    ]);
+    return repo;
+  };
+
+  const runtimeCheck = (repo: string) =>
+    runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'inject-runtime');
+
+  it('reports an unwired repository instead of calling it healthy', () => {
+    const check = runtimeCheck(recordedRepo('doctor-inject-unwired'));
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('not installed');
+    expect(check?.fix).toContain('install-claude-hook');
+  });
+
+  it('runs a known-good payload and reports non-empty context', () => {
+    const repo = recordedRepo('doctor-inject-ok');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+
+    const check = runtimeCheck(repo);
+
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('returned context');
+  });
+
+  it('fails when the hook returns empty for a known-good payload', () => {
+    const repo = recordedRepo('doctor-inject-empty');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const emptyRoot = tempDir('doctor-inject-empty-root');
+    const previous = process.env['CLAUDE_PLUGIN_ROOT'];
+    process.env['CLAUDE_PLUGIN_ROOT'] = emptyRoot;
+    try {
+      const report = runDoctor({ cwd: repo });
+      const check = report.checks.find((entry) => entry.id === 'inject-runtime');
+      expect(check?.status).toBe('fail');
+      expect(check?.detail).toContain('returned no context');
+      expect(report.exitCode).toBe(1);
+    } finally {
+      if (previous === undefined) delete process.env['CLAUDE_PLUGIN_ROOT'];
+      else process.env['CLAUDE_PLUGIN_ROOT'] = previous;
+    }
+  });
+});
+
 describe('doctor: cli runtime', () => {
   it('reports ok because this checkout is built', () => {
     const check = runDoctor({ cwd: initRepo('doctor-cli-runtime') }).checks.find(
@@ -440,6 +498,7 @@ describe('doctor: report', () => {
       'notes-push',
       'commit-msg-hook',
       'hook-runtime',
+      'inject-runtime',
       'git-trailers',
       'index-health',
     ]);
@@ -459,7 +518,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(7);
+    expect(parsed.checks).toHaveLength(8);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
