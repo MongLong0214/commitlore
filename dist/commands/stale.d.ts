@@ -23,6 +23,7 @@ export interface CollectOptions {
     cwd?: string;
     /** Read the whole reachable history instead of the most recent commits. */
     allHistory?: boolean;
+    revision?: string;
 }
 type RecordSource = NonNullable<StaleRecord['source']>;
 type CollectedRecord = StaleRecord & {
@@ -56,6 +57,7 @@ export interface StaleReport {
     /** The stale ones: superseded, expired, or flagged for review. */
     records: StaleReportRecord[];
     danglingRefs: Violation[];
+    idCollisions: Violation[];
 }
 export declare const buildReport: (scan: Scan, at: Date) => StaleReport;
 export declare const formatReport: (report: StaleReport) => string;

@@ -13411,6 +13411,7 @@ var FOLLOWS_KEY = "Follows";
 var EXPIRES_KEY = "Expires";
 var REVIEW_FLAG = "review";
 var DANGLING_WANT = "an existing Record-Id in history";
+var UNIQUE_ID_WANT = "exactly one record per Record-Id";
 var DAY_MS = 864e5;
 var DATE_SHAPE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var trailerValue = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
@@ -13499,14 +13500,14 @@ var foldLifecycle = (records, opts) => {
     };
   });
 };
-var findDanglingRefs = (records) => {
+var findDanglingRefs = (records, referencedBy = records) => {
   const declared = /* @__PURE__ */ new Set();
   for (const record2 of records) {
     const recordId = trailerValue(record2.trailers, RECORD_ID_KEY);
     if (recordId !== void 0) declared.add(recordId);
   }
   const violations = [];
-  for (const record2 of records) {
+  for (const record2 of referencedBy) {
     for (const trailer of record2.trailers) {
       if (trailer.key !== SUPERSEDES_KEY && trailer.key !== FOLLOWS_KEY) continue;
       if (!RECORD_ID_RE.test(trailer.value)) continue;
@@ -13521,6 +13522,27 @@ var findDanglingRefs = (records) => {
     }
   }
   return violations;
+};
+var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var findIdCollisions = (records) => {
+  const groups = /* @__PURE__ */ new Map();
+  for (const record2 of records) {
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY);
+    if (recordId === void 0) continue;
+    const group = groups.get(recordId);
+    if (group === void 0) groups.set(recordId, [record2]);
+    else group.push(record2);
+  }
+  return [...groups].filter(([, group]) => {
+    if (!group.some((record2) => record2.source === "notes")) return false;
+    return new Set(group.map(payloadSignature)).size > 1;
+  }).map(([recordId]) => ({
+    key: RECORD_ID_KEY,
+    value: recordId,
+    rule: "duplicate-id",
+    got: recordId,
+    want: UNIQUE_ID_WANT
+  }));
 };
 var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
@@ -14163,6 +14185,7 @@ var mergeByIdentity = (records, states) => {
     const recordId = trailerValue2(trailers, RECORD_ID_KEY2);
     const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY2);
     const provenance = parseProvenance(provenanceValue);
+    const identityCollision = findIdCollisions(ordered).length > 0;
     merged.push({
       trailers,
       sha: latest2.sha,
@@ -14180,6 +14203,7 @@ var mergeByIdentity = (records, states) => {
       ...recordId === void 0 ? {} : { recordId },
       ...provenance === void 0 ? {} : { provenance },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
+      ...identityCollision ? { identityCollision: true } : {},
       ...state?.supersededBy === void 0 ? {} : { supersededBy: state.supersededBy },
       ...state?.expiresAt === void 0 ? {} : { expiresAt: state.expiresAt }
     });
@@ -14218,6 +14242,11 @@ var runQuery = (opts = {}) => {
     );
     const records = mergeByIdentity(visible, states).filter((record2) => opts.allHistory === true || record2.lifecycle === "active").filter((record2) => carriesKey(record2, opts.keys)).sort(compareRecords);
     gradeMerged(records, cwd, at, opts.trustedAuthors);
+    for (const record2 of records) {
+      if (record2.identityCollision !== true) continue;
+      record2.trust = "blocked";
+      record2.matchedTrailerKeys = [RECORD_ID_KEY2];
+    }
     const history = historyAvailability(cwd);
     if (history === "unavailable") {
       diagnostics.push(
@@ -16176,7 +16205,8 @@ var project = (records, grades) => {
         recordId: oneLine2(record2.recordId ?? "-"),
         sha: shortSha3(record2.sha),
         patterns: grade2.matchedPatterns ?? [],
-        keys: grade2.matchedTrailerKeys ?? []
+        keys: grade2.matchedTrailerKeys ?? [],
+        reason: record2.identityCollision === true ? "identity-collision" : "injection"
       });
       continue;
     }
@@ -16201,13 +16231,20 @@ var header = (path2, ablation) => {
 };
 var withheldLine = (withheld) => {
   if (withheld.length === 0) return [];
-  const named = withheld.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ");
-  const patterns = [...new Set(withheld.flatMap((entry) => entry.patterns))].sort();
-  const keys = [...new Set(withheld.flatMap((entry) => entry.keys))].sort();
+  const collisions = withheld.filter((entry) => entry.reason === "identity-collision");
+  const injections = withheld.filter((entry) => entry.reason === "injection");
+  const collisionLine = collisions.length === 0 ? [] : [
+    `withheld: ${collisions.length} record(s) due to a Record-Id collision; content not shown: ${collisions.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")}.`
+  ];
+  if (injections.length === 0) return collisionLine;
+  const named = withheld.filter((entry) => entry.reason === "injection").map((entry) => `${entry.recordId} ${entry.sha}`).join(", ");
+  const patterns = [...new Set(injections.flatMap((entry) => entry.patterns))].sort();
+  const keys = [...new Set(injections.flatMap((entry) => entry.keys))].sort();
   const because = patterns.length === 0 ? "" : ` (matched: ${patterns.join(", ")})`;
   const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
   return [
-    `withheld: ${withheld.length} record(s) whose ${source} matched an injection pattern${because}; content not shown: ${named}.`
+    ...collisionLine,
+    `withheld: ${injections.length} record(s) whose ${source} matched an injection pattern${because}; content not shown: ${named}.`
   ];
 };
 var omittedLine = (cut, total, tier) => {
@@ -16342,7 +16379,13 @@ var buildInjection = (opts) => {
   const grades = new Map(
     active.map((record2) => [
       record2.recordId ?? `${record2.sha}:${record2.source}`,
-      ablation.noGrade ? ungraded(record2) : gradeMerged2(record2, authors, at, opts.trustedAuthors)
+      record2.identityCollision === true ? {
+        provenance: record2.provenance?.kind ?? "unknown",
+        lifecycle: record2.lifecycle,
+        trust: "blocked",
+        reason: "Record-Id collision",
+        matchedTrailerKeys: ["Record-Id"]
+      } : ablation.noGrade ? ungraded(record2) : gradeMerged2(record2, authors, at, opts.trustedAuthors)
     ])
   );
   const { entries, withheld, withheldValues } = project(active, grades);
@@ -25160,8 +25203,10 @@ var withholdBlocked = (result) => {
     (record2) => record2.trust === "blocked" && record2.withheldTrailerKeys === void 0
   );
   if (blocked.length === 0) return result;
+  const collisions = blocked.filter((record2) => record2.identityCollision === true);
+  const injectionBlocked = blocked.filter((record2) => record2.identityCollision !== true);
   const keys = [
-    ...new Set(blocked.flatMap((record2) => record2.matchedTrailerKeys ?? []))
+    ...new Set(injectionBlocked.flatMap((record2) => record2.matchedTrailerKeys ?? []))
   ].sort();
   const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
   const records = result.records.map(
@@ -25182,7 +25227,12 @@ var withholdBlocked = (result) => {
     records,
     diagnostics: [
       ...result.diagnostics,
-      `withheld the content of ${blocked.length} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
+      ...injectionBlocked.length === 0 ? [] : [
+        `withheld the content of ${injectionBlocked.length} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
+      ],
+      ...collisions.length === 0 ? [] : [
+        `withheld the content of ${collisions.length} record(s) whose Record-Id collides with a divergent note`
+      ]
     ]
   };
 };
@@ -25231,6 +25281,7 @@ var toJsonRecord = (record2) => ({
   lifecycle: record2.lifecycle,
   flags: record2.flags,
   trust: record2.trust ?? null,
+  identityCollision: record2.identityCollision === true,
   provenance: record2.provenanceValue ?? null,
   supersededBy: record2.supersededBy ?? null,
   expiresAt: record2.expiresAt ?? null,
@@ -25275,12 +25326,13 @@ var stateTag = (record2) => {
   return tags.length === 0 ? "" : `(${tags.join(", ")})  `;
 };
 var trustTag = (record2) => record2.trust === void 0 ? "" : `[${record2.trust}]  `;
+var blockedMessage = (record2) => record2.identityCollision === true ? "Record content was withheld because its Record-Id collides." : BLOCKED_RECORD_WITHHELD;
 var idColumn = (record2, width) => (record2.recordId ?? "-").padEnd(width);
 var idWidth = (records) => records.reduce((width, record2) => Math.max(width, (record2.recordId ?? "-").length), 1);
 var valueLines = (records, key) => {
   const width = idWidth(records);
   return records.flatMap((record2) => {
-    const values = record2.trust === "blocked" ? record2.withheldTrailerKeys?.includes(key) === true ? [BLOCKED_RECORD_WITHHELD] : [] : valuesOf(record2, key);
+    const values = record2.trust === "blocked" ? record2.withheldTrailerKeys?.includes(key) === true ? [blockedMessage(record2)] : [] : valuesOf(record2, key);
     return values.map(
       (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trustTag(record2)}${value}`
     );
@@ -25289,7 +25341,7 @@ var valueLines = (records, key) => {
 var otherLines = (records) => {
   const width = idWidth(records);
   return records.flatMap((record2) => {
-    const withheld = record2.trust === "blocked" && record2.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true ? [BLOCKED_RECORD_WITHHELD] : [];
+    const withheld = record2.trust === "blocked" && record2.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true ? [blockedMessage(record2)] : [];
     const values = [
       ...withheld,
       ...otherTrailers(record2).map((trailer) => `${trailer.key}: ${trailer.value}`)
@@ -25385,7 +25437,7 @@ var register9 = (program3) => {
 var DEFAULT_SCAN_LIMIT = 1e3;
 var UNIT = "";
 var LOG_FORMAT2 = `%H${UNIT}%cI${UNIT}%B`;
-var EMPTY_REPO_RE = /does not have any commits yet|bad default revision/;
+var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
 var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
 var parseChunk = (chunk) => {
   const firstSep = chunk.indexOf(UNIT);
@@ -25406,6 +25458,7 @@ var collectRecords = (opts = {}) => {
   const notes = notesAvailability({ cwd });
   const args = ["log", "-z", `--format=${LOG_FORMAT2}`];
   if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+  args.push("--end-of-options", opts.revision ?? "HEAD");
   const result = execGit(args, { cwd });
   if (result.code !== 0) {
     if (EMPTY_REPO_RE.test(result.stderr)) {
@@ -25449,7 +25502,8 @@ var buildReport = (scan2, at) => {
     notes: scan2.notes,
     totalRecords: states.length,
     records: stale,
-    danglingRefs: findDanglingRefs(scan2.records)
+    danglingRefs: findDanglingRefs(scan2.records),
+    idCollisions: findIdCollisions(scan2.records)
   };
 };
 var shortSha5 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
@@ -25478,6 +25532,10 @@ var formatReport2 = (report) => {
     ...section(
       "dangling refs",
       report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
+    ),
+    ...section(
+      "id collisions",
+      report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)
     )
   ];
   if (report.truncated) {
@@ -26321,7 +26379,8 @@ var usageError2 = (message) => ({
 ${USAGE2}
 `,
   violations: [],
-  secrets: []
+  secrets: [],
+  checks: []
 });
 var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
@@ -26357,6 +26416,25 @@ var locateTrailerLines = (message, trailers) => {
   }
   return trailers.map(() => void 0);
 };
+var knownTrailerCandidate = (line) => {
+  const tabIndented = line.startsWith("	");
+  const candidate = tabIndented ? line.replace(/^\t+/, "") : line;
+  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+  return key === void 0 ? void 0 : { key, tabIndented };
+};
+var locateUnparsedTrailerWarnings = (message, trailers) => {
+  const lines = message.split("\n").map(stripCr);
+  const contentLines = lines.filter((line) => line !== "" && !isComment(line));
+  if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== void 0)) {
+    return [];
+  }
+  const parsedLines = new Set(locateTrailerLines(message, trailers));
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === void 0 || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
 var lineForViolation = (violation, trailers, lines) => {
   const indexesWithKey = trailers.flatMap(
     (trailer, index) => trailer.key === violation.key ? [index] : []
@@ -26372,10 +26450,34 @@ var lineForViolation = (violation, trailers, lines) => {
   const only = matches.length === 1 ? matches[0] : void 0;
   return only === void 0 ? void 0 : lines[only];
 };
-var locateViolations = (source) => {
+var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
   const lines = locateTrailerLines(source.message, trailers);
-  return validateRecord(trailers).map((violation) => {
+  const rawViolations = validateRecord(trailers);
+  const firstTrailerLine = lines[0];
+  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
+  const violations = (nonTrailerParagraph === void 0 ? rawViolations : []).map((violation) => {
+    const line = lineForViolation(violation, trailers, lines);
+    return {
+      ...source.sha === void 0 ? {} : { sha: source.sha },
+      ...line === void 0 ? {} : { line },
+      ...violation
+    };
+  });
+  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map(
+    (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
+  );
+  if (nonTrailerParagraph !== void 0) {
+    warnings.push(
+      `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
+    );
+  }
+  return { violations, warnings };
+};
+var locateReferenceViolations = (source, violations) => {
+  const trailers = parseCommitMessage(source.message);
+  const lines = locateTrailerLines(source.message, trailers);
+  return violations.map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
     return {
       ...source.sha === void 0 ? {} : { sha: source.sha },
@@ -26391,19 +26493,24 @@ var resolveCommit2 = (ref, cwd) => {
   }
   return result.stdout.trim();
 };
-var readCommitMessage = (sha, cwd) => {
-  const result = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
+var readCommitSource = (sha, cwd) => {
+  const result = execGit(["log", "-1", "--format=%P%x00%B", sha, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine4(result.stderr)}`);
   }
-  return result.stdout;
+  const [parents = "", message = ""] = result.stdout.split("\0");
+  return {
+    sha,
+    message,
+    merge: parents.split(" ").filter(Boolean).length > 1
+  };
 };
 var readRange = (range, cwd) => {
   const result = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine4(result.stderr)}`);
   }
-  return result.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => ({ sha, message: readCommitMessage(sha, cwd) }));
+  return result.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => readCommitSource(sha, cwd));
 };
 var readMessageFile = (path2) => {
   try {
@@ -26423,10 +26530,115 @@ var collectSources2 = (input, cwd) => {
   if (input.messageFile !== void 0) return [{ message: readMessageFile(input.messageFile) }];
   if (input.commit !== void 0) {
     const sha = resolveCommit2(input.commit, cwd);
-    return [{ sha, message: readCommitMessage(sha, cwd) }];
+    return [readCommitSource(sha, cwd)];
   }
   if (input.range !== void 0) return readRange(input.range, cwd);
   return [{ message: (input.readStdin ?? readStdinSync)() }];
+};
+var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
+var indexedHeadRecords = (cwd) => {
+  const { handle } = ensureIndex({ cwd });
+  try {
+    const records = /* @__PURE__ */ new Map();
+    for (const row of queryTrailers(handle)) {
+      const identity = `${row.sha}\0${row.source}`;
+      const existing = records.get(identity);
+      if (existing !== void 0) {
+        existing.trailers.push({ key: row.key, value: row.value });
+        continue;
+      }
+      records.set(identity, {
+        sha: row.sha,
+        committedAt: row.committedAt,
+        source: row.source,
+        trailers: [{ key: row.key, value: row.value }]
+      });
+    }
+    return [...records.values()];
+  } finally {
+    closeIndex(handle);
+  }
+};
+var recordsFor = (source, cwd) => {
+  if (source.sha !== void 0) {
+    return collectRecords({ cwd, allHistory: true, revision: source.sha });
+  }
+  try {
+    return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
+  } catch {
+    return collectRecords({ cwd, allHistory: true, revision: "HEAD" });
+  }
+};
+var reachableShas = (revision, cwd) => {
+  const result = execGit(["rev-list", revision], { cwd });
+  if (result.code !== 0) {
+    throw new Error(firstLine4(result.stderr) || `cannot walk revision ${revision}`);
+  }
+  return new Set(result.stdout.trim().split("\n").filter(Boolean));
+};
+var checkReferences = (input, sources, cwd) => {
+  if (input.messageFile === void 0 && input.commit === void 0 && input.range === void 0) {
+    return {
+      check: { class: "reference", status: "not-checked", reason: "no repository" },
+      violations: []
+    };
+  }
+  if (!repositoryAvailable(cwd)) {
+    return {
+      check: { class: "reference", status: "not-checked", reason: "no repository" },
+      violations: []
+    };
+  }
+  try {
+    const violations = [];
+    for (const source of sources) {
+      const trailers = parseCommitMessage(source.message);
+      const candidate = {
+        trailers,
+        source: "commit",
+        ...source.sha === void 0 ? {} : { sha: source.sha }
+      };
+      const scan2 = recordsFor(source, cwd);
+      if (scan2.notes === "unfetched") {
+        return {
+          check: {
+            class: "reference",
+            status: "not-checked",
+            reason: "notes mirror not fetched"
+          },
+          violations: []
+        };
+      }
+      const reachable = reachableShas(source.sha ?? "HEAD", cwd);
+      const repositoryRecords = scan2.records.filter(
+        (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
+      );
+      const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
+      const dangling = findDanglingRefs(prior, [candidate]);
+      const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+      const collisions = recordId === void 0 ? [] : findIdCollisions([...repositoryRecords, candidate]).filter(
+        (violation) => violation.value === recordId
+      );
+      violations.push(...locateReferenceViolations(source, [...dangling, ...collisions]));
+    }
+    return {
+      check: { class: "reference", status: violations.length === 0 ? "ok" : "failed" },
+      violations
+    };
+  } catch (error2) {
+    return {
+      check: {
+        class: "reference",
+        status: "not-checked",
+        reason: `repository scan failed: ${firstLine4(messageOf5(error2))}`
+      },
+      violations: []
+    };
+  }
+};
+var formatCheck = (check2) => {
+  const name = check2.class === "reference" ? "references" : check2.class;
+  return check2.status === "not-checked" ? `${name} not checked (${check2.reason ?? "required information unavailable"})` : `${name} ${check2.status}`;
 };
 var formatViolation = (violation) => {
   const parts = [];
@@ -26447,28 +26659,48 @@ var runValidate = (input = {}) => {
     return usageError2(`--range expects <a>..<b>, got ${JSON.stringify(input.range)}`);
   }
   const cwd = input.cwd ?? process.cwd();
-  let violations;
+  let shapeViolations;
+  let warnings;
   let secrets;
+  let sources;
   try {
-    const sources = collectSources2(input, cwd);
-    violations = sources.flatMap(locateViolations);
+    sources = collectSources2(input, cwd);
+    const inspections = sources.map(inspectSource);
+    shapeViolations = inspections.flatMap((inspection) => inspection.violations);
+    warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
     return usageError2(messageOf5(error2));
   }
+  const references = checkReferences(input, sources, cwd);
+  const violations = [...shapeViolations, ...references.violations];
+  const checks = [
+    {
+      class: "shape",
+      status: shapeViolations.length > 0 || secrets.length > 0 ? "failed" : "ok"
+    },
+    references.check
+  ];
+  const status = `${checks.map(formatCheck).join(" \xB7 ")}
+`;
   const failed = violations.length > 0 || secrets.length > 0;
+  const warningText = warnings.length === 0 ? "" : `${warnings.join("\n")}
+`;
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
-      stdout: `${JSON.stringify({ violations, secrets })}
+      stdout: `${JSON.stringify({ checks, violations, secrets })}
 `,
-      stderr: "",
+      stderr: warningText,
       violations,
-      secrets
+      secrets,
+      checks
     };
   }
-  if (!failed) return { code: 0, stdout: "", stderr: "", violations, secrets };
-  const parts = [];
+  if (!failed) {
+    return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
+  }
+  const parts = [status.trimEnd()];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join("\n"));
   if (secrets.length > 0) parts.push(formatFindings(secrets));
   const notes = [];
@@ -26484,10 +26716,11 @@ var runValidate = (input = {}) => {
     code: 1,
     stdout: `${parts.join("\n")}
 `,
-    stderr: `commitlore: ${notes.join(", ")} \u2014 the message was not modified
+    stderr: `${warningText}commitlore: ${notes.join(", ")} \u2014 the message was not modified
 `,
     violations,
-    secrets
+    secrets,
+    checks
   };
 };
 var register13 = (program3) => {
