@@ -425,6 +425,15 @@ describe('handshake and declarations', () => {
     expect(initialized.result?.['capabilities']).toMatchObject({ resources: {}, tools: {} });
   });
 
+  it('explains how to handle each record trust grade', () => {
+    const instructions = initialized.result?.['instructions'];
+    expect(instructions).toContain('directive');
+    expect(instructions).toContain('claim');
+    expect(instructions).toContain('blocked');
+    expect(instructions).not.toContain('treat an active Limit: as a constraint');
+    expect(instructions).toContain('unknown, not empty');
+  });
+
   it('declares exactly the three tools of the ticket', async () => {
     const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as {
