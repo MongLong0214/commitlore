@@ -11466,7 +11466,9 @@ var RULES = [
   "5. Record nothing for a trivial change. Typo fixes and formatting carry no",
   "   record \u2014 noise costs more than it returns.",
   "6. When unsure, emit less. Everything you emit will be read by an agent that",
-  "   cannot check it."
+  "   cannot check it.",
+  "7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.",
+  "   Record Verified only from the command or test run that performed the check."
 ];
 var vocabularyList = (entries) => entries.flatMap((entry) => [
   `- \`${entry.key}:\` = ${entry.grammar} (${entry.repeatable ? "repeatable" : "single-valued"})`,
@@ -11520,7 +11522,7 @@ var outputBlock = (entries) => {
   ];
 };
 var buildHarvestPrompt = (input) => {
-  const entries = loadVocabulary();
+  const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
   const diff = input.diff.trim() === "" ? "(no diff)" : input.diff.replace(/\n+$/, "");
   return [
     "# CommitLore harvest",
@@ -11823,6 +11825,11 @@ var reasonFor = (violation) => {
 };
 var describeViolation2 = (violation) => violation.got === violation.key ? `${violation.key} (${violation.rule}, want ${violation.want})` : `${violation.key}: ${JSON.stringify(brief(violation.got))} (${violation.rule}, want ${violation.want})`;
 var discard = (record2, reason, detail) => ({ record: record2, reason, detail });
+var unsupportedVerified = (record2) => record2.trailers.some((trailer) => trailer.key === "Verified") ? discard(
+  record2,
+  "verified-unsupported",
+  "Verified cannot be harvested from quoted prose; record it from the command or test run that performed the check"
+) : null;
 var uncitedClaims = (record2) => {
   const cited = new Set(record2.evidence.map((cite) => cite.key));
   const claims = claimKeySet();
@@ -11879,7 +11886,7 @@ var verifyDraft = (draft, sources) => {
   const accepted = [];
   const rejected = [];
   for (const record2 of draft) {
-    const failure3 = missingEvidence(record2) ?? unfoundEvidence(record2, scanned) ?? ungroundedRuledOut(record2, scanned) ?? invalid(record2);
+    const failure3 = unsupportedVerified(record2) ?? missingEvidence(record2) ?? unfoundEvidence(record2, scanned) ?? ungroundedRuledOut(record2, scanned) ?? invalid(record2);
     if (failure3 === null) accepted.push({ record: record2 });
     else rejected.push(failure3);
   }
@@ -11889,6 +11896,7 @@ var REPAIR_GUIDANCE = {
   "evidence-not-found": "Copy the quote out of the transcript or the diff character for character. Only whitespace may differ. If you cannot find the sentence, drop the record.",
   "evidence-missing": "Add a citation for every decision-context key the record carries, or drop the record.",
   "ruled-out-no-rejection": "Quote the place where the alternative was actually turned down, not where it was first suggested. If the source only mentions the alternative, drop the Ruled-out trailer.",
+  "verified-unsupported": "Remove Verified from the draft. Record it only from the command or test run that performed the check.",
   enum: "Use one of the values listed for that key, exactly. A synonym is a violation, not a shortcut.",
   format: "Match the value grammar the vocabulary states for that key.",
   "unknown-key": "Use a key from the vocabulary, or an X-<Name> extension key."
