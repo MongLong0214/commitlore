@@ -25,7 +25,7 @@ import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, } from '../core/stale.js';
-import { parseCommitMessage } from '../core/trailers.js';
+import { parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 export const CHECK_CLASS_NEEDS = {
@@ -120,14 +120,17 @@ const knownTrailerCandidate = (line) => {
     const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
     return key === undefined ? undefined : { key, tabIndented };
 };
-const locateUnparsedTrailerWarnings = (message, trailers) => {
+const locateUnparsedTrailerWarnings = (message, blocks) => {
     const lines = message.split('\n').map(stripCr);
     const contentLines = lines.filter((line) => line !== '' && !isComment(line));
     if (contentLines.length > 0 &&
         contentLines.every((line) => knownTrailerCandidate(line) !== undefined)) {
         return [];
     }
-    const parsedLines = new Set(locateTrailerLines(message, trailers));
+    // A line already accounted for by any recovered block (SPEC §2.4) is not an
+    // unparsed one, even when that block sits earlier than the message's own
+    // last paragraph.
+    const parsedLines = new Set(blocks.flatMap((block) => locateTrailerLines(message, block)));
     return lines.flatMap((line, index) => {
         const candidate = knownTrailerCandidate(line);
         if (candidate === undefined || parsedLines.has(index + 1))
@@ -162,8 +165,42 @@ const lineForViolation = (violation, trailers, lines) => {
     const only = matches.length === 1 ? matches[0] : undefined;
     return only === undefined ? undefined : lines[only];
 };
+/**
+ * Validates one recovered block (SPEC §2.4) against its own line positions,
+ * shaped the same way `LocatedViolation` is everywhere else.
+ */
+const violationsForBlock = (source, trailers) => {
+    const lines = locateTrailerLines(source.message, trailers);
+    return validateRecord(trailers).map((violation) => {
+        const line = lineForViolation(violation, trailers, lines);
+        return {
+            ...(source.sha === undefined ? {} : { sha: source.sha }),
+            ...(line === undefined ? {} : { line }),
+            ...violation,
+        };
+    });
+};
+/**
+ * Validates every record block a message carries (SPEC §2.4), not only the
+ * one git recognizes as the message's own last paragraph.
+ *
+ * The message's own last paragraph keeps its existing, unchanged treatment:
+ * `nonTrailerParagraph` still exists to tell "a real trailer block with a bad
+ * key" from "GitHub wrote a PR title here and it happens to contain a colon"
+ * (bug-issue-76) — a merge commit's platform-generated last paragraph is not
+ * additionally re-checked as if it declared a `Record-Id`, because it never
+ * claims to be a record at all.
+ *
+ * Earlier blocks the multi-record grammar recovers do not get that special
+ * case: `parseRecordBlocks` only accepts one when it is entirely
+ * trailer-shaped and declares an identity, so an earlier block reaching this
+ * function has already committed to being a record. A malformed one is
+ * reported as such rather than silently excused.
+ */
 const inspectSource = (source) => {
     const trailers = parseCommitMessage(source.message);
+    const blocks = parseRecordBlocks(source.message);
+    const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
     const lines = locateTrailerLines(source.message, trailers);
     const rawViolations = validateRecord(trailers);
     const firstTrailerLine = lines[0];
@@ -179,7 +216,7 @@ const inspectSource = (source) => {
             .filter((line) => line !== '')
             .join('\n')
         : undefined;
-    const violations = (nonTrailerParagraph === undefined ? rawViolations : []).map((violation) => {
+    const lastViolations = (nonTrailerParagraph === undefined ? rawViolations : []).map((violation) => {
         const line = lineForViolation(violation, trailers, lines);
         return {
             ...(source.sha === undefined ? {} : { sha: source.sha }),
@@ -187,7 +224,12 @@ const inspectSource = (source) => {
             ...violation,
         };
     });
-    const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) => warning.tabIndented
+    const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
+    // Document order: the blocks the grammar recovers from earlier in the
+    // message are reported before whatever the message's own last paragraph
+    // has to say.
+    const violations = [...earlierViolations, ...lastViolations];
+    const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map((warning) => warning.tabIndented
         ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
         : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`);
     if (nonTrailerParagraph !== undefined) {
@@ -195,8 +237,7 @@ const inspectSource = (source) => {
     }
     return { violations, warnings };
 };
-const locateReferenceViolations = (source, violations) => {
-    const trailers = parseCommitMessage(source.message);
+const locateReferenceViolations = (source, trailers, violations) => {
     const lines = locateTrailerLines(source.message, trailers);
     return violations.map((violation) => {
         const line = lineForViolation(violation, trailers, lines);
@@ -325,12 +366,15 @@ const checkReferences = (input, sources, cwd) => {
     try {
         const violations = [];
         for (const source of sources) {
-            const trailers = parseCommitMessage(source.message);
-            const candidate = {
-                trailers,
-                source: 'commit',
-                ...(source.sha === undefined ? {} : { sha: source.sha }),
-            };
+            // A message may carry several record blocks (SPEC §2.4); each is its
+            // own reference-checkable record. Cross-references between two blocks
+            // declared by the *same* commit are not resolved here — `prior` below
+            // excludes every record on `source.sha`, block or not, the same way it
+            // always excluded the commit's single record. A `Follows:`/`Supersedes:`
+            // naming a sibling block's id is therefore reported as dangling; a
+            // narrower carve-out for that case is future work, not a regression
+            // this change introduces.
+            const blocks = parseRecordBlocks(source.message);
             const scan = recordsFor(source, cwd);
             if (scan.notes === 'unfetched') {
                 return {
@@ -345,12 +389,19 @@ const checkReferences = (input, sources, cwd) => {
             const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
             const repositoryRecords = scan.records.filter((record) => record.sha !== undefined && reachable.has(record.sha));
             const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
-            const dangling = findDanglingRefs(prior, [candidate]);
-            const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
-            const collisions = recordId === undefined
-                ? []
-                : findIdCollisions([...repositoryRecords, candidate]).filter((violation) => violation.value === recordId);
-            violations.push(...locateReferenceViolations(source, [...dangling, ...collisions]));
+            for (const trailers of blocks) {
+                const candidate = {
+                    trailers,
+                    source: 'commit',
+                    ...(source.sha === undefined ? {} : { sha: source.sha }),
+                };
+                const dangling = findDanglingRefs(prior, [candidate]);
+                const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+                const collisions = recordId === undefined
+                    ? []
+                    : findIdCollisions([...repositoryRecords, candidate]).filter((violation) => violation.value === recordId);
+                violations.push(...locateReferenceViolations(source, trailers, [...dangling, ...collisions]));
+            }
         }
         return {
             check: { class: 'reference', status: violations.length === 0 ? 'ok' : 'failed' },

@@ -11944,6 +11944,7 @@ import { createRequire } from "node:module";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
 
 // src/core/trailers.ts
+var RECORD_ID_KEY = "Record-Id";
 var PARSE_ARGS = [
   "-c",
   "trailer.separators=:",
@@ -11990,6 +11991,23 @@ var serializeTrailers = (trailers) => {
   }
   return ordered.map(serializeOne).join("");
 };
+var splitParagraphs = (message) => message.replace(/\r\n/g, "\n").split(/\n\n+/).filter((paragraph) => paragraph.trim() !== "");
+var asIsolatedBlock = (paragraph) => parseCommitMessage(`x
+
+${paragraph}`);
+var parseRecordBlocks = (message) => {
+  const last = parseCommitMessage(message);
+  const paragraphs = splitParagraphs(message);
+  const earlier = paragraphs.slice(0, -1);
+  const extra = [];
+  for (const paragraph of earlier) {
+    const candidate = asIsolatedBlock(paragraph);
+    if (candidate.length === 0) continue;
+    if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
+    extra.push(candidate);
+  }
+  return last.length === 0 ? extra : [...extra, last];
+};
 
 // src/core/index-db.ts
 var cachedCtor = null;
@@ -12005,7 +12023,7 @@ var loadDatabaseCtor = () => {
     );
   }
 };
-var SCHEMA_VERSION = 1;
+var SCHEMA_VERSION = 2;
 var NOTES_REF = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
@@ -12023,6 +12041,7 @@ var SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS trailers (
   id           INTEGER PRIMARY KEY,
   commit_sha   TEXT    NOT NULL,
+  block        INTEGER NOT NULL DEFAULT 0,
   seq          INTEGER NOT NULL,
   key          TEXT    NOT NULL,
   value        TEXT    NOT NULL,
@@ -12032,9 +12051,9 @@ CREATE TABLE IF NOT EXISTS trailers (
   provenance   TEXT,
   source       TEXT    NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, seq);
+CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, block, seq);
 CREATE INDEX IF NOT EXISTS trailers_key ON trailers (key);
-CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, seq);
+CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, block, seq);
 
 CREATE TABLE IF NOT EXISTS commit_paths (
   commit_sha TEXT NOT NULL,
@@ -12123,6 +12142,39 @@ var readPaths = (cwd, shas) => {
   }
   return byCommit;
 };
+var readFullMessages = (cwd, shas) => {
+  const byCommit = /* @__PURE__ */ new Map();
+  if (shas.length === 0) return byCommit;
+  for (const batch of chunked(shas, LOG_BATCH)) {
+    const result = gitLogByShas(cwd, batch, `%x01%H%x00%B%x00`, []);
+    if (result.code !== 0) {
+      throw Object.assign(new Error(`git log --format=%B failed: ${result.stderr.trim()}`), {
+        code: result.code,
+        stderr: result.stderr
+      });
+    }
+    for (const record2 of splitRecords(result.stdout)) {
+      const fields = record2.split(FIELD_SEP);
+      const [sha, message] = fields;
+      if (sha === void 0 || message === void 0) continue;
+      byCommit.set(sha, message);
+    }
+  }
+  return byCommit;
+};
+var explodeRecordBlocks = (cwd, records) => {
+  const messages = readFullMessages(
+    cwd,
+    records.map((record2) => record2.sha)
+  );
+  return records.flatMap((record2) => {
+    const message = messages.get(record2.sha);
+    if (message === void 0) return [record2];
+    const blocks = parseRecordBlocks(message);
+    if (blocks.length <= 1) return [record2];
+    return blocks.map((trailers, block) => ({ ...record2, block, trailers }));
+  });
+};
 var readCommitRecords = (cwd, shas) => {
   const records = [];
   for (const batch of chunked(shas, LOG_BATCH)) {
@@ -12142,6 +12194,7 @@ var readCommitRecords = (cwd, shas) => {
       if (trailers.length === 0) continue;
       batchRecords.push({
         sha,
+        block: 0,
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: "commit",
@@ -12149,12 +12202,13 @@ var readCommitRecords = (cwd, shas) => {
         paths: []
       });
     }
+    const exploded = explodeRecordBlocks(cwd, batchRecords);
     const paths = readPaths(
       cwd,
       batchRecords.map((record2) => record2.sha)
     );
-    for (const record2 of batchRecords) record2.paths = paths.get(record2.sha) ?? [];
-    records.push(...batchRecords);
+    for (const record2 of exploded) record2.paths = paths.get(record2.sha) ?? [];
+    records.push(...exploded);
   }
   return records;
 };
@@ -12186,17 +12240,20 @@ var readNoteRecords = (cwd) => {
       const [sha, rawTs, committedAt, noteText] = fields;
       if (sha === void 0 || rawTs === void 0 || committedAt === void 0) continue;
       if (noteText === void 0 || noteText.trim() === "") continue;
-      const trailers = parseCommitMessage(`${NOTE_SUBJECT}
+      const blocks = parseRecordBlocks(`${NOTE_SUBJECT}
 
 ${noteText}`);
-      if (trailers.length === 0) continue;
-      batchRecords.push({
-        sha,
-        committedAt,
-        committedTs: Number.parseInt(rawTs, 10),
-        source: "notes",
-        trailers,
-        paths: []
+      blocks.forEach((trailers, block) => {
+        if (trailers.length === 0) return;
+        batchRecords.push({
+          sha,
+          block,
+          committedAt,
+          committedTs: Number.parseInt(rawTs, 10),
+          source: "notes",
+          trailers,
+          paths: []
+        });
       });
     }
     const paths = readPaths(
@@ -12380,8 +12437,8 @@ var resetIndexFile = (handle) => {
 var insertRecords = (handle, records) => {
   const insertTrailer = handle.db.prepare(
     `INSERT INTO trailers
-       (commit_sha, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertFts = handle.fts ? handle.db.prepare("INSERT INTO trailers_fts (rowid, value_lc) VALUES (?, ?)") : null;
   const insertPath = handle.db.prepare(
@@ -12395,6 +12452,7 @@ var insertRecords = (handle, records) => {
         const valueLc = trailer.value.toLowerCase();
         const inserted = insertTrailer.run(
           record2.sha,
+          record2.block,
           seq,
           trailer.key,
           trailer.value,
@@ -12555,6 +12613,7 @@ var compareTrailers = (a, b) => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  if (a.block !== b.block) return a.block - b.block;
   return a.seq - b.seq;
 };
 var ftsEligible = (term) => term.length >= 3 && /^[ -~]+$/.test(term) && !/[%_\\]/.test(term);
@@ -12612,16 +12671,17 @@ var queryTrailers = (handle, query = {}) => {
   const limit = query.limit === void 0 ? "" : "LIMIT ?";
   if (query.limit !== void 0) params.push(query.limit);
   const rows = handle.db.prepare(
-    `SELECT t.id, t.commit_sha, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
+    `SELECT t.id, t.commit_sha, t.block, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
               t.provenance, t.source
          FROM trailers t
          ${where}
-        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.seq ASC
+        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.block ASC, t.seq ASC
         ${limit}`
   ).all(...params);
   const paths = attachPaths(handle, rows);
   return rows.map((row) => ({
     sha: row.commit_sha,
+    block: row.block,
     seq: row.seq,
     key: row.key,
     value: row.value,
@@ -12655,6 +12715,7 @@ var toIndexedTrailers = (records) => records.flatMap((record2) => {
   const provenance = record2.trailers.find((t) => t.key === "Provenance")?.value ?? null;
   return record2.trailers.map((trailer, seq) => ({
     sha: record2.sha,
+    block: record2.block,
     seq,
     key: trailer.key,
     value: trailer.value,
@@ -12699,8 +12760,7 @@ var resolveObject = (sha, opts) => execGitOrThrow(
   ["rev-parse", "--verify", "--end-of-options", `${sha}^{object}`],
   gitOptions(opts)
 ).trim();
-var writeRecord = (sha, trailers, opts = {}) => {
-  const body = serializeTrailers(trailers);
+var writeBody = (sha, body, opts) => {
   if (body === "") {
     throw new Error(
       `refusing to write an empty record to ${NOTES_REF2} for ${sha}: an empty note body deletes the note`
@@ -12720,13 +12780,15 @@ var writeRecord = (sha, trailers, opts = {}) => {
     );
   }
 };
-var readRecord = (sha, opts = {}) => {
+var writeRecord = (sha, trailers, opts = {}) => writeBody(sha, serializeTrailers(trailers), opts);
+var writeRecordBlocks = (sha, blocks, opts = {}) => writeBody(sha, blocks.map(serializeTrailers).join("\n"), opts);
+var showNote = (sha, opts) => {
   const object3 = resolveObject(sha, opts);
   const result = execGit(
     ["notes", REF_ARG, "show", "--end-of-options", object3],
     gitOptions(opts)
   );
-  if (result.code === NO_NOTE_EXIT) return [];
+  if (result.code === NO_NOTE_EXIT) return null;
   if (result.code !== 0) {
     throw Object.assign(
       new Error(
@@ -12735,9 +12797,19 @@ var readRecord = (sha, opts = {}) => {
       { code: result.code, stderr: result.stderr }
     );
   }
-  return parseCommitMessage(`${SYNTHETIC_SUBJECT}
+  return result.stdout;
+};
+var readRecord = (sha, opts = {}) => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseCommitMessage(`${SYNTHETIC_SUBJECT}
 
-${result.stdout}`);
+${note}`);
+};
+var readRecordBlocks = (sha, opts = {}) => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}
+
+${note}`);
 };
 var listRecordShas = (opts = {}) => {
   const stdout = execGitOrThrow(["notes", REF_ARG, "list"], gitOptions(opts));
@@ -13431,7 +13503,7 @@ var describeRecordedHookTarget = (target) => [
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
 
 // src/core/stale.ts
-var RECORD_ID_KEY = "Record-Id";
+var RECORD_ID_KEY2 = "Record-Id";
 var SUPERSEDES_KEY = "Supersedes";
 var FOLLOWS_KEY = "Follows";
 var EXPIRES_KEY = "Expires";
@@ -13467,7 +13539,7 @@ var expiryEndOf = (value) => {
 };
 var mergeTrailers = (into, from) => {
   for (const trailer of from) {
-    if (trailer.key === RECORD_ID_KEY) continue;
+    if (trailer.key === RECORD_ID_KEY2) continue;
     if (SINGLE_VALUED.has(trailer.key)) {
       const at = into.findIndex((existing) => existing.key === trailer.key);
       if (at === -1) into.push({ ...trailer });
@@ -13483,7 +13555,7 @@ var mergeTrailers = (into, from) => {
 var declarations = (ordered) => {
   const found = /* @__PURE__ */ new Map();
   for (const { record: record2 } of ordered) {
-    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY);
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
     if (recordId === void 0) continue;
     const declaration = found.get(recordId) ?? { recordId, sha: "", trailers: [] };
     if (record2.sha !== void 0) declaration.sha = record2.sha;
@@ -13529,7 +13601,7 @@ var foldLifecycle = (records, opts) => {
 var findDanglingRefs = (records, referencedBy = records) => {
   const declared = /* @__PURE__ */ new Set();
   for (const record2 of records) {
-    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY);
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
     if (recordId !== void 0) declared.add(recordId);
   }
   const violations = [];
@@ -13549,11 +13621,11 @@ var findDanglingRefs = (records, referencedBy = records) => {
   }
   return violations;
 };
-var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
 var findIdCollisions = (records) => {
   const groups = /* @__PURE__ */ new Map();
   for (const record2 of records) {
-    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY);
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
     if (recordId === void 0) continue;
     const group = groups.get(recordId);
     if (group === void 0) groups.set(recordId, [record2]);
@@ -13563,7 +13635,7 @@ var findIdCollisions = (records) => {
     if (!group.some((record2) => record2.source === "notes")) return false;
     return new Set(group.map(payloadSignature)).size > 1;
   }).map(([recordId]) => ({
-    key: RECORD_ID_KEY,
+    key: RECORD_ID_KEY2,
     value: recordId,
     rule: "duplicate-id",
     got: recordId,
@@ -14045,9 +14117,9 @@ var authorsOf = (cwd, shas) => {
 var LIMIT_KEY = "Limit";
 var RULED_OUT_KEY = "Ruled-out";
 var WARN_KEY = "Warn";
-var RECORD_ID_KEY2 = "Record-Id";
+var RECORD_ID_KEY3 = "Record-Id";
 var PROVENANCE_KEY2 = "Provenance";
-var LIFECYCLE_KEYS = [RECORD_ID_KEY2, "Supersedes", "Expires"];
+var LIFECYCLE_KEYS = [RECORD_ID_KEY3, "Supersedes", "Expires"];
 var SYNTHETIC_PREFIX = "commit:";
 var MAX_ALIASES = 64;
 var errorMessage3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
@@ -14133,6 +14205,7 @@ var compareRows = (a, b) => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  if (a.block !== b.block) return a.block - b.block;
   return a.seq - b.seq;
 };
 var collectRows = (source, aliases) => {
@@ -14152,11 +14225,12 @@ var collectRows = (source, aliases) => {
 var groupByCommit = (rows) => {
   const found = /* @__PURE__ */ new Map();
   for (const row of rows) {
-    const key = `${row.sha}\0${row.source}`;
+    const key = `${row.sha}\0${row.source}\0${row.block}`;
     const existing = found.get(key);
     if (existing === void 0) {
       found.set(key, {
         sha: row.sha,
+        block: row.block,
         source: row.source,
         mirrored: false,
         committedAt: row.committedAt,
@@ -14174,7 +14248,7 @@ var trailerValue2 = (trailers, key) => {
   const found = trailers.find((trailer) => trailer.key === key)?.value;
   return found === void 0 || found === "" ? void 0 : found;
 };
-var identityOf = (record2) => trailerValue2(record2.trailers, RECORD_ID_KEY2) ?? `${SYNTHETIC_PREFIX}${record2.sha}:${record2.source}`;
+var identityOf = (record2) => trailerValue2(record2.trailers, RECORD_ID_KEY3) ?? `${SYNTHETIC_PREFIX}${record2.sha}:${record2.source}:${record2.block}`;
 var instantOf2 = (record2) => {
   const parsed = Date.parse(record2.committedAt);
   return Number.isNaN(parsed) ? void 0 : parsed;
@@ -14183,28 +14257,33 @@ var foldMirroredNotes = (records) => {
   const commits = /* @__PURE__ */ new Map();
   for (const record2 of records) {
     if (record2.source !== "commit") continue;
-    commits.set(record2.sha, record2);
+    const list = commits.get(record2.sha) ?? [];
+    list.push(record2);
+    commits.set(record2.sha, list);
   }
+  const claimed = /* @__PURE__ */ new Set();
   return records.filter((record2) => {
     if (record2.source !== "notes") return true;
-    if (trailerValue2(record2.trailers, RECORD_ID_KEY2) !== void 0) return true;
-    const commit = commits.get(record2.sha);
-    if (commit === void 0) return true;
+    if (trailerValue2(record2.trailers, RECORD_ID_KEY3) !== void 0) return true;
+    const candidates = commits.get(record2.sha);
+    if (candidates === void 0) return true;
     const contents = new Set(
       record2.trailers.map((trailer) => `${trailer.key}\0${trailer.value}`)
     );
-    if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\0${trailer.value}`))) {
-      return true;
-    }
+    const commit = candidates.find(
+      (candidate) => !claimed.has(candidate) && candidate.trailers.every((trailer) => contents.has(`${trailer.key}\0${trailer.value}`))
+    );
+    if (commit === void 0) return true;
     mergeTrailers2(commit.trailers, record2.trailers);
     commit.mirrored = true;
+    claimed.add(commit);
     return false;
   });
 };
 var withIdentity = (record2) => {
   const identity = identityOf(record2);
-  const rest = record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2);
-  return [{ key: RECORD_ID_KEY2, value: identity }, ...rest];
+  const rest = record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY3);
+  return [{ key: RECORD_ID_KEY3, value: identity }, ...rest];
 };
 var foldStates = (source, at, cutoff) => {
   const records = groupByCommit(source.fetch({ keys: LIFECYCLE_KEYS }));
@@ -14275,7 +14354,8 @@ var gradeMerged = (merged, cwd, at, trustedAuthors) => {
 var oldestFirst = (a, b) => {
   if (a.committedTs !== b.committedTs) return a.committedTs - b.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
-  return a.source < b.source ? -1 : a.source > b.source ? 1 : 0;
+  if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  return a.block - b.block;
 };
 var mergeByIdentity = (records, states) => {
   const groups = /* @__PURE__ */ new Map();
@@ -14302,7 +14382,7 @@ var mergeByIdentity = (records, states) => {
       if (!shas.includes(record2.sha)) shas.push(record2.sha);
     }
     const state = states.get(identity);
-    const recordId = trailerValue2(trailers, RECORD_ID_KEY2);
+    const recordId = trailerValue2(trailers, RECORD_ID_KEY3);
     const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY2);
     const provenance = parseProvenance(provenanceValue);
     const identityCollision = findIdCollisions(ordered).length > 0;
@@ -14365,7 +14445,7 @@ var runQuery = (opts = {}) => {
     for (const record2 of records) {
       if (record2.identityCollision !== true) continue;
       record2.trust = "blocked";
-      record2.matchedTrailerKeys = [RECORD_ID_KEY2];
+      record2.matchedTrailerKeys = [RECORD_ID_KEY3];
     }
     const history = historyAvailability(cwd);
     if (history === "unavailable") {
@@ -14399,6 +14479,262 @@ var runQuery = (opts = {}) => {
   }
 };
 var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+
+// src/core/squash.ts
+var RECORD_ID_KEY4 = "Record-Id";
+var PROVENANCE_KEY3 = "Provenance";
+var EXPIRES_KEY2 = "Expires";
+var VERSION_KEY = "CommitLore-Version";
+var UNIT = "";
+var NUL = "\0";
+var LOG_FORMAT2 = `%H${UNIT}%B`;
+var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
+var DATE_SHAPE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
+var SEMVER_CORE_RE = /^(\d+)\.(\d+)\.(\d+)/;
+var MAX_PARAGRAPH_DROPS = 8;
+var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var trailerValue3 = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
+var recordIdOf = (record2) => record2.recordId ?? trailerValue3(record2.trailers, RECORD_ID_KEY4);
+var contentSet = (trailers) => new Set(trailers.map((trailer) => `${trailer.key}${NUL}${trailer.value}`));
+var mergeCommitBlocks = (messageBlocks, noteBlocks) => {
+  const claimed = /* @__PURE__ */ new Set();
+  const blocks = [];
+  for (const messageBlock of messageBlocks) {
+    const messageId = trailerValue3(messageBlock, RECORD_ID_KEY4);
+    const contents = contentSet(messageBlock);
+    const matchIndex = noteBlocks.findIndex((noteBlock, index) => {
+      if (claimed.has(index)) return false;
+      const noteId = trailerValue3(noteBlock, RECORD_ID_KEY4);
+      if (messageId !== void 0 || noteId !== void 0) return messageId === noteId;
+      const noteContents = contentSet(noteBlock);
+      return [...contents].every((entry) => noteContents.has(entry));
+    });
+    if (matchIndex === -1) {
+      blocks.push(messageBlock);
+      continue;
+    }
+    claimed.add(matchIndex);
+    const merged = [...messageBlock];
+    for (const trailer of noteBlocks[matchIndex] ?? []) {
+      const duplicate = merged.some(
+        (existing) => existing.key === trailer.key && existing.value === trailer.value
+      );
+      if (!duplicate) merged.push(trailer);
+    }
+    blocks.push(merged);
+  }
+  noteBlocks.forEach((noteBlock, index) => {
+    if (!claimed.has(index)) blocks.push(noteBlock);
+  });
+  return blocks;
+};
+var collectRange = (range, opts = {}) => {
+  if (!range.includes("..")) {
+    throw new Error(`expected a range <base>..<head>, got ${JSON.stringify(range)}`);
+  }
+  const result = execGit(
+    ["log", "--reverse", "-z", `--format=${LOG_FORMAT2}`, "--end-of-options", range, "--"],
+    gitOptions2(opts)
+  );
+  if (result.code !== 0) {
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine(result.stderr)}`);
+  }
+  const mirrored = new Set(listRecordShas(opts));
+  const collected = [];
+  for (const chunk of result.stdout.split(NUL)) {
+    if (chunk.length === 0) continue;
+    const separator = chunk.indexOf(UNIT);
+    if (separator === -1) continue;
+    const sha = chunk.slice(0, separator);
+    const message = chunk.slice(separator + 1);
+    const messageBlocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocks(message) : [];
+    const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
+    const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
+    for (const trailers of blocks) {
+      if (trailers.length === 0) continue;
+      const recordId = trailerValue3(trailers, RECORD_ID_KEY4);
+      collected.push({ sha, trailers, ...recordId === void 0 ? {} : { recordId } });
+    }
+  }
+  return collected;
+};
+var latest = (candidates) => {
+  const last = candidates[candidates.length - 1];
+  return last === void 0 ? "" : last.value;
+};
+var conservative = (ordered) => (candidates) => {
+  let best = latest(candidates);
+  let bestRank = -1;
+  for (const candidate of candidates) {
+    const rank = ordered.indexOf(candidate.value);
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = candidate.value;
+    }
+  }
+  return best;
+};
+var earliestExpiry = (candidates) => {
+  const [earliest] = candidates.map((candidate) => candidate.value).filter((value) => DATE_SHAPE_RE2.test(value)).sort();
+  return earliest ?? latest(candidates);
+};
+var semverCore = (value) => {
+  const match = SEMVER_CORE_RE.exec(value);
+  if (match === null) return null;
+  const [, major = "0", minor = "0", patch = "0"] = match;
+  return [Number(major), Number(minor), Number(patch)];
+};
+var compareCore = (left, right) => {
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index] ?? 0;
+    const b = right[index] ?? 0;
+    if (a !== b) return a - b;
+  }
+  return 0;
+};
+var highestVersion = (candidates) => {
+  let best;
+  let bestCore = null;
+  for (const candidate of candidates) {
+    const core = semverCore(candidate.value);
+    if (core === null) continue;
+    if (bestCore === null || compareCore(core, bestCore) > 0) {
+      bestCore = core;
+      best = candidate.value;
+    }
+  }
+  return best ?? latest(candidates);
+};
+var RESOLVERS = /* @__PURE__ */ new Map([
+  ["Blast", conservative(BLAST_VALUES)],
+  ["Undo", conservative(UNDO_VALUES)],
+  ["Certainty", conservative(CERTAINTY_VALUES)],
+  [EXPIRES_KEY2, earliestExpiry],
+  [VERSION_KEY, highestVersion]
+]);
+var groupRecords = (records) => {
+  const groups = [];
+  const byId = /* @__PURE__ */ new Map();
+  for (const record2 of records) {
+    const recordId = recordIdOf(record2);
+    if (recordId === void 0) {
+      groups.push({ members: [record2] });
+      continue;
+    }
+    let group = byId.get(recordId);
+    if (group === void 0) {
+      group = { recordId, members: [] };
+      byId.set(recordId, group);
+      groups.push(group);
+    }
+    group.members.push(record2);
+  }
+  return groups;
+};
+var findConflicts = (groups) => {
+  const conflicts = [];
+  for (const group of groups) {
+    const { recordId, members } = group;
+    const winner = members[members.length - 1];
+    if (recordId === void 0 || members.length < 2 || winner === void 0) continue;
+    const kept = serializeTrailers(winner.trailers);
+    const dropped = members.slice(0, -1).filter((member) => serializeTrailers(member.trailers) !== kept).map((member) => member.sha);
+    if (dropped.length > 0) conflicts.push({ recordId, kept: winner.sha, dropped });
+  }
+  return conflicts;
+};
+var foldGroup = (members) => {
+  const merged = [];
+  const candidates = /* @__PURE__ */ new Map();
+  const slots = /* @__PURE__ */ new Map();
+  for (const record2 of members) {
+    for (const trailer of record2.trailers) {
+      if (trailer.key === PROVENANCE_KEY3 || trailer.key === RECORD_ID_KEY4) continue;
+      if (SINGLE_VALUED.has(trailer.key)) {
+        const list = candidates.get(trailer.key) ?? [];
+        list.push({ value: trailer.value, sha: record2.sha });
+        candidates.set(trailer.key, list);
+        if (!slots.has(trailer.key)) {
+          slots.set(trailer.key, merged.length);
+          merged.push({ key: trailer.key, value: trailer.value });
+        }
+        continue;
+      }
+      const duplicate = merged.some(
+        (existing) => existing.key === trailer.key && existing.value === trailer.value
+      );
+      if (!duplicate) merged.push({ key: trailer.key, value: trailer.value });
+    }
+  }
+  for (const [key, list] of candidates) {
+    const slot = slots.get(key);
+    if (slot === void 0) continue;
+    merged[slot] = { key, value: (RESOLVERS.get(key) ?? latest)(list) };
+  }
+  return merged;
+};
+var planSquash = (records) => {
+  const groups = groupRecords(records);
+  const identified = groups.filter((group) => group.recordId !== void 0);
+  const unidentified = groups.filter((group) => group.recordId === void 0);
+  const ordered = [...identified, ...unidentified];
+  const blocks = ordered.map((group) => {
+    const newest = group.members[group.members.length - 1];
+    const payload = foldGroup(group.members);
+    const block = [...payload];
+    if (group.recordId !== void 0) block.push({ key: RECORD_ID_KEY4, value: group.recordId });
+    if (newest !== void 0) {
+      block.push({ key: PROVENANCE_KEY3, value: `inherited ${newest.sha}` });
+    }
+    return block;
+  });
+  return {
+    sources: [...records],
+    blocks,
+    conflicts: findConflicts(groups),
+    provenance: records.map((record2) => {
+      const recordId = recordIdOf(record2);
+      return { ...recordId === void 0 ? {} : { recordId }, fromSha: record2.sha };
+    })
+  };
+};
+var dropLastParagraph = (message) => {
+  const lines = message.split("\n");
+  let end = lines.length;
+  while (end > 0 && (lines[end - 1] ?? "").trim() === "") end -= 1;
+  let start = end;
+  while (start > 0 && (lines[start - 1] ?? "").trim() !== "") start -= 1;
+  if (start === 0) return null;
+  return lines.slice(0, start).join("\n");
+};
+var stripTrailerBlock = (message) => {
+  let text = message;
+  for (let drops = 0; drops < MAX_PARAGRAPH_DROPS; drops += 1) {
+    if (parseCommitMessage(text).length === 0) return text;
+    const shorter = dropLastParagraph(text);
+    if (shorter === null) return text;
+    text = shorter;
+  }
+  return text;
+};
+var renderMessage = (base, plan) => {
+  const body = plan.blocks.map(serializeTrailers).filter((block) => block !== "").join("\n");
+  if (body === "") return base;
+  const prose = stripTrailerBlock(base).replace(/\n+$/, "");
+  return prose === "" ? body : `${prose}
+
+${body}`;
+};
+var attachToNotes = (targetSha, plan, opts = {}) => {
+  if (plan.blocks.length === 0) {
+    throw new Error(`nothing to attach to ${targetSha}: the plan inherited no records`);
+  }
+  writeRecordBlocks(targetSha, plan.blocks, {
+    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
+    ...opts.force === void 0 ? {} : { force: opts.force }
+  });
+};
 
 // src/hooks/claude-settings.ts
 import { randomBytes } from "node:crypto";
@@ -14748,7 +15084,7 @@ var commitMsgStub = () => [
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
-var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
@@ -14771,11 +15107,11 @@ var checkRefspec = (opts) => {
       if (configured.includes(EXACT_NOTES_REFSPEC)) {
         const replaced = execGit(
           ["config", "--replace-all", key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
-          gitOptions2(opts)
+          gitOptions3(opts)
         );
         fixed = replaced.code === 0 || fixed;
       } else if (!configured.some(coversNotes)) {
-        const added = execGit(["config", "--add", key, NOTES_REFSPEC], gitOptions2(opts));
+        const added = execGit(["config", "--add", key, NOTES_REFSPEC], gitOptions3(opts));
         fixed = added.code === 0 || fixed;
       }
     }
@@ -14790,7 +15126,7 @@ var checkRefspec = (opts) => {
       missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n")
     );
   }
-  const failed = remotes.map((remote) => ({ remote, result: execGit(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
+  const failed = remotes.map((remote) => ({ remote, result: execGit(["fetch", "--dry-run", remote], gitOptions3(opts)) })).filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
     return check(
       "notes-refspec",
@@ -14815,7 +15151,7 @@ var checkPush = (opts) => {
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? "origin";
   const command = `git push ${remote} ${NOTES_REF2}`;
-  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions2(opts));
+  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions3(opts));
   if (local.code !== 0) {
     return check(
       "notes-push",
@@ -14824,7 +15160,7 @@ var checkPush = (opts) => {
       `no local mirror yet \u2014 nothing to push (${command}, once there is)`
     );
   }
-  const advertised = execGit(["ls-remote", remote, NOTES_REF2], gitOptions2(opts));
+  const advertised = execGit(["ls-remote", remote, NOTES_REF2], gitOptions3(opts));
   if (advertised.code !== 0) {
     return check(
       "notes-push",
@@ -14849,7 +15185,7 @@ var checkHook = (opts, runtime) => {
   const title = "commit-msg hook";
   const id = "commit-msg-hook";
   const install = "commitlore hooks install";
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions3(opts));
   if (located.code !== 0) {
     return check(id, title, "warn", "not inside a git repository", install);
   }
@@ -14902,7 +15238,7 @@ var checkHook = (opts, runtime) => {
 var checkGit = (opts) => {
   const title = "git interpret-trailers";
   const id = "git-trailers";
-  const version2 = execGit(["--version"], gitOptions2(opts)).stdout.trim();
+  const version2 = execGit(["--version"], gitOptions3(opts)).stdout.trim();
   const upgrade = "install a git that supports interpret-trailers --parse (git >= 2.9)";
   let trailers;
   try {
@@ -14934,7 +15270,7 @@ var checkRuntime = (opts) => {
   const run = spawnSync3(process.execPath, [entry, "--version"], {
     shell: false,
     encoding: "utf8",
-    ...gitOptions2(opts)
+    ...gitOptions3(opts)
   });
   if (run.error !== void 0) {
     return check(id, title, "fail", `could not run ${entry}: ${run.error.message}`, null);
@@ -14950,7 +15286,7 @@ var checkHookRuntime = (opts) => {
   const id = "hook-runtime";
   const fix = "commitlore hooks install";
   const cwd = opts.cwd ?? process.cwd();
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions3(opts));
   if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
   const hook = resolve4(cwd, located.stdout.trim());
   if (!existsSync4(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
@@ -15070,7 +15406,7 @@ var checkIndex = (opts) => {
   }
   try {
     const info = indexInfo(handle);
-    const head = execGit(["rev-parse", "HEAD"], gitOptions2(opts));
+    const head = execGit(["rev-parse", "HEAD"], gitOptions3(opts));
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
     return behind ? check(
@@ -15107,6 +15443,98 @@ var checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd()) ?
   "this clone has shallow history, so queries may be missing records that exist upstream",
   "git fetch --unshallow"
 ) : check("history-depth", "history depth", "ok", "full history is available");
+var MAX_SQUASH_CANDIDATE_BRANCHES = 200;
+var squashCandidates = (opts, head) => {
+  const listed = execGit(
+    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    gitOptions3(opts)
+  );
+  if (listed.code !== 0) return [];
+  const branches = listed.stdout.split("\n").filter((line) => line !== "").slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+  const candidates = [];
+  for (const branch of branches) {
+    const resolved = execGit(["rev-parse", "--verify", "--quiet", branch], gitOptions3(opts));
+    const sha = resolved.code === 0 ? resolved.stdout.trim() : "";
+    if (sha === "" || sha === head) continue;
+    if (execGit(["merge-base", "--is-ancestor", sha, head], gitOptions3(opts)).code === 0) {
+      continue;
+    }
+    const merged = execGit(["merge-base", sha, head], gitOptions3(opts));
+    if (merged.code !== 0) continue;
+    const base = merged.stdout.trim();
+    if (base === "" || base === sha) continue;
+    candidates.push({ branch, sha, base });
+  }
+  return candidates;
+};
+var checkSquashConservation = (opts) => {
+  const title = "squash conservation";
+  const id = "squash-conservation";
+  const cwd = opts.cwd ?? process.cwd();
+  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions3(opts));
+  if (head.code !== 0) {
+    return check(id, title, "skipped", "no HEAD yet \u2014 nothing to compare against");
+  }
+  const candidates = squashCandidates(opts, head.stdout.trim());
+  if (candidates.length === 0) {
+    return check(
+      id,
+      title,
+      "skipped",
+      "no local branch looks like the source of a squash \u2014 nothing to check"
+    );
+  }
+  let known = null;
+  const lost = [];
+  let uncheckable = 0;
+  let checked = 0;
+  for (const candidate of candidates) {
+    let records;
+    try {
+      records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd });
+    } catch {
+      continue;
+    }
+    if (records.length === 0) continue;
+    checked += 1;
+    const ids = new Set(
+      records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
+    );
+    if (ids.size === 0) {
+      uncheckable += 1;
+      continue;
+    }
+    if (known === null) {
+      known = new Set(
+        runQuery({ cwd, allHistory: true }).records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
+      );
+    }
+    for (const recordId of ids) {
+      if (!known.has(recordId)) lost.push({ branch: candidate.branch, recordId });
+    }
+  }
+  if (checked === 0) {
+    return check(
+      id,
+      title,
+      "skipped",
+      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`
+    );
+  }
+  if (lost.length > 0) {
+    const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch})`).join(", ");
+    const more = lost.length > 5 ? `, and ${lost.length - 5} more` : "";
+    return check(
+      id,
+      title,
+      "warn",
+      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
+      "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result"
+    );
+  }
+  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
+  return check(id, title, "ok", detail);
+};
 var runDoctor = (opts = {}) => {
   const hookRuntime = checkHookRuntime(opts);
   const checks = [
@@ -15118,7 +15546,8 @@ var runDoctor = (opts = {}) => {
     checkInjectRuntime(opts),
     checkGit(opts),
     checkHistoryDepth(opts),
-    checkIndex(opts)
+    checkIndex(opts),
+    checkSquashConservation(opts)
   ];
   return {
     checks,
@@ -16008,7 +16437,7 @@ import {
 } from "node:fs";
 import { join as join4, resolve as resolve5 } from "node:path";
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure2 = (message) => ({
   code: 2,
   stdout: "",
@@ -16025,7 +16454,7 @@ var success2 = (status, lines) => ({
 var resolveHooksDir = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "hooks"], { cwd });
   if (result.code !== 0) {
-    throw new Error(`not a git repository (${firstLine(result.stderr)})`);
+    throw new Error(`not a git repository (${firstLine2(result.stderr)})`);
   }
   return resolve5(cwd, result.stdout.trim());
 };
@@ -25365,7 +25794,7 @@ var StdioServerTransport = class {
 };
 
 // src/commands/query.ts
-var RECORD_ID_KEY3 = "Record-Id";
+var RECORD_ID_KEY5 = "Record-Id";
 var USAGE_EXIT_CODE3 = 2;
 var INCOMPLETE_EXIT_CODE2 = 3;
 var SECTIONS = [
@@ -25390,7 +25819,7 @@ var withholdBlocked = (result) => {
     const trailers = record2.trailers.filter(
       (trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0
     );
-    const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY3)?.value;
+    const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY5)?.value;
     const provenanceValue = trailers.find(
       (trailer) => trailer.key === "Provenance"
     )?.value;
@@ -25458,7 +25887,7 @@ var queryOptions = (paths, options, keys) => {
   };
 };
 var otherTrailers = (record2) => record2.trailers.filter(
-  (trailer) => trailer.key !== RECORD_ID_KEY3 && !SECTION_KEYS.includes(trailer.key)
+  (trailer) => trailer.key !== RECORD_ID_KEY5 && !SECTION_KEYS.includes(trailer.key)
 );
 var countKey = (records, key) => records.reduce((total, record2) => total + valuesOf(record2, key).length, 0);
 var toJsonRecord = (record2) => ({
@@ -25628,17 +26057,17 @@ var register9 = (program3) => {
 
 // src/commands/stale.ts
 var DEFAULT_SCAN_LIMIT = 1e3;
-var UNIT = "";
-var LOG_FORMAT2 = `%H${UNIT}%cI${UNIT}%B`;
+var UNIT2 = "";
+var LOG_FORMAT3 = `%H${UNIT2}%cI${UNIT2}%B`;
 var EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
-var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
+var CANDIDATE_LINE_RE2 = /^[A-Za-z][A-Za-z0-9-]*:/m;
 var parseChunk = (chunk) => {
-  const firstSep = chunk.indexOf(UNIT);
+  const firstSep = chunk.indexOf(UNIT2);
   if (firstSep === -1) return null;
-  const secondSep = chunk.indexOf(UNIT, firstSep + 1);
+  const secondSep = chunk.indexOf(UNIT2, firstSep + 1);
   if (secondSep === -1) return null;
   const message = chunk.slice(secondSep + 1);
-  const trailers = CANDIDATE_LINE_RE.test(message) ? parseCommitMessage(message) : [];
+  const trailers = CANDIDATE_LINE_RE2.test(message) ? parseCommitMessage(message) : [];
   return {
     sha: chunk.slice(0, firstSep),
     committedAt: chunk.slice(firstSep + 1, secondSep),
@@ -25649,7 +26078,7 @@ var parseChunk = (chunk) => {
 var collectRecords = (opts = {}) => {
   const cwd = opts.cwd ?? process.cwd();
   const notes = notesAvailability({ cwd });
-  const args = ["log", "-z", `--format=${LOG_FORMAT2}`];
+  const args = ["log", "-z", `--format=${LOG_FORMAT3}`];
   if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
   args.push("--end-of-options", opts.revision ?? "HEAD");
   const result = execGit(args, { cwd });
@@ -26027,228 +26456,6 @@ var register11 = (program3) => {
 
 // src/commands/squash-preserve.ts
 import { readFileSync as readFileSync12, writeFileSync as writeFileSync6 } from "node:fs";
-
-// src/core/squash.ts
-var RECORD_ID_KEY4 = "Record-Id";
-var PROVENANCE_KEY3 = "Provenance";
-var EXPIRES_KEY2 = "Expires";
-var VERSION_KEY = "CommitLore-Version";
-var INHERITED_FROM_KEY = "X-Inherited-From";
-var UNIT2 = "";
-var NUL = "\0";
-var LOG_FORMAT3 = `%H${UNIT2}%B`;
-var CANDIDATE_LINE_RE2 = /^[A-Za-z][A-Za-z0-9-]*:/m;
-var DATE_SHAPE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
-var SEMVER_CORE_RE = /^(\d+)\.(\d+)\.(\d+)/;
-var MAX_PARAGRAPH_DROPS = 8;
-var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
-var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
-var trailerValue3 = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
-var recordIdOf = (record2) => record2.recordId ?? trailerValue3(record2.trailers, RECORD_ID_KEY4);
-var collectRange = (range, opts = {}) => {
-  if (!range.includes("..")) {
-    throw new Error(`expected a range <base>..<head>, got ${JSON.stringify(range)}`);
-  }
-  const result = execGit(
-    ["log", "--reverse", "-z", `--format=${LOG_FORMAT3}`, "--end-of-options", range, "--"],
-    gitOptions3(opts)
-  );
-  if (result.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine2(result.stderr)}`);
-  }
-  const mirrored = new Set(listRecordShas(opts));
-  const collected = [];
-  for (const chunk of result.stdout.split(NUL)) {
-    if (chunk.length === 0) continue;
-    const separator = chunk.indexOf(UNIT2);
-    if (separator === -1) continue;
-    const sha = chunk.slice(0, separator);
-    const message = chunk.slice(separator + 1);
-    const trailers = CANDIDATE_LINE_RE2.test(message) ? parseCommitMessage(message) : [];
-    if (mirrored.has(sha)) {
-      for (const trailer of readRecord(sha, opts)) {
-        const duplicate = trailers.some(
-          (existing) => existing.key === trailer.key && existing.value === trailer.value
-        );
-        if (!duplicate) trailers.push(trailer);
-      }
-    }
-    if (trailers.length === 0) continue;
-    const recordId = trailerValue3(trailers, RECORD_ID_KEY4);
-    collected.push({ sha, trailers, ...recordId === void 0 ? {} : { recordId } });
-  }
-  return collected;
-};
-var latest = (candidates) => {
-  const last = candidates[candidates.length - 1];
-  return last === void 0 ? "" : last.value;
-};
-var conservative = (ordered) => (candidates) => {
-  let best = latest(candidates);
-  let bestRank = -1;
-  for (const candidate of candidates) {
-    const rank = ordered.indexOf(candidate.value);
-    if (rank > bestRank) {
-      bestRank = rank;
-      best = candidate.value;
-    }
-  }
-  return best;
-};
-var earliestExpiry = (candidates) => {
-  const [earliest] = candidates.map((candidate) => candidate.value).filter((value) => DATE_SHAPE_RE2.test(value)).sort();
-  return earliest ?? latest(candidates);
-};
-var semverCore = (value) => {
-  const match = SEMVER_CORE_RE.exec(value);
-  if (match === null) return null;
-  const [, major = "0", minor = "0", patch = "0"] = match;
-  return [Number(major), Number(minor), Number(patch)];
-};
-var compareCore = (left, right) => {
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index] ?? 0;
-    const b = right[index] ?? 0;
-    if (a !== b) return a - b;
-  }
-  return 0;
-};
-var highestVersion = (candidates) => {
-  let best;
-  let bestCore = null;
-  for (const candidate of candidates) {
-    const core = semverCore(candidate.value);
-    if (core === null) continue;
-    if (bestCore === null || compareCore(core, bestCore) > 0) {
-      bestCore = core;
-      best = candidate.value;
-    }
-  }
-  return best ?? latest(candidates);
-};
-var RESOLVERS = /* @__PURE__ */ new Map([
-  ["Blast", conservative(BLAST_VALUES)],
-  ["Undo", conservative(UNDO_VALUES)],
-  ["Certainty", conservative(CERTAINTY_VALUES)],
-  [EXPIRES_KEY2, earliestExpiry],
-  [VERSION_KEY, highestVersion]
-]);
-var groupByRecordId = (records) => {
-  const groups = /* @__PURE__ */ new Map();
-  for (const record2 of records) {
-    const recordId = recordIdOf(record2);
-    if (recordId === void 0) continue;
-    const members = groups.get(recordId) ?? [];
-    members.push(record2);
-    groups.set(recordId, members);
-  }
-  return groups;
-};
-var findConflicts = (groups) => {
-  const conflicts = [];
-  for (const [recordId, members] of groups) {
-    const winner = members[members.length - 1];
-    if (members.length < 2 || winner === void 0) continue;
-    const kept = serializeTrailers(winner.trailers);
-    const dropped = members.slice(0, -1).filter((member) => serializeTrailers(member.trailers) !== kept).map((member) => member.sha);
-    if (dropped.length > 0) conflicts.push({ recordId, kept: winner.sha, dropped });
-  }
-  return conflicts;
-};
-var planSquash = (records) => {
-  const groups = groupByRecordId(records);
-  const merged = [];
-  const candidates = /* @__PURE__ */ new Map();
-  const slots = /* @__PURE__ */ new Map();
-  for (const record2 of records) {
-    for (const trailer of record2.trailers) {
-      if (trailer.key === PROVENANCE_KEY3 || trailer.key === RECORD_ID_KEY4) continue;
-      if (SINGLE_VALUED.has(trailer.key)) {
-        const list = candidates.get(trailer.key) ?? [];
-        list.push({ value: trailer.value, sha: record2.sha });
-        candidates.set(trailer.key, list);
-        if (!slots.has(trailer.key)) {
-          slots.set(trailer.key, merged.length);
-          merged.push({ key: trailer.key, value: trailer.value });
-        }
-        continue;
-      }
-      const duplicate = merged.some(
-        (existing) => existing.key === trailer.key && existing.value === trailer.value
-      );
-      if (!duplicate) merged.push({ key: trailer.key, value: trailer.value });
-    }
-  }
-  for (const [key, list] of candidates) {
-    const slot = slots.get(key);
-    if (slot === void 0) continue;
-    merged[slot] = { key, value: (RESOLVERS.get(key) ?? latest)(list) };
-  }
-  const [onlyId, ...otherIds] = [...groups.keys()];
-  if (onlyId !== void 0 && otherIds.length === 0) {
-    merged.push({ key: RECORD_ID_KEY4, value: onlyId });
-  }
-  const newest = records[records.length - 1];
-  if (newest !== void 0) {
-    merged.push({ key: PROVENANCE_KEY3, value: `inherited ${newest.sha}` });
-  }
-  return {
-    sources: [...records],
-    merged,
-    conflicts: findConflicts(groups),
-    provenance: records.map((record2) => {
-      const recordId = recordIdOf(record2);
-      return { ...recordId === void 0 ? {} : { recordId }, fromSha: record2.sha };
-    })
-  };
-};
-var dropLastParagraph = (message) => {
-  const lines = message.split("\n");
-  let end = lines.length;
-  while (end > 0 && (lines[end - 1] ?? "").trim() === "") end -= 1;
-  let start = end;
-  while (start > 0 && (lines[start - 1] ?? "").trim() !== "") start -= 1;
-  if (start === 0) return null;
-  return lines.slice(0, start).join("\n");
-};
-var stripTrailerBlock = (message) => {
-  let text = message;
-  for (let drops = 0; drops < MAX_PARAGRAPH_DROPS; drops += 1) {
-    if (parseCommitMessage(text).length === 0) return text;
-    const shorter = dropLastParagraph(text);
-    if (shorter === null) return text;
-    text = shorter;
-  }
-  return text;
-};
-var renderMessage = (base, plan) => {
-  const block = serializeTrailers(plan.merged);
-  if (block === "") return base;
-  const prose = stripTrailerBlock(base).replace(/\n+$/, "");
-  return prose === "" ? block : `${prose}
-
-${block}`;
-};
-var attachToNotes = (targetSha, plan, opts = {}) => {
-  const seen = /* @__PURE__ */ new Set();
-  const inherited = [];
-  for (const entry of plan.provenance) {
-    const value = entry.recordId === void 0 ? entry.fromSha : `${entry.recordId} ${entry.fromSha}`;
-    if (seen.has(value)) continue;
-    seen.add(value);
-    inherited.push({ key: INHERITED_FROM_KEY, value });
-  }
-  const trailers = [...plan.merged, ...inherited];
-  if (trailers.length === 0) {
-    throw new Error(`nothing to attach to ${targetSha}: the plan inherited no records`);
-  }
-  writeRecord(targetSha, trailers, {
-    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
-    ...opts.force === void 0 ? {} : { force: opts.force }
-  });
-};
-
-// src/commands/squash-preserve.ts
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -26277,15 +26484,12 @@ var warningsFor = (plan) => {
   const lines = plan.conflicts.map(
     (conflict) => `${PREFIX4} conflict on ${conflict.recordId} \u2014 kept the version from ${shortSha6(conflict.kept)}, dropped ${conflict.dropped.map(shortSha6).join(", ")}`
   );
-  const declared = [
-    ...new Set(
-      plan.provenance.map((entry) => entry.recordId).filter((recordId) => recordId !== void 0)
-    )
-  ];
-  const keeps = plan.merged.some((trailer) => trailer.key === "Record-Id");
-  if (declared.length > 1 && !keeps) {
+  const unidentified = plan.blocks.filter(
+    (block) => !block.some((trailer) => trailer.key === "Record-Id")
+  ).length;
+  if (unidentified > 1) {
     lines.push(
-      `${PREFIX4} ${declared.length} record ids were inherited (${declared.join(", ")}) and a record may declare only one, so the merge record declares none \u2014 the mapping is in X-Inherited-From in the notes mirror`
+      `${PREFIX4} ${unidentified} inherited records declared no Record-Id \u2014 only the last one written stays recoverable if this note or message is re-parsed later; this plan (and --json) still lists all of them`
     );
   }
   return lines;
@@ -26368,7 +26572,7 @@ var runSquashPreserve = (input = {}) => {
   if (wrote.length === 0) {
     return {
       code: 0,
-      stdout: serializeTrailers(plan.merged),
+      stdout: plan.blocks.map(serializeTrailers).join("\n"),
       stderr: `${warnings}${summary2} \u2014 plan only; pass --message-file or --target to apply
 `,
       plan
@@ -26618,13 +26822,13 @@ var knownTrailerCandidate = (line) => {
   const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
   return key === void 0 ? void 0 : { key, tabIndented };
 };
-var locateUnparsedTrailerWarnings = (message, trailers) => {
+var locateUnparsedTrailerWarnings = (message, blocks) => {
   const lines = message.split("\n").map(stripCr);
   const contentLines = lines.filter((line) => line !== "" && !isComment(line));
   if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== void 0)) {
     return [];
   }
-  const parsedLines = new Set(locateTrailerLines(message, trailers));
+  const parsedLines = new Set(blocks.flatMap((block) => locateTrailerLines(message, block)));
   return lines.flatMap((line, index) => {
     const candidate = knownTrailerCandidate(line);
     if (candidate === void 0 || parsedLines.has(index + 1)) return [];
@@ -26646,13 +26850,9 @@ var lineForViolation = (violation, trailers, lines) => {
   const only = matches.length === 1 ? matches[0] : void 0;
   return only === void 0 ? void 0 : lines[only];
 };
-var inspectSource = (source) => {
-  const trailers = parseCommitMessage(source.message);
+var violationsForBlock = (source, trailers) => {
   const lines = locateTrailerLines(source.message, trailers);
-  const rawViolations = validateRecord(trailers);
-  const firstTrailerLine = lines[0];
-  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
-  const violations = (nonTrailerParagraph === void 0 ? rawViolations : []).map((violation) => {
+  return validateRecord(trailers).map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
     return {
       ...source.sha === void 0 ? {} : { sha: source.sha },
@@ -26660,7 +26860,28 @@ var inspectSource = (source) => {
       ...violation
     };
   });
-  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map(
+};
+var inspectSource = (source) => {
+  const trailers = parseCommitMessage(source.message);
+  const blocks = parseRecordBlocks(source.message);
+  const earlierBlocks = trailers.length === 0 ? blocks : blocks.slice(0, -1);
+  const lines = locateTrailerLines(source.message, trailers);
+  const rawViolations = validateRecord(trailers);
+  const firstTrailerLine = lines[0];
+  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
+  const lastViolations = (nonTrailerParagraph === void 0 ? rawViolations : []).map(
+    (violation) => {
+      const line = lineForViolation(violation, trailers, lines);
+      return {
+        ...source.sha === void 0 ? {} : { sha: source.sha },
+        ...line === void 0 ? {} : { line },
+        ...violation
+      };
+    }
+  );
+  const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
+  const violations = [...earlierViolations, ...lastViolations];
+  const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map(
     (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
   );
   if (nonTrailerParagraph !== void 0) {
@@ -26670,8 +26891,7 @@ var inspectSource = (source) => {
   }
   return { violations, warnings };
 };
-var locateReferenceViolations = (source, violations) => {
-  const trailers = parseCommitMessage(source.message);
+var locateReferenceViolations = (source, trailers, violations) => {
   const lines = locateTrailerLines(source.message, trailers);
   return violations.map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
@@ -26788,12 +27008,7 @@ var checkReferences = (input, sources, cwd) => {
   try {
     const violations = [];
     for (const source of sources) {
-      const trailers = parseCommitMessage(source.message);
-      const candidate = {
-        trailers,
-        source: "commit",
-        ...source.sha === void 0 ? {} : { sha: source.sha }
-      };
+      const blocks = parseRecordBlocks(source.message);
       const scan2 = recordsFor(source, cwd);
       if (scan2.notes === "unfetched") {
         return {
@@ -26810,12 +27025,21 @@ var checkReferences = (input, sources, cwd) => {
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
-      const dangling = findDanglingRefs(prior, [candidate]);
-      const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-      const collisions = recordId === void 0 ? [] : findIdCollisions([...repositoryRecords, candidate]).filter(
-        (violation) => violation.value === recordId
-      );
-      violations.push(...locateReferenceViolations(source, [...dangling, ...collisions]));
+      for (const trailers of blocks) {
+        const candidate = {
+          trailers,
+          source: "commit",
+          ...source.sha === void 0 ? {} : { sha: source.sha }
+        };
+        const dangling = findDanglingRefs(prior, [candidate]);
+        const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...repositoryRecords, candidate]).filter(
+          (violation) => violation.value === recordId
+        );
+        violations.push(
+          ...locateReferenceViolations(source, trailers, [...dangling, ...collisions])
+        );
+      }
     }
     return {
       check: { class: "reference", status: violations.length === 0 ? "ok" : "failed" },

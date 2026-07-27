@@ -10,7 +10,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted 
 
 ## 1. Overview
 
-An CommitLore **record** is the set of trailers attached to a single commit. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
+An CommitLore **record** is a set of trailers forming one record block (§2.4). A commit message or a mirrored note MAY carry more than one — most carry at most one, but a message that inherited several decisions across a squash, or that concatenates more than one commit's message, carries one block per record. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
 
 Records live in two places, both inside git:
 
@@ -61,6 +61,26 @@ A `trailer-block` qualifies only if **every** line in the final paragraph is a `
 ### 2.3 Canonical serialization
 
 When writing trailers, implementations MUST emit `Key: value`, one per line, folded continuations indented by two spaces, in the vocabulary order of §3. Parsing a canonically serialized block MUST yield an identical trailer list (round-trip identity).
+
+### 2.4 Multi-record grammar
+
+§2.1–2.3 describe one record block: the message's own trailer block, exactly as B1 defines it — the last paragraph, and only when every line in it is a trailer or a continuation (B3). A message MAY carry additional, **earlier** record blocks. This does not relax B1–B8 for the message's own last paragraph — that recognition is unconditional and unchanged — it only says how to recover records that arrived earlier in the same message, which the pre-2.4 grammar had no way to represent at all.
+
+A **record block** is a contiguous run of trailer lines terminated by `Record-Id:`. Concretely: for every paragraph other than the message's own last one, test the paragraph in isolation, exactly as B1 tests a message's last paragraph (a synthetic one-line subject in front of it is sufficient). It is an additional record block if and only if both hold:
+
+1. Every line in the paragraph is a trailer or a continuation (B3, applied to the paragraph alone).
+2. The paragraph declares a `Record-Id:`.
+
+Rule 2 is the reason this does not conflict with B2's own example (`Context:` / `Source:` — individually well-formed `Key: value` lines, declaring no identity, correctly read as body prose): a paragraph that is merely trailer-shaped is not promoted to a record. Only one that also names an identity is — the same principle that makes `Record-Id` "a stable identity for this record" (§3.2) rather than incidental payload.
+
+Two consequences follow directly from this rule, both load-bearing:
+
+- **A single-record message parses identically under §2.4 as under §2.1–2.3 alone.** With zero or one `Record-Id` anywhere in the message, there is nothing for rule 2 to promote — the message's own last paragraph is the only block, exactly as before. Backward compatibility is a property of the grammar, not a compatibility shim bolted onto it.
+- **A record MAY still omit `Record-Id:` (§4).** Only a *non-final* block needs one to be told apart from body prose; the message's own last paragraph needs none, the same as always.
+
+Implementations parsing record blocks MUST NOT identify a non-final block by scanning for `Record-Id:` as a line pattern across the whole message — that repeats B3's mistake at a larger grain. The isolation test above still delegates every trailer-or-prose judgement to git (or an equivalent parser), paragraph by paragraph; only the decision of *which paragraphs to test in isolation*, and *whether to accept the result*, is added.
+
+`Follows:` and `Supersedes:` resolve against `Record-Id`s regardless of which block declared them (§3.2); the grammar does not scope identity resolution to one block or one message.
 
 ---
 

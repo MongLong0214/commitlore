@@ -19,7 +19,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
-import { listRecordShas, readRecord } from '../src/core/notes.js';
+import { listRecordShas, readRecord, readRecordBlocks, writeRecord } from '../src/core/notes.js';
 import { validateRecord } from '../src/core/schema.js';
 import {
   INHERITED_FROM_KEY,
@@ -28,7 +28,7 @@ import {
   renderMessage,
   type CollectedRecord,
 } from '../src/core/squash.js';
-import { parseCommitMessage } from '../src/core/trailers.js';
+import { parseCommitMessage, parseRecordBlocks } from '../src/core/trailers.js';
 import type { Trailer } from '../src/core/types.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -74,6 +74,13 @@ const values = (trailers: Trailer[], key: string): string[] =>
   trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 
 const value = (trailers: Trailer[], key: string): string | undefined => values(trailers, key)[0];
+
+/** The block among several (SPEC §2.4) that declares `recordId`. */
+const blockById = (blocks: Trailer[][], recordId: string): Trailer[] => {
+  const found = blocks.find((block) => value(block, 'Record-Id') === recordId);
+  if (found === undefined) throw new Error(`no block declares Record-Id: ${recordId}`);
+  return found;
+};
 
 /**
  * The branch of the D3 experiment: three commits on one path, each recording
@@ -157,7 +164,7 @@ const record = (sha: string, block: string): CollectedRecord => {
 
 describe('squash-preserve', () => {
   it(
-    'reproduces D3 and then repairs it: the branch records reach the merge commit',
+    'reproduces D3 and then repairs it: every branch record reaches the merge commit with its own id and true source sha',
     () => {
       const { repo, branchShas, range } = squashFixture('squash-d3');
 
@@ -172,29 +179,45 @@ describe('squash-preserve', () => {
 
       git(repo, ['commit', '--quiet', '-F', draft]);
       const mergeSha = head(repo);
-      const trailers = parseCommitMessage(messageOf(repo, mergeSha));
+      const blocks = parseRecordBlocks(messageOf(repo, mergeSha));
 
-      expect(values(trailers, 'Limit')).toEqual([
-        'the vendor caps us at 3 concurrent workers',
+      // Finding 2 (bug-issue-60): both identified branch records keep their
+      // own identity — neither is dropped for ambiguity.
+      expect(blocks.map((block) => value(block, 'Record-Id'))).toEqual([
+        'r-aaa111',
+        'r-bbb222',
+        undefined,
       ]);
-      expect(values(trailers, 'Warn')).toEqual([
+
+      // Finding 3: each block's own `Provenance:` names *its own* source
+      // commit, not just the newest one on the branch.
+      const worker = blockById(blocks, 'r-aaa111');
+      expect(values(worker, 'Limit')).toEqual(['the vendor caps us at 3 concurrent workers']);
+      expect(value(worker, 'Provenance')).toBe(`inherited ${branchShas[0] ?? ''}`);
+
+      const retry = blockById(blocks, 'r-bbb222');
+      expect(values(retry, 'Warn')).toEqual([
         'do not raise the retry ceiling without re-reading the vendor quota',
       ]);
-      expect(values(trailers, 'Ruled-out')).toEqual([
+      expect(values(retry, 'Ruled-out')).toEqual([
         'exponential backoff | the vendor resets the window on every request',
       ]);
-      expect(values(trailers, 'Verified')).toEqual(['drained under SIGTERM in a local run']);
-      expect(value(trailers, 'Undo')).toBe('costly');
-      expect(value(trailers, 'Provenance')).toBe(`inherited ${branchShas[2] ?? ''}`);
+      expect(value(retry, 'Provenance')).toBe(`inherited ${branchShas[1] ?? ''}`);
+
+      const drain = blocks[2] ?? [];
+      expect(values(drain, 'Verified')).toEqual(['drained under SIGTERM in a local run']);
+      expect(value(drain, 'Undo')).toBe('costly');
+      expect(value(drain, 'Provenance')).toBe(`inherited ${branchShas[2] ?? ''}`);
 
       // The prose the merge arrived with is still there.
       expect(messageOf(repo, mergeSha)).toContain('* retry on 429');
 
       // PRD-F3 AC 1 in protocol terms: the path-scoped walk that
-      // `commitlore limits -- queue.ts` performs now reaches the record. Only
-      // the merge commit touches this path on main, so the walk is one message.
+      // `commitlore limits -- queue.ts` performs now reaches every record.
+      // Only the merge commit touches this path on main, so the walk is one
+      // message — now carrying several record blocks (SPEC §2.4).
       const pathScoped = git(repo, ['log', '--format=%B', '--', 'queue.ts']);
-      expect(values(parseCommitMessage(pathScoped), 'Limit')).toEqual([
+      expect(parseRecordBlocks(pathScoped).flatMap((block) => values(block, 'Limit'))).toEqual([
         'the vendor caps us at 3 concurrent workers',
       ]);
     },
@@ -202,7 +225,7 @@ describe('squash-preserve', () => {
   );
 
   it(
-    'attaches the inherited record to the merge commit in the notes mirror',
+    'attaches every inherited record to the merge commit in the notes mirror, each with its own id',
     () => {
       const { repo, branchShas, range } = squashFixture('squash-notes');
 
@@ -216,26 +239,71 @@ describe('squash-preserve', () => {
       const outcome = runSquashPreserve({ range, target: mergeSha, cwd: repo });
       expect(outcome.code).toBe(0);
 
-      const mirrored = readRecord(mergeSha, { cwd: repo });
-      expect(values(mirrored, 'Limit')).toEqual(['the vendor caps us at 3 concurrent workers']);
-      expect(value(mirrored, 'Provenance')).toBe(`inherited ${branchShas[2] ?? ''}`);
+      // Verification case: `commitlore context` (and every other consumer
+      // route) reads the mirror through `readRecordBlocks`/the index, and
+      // recovers each inherited record with its own resolvable id, not one
+      // record with an ambiguous `Provenance:` (findings 2 and 3).
+      const mirrored = readRecordBlocks(mergeSha, { cwd: repo });
+      expect(mirrored).toHaveLength(3);
 
-      // Per-source provenance: one line per original, ids where they existed.
-      expect(values(mirrored, INHERITED_FROM_KEY)).toEqual([
-        `r-aaa111 ${branchShas[0] ?? ''}`,
-        `r-bbb222 ${branchShas[1] ?? ''}`,
-        branchShas[2] ?? '',
-      ]);
+      const worker = blockById(mirrored, 'r-aaa111');
+      expect(values(worker, 'Limit')).toEqual(['the vendor caps us at 3 concurrent workers']);
+      expect(value(worker, 'Provenance')).toBe(`inherited ${branchShas[0] ?? ''}`);
+
+      const retry = blockById(mirrored, 'r-bbb222');
+      expect(value(retry, 'Provenance')).toBe(`inherited ${branchShas[1] ?? ''}`);
+
+      const drain = mirrored.find((block) => value(block, 'Record-Id') === undefined);
+      expect(value(drain, 'Provenance')).toBe(`inherited ${branchShas[2] ?? ''}`);
+
+      // `X-Inherited-From` is no longer written — a canonical `Provenance:`
+      // inside each block already says where it came from.
+      expect(mirrored.flat().some((trailer) => trailer.key === INHERITED_FROM_KEY)).toBe(false);
 
       // A second run does not quietly replace what the first one wrote.
       const again = runSquashPreserve({ range, target: mergeSha, cwd: repo });
       expect(again.code).toBe(2);
       expect(again.stderr).toMatch(/exists|existing/i);
-      expect(readRecord(mergeSha, { cwd: repo })).toEqual(mirrored);
+      expect(readRecordBlocks(mergeSha, { cwd: repo })).toEqual(mirrored);
 
       expect(runSquashPreserve({ range, target: mergeSha, force: true, cwd: repo }).code).toBe(0);
     },
     30_000,
+  );
+
+  it(
+    'still resolves a note published by the old single-record, X-Inherited-From format',
+    () => {
+      // Backward compatibility for reading: a note published before this
+      // change carried one merged record, with per-source provenance only in
+      // the extension key. `readRecord` and `readRecordBlocks` both still
+      // resolve it, because `X-<Name>:` is an ordinary preserved extension
+      // (SPEC §3.2) and a single-`Record-Id` note is trivially one block.
+      const repo = initRepo('squash-old-format');
+      writeFileSync(join(repo, 'README.md'), 'seed\n');
+      git(repo, ['add', '--', 'README.md']);
+      git(repo, ['commit', '--quiet', '-m', 'seed']);
+      const mergeSha = head(repo);
+
+      writeRecord(
+        mergeSha,
+        [
+          { key: 'Limit', value: 'the vendor caps us at 3 concurrent workers' },
+          { key: 'Provenance', value: 'inherited abc1234' },
+          { key: INHERITED_FROM_KEY, value: 'r-aaa111 abc1234' },
+          { key: INHERITED_FROM_KEY, value: 'def5678' },
+        ],
+        { cwd: repo },
+      );
+
+      const flat = readRecord(mergeSha, { cwd: repo });
+      expect(values(flat, 'Limit')).toEqual(['the vendor caps us at 3 concurrent workers']);
+      expect(values(flat, INHERITED_FROM_KEY)).toEqual(['r-aaa111 abc1234', 'def5678']);
+
+      const blocks = readRecordBlocks(mergeSha, { cwd: repo });
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]).toEqual(flat);
+    },
   );
 
   it(
@@ -295,13 +363,15 @@ describe('squash-preserve', () => {
       expect(parseCommitMessage(messageOf(repo, rewritten))).toEqual([]);
 
       // The mirror did not. Both on the original object, which is now
-      // unreachable, and on the commit that replaced it.
-      expect(values(readRecord(mergeSha, { cwd: repo }), 'Limit')).toEqual([
+      // unreachable, and on the commit that replaced it. The mirror now
+      // carries several record blocks (SPEC §2.4); `readRecordBlocks`
+      // recovers all of them, not only the last.
+      expect(readRecordBlocks(mergeSha, { cwd: repo }).flatMap((block) => values(block, 'Limit'))).toEqual([
         'the vendor caps us at 3 concurrent workers',
       ]);
-      expect(values(readRecord(rewritten, { cwd: repo }), 'Limit')).toEqual([
-        'the vendor caps us at 3 concurrent workers',
-      ]);
+      expect(
+        readRecordBlocks(rewritten, { cwd: repo }).flatMap((block) => values(block, 'Limit')),
+      ).toEqual(['the vendor caps us at 3 concurrent workers']);
     },
     60_000,
   );
@@ -321,10 +391,11 @@ describe('squash-preserve', () => {
     const plan = planSquash(collectRange(`${base}..HEAD`, { cwd: repo }));
 
     expect(plan.sources).toHaveLength(3);
-    expect(values(plan.merged, 'Limit')).toEqual([
-      'the vendor caps us at 3 concurrent workers',
-    ]);
-    expect(values(plan.merged, 'Record-Id')).toEqual(['r-ddd444']);
+    // One shared identity is one record, so the plan carries exactly one block.
+    expect(plan.blocks).toHaveLength(1);
+    const merged = plan.blocks[0] ?? [];
+    expect(values(merged, 'Limit')).toEqual(['the vendor caps us at 3 concurrent workers']);
+    expect(values(merged, 'Record-Id')).toEqual(['r-ddd444']);
     // Restating a record is not a conflict — only changing it is.
     expect(plan.conflicts).toEqual([]);
     expect(plan.provenance.map((entry) => entry.recordId)).toEqual([
@@ -358,9 +429,11 @@ describe('squash-preserve', () => {
     const plan = planSquash(collectRange(range, { cwd: repo }));
 
     expect(plan.conflicts).toEqual([{ recordId: 'r-eee555', kept: newer, dropped: [older] }]);
+    expect(plan.blocks).toHaveLength(1);
+    const merged = plan.blocks[0] ?? [];
     // Both claims survive on a repeatable key; the single-valued one resolves.
-    expect(values(plan.merged, 'Limit')).toEqual(['the quota is 3', 'the quota is 5']);
-    expect(value(plan.merged, 'Expires')).toBe('when the vendor ships v4');
+    expect(values(merged, 'Limit')).toEqual(['the quota is 3', 'the quota is 5']);
+    expect(value(merged, 'Expires')).toBe('when the vendor ships v4');
 
     const outcome = runSquashPreserve({ range, cwd: repo });
     expect(outcome.code).toBe(0);
@@ -369,21 +442,45 @@ describe('squash-preserve', () => {
     expect(outcome.stderr).toContain(older.slice(0, 8));
   });
 
-  it('keeps the most conservative value of every single-valued risk key', () => {
+  it('keeps the most conservative value of every single-valued risk key, within one identity', () => {
+    // Resolution only folds across sources that declare the *same* record —
+    // a shared `Record-Id` is what makes these three one record instead of
+    // three (SPEC §3.3, and the reason this module stopped folding
+    // unrelated records together at all: see squash.ts's own doc comment).
+    const id = 'Record-Id: r-fff666\n';
     const plan = planSquash([
-      record('1111111111111111111111111111111111111111', 'Blast: local\nUndo: easy\nCertainty: firm\n'),
-      record('2222222222222222222222222222222222222222', 'Blast: system\nUndo: permanent\nCertainty: guess\n'),
-      record('3333333333333333333333333333333333333333', 'Blast: local\nUndo: easy\nCertainty: firm\n'),
+      record('1111111111111111111111111111111111111111', `Blast: local\nUndo: easy\nCertainty: firm\n${id}`),
+      record('2222222222222222222222222222222222222222', `Blast: system\nUndo: permanent\nCertainty: guess\n${id}`),
+      record('3333333333333333333333333333333333333333', `Blast: local\nUndo: easy\nCertainty: firm\n${id}`),
     ]);
 
+    expect(plan.blocks).toHaveLength(1);
+    const merged = plan.blocks[0] ?? [];
     // The latest source says `local`/`easy`/`firm`. The approval gate reads
     // these, so the merge must not collapse toward the optimistic answer.
-    expect(value(plan.merged, 'Blast')).toBe('system');
-    expect(value(plan.merged, 'Undo')).toBe('permanent');
-    expect(value(plan.merged, 'Certainty')).toBe('guess');
+    expect(value(merged, 'Blast')).toBe('system');
+    expect(value(merged, 'Undo')).toBe('permanent');
+    expect(value(merged, 'Certainty')).toBe('guess');
   });
 
-  it('produces a record that passes validate on both channels', () => {
+  it('folds unrelated records side by side rather than mixing their content', () => {
+    // The bug this module used to have: two different decisions on a branch
+    // are two records, not one. Neither declares an id, so each is its own
+    // block (SPEC §3.3 — nothing but a shared identity says two declarations
+    // are the same decision).
+    const plan = planSquash([
+      record('4444444444444444444444444444444444444444', 'Blast: system\n'),
+      record('5555555555555555555555555555555555555555', 'Undo: permanent\n'),
+    ]);
+
+    expect(plan.blocks).toHaveLength(2);
+    expect(value(plan.blocks[0] ?? [], 'Blast')).toBe('system');
+    expect(value(plan.blocks[0] ?? [], 'Undo')).toBeUndefined();
+    expect(value(plan.blocks[1] ?? [], 'Undo')).toBe('permanent');
+    expect(value(plan.blocks[1] ?? [], 'Blast')).toBeUndefined();
+  });
+
+  it('produces records that each pass validate, on both channels', () => {
     const { repo, range } = squashFixture('squash-valid');
 
     stageSquash(repo);
@@ -394,11 +491,16 @@ describe('squash-preserve', () => {
 
     expect(runSquashPreserve({ range, target: mergeSha, cwd: repo }).code).toBe(0);
 
-    expect(validateRecord(parseCommitMessage(messageOf(repo, mergeSha)))).toEqual([]);
-    expect(validateRecord(readRecord(mergeSha, { cwd: repo }))).toEqual([]);
+    const messageBlocks = parseRecordBlocks(messageOf(repo, mergeSha));
+    expect(messageBlocks).toHaveLength(3);
+    for (const block of messageBlocks) expect(validateRecord(block)).toEqual([]);
 
-    // Rewriting an already-rewritten draft replaces the block rather than
-    // appending a second one, which B2 would turn into prose.
+    const noteBlocks = readRecordBlocks(mergeSha, { cwd: repo });
+    expect(noteBlocks).toHaveLength(3);
+    for (const block of noteBlocks) expect(validateRecord(block)).toEqual([]);
+
+    // Rewriting an already-rewritten draft replaces the blocks rather than
+    // appending a second set, which B2 would turn into prose.
     const once = readFileSync(draft, 'utf8');
     const plan = planSquash(collectRange(range, { cwd: repo }));
     expect(renderMessage(once, plan)).toBe(once);
@@ -426,12 +528,14 @@ describe('squash-preserve', () => {
     const payload: {
       range: string;
       sources: { sha: string }[];
-      merged: Trailer[];
+      blocks: Trailer[][];
       applied: { messageFile: string | null; target: string | null };
     } = JSON.parse(asJson.stdout);
     expect(payload.range).toBe(range);
     expect(payload.sources).toHaveLength(3);
-    expect(value(payload.merged, 'Undo')).toBe('costly');
+    expect(payload.blocks).toHaveLength(3);
+    const drain = payload.blocks.find((block) => value(block, 'Record-Id') === undefined) ?? [];
+    expect(value(drain, 'Undo')).toBe('costly');
     expect(payload.applied).toEqual({ messageFile: null, target: null });
 
     expect(head(repo)).toBe(before.head);

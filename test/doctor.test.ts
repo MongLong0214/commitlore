@@ -26,6 +26,7 @@ import {
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
+import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -573,6 +574,7 @@ describe('doctor: report', () => {
       'git-trailers',
       'history-depth',
       'index-health',
+      'squash-conservation',
     ]);
     for (const entry of report.checks) {
       expect(['ok', 'warn', 'fail', 'skipped']).toContain(entry.status);
@@ -590,7 +592,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(9);
+    expect(parsed.checks).toHaveLength(10);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -606,5 +608,76 @@ describe('doctor: report', () => {
     expect(text).toContain('notes fetch refspec');
     expect(text).toContain(`fix: git config --add remote.origin.fetch '${NOTES_REFSPEC}'`);
     expect(text).toContain('index health');
+  });
+});
+
+describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
+  /** A feature branch off `main`, one commit declaring `recordId`. */
+  const growFeatureBranch = (repo: string, recordId: string): { base: string; featureSha: string } => {
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    writeFileSync(join(repo, 'feature.ts'), 'export const x = 1;\n');
+    git(repo, ['add', '--', 'feature.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      `add the feature\n\nLimit: the vendor caps concurrency\nRecord-Id: ${recordId}\n`,
+    ]);
+    const featureSha = git(repo, ['rev-parse', 'HEAD']).trim();
+    git(repo, ['checkout', '--quiet', 'main']);
+    return { base, featureSha };
+  };
+
+  /** Collapses `feature` onto `main` the way `git merge --squash` does, alone. */
+  const squashWithoutPreserving = (repo: string): string => {
+    git(repo, ['merge', '--squash', 'feature']);
+    git(repo, ['commit', '--quiet', '-m', 'Squash in the feature']);
+    return git(repo, ['rev-parse', 'HEAD']).trim();
+  };
+
+  it('skips when no local branch looks like a squash source', () => {
+    const repo = initRepo('squash-conservation-none');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
+
+    const report = runDoctor({ cwd: repo });
+    expect(statusOf(report, 'squash-conservation')).toBe('skipped');
+  });
+
+  it('warns when a squashed branch left a Record-Id behind that HEAD cannot find', () => {
+    const repo = initRepo('squash-conservation-lost');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    growFeatureBranch(repo, 'r-lost01');
+    squashWithoutPreserving(repo);
+
+    const report = runDoctor({ cwd: repo });
+    expect(statusOf(report, 'squash-conservation')).toBe('warn');
+    const entry = report.checks.find((check) => check.id === 'squash-conservation');
+    expect(entry?.detail).toContain('r-lost01');
+    expect(entry?.detail).toContain('feature');
+    expect(entry?.fix).toContain('squash-preserve');
+  });
+
+  it('reports ok once squash-preserve has attached the branch records', () => {
+    const repo = initRepo('squash-conservation-fixed');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    const { base, featureSha } = growFeatureBranch(repo, 'r-fixed01');
+    const mergeSha = squashWithoutPreserving(repo);
+
+    const before = runDoctor({ cwd: repo });
+    expect(statusOf(before, 'squash-conservation')).toBe('warn');
+
+    const outcome = runSquashPreserve({
+      range: `${base}..${featureSha}`,
+      target: mergeSha,
+      cwd: repo,
+    });
+    expect(outcome.code).toBe(0);
+    rebuildIndex(openIndex({ cwd: repo }));
+
+    const after = runDoctor({ cwd: repo });
+    const entry = after.checks.find((check) => check.id === 'squash-conservation');
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('reachable from HEAD');
   });
 });
