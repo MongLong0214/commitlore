@@ -13490,6 +13490,15 @@ var checkHook = (opts) => {
       install
     );
   }
+  if (contents !== commitMsgStub()) {
+    return check(
+      id,
+      title,
+      "warn",
+      `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI`,
+      install
+    );
+  }
   return check(id, title, "ok", `installed at ${path2}`);
 };
 var checkGit = (opts) => {

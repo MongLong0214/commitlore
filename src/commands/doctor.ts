@@ -34,7 +34,7 @@ import {
   fetchRefspecs,
 } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { HOOK_MARKER } from '../hooks/commit-msg.js';
+import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
 
 /**
  * `skipped` is a check that exists but has nothing to inspect yet — it is not
@@ -193,6 +193,20 @@ const checkHook = (opts: DoctorOptions): DoctorCheck => {
       title,
       'warn',
       `a commit-msg hook exists at ${path} but does not invoke commitlore`,
+      install,
+    );
+  }
+
+  // `hooks status` has always reported this; doctor did not, and doctor is what
+  // people run to ask whether their installation is healthy. A stale stub is
+  // exactly how a fixed resolution order fails to reach anyone who installed
+  // before it landed.
+  if (contents !== commitMsgStub()) {
+    return check(
+      id,
+      title,
+      'warn',
+      `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI`,
       install,
     );
   }

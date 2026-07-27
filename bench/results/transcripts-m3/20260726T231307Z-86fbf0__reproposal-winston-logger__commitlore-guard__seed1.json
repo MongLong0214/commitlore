@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-guard",
+  "seed": 1,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "## Approach Explained\n\nI've implemented an **async queue** to decouple logging from the request path:\n\n**How it works:**\n\n1. **Request handler** (fast path): Calls `log()` → pushes to queue → schedules async drain. This is O(1) and never blocks.\n\n2. **Background drain**: The `drain()` function processes the queue asynchronously using `process.stdout.write(chunk, callback)`. The callback form is non-blocking—once the write is queued, control returns immediately.\n\n3. **No drops**: All log lines are queued before being written to stdout, guaranteeing the audit trail.\n\n4. **Backpressure**: If logs arrive faster than stdout can consume them, the queue builds up naturally, but never blocks request handling.\n\n**Key changes:**\n- `log(message)` now enqueues and triggers async drain (not synchronous write)\n- `drain()` uses callbacks to write one line at a time without blocking\n- The `draining` flag prevents concurrent drains\n\n**Result**: The request handler's critical path is now O(1)—just an array push—while the actual I/O happens asynchronously in the background. Handler.ts needs no changes; the `log()` API is identical.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..aab26f6 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,21 @@\n+const queue: string[] = [];\n+let draining = false;\n+\n+const drain = async (): Promise<void> => {\n+  if (draining || queue.length === 0) return;\n+  draining = true;\n+\n+  while (queue.length > 0) {\n+    const line = queue.shift()!;\n+    await new Promise<void>((resolve) => {\n+      process.stdout.write(line, () => resolve());\n+    });\n+  }\n+\n+  draining = false;\n+};\n+\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  queue.push(`${JSON.stringify({ message })}\\n`);\n+  drain().catch(console.error);\n };\n",
+  "commits": ""
+}

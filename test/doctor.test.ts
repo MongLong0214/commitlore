@@ -33,7 +33,7 @@ import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
-import { commitMsgStub } from '../src/hooks/commit-msg.js';
+import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
 
 const scratch: string[] = [];
 
@@ -240,6 +240,28 @@ describe('doctor: commit-msg hook', () => {
  * times. Each one was invisible to every check that read configuration, and each
  * surfaced as a commit that silently skipped validation.
  */
+describe('doctor: a stale stub', () => {
+  it('warns when the installed stub is not the current one', () => {
+    const { repo } = repoWithRemote('doctor-hook-stale');
+    // A stub from before the resolution order changed: our marker, older body.
+    writeScript(hookPath(repo), `#!/bin/sh\n${HOOK_MARKER}\nexec commitlore validate "$1"\n`);
+
+    const check = runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('out of date');
+    expect(check?.fix).toContain('hooks install');
+  });
+
+  it('reports ok for the current stub', () => {
+    const { repo } = repoWithRemote('doctor-hook-current');
+    writeScript(hookPath(repo), commitMsgStub());
+
+    expect(runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook')?.status).toBe(
+      'ok',
+    );
+  });
+});
+
 describe('doctor: hook runtime', () => {
   const installedHook = (repo: string): void => {
     writeScript(hookPath(repo), commitMsgStub());
