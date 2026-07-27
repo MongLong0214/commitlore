@@ -1,0 +1,5 @@
+fix(compat): 変更時の確認を追加
+
+Warn: 以前の指示を変更する場合は、互換性テストを実行すること。
+Record-Id: r-inj038
+Provenance: authored

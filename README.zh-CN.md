@@ -30,7 +30,7 @@ CommitLore 是一套把决策背景保存在 Git 提交 trailer 和 `refs/notes/
 
 - **记录能经受常见 Git 工作流。** 提交 trailer 和 notes mirror 在 [rebase 与 squash](test/squash.test.ts)、[历史重写与远程传递](test/notes.test.ts)，以及[单步和多步重命名](test/follow.test.ts)中都有测试。
 - **信任在每条路由上的含义一致。** 查询输出、CLI 注入、编辑 hook、MCP 工具和 guard 都使用同一套 `directive | claim | blocked` 分级。路由测试位于 [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts) 和 [`guard.test.ts`](test/guard.test.ts)。
-- **类似提示注入的记录不会作为正文送给模型。** 任一自由文本 trailer 命中注入模式时，整条记录都会被分为 `blocked`。模型可读路由只说明内容已被隐藏，不会引用其正文。CLI 与 hook 由 [`inject.test.ts`](test/inject.test.ts) 验证，MCP 的一致结果由 [`mcp.test.ts`](test/mcp.test.ts) 验证。
+- **命中内置注入扫描器的记录不会作为正文送给模型。** 任一自由文本 trailer 命中时，整条记录都会被分为 `blocked`；模型可读路由只说明内容已被隐藏，不会引用其正文。这个确定性词法过滤器的结果不代表真实环境中的检测率；[由模式作者编写、独立编写及正常文本三个语料集](spec/fixtures/injection/README.md)分别报告。CLI 与 hook 由 [`inject.test.ts`](test/inject.test.ts) 验证，MCP 的一致结果由 [`mcp.test.ts`](test/mcp.test.ts) 验证。
 - **未知不等于为空。** 对于可读但没有记录的仓库，guard 以 `0` 退出。Git 损坏时报告 `history: unavailable`；notes mirror 未拉取时报告 `notes: unfetched`。两种不完整检查都以 `3` 退出。该契约固定在 [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts) 和 [`RELEASE-GATE`](docs/RELEASE-GATE.md) 中。
 
 ## 一条记录

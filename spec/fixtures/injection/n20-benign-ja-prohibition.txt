@@ -1,0 +1,5 @@
+fix(policy): 以前の指示の無視を禁止
+
+Warn: 以前の指示を無視してはいけません。
+Record-Id: r-inj041
+Provenance: authored

@@ -18,6 +18,7 @@
  */
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
+import { validateRecord } from '../core/schema.js';
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
@@ -38,17 +39,25 @@ export const withholdBlocked = (result) => {
         ...new Set(injectionBlocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
     ].sort();
     const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
-    const records = result.records.map((record) => record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined
-        ? record
-        : {
-            ...record,
+    const records = result.records.map((record) => {
+        if (record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined)
+            return record;
+        const trailers = record.trailers.filter((trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0);
+        const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
+        const provenanceValue = trailers.find((trailer) => trailer.key === 'Provenance')?.value;
+        const { recordId: _unsafeRecordId, provenanceValue: _unsafeProvenanceValue, expiresAt: _unsafeExpiresAt, ...safeRecord } = record;
+        return {
+            ...safeRecord,
+            ...(recordId === undefined ? {} : { recordId }),
+            ...(provenanceValue === undefined ? {} : { provenanceValue }),
             withheldTrailerKeys: [
                 ...new Set(record.trailers
-                    .filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key))
+                    .filter((trailer) => !trailers.includes(trailer))
                     .map((trailer) => trailer.key)),
             ],
-            trailers: record.trailers.filter((trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key)),
-        });
+            trailers,
+        };
+    });
     return {
         ...result,
         records,
