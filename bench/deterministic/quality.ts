@@ -6,10 +6,21 @@ import { createWorkspace, destroyWorkspace } from '../workspace.ts';
 import { scanInjection } from '../../dist/core/grade.js';
 import { DEFAULT_THRESHOLD, guard } from '../../dist/core/guard.js';
 import { parseCommitMessage } from '../../dist/core/trailers.js';
-import type { GuardQualityRow, InjectionDetectionRow, RowBase } from './types.ts';
+import type {
+  GuardQualityRow,
+  GuardScoreBand,
+  InjectionDetectionRow,
+  RowBase,
+} from './types.ts';
 
 interface InjectionExpected {
   readonly blocked: boolean;
+}
+
+interface AdversarialCorpus {
+  readonly label: string;
+  readonly source: string;
+  readonly cases: readonly { readonly name: string; readonly payload: string }[];
 }
 
 interface GuardArtifact {
@@ -75,6 +86,19 @@ export const measureInjectionDetection = (
   const positives = truePositives + falseNegatives;
   const negatives = falsePositives + trueNegatives;
   if (positives === 0 || negatives === 0) throw new Error('injection corpus needs both labels');
+
+  // Separate from the pattern-authored corpus above: this set was written
+  // without reading `INJECTION_PATTERNS` (GitHub issue #70), so it is the
+  // closest thing this suite has to an independent detection-rate estimate.
+  // Mixing it into the count above would let a corpus scored by its own
+  // authors stand in for one it did not write.
+  const adversarialPath = join(fixtureRoot, 'adversarial.json');
+  const adversarial = JSON.parse(readFileSync(adversarialPath, 'utf8')) as AdversarialCorpus;
+  if (adversarial.cases.length === 0) throw new Error('adversarial corpus is empty');
+  const adversarialDetected = adversarial.cases.filter(
+    (candidate) => scanInjection(candidate.payload).length > 0,
+  ).length;
+
   return {
     ...base,
     metric: 'injection_detection',
@@ -87,6 +111,10 @@ export const measureInjectionDetection = (
     true_negatives: trueNegatives,
     true_positive_rate: truePositives / positives,
     false_positive_rate: falsePositives / negatives,
+    adversarial_corpus: 'spec/fixtures/injection/adversarial.json',
+    adversarial_source: adversarial.source,
+    adversarial_total: adversarial.cases.length,
+    adversarial_detected: adversarialDetected,
   };
 };
 
@@ -99,6 +127,27 @@ const loadGuardArtifact = (path: string): GuardArtifact => {
     reproposed: booleanField(parsed, 'reproposed'),
     diff: stringField(parsed, 'diff'),
   };
+};
+
+/**
+ * Fixed, not fit to any single run's data — issue #61 rejected choosing a
+ * boundary from the same firings it would then describe as "the noise floor"
+ * or "the reliable band", which is post-hoc subset selection with a different
+ * name (`bench/PREREGISTRATION.md` §4 already forbids that shape for the
+ * behavior benchmark). The floor is `DEFAULT_THRESHOLD`; the other edges are
+ * round numbers chosen before looking at where any particular run's scores
+ * happen to fall.
+ */
+const GUARD_SCORE_BAND_EDGES: readonly number[] = [DEFAULT_THRESHOLD, 0.5, 0.75, 1.0];
+
+const bandIndexOf = (score: number): number => {
+  for (let index = 0; index < GUARD_SCORE_BAND_EDGES.length - 1; index += 1) {
+    const min = GUARD_SCORE_BAND_EDGES[index] ?? 0;
+    const max = GUARD_SCORE_BAND_EDGES[index + 1] ?? 1;
+    const isLastBand = index === GUARD_SCORE_BAND_EDGES.length - 2;
+    if (score >= min && (score < max || isLastBand)) return index;
+  }
+  throw new Error(`score ${score} outside the guard band edges`);
 };
 
 export const measureGuardQuality = (
@@ -121,6 +170,8 @@ export const measureGuardQuality = (
   let falsePositives = 0;
   let falseNegatives = 0;
   let trueNegatives = 0;
+  const bandFirings = new Array<number>(GUARD_SCORE_BAND_EDGES.length - 1).fill(0);
+  const bandCorrect = new Array<number>(GUARD_SCORE_BAND_EDGES.length - 1).fill(0);
   try {
     for (const artifact of artifacts) {
       const task = tasks.get(artifact.task);
@@ -130,17 +181,26 @@ export const measureGuardQuality = (
         workspace = createWorkspace(task, artifact.seed, repoRoot).dir;
         workspaces.set(task.id, workspace);
       }
-      const detected =
-        guard({
-          proposal: artifact.diff,
-          cwd: workspace,
-          threshold: DEFAULT_THRESHOLD,
-          noIndex: true,
-        }).matches.length > 0;
+      // `guard` sorts matches strongest first (`compareMatches`), so the top
+      // score is what decided this firing.
+      const matches = guard({
+        proposal: artifact.diff,
+        cwd: workspace,
+        threshold: DEFAULT_THRESHOLD,
+        noIndex: true,
+      }).matches;
+      const topScore = matches[0]?.score;
+      const detected = topScore !== undefined;
       if (artifact.reproposed && detected) truePositives += 1;
       else if (artifact.reproposed) falseNegatives += 1;
       else if (detected) falsePositives += 1;
       else trueNegatives += 1;
+
+      if (detected) {
+        const band = bandIndexOf(topScore);
+        bandFirings[band] = (bandFirings[band] ?? 0) + 1;
+        if (artifact.reproposed) bandCorrect[band] = (bandCorrect[band] ?? 0) + 1;
+      }
     }
   } finally {
     for (const workspace of workspaces.values()) destroyWorkspace(workspace);
@@ -150,6 +210,15 @@ export const measureGuardQuality = (
   const actualPositive = truePositives + falseNegatives;
   if (predictedPositive === 0 || actualPositive === 0) {
     throw new Error('guard corpus produced an undefined precision or recall');
+  }
+  const bands: GuardScoreBand[] = [];
+  for (let index = 0; index < GUARD_SCORE_BAND_EDGES.length - 1; index += 1) {
+    bands.push({
+      min: GUARD_SCORE_BAND_EDGES[index] ?? 0,
+      max: GUARD_SCORE_BAND_EDGES[index + 1] ?? 1,
+      firings: bandFirings[index] ?? 0,
+      correct: bandCorrect[index] ?? 0,
+    });
   }
   return {
     ...base,
@@ -162,5 +231,7 @@ export const measureGuardQuality = (
     true_negatives: trueNegatives,
     precision: truePositives / predictedPositive,
     recall: truePositives / actualPositive,
+    firings: predictedPositive,
+    bands,
   };
 };

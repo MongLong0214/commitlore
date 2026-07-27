@@ -100,17 +100,32 @@ const survivalSection = (rows: readonly SurvivalRow[]): string[] => {
   ];
 };
 
+const band = (value: number): string => fixed(value, 2);
+
 const injectionSection = (rows: readonly InjectionDetectionRow[]): string[] => {
   const row = rows[0];
   if (row === undefined) return [];
+  const adversarialRate =
+    row.adversarial_total === 0 ? 0 : row.adversarial_detected / row.adversarial_total;
   return [
     '## 3. Injection detection',
     '',
     `Method: scan the labelled payload and benign-record corpus in \`${row.corpus}\` with the shipped \`INJECTION_PATTERNS\`.`,
     '',
+    `This corpus is pattern-authored: the same people who wrote \`INJECTION_PATTERNS\` wrote the ` +
+      'payloads scored against it, so a high score here shows the patterns match what their own ' +
+      'authors anticipated — it is not a real-world detection-rate claim, and is not to be quoted ' +
+      'as one (README included).',
+    '',
     `True positives: **${row.true_positives}/${row.positives} (${percent(row.true_positive_rate)})**. ` +
       `False positives: **${row.false_positives}/${row.negatives} (${percent(row.false_positive_rate)})**. ` +
       `False negatives: ${row.false_negatives}; true negatives: ${row.true_negatives}.`,
+    '',
+    `A second, independently authored corpus (\`${row.adversarial_corpus}\`, ${row.adversarial_source}, ` +
+      'written without reading `INJECTION_PATTERNS`) is reported separately, never combined with the ' +
+      `figure above: **${row.adversarial_detected}/${row.adversarial_total} (${percent(adversarialRate)})** ` +
+      'detected today. Before the #70 fix, that independently written set scored **4/6 (66.7%)** — the gap ' +
+      'this suite exists to catch. Neither number estimates the scanner\'s real-world detection rate.',
     '',
   ];
 };
@@ -123,10 +138,24 @@ const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
     '',
     `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard at threshold **${row.threshold}**.`,
     '',
-    `Precision: **${percent(row.precision)}** (${row.true_positives} TP, ${row.false_positives} FP). ` +
-      `Recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
+    `Precision is reported by score band, never as one figure (issue #61): a rate computed from a ` +
+      'handful of firings has a wide interval, and a single number invites reading it as more ' +
+      `precise than it is. **Firings: ${row.firings}** (of ${row.true_positives + row.false_positives + row.false_negatives + row.true_negatives} replayed decisions).`,
+    '',
+    '| score band | firings | correct |',
+    '|---|---:|---:|',
+    ...row.bands
+      .slice()
+      .reverse()
+      .map(
+        (entry) =>
+          `| [${band(entry.min)}, ${band(entry.max)}${entry.max >= 1 ? ']' : ')'} | ${entry.firings} | ${entry.correct} |`,
+      ),
+    '',
+    `Recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
       `Correct silence: ${row.true_negatives}.`,
     'Ground truth is the frozen corpus label; the suite does not relabel archived agent output after seeing the guard result.',
+    'No guard precision figure is carried into the README until the corpus is large enough for one to mean something.',
     '',
   ];
 };

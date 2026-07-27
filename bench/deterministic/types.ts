@@ -76,6 +76,22 @@ export interface InjectionDetectionRow extends BaseRow {
   readonly true_negatives: number;
   readonly true_positive_rate: number;
   readonly false_positive_rate: number;
+  /**
+   * The issue #70 set: written without reading `INJECTION_PATTERNS`, reported
+   * separately from the pattern-authored corpus above because a corpus scored
+   * by its own authors cannot stand in for a detection-rate claim.
+   */
+  readonly adversarial_corpus: string;
+  readonly adversarial_source: string;
+  readonly adversarial_total: number;
+  readonly adversarial_detected: number;
+}
+
+export interface GuardScoreBand {
+  readonly min: number;
+  readonly max: number;
+  readonly firings: number;
+  readonly correct: number;
 }
 
 export interface GuardQualityRow extends BaseRow {
@@ -86,8 +102,17 @@ export interface GuardQualityRow extends BaseRow {
   readonly false_positives: number;
   readonly false_negatives: number;
   readonly true_negatives: number;
+  /**
+   * Kept for programmatic use (trend tracking as the corpus grows). Never
+   * rendered alone in the report: issue #61 decided precision is reported by
+   * score band, because a rate computed from a handful of firings has a wide
+   * interval and a single number invites reading it as more than it is.
+   */
   readonly precision: number;
   readonly recall: number;
+  /** True positives + false positives; the denominator the bands partition. */
+  readonly firings: number;
+  readonly bands: readonly GuardScoreBand[];
 }
 
 export type HookName = 'commit-msg' | 'pre-tool-use-inject';
