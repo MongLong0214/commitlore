@@ -14611,6 +14611,27 @@ var runQuery = (opts = {}) => {
 var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 
 // src/core/guard.ts
+var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
+var renderGuardMatch = (match) => {
+  const identity = {
+    recordId: match.recordId ?? null,
+    sha: match.sha,
+    score: match.score,
+    signals: [...match.signals]
+  };
+  switch (match.trust) {
+    case "blocked":
+      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+    case "claim":
+    case "directive":
+      return {
+        ...identity,
+        trust: match.trust,
+        alternative: match.alternative,
+        reason: match.reason
+      };
+  }
+};
 var JACCARD_WEIGHT = 0.5;
 var KEYWORD_WEIGHT = 0.5;
 var MIN_KEYWORD_HITS = 2;
@@ -15000,6 +15021,7 @@ var matchOne = (candidate, proposal, corpus, requireContent = false) => {
   ];
   return {
     sha: record2.sha,
+    trust: record2.trust ?? "claim",
     alternative: parsed.alternative,
     reason: parsed.reason,
     score,
@@ -15011,7 +15033,6 @@ var guard = (opts) => {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const proposal = tokenize(opts.proposal);
   const ids = recordIdsIn(opts.proposal);
-  if (proposal.stems.size === 0 && ids.size === 0) return [];
   const result = runQuery({
     keys: [RULED_OUT_KEY],
     ...opts.paths === void 0 ? {} : { paths: opts.paths },
@@ -15019,6 +15040,14 @@ var guard = (opts) => {
     ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
     ...opts.noIndex === void 0 ? {} : { noIndex: opts.noIndex }
   });
+  const availability = {
+    history: result.history,
+    notes: result.notes,
+    incomplete: result.history === "unavailable" || result.notes === "unfetched"
+  };
+  if (proposal.stems.size === 0 && ids.size === 0) {
+    return { matches: [], ...availability };
+  }
   const candidates = result.records.flatMap((record2) => {
     const idHit = record2.recordId !== void 0 && ids.has(record2.recordId);
     return valuesOf(record2, RULED_OUT_KEY).map((value) => {
@@ -15032,11 +15061,15 @@ var guard = (opts) => {
     });
   });
   const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
-  return candidates.map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches);
+  return {
+    matches: candidates.map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches),
+    ...availability
+  };
 };
 
 // src/commands/guard.ts
 var FLAGGED_EXIT_CODE = 2;
+var INCOMPLETE_EXIT_CODE = 3;
 var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
@@ -15060,37 +15093,81 @@ var evaluationInstant = (raw) => {
   }
   return parsed;
 };
-var toJson = (matches, at, paths, threshold) => ({
+var toJson = (result, at, paths, threshold) => ({
   command: "guard",
   at: at.toISOString(),
   paths: [...paths],
   threshold,
-  matched: matches.length > 0,
-  matches: matches.map((match) => ({
-    recordId: match.recordId ?? null,
-    sha: match.sha,
-    alternative: match.alternative,
-    reason: match.reason,
-    score: match.score,
-    signals: match.signals
-  }))
+  matched: result.matches.length > 0,
+  history: result.history,
+  notes: result.notes,
+  incomplete: result.incomplete,
+  matches: result.matches.map(renderGuardMatch)
 });
 var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var NO_REASON = 'no reason recorded \u2014 this Ruled-out: is missing the required "|" separator';
 var formatMatches = (matches) => {
   if (matches.length === 0) return "";
   const header2 = `commitlore guard: ${matches.length} ruled-out ${matches.length === 1 ? "alternative matches" : "alternatives match"} this proposal`;
-  const blocks = matches.map(
-    (match) => [
-      `  ruled out: ${match.alternative}`,
-      `  because:   ${match.reason === "" ? NO_REASON : match.reason}`,
-      `  recorded:  ${match.recordId ?? "-"} in ${shortSha2(match.sha)} (score ${match.score.toFixed(2)}; ${match.signals.join(", ")})`
-    ].join("\n")
-  );
+  const blocks = matches.map((match) => {
+    const rendered = renderGuardMatch(match);
+    const recorded = `  recorded:  ${rendered.recordId ?? "-"} in ${rendered.trust === "blocked" ? rendered.sha : shortSha2(rendered.sha)} (score ${rendered.score.toFixed(2)}; ${rendered.signals.join(", ")})`;
+    switch (rendered.trust) {
+      case "blocked":
+        return [`  withheld: ${rendered.withheld}`, recorded].join("\n");
+      case "claim":
+      case "directive":
+        return [
+          `  ruled out: ${rendered.alternative}`,
+          `  because:   ${rendered.reason === "" ? NO_REASON : rendered.reason}`,
+          recorded
+        ].join("\n");
+    }
+  });
   return `${[header2, ...blocks].join("\n\n")}
 `;
 };
 var scopeCaveat = (paths) => paths.length > 1 ? "commitlore: renames are not followed for several paths; a record whose file was renamed may not be checked\n" : "";
+var incompleteMessage = (result) => {
+  const reasons = [
+    ...result.history === "unavailable" ? ["git history is unavailable"] : [],
+    ...result.notes === "unfetched" ? ["the notes mirror has not been fetched"] : []
+  ];
+  return `commitlore guard: could not complete the check: ${reasons.join("; ")}`;
+};
+var blockedIdentity = (match) => `recordId=${match.recordId ?? "-"}; sha=${match.sha}; score=${match.score.toFixed(2)}; signals=${match.signals.join(", ")}`;
+var formatHookContext = (result) => {
+  const context = [];
+  if (result.matches.length > 0) {
+    const rendered = result.matches.map(renderGuardMatch);
+    const lines = rendered.map((match) => {
+      switch (match.trust) {
+        case "blocked":
+          return `- ${match.withheld} [${blockedIdentity(match)}]`;
+        case "claim":
+          return `- A record claims this was ruled out: ${match.alternative} \u2014 reported reason: ${match.reason} [${match.recordId ?? match.sha.slice(0, 8)}]`;
+        case "directive":
+          return `- ${match.alternative} \u2014 ruled out: ${match.reason} [${match.recordId ?? match.sha.slice(0, 8)}]`;
+      }
+    });
+    context.push(
+      "commitlore guard: this edit resembles an alternative already ruled out.",
+      "",
+      ...lines
+    );
+    if (rendered.some((match) => match.trust === "directive")) {
+      context.push(
+        "",
+        "If the rejection no longer holds, say what changed. Not knowing is not a reason."
+      );
+    }
+  }
+  if (result.incomplete) {
+    if (context.length > 0) context.push("");
+    context.push(incompleteMessage(result).replace("the check", "the check on this edit"));
+  }
+  return context.join("\n");
+};
 var runAsHook = async (options) => {
   let raw = "";
   for await (const chunk of process.stdin) raw += chunk;
@@ -15103,7 +15180,7 @@ var runAsHook = async (options) => {
   const proposal = payload.tool_input?.new_string;
   const filePath = payload.tool_input?.file_path;
   if (typeof proposal !== "string" || proposal.trim() === "") return;
-  const matches = guard({
+  const result = guard({
     proposal,
     ...typeof filePath === "string" && filePath !== "" ? { paths: [filePath] } : {},
     threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
@@ -15113,17 +15190,8 @@ var runAsHook = async (options) => {
     // reason it exists: naming a record is what obeying one looks like.
     requireContent: true
   });
-  if (matches.length === 0) return;
-  const lines = matches.map(
-    (match) => `- ${match.alternative} \u2014 ruled out: ${match.reason} [${match.recordId ?? match.sha.slice(0, 8)}]`
-  );
-  const context = [
-    "commitlore guard: this edit resembles an alternative already ruled out.",
-    "",
-    ...lines,
-    "",
-    "If the rejection no longer holds, say what changed. Not knowing is not a reason."
-  ].join("\n");
+  const context = formatHookContext(result);
+  if (context === "") return;
   process.stdout.write(
     `${JSON.stringify({
       hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: context }
@@ -15149,7 +15217,7 @@ var register4 = (program3) => {
       }
       const threshold = matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD;
       const at = evaluationInstant(options.at) ?? /* @__PURE__ */ new Date();
-      const matches = guard({
+      const result = guard({
         proposal: readProposal(
           options.proposal ?? (() => {
             throw new Error(
@@ -15164,13 +15232,16 @@ var register4 = (program3) => {
         ...options.requireContent === true ? { requireContent: true } : {}
       });
       process.stderr.write(scopeCaveat(paths));
+      if (result.incomplete) process.stderr.write(`${incompleteMessage(result)}
+`);
       if (options.json === true) {
-        process.stdout.write(`${JSON.stringify(toJson(matches, at, paths, threshold), null, 2)}
+        process.stdout.write(`${JSON.stringify(toJson(result, at, paths, threshold), null, 2)}
 `);
       } else {
-        process.stderr.write(formatMatches(matches));
+        process.stderr.write(formatMatches(result.matches));
       }
-      if (matches.length > 0) process.exitCode = FLAGGED_EXIT_CODE;
+      if (result.matches.length > 0) process.exitCode = FLAGGED_EXIT_CODE;
+      else if (result.incomplete) process.exitCode = INCOMPLETE_EXIT_CODE;
     } catch (error2) {
       process.stderr.write(
         `commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
@@ -25280,12 +25351,19 @@ var createServer = (opts = {}) => {
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, "proposal");
       const path2 = pathArg(root, args);
-      const matches = guard({
+      const result = guard({
         proposal,
         cwd: root,
         ...path2 === void 0 ? {} : { paths: [path2] }
       });
-      return asText({ proposal_checked: true, threshold: DEFAULT_THRESHOLD, matched: matches });
+      return asText({
+        proposal_checked: !result.incomplete,
+        threshold: DEFAULT_THRESHOLD,
+        history: result.history,
+        notes: result.notes,
+        incomplete: result.incomplete,
+        matched: result.matches.map(renderGuardMatch)
+      });
     }
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));

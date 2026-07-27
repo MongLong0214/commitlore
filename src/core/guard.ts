@@ -77,11 +77,20 @@
  */
 
 import { normalizeForMatch } from './grade.js';
-import { RULED_OUT_KEY, runQuery, valuesOf, type GradedRecord } from './query.js';
+import type { HistoryAvailability } from './git.js';
+import type { NotesAvailability } from './notes.js';
+import {
+  RULED_OUT_KEY,
+  runQuery,
+  valuesOf,
+  type GradedRecord,
+  type TrustGrade,
+} from './query.js';
 
 export interface GuardMatch {
   recordId?: string;
   sha: string;
+  trust: TrustGrade;
   /** The alternative half of the `Ruled-out:` value — everything before the `|`. */
   alternative: string;
   /**
@@ -94,6 +103,62 @@ export interface GuardMatch {
   /** What hit, in a fixed order: the record id, then keywords, then the Jaccard value. */
   signals: string[];
 }
+
+export interface GuardResult {
+  matches: GuardMatch[];
+  /** Whether the check could actually be performed. */
+  history: HistoryAvailability;
+  notes: NotesAvailability;
+  /** True when history is 'unavailable' or notes is 'unfetched'. */
+  incomplete: boolean;
+}
+
+interface RenderedGuardMatchIdentity {
+  recordId: string | null;
+  sha: string;
+  score: number;
+  signals: string[];
+}
+
+export type RenderedGuardMatch =
+  | (RenderedGuardMatchIdentity & {
+      trust: 'blocked';
+      withheld: string;
+    })
+  | (RenderedGuardMatchIdentity & {
+      trust: 'directive' | 'claim';
+      alternative: string;
+      reason: string;
+    });
+
+const BLOCKED_RECORD_WITHHELD =
+  'Record content was withheld because it matched an injection pattern.';
+
+/**
+ * The raw blocked content remains available to trusted program logic, while
+ * every output surface receives a shape that cannot quote it accidentally.
+ */
+export const renderGuardMatch = (match: GuardMatch): RenderedGuardMatch => {
+  const identity = {
+    recordId: match.recordId ?? null,
+    sha: match.sha,
+    score: match.score,
+    signals: [...match.signals],
+  };
+
+  switch (match.trust) {
+    case 'blocked':
+      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+    case 'claim':
+    case 'directive':
+      return {
+        ...identity,
+        trust: match.trust,
+        alternative: match.alternative,
+        reason: match.reason,
+      };
+  }
+};
 
 export interface GuardOptions {
   proposal: string;
@@ -561,6 +626,7 @@ const matchOne = (
 
   return {
     sha: record.sha,
+    trust: record.trust ?? 'claim',
     alternative: parsed.alternative,
     reason: parsed.reason,
     score,
@@ -578,19 +644,14 @@ const matchOne = (
  * rejection, and a rejection that no longer holds must not block anything — and
  * the `--at` replay. Guard adds matching and nothing else.
  *
- * The query's own diagnostics are not returned: the ticket fixes this signature
- * at `GuardMatch[]`, and the one diagnostic that changes what an empty answer
- * means — several paths, so renames were not followed — is a property of the
- * caller's own arguments, which `commands/guard.ts` reports without asking.
+ * Availability now travels with the matches because an empty result is only
+ * actionable when git history was readable and the notes mirror was fetched.
+ * The command still owns path-scope caveats because they derive from its input.
  */
-export const guard = (opts: GuardOptions): GuardMatch[] => {
+export const guard = (opts: GuardOptions): GuardResult => {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   const proposal = tokenize(opts.proposal);
   const ids = recordIdsIn(opts.proposal);
-
-  // An empty proposal names nothing. Running the query to prove it would make
-  // the no-op case the slowest one on a hook that fires constantly.
-  if (proposal.stems.size === 0 && ids.size === 0) return [];
 
   const result = runQuery({
     keys: [RULED_OUT_KEY],
@@ -599,6 +660,15 @@ export const guard = (opts: GuardOptions): GuardMatch[] => {
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
     ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
   });
+  const availability = {
+    history: result.history,
+    notes: result.notes,
+    incomplete: result.history === 'unavailable' || result.notes === 'unfetched',
+  };
+
+  if (proposal.stems.size === 0 && ids.size === 0) {
+    return { matches: [], ...availability };
+  }
 
   // Two passes, because the weight of a token is a property of the corpus:
   // every alternative is parsed and tokenized first, then scored against
@@ -618,8 +688,11 @@ export const guard = (opts: GuardOptions): GuardMatch[] => {
 
   const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
 
-  return candidates
-    .map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false))
-    .filter((match): match is GuardMatch => match !== null && match.score >= threshold)
-    .sort(compareMatches);
+  return {
+    matches: candidates
+      .map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false))
+      .filter((match): match is GuardMatch => match !== null && match.score >= threshold)
+      .sort(compareMatches),
+    ...availability,
+  };
 };

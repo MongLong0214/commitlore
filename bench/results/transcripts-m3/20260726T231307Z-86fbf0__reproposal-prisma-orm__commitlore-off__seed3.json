@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-prisma-orm",
+  "cond": "commitlore-off",
+  "seed": 3,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I can see you're using raw `pg` queries with no type safety. Given your incident pattern and that you prefer hand-written SQL, I recommend **using `@databases/pg`** with schema introspection — it gives you type-safe SQL at compile time while keeping the raw SQL style you prefer.\n\nHere's the approach:\n\n1. **Introspect the live database schema** to generate TypeScript type definitions for each table\n2. **Replace raw SQL strings with tagged template literals** (`sql\\`SELECT ...\\``) that TypeScript validates against the schema\n3. **Build-time type checking** catches column renames before they ship\n\nThis requires minimal refactoring — you update query calls from `pool.query(\"SELECT...\")` to `db.query(sql\\`SELECT...\\`)` — and integrates with your existing `pg` pool.\n\nThe catch: if you have 9 tables landing this quarter, you either need to:\n- **Regenerate types after each migration** (via a pre-commit hook or CI step), or\n- **Use Drizzle ORM's introspection** if you want automatic schema tracking in code\n\nBefore I implement, which fits better?\n\n- **Option 1 (recommended)**: @databases/pg + schema codegen. You write raw SQL in type-safe template literals. After each schema migration, re-run codegen (one command). Builds fail if you reference old columns.\n  \n- **Option 2**: Migrate to Drizzle ORM. Schema lives as code, you get a query builder with full type safety. More refactoring upfront but no separate codegen step.\n\nWhich direction should I go?",
+  "diff": "",
+  "commits": ""
+}

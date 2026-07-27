@@ -60,7 +60,7 @@ import {
 
 import { toJson, type JsonOutput } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
-import { DEFAULT_THRESHOLD, guard } from '../core/guard.js';
+import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, type QueryResult } from '../core/query.js';
 import { BOOKKEEPING_KEYS } from '../core/types.js';
 
@@ -389,15 +389,21 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, 'proposal');
       const path = pathArg(root, args);
-      const matches = guard({
+      const result = guard({
         proposal,
         cwd: root,
         ...(path === undefined ? {} : { paths: [path] }),
       });
-      // No match is an answer, not an absence: an agent that gets nothing back
-      // should be able to tell "checked, nothing ruled this out" from "the
-      // check did not run".
-      return asText({ proposal_checked: true, threshold: DEFAULT_THRESHOLD, matched: matches });
+      // Empty matches are approval only when the availability fields say the
+      // repository and its notes were actually checked.
+      return asText({
+        proposal_checked: !result.incomplete,
+        threshold: DEFAULT_THRESHOLD,
+        history: result.history,
+        notes: result.notes,
+        incomplete: result.incomplete,
+        matched: result.matches.map(renderGuardMatch),
+      });
     },
   };
 

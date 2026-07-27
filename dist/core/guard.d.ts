@@ -75,9 +75,13 @@
  * All three are the honest limit of lexical matching, and the reason `guard`
  * warns rather than blocks.
  */
+import type { HistoryAvailability } from './git.js';
+import type { NotesAvailability } from './notes.js';
+import { type TrustGrade } from './query.js';
 export interface GuardMatch {
     recordId?: string;
     sha: string;
+    trust: TrustGrade;
     /** The alternative half of the `Ruled-out:` value — everything before the `|`. */
     alternative: string;
     /**
@@ -90,6 +94,33 @@ export interface GuardMatch {
     /** What hit, in a fixed order: the record id, then keywords, then the Jaccard value. */
     signals: string[];
 }
+export interface GuardResult {
+    matches: GuardMatch[];
+    /** Whether the check could actually be performed. */
+    history: HistoryAvailability;
+    notes: NotesAvailability;
+    /** True when history is 'unavailable' or notes is 'unfetched'. */
+    incomplete: boolean;
+}
+interface RenderedGuardMatchIdentity {
+    recordId: string | null;
+    sha: string;
+    score: number;
+    signals: string[];
+}
+export type RenderedGuardMatch = (RenderedGuardMatchIdentity & {
+    trust: 'blocked';
+    withheld: string;
+}) | (RenderedGuardMatchIdentity & {
+    trust: 'directive' | 'claim';
+    alternative: string;
+    reason: string;
+});
+/**
+ * The raw blocked content remains available to trusted program logic, while
+ * every output surface receives a shape that cannot quote it accidentally.
+ */
+export declare const renderGuardMatch: (match: GuardMatch) => RenderedGuardMatch;
 export interface GuardOptions {
     proposal: string;
     paths?: readonly string[];
@@ -195,9 +226,9 @@ export declare const DEFAULT_THRESHOLD = 0.35;
  * rejection, and a rejection that no longer holds must not block anything — and
  * the `--at` replay. Guard adds matching and nothing else.
  *
- * The query's own diagnostics are not returned: the ticket fixes this signature
- * at `GuardMatch[]`, and the one diagnostic that changes what an empty answer
- * means — several paths, so renames were not followed — is a property of the
- * caller's own arguments, which `commands/guard.ts` reports without asking.
+ * Availability now travels with the matches because an empty result is only
+ * actionable when git history was readable and the notes mirror was fetched.
+ * The command still owns path-scope caveats because they derive from its input.
  */
-export declare const guard: (opts: GuardOptions) => GuardMatch[];
+export declare const guard: (opts: GuardOptions) => GuardResult;
+export {};
