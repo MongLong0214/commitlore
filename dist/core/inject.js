@@ -62,7 +62,7 @@ import { createHash } from 'node:crypto';
 import { execGit } from './git.js';
 import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from './query.js';
-import { BOOKKEEPING_KEYS } from './types.js';
+import { INJECT_OMITTED_KEYS } from './types.js';
 const NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 const resolveAblation = (flags) => flags === undefined
     ? NO_ABLATION
@@ -265,7 +265,7 @@ const project = (records, grades) => {
         const grade = grades.get(identity);
         if (grade === undefined)
             continue;
-        const payload = record.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key));
+        const payload = record.trailers.filter((trailer) => !INJECT_OMITTED_KEYS.has(trailer.key));
         if (payload.length === 0)
             continue;
         // The content of a blocked record is the attack. Only the fact is reported.

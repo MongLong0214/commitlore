@@ -70,7 +70,7 @@ import {
   runQuery,
   type GradedRecord,
 } from './query.js';
-import { BOOKKEEPING_KEYS, type Trailer } from './types.js';
+import { INJECT_OMITTED_KEYS, type Trailer } from './types.js';
 
 /**
  * The three guarantees of this module, individually removable.
@@ -185,7 +185,7 @@ export interface Injection {
    * Trailer values that did not reach the payload, in the same unit as
    * `included`: every value of a `blocked` record, plus every value the budget
    * cut. `included + omitted` is every *injectable* value the path's active
-   * records carry — the bookkeeping keys of `BOOKKEEPING_KEYS` are never
+   * records carry — the keys in `INJECT_OMITTED_KEYS` are never
    * candidates and are counted in neither.
    */
   omitted: number;
@@ -473,7 +473,7 @@ const project = (
     const grade = grades.get(identity);
     if (grade === undefined) continue;
 
-    const payload = record.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key));
+    const payload = record.trailers.filter((trailer) => !INJECT_OMITTED_KEYS.has(trailer.key));
     if (payload.length === 0) continue;
 
     // The content of a blocked record is the attack. Only the fact is reported.

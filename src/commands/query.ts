@@ -31,7 +31,7 @@ import {
   type QueryResult,
   type TrustGrade,
 } from '../core/query.js';
-import { BOOKKEEPING_KEYS, type Lifecycle, type Trailer } from '../core/types.js';
+import { STRUCTURAL_TRAILER_KEYS, type Lifecycle, type Trailer } from '../core/types.js';
 
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
@@ -71,11 +71,13 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
           withheldTrailerKeys: [
             ...new Set(
               record.trailers
-                .filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key))
+                .filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key))
                 .map((trailer) => trailer.key),
             ),
           ],
-          trailers: record.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key)),
+          trailers: record.trailers.filter((trailer) =>
+            STRUCTURAL_TRAILER_KEYS.has(trailer.key),
+          ),
         },
   );
 

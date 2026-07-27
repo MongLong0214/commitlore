@@ -22,7 +22,7 @@
  * depend on recognising the attack at all.
  */
 import { type StaleRecord } from './stale.js';
-import type { Lifecycle, Provenance, Record } from './types.js';
+import { type Lifecycle, type Provenance, type Record } from './types.js';
 /** How a record's `Warn:` may be delivered. */
 export type Trust = 'directive' | 'claim' | 'blocked';
 export declare const BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";

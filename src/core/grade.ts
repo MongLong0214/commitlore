@@ -24,7 +24,13 @@
 
 import { execGit } from './git.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
-import type { Lifecycle, Provenance, Record, Trailer } from './types.js';
+import {
+  STRUCTURAL_TRAILER_KEYS,
+  type Lifecycle,
+  type Provenance,
+  type Record,
+  type Trailer,
+} from './types.js';
 
 const PROVENANCE_KEY = 'Provenance';
 
@@ -394,18 +400,6 @@ export const scanInjection = (text: string): string[] => {
 
 const trailerValues = (trailers: Trailer[], key: string): string[] =>
   trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-
-// An allow-list would reopen the bug as the vocabulary grows; exclusion scans new prose by default.
-const STRUCTURAL_TRAILER_KEYS: ReadonlySet<string> = new Set([
-  'Blast',
-  'Undo',
-  'Certainty',
-  'Record-Id',
-  'Follows',
-  'Supersedes',
-  PROVENANCE_KEY,
-  'CommitLore-Version',
-]);
 
 const scanRecord = (record: Record): { patterns: string[]; keys: string[] } => {
   const matchedPatterns = new Set<string>();

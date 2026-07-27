@@ -11199,7 +11199,17 @@ var SINGLE_VALUED = /* @__PURE__ */ new Set([
   "Provenance",
   "CommitLore-Version"
 ]);
-var BOOKKEEPING_KEYS = /* @__PURE__ */ new Set([
+var STRUCTURAL_TRAILER_KEYS = /* @__PURE__ */ new Set([
+  "Blast",
+  "Undo",
+  "Certainty",
+  "Record-Id",
+  "Supersedes",
+  "Follows",
+  "Provenance",
+  "CommitLore-Version"
+]);
+var INJECT_OMITTED_KEYS = /* @__PURE__ */ new Set([
   "Record-Id",
   "Supersedes",
   "Follows",
@@ -14215,16 +14225,6 @@ var scanInjection = (text) => {
   return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-var STRUCTURAL_TRAILER_KEYS = /* @__PURE__ */ new Set([
-  "Blast",
-  "Undo",
-  "Certainty",
-  "Record-Id",
-  "Follows",
-  "Supersedes",
-  PROVENANCE_KEY,
-  "CommitLore-Version"
-]);
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
@@ -15782,7 +15782,7 @@ var project = (records, grades) => {
     const identity = record2.recordId ?? `${record2.sha}:${record2.source}`;
     const grade2 = grades.get(identity);
     if (grade2 === void 0) continue;
-    const payload = record2.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key));
+    const payload = record2.trailers.filter((trailer) => !INJECT_OMITTED_KEYS.has(trailer.key));
     if (payload.length === 0) continue;
     if (grade2.trust === "blocked") {
       withheldValues += payload.length;
@@ -24980,10 +24980,12 @@ var withholdBlocked = (result) => {
       ...record2,
       withheldTrailerKeys: [
         ...new Set(
-          record2.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key)).map((trailer) => trailer.key)
+          record2.trailers.filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key)).map((trailer) => trailer.key)
         )
       ],
-      trailers: record2.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key))
+      trailers: record2.trailers.filter(
+        (trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key)
+      )
     }
   );
   return {
