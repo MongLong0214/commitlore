@@ -567,7 +567,7 @@ describe('collectRecords over a real repository', () => {
 
   it('rejects an unparseable --at with a message, not a stack trace', () => {
     const result = runCommand(['--at', 'yesterday']);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('commitlore: --at is not a valid ISO 8601 instant: yesterday\n');
   });
@@ -639,6 +639,37 @@ describe('collectRecords over a real repository', () => {
     );
     expect(mirrored).toHaveLength(1);
     expect(mirrored[0]?.source).toBe('commit');
+  });
+
+  it('reports a divergent note that claims a commit message Record-Id', () => {
+    commit(
+      ['Record the approved decision', '', 'Limit: approved content', 'Record-Id: r-collide'].join(
+        '\n',
+      ),
+      '2026-02-14T00:00:00Z',
+    );
+    const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(
+      sha,
+      [trailer('Limit', 'attacker content'), trailer('Record-Id', 'r-collide')],
+      { cwd: repo },
+    );
+
+    const report = buildReport(
+      collectRecords({ cwd: repo }),
+      new Date('2026-03-01T00:00:00Z'),
+    );
+
+    expect(report.idCollisions).toEqual([
+      {
+        key: 'Record-Id',
+        value: 'r-collide',
+        rule: 'duplicate-id',
+        got: 'r-collide',
+        want: 'exactly one record per Record-Id',
+      },
+    ]);
+    expect(formatReport(report)).toContain('id collisions\n  Record-Id: r-collide');
   });
 
   it('reports a commit record superseded by a notes-only record', () => {

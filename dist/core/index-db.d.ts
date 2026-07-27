@@ -50,9 +50,9 @@
  * applied on top of it, and it is used only where trigram LIKE is exactly
  * substring matching (printable ASCII, >= 3 characters, no LIKE wildcards).
  */
-import type * as BetterSqlite3 from 'better-sqlite3';
+import type { DatabaseSync } from 'node:sqlite';
 import type { Trailer } from './types.js';
-export type IndexDatabase = BetterSqlite3.Database;
+export type IndexDatabase = DatabaseSync;
 /**
  * Bumped whenever the table shape changes. A mismatch is not an error: the
  * index is derived, so the old file is deleted and rebuilt (ADR-0003). Without

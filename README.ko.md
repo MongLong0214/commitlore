@@ -30,7 +30,7 @@ CommitLore는 결정 맥락을 Git 커밋 trailer와 `refs/notes/commitlore`에 
 
 - **기록은 일반적인 Git 워크플로우를 견딘다.** 커밋 trailer와 notes 미러는 [rebase와 squash](test/squash.test.ts), [히스토리 재작성과 원격 전달](test/notes.test.ts), [한 단계·여러 단계 rename](test/follow.test.ts)에서 검증된다.
 - **신뢰는 모든 라우트에서 같은 뜻이다.** 쿼리 출력, CLI 주입, 편집 훅, MCP 도구, guard는 모두 `directive | claim | blocked` 등급을 공유한다. 라우트 검사는 [`query.test.ts`](test/query.test.ts), [`inject.test.ts`](test/inject.test.ts), [`mcp.test.ts`](test/mcp.test.ts), [`guard.test.ts`](test/guard.test.ts)에 있다.
-- **인젝션 형태의 기록은 산문으로 모델에 전달되지 않는다.** 자유 서술 trailer 하나라도 인젝션 패턴과 일치하면 기록 전체가 `blocked` 등급을 받는다. 모델이 읽는 라우트는 내용을 인용하지 않고 보류 사실만 알린다. CLI·훅은 [`inject.test.ts`](test/inject.test.ts), MCP의 동일한 응답은 [`mcp.test.ts`](test/mcp.test.ts)가 검증한다.
+- **내장 인젝션 스캐너와 일치한 기록은 산문으로 모델에 전달되지 않는다.** 자유 서술 trailer 하나라도 일치하면 기록 전체가 `blocked` 등급을 받으며, 모델이 읽는 라우트는 내용을 인용하지 않고 보류 사실만 알린다. 이 결정적 어휘 필터의 결과는 실제 탐지율 주장이 아니다. [패턴 작성자가 만든 corpus, 독립 작성 corpus, 무해한 corpus](spec/fixtures/injection/README.md)는 따로 보고한다. CLI·훅은 [`inject.test.ts`](test/inject.test.ts), MCP의 동일한 응답은 [`mcp.test.ts`](test/mcp.test.ts)가 검증한다.
 - **알 수 없음과 비어 있음은 다르다.** 읽을 수 있는 빈 저장소에서 guard는 `0`으로 종료한다. 고장 난 Git은 `history: unavailable`, 가져오지 않은 notes 미러는 `notes: unfetched`로 보고한다. 두 불완전한 검사는 모두 `3`으로 종료한다. 계약은 [`notes-availability.test.ts`](test/notes-availability.test.ts), [`guard.test.ts`](test/guard.test.ts), [`RELEASE-GATE`](docs/RELEASE-GATE.md)에 고정돼 있다.
 
 ## 기록 하나
@@ -107,10 +107,20 @@ CommitLore 레지스트리 패키지는 없다. 배포 채널은 Git 저장소 �
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-커밋된 번들은 빌드 없이 실행된다. 단, 네이티브 `better-sqlite3` 모듈은 번들에 들어 있지 않으므로 clone만으로는 SQLite 인덱스를 열 수 없다. `--no-index`로 Git을 직접 스캔하거나 clone 안에서 `npm install`을 실행해 현재 인덱스를 활성화한다. 네이티브 모듈 제거 결정은 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)에 기록돼 있다.
+커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
+
+## GitHub Actions
+
+query, guard 또는 inject 명령을 실행하는 job은 전체 history를 받아야 한다.
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
 

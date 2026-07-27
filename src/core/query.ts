@@ -44,7 +44,13 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 
-import { execGit, historyAvailability, type HistoryAvailability } from './git.js';
+import {
+  execGit,
+  hasShallowHistory,
+  historyAvailability,
+  SHALLOW_HISTORY_CAVEAT,
+  type HistoryAvailability,
+} from './git.js';
 import {
   closeIndex,
   ensureIndex,
@@ -56,7 +62,12 @@ import {
 } from './index-db.js';
 import { authorsOf, gradeRecord, restrictGrade, type Grade } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
-import { foldLifecycle, type RecordState, type StaleRecord } from './stale.js';
+import {
+  findIdCollisions,
+  foldLifecycle,
+  type RecordState,
+  type StaleRecord,
+} from './stale.js';
 import {
   SINGLE_VALUED,
   type Lifecycle,
@@ -144,6 +155,7 @@ export interface GradedRecord extends Record {
   /** The `Provenance:` value verbatim, when the record carried one. */
   provenanceValue?: string;
   trust?: TrustGrade;
+  identityCollision?: boolean;
   matchedTrailerKeys?: string[];
   /** Payload key names retained only so a redacted record remains visible in its sections. */
   withheldTrailerKeys?: string[];
@@ -175,6 +187,7 @@ export interface QueryResult {
    * and return `[]`, so a broken git produced "no constraints" with exit 0.
    */
   history: HistoryAvailability;
+  shallow: boolean;
   /**
    * Whether the notes mirror could be read here, and if not, why.
    *
@@ -622,6 +635,7 @@ const mergeByIdentity = (
     const recordId = trailerValue(trailers, RECORD_ID_KEY);
     const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
     const provenance = parseProvenance(provenanceValue);
+    const identityCollision = findIdCollisions(ordered).length > 0;
 
     merged.push({
       trailers,
@@ -640,6 +654,7 @@ const mergeByIdentity = (
       ...(recordId === undefined ? {} : { recordId }),
       ...(provenance === undefined ? {} : { provenance }),
       ...(provenanceValue === undefined ? {} : { provenanceValue }),
+      ...(identityCollision ? { identityCollision: true } : {}),
       ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
       ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
     });
@@ -700,6 +715,11 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       .sort(compareRecords);
     // After the filters, so the one `git show` prices only the records that survive.
     gradeMerged(records, cwd, at, opts.trustedAuthors);
+    for (const record of records) {
+      if (record.identityCollision !== true) continue;
+      record.trust = 'blocked';
+      record.matchedTrailerKeys = [RECORD_ID_KEY];
+    }
 
     // Config only — no network. Cheap enough to run on every answer, and the
     // answer it qualifies is the empty one, which is the answer nobody inspects.
@@ -710,6 +730,9 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
           'treat it as unknown, not as empty',
       );
     }
+
+    const shallow = hasShallowHistory(cwd);
+    if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
 
     const notes = notesAvailability({ cwd });
     if (notes === 'unfetched') {
@@ -730,6 +753,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       aliases: scope.aliases,
       follow: scope.follow,
       history,
+      shallow,
       notes,
       diagnostics,
     };

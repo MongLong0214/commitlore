@@ -23,6 +23,7 @@ export interface CollectOptions {
     cwd?: string;
     /** Read the whole reachable history instead of the most recent commits. */
     allHistory?: boolean;
+    revision?: string;
 }
 type RecordSource = NonNullable<StaleRecord['source']>;
 type CollectedRecord = StaleRecord & {
@@ -56,6 +57,7 @@ export interface StaleReport {
     /** The stale ones: superseded, expired, or flagged for review. */
     records: StaleReportRecord[];
     danglingRefs: Violation[];
+    idCollisions: Violation[];
 }
 export declare const buildReport: (scan: Scan, at: Date) => StaleReport;
 export declare const formatReport: (report: StaleReport) => string;
@@ -63,6 +65,9 @@ export declare const formatReport: (report: StaleReport) => string;
  * Exit status stays 0 even with findings: `stale` reports, it does not gate.
  * The non-zero exit of SPEC §6 belongs to `commitlore validate`; a caller that
  * wants CI to fail on a dangling reference reads `danglingRefs` from `--json`.
+ * The only non-zero code `stale` uses is 2, for a usage error -- an
+ * unparseable `--at`, or git unable to answer at all (SPEC §10: neither is a
+ * finding).
  */
 export declare const register: (program: Command) => void;
 export {};

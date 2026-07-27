@@ -43,11 +43,11 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
-import { execGit, historyAvailability } from './git.js';
+import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
-import { foldLifecycle } from './stale.js';
+import { findIdCollisions, foldLifecycle, } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
@@ -442,6 +442,7 @@ const mergeByIdentity = (records, states) => {
         const recordId = trailerValue(trailers, RECORD_ID_KEY);
         const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
         const provenance = parseProvenance(provenanceValue);
+        const identityCollision = findIdCollisions(ordered).length > 0;
         merged.push({
             trailers,
             sha: latest.sha,
@@ -459,6 +460,7 @@ const mergeByIdentity = (records, states) => {
             ...(recordId === undefined ? {} : { recordId }),
             ...(provenance === undefined ? {} : { provenance }),
             ...(provenanceValue === undefined ? {} : { provenanceValue }),
+            ...(identityCollision ? { identityCollision: true } : {}),
             ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
             ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
         });
@@ -513,6 +515,12 @@ export const runQuery = (opts = {}) => {
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
         gradeMerged(records, cwd, at, opts.trustedAuthors);
+        for (const record of records) {
+            if (record.identityCollision !== true)
+                continue;
+            record.trust = 'blocked';
+            record.matchedTrailerKeys = [RECORD_ID_KEY];
+        }
         // Config only — no network. Cheap enough to run on every answer, and the
         // answer it qualifies is the empty one, which is the answer nobody inspects.
         const history = historyAvailability(cwd);
@@ -520,6 +528,9 @@ export const runQuery = (opts = {}) => {
             diagnostics.push('git could not read this repository, so this is not an answer about its contents — ' +
                 'treat it as unknown, not as empty');
         }
+        const shallow = hasShallowHistory(cwd);
+        if (shallow)
+            diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
         const notes = notesAvailability({ cwd });
         if (notes === 'unfetched') {
             diagnostics.push('the notes mirror has not been fetched here, so this answer may be missing records ' +
@@ -535,6 +546,7 @@ export const runQuery = (opts = {}) => {
             aliases: scope.aliases,
             follow: scope.follow,
             history,
+            shallow,
             notes,
             diagnostics,
         };

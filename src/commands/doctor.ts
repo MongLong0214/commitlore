@@ -19,16 +19,17 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { execGit } from '../core/git.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
 import {
   describeRecordedHookTarget,
+  hasAllowedBinExtension,
   readRecordedHookTarget,
 } from '../core/hook-target.js';
-import { installedPath } from '../core/paths.js';
+import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import {
   NOTES_REF,
@@ -38,6 +39,8 @@ import {
   fetchRefspecs,
 } from '../core/notes.js';
 import { parseCommitMessage } from '../core/trailers.js';
+import { runQuery } from '../core/query.js';
+import { claudeSettingsPath, readClaudeHookStatus } from '../hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
 
 /**
@@ -60,7 +63,7 @@ export interface DoctorCheck {
 
 export interface DoctorReport {
   checks: DoctorCheck[];
-  /** 0 unless some check is `fail` — warnings do not fail the command. */
+  /** 0 unless some check is `fail` — warnings do not fail the command (SPEC §10: 1 is a finding). */
   exitCode: number;
 }
 
@@ -72,6 +75,8 @@ export interface DoctorOptions {
 
 /** Probe message for the git capability check — one trailer of each shape. */
 const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
+const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 
 const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
 
@@ -98,22 +103,25 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
-  let missing = remotes.filter(
-    (remote) => !fetchRefspecs(remote, opts).some(coversNotes),
-  );
+  let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   let fixed = false;
 
-  if (missing.length > 0 && opts.fix === true) {
-    const applied: string[] = [];
-    for (const remote of missing) {
-      const result = execGit(
-        ['config', '--add', `remote.${remote}.fetch`, NOTES_REFSPEC],
-        gitOptions(opts),
-      );
-      if (result.code === 0) applied.push(remote);
+  if (opts.fix === true) {
+    for (const remote of remotes) {
+      const key = `remote.${remote}.fetch`;
+      const configured = fetchRefspecs(remote, opts);
+      if (configured.includes(EXACT_NOTES_REFSPEC)) {
+        const replaced = execGit(
+          ['config', '--replace-all', key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
+          gitOptions(opts),
+        );
+        fixed = replaced.code === 0 || fixed;
+      } else if (!configured.some(coversNotes)) {
+        const added = execGit(['config', '--add', key, NOTES_REFSPEC], gitOptions(opts));
+        fixed = added.code === 0 || fixed;
+      }
     }
-    fixed = applied.length > 0;
-    missing = missing.filter((remote) => !applied.includes(remote));
+    missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   }
 
   if (missing.length > 0) {
@@ -126,18 +134,31 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
+  const failed = remotes
+    .map((remote) => ({ remote, result: execGit(['fetch', '--dry-run', remote], gitOptions(opts)) }))
+    .filter(({ result }) => result.code !== 0);
+  if (failed.length > 0) {
+    return check(
+      'notes-refspec',
+      title,
+      'warn',
+      `could not verify (${failed
+        .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
+        .join('; ')})`,
+      failed.map(({ remote }) => `git fetch ${remote}`).join('\n'),
+      fixed,
+    );
+  }
+
   return check(
     'notes-refspec',
     title,
     'ok',
-    `${remotes.join(', ')} ${remotes.length === 1 ? 'fetches' : 'fetch'} ${NOTES_REF}`,
+    `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`,
     null,
     fixed,
   );
 };
-
-const hasLocalNotes = (opts: DoctorOptions): boolean =>
-  execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts)).code === 0;
 
 /**
  * Pushing is never automatic: `git push` writes to a ref other people read,
@@ -148,14 +169,29 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? 'origin';
   const command = `git push ${remote} ${NOTES_REF}`;
+  const local = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
 
-  if (!hasLocalNotes(opts)) {
+  if (local.code !== 0) {
     return check(
       'notes-push',
       title,
       'ok',
       `no local mirror yet — nothing to push (${command}, once there is)`,
     );
+  }
+
+  const advertised = execGit(['ls-remote', remote, NOTES_REF], gitOptions(opts));
+  if (advertised.code !== 0) {
+    return check(
+      'notes-push',
+      title,
+      'warn',
+      `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
+      command,
+    );
+  }
+  if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
+    return check('notes-push', title, 'ok', `${remote} has the current ${NOTES_REF}`);
   }
 
   return check(
@@ -173,7 +209,7 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-const checkHook = (opts: DoctorOptions): DoctorCheck => {
+const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
   const title = 'commit-msg hook';
   const id = 'commit-msg-hook';
   const install = 'commitlore hooks install';
@@ -223,8 +259,24 @@ const checkHook = (opts: DoctorOptions): DoctorCheck => {
 
   const problems = [
     ...target.problems,
-    ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+    ...(override === undefined || override === ''
+      ? []
+      : hasAllowedBinExtension(override)
+        ? ['COMMITLORE_BIN override is active']
+        : [
+            'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
+              'ignores it and falls through to the remaining resolution steps',
+          ]),
   ];
+  if (runtime.status !== 'ok') {
+    return check(
+      id,
+      title,
+      runtime.status,
+      `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`,
+      install,
+    );
+  }
   return problems.length === 0
     ? check(id, title, 'ok', `installed at ${path}; ${targetDetail}`)
     : check(id, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
@@ -385,6 +437,82 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
   }
 };
 
+const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
+  const title = 'PreToolUse hook runtime';
+  const id = 'inject-runtime';
+  const fix = 'commitlore inject install-claude-hook';
+  const cwd = opts.cwd ?? process.cwd();
+  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
+
+  if (settings.state !== 'installed') {
+    const detail =
+      settings.state === 'absent'
+        ? `not installed in ${settings.settingsPath}`
+        : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
+    return check(id, title, 'warn', detail, fix);
+  }
+
+  const path = runQuery({ cwd, noIndex: true }).records
+    .flatMap((record) => record.paths)
+    .find((candidate) => candidate !== '' && candidate !== '.');
+  if (path === undefined) {
+    return check(id, title, 'skipped', 'no recorded path is available for a runtime probe');
+  }
+
+  const configuredRoot = process.env['CLAUDE_PLUGIN_ROOT'];
+  const pluginRoot =
+    configuredRoot === undefined || configuredRoot === ''
+      ? PACKAGE_ROOT
+      : resolve(process.cwd(), configuredRoot);
+  const payload = JSON.stringify({
+    session_id: 'commitlore-doctor',
+    cwd,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Edit',
+    tool_input: { file_path: resolve(cwd, path) },
+  });
+  const run = spawnSync(
+    '/bin/bash',
+    [installedPath('scripts/commitlore-run.sh'), 'inject', '--hook-input'],
+    {
+      shell: false,
+      encoding: 'utf8',
+      cwd,
+      input: payload,
+      env: {
+        PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+        HOME: process.env['HOME'] ?? '',
+        CLAUDE_PLUGIN_ROOT: pluginRoot,
+      },
+    },
+  );
+
+  if (run.error !== undefined) {
+    return check(id, title, 'fail', `could not run the PreToolUse hook: ${run.error.message}`, fix);
+  }
+  if (run.status !== 0) {
+    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+    return check(
+      id,
+      title,
+      'fail',
+      `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`,
+      fix,
+    );
+  }
+  if (`${run.stdout ?? ''}`.trim() === '') {
+    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+    return check(
+      id,
+      title,
+      'fail',
+      `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`,
+      fix,
+    );
+  }
+  return check(id, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+};
+
 const checkIndex = (opts: DoctorOptions): DoctorCheck => {
   const cwd = opts.cwd ?? process.cwd();
   let handle;
@@ -435,14 +563,28 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
   }
 };
 
+const checkHistoryDepth = (opts: DoctorOptions): DoctorCheck =>
+  hasShallowHistory(opts.cwd ?? process.cwd())
+    ? check(
+        'history-depth',
+        'history depth',
+        'warn',
+        'this clone has shallow history, so queries may be missing records that exist upstream',
+        'git fetch --unshallow',
+      )
+    : check('history-depth', 'history depth', 'ok', 'full history is available');
+
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
+  const hookRuntime = checkHookRuntime(opts);
   const checks = [
     checkRuntime(opts),
     checkRefspec(opts),
     checkPush(opts),
-    checkHook(opts),
-    checkHookRuntime(opts),
+    checkHook(opts, hookRuntime),
+    hookRuntime,
+    checkInjectRuntime(opts),
     checkGit(opts),
+    checkHistoryDepth(opts),
     checkIndex(opts),
   ];
   return {
@@ -472,6 +614,7 @@ export const register = (program: Command): void => {
     .description('check that this repository can carry and share CommitLore records')
     .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
     .option('--json', 'emit the report as JSON')
+    .addHelpText('after', '\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC §10).')
     .action((options: { fix?: boolean; json?: boolean }) => {
       const report = runDoctor({ fix: options.fix === true });
       process.stdout.write(

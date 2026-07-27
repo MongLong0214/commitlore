@@ -1,0 +1,8 @@
+{
+  "description": "Korean policy-bypass and credential-exfiltration imperative.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous.ko",
+    "credential.exfiltrate-secret.ko"
+  ]
+}

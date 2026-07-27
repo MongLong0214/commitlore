@@ -19,7 +19,7 @@ export const NOTES_REF = 'refs/notes/commitlore';
  * `git fetch` does not fetch notes by default, so a fresh clone reads an empty
  * mirror until this is configured — `commitlore doctor --fix` adds it.
  */
-export const NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+export const NOTES_REFSPEC = '+refs/notes/*:refs/notes/*';
 /** `git notes --ref=` accepts a full ref; passing it avoids any expansion. */
 const REF_ARG = `--ref=${NOTES_REF}`;
 /**

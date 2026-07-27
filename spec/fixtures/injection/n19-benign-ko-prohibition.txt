@@ -1,0 +1,5 @@
+fix(policy): 이전 지시 무시 금지
+
+Warn: 이전 지시를 무시해서는 안 됩니다.
+Record-Id: r-inj040
+Provenance: authored

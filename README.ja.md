@@ -30,7 +30,7 @@ CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/
 
 - **記録は通常の Git ワークフローを生き残ります。** コミット trailer と notes mirror は、[rebase と squash](test/squash.test.ts)、[履歴の書き換えと remote 間の転送](test/notes.test.ts)、[一段・多段の rename](test/follow.test.ts)でテストされています。
 - **信頼の意味は全ルートで共通です。** query 出力、CLI injection、編集 hook、MCP tool、guard は同じ `directive | claim | blocked` グレードを使います。ルート検証は [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts)、[`guard.test.ts`](test/guard.test.ts) にあります。
-- **インジェクション形式の記録は文章としてモデルへ届きません。** どれか一つの自由記述 trailer がインジェクションパターンに一致すると、その記録全体が `blocked` になります。モデルが読むルートは内容を引用せず、保留した事実だけを伝えます。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
+- **同梱のインジェクションスキャナーに一致した記録は、文章としてモデルへ届きません。** どれか一つの自由記述 trailer が一致すると、その記録全体が `blocked` になり、モデルが読むルートは内容を引用せず保留した事実だけを伝えます。この決定論的な語彙フィルターの結果は、実環境での検出率を示すものではありません。[パターン作成者による corpus、独立作成 corpus、無害 corpus](spec/fixtures/injection/README.md) は別々に報告します。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
 - **不明と空は別です。** 読み取り可能で記録がないリポジトリでは guard は `0` で終了します。壊れた Git は `history: unavailable`、未取得の notes mirror は `notes: unfetched` と報告します。どちらの不完全な検査も `3` で終了します。この契約は [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts)、[`RELEASE-GATE`](docs/RELEASE-GATE.md) に固定されています。
 
 ## 一つの記録
@@ -107,10 +107,20 @@ CommitLore の registry package はありません。配布チャネルは Git �
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-コミット済み bundle は build なしで動きます。ただし native module `better-sqlite3` は bundle に含まれないため、clone だけでは SQLite index を開けません。`--no-index` で Git を直接 scan するか、clone 内で `npm install` を実行して現在の index を有効にします。native module を外す決定は [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) に記録されています。
+コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
+
+## GitHub Actions
+
+query、guard、inject を実行する job は全 history を取得する必要があります。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 MCP client には同じ clone の entry point を登録します。
 

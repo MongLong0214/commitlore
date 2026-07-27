@@ -16,10 +16,11 @@
  * `core.hooksPath` can move the directory out of the repository entirely.
  */
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { PACKAGE_ROOT } from '../core/paths.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_MODE, HOOK_NAME, commitMsgStub, } from '../hooks/commit-msg.js';
 const messageOf = (error) => error instanceof Error ? error.message : String(error);
 const firstLine = (text) => (text.trim().split('\n')[0] ?? '').trim();
@@ -116,6 +117,22 @@ const recordBinPath = (cwd) => {
     // The interpreter as well: the branch that reads these back runs in a hook
     // whose PATH may not carry node, which is the whole reason it exists.
     execGit(['config', '--local', 'commitlore.node', process.execPath], { cwd });
+    // And the install root the stub trusts `commitlore.bin` to sit under. A
+    // `.git/config` edit made after this install (ADR-0011's threat model: the
+    // same permission that can write this key can write `.git/hooks` directly)
+    // can still repoint `commitlore.bin` at another `.js` file, but not at one
+    // outside here — the stub checks the recorded path against this root, not
+    // just its extension. `realpathSync` so the recorded value is comparable to
+    // the physical path the stub resolves with `cd ... && pwd -P`; best-effort
+    // like the rest of this function, so a failure here is swallowed rather than
+    // failing the install.
+    try {
+        execGit(['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)], { cwd });
+    }
+    catch {
+        // No root recorded means the stub's containment check cannot pass, which
+        // only narrows resolution to the remaining, still-safe fallback steps.
+    }
 };
 const describeChained = (status) => {
     if (!status.chained)
@@ -228,18 +245,21 @@ export const register = (program) => {
         .command('install')
         .description('install the commit-msg hook, preserving and chaining any existing one')
         .option('--force', 'replace an already preserved hook when a foreign hook is in the way')
+        .addHelpText('after', '\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC §10).')
         .action((flags) => {
         emit(installHook(flags.force === undefined ? {} : { force: flags.force }));
     });
     hooks
         .command('uninstall')
         .description('remove the commit-msg hook and restore the one it replaced')
+        .addHelpText('after', '\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC §10).')
         .action(() => {
         emit(uninstallHook());
     });
     hooks
         .command('status')
         .description('report what is installed in the hooks directory')
+        .addHelpText('after', '\nExit codes: 0 reported, 2 could not run -- no repository (SPEC §10).')
         .action(() => {
         emit(hookStatus());
     });

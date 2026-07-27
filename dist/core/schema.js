@@ -182,10 +182,9 @@ const cardinalityViolations = (trailers) => {
  * is well-formed (SPEC §4).
  *
  * Scope: this function sees one record and nothing else. It therefore never
- * reports `dangling-ref`, which asks whether a `Follows:`/`Supersedes:` target
- * exists elsewhere in history — a cross-record question owned by the stale
- * engine (T-205). A syntactically valid `Supersedes:` pointing at nothing is
- * clean here by design.
+ * reports the reference-class `dangling-ref` or `duplicate-id` violations.
+ * A syntactically valid `Supersedes:` pointing at nothing is clean here by
+ * design.
  */
 export const validateRecord = (trailers) => [...schemaViolations(trailers), ...cardinalityViolations(trailers)]
     .sort((a, b) => a.index - b.index)

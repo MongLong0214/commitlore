@@ -53,6 +53,7 @@ program
     .description('Parse a commit message into its CommitLore trailers (SPEC §2)')
     .option('--message-file <path>', 'read the message from a file instead of stdin')
     .option('--json', 'emit the parsed trailers as JSON')
+    .addHelpText('after', '\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read.')
     .action((options) => {
     runParse(options);
 });
@@ -70,19 +71,22 @@ registerInject(program);
 registerBackfill(program);
 registerMcp(program);
 /**
- * Exit codes are a contract here: 0 clean, 1 the check found something, 2 the
- * invocation was wrong. Hooks and CI branch on them, and every command already
+ * Exit codes are a protocol property, not a per-command habit (SPEC §10): 0
+ * clean, 1 the check found something, 2 the invocation was wrong, 3 answered
+ * from an incomplete view. Hooks and CI branch on them, and every command
  * follows it -- `validate` returns 2 for mutually exclusive input flags, for
  * one. Commander's own parse failures default to 1, which would make an
- * unknown flag indistinguishable from a real finding, so they are mapped here.
+ * unknown flag indistinguishable from a real finding, so they are mapped here
+ * to 2: the invocation was wrong, not a finding.
  *
  * `--help` and `--version` also arrive as exceptions; those are a successful
  * invocation and exit 0.
  *
- * One overload is deliberate and worth knowing about: `guard` uses 2 for "a
- * ruled-out alternative matched", so a usage error there is indistinguishable
- * from a warning. That resolves toward warning rather than toward silence,
- * which is the safe direction for a command whose job is to interrupt.
+ * Anything that reaches this catch without a commander code is a thrown error
+ * from an action that never got the chance to classify it itself -- `parse`
+ * is the one command that does not wrap its own body in a try/catch, so an
+ * unreadable `--message-file` surfaces here. That is a usage error (a missing
+ * input file, SPEC §10), not a finding, so it maps to 2 as well.
  */
 const USAGE_ERRORS = new Set([
     'commander.unknownOption',
@@ -112,6 +116,6 @@ catch (error) {
         process.exit(2);
     }
     process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
-    process.exit(1);
+    process.exit(2);
 }
 //# sourceMappingURL=cli.js.map

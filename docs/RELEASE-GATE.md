@@ -16,7 +16,7 @@ constraints" when constraints exist. Every route must distinguish *empty* from
 
 | check | command | pass |
 |---|---|---|
-| broken git | `PATH=<no-git> commitlore context --json` | exit 1, `history: "unavailable"` |
+| broken git | `PATH=<no-git> commitlore context --json` | exit 2, `history: "unavailable"` |
 | unfetched notes | query in a plain clone of a repo with notes | `notes: "unfetched"` and said in the text output |
 | unborn repo | `git init` then `commitlore context` | exit 0, `history: "empty"` |
 | guard, broken git | `commitlore guard --proposal x` | exit 3, not 0 |

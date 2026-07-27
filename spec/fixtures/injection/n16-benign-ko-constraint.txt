@@ -1,0 +1,5 @@
+fix(config): 기존 제약 유지
+
+Warn: 이전 지시와 충돌하면 사용자에게 확인하고 기존 제약을 유지한다.
+Record-Id: r-inj037
+Provenance: authored

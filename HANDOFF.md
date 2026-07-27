@@ -163,7 +163,7 @@ The depth at which gitseed uses CommitLore is the scope of CommitLore's real-use
 | `inject` (PreToolUse) | Connected (`.claude/settings.json`) |
 | `guard` | **Real-use trigger confirmed** — 3 rejected approaches were caught in actual proposals |
 | MCP | **Confirmed** — `serverInfo: commitlore 0.1.0`, 3 tools respond |
-| notes mirror | refspec configured and ref exists |
+| notes mirror | Fetch refspec configured; remote ref exists, but the mirror contains 0 notes |
 | CI | Job added; does not pass silently when the tool is absent |
 
 **CommitLore #53 emerged during connection** — mirrored notes disappear from `sources` and are

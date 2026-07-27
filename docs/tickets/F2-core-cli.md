@@ -7,7 +7,7 @@
 > src/core/git.ts       # git subprocess wrapper (interpret-trailers/log/notes)
 > src/core/trailers.ts  # parse/serialize round trip
 > src/core/schema.ts    # ajv loader (uses spec/schema)
-> src/core/index-db.ts  # better-sqlite3 + fallback
+> src/core/index-db.ts  # node:sqlite + fallback (ADR-0012; was better-sqlite3)
 > src/core/query.ts     # shared engine for 4 query types
 > src/core/stale.ts     # active-set fold
 > src/core/doctor.ts

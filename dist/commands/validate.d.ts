@@ -2,7 +2,7 @@
  * `commitlore validate` — machine refusal of malformed records (SPEC §6).
  *
  * Three contracts hold this command in place, because a hook and a CI job both
- * branch on them:
+ * branch on them (SPEC §10):
  *
  *   exit 0  no violations
  *   exit 1  violations found
@@ -15,9 +15,8 @@
  * The command never edits its input (SPEC §6: implementations MUST NOT silently
  * repair). It reads, reports, and exits.
  *
- * Scope: single-record rules only. `dangling-ref` asks whether a
- * `Supersedes:`/`Follows:` target exists elsewhere in history — a cross-record
- * question owned by the stale engine (T-205), not by this command.
+ * Shape checks run for every input. Reference checks additionally run when the
+ * input mode identifies a repository.
  */
 import type { Command } from 'commander';
 import { type Violation } from '../core/types.js';
@@ -53,6 +52,19 @@ export interface ValidateResult {
      * still be inscribing a secret into history permanently (ADR-0005).
      */
     secrets: SecretFinding[];
+    checks: ValidationCheck[];
+}
+export declare const CHECK_CLASS_NEEDS: {
+    readonly shape: "message";
+    readonly reference: "repository";
+    readonly conservation: "before and after";
+};
+export type CheckClass = keyof typeof CHECK_CLASS_NEEDS;
+export type CheckStatus = 'ok' | 'failed' | 'not-checked';
+export interface ValidationCheck {
+    class: Exclude<CheckClass, 'conservation'>;
+    status: CheckStatus;
+    reason?: string;
 }
 /**
  * Validates one or more commit messages. Never throws for an input problem:

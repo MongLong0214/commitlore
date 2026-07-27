@@ -6,9 +6,10 @@
  * Three conventions here are load-bearing, because this command is designed to
  * run from a PreToolUse hook on every edit an agent proposes (ADR-0006 §4):
  *
- * **Exit 2 means "flagged".** 0 is a complete clean check, 1 is a broken
- * invocation, 2 is a warning, and 3 means the check was incomplete. Distinct
- * states keep an unavailable repository from being mistaken for approval.
+ * **Exit 1 means "flagged".** 0 is a complete clean check, 1 is a warning, 2
+ * is a broken invocation, and 3 means the check was incomplete (SPEC §10).
+ * Distinct states keep an unavailable repository from being mistaken for
+ * approval.
  *
  * **Nothing is printed when a complete check finds nothing.** Incomplete checks
  * must speak because silence is otherwise indistinguishable from approval.
@@ -32,9 +33,13 @@ import {
   type GuardResult,
   type RenderedGuardMatch,
 } from '../core/guard.js';
+import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
 
-/** Exit status when at least one ruled-out alternative matched. */
-export const FLAGGED_EXIT_CODE = 2;
+/** Exit status when at least one ruled-out alternative matched (SPEC §10: a finding). */
+export const FLAGGED_EXIT_CODE = 1;
+
+/** Usage error: a broken invocation, not a finding (SPEC §10). */
+export const USAGE_EXIT_CODE = 2;
 
 export const INCOMPLETE_EXIT_CODE = 3;
 
@@ -186,6 +191,9 @@ const incompleteMessage = (result: GuardResult): string => {
   return `commitlore guard: could not complete the check: ${reasons.join('; ')}`;
 };
 
+const shallowMessage = (): string =>
+  `commitlore guard: ${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`;
+
 const blockedIdentity = (match: Extract<RenderedGuardMatch, { trust: 'blocked' }>): string =>
   `recordId=${match.recordId ?? '-'}; sha=${match.sha}; score=${match.score.toFixed(2)}; ` +
   `signals=${match.signals.join(', ')}`;
@@ -227,6 +235,11 @@ export const formatHookContext = (result: GuardResult): string => {
   if (result.incomplete) {
     if (context.length > 0) context.push('');
     context.push(incompleteMessage(result).replace('the check', 'the check on this edit'));
+  }
+
+  if (result.shallow) {
+    if (context.length > 0) context.push('');
+    context.push(shallowMessage().replace('commitlore guard: ', ''));
   }
 
   return context.join('\n');
@@ -309,6 +322,10 @@ export const register = (program: Command): void => {
       '--hook-input',
       'read a PreToolUse payload on stdin and answer as hook JSON, scoping the proposal to the edit',
     )
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 clean, 1 a ruled-out alternative matched, 2 usage error, 3 the check was incomplete (SPEC §10).',
+    )
     .action(async (paths: string[], options: GuardCommandOptions) => {
       try {
         if (options.hookInput === true) {
@@ -335,6 +352,7 @@ export const register = (program: Command): void => {
 
         process.stderr.write(scopeCaveat(paths));
         if (result.incomplete) process.stderr.write(`${incompleteMessage(result)}\n`);
+        if (result.shallow) process.stderr.write(`${shallowMessage()}\n`);
         if (options.json === true) {
           process.stdout.write(`${JSON.stringify(toJson(result, at, paths, threshold), null, 2)}\n`);
         } else {
@@ -347,7 +365,7 @@ export const register = (program: Command): void => {
         process.stderr.write(
           `commitlore: ${error instanceof Error ? error.message : String(error)}\n`,
         );
-        process.exitCode = 1;
+        process.exitCode = USAGE_EXIT_CODE;
       }
     });
 };

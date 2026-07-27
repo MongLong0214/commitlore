@@ -6,9 +6,10 @@
  * Three conventions here are load-bearing, because this command is designed to
  * run from a PreToolUse hook on every edit an agent proposes (ADR-0006 §4):
  *
- * **Exit 2 means "flagged".** 0 is a complete clean check, 1 is a broken
- * invocation, 2 is a warning, and 3 means the check was incomplete. Distinct
- * states keep an unavailable repository from being mistaken for approval.
+ * **Exit 1 means "flagged".** 0 is a complete clean check, 1 is a warning, 2
+ * is a broken invocation, and 3 means the check was incomplete (SPEC §10).
+ * Distinct states keep an unavailable repository from being mistaken for
+ * approval.
  *
  * **Nothing is printed when a complete check finds nothing.** Incomplete checks
  * must speak because silence is otherwise indistinguishable from approval.
@@ -21,8 +22,10 @@
  */
 import type { Command } from 'commander';
 import { type GuardMatch, type GuardResult, type RenderedGuardMatch } from '../core/guard.js';
-/** Exit status when at least one ruled-out alternative matched. */
-export declare const FLAGGED_EXIT_CODE = 2;
+/** Exit status when at least one ruled-out alternative matched (SPEC §10: a finding). */
+export declare const FLAGGED_EXIT_CODE = 1;
+/** Usage error: a broken invocation, not a finding (SPEC §10). */
+export declare const USAGE_EXIT_CODE = 2;
 export declare const INCOMPLETE_EXIT_CODE = 3;
 export type JsonGuardMatch = RenderedGuardMatch;
 export interface JsonGuardOutput {
