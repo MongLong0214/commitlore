@@ -76,7 +76,7 @@
  * warns rather than blocks.
  */
 
-import { normalizeForMatch } from './grade.js';
+import { BLOCKED_RECORD_WITHHELD, normalizeForMatch } from './grade.js';
 import type { HistoryAvailability } from './git.js';
 import type { NotesAvailability } from './notes.js';
 import {
@@ -130,9 +130,6 @@ export type RenderedGuardMatch =
       alternative: string;
       reason: string;
     });
-
-const BLOCKED_RECORD_WITHHELD =
-  'Record content was withheld because it matched an injection pattern.';
 
 /**
  * The raw blocked content remains available to trusted program logic, while

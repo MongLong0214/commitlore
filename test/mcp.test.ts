@@ -864,15 +864,11 @@ describe.each(['Warn', 'Limit'] as const)(
     expect(records.find((record) => record['recordId'] === 'r-good01')?.['trust']).toBe('claim');
   });
 
-  it('is the CLI answer in every respect but the withheld payload', async () => {
+  it('is the same withheld answer as the CLI', async () => {
     const overMcp = withoutInstant(await context());
     const overCli = withoutInstant(runCli(attacked, ['context', '--json']));
-    expect(Object.keys(overMcp).sort()).toEqual(Object.keys(overCli).sort());
-    expect((overMcp['counts'] as Record<string, unknown>)['records']).toEqual(
-      (overCli['counts'] as Record<string, unknown>)['records'],
-    );
-    // The CLI prints it: a person reading a terminal can disbelieve a sentence.
-    expect(JSON.stringify(overCli)).toContain(ATTACK);
+    expect(overCli).toEqual(overMcp);
+    expect(JSON.stringify(overCli)).not.toContain(ATTACK);
   });
   },
 );

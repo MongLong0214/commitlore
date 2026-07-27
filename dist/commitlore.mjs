@@ -13915,6 +13915,7 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 // src/core/grade.ts
 var PROVENANCE_KEY = "Provenance";
 var INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
+var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var INJECTION_PATTERNS = [
   {
     id: "tool.run-the-following",
@@ -14639,7 +14640,6 @@ var runQuery = (opts = {}) => {
 var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 
 // src/core/guard.ts
-var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var renderGuardMatch = (match) => {
   const identity = {
     recordId: match.recordId ?? null,
@@ -24907,6 +24907,35 @@ var SECTIONS = [
   { label: "warnings", key: WARN_KEY }
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
+var withholdBlocked = (result) => {
+  const blocked = result.records.filter(
+    (record2) => record2.trust === "blocked" && record2.withheldTrailerKeys === void 0
+  );
+  if (blocked.length === 0) return result;
+  const keys = [
+    ...new Set(blocked.flatMap((record2) => record2.matchedTrailerKeys ?? []))
+  ].sort();
+  const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
+  const records = result.records.map(
+    (record2) => record2.trust !== "blocked" || record2.withheldTrailerKeys !== void 0 ? record2 : {
+      ...record2,
+      withheldTrailerKeys: [
+        ...new Set(
+          record2.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key)).map((trailer) => trailer.key)
+        )
+      ],
+      trailers: record2.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key))
+    }
+  );
+  return {
+    ...result,
+    records,
+    diagnostics: [
+      ...result.diagnostics,
+      `withheld the content of ${blocked.length} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
+    ]
+  };
+};
 var collect2 = (value, previous) => [...previous, value];
 var evaluationInstant3 = (raw) => {
   if (raw === void 0) return void 0;
@@ -24958,26 +24987,32 @@ var toJsonRecord = (record2) => ({
   paths: record2.paths,
   trailers: record2.trailers
 });
-var toJson2 = (command, result) => ({
-  command,
-  at: result.at.toISOString(),
-  paths: result.paths,
-  aliases: result.aliases,
-  follow: result.follow,
-  fromIndex: result.fromIndex,
-  scanned: result.scanned,
-  counts: {
-    records: result.records.length,
-    limits: countKey(result.records, LIMIT_KEY),
-    ruledOut: countKey(result.records, RULED_OUT_KEY),
-    warnings: countKey(result.records, WARN_KEY),
-    other: result.records.reduce((total, record2) => total + otherTrailers(record2).length, 0)
-  },
-  history: result.history,
-  notes: result.notes,
-  diagnostics: result.diagnostics,
-  records: result.records.map(toJsonRecord)
-});
+var toJson2 = (command, result) => {
+  const presented = withholdBlocked(result);
+  return {
+    command,
+    at: presented.at.toISOString(),
+    paths: presented.paths,
+    aliases: presented.aliases,
+    follow: presented.follow,
+    fromIndex: presented.fromIndex,
+    scanned: presented.scanned,
+    counts: {
+      records: presented.records.length,
+      limits: countKey(presented.records, LIMIT_KEY),
+      ruledOut: countKey(presented.records, RULED_OUT_KEY),
+      warnings: countKey(presented.records, WARN_KEY),
+      other: presented.records.reduce(
+        (total, record2) => total + otherTrailers(record2).length,
+        0
+      )
+    },
+    history: presented.history,
+    notes: presented.notes,
+    diagnostics: presented.diagnostics,
+    records: presented.records.map(toJsonRecord)
+  };
+};
 var shortSha4 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var scopeSuffix = (result) => result.paths.length === 0 ? "" : ` for ${result.paths.join(", ")}`;
 var provenanceSuffix = (result) => `${result.fromIndex ? "index" : "no index"}, ${result.scanned} commit record(s) scanned`;
@@ -24992,46 +25027,54 @@ var stateTag = (record2) => {
 var trustTag = (record2) => record2.trust === void 0 ? "" : `[${record2.trust}]  `;
 var idColumn = (record2, width) => (record2.recordId ?? "-").padEnd(width);
 var idWidth = (records) => records.reduce((width, record2) => Math.max(width, (record2.recordId ?? "-").length), 1);
-var valueLines = (records, key, withTrust) => {
+var valueLines = (records, key) => {
   const width = idWidth(records);
-  return records.flatMap(
-    (record2) => valuesOf(record2, key).map(
-      (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${withTrust ? trustTag(record2) : ""}${value}`
-    )
-  );
+  return records.flatMap((record2) => {
+    const values = record2.trust === "blocked" ? record2.withheldTrailerKeys?.includes(key) === true ? [BLOCKED_RECORD_WITHHELD] : [] : valuesOf(record2, key);
+    return values.map(
+      (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trustTag(record2)}${value}`
+    );
+  });
 };
 var otherLines = (records) => {
   const width = idWidth(records);
-  return records.flatMap(
-    (record2) => otherTrailers(record2).map(
-      (trailer) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trailer.key}: ${trailer.value}`
-    )
-  );
+  return records.flatMap((record2) => {
+    const withheld = record2.trust === "blocked" && record2.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true ? [BLOCKED_RECORD_WITHHELD] : [];
+    const values = [
+      ...withheld,
+      ...otherTrailers(record2).map((trailer) => `${trailer.key}: ${trailer.value}`)
+    ];
+    return values.map(
+      (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trustTag(record2)}${value}`
+    );
+  });
 };
 var emptyLine = (result, what) => result.history === "unavailable" ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} \u2014 this is unknown, not empty
 ` : result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
 ` : `no active ${what}${scopeSuffix(result)}
 `;
 var formatKind = (result, section2) => {
-  const lines = valueLines(result.records, section2.key, section2.key === WARN_KEY);
-  if (lines.length === 0) return emptyLine(result, `${section2.key} records`);
-  const header2 = `${plural2(lines.length, section2.label.replace(/s$/, ""), section2.label)}${scopeSuffix(result)} as of ${result.at.toISOString()} (${provenanceSuffix(result)})`;
+  const presented = withholdBlocked(result);
+  const lines = valueLines(presented.records, section2.key);
+  if (lines.length === 0) return emptyLine(presented, `${section2.key} records`);
+  const header2 = `${plural2(lines.length, section2.label.replace(/s$/, ""), section2.label)}${scopeSuffix(presented)} as of ${presented.at.toISOString()} (${provenanceSuffix(presented)})`;
   return `${[header2, "", ...lines].join("\n")}
 `;
 };
 var formatContext = (result) => {
+  const presented = withholdBlocked(result);
   const sections = SECTIONS.map((section2) => ({
     label: section2.label,
-    lines: valueLines(result.records, section2.key, section2.key === WARN_KEY)
+    lines: valueLines(presented.records, section2.key)
   }));
-  const other = otherLines(result.records);
+  const other = otherLines(presented.records);
   const total = sections.reduce((sum, section2) => sum + section2.lines.length, 0) + other.length;
-  if (total === 0) return emptyLine(result, "records");
+  if (total === 0) return emptyLine(presented, "records");
   const summary2 = [
     ...sections.map((section2) => `${section2.lines.length} ${section2.label}`),
     `${other.length} other`
   ].join(", ");
-  const header2 = `context${scopeSuffix(result)} as of ${result.at.toISOString()} \u2014 ${summary2} in ${plural2(result.records.length, "record", "records")} (${provenanceSuffix(result)})`;
+  const header2 = `context${scopeSuffix(presented)} as of ${presented.at.toISOString()} \u2014 ${summary2} in ${plural2(presented.records.length, "record", "records")} (${provenanceSuffix(presented)})`;
   const body = [...sections, { label: "other", lines: other }].flatMap(
     (section2) => section2.lines.length === 0 ? [] : ["", section2.label, ...section2.lines]
   );
@@ -25039,15 +25082,16 @@ var formatContext = (result) => {
 `;
 };
 var emit4 = (name, result, options, render2) => {
-  for (const diagnostic of result.diagnostics) {
+  const presented = withholdBlocked(result);
+  for (const diagnostic of presented.diagnostics) {
     process.stderr.write(`commitlore: ${diagnostic}
 `);
   }
   process.stdout.write(
-    options.json === true ? `${JSON.stringify(toJson2(name, result), null, 2)}
-` : render2(result)
+    options.json === true ? `${JSON.stringify(toJson2(name, presented), null, 2)}
+` : render2(presented)
   );
-  if (result.history === "unavailable") process.exitCode = 1;
+  if (presented.history === "unavailable") process.exitCode = 1;
 };
 var define = (program3, name, description, keys, render2) => {
   program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
@@ -25278,41 +25322,17 @@ var contextUriPath = (uri) => {
     throw new Error(`resource URI is not valid percent-encoding: ${uri}`);
   }
 };
-var withheldBlocked = (result) => {
-  if (!result.records.some((record2) => record2.trust === "blocked")) return result;
-  const keys = [
-    ...new Set(
-      result.records.filter((record2) => record2.trust === "blocked").flatMap((record2) => record2.matchedTrailerKeys ?? [])
-    )
-  ].sort();
-  const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
-  let withheld = 0;
-  const records = result.records.map((record2) => {
-    if (record2.trust !== "blocked") return record2;
-    withheld += 1;
-    return {
-      ...record2,
-      trailers: record2.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key))
-    };
-  });
-  return {
-    ...result,
-    records,
-    diagnostics: [
-      ...result.diagnostics,
-      `withheld the content of ${withheld} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
-    ]
-  };
-};
 var contextJson = (root, kind, path2) => {
   const keys = KEYS_BY_KIND[kind];
-  const result = runQuery({
-    cwd: root,
-    ...path2 === "" ? {} : { paths: [path2] },
-    ...keys === void 0 ? {} : { keys }
-  });
+  const result = withholdBlocked(
+    runQuery({
+      cwd: root,
+      ...path2 === "" ? {} : { paths: [path2] },
+      ...keys === void 0 ? {} : { keys }
+    })
+  );
   for (const diagnostic of result.diagnostics) warn(diagnostic);
-  return toJson2(kind, withheldBlocked(result));
+  return toJson2(kind, result);
 };
 var asText = (value) => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }]

@@ -104,6 +104,8 @@ export interface GradedRecord extends Record {
     provenanceValue?: string;
     trust?: TrustGrade;
     matchedTrailerKeys?: string[];
+    /** Payload key names retained only so a redacted record remains visible in its sections. */
+    withheldTrailerKeys?: string[];
     supersededBy?: string;
     expiresAt?: string;
 }

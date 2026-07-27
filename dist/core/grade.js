@@ -26,6 +26,7 @@ import { foldLifecycle } from './stale.js';
 const PROVENANCE_KEY = 'Provenance';
 /** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
 const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
+export const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it matched an injection pattern.';
 /**
  * The pattern table. Every entry is pinned by at least one fixture under
  * `spec/fixtures/injection/` (`test/grade.test.ts` fails if an id has none), and

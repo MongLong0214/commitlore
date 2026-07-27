@@ -75,9 +75,8 @@
  * All three are the honest limit of lexical matching, and the reason `guard`
  * warns rather than blocks.
  */
-import { normalizeForMatch } from './grade.js';
+import { BLOCKED_RECORD_WITHHELD, normalizeForMatch } from './grade.js';
 import { RULED_OUT_KEY, runQuery, valuesOf, } from './query.js';
-const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it matched an injection pattern.';
 /**
  * The raw blocked content remains available to trusted program logic, while
  * every output surface receives a shape that cannot quote it accidentally.

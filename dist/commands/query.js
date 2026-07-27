@@ -16,7 +16,9 @@
  * nothing is not an error), and a query that exits non-zero on an empty answer
  * would make every agent treat "nothing to know here" as a failure.
  */
+import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
+import { BOOKKEEPING_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
 const SECTIONS = [
@@ -25,6 +27,35 @@ const SECTIONS = [
     { label: 'warnings', key: WARN_KEY },
 ];
 const SECTION_KEYS = SECTIONS.map((section) => section.key);
+export const withholdBlocked = (result) => {
+    const blocked = result.records.filter((record) => record.trust === 'blocked' && record.withheldTrailerKeys === undefined);
+    if (blocked.length === 0)
+        return result;
+    const keys = [
+        ...new Set(blocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
+    ].sort();
+    const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
+    const records = result.records.map((record) => record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined
+        ? record
+        : {
+            ...record,
+            withheldTrailerKeys: [
+                ...new Set(record.trailers
+                    .filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key))
+                    .map((trailer) => trailer.key)),
+            ],
+            trailers: record.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key)),
+        });
+    return {
+        ...result,
+        records,
+        diagnostics: [
+            ...result.diagnostics,
+            `withheld the content of ${blocked.length} record(s) graded blocked: a ${source} matching an ` +
+                'injection pattern is reported, never quoted (SPEC §7)',
+        ],
+    };
+};
 /** Repeatable option accumulator, as `commands/inject.ts` uses. */
 const collect = (value, previous) => [...previous, value];
 // ---------------------------------------------------------------------------
@@ -88,26 +119,29 @@ const toJsonRecord = (record) => ({
     paths: record.paths,
     trailers: record.trailers,
 });
-export const toJson = (command, result) => ({
-    command,
-    at: result.at.toISOString(),
-    paths: result.paths,
-    aliases: result.aliases,
-    follow: result.follow,
-    fromIndex: result.fromIndex,
-    scanned: result.scanned,
-    counts: {
-        records: result.records.length,
-        limits: countKey(result.records, LIMIT_KEY),
-        ruledOut: countKey(result.records, RULED_OUT_KEY),
-        warnings: countKey(result.records, WARN_KEY),
-        other: result.records.reduce((total, record) => total + otherTrailers(record).length, 0),
-    },
-    history: result.history,
-    notes: result.notes,
-    diagnostics: result.diagnostics,
-    records: result.records.map(toJsonRecord),
-});
+export const toJson = (command, result) => {
+    const presented = withholdBlocked(result);
+    return {
+        command,
+        at: presented.at.toISOString(),
+        paths: presented.paths,
+        aliases: presented.aliases,
+        follow: presented.follow,
+        fromIndex: presented.fromIndex,
+        scanned: presented.scanned,
+        counts: {
+            records: presented.records.length,
+            limits: countKey(presented.records, LIMIT_KEY),
+            ruledOut: countKey(presented.records, RULED_OUT_KEY),
+            warnings: countKey(presented.records, WARN_KEY),
+            other: presented.records.reduce((total, record) => total + otherTrailers(record).length, 0),
+        },
+        history: presented.history,
+        notes: presented.notes,
+        diagnostics: presented.diagnostics,
+        records: presented.records.map(toJsonRecord),
+    };
+};
 // ---------------------------------------------------------------------------
 // Text
 // ---------------------------------------------------------------------------
@@ -141,15 +175,32 @@ const idWidth = (records) => records.reduce((width, record) => Math.max(width, (
  * one row would hide two of them (SPEC §2.1 B5 keeps every repeat for exactly
  * this reason).
  */
-const valueLines = (records, key, withTrust) => {
+const valueLines = (records, key) => {
     const width = idWidth(records);
-    return records.flatMap((record) => valuesOf(record, key).map((value) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
-        `${stateTag(record)}${withTrust ? trustTag(record) : ''}${value}`));
+    return records.flatMap((record) => {
+        const values = record.trust === 'blocked'
+            ? record.withheldTrailerKeys?.includes(key) === true
+                ? [BLOCKED_RECORD_WITHHELD]
+                : []
+            : valuesOf(record, key);
+        return values.map((value) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
+            `${stateTag(record)}${trustTag(record)}${value}`);
+    });
 };
 const otherLines = (records) => {
     const width = idWidth(records);
-    return records.flatMap((record) => otherTrailers(record).map((trailer) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
-        `${stateTag(record)}${trailer.key}: ${trailer.value}`));
+    return records.flatMap((record) => {
+        const withheld = record.trust === 'blocked' &&
+            record.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true
+            ? [BLOCKED_RECORD_WITHHELD]
+            : [];
+        const values = [
+            ...withheld,
+            ...otherTrailers(record).map((trailer) => `${trailer.key}: ${trailer.value}`),
+        ];
+        return values.map((value) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
+            `${stateTag(record)}${trustTag(record)}${value}`);
+    });
 };
 /**
  * The empty answer, and the one qualifier it must never omit.
@@ -170,11 +221,12 @@ const emptyLine = (result, what) => result.history === 'unavailable'
         : `no active ${what}${scopeSuffix(result)}\n`;
 /** `limits`, `ruled-out` and `warnings`: one section, no header block. */
 export const formatKind = (result, section) => {
-    const lines = valueLines(result.records, section.key, section.key === WARN_KEY);
+    const presented = withholdBlocked(result);
+    const lines = valueLines(presented.records, section.key);
     if (lines.length === 0)
-        return emptyLine(result, `${section.key} records`);
+        return emptyLine(presented, `${section.key} records`);
     const header = `${plural(lines.length, section.label.replace(/s$/, ''), section.label)}` +
-        `${scopeSuffix(result)} as of ${result.at.toISOString()} (${provenanceSuffix(result)})`;
+        `${scopeSuffix(presented)} as of ${presented.at.toISOString()} (${provenanceSuffix(presented)})`;
     return `${[header, '', ...lines].join('\n')}\n`;
 };
 /**
@@ -183,20 +235,21 @@ export const formatKind = (result, section) => {
  * whether the index answered.
  */
 export const formatContext = (result) => {
+    const presented = withholdBlocked(result);
     const sections = SECTIONS.map((section) => ({
         label: section.label,
-        lines: valueLines(result.records, section.key, section.key === WARN_KEY),
+        lines: valueLines(presented.records, section.key),
     }));
-    const other = otherLines(result.records);
+    const other = otherLines(presented.records);
     const total = sections.reduce((sum, section) => sum + section.lines.length, 0) + other.length;
     if (total === 0)
-        return emptyLine(result, 'records');
+        return emptyLine(presented, 'records');
     const summary = [
         ...sections.map((section) => `${section.lines.length} ${section.label}`),
         `${other.length} other`,
     ].join(', ');
-    const header = `context${scopeSuffix(result)} as of ${result.at.toISOString()} — ${summary} ` +
-        `in ${plural(result.records.length, 'record', 'records')} (${provenanceSuffix(result)})`;
+    const header = `context${scopeSuffix(presented)} as of ${presented.at.toISOString()} — ${summary} ` +
+        `in ${plural(presented.records.length, 'record', 'records')} (${provenanceSuffix(presented)})`;
     const body = [...sections, { label: 'other', lines: other }].flatMap((section) => section.lines.length === 0 ? [] : ['', section.label, ...section.lines]);
     return `${[header, ...body].join('\n')}\n`;
 };
@@ -204,16 +257,19 @@ export const formatContext = (result) => {
 // Registration
 // ---------------------------------------------------------------------------
 const emit = (name, result, options, render) => {
+    const presented = withholdBlocked(result);
     // Diagnostics go to stderr in both modes: they describe how the answer was
     // produced, and a caller piping `--json` into a parser must still see them.
-    for (const diagnostic of result.diagnostics) {
+    for (const diagnostic of presented.diagnostics) {
         process.stderr.write(`commitlore: ${diagnostic}\n`);
     }
-    process.stdout.write(options.json === true ? `${JSON.stringify(toJson(name, result), null, 2)}\n` : render(result));
+    process.stdout.write(options.json === true
+        ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
+        : render(presented));
     // Fail closed. An answer git could not produce must not exit 0: a caller that
     // branches on the exit code — a hook, a CI step, a shell `&&` — would read
     // success and an empty list as "this path has no constraints".
-    if (result.history === 'unavailable')
+    if (presented.history === 'unavailable')
         process.exitCode = 1;
 };
 const define = (program, name, description, keys, render) => {

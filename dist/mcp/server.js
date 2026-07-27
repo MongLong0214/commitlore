@@ -46,11 +46,10 @@ import { packageVersion as readPackageVersion } from '../core/paths.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
-import { toJson } from '../commands/query.js';
+import { toJson, withholdBlocked } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
-import { BOOKKEEPING_KEYS } from '../core/types.js';
 export const SERVER_NAME = 'commitlore';
 /** Used when the package manifest cannot be read — a version is not an answer. */
 const FALLBACK_VERSION = '0.0.0';
@@ -150,50 +149,6 @@ export const contextUriPath = (uri) => {
 // The answers themselves
 // ---------------------------------------------------------------------------
 /**
- * Strips the payload of any record graded `blocked`, keeping the fact of it.
- *
- * `core/inject.ts` already does this — "the content of a blocked record is the
- * attack. Only the fact is reported." — and this route did not, so the same
- * record was withheld from the hook and handed over verbatim through MCP. The
- * difference matters more here than anywhere: an injection payload printed to a
- * terminal is read by a person who can disbelieve it, and the same bytes
- * returned from a tool call land in a model's context as retrieved fact.
- *
- * The record is not dropped. An agent that asks what the repository says about a
- * path and silently receives less than there is has no way to notice; a record
- * whose trailers are replaced by the reason it was withheld is auditable, and
- * `trust: "blocked"` is already in the schema for the client to branch on.
- */
-const withheldBlocked = (result) => {
-    if (!result.records.some((record) => record.trust === 'blocked'))
-        return result;
-    const keys = [
-        ...new Set(result.records
-            .filter((record) => record.trust === 'blocked')
-            .flatMap((record) => record.matchedTrailerKeys ?? [])),
-    ].sort();
-    const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
-    let withheld = 0;
-    const records = result.records.map((record) => {
-        if (record.trust !== 'blocked')
-            return record;
-        withheld += 1;
-        return {
-            ...record,
-            trailers: record.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key)),
-        };
-    });
-    return {
-        ...result,
-        records,
-        diagnostics: [
-            ...result.diagnostics,
-            `withheld the content of ${withheld} record(s) graded blocked: a ${source} matching an ` +
-                'injection pattern is reported, never quoted (SPEC §7)',
-        ],
-    };
-};
-/**
  * One consumer-route answer, in the schema `--json` prints. Diagnostics are
  * carried in that schema *and* mirrored to stderr: a client that only shows the
  * model the tool result still leaves the operator a record of how the answer
@@ -201,14 +156,14 @@ const withheldBlocked = (result) => {
  */
 const contextJson = (root, kind, path) => {
     const keys = KEYS_BY_KIND[kind];
-    const result = runQuery({
+    const result = withholdBlocked(runQuery({
         cwd: root,
         ...(path === '' ? {} : { paths: [path] }),
         ...(keys === undefined ? {} : { keys }),
-    });
+    }));
     for (const diagnostic of result.diagnostics)
         warn(diagnostic);
-    return toJson(kind, withheldBlocked(result));
+    return toJson(kind, result);
 };
 const asText = (value) => ({
     content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],

@@ -34,6 +34,9 @@ const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 /** How a record's `Warn:` may be delivered. */
 export type Trust = 'directive' | 'claim' | 'blocked';
 
+export const BLOCKED_RECORD_WITHHELD =
+  'Record content was withheld because it matched an injection pattern.';
+
 export interface Grade {
   provenance: Provenance['kind'];
   lifecycle: Lifecycle;

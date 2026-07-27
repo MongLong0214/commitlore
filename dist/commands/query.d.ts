@@ -18,12 +18,13 @@
  */
 import type { Command } from 'commander';
 import { type QueryResult, type TrustGrade } from '../core/query.js';
-import type { Lifecycle, Trailer } from '../core/types.js';
+import { type Lifecycle, type Trailer } from '../core/types.js';
 interface Section {
     /** The heading `context` prints, and the name of the command that isolates it. */
     label: string;
     key: string;
 }
+export declare const withholdBlocked: (result: QueryResult) => QueryResult;
 export interface JsonRecord {
     recordId: string | null;
     sha: string;
