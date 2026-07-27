@@ -892,11 +892,11 @@ describe('the four commands', () => {
     expect(runCommand(makeRepo(), [command, AT, PINNED]).code).toBe(0);
   });
 
-  it.each(commands)('%s keeps exit 1 when git cannot answer at all', (command) => {
+  it.each(commands)('%s exits 2 when git cannot answer at all', (command) => {
     const run = withPath(brokenGitPath(), () =>
       runCommand(dir, [command, AT, PINNED, '--no-index']),
     );
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
   });
 
   it('warns on stderr for several paths and still answers', () => {
@@ -913,15 +913,15 @@ describe('the four commands', () => {
     expect(run.stdout.split('\n').filter((line) => line.startsWith('  '))).toHaveLength(1);
   });
 
-  it('exits 1 on an unusable --at', () => {
+  it('exits 2 on an unusable --at', () => {
     const run = runCommand(dir, ['limits', AT, 'yesterday']);
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
     expect(run.stderr).toContain('--at is not a valid ISO 8601 instant');
   });
 
-  it('exits 1 on an unusable --limit', () => {
+  it('exits 2 on an unusable --limit', () => {
     const run = runCommand(dir, ['limits', '--limit', '-3']);
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
     expect(run.stderr).toContain('--limit is not a non-negative integer');
   });
 });

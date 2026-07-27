@@ -14,6 +14,9 @@
  * commit must never fail because an optional enrichment step had nothing to
  * work with (ADR-0006: 전량 실패 시 비차단). Only two things are errors here: a
  * path the user named that cannot be read, and a draft that is not a draft.
+ * Both are usage errors, so both exit 2 (SPEC §10) -- neither is a finding,
+ * and harvest never gates on what a draft contains (a discarded record is
+ * reported on stderr, not failed on).
  */
 import type { Command } from 'commander';
 export interface HarvestOptions {

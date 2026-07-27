@@ -404,7 +404,7 @@ describe('commitlore harvest', () => {
 
   it('fails with one line and no stack trace on a broken draft', () => {
     const outcome = runHarvest({ draft: fixture('draft-broken.json') });
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stdout).toBe('');
     expect(outcome.stderr).toContain('commitlore: draft is not valid JSON');
     expect(outcome.stderr).not.toMatch(/\n\s+at /);
@@ -413,14 +413,14 @@ describe('commitlore harvest', () => {
 
   it('fails on a path it was told to read but cannot', () => {
     const outcome = runHarvest({ promptOnly: true, transcript: join(workspace, 'nope.txt') });
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('cannot read --transcript');
     expect(outcome.stderr).not.toMatch(/\n\s+at /);
   });
 
   it('refuses to build a prompt and check a draft at once', () => {
     const outcome = runHarvest({ promptOnly: true, draft: fixture('draft-valid.json') });
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('mutually exclusive');
   });
 

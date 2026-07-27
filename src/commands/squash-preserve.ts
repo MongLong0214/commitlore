@@ -8,9 +8,11 @@
  *   exit 0  the plan was produced (and applied, if asked). Conflicts warn here.
  *   exit 2  the range is not a range, names nothing, is empty, or a write failed
  *
- * A conflict is a warning and never a failure. Two commits disagreeing about a
- * record is a normal thing for a branch to do, and blocking a merge over it
- * would teach people to stop writing records — the opposite of the point.
+ * Both codes follow SPEC §10: 2 is a usage error, and this command never emits
+ * 1, because a conflict is a warning and never a failure. Two commits
+ * disagreeing about a record is a normal thing for a branch to do, and
+ * blocking a merge over it would teach people to stop writing records — the
+ * opposite of the point.
  *
  * Doing nothing is the default. With neither `--message-file` nor `--target`
  * the command prints what it would write and touches nothing, so it is safe to
@@ -257,7 +259,7 @@ export const register = (program: Command): void => {
       'after',
       '\nWith neither --message-file nor --target the plan is printed and nothing is written.' +
         '\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.' +
-        '\nExit codes: 0 done — conflicts warn but do not block, 2 bad range, empty range, or a failed write.',
+        '\nExit codes: 0 done — conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC §10).',
     )
     .action((range: string, flags: SquashPreserveFlags) => {
       const outcome = runSquashPreserve({

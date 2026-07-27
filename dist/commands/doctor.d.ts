@@ -34,7 +34,7 @@ export interface DoctorCheck {
 }
 export interface DoctorReport {
     checks: DoctorCheck[];
-    /** 0 unless some check is `fail` — warnings do not fail the command. */
+    /** 0 unless some check is `fail` — warnings do not fail the command (SPEC §10: 1 is a finding). */
     exitCode: number;
 }
 export interface DoctorOptions {

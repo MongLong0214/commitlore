@@ -13354,11 +13354,14 @@ var runBackfill = (options) => {
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     return { stdout: "", stderr: `${PREFIX} ${detail}
-`, exitCode: 1 };
+`, exitCode: 2 };
   }
 };
 var register = (program3) => {
-  program3.command("backfill").description("reconstruct records for past commits that have none (all Provenance: reconstructed)").option("--limit <n>", `consider at most n commits with no record (default: ${DEFAULT_LIMIT})`).option("--with-prs", "collect linked pull request bodies through the gh CLI").option("--budget-tokens <n>", "stop emitting prompts past this estimated token count").option("--prompt-only", "print the reconstruction contract for the session and exit").option("--draft <file>", "verify a draft the session produced and attach what survives").option("--dry-run", "compute everything, write nothing").option("--json", "emit the report as JSON").action((options) => {
+  program3.command("backfill").description("reconstruct records for past commits that have none (all Provenance: reconstructed)").option("--limit <n>", `consider at most n commits with no record (default: ${DEFAULT_LIMIT})`).option("--with-prs", "collect linked pull request bodies through the gh CLI").option("--budget-tokens <n>", "stop emitting prompts past this estimated token count").option("--prompt-only", "print the reconstruction contract for the session and exit").option("--draft <file>", "verify a draft the session produced and attach what survives").option("--dry-run", "compute everything, write nothing").option("--json", "emit the report as JSON").addHelpText(
+    "after",
+    "\nExit codes: 0 ran (discarded and skipped commits are reported, not failed on), 2 a usage error -- a bad flag, an unreadable --draft, a draft that is not a draft (SPEC \xA710)."
+  ).action((options) => {
     const outcome = runBackfill({ ...options, batchSize: DEFAULT_BATCH_SIZE });
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);
@@ -15134,7 +15137,7 @@ var formatReport = (report) => {
 `;
 };
 var register2 = (program3) => {
-  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").action((options) => {
+  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").addHelpText("after", "\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC \xA710).").action((options) => {
     const report = runDoctor({ fix: options.fix === true });
     process.stdout.write(
       options.json === true ? `${JSON.stringify(report, null, 2)}
@@ -15147,6 +15150,7 @@ var register2 = (program3) => {
 // src/commands/harvest.ts
 import { readFileSync as readFileSync7, writeFileSync as writeFileSync3 } from "node:fs";
 var PREFIX2 = "commitlore:";
+var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
   stdout: "",
   stderr: `${PREFIX2} harvest skipped \u2014 ${reason}
@@ -15222,11 +15226,14 @@ var runHarvest = (options) => {
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     return { stdout: "", stderr: `${PREFIX2} ${detail}
-`, exitCode: 1 };
+`, exitCode: USAGE_EXIT_CODE };
   }
 };
 var register3 = (program3) => {
-  program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").action((options) => {
+  program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").addHelpText(
+    "after",
+    "\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft that is not a draft (SPEC \xA710)."
+  ).action((options) => {
     const outcome = runHarvest(options);
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);
@@ -15695,7 +15702,8 @@ var guard = (opts) => {
 };
 
 // src/commands/guard.ts
-var FLAGGED_EXIT_CODE = 2;
+var FLAGGED_EXIT_CODE = 1;
+var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
 var STDIN_FD = 0;
 var readProposal = (raw) => {
@@ -15841,6 +15849,9 @@ var register4 = (program3) => {
   ).option("--no-index", "answer from git alone, without the SQLite index").option(
     "--hook-input",
     "read a PreToolUse payload on stdin and answer as hook JSON, scoping the proposal to the edit"
+  ).addHelpText(
+    "after",
+    "\nExit codes: 0 clean, 1 a ruled-out alternative matched, 2 usage error, 3 the check was incomplete (SPEC \xA710)."
   ).action(async (paths, options) => {
     try {
       if (options.hookInput === true) {
@@ -15881,7 +15892,7 @@ var register4 = (program3) => {
         `commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
 `
       );
-      process.exitCode = 1;
+      process.exitCode = USAGE_EXIT_CODE2;
     }
   });
 };
@@ -15971,7 +15982,10 @@ var runHarvestVerify = (options) => {
   }
 };
 var register5 = (program3) => {
-  program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").action((options) => {
+  program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").addHelpText(
+    "after",
+    "\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, an unreadable path, a draft that is not a draft (SPEC \xA710)."
+  ).action((options) => {
     const outcome = runHarvestVerify(options);
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);
@@ -16155,13 +16169,13 @@ var emit3 = (result) => {
 };
 var register6 = (program3) => {
   const hooks = program3.command("hooks").description(`manage the git ${HOOK_NAME} hook that runs commitlore validate`);
-  hooks.command("install").description("install the commit-msg hook, preserving and chaining any existing one").option("--force", "replace an already preserved hook when a foreign hook is in the way").action((flags) => {
+  hooks.command("install").description("install the commit-msg hook, preserving and chaining any existing one").option("--force", "replace an already preserved hook when a foreign hook is in the way").addHelpText("after", "\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC \xA710).").action((flags) => {
     emit3(installHook(flags.force === void 0 ? {} : { force: flags.force }));
   });
-  hooks.command("uninstall").description("remove the commit-msg hook and restore the one it replaced").action(() => {
+  hooks.command("uninstall").description("remove the commit-msg hook and restore the one it replaced").addHelpText("after", "\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC \xA710).").action(() => {
     emit3(uninstallHook());
   });
-  hooks.command("status").description("report what is installed in the hooks directory").action(() => {
+  hooks.command("status").description("report what is installed in the hooks directory").addHelpText("after", "\nExit codes: 0 reported, 2 could not run -- no repository (SPEC \xA710).").action(() => {
     emit3(hookStatus());
   });
 };
@@ -16170,7 +16184,7 @@ var register6 = (program3) => {
 var fail = (message) => {
   process.stderr.write(`commitlore: ${message}
 `);
-  process.exitCode = 1;
+  process.exitCode = 2;
 };
 var plural = (count2, unit) => `${count2} ${unit}${count2 === 1 ? "" : "s"}`;
 var runScan = (options) => {
@@ -16232,7 +16246,10 @@ var runIndex = (options) => {
   }
 };
 var register7 = (program3) => {
-  program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").action((options) => {
+  program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
+    "after",
+    "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or better-sqlite3 is not installed (SPEC \xA710)."
+  ).action((options) => {
     try {
       if (!options.index) {
         if (options.rebuild ?? false) {
@@ -16755,7 +16772,10 @@ var register8 = (program3) => {
     "an author whose records may render as instructions (repeatable)",
     collect,
     []
-  ).option("--no-index", "answer from git alone, without the SQLite index").option("--hook-input", `read a ${CLAUDE_HOOK_EVENT} payload on stdin and answer as hook JSON`).action((options) => {
+  ).option("--no-index", "answer from git alone, without the SQLite index").option("--hook-input", `read a ${CLAUDE_HOOK_EVENT} payload on stdin and answer as hook JSON`).addHelpText(
+    "after",
+    "\nExit codes: 0 ran (empty output means the path has nothing to say, and --hook-input never fails), 2 a usage error -- --path is missing (SPEC \xA710)."
+  ).action((options) => {
     if (options.hookInput === true) {
       runHookMode(options);
       return;
@@ -16769,13 +16789,13 @@ var register8 = (program3) => {
       fail2(error2);
     }
   });
-  inject.command("install-claude-hook").description(`add the ${CLAUDE_HOOK_EVENT} injection hook to a Claude Code settings.json`).option("--settings <path>", "the settings file to edit (default: .claude/settings.json)").option("--command <command>", `the command to install (default: ${CLAUDE_HOOK_COMMAND})`).action((options) => {
+  inject.command("install-claude-hook").description(`add the ${CLAUDE_HOOK_EVENT} injection hook to a Claude Code settings.json`).option("--settings <path>", "the settings file to edit (default: .claude/settings.json)").option("--command <command>", `the command to install (default: ${CLAUDE_HOOK_COMMAND})`).addHelpText("after", "\nExit codes: 0 installed, 2 the settings file could not be read or written (SPEC \xA710).").action((options) => {
     emitResult(installClaudeHook(hookInput(options)));
   });
-  inject.command("uninstall-claude-hook").description("remove the injection hook, leaving every other setting untouched").option("--settings <path>", "the settings file to edit (default: .claude/settings.json)").action((options) => {
+  inject.command("uninstall-claude-hook").description("remove the injection hook, leaving every other setting untouched").option("--settings <path>", "the settings file to edit (default: .claude/settings.json)").addHelpText("after", "\nExit codes: 0 removed (or nothing to remove), 2 the settings file could not be read or written (SPEC \xA710).").action((options) => {
     emitResult(uninstallClaudeHook(hookInput(options)));
   });
-  inject.command("claude-hook-status").description("report whether the injection hook is installed").option("--settings <path>", "the settings file to read (default: .claude/settings.json)").action((options) => {
+  inject.command("claude-hook-status").description("report whether the injection hook is installed").option("--settings <path>", "the settings file to read (default: .claude/settings.json)").addHelpText("after", "\nExit codes: 0 reported, 2 the settings file could not be read (SPEC \xA710).").action((options) => {
     emitResult(claudeHookStatus(hookInput(options)));
   });
 };
@@ -25346,6 +25366,7 @@ var StdioServerTransport = class {
 
 // src/commands/query.ts
 var RECORD_ID_KEY3 = "Record-Id";
+var USAGE_EXIT_CODE3 = 2;
 var INCOMPLETE_EXIT_CODE2 = 3;
 var SECTIONS = [
   { label: "limits", key: LIMIT_KEY },
@@ -25562,7 +25583,7 @@ var emit4 = (name, result, options, render2) => {
     options.json === true ? `${JSON.stringify(toJson2(name, presented), null, 2)}
 ` : render2(presented)
   );
-  if (presented.history === "unavailable") process.exitCode = 1;
+  if (presented.history === "unavailable") process.exitCode = USAGE_EXIT_CODE3;
   else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
 };
 var define = (program3, name, description, keys, render2) => {
@@ -25571,6 +25592,9 @@ var define = (program3, name, description, keys, render2) => {
     "an author whose records may render as instructions (repeatable)",
     collect2,
     []
+  ).addHelpText(
+    "after",
+    "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror has not been fetched (SPEC \xA710)."
   ).action((paths, options) => {
     try {
       emit4(name, runQuery(queryOptions(paths, options, keys)), options, render2);
@@ -25579,7 +25603,7 @@ var define = (program3, name, description, keys, render2) => {
         `commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
 `
       );
-      process.exitCode = 1;
+      process.exitCode = USAGE_EXIT_CODE3;
     }
   });
 };
@@ -25728,7 +25752,10 @@ var evaluationInstant4 = (raw) => {
   return parsed;
 };
 var register10 = (program3) => {
-  program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).action((options) => {
+  program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
+    "after",
+    "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
+  ).action((options) => {
     try {
       const at = evaluationInstant4(options.at);
       const scan2 = collectRecords(
@@ -25742,7 +25769,7 @@ var register10 = (program3) => {
     } catch (error2) {
       process.stderr.write(`commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
 `);
-      process.exitCode = 1;
+      process.exitCode = 2;
     }
   });
 };
@@ -25987,13 +26014,13 @@ var startStdioServer = async (opts = {}) => {
 
 // src/commands/mcp.ts
 var register11 = (program3) => {
-  program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").action(() => {
+  program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
         `commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
 `
       );
-      process.exitCode = 1;
+      process.exitCode = 2;
     });
   });
 };
@@ -26353,7 +26380,7 @@ var runSquashPreserve = (input = {}) => {
 var register12 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
-    "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write."
+    "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
   ).action((range, flags) => {
     const outcome = runSquashPreserve({
       range,
@@ -26895,7 +26922,7 @@ var runValidate = (input = {}) => {
 var register13 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
-    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error."
+    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
   ).action((flags) => {
     const result = runValidate({
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
@@ -26928,7 +26955,10 @@ var runParse = (options) => {
 };
 var program2 = new Command();
 program2.name("commitlore").description("Git commit trailers as institutional memory for AI coding agents").version(pkg.version ?? "0.0.0");
-program2.command("parse").description("Parse a commit message into its CommitLore trailers (SPEC \xA72)").option("--message-file <path>", "read the message from a file instead of stdin").option("--json", "emit the parsed trailers as JSON").action((options) => {
+program2.command("parse").description("Parse a commit message into its CommitLore trailers (SPEC \xA72)").option("--message-file <path>", "read the message from a file instead of stdin").option("--json", "emit the parsed trailers as JSON").addHelpText(
+  "after",
+  "\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read."
+).action((options) => {
   runParse(options);
 });
 register13(program2);
@@ -26968,5 +26998,5 @@ try {
   }
   process.stderr.write(`commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
 `);
-  process.exit(1);
+  process.exit(2);
 }

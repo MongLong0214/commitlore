@@ -113,7 +113,7 @@ describe('commitlore CLI', () => {
 
   it('fails with a message, not a stack trace, on an unreadable file', () => {
     const result = runCli(['parse', '--message-file', 'no/such/message.txt']);
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stderr).toContain('commitlore:');
     expect(result.stderr).not.toContain('at Object.');
   });

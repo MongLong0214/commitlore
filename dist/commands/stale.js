@@ -164,6 +164,9 @@ const evaluationInstant = (raw) => {
  * Exit status stays 0 even with findings: `stale` reports, it does not gate.
  * The non-zero exit of SPEC §6 belongs to `commitlore validate`; a caller that
  * wants CI to fail on a dangling reference reads `danglingRefs` from `--json`.
+ * The only non-zero code `stale` uses is 2, for a usage error -- an
+ * unparseable `--at`, or git unable to answer at all (SPEC §10: neither is a
+ * finding).
  */
 export const register = (program) => {
     program
@@ -172,6 +175,8 @@ export const register = (program) => {
         .option('--json', 'emit the report as JSON')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option('--all-history', `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`)
+        .addHelpText('after', '\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), ' +
+        '2 a usage error -- an unparseable --at, or git could not answer (SPEC §10).')
         .action((options) => {
         try {
             const at = evaluationInstant(options.at);
@@ -181,7 +186,7 @@ export const register = (program) => {
         }
         catch (error) {
             process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 1;
+            process.exitCode = 2;
         }
     });
 };

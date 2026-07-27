@@ -245,18 +245,21 @@ export const register = (program) => {
         .command('install')
         .description('install the commit-msg hook, preserving and chaining any existing one')
         .option('--force', 'replace an already preserved hook when a foreign hook is in the way')
+        .addHelpText('after', '\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC §10).')
         .action((flags) => {
         emit(installHook(flags.force === undefined ? {} : { force: flags.force }));
     });
     hooks
         .command('uninstall')
         .description('remove the commit-msg hook and restore the one it replaced')
+        .addHelpText('after', '\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC §10).')
         .action(() => {
         emit(uninstallHook());
     });
     hooks
         .command('status')
         .description('report what is installed in the hooks directory')
+        .addHelpText('after', '\nExit codes: 0 reported, 2 could not run -- no repository (SPEC §10).')
         .action(() => {
         emit(hookStatus());
     });

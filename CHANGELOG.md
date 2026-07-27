@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+Exit codes are now one contract across every command (SPEC §10), not a
+per-command habit: `0` ran, nothing to report; `1` ran, found what the caller
+asked about (a violation, a match, a block); `2` could not run (usage error,
+unresolvable ref, missing dependency, missing input file, no repository); `3`
+ran and answered, but could not see everything (unfetched notes, shallow
+history).
+
+`guard` was the one command that disagreed with itself: `1` meant a broken
+invocation and `2` meant a match, both opposite of `validate`'s `1`/`2`, and
+`--help` documented neither. **`guard`'s `1` and `2` are now swapped** — a
+match is `1`, a usage error is `2` — which is a breaking change for anything
+scripted against the old numbers. Everything else was consistency work, not a
+new behavior: `context`/`limits`/`ruled-out`/`warnings` now use `2` instead of
+`1` for "no repository" or a bad flag (`3`, for an unfetched notes mirror, is
+unchanged); `parse`, `harvest`, and `index --rebuild` now use `2` instead of
+`1` for a missing input file or a missing dependency, matching what
+`harvest-verify`, `inject`, `hooks`, and `squash-preserve` already did.
+
+Every command now documents its exit codes in `--help`.
+
 ## 0.1.0 — 2026-07-26
 
 First release. Protocol v2.0.0.
