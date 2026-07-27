@@ -3,7 +3,7 @@
   "$id": "https://commitlore.dev/schema/record.schema.json",
   "title": "CommitLore Record",
   "description": "A parsed CommitLore record: the set of trailers attached to a single commit (SPEC.md §1, §3). This schema validates the output of `git interpret-trailers --parse`, not raw commit text.",
-  "$comment": "Enforceable here: unknown-key rejection, enum values, Record-Id/Ruled-out/Provenance/CommitLore-Version/Expires-as-date format, and single-valued cardinality (via contains/maxContains, mirroring SINGLE_VALUED in src/core/types.ts). NOT enforceable here, left to the validator (SPEC §6): dangling-ref (Follows/Supersedes must resolve against Record-Ids that exist elsewhere in git history — a cross-record, cross-commit check with no meaning inside a single record document) and repeatable-key-vs-history reasoning. The `format: date` keyword on Expires requires an AJV instance with ajv-formats' `date` format registered; without it, that branch degrades to pattern-only (digit-shape) checking.",
+  "$comment": "Enforceable here: unknown-key rejection, enum values, Record-Id/Ruled-out/Provenance/CommitLore-Version/Expires-as-date format, and single-valued cardinality (via contains/maxContains, mirroring SINGLE_VALUED in src/core/types.ts). NOT enforceable here, left to repository-aware validation (SPEC §6): dangling-ref (Follows/Supersedes must resolve against Record-Ids elsewhere in git history), duplicate-id (a Record-Id must resolve to exactly one logical record), and repeatable-key-vs-history reasoning. The `format: date` keyword on Expires requires an AJV instance with ajv-formats' `date` format registered; without it, that branch degrades to pattern-only (digit-shape) checking.",
   "type": "object",
   "required": [
     "trailers"

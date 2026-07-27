@@ -10,7 +10,7 @@
  */
 import { execGit } from '../core/git.js';
 import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
-import { findDanglingRefs, foldLifecycle, isStale } from '../core/stale.js';
+import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 /**
  * How many commits a scan reads when `--all-history` is not given. A bounded
@@ -36,7 +36,7 @@ const LOG_FORMAT = `%H${UNIT}%cI${UNIT}%B`;
  * a commit with no trailers). The wording has changed across git versions, so
  * both are matched.
  */
-const EMPTY_REPO_RE = /does not have any commits yet|bad default revision/;
+const EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
 /**
  * A message with no line of the form `Key:` cannot contain a trailer under
  * git's grammar (SPEC §2.2), so parsing it would spawn a process to be told
@@ -71,6 +71,7 @@ export const collectRecords = (opts = {}) => {
     const args = ['log', '-z', `--format=${LOG_FORMAT}`];
     if (opts.allHistory !== true)
         args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+    args.push('--end-of-options', opts.revision ?? 'HEAD');
     const result = execGit(args, { cwd });
     if (result.code !== 0) {
         if (EMPTY_REPO_RE.test(result.stderr)) {
@@ -118,6 +119,7 @@ export const buildReport = (scan, at) => {
         totalRecords: states.length,
         records: stale,
         danglingRefs: findDanglingRefs(scan.records),
+        idCollisions: findIdCollisions(scan.records),
     };
 };
 const shortSha = (sha) => (sha.length > 8 ? sha.slice(0, 8) : sha);
@@ -134,6 +136,7 @@ export const formatReport = (report) => {
         ...section('expired', expired.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
         ...section('review', review.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
         ...section('dangling refs', report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
+        ...section('id collisions', report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
     ];
     if (report.truncated) {
         lines.push('', `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`);

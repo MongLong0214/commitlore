@@ -88,6 +88,12 @@ export declare const foldLifecycle: (records: StaleRecord[], opts: FoldOptions) 
  * and reporting them twice under two rules makes the repair loop chase one
  * line with two fixes.
  */
-export declare const findDanglingRefs: (records: StaleRecord[]) => Violation[];
+export declare const findDanglingRefs: (records: StaleRecord[], referencedBy?: StaleRecord[]) => Violation[];
+/**
+ * A note may mirror a commit byte-for-byte, but it may not add or replace
+ * content under an identity already declared elsewhere. Commit-only
+ * re-declarations remain lifecycle updates (SPEC §5).
+ */
+export declare const findIdCollisions: (records: StaleRecord[]) => Violation[];
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */
 export declare const isStale: (state: RecordState) => boolean;

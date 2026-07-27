@@ -15,17 +15,24 @@
  * The command never edits its input (SPEC §6: implementations MUST NOT silently
  * repair). It reads, reports, and exits.
  *
- * Scope: single-record rules only. `dangling-ref` asks whether a
- * `Supersedes:`/`Follows:` target exists elsewhere in history — a cross-record
- * question owned by the stale engine (T-205), not by this command.
+ * Shape checks run for every input. Reference checks additionally run when the
+ * input mode identifies a repository.
  */
 
 import { readFileSync } from 'node:fs';
 
 import type { Command } from 'commander';
 
+import { collectRecords } from './stale.js';
 import { execGit } from '../core/git.js';
+import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { validateRecord } from '../core/schema.js';
+import {
+  findDanglingRefs,
+  findIdCollisions,
+  type StaleRecord,
+} from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import { SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
 import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
@@ -63,6 +70,22 @@ export interface ValidateResult {
    * still be inscribing a secret into history permanently (ADR-0005).
    */
   secrets: SecretFinding[];
+  checks: ValidationCheck[];
+}
+
+export const CHECK_CLASS_NEEDS = {
+  shape: 'message',
+  reference: 'repository',
+  conservation: 'before and after',
+} as const;
+
+export type CheckClass = keyof typeof CHECK_CLASS_NEEDS;
+export type CheckStatus = 'ok' | 'failed' | 'not-checked';
+
+export interface ValidationCheck {
+  class: Exclude<CheckClass, 'conservation'>;
+  status: CheckStatus;
+  reason?: string;
 }
 
 /** One commit message to check, with its sha when the input mode knows one. */
@@ -90,6 +113,7 @@ const usageError = (message: string): ValidateResult => ({
   stderr: `commitlore: ${message}\n${USAGE}\n`,
   violations: [],
   secrets: [],
+  checks: [],
 });
 
 const messageOf = (error: unknown): string =>
@@ -217,6 +241,22 @@ const locateViolations = (source: MessageSource): LocatedViolation[] => {
   });
 };
 
+const locateReferenceViolations = (
+  source: MessageSource,
+  violations: Violation[],
+): LocatedViolation[] => {
+  const trailers = parseCommitMessage(source.message);
+  const lines = locateTrailerLines(source.message, trailers);
+  return violations.map((violation) => {
+    const line = lineForViolation(violation, trailers, lines);
+    return {
+      ...(source.sha === undefined ? {} : { sha: source.sha }),
+      ...(line === undefined ? {} : { line }),
+      ...violation,
+    };
+  });
+};
+
 /** Resolves a revision to a full sha so the reported `sha` is unambiguous. */
 const resolveCommit = (ref: string, cwd: string): string => {
   const result = execGit(['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`], { cwd });
@@ -271,6 +311,142 @@ const collectSources = (input: ValidateInput, cwd: string): MessageSource[] => {
   return [{ message: (input.readStdin ?? readStdinSync)() }];
 };
 
+interface ReferenceCheck {
+  check: ValidationCheck;
+  violations: LocatedViolation[];
+}
+
+const repositoryAvailable = (cwd: string): boolean =>
+  execGit(['rev-parse', '--git-dir'], { cwd }).code === 0;
+
+const indexedHeadRecords = (cwd: string): StaleRecord[] => {
+  const { handle } = ensureIndex({ cwd });
+  try {
+    const records = new Map<string, StaleRecord>();
+    for (const row of queryTrailers(handle)) {
+      const identity = `${row.sha}\0${row.source}`;
+      const existing = records.get(identity);
+      if (existing !== undefined) {
+        existing.trailers.push({ key: row.key, value: row.value });
+        continue;
+      }
+      records.set(identity, {
+        sha: row.sha,
+        committedAt: row.committedAt,
+        source: row.source,
+        trailers: [{ key: row.key, value: row.value }],
+      });
+    }
+    return [...records.values()];
+  } finally {
+    closeIndex(handle);
+  }
+};
+
+const recordsFor = (
+  source: MessageSource,
+  cwd: string,
+): { records: StaleRecord[]; notes: ReturnType<typeof notesAvailability> } => {
+  if (source.sha !== undefined) {
+    return collectRecords({ cwd, allHistory: true, revision: source.sha });
+  }
+  try {
+    return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
+  } catch {
+    return collectRecords({ cwd, allHistory: true, revision: 'HEAD' });
+  }
+};
+
+const reachableShas = (revision: string, cwd: string): Set<string> => {
+  const result = execGit(['rev-list', revision], { cwd });
+  if (result.code !== 0) {
+    throw new Error(firstLine(result.stderr) || `cannot walk revision ${revision}`);
+  }
+  return new Set(result.stdout.trim().split('\n').filter(Boolean));
+};
+
+const checkReferences = (
+  input: ValidateInput,
+  sources: MessageSource[],
+  cwd: string,
+): ReferenceCheck => {
+  if (
+    input.messageFile === undefined &&
+    input.commit === undefined &&
+    input.range === undefined
+  ) {
+    return {
+      check: { class: 'reference', status: 'not-checked', reason: 'no repository' },
+      violations: [],
+    };
+  }
+  if (!repositoryAvailable(cwd)) {
+    return {
+      check: { class: 'reference', status: 'not-checked', reason: 'no repository' },
+      violations: [],
+    };
+  }
+
+  try {
+    const violations: LocatedViolation[] = [];
+    for (const source of sources) {
+      const trailers = parseCommitMessage(source.message);
+      const candidate: StaleRecord = {
+        trailers,
+        source: 'commit',
+        ...(source.sha === undefined ? {} : { sha: source.sha }),
+      };
+      const scan = recordsFor(source, cwd);
+      if (scan.notes === 'unfetched') {
+        return {
+          check: {
+            class: 'reference',
+            status: 'not-checked',
+            reason: 'notes mirror not fetched',
+          },
+          violations: [],
+        };
+      }
+
+      const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
+      const repositoryRecords = scan.records.filter(
+        (record) => record.sha !== undefined && reachable.has(record.sha),
+      );
+      const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
+      const dangling = findDanglingRefs(prior, [candidate]);
+      const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+      const collisions =
+        recordId === undefined
+          ? []
+          : findIdCollisions([...repositoryRecords, candidate]).filter(
+              (violation) => violation.value === recordId,
+            );
+      violations.push(...locateReferenceViolations(source, [...dangling, ...collisions]));
+    }
+
+    return {
+      check: { class: 'reference', status: violations.length === 0 ? 'ok' : 'failed' },
+      violations,
+    };
+  } catch (error) {
+    return {
+      check: {
+        class: 'reference',
+        status: 'not-checked',
+        reason: `repository scan failed: ${firstLine(messageOf(error))}`,
+      },
+      violations: [],
+    };
+  }
+};
+
+const formatCheck = (check: ValidationCheck): string => {
+  const name = check.class === 'reference' ? 'references' : check.class;
+  return check.status === 'not-checked'
+    ? `${name} not checked (${check.reason ?? 'required information unavailable'})`
+    : `${name} ${check.status}`;
+};
+
 /** `a1b2c3d4e5:12: enum Blast — got "wide", want "local|module|system"` */
 const formatViolation = (violation: LocatedViolation): string => {
   const parts: string[] = [];
@@ -299,11 +475,12 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
 
   const cwd = input.cwd ?? process.cwd();
 
-  let violations: LocatedViolation[];
+  let shapeViolations: LocatedViolation[];
   let secrets: SecretFinding[];
+  let sources: MessageSource[];
   try {
-    const sources = collectSources(input, cwd);
-    violations = sources.flatMap(locateViolations);
+    sources = collectSources(input, cwd);
+    shapeViolations = sources.flatMap(locateViolations);
     // A credential in a commit message is inscribed permanently -- rewriting
     // history does not reach the clones and forks that already have it. So the
     // scan runs on the same path as validation, which is what the commit-msg
@@ -313,21 +490,32 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
     return usageError(messageOf(error));
   }
 
+  const references = checkReferences(input, sources, cwd);
+  const violations = [...shapeViolations, ...references.violations];
+  const checks: ValidationCheck[] = [
+    {
+      class: 'shape',
+      status: shapeViolations.length > 0 || secrets.length > 0 ? 'failed' : 'ok',
+    },
+    references.check,
+  ];
+  const status = `${checks.map(formatCheck).join(' · ')}\n`;
   const failed = violations.length > 0 || secrets.length > 0;
 
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
-      stdout: `${JSON.stringify({ violations, secrets })}\n`,
+      stdout: `${JSON.stringify({ checks, violations, secrets })}\n`,
       stderr: '',
       violations,
       secrets,
+      checks,
     };
   }
 
-  if (!failed) return { code: 0, stdout: '', stderr: '', violations, secrets };
+  if (!failed) return { code: 0, stdout: status, stderr: '', violations, secrets, checks };
 
-  const parts: string[] = [];
+  const parts: string[] = [status.trimEnd()];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join('\n'));
   if (secrets.length > 0) parts.push(formatFindings(secrets));
 
@@ -347,6 +535,7 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
     stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
     violations,
     secrets,
+    checks,
   };
 };
 
