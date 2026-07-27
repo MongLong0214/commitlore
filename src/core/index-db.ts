@@ -57,7 +57,7 @@ import { dirname, resolve } from 'node:path';
 
 import type * as BetterSqlite3 from 'better-sqlite3';
 
-import { execGit, execGitOrThrow } from './git.js';
+import { execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseCommitMessage } from './trailers.js';
 import type { Trailer } from './types.js';
 
@@ -117,6 +117,8 @@ const LOG_BATCH = 1024;
 
 /** `git log` output can be large; 256 MiB leaves room for a wide merge commit. */
 const LOG_MAX_BUFFER = 256 * 1024 * 1024;
+
+const GIT_NO_SUCH_REF = 1;
 
 const RECORD_SEP = '\x01';
 const FIELD_SEP = '\0';
@@ -443,10 +445,9 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
  * starts.
  */
 const readNoteRecords = (cwd: string): RawRecord[] => {
-  const listed = execGit(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
-  if (listed.code !== 0) return [];
+  const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
 
-  const annotated = listed.stdout
+  const annotated = listed
     .split('\n')
     .filter((line) => line !== '')
     .map((line) => line.split(' ')[1] ?? '')
@@ -455,11 +456,11 @@ const readNoteRecords = (cwd: string): RawRecord[] => {
 
   /* Notes may annotate any object. `git log` refuses a blob, so one bad note
      would otherwise take the whole index down. */
-  const typed = execGit(['cat-file', '--batch-check'], {
+  const typed = execGitOrThrow(['cat-file', '--batch-check'], {
     cwd,
     stdin: `${annotated.join('\n')}\n`,
   });
-  const commits = typed.stdout
+  const commits = typed
     .split('\n')
     .filter((line) => line.endsWith(' commit') || line.includes(' commit '))
     .map((line) => line.split(' ')[0] ?? '')
@@ -519,7 +520,13 @@ const revParse = (cwd: string, rev: string): string | null => {
 /** Unlike `revParse`, does not peel to a commit — a notes ref points at a tree. */
 const revParseRef = (cwd: string, ref: string): string | null => {
   const result = execGit(['rev-parse', '--verify', '--quiet', ref], { cwd });
-  if (result.code !== 0) return null;
+  if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '') return null;
+  if (result.code !== 0) {
+    throw Object.assign(new Error(`git could not resolve ${ref}: ${result.stderr.trim()}`), {
+      code: result.code,
+      stderr: result.stderr,
+    });
+  }
   const sha = result.stdout.trim();
   return sha === '' ? null : sha;
 };
@@ -804,11 +811,13 @@ export const indexNotes = (handle: IndexHandle, opts: { force?: boolean } = {}):
 
   if (!(opts.force ?? false) && refSha === indexed) return 0;
 
-  deleteNoteRows(handle);
   const records = refSha === null ? [] : readNoteRecords(handle.cwd);
-  const counts = insertRecords(handle, records);
-  writeMeta(handle.db, 'notes_ref_sha', refSha);
-  return counts.trailers;
+  return handle.db.transaction(() => {
+    deleteNoteRows(handle);
+    const counts = insertRecords(handle, records);
+    writeMeta(handle.db, 'notes_ref_sha', refSha);
+    return counts.trailers;
+  })();
 };
 
 const emptyStats = (handle: IndexHandle, started: number): IndexStats => ({
@@ -964,7 +973,12 @@ export const ensureIndex = (
   opts: OpenIndexOptions = {},
 ): { handle: IndexHandle; stats: IndexStats } => {
   const handle = openIndex(opts);
-  return { handle, stats: updateIndex(handle) };
+  try {
+    return { handle, stats: updateIndex(handle) };
+  } catch (error) {
+    closeIndex(handle);
+    throw error;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -1147,6 +1161,7 @@ export const scanTrailers = (
   opts: { cwd?: string } = {},
 ): IndexedTrailer[] => {
   const cwd = opts.cwd ?? process.cwd();
+  if (historyAvailability(cwd) === 'unavailable') return [];
   const head = revParse(cwd, 'HEAD');
   const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
 

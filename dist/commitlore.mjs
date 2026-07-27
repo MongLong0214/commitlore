@@ -11983,6 +11983,7 @@ var SCHEMA_VERSION = 1;
 var NOTES_REF = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
+var GIT_NO_SUCH_REF2 = 1;
 var RECORD_SEP = "";
 var FIELD_SEP = "\0";
 var TRAILER_SEP = "";
@@ -12132,16 +12133,15 @@ var readCommitRecords = (cwd, shas) => {
   return records;
 };
 var readNoteRecords = (cwd) => {
-  const listed = execGit(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
-  if (listed.code !== 0) return [];
-  const annotated = listed.stdout.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "");
+  const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
+  const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "");
   if (annotated.length === 0) return [];
-  const typed = execGit(["cat-file", "--batch-check"], {
+  const typed = execGitOrThrow(["cat-file", "--batch-check"], {
     cwd,
     stdin: `${annotated.join("\n")}
 `
   });
-  const commits = typed.stdout.split("\n").filter((line) => line.endsWith(" commit") || line.includes(" commit ")).map((line) => line.split(" ")[0] ?? "").filter((sha) => sha !== "");
+  const commits = typed.split("\n").filter((line) => line.endsWith(" commit") || line.includes(" commit ")).map((line) => line.split(" ")[0] ?? "").filter((sha) => sha !== "");
   if (commits.length === 0) return [];
   const records = [];
   for (const batch of chunked(commits, LOG_BATCH)) {
@@ -12190,7 +12190,13 @@ var revParse = (cwd, rev) => {
 };
 var revParseRef = (cwd, ref) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", ref], { cwd });
-  if (result.code !== 0) return null;
+  if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
+  if (result.code !== 0) {
+    throw Object.assign(new Error(`git could not resolve ${ref}: ${result.stderr.trim()}`), {
+      code: result.code,
+      stderr: result.stderr
+    });
+  }
   const sha = result.stdout.trim();
   return sha === "" ? null : sha;
 };
@@ -12374,11 +12380,13 @@ var indexNotes = (handle, opts = {}) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
-  deleteNoteRows(handle);
   const records = refSha === null ? [] : readNoteRecords(handle.cwd);
-  const counts = insertRecords(handle, records);
-  writeMeta(handle.db, "notes_ref_sha", refSha);
-  return counts.trailers;
+  return handle.db.transaction(() => {
+    deleteNoteRows(handle);
+    const counts = insertRecords(handle, records);
+    writeMeta(handle.db, "notes_ref_sha", refSha);
+    return counts.trailers;
+  })();
 };
 var emptyStats = (handle, started) => ({
   rebuilt: false,
@@ -12492,7 +12500,12 @@ var updateIndex = (handle, opts = {}) => {
 };
 var ensureIndex = (opts = {}) => {
   const handle = openIndex(opts);
-  return { handle, stats: updateIndex(handle) };
+  try {
+    return { handle, stats: updateIndex(handle) };
+  } catch (error2) {
+    closeIndex(handle);
+    throw error2;
+  }
 };
 var normalizePath = (path2) => path2.replace(/\/+$/, "");
 var compareTrailers = (a, b) => {
@@ -12613,6 +12626,7 @@ var toIndexedTrailers = (records) => records.flatMap((record2) => {
 });
 var scanTrailers = (query = {}, opts = {}) => {
   const cwd = opts.cwd ?? process.cwd();
+  if (historyAvailability(cwd) === "unavailable") return [];
   const head = revParse(cwd, "HEAD");
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
   const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd)];

@@ -17,7 +17,46 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import Database from 'better-sqlite3';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+
+type InjectedGitFailure = {
+  readonly matches: (args: readonly string[]) => boolean;
+  readonly code: number;
+  readonly stderr: string;
+};
+
+const gitInjection = vi.hoisted(
+  (): { failure: InjectedGitFailure | null } => ({ failure: null }),
+);
+
+vi.mock('../src/core/git.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/core/git.js')>();
+  return {
+    ...actual,
+    execGit: (
+      args: Parameters<typeof actual.execGit>[0],
+      opts?: Parameters<typeof actual.execGit>[1],
+    ): ReturnType<typeof actual.execGit> => {
+      const failure = gitInjection.failure;
+      if (failure?.matches(args)) {
+        return { stdout: '', stderr: failure.stderr, code: failure.code };
+      }
+      return actual.execGit(args, opts);
+    },
+    execGitOrThrow: (
+      args: Parameters<typeof actual.execGitOrThrow>[0],
+      opts?: Parameters<typeof actual.execGitOrThrow>[1],
+    ): ReturnType<typeof actual.execGitOrThrow> => {
+      const failure = gitInjection.failure;
+      if (!failure?.matches(args)) return actual.execGitOrThrow(args, opts);
+      throw Object.assign(
+        new Error(`git ${args.join(' ')} failed (exit ${failure.code}): ${failure.stderr}`),
+        { code: failure.code, stderr: failure.stderr },
+      );
+    },
+  };
+});
 
 import {
   closeIndex,
@@ -52,6 +91,11 @@ const temporaries: string[] = [];
 
 afterAll(() => {
   for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  gitInjection.failure = null;
+  vi.restoreAllMocks();
 });
 
 const makeRepo = (): string => {
@@ -510,6 +554,187 @@ describe('index-db: notes as a second source', () => {
       updateIndex(handle);
       expect(queryTrailers(handle, { source: 'notes' })).toEqual([]);
       expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('keeps indexed notes and their ref stamp when a replacement read fails', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: keep the last good note\nRecord-Id: r-note04\n' },
+    );
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      const before = queryTrailers(handle, { source: 'notes' });
+      const indexedRef = execGitOrThrow(
+        ['rev-parse', '--verify', 'refs/notes/commitlore'],
+        { cwd: dir },
+      ).trim();
+
+      execGitOrThrow(
+        [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-f', '-F', '-', target],
+        { cwd: dir, stdin: 'Warn: replacement must wait\nRecord-Id: r-note05\n' },
+      );
+      expect(execGitOrThrow(['rev-parse', 'refs/notes/commitlore'], { cwd: dir }).trim()).not.toBe(
+        indexedRef,
+      );
+      gitInjection.failure = {
+        matches: (args) =>
+          args.includes('log') && args.includes('--notes=refs/notes/commitlore'),
+        code: 70,
+        stderr: 'injected note read failure',
+      };
+
+      expect(() => updateIndex(handle)).toThrow(/injected note read failure/);
+      expect(queryTrailers(handle, { source: 'notes' })).toEqual(before);
+      expect(
+        handle.db.prepare("SELECT v FROM meta WHERE k = 'notes_ref_sha'").pluck().get(),
+      ).toBe(indexedRef);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('indexes the replacement on the next update after a failed note read', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: original note\nRecord-Id: r-note06\n' },
+    );
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      execGitOrThrow(
+        [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-f', '-F', '-', target],
+        { cwd: dir, stdin: 'Warn: recovered replacement\nRecord-Id: r-note07\n' },
+      );
+      gitInjection.failure = {
+        matches: (args) =>
+          args.includes('log') && args.includes('--notes=refs/notes/commitlore'),
+        code: 70,
+        stderr: 'injected note read failure',
+      };
+      expect(() => updateIndex(handle)).toThrow(/injected note read failure/);
+
+      gitInjection.failure = null;
+      expect(updateIndex(handle).noteTrailersIndexed).toBe(2);
+      expect(queryTrailers(handle, { source: 'notes' }).map((row) => row.value)).toEqual([
+        'recovered replacement',
+        'r-note07',
+      ]);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('closes the lazy-update handle when note indexing throws', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: force ensureIndex to fail\nRecord-Id: r-note08\n' },
+    );
+    gitInjection.failure = {
+      matches: (args) => args.includes('notes') && args.includes('list'),
+      code: 70,
+      stderr: 'injected notes list failure',
+    };
+    const close = vi.spyOn(Database.prototype, 'close');
+
+    expect(() => ensureIndex({ cwd: dir })).toThrow(/injected notes list failure/);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an absent notes ref as an empty source', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+    try {
+      expect(() => updateIndex(handle)).not.toThrow();
+      expect(queryTrailers(handle, { source: 'notes' })).toEqual([]);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('raises when git cannot list an existing notes ref', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: listing must be checked\nRecord-Id: r-note09\n' },
+    );
+    gitInjection.failure = {
+      matches: (args) => args.includes('notes') && args.includes('list'),
+      code: 70,
+      stderr: 'injected notes list failure',
+    };
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      expect(() => updateIndex(handle)).toThrow(/injected notes list failure/);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('raises when git cannot inspect an annotated object', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: object typing must be checked\nRecord-Id: r-note10\n' },
+    );
+    gitInjection.failure = {
+      matches: (args) => args.includes('cat-file') && args.includes('--batch-check'),
+      code: 70,
+      stderr: 'injected cat-file failure',
+    };
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      expect(() => updateIndex(handle)).toThrow(/injected cat-file failure/);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('raises when git cannot resolve the notes ref for an update', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const target = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: dir }).trim();
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', target],
+      { cwd: dir, stdin: 'Warn: original ref state\nRecord-Id: r-note11\n' },
+    );
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      execGitOrThrow(
+        [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-f', '-F', '-', target],
+        { cwd: dir, stdin: 'Warn: moved ref state\nRecord-Id: r-note12\n' },
+      );
+      gitInjection.failure = {
+        matches: (args) =>
+          args.includes('rev-parse') && args.includes('refs/notes/commitlore'),
+        code: 70,
+        stderr: 'injected ref resolution failure',
+      };
+
+      expect(() => updateIndex(handle)).toThrow(/injected ref resolution failure/);
     } finally {
       closeIndex(handle);
     }

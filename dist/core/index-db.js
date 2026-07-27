@@ -53,7 +53,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { execGit, execGitOrThrow } from './git.js';
+import { execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseCommitMessage } from './trailers.js';
 /**
  * Resolved on first use, not at import.
@@ -92,6 +92,7 @@ export const NOTES_REF = 'refs/notes/commitlore';
 const LOG_BATCH = 1024;
 /** `git log` output can be large; 256 MiB leaves room for a wide merge commit. */
 const LOG_MAX_BUFFER = 256 * 1024 * 1024;
+const GIT_NO_SUCH_REF = 1;
 const RECORD_SEP = '\x01';
 const FIELD_SEP = '\0';
 const TRAILER_SEP = '\x1e';
@@ -306,10 +307,8 @@ const readCommitRecords = (cwd, shas) => {
  * starts.
  */
 const readNoteRecords = (cwd) => {
-    const listed = execGit(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
-    if (listed.code !== 0)
-        return [];
-    const annotated = listed.stdout
+    const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
+    const annotated = listed
         .split('\n')
         .filter((line) => line !== '')
         .map((line) => line.split(' ')[1] ?? '')
@@ -318,11 +317,11 @@ const readNoteRecords = (cwd) => {
         return [];
     /* Notes may annotate any object. `git log` refuses a blob, so one bad note
        would otherwise take the whole index down. */
-    const typed = execGit(['cat-file', '--batch-check'], {
+    const typed = execGitOrThrow(['cat-file', '--batch-check'], {
         cwd,
         stdin: `${annotated.join('\n')}\n`,
     });
-    const commits = typed.stdout
+    const commits = typed
         .split('\n')
         .filter((line) => line.endsWith(' commit') || line.includes(' commit '))
         .map((line) => line.split(' ')[0] ?? '')
@@ -377,8 +376,14 @@ const revParse = (cwd, rev) => {
 /** Unlike `revParse`, does not peel to a commit — a notes ref points at a tree. */
 const revParseRef = (cwd, ref) => {
     const result = execGit(['rev-parse', '--verify', '--quiet', ref], { cwd });
-    if (result.code !== 0)
+    if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '')
         return null;
+    if (result.code !== 0) {
+        throw Object.assign(new Error(`git could not resolve ${ref}: ${result.stderr.trim()}`), {
+            code: result.code,
+            stderr: result.stderr,
+        });
+    }
     const sha = result.stdout.trim();
     return sha === '' ? null : sha;
 };
@@ -608,11 +613,13 @@ export const indexNotes = (handle, opts = {}) => {
     const indexed = readMeta(handle.db, 'notes_ref_sha');
     if (!(opts.force ?? false) && refSha === indexed)
         return 0;
-    deleteNoteRows(handle);
     const records = refSha === null ? [] : readNoteRecords(handle.cwd);
-    const counts = insertRecords(handle, records);
-    writeMeta(handle.db, 'notes_ref_sha', refSha);
-    return counts.trailers;
+    return handle.db.transaction(() => {
+        deleteNoteRows(handle);
+        const counts = insertRecords(handle, records);
+        writeMeta(handle.db, 'notes_ref_sha', refSha);
+        return counts.trailers;
+    })();
 };
 const emptyStats = (handle, started) => ({
     rebuilt: false,
@@ -751,7 +758,13 @@ export const updateIndex = (handle, opts = {}) => {
 /** Opens the index and brings it up to date. The one call a query command needs. */
 export const ensureIndex = (opts = {}) => {
     const handle = openIndex(opts);
-    return { handle, stats: updateIndex(handle) };
+    try {
+        return { handle, stats: updateIndex(handle) };
+    }
+    catch (error) {
+        closeIndex(handle);
+        throw error;
+    }
 };
 // ---------------------------------------------------------------------------
 // Querying — the index path and the no-index path, which must agree
@@ -903,6 +916,8 @@ const toIndexedTrailers = (records) => records.flatMap((record) => {
  */
 export const scanTrailers = (query = {}, opts = {}) => {
     const cwd = opts.cwd ?? process.cwd();
+    if (historyAvailability(cwd) === 'unavailable')
+        return [];
     const head = revParse(cwd, 'HEAD');
     const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
     const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd)];
