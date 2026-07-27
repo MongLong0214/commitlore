@@ -125,9 +125,7 @@ commitlore guard --proposal "换成 RabbitMQ"       # 已被否决？以非零�
 
 **诚实地说说预期。** 记录能挺过 rebase、squash 与重命名，在大型历史上依然很快
 （10 万次提交下 p50 1.86ms）。**尚未被证明的**是它能在多大程度上改变智能体的行为
-—— 我们自己的基准测试没有跑出显著差异，我们照样公开：
-[`bench/VERDICT-M1.md`](bench/VERDICT-M1.md)、
-[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md)。
+。此前发布的基准测试结果因运行时没有记录 provenance，已在[下文](#测量结果)撤回。
 
 ## 立即使用（纯 git）
 
@@ -159,6 +157,12 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | **L5 CommitLoreBench** | 重复提案率（CommitLore 开/关）、噪声消融、每个被接受原子的成本 —— README 所有数字均可从日志再生 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) / [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
 
 完整计划：[ADR](docs/adr/) · [PRD](docs/prd/) · [票据规格](docs/tickets/TICKETS.md) · [Issues](https://github.com/MongLong0214/commitlore/issues)
+
+## 测量结果
+
+<!-- BENCH:WITHDRAWN -->
+
+这些基准数字现已撤回。生成这些数字的运行没有记录所执行的提交或 `dist/` 摘要，因此仓库中目前没有任何数据集能够证明其每一行由哪个二进制文件生成。M3 因此被直接判为无效（§15），并正以 M3-b 重新运行。判定文档继续保留，作为当时所得结论的带日期记录：[`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[`ROUTE-GAP.md`](bench/ROUTE-GAP.md)、[`GUARD-CANNOT-BLOCK.md`](bench/GUARD-CANNOT-BLOCK.md)、[`DETECTOR-DEFECT.md`](bench/DETECTOR-DEFECT.md)。只有在存在可证明 provenance 的数据集时才恢复数字，在此之前不会恢复。
 
 ## 为什么不直接用……
 

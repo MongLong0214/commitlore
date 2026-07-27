@@ -1,5 +1,10 @@
 # CommitLoreBench
 
+**No dataset currently in this repository can be summarized.** Existing rows do
+not record the harness commit or the `dist/` digest they executed, so
+`bench/report.ts` correctly refuses them. M3 was voided for that reason (§15)
+and is being re-run as M3-b.
+
 Measures the one thing that decides whether CommitLore is worth building: does an
 agent that can see recorded decisions stop re-proposing the approaches a team
 already rejected?

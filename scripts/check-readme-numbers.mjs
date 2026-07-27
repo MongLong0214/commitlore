@@ -7,20 +7,21 @@
 // or one that was generated honestly and then went stale when the matrix grew —
 // fails here, which is the only way a documentation claim stays checkable.
 //
-// It does two things:
+// It does three things:
 //
-//   1. regenerates `bench/report.ts --section` and compares it byte for byte
-//      with the block between the markers in README.md;
-//   2. refuses a small set of statistics *outside* the block. A generated block
+//   1. when the declared datasets carry provenance, regenerates
+//      `bench/report.ts --section` and compares it byte for byte with README.md;
+//   2. while any row lacks provenance, requires the withdrawal notice in all
+//      four READMEs and refuses a generated block;
+//   3. refuses a small set of statistics *outside* the block. A generated block
 //      is worth nothing if the paragraph above it carries a hand-written p-value.
 //
 // Usage:
 //   node scripts/check-readme-numbers.mjs [--write] [--readme <path>] [<results.jsonl>...]
 //
-// With no result files it regenerates from the sources declared in
-// bench/report.ts (README_SOURCES) — which is what CI runs. `--write` replaces
-// the block in place, so the block is never assembled by a human hand at all;
-// CI never passes --write, so a repository that skipped it still fails.
+// With no result files it checks the sources declared in bench/report.ts
+// (README_SOURCES) — which is what CI runs. `--write` replaces a generated block
+// only after the provenance gate passes.
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,11 +29,17 @@ import path from 'node:path';
 import process from 'node:process';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
+const PUBLIC_READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh-CN.md'].map((file) =>
+  path.join(REPO_ROOT, file),
+);
+const WITHDRAWAL_MARKER = '<!-- BENCH:WITHDRAWN -->';
+const GENERATED_BEGIN = '<!-- BENCH:BEGIN -->';
+const GENERATED_END = '<!-- BENCH:END -->';
 
 const usage = () => {
   process.stderr.write(
     'usage: check-readme-numbers.mjs [--write] [--readme <path>] [<results.jsonl>...]\n' +
-      '  --readme  the markdown file to check (default: README.md)\n' +
+      '  --readme  one markdown file to check (default: all four public READMEs)\n' +
       '  --write   regenerate the block in place instead of only checking it\n',
   );
   return 2;
@@ -40,7 +47,7 @@ const usage = () => {
 
 const parseArgs = (argv) => {
   const files = [];
-  let readme = path.join(REPO_ROOT, 'README.md');
+  let readme = null;
   let write = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -80,11 +87,14 @@ const regenerate = (files) => {
     return null;
   }
   if (result.status !== 0) {
+    if (/\bunrecorded:\s*\d+/.test(result.stderr)) {
+      return { expected: null, provenanceRecorded: false };
+    }
     process.stderr.write(result.stderr || '');
     process.stderr.write(`check-readme-numbers: bench/report.ts exited ${result.status}\n`);
     return null;
   }
-  return result.stdout;
+  return { expected: result.stdout, provenanceRecorded: true };
 };
 
 /**
@@ -110,28 +120,75 @@ const firstDifference = (expected, actual) => {
   return null;
 };
 
+const relativePath = (file) => {
+  const inside = path.relative(REPO_ROOT, file);
+  return inside !== '' && !inside.startsWith('..') ? inside : file;
+};
+
+const findStrays = (markdown) =>
+  STRAY_STATISTIC_PATTERNS.filter(({ pattern }) => pattern.test(markdown));
+
 const main = () => {
   const args = parseArgs(process.argv.slice(2));
   if (args === null) return usage();
 
-  const expected = regenerate(args.files);
-  if (expected === null) return 1;
+  const generation = regenerate(args.files);
+  if (generation === null) return 1;
 
+  const readmePaths = args.readme === null ? PUBLIC_READMES : [args.readme];
+  const readmes = [];
+  for (const file of readmePaths) {
+    if (!fs.existsSync(file)) {
+      process.stderr.write(`check-readme-numbers: no such file: ${file}\n`);
+      return 1;
+    }
+    readmes.push({ file, markdown: fs.readFileSync(file, 'utf8'), relative: relativePath(file) });
+  }
+
+  if (!generation.provenanceRecorded) {
+    for (const { markdown, relative } of readmes) {
+      const withdrawalCount = markdown.split(WITHDRAWAL_MARKER).length - 1;
+      const hasGeneratedBlock = markdown.includes(GENERATED_BEGIN) || markdown.includes(GENERATED_END);
+      if (withdrawalCount !== 1 || hasGeneratedBlock) {
+        process.stderr.write(
+          `${relative}: dataset provenance is unrecorded; expected exactly one withdrawal notice and no generated numbers block.\n`,
+        );
+        return 1;
+      }
+      const strays = findStrays(markdown);
+      if (strays.length > 0) {
+        process.stderr.write(
+          `${relative}: found ${strays.map(({ label }) => label).join(', ')} while benchmark numbers are withdrawn.\n`,
+        );
+        return 1;
+      }
+    }
+    if (!args.write) {
+      process.stdout.write(
+        `${readmes.map(({ relative }) => relative).join(', ')}: withdrawal notice present; declared datasets lack provenance\n`,
+      );
+    }
+    return 0;
+  }
+
+  for (const { markdown, relative } of readmes) {
+    if (markdown.includes(WITHDRAWAL_MARKER)) {
+      process.stderr.write(
+        `${relative}: a provenanced dataset can be summarized, but the README still carries the withdrawal notice.\n`,
+      );
+      return 1;
+    }
+  }
+
+  const expected = generation.expected;
+  if (expected === null) return 1;
   const expectedLines = expected.replace(/\n$/, '').split('\n');
-  // The markers are whatever the generator emits, read off its own output. A
-  // copy of them here would be one more thing that can drift.
+  // The markers are whatever the generator emits, read off its own output.
   const begin = expectedLines[0];
   const end = expectedLines[expectedLines.length - 1];
-
-  if (!fs.existsSync(args.readme)) {
-    process.stderr.write(`check-readme-numbers: no such file: ${args.readme}\n`);
-    return 1;
-  }
-  const markdown = fs.readFileSync(args.readme, 'utf8');
-  // Repo-relative when it is inside the repo; the full path otherwise, because
-  // a diagnostic reading "../../../../tmp/..." helps nobody.
-  const inside = path.relative(REPO_ROOT, args.readme);
-  const relative = inside !== '' && !inside.startsWith('..') ? inside : args.readme;
+  const target = readmes[0];
+  if (target === undefined) return 1;
+  const { file: readme, markdown, relative } = target;
 
   const beginCount = markdown.split(begin).length - 1;
   const endCount = markdown.split(end).length - 1;
@@ -158,7 +215,7 @@ const main = () => {
       process.stdout.write(`${relative}: already up to date, nothing written\n`);
     } else {
       fs.writeFileSync(
-        args.readme,
+        readme,
         markdown.slice(0, beginAt) + expectedBlock + markdown.slice(endAt + end.length),
       );
       process.stdout.write(
@@ -187,7 +244,7 @@ const main = () => {
   }
 
   const outside = markdown.slice(0, beginAt) + markdown.slice(endAt + end.length);
-  const strays = STRAY_STATISTIC_PATTERNS.filter(({ pattern }) => pattern.test(outside));
+  const strays = findStrays(outside);
   if (strays.length > 0) {
     process.stderr.write(
       `${relative}: found ${strays.map(({ label }) => label).join(', ')} outside the generated block.\n` +

@@ -122,9 +122,8 @@ commitlore guard --proposal "RabbitMQ로 교체"  # 이미 기각? 0이 아닌 �
 
 **기대치는 정직하게.** 기록은 rebase·squash·이름 변경을 넘어 살아남고, 큰
 히스토리에서도 빠르다(10만 커밋 p50 1.86ms). **입증되지 않은 것**은 이것이
-에이전트 행동을 얼마나 바꾸는가다 — 자체 벤치마크는 유의차 없이 돌아왔고 그대로
-싣는다: [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md),
-[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md).
+에이전트 행동을 얼마나 바꾸는가다. 이전에 공개한 벤치마크 결과는 실행 provenance를
+기록하지 않았으므로 [아래에서](#측정-결과) 철회한다.
 
 ## 오늘 바로 쓰기 (순수 git)
 
@@ -156,6 +155,12 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | **L5 CommitLoreBench** | 재제안율(CommitLore on/off), 노이즈 어블레이션, 수용 기록당 비용 — README의 모든 수치는 로그에서 재생성 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) / [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
 
 전체 계획: [ADR](docs/adr/) · [PRD](docs/prd/) · [티켓 스펙](docs/tickets/TICKETS.md) · [이슈](https://github.com/MongLong0214/commitlore/issues)
+
+## 측정 결과
+
+<!-- BENCH:WITHDRAWN -->
+
+이 벤치마크 수치는 철회되었습니다. 수치를 만든 실행은 실행한 커밋과 `dist/` 다이제스트를 기록하지 않았으므로, 현재 저장소의 어떤 데이터셋도 어느 바이너리가 각 행을 만들었는지 증명할 수 없습니다. 그 이유로 M3는 전면 무효 처리되었고(§15) M3-b로 다시 실행 중입니다. 판정 문서는 당시 내린 결론의 날짜가 있는 기록으로 남습니다: [`VERDICT-M1.md`](bench/VERDICT-M1.md), [`VERDICT-M1b.md`](bench/VERDICT-M1b.md), [`VERDICT-M2.md`](bench/VERDICT-M2.md), [`ROUTE-GAP.md`](bench/ROUTE-GAP.md), [`GUARD-CANNOT-BLOCK.md`](bench/GUARD-CANNOT-BLOCK.md), [`DETECTOR-DEFECT.md`](bench/DETECTOR-DEFECT.md). provenance가 증명되는 데이터셋이 생기면 수치를 다시 싣고, 그전에는 싣지 않습니다.
 
 ## 그냥 이거 쓰면 안 되나?
 

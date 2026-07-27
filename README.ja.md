@@ -125,9 +125,8 @@ commitlore guard --proposal "RabbitMQ に置き換え"   # 却下済みなら非
 
 **期待値は正直に。** 記録は rebase・squash・リネームを越えて生き残り、大きな履歴でも
 速い（10 万コミットで p50 1.86ms）。**実証されていないのは**、これがエージェントの
-振る舞いをどれだけ変えるかだ。自前のベンチマークは有意差なしで返り、そのまま公開して
-いる: [`bench/VERDICT-M1.md`](bench/VERDICT-M1.md)、
-[`bench/ROUTE-GAP.md`](bench/ROUTE-GAP.md)。
+振る舞いをどれだけ変えるかだ。以前公開したベンチマーク結果は、実行 provenance を
+記録していなかったため、[以下で](#測定結果)撤回している。
 
 ## 今すぐ使う（素の git）
 
@@ -159,6 +158,12 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 | **L5 CommitLoreBench** | 再提案率（CommitLore on/off）、ノイズアブレーション、受理アトムあたりコスト — README の数値はすべてログから再生成 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) / [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
 
 全体計画: [ADR](docs/adr/) · [PRD](docs/prd/) · [チケット仕様](docs/tickets/TICKETS.md) · [Issues](https://github.com/MongLong0214/commitlore/issues)
+
+## 測定結果
+
+<!-- BENCH:WITHDRAWN -->
+
+このベンチマーク数値は撤回しました。数値を生成した実行は、実行対象のコミットと `dist/` ダイジェストを記録していなかったため、現在リポジトリにあるどのデータセットも、どのバイナリが各行を生成したかを証明できません。この理由で M3 は全面的に無効とされ（§15）、M3-b として再実行中です。判定文書は、当時の結論を記録した日付付きの文書として残します: [`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[`ROUTE-GAP.md`](bench/ROUTE-GAP.md)、[`GUARD-CANNOT-BLOCK.md`](bench/GUARD-CANNOT-BLOCK.md)、[`DETECTOR-DEFECT.md`](bench/DETECTOR-DEFECT.md)。provenance が証明されたデータセットが存在するときに限り、数値を再掲載します。
 
 ## 「それなら○○でいいのでは」への答え
 
