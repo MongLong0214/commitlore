@@ -81,4 +81,22 @@ describe('shallow history caveat', () => {
       }),
     );
   });
+
+  it('detects shallow history from a linked worktree', () => {
+    const clone = shallowClone();
+    const parent = mkdtempSync(join(tmpdir(), 'commitlore-shallow-worktree-'));
+    const cwd = join(parent, 'linked');
+    temporaries.push(parent);
+    git(clone, ['worktree', 'add', '-q', '-b', 'linked', cwd]);
+
+    expect(git(cwd, ['rev-parse', '--is-shallow-repository']).trim()).toBe('true');
+    expect(runQuery({ cwd, noIndex: true }).shallow).toBe(true);
+    expect(runDoctor({ cwd }).checks).toContainEqual(
+      expect.objectContaining({
+        id: 'history-depth',
+        status: 'warn',
+        fix: 'git fetch --unshallow',
+      }),
+    );
+  });
 });

@@ -82,7 +82,7 @@ export const historyAvailability = (cwd) => {
 };
 export const SHALLOW_HISTORY_CAVEAT = 'this clone has shallow history, so this answer may be missing records that exist upstream';
 export const hasShallowHistory = (cwd) => {
-    const gitDir = execGit(['rev-parse', '--git-dir'], { cwd });
-    return gitDir.code === 0 && existsSync(resolve(cwd, gitDir.stdout.trim(), 'shallow'));
+    const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
+    return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
 //# sourceMappingURL=git.js.map
