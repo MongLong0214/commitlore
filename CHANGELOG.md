@@ -35,6 +35,41 @@ reports it on stdout (`identityCollision: true` per block in `--json`, a
 should also catch the same-message case is open; SPEC and those commands are
 unchanged here.
 
+### Eliminates a `dist/`-race flake in `bench-ablation.test.ts`; scales `mcp.test.ts`'s per-test budget — bug-issue-88
+
+`test/bench-ablation.test.ts`'s "accepts all six arms" test failed
+intermittently under concurrent load (CI #79, #87). Diagnosed before
+changing anything: `bench/runner.ts` hashes the whole `dist/` tree at startup
+and re-checks it before every one of the six arms
+(`bench/hooks-settings.ts` `writeArmSettings`), refusing an arm when the two
+disagree — a real, useful check (it caught a genuine `dist/core/guard.js`
+drift once before). `dist/` is one directory shared by every vitest worker,
+though, and four other test files (`cli.test.ts`, `mcp.test.ts`,
+`action-lint.test.ts`, `action-preserve.test.ts`) each rebuild it via their
+own `tsc` in a `beforeAll` — so a concurrent rebuild from any of those can
+legitimately trip the check on a digest that was never wrong, only
+concurrently rewritten. Reproduced directly (`bench/runner.ts` invoked in a
+loop against a competing `tsc` rebuild loop): ~1 run in 5 fails with exactly
+the reported `Command failed:` / `dist/ changed after the benchmark matrix
+started` error. `execFileSync` is fully synchronous, so vitest's own
+per-test timeout cannot even pre-empt it — this was never a timeout problem,
+raising one would not have helped.
+
+Fixed the contention, not the symptom: `DIST_DIR` (`bench/hooks-settings.ts`)
+is now overridable via `COMMITLORE_BENCH_DIST_DIR`, unset (and so unchanged)
+everywhere except `bench-ablation.test.ts`, which now snapshots `dist/` into
+a private, unshared copy once per file and points every run at it. 20/20
+clean runs of the previously-flaky test under the same concurrent-rebuild
+load that failed 4/20 before.
+
+`mcp.test.ts` does not share that cause — it never calls `bench/runner.ts` or
+the digest check — but its JSON-RPC round trips are `await`ed (unlike
+`bench-ablation`'s synchronous `execFileSync`), so they genuinely are subject
+to vitest's fixed 5000ms default under real concurrency. Scaled its budget to
+`5_000 * Math.max(availableParallelism() - 1, 1)` — the same worker count
+vitest's own default pool sizing already uses — rather than picking a bigger
+constant.
+
 ### Multi-record grammar (SPEC §2.4) — bug-issue-60
 
 A message MAY now carry more than one record block. `squash-preserve` used to
