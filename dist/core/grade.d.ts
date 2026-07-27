@@ -33,6 +33,7 @@ export interface Grade {
     reason: string;
     /** blocked인 경우, 어떤 패턴에 걸렸는지 */
     matchedPatterns?: string[];
+    matchedTrailerKeys?: string[];
 }
 export interface GradeContext {
     /** 이 저장소에서 신뢰되는 작성자. 로컬은 --trusted-authors, Action은 GitHub API. */
@@ -116,8 +117,7 @@ export declare const normalizeForMatch: (text: string) => string;
  * which is not the same as "safe", only "not recognised" (see
  * `INJECTION_PATTERNS`).
  *
- * Exported so a consumer that injects more than `Warn:` can scan those fields
- * too; grading itself reads `Warn:` only, because that is the key SPEC §7 grades.
+ * Exported so consumers can scan text that is not part of a record too.
  */
 export declare const scanInjection: (text: string) => string[];
 /**

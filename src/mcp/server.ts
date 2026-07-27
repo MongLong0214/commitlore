@@ -200,6 +200,15 @@ export const contextUriPath = (uri: string): string => {
 const withheldBlocked = (result: QueryResult): QueryResult => {
   if (!result.records.some((record) => record.trust === 'blocked')) return result;
 
+  const keys = [
+    ...new Set(
+      result.records
+        .filter((record) => record.trust === 'blocked')
+        .flatMap((record) => record.matchedTrailerKeys ?? []),
+    ),
+  ].sort();
+  const source =
+    keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
   let withheld = 0;
   const records = result.records.map((record) => {
     if (record.trust !== 'blocked') return record;
@@ -215,7 +224,7 @@ const withheldBlocked = (result: QueryResult): QueryResult => {
     records,
     diagnostics: [
       ...result.diagnostics,
-      `withheld the content of ${withheld} record(s) graded blocked: a Warn: matching an ` +
+      `withheld the content of ${withheld} record(s) graded blocked: a ${source} matching an ` +
         'injection pattern is reported, never quoted (SPEC §7)',
     ],
   };

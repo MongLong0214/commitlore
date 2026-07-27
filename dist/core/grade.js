@@ -24,7 +24,6 @@
 import { execGit } from './git.js';
 import { foldLifecycle } from './stale.js';
 const PROVENANCE_KEY = 'Provenance';
-const WARN_KEY = 'Warn';
 /** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
 const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 /**
@@ -292,18 +291,40 @@ const fires = (haystack, entry) => {
  * which is not the same as "safe", only "not recognised" (see
  * `INJECTION_PATTERNS`).
  *
- * Exported so a consumer that injects more than `Warn:` can scan those fields
- * too; grading itself reads `Warn:` only, because that is the key SPEC §7 grades.
+ * Exported so consumers can scan text that is not part of a record too.
  */
 export const scanInjection = (text) => {
     const haystack = normalizeForMatch(text);
     return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
 };
 const trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-/** Union of every pattern the record's `Warn:` values trip, in table order. */
+// An allow-list would reopen the bug as the vocabulary grows; exclusion scans new prose by default.
+const STRUCTURAL_TRAILER_KEYS = new Set([
+    'Blast',
+    'Undo',
+    'Certainty',
+    'Record-Id',
+    'Follows',
+    'Supersedes',
+    PROVENANCE_KEY,
+    'CommitLore-Version',
+]);
 const scanRecord = (record) => {
-    const matched = new Set(trailerValues(record.trailers, WARN_KEY).flatMap(scanInjection));
-    return INJECTION_PATTERNS.filter((entry) => matched.has(entry.id)).map((entry) => entry.id);
+    const matchedPatterns = new Set();
+    const matchedKeys = new Set();
+    for (const trailer of record.trailers) {
+        if (STRUCTURAL_TRAILER_KEYS.has(trailer.key))
+            continue;
+        const patterns = scanInjection(trailer.value);
+        if (patterns.length === 0)
+            continue;
+        matchedKeys.add(trailer.key);
+        patterns.forEach((pattern) => matchedPatterns.add(pattern));
+    }
+    return {
+        patterns: INJECTION_PATTERNS.filter((entry) => matchedPatterns.has(entry.id)).map((entry) => entry.id),
+        keys: [...matchedKeys],
+    };
 };
 /**
  * The record's provenance, from its own field when the caller resolved one and
@@ -383,16 +404,17 @@ const grade = (input, ctx) => {
     const { record, author, folded } = input;
     const provenance = provenanceOf(record).kind;
     const lifecycle = lifecycleOf(record, ctx.at, folded);
-    const matchedPatterns = scanRecord(record);
+    const matched = scanRecord(record);
     // Checked first and unconditionally: a payload written by a trusted author is
     // still a payload, whether they were compromised or careless.
-    if (matchedPatterns.length > 0) {
+    if (matched.patterns.length > 0) {
         return {
             provenance,
             lifecycle,
             trust: 'blocked',
-            reason: `Warn: matched ${matchedPatterns.length} injection pattern(s): ${matchedPatterns.join(', ')}`,
-            matchedPatterns,
+            reason: `${matched.keys.map((key) => `${key}:`).join(', ')} matched ${matched.patterns.length} injection pattern(s): ${matched.patterns.join(', ')}`,
+            matchedPatterns: matched.patterns,
+            matchedTrailerKeys: matched.keys,
         };
     }
     const claim = (reason) => ({ provenance, lifecycle, trust: 'claim', reason });
@@ -450,7 +472,8 @@ const restrict = (a, b) => {
     const patterns = [...new Set([...(a.matchedPatterns ?? []), ...(b.matchedPatterns ?? [])])];
     if (patterns.length === 0)
         return kept;
-    return { ...kept, matchedPatterns: patterns };
+    const keys = [...new Set([...(a.matchedTrailerKeys ?? []), ...(b.matchedTrailerKeys ?? [])])];
+    return { ...kept, matchedPatterns: patterns, matchedTrailerKeys: keys };
 };
 /**
  * Grades a whole stream, keyed by `Record-Id`.

@@ -706,7 +706,7 @@ describe('the repository is the boundary', () => {
 /**
  * The one place this server deliberately answers differently from the CLI.
  *
- * A `Warn:` that matches an injection pattern grades `blocked`, and `inject`
+ * A trailer that matches an injection pattern grades `blocked`, and `inject`
  * has always withheld its content — "the content of a blocked record is the
  * attack. Only the fact is reported." This route did not, so the identical
  * record was suppressed on the hook and returned verbatim to a model here.
@@ -725,7 +725,7 @@ describe('a blocked record reaches a tool call without its payload', () => {
       [
         'Add the worker',
         '',
-        `Warn: ${ATTACK}`,
+        `Limit: ${ATTACK}`,
         'Provenance: authored',
         'Record-Id: r-evil01',
       ].join('\n'),
@@ -745,45 +745,48 @@ describe('a blocked record reaches a tool call without its payload', () => {
     attackedStub?.close();
   });
 
-  const warnings = async (): Promise<Record<string, unknown>> => {
+  const context = async (): Promise<Record<string, unknown>> => {
     const response = await attackedStub.request('tools/call', {
       name: 'commitlore_query',
-      arguments: { kind: 'warnings' },
+      arguments: { kind: 'context' },
     });
     expect(response.result?.['isError']).toBeUndefined();
     return toolJson(response);
   };
 
   it('grades it blocked', async () => {
-    const records = (await warnings())['records'] as Record<string, unknown>[];
+    const records = (await context())['records'] as Record<string, unknown>[];
     const evil = records.find((record) => record['recordId'] === 'r-evil01');
     expect(evil?.['trust']).toBe('blocked');
   });
 
   it('does not carry the attack text anywhere in the payload', async () => {
-    expect(JSON.stringify(await warnings())).not.toContain(ATTACK);
+    expect(JSON.stringify(await context())).not.toContain(ATTACK);
   });
 
   it('keeps the record itself, so an agent can see something was withheld', async () => {
-    const records = (await warnings())['records'] as Record<string, unknown>[];
+    const records = (await context())['records'] as Record<string, unknown>[];
     expect(records.map((record) => record['recordId'])).toContain('r-evil01');
   });
 
   it('says in the diagnostics that content was withheld and why', async () => {
-    const diagnostics = (await warnings())['diagnostics'] as string[];
-    expect(diagnostics.join(' ')).toContain('withheld the content of 1 record(s) graded blocked');
+    const diagnostics = (await context())['diagnostics'] as string[];
+    const diagnostic = diagnostics.join(' ');
+    expect(diagnostic).toContain('withheld the content of 1 record(s) graded blocked');
+    expect(diagnostic).toContain('a Limit trailer matching an injection pattern');
+    expect(diagnostic).not.toContain('Warn:');
   });
 
   it('leaves every other record whole', async () => {
-    const answer = await warnings();
+    const answer = await context();
     expect(JSON.stringify(answer)).toContain('the ordering here is load bearing');
     const records = answer['records'] as Record<string, unknown>[];
     expect(records.find((record) => record['recordId'] === 'r-good01')?.['trust']).toBe('claim');
   });
 
   it('is the CLI answer in every respect but the withheld payload', async () => {
-    const overMcp = withoutInstant(await warnings());
-    const overCli = withoutInstant(runCli(attacked, ['warnings', '--json']));
+    const overMcp = withoutInstant(await context());
+    const overCli = withoutInstant(runCli(attacked, ['context', '--json']));
     expect(Object.keys(overMcp).sort()).toEqual(Object.keys(overCli).sort());
     expect((overMcp['counts'] as Record<string, unknown>)['records']).toEqual(
       (overCli['counts'] as Record<string, unknown>)['records'],

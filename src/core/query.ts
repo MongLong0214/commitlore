@@ -144,6 +144,7 @@ export interface GradedRecord extends Record {
   /** The `Provenance:` value verbatim, when the record carried one. */
   provenanceValue?: string;
   trust?: TrustGrade;
+  matchedTrailerKeys?: string[];
   supersededBy?: string;
   expiresAt?: string;
 }
@@ -563,6 +564,9 @@ const gradeMerged = (
       },
     );
     record.trust = grade.trust;
+    if (grade.matchedTrailerKeys !== undefined) {
+      record.matchedTrailerKeys = grade.matchedTrailerKeys;
+    }
   }
 };
 

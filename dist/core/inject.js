@@ -278,6 +278,7 @@ const project = (records, grades) => {
                 recordId: oneLine(record.recordId ?? '-'),
                 sha: shortSha(record.sha),
                 patterns: grade.matchedPatterns ?? [],
+                keys: grade.matchedTrailerKeys ?? [],
             });
             continue;
         }
@@ -325,9 +326,11 @@ const withheldLine = (withheld) => {
         .map((entry) => `${entry.recordId} ${entry.sha}`)
         .join(', ');
     const patterns = [...new Set(withheld.flatMap((entry) => entry.patterns))].sort();
+    const keys = [...new Set(withheld.flatMap((entry) => entry.keys))].sort();
     const because = patterns.length === 0 ? '' : ` (matched: ${patterns.join(', ')})`;
+    const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
     return [
-        `withheld: ${withheld.length} record(s) whose Warn: matched an injection pattern${because}; ` +
+        `withheld: ${withheld.length} record(s) whose ${source} matched an injection pattern${because}; ` +
             `content not shown: ${named}.`,
     ];
 };

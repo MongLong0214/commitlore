@@ -13900,7 +13900,6 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
 // src/core/grade.ts
 var PROVENANCE_KEY = "Provenance";
-var WARN_KEY = "Warn";
 var INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 var INJECTION_PATTERNS = [
   {
@@ -14147,9 +14146,32 @@ var scanInjection = (text) => {
   return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+var STRUCTURAL_TRAILER_KEYS = /* @__PURE__ */ new Set([
+  "Blast",
+  "Undo",
+  "Certainty",
+  "Record-Id",
+  "Follows",
+  "Supersedes",
+  PROVENANCE_KEY,
+  "CommitLore-Version"
+]);
 var scanRecord = (record2) => {
-  const matched = new Set(trailerValues(record2.trailers, WARN_KEY).flatMap(scanInjection));
-  return INJECTION_PATTERNS.filter((entry) => matched.has(entry.id)).map((entry) => entry.id);
+  const matchedPatterns = /* @__PURE__ */ new Set();
+  const matchedKeys = /* @__PURE__ */ new Set();
+  for (const trailer of record2.trailers) {
+    if (STRUCTURAL_TRAILER_KEYS.has(trailer.key)) continue;
+    const patterns = scanInjection(trailer.value);
+    if (patterns.length === 0) continue;
+    matchedKeys.add(trailer.key);
+    patterns.forEach((pattern) => matchedPatterns.add(pattern));
+  }
+  return {
+    patterns: INJECTION_PATTERNS.filter((entry) => matchedPatterns.has(entry.id)).map(
+      (entry) => entry.id
+    ),
+    keys: [...matchedKeys]
+  };
 };
 var provenanceOf = (record2) => {
   if (record2.provenance !== void 0) return record2.provenance;
@@ -14190,14 +14212,15 @@ var grade = (input, ctx) => {
   const { record: record2, author, folded } = input;
   const provenance = provenanceOf(record2).kind;
   const lifecycle = lifecycleOf(record2, ctx.at, folded);
-  const matchedPatterns = scanRecord(record2);
-  if (matchedPatterns.length > 0) {
+  const matched = scanRecord(record2);
+  if (matched.patterns.length > 0) {
     return {
       provenance,
       lifecycle,
       trust: "blocked",
-      reason: `Warn: matched ${matchedPatterns.length} injection pattern(s): ${matchedPatterns.join(", ")}`,
-      matchedPatterns
+      reason: `${matched.keys.map((key) => `${key}:`).join(", ")} matched ${matched.patterns.length} injection pattern(s): ${matched.patterns.join(", ")}`,
+      matchedPatterns: matched.patterns,
+      matchedTrailerKeys: matched.keys
     };
   }
   const claim = (reason) => ({ provenance, lifecycle, trust: "claim", reason });
@@ -14254,7 +14277,7 @@ var authorsOf = (cwd, shas) => {
 // src/core/query.ts
 var LIMIT_KEY = "Limit";
 var RULED_OUT_KEY = "Ruled-out";
-var WARN_KEY2 = "Warn";
+var WARN_KEY = "Warn";
 var RECORD_ID_KEY2 = "Record-Id";
 var PROVENANCE_KEY2 = "Provenance";
 var LIFECYCLE_KEYS = [RECORD_ID_KEY2, "Supersedes", "Expires"];
@@ -14465,6 +14488,9 @@ var gradeMerged = (merged, cwd, at, trustedAuthors) => {
       }
     );
     record2.trust = grade2.trust;
+    if (grade2.matchedTrailerKeys !== void 0) {
+      record2.matchedTrailerKeys = grade2.matchedTrailerKeys;
+    }
   }
 };
 var oldestFirst = (a, b) => {
@@ -15517,7 +15543,7 @@ var CHARS_PER_TOKEN2 = 4;
 var DEFAULT_BUDGET_TOKENS = 800;
 var TEMPLATE_VERSION = "commitlore-inject/1";
 var TIERS = [
-  { name: "warn", label: "Warn", key: WARN_KEY2 },
+  { name: "warn", label: "Warn", key: WARN_KEY },
   { name: "limit", label: "Limit", key: LIMIT_KEY },
   { name: "ruled-out", label: "Ruled-out", key: RULED_OUT_KEY },
   { name: "other", label: "Other" }
@@ -15607,7 +15633,8 @@ var project = (records, grades) => {
       withheld.push({
         recordId: oneLine2(record2.recordId ?? "-"),
         sha: shortSha3(record2.sha),
-        patterns: grade2.matchedPatterns ?? []
+        patterns: grade2.matchedPatterns ?? [],
+        keys: grade2.matchedTrailerKeys ?? []
       });
       continue;
     }
@@ -15634,9 +15661,11 @@ var withheldLine = (withheld) => {
   if (withheld.length === 0) return [];
   const named = withheld.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ");
   const patterns = [...new Set(withheld.flatMap((entry) => entry.patterns))].sort();
+  const keys = [...new Set(withheld.flatMap((entry) => entry.keys))].sort();
   const because = patterns.length === 0 ? "" : ` (matched: ${patterns.join(", ")})`;
+  const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
   return [
-    `withheld: ${withheld.length} record(s) whose Warn: matched an injection pattern${because}; content not shown: ${named}.`
+    `withheld: ${withheld.length} record(s) whose ${source} matched an injection pattern${because}; content not shown: ${named}.`
   ];
 };
 var omittedLine = (cut, total, tier) => {
@@ -24777,7 +24806,7 @@ var RECORD_ID_KEY3 = "Record-Id";
 var SECTIONS = [
   { label: "limits", key: LIMIT_KEY },
   { label: "ruled-out", key: RULED_OUT_KEY },
-  { label: "warnings", key: WARN_KEY2 }
+  { label: "warnings", key: WARN_KEY }
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
 var collect2 = (value, previous) => [...previous, value];
@@ -24843,7 +24872,7 @@ var toJson2 = (command, result) => ({
     records: result.records.length,
     limits: countKey(result.records, LIMIT_KEY),
     ruledOut: countKey(result.records, RULED_OUT_KEY),
-    warnings: countKey(result.records, WARN_KEY2),
+    warnings: countKey(result.records, WARN_KEY),
     other: result.records.reduce((total, record2) => total + otherTrailers(record2).length, 0)
   },
   history: result.history,
@@ -24886,7 +24915,7 @@ var emptyLine = (result, what) => result.history === "unavailable" ? `git could 
 ` : `no active ${what}${scopeSuffix(result)}
 `;
 var formatKind = (result, section2) => {
-  const lines = valueLines(result.records, section2.key, section2.key === WARN_KEY2);
+  const lines = valueLines(result.records, section2.key, section2.key === WARN_KEY);
   if (lines.length === 0) return emptyLine(result, `${section2.key} records`);
   const header2 = `${plural2(lines.length, section2.label.replace(/s$/, ""), section2.label)}${scopeSuffix(result)} as of ${result.at.toISOString()} (${provenanceSuffix(result)})`;
   return `${[header2, "", ...lines].join("\n")}
@@ -24895,7 +24924,7 @@ var formatKind = (result, section2) => {
 var formatContext = (result) => {
   const sections = SECTIONS.map((section2) => ({
     label: section2.label,
-    lines: valueLines(result.records, section2.key, section2.key === WARN_KEY2)
+    lines: valueLines(result.records, section2.key, section2.key === WARN_KEY)
   }));
   const other = otherLines(result.records);
   const total = sections.reduce((sum, section2) => sum + section2.lines.length, 0) + other.length;
@@ -25078,7 +25107,7 @@ var KEYS_BY_KIND = {
   context: void 0,
   limits: [LIMIT_KEY],
   "ruled-out": [RULED_OUT_KEY],
-  warnings: [WARN_KEY2]
+  warnings: [WARN_KEY]
 };
 var QUERY_TOOL = "commitlore_query";
 var STALE_TOOL = "commitlore_stale";
@@ -25124,6 +25153,12 @@ var contextUriPath = (uri) => {
 };
 var withheldBlocked = (result) => {
   if (!result.records.some((record2) => record2.trust === "blocked")) return result;
+  const keys = [
+    ...new Set(
+      result.records.filter((record2) => record2.trust === "blocked").flatMap((record2) => record2.matchedTrailerKeys ?? [])
+    )
+  ].sort();
+  const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(", ")} trailers` : "a trailer";
   let withheld = 0;
   const records = result.records.map((record2) => {
     if (record2.trust !== "blocked") return record2;
@@ -25138,7 +25173,7 @@ var withheldBlocked = (result) => {
     records,
     diagnostics: [
       ...result.diagnostics,
-      `withheld the content of ${withheld} record(s) graded blocked: a Warn: matching an injection pattern is reported, never quoted (SPEC \xA77)`
+      `withheld the content of ${withheld} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
     ]
   };
 };

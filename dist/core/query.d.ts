@@ -103,6 +103,7 @@ export interface GradedRecord extends Record {
     /** The `Provenance:` value verbatim, when the record carried one. */
     provenanceValue?: string;
     trust?: TrustGrade;
+    matchedTrailerKeys?: string[];
     supersededBy?: string;
     expiresAt?: string;
 }

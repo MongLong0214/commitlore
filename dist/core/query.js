@@ -387,6 +387,9 @@ const gradeMerged = (merged, cwd, at, trustedAuthors) => {
             ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
         });
         record.trust = grade.trust;
+        if (grade.matchedTrailerKeys !== undefined) {
+            record.matchedTrailerKeys = grade.matchedTrailerKeys;
+        }
     }
 };
 const oldestFirst = (a, b) => {
