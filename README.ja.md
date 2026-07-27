@@ -30,7 +30,7 @@ CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/
 
 - **記録は通常の Git ワークフローを生き残ります。** コミット trailer と notes mirror は、[rebase と squash](test/squash.test.ts)、[履歴の書き換えと remote 間の転送](test/notes.test.ts)、[一段・多段の rename](test/follow.test.ts)でテストされています。
 - **信頼の意味は全ルートで共通です。** query 出力、CLI injection、編集 hook、MCP tool、guard は同じ `directive | claim | blocked` グレードを使います。ルート検証は [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts)、[`guard.test.ts`](test/guard.test.ts) にあります。
-- **インジェクション形式の記録は文章としてモデルへ届きません。** どれか一つの自由記述 trailer がインジェクションパターンに一致すると、その記録全体が `blocked` になります。モデルが読むルートは内容を引用せず、保留した事実だけを伝えます。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
+- **同梱のインジェクションスキャナーに一致した記録は、文章としてモデルへ届きません。** どれか一つの自由記述 trailer が一致すると、その記録全体が `blocked` になり、モデルが読むルートは内容を引用せず保留した事実だけを伝えます。この決定論的な語彙フィルターの結果は、実環境での検出率を示すものではありません。[パターン作成者による corpus、独立作成 corpus、無害 corpus](spec/fixtures/injection/README.md) は別々に報告します。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
 - **不明と空は別です。** 読み取り可能で記録がないリポジトリでは guard は `0` で終了します。壊れた Git は `history: unavailable`、未取得の notes mirror は `notes: unfetched` と報告します。どちらの不完全な検査も `3` で終了します。この契約は [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts)、[`RELEASE-GATE`](docs/RELEASE-GATE.md) に固定されています。
 
 ## 一つの記録

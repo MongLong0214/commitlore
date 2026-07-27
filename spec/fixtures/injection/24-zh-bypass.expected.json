@@ -1,0 +1,7 @@
+{
+  "description": "Chinese policy-bypass imperative.",
+  "blocked": true,
+  "patterns": [
+    "bypass.ignore-previous.zh"
+  ]
+}
