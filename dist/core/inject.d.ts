@@ -166,6 +166,7 @@ export interface Injection {
     records: number;
     /** **Records** excluded entirely because they graded `blocked`. */
     withheld: number;
+    diagnostics: string[];
 }
 /**
  * Characters per token. A deliberate over-estimate of English prose density

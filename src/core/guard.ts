@@ -108,6 +108,7 @@ export interface GuardResult {
   matches: GuardMatch[];
   /** Whether the check could actually be performed. */
   history: HistoryAvailability;
+  shallow: boolean;
   notes: NotesAvailability;
   /** True when history is 'unavailable' or notes is 'unfetched'. */
   incomplete: boolean;
@@ -659,6 +660,7 @@ export const guard = (opts: GuardOptions): GuardResult => {
   });
   const availability = {
     history: result.history,
+    shallow: result.shallow,
     notes: result.notes,
     incomplete: result.history === 'unavailable' || result.notes === 'unfetched',
   };

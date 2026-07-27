@@ -71,3 +71,5 @@ export type HistoryAvailability = 'ready' | 'empty' | 'unavailable';
  * repository and fails for everything else.
  */
 export declare const historyAvailability: (cwd: string) => HistoryAvailability;
+export declare const SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
+export declare const hasShallowHistory: (cwd: string) => boolean;

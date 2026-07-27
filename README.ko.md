@@ -112,6 +112,16 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
 
 커밋된 번들은 빌드 없이 실행된다. 단, 네이티브 `better-sqlite3` 모듈은 번들에 들어 있지 않으므로 clone만으로는 SQLite 인덱스를 열 수 없다. `--no-index`로 Git을 직접 스캔하거나 clone 안에서 `npm install`을 실행해 현재 인덱스를 활성화한다. 네이티브 모듈 제거 결정은 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)에 기록돼 있다.
 
+## GitHub Actions
+
+query, guard 또는 inject 명령을 실행하는 job은 전체 history를 받아야 한다.
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
+
 MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
 
 ```json

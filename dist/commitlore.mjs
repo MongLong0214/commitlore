@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve7.call(this, root, ref);
+      let _sch = resolve8.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve7(root, ref) {
+    function resolve8(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve7(baseURI, relativeURI, options) {
+    function resolve8(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve7,
+      resolve: resolve8,
       resolveComponent,
       equal,
       serialize,
@@ -11096,6 +11096,8 @@ import { readFileSync as readFileSync4 } from "node:fs";
 
 // src/core/git.ts
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 var GIT_SPAWN_FAILED = -1;
 var DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
 var execGit = (args, opts = {}) => {
@@ -11136,6 +11138,11 @@ var historyAvailability = (cwd) => {
   if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === "") return "empty";
   return "unavailable";
 };
+var SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
+var hasShallowHistory = (cwd) => {
+  const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
+  return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
+};
 
 // src/core/harvest.ts
 import { readFileSync as readFileSync3 } from "node:fs";
@@ -11145,14 +11152,14 @@ var import__ = __toESM(require__(), 1);
 import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/core/paths.ts
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync as existsSync2, readFileSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
 var findPackageRoot = (startDir) => {
   const { root } = parse(startDir);
   let dir = startDir;
   for (; ; ) {
-    if (existsSync(join(dir, "package.json"))) return dir;
+    if (existsSync2(join(dir, "package.json"))) return dir;
     if (dir === root) {
       throw new Error(
         `could not find package.json above ${startDir} \u2014 this installation is incomplete`
@@ -11934,7 +11941,7 @@ var buildRepairFeedback = (rejected) => {
 // src/core/index-db.ts
 import { mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname as dirname2, resolve } from "node:path";
+import { dirname as dirname2, resolve as resolve2 } from "node:path";
 
 // src/core/trailers.ts
 var PARSE_ARGS = [
@@ -12046,7 +12053,7 @@ var indexDbPath = (cwd = process.cwd()) => {
   const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/index.db"], {
     cwd
   }).trim();
-  return resolve(cwd, reported);
+  return resolve2(cwd, reported);
 };
 var splitRecords = (stdout) => {
   const records = [];
@@ -13342,13 +13349,13 @@ var register = (program3) => {
 
 // src/commands/doctor.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync3, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { dirname as dirname4, join as join3, resolve as resolve3 } from "node:path";
+import { dirname as dirname4, join as join3, resolve as resolve4 } from "node:path";
 
 // src/core/hook-target.ts
 import { realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve as resolve2, sep } from "node:path";
+import { isAbsolute, relative, resolve as resolve3, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
   try {
@@ -13375,7 +13382,7 @@ var readRecordedHookTarget = (cwd) => {
   const problems = [];
   if (bin === "") problems.push("commitlore.bin is not recorded");
   else {
-    const binPath = resolve2(cwd, bin);
+    const binPath = resolve3(cwd, bin);
     if (!bin.endsWith(".js") && !bin.endsWith(".mjs")) {
       problems.push("commitlore.bin is not a .js or .mjs file");
     }
@@ -13384,7 +13391,7 @@ var readRecordedHookTarget = (cwd) => {
   }
   if (node === "") problems.push("commitlore.node is not recorded");
   else {
-    const nodePath = resolve2(cwd, node);
+    const nodePath = resolve3(cwd, node);
     if (!isExecutableFile(nodePath)) problems.push("commitlore.node is not an executable file");
     else if (realpathSync(nodePath) !== realpathSync(process.execPath)) {
       problems.push("commitlore.node differs from this CLI interpreter");
@@ -14246,6 +14253,8 @@ var runQuery = (opts = {}) => {
         "git could not read this repository, so this is not an answer about its contents \u2014 treat it as unknown, not as empty"
       );
     }
+    const shallow = hasShallowHistory(cwd);
+    if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
       diagnostics.push(
@@ -14261,6 +14270,7 @@ var runQuery = (opts = {}) => {
       aliases: scope.aliases,
       follow: scope.follow,
       history,
+      shallow,
       notes,
       diagnostics
     };
@@ -14272,7 +14282,7 @@ var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.ke
 
 // src/hooks/claude-settings.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync5, renameSync, statSync as statSync2, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync5, renameSync, statSync as statSync2, unlinkSync, writeFileSync } from "node:fs";
 import { dirname as dirname3, join as join2 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -14298,7 +14308,7 @@ var success = (status, lines, changed) => ({
   changed
 });
 var load = (settingsPath) => {
-  if (!existsSync2(settingsPath)) return { settings: {}, existed: false };
+  if (!existsSync3(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
     raw = readFileSync5(settingsPath, "utf8");
@@ -14705,14 +14715,14 @@ var checkHook = (opts, runtime) => {
   if (located.code !== 0) {
     return check(id, title, "warn", "not inside a git repository", install);
   }
-  const path2 = resolve3(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const path2 = resolve4(opts.cwd ?? process.cwd(), located.stdout.trim());
   const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
   const override = process.env["COMMITLORE_BIN"];
   const targetDetail = [
     ...describeRecordedHookTarget(target),
     ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
   ].join("; ");
-  if (!existsSync3(path2)) {
+  if (!existsSync4(path2)) {
     return check(id, title, "warn", `no commit-msg hook at ${path2}; ${targetDetail}`, install);
   }
   const contents = readFileSync6(path2, "utf8");
@@ -14771,7 +14781,7 @@ var checkRuntime = (opts) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync3(path2));
+  const entry = candidates.find((path2) => existsSync4(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -14802,8 +14812,8 @@ var checkHookRuntime = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
-  const hook = resolve3(cwd, located.stdout.trim());
-  if (!existsSync3(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
+  const hook = resolve4(cwd, located.stdout.trim());
+  if (!existsSync4(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
   const probe = join3(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync2(probe, PROBE_MESSAGE);
@@ -14856,13 +14866,13 @@ var checkInjectRuntime = (opts) => {
     return check(id, title, "skipped", "no recorded path is available for a runtime probe");
   }
   const configuredRoot = process.env["CLAUDE_PLUGIN_ROOT"];
-  const pluginRoot = configuredRoot === void 0 || configuredRoot === "" ? PACKAGE_ROOT : resolve3(process.cwd(), configuredRoot);
+  const pluginRoot = configuredRoot === void 0 || configuredRoot === "" ? PACKAGE_ROOT : resolve4(process.cwd(), configuredRoot);
   const payload = JSON.stringify({
     session_id: "commitlore-doctor",
     cwd,
     hook_event_name: "PreToolUse",
     tool_name: "Edit",
-    tool_input: { file_path: resolve3(cwd, path2) }
+    tool_input: { file_path: resolve4(cwd, path2) }
   });
   const run = spawnSync3(
     "/bin/bash",
@@ -14950,6 +14960,13 @@ var checkIndex = (opts) => {
     }
   }
 };
+var checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd()) ? check(
+  "history-depth",
+  "history depth",
+  "warn",
+  "this clone has shallow history, so queries may be missing records that exist upstream",
+  "git fetch --unshallow"
+) : check("history-depth", "history depth", "ok", "full history is available");
 var runDoctor = (opts = {}) => {
   const hookRuntime = checkHookRuntime(opts);
   const checks = [
@@ -14960,6 +14977,7 @@ var runDoctor = (opts = {}) => {
     hookRuntime,
     checkInjectRuntime(opts),
     checkGit(opts),
+    checkHistoryDepth(opts),
     checkIndex(opts)
   ];
   return {
@@ -15513,6 +15531,7 @@ var guard = (opts) => {
   });
   const availability = {
     history: result.history,
+    shallow: result.shallow,
     notes: result.notes,
     incomplete: result.history === "unavailable" || result.notes === "unfetched"
   };
@@ -15606,6 +15625,7 @@ var incompleteMessage = (result) => {
   ];
   return `commitlore guard: could not complete the check: ${reasons.join("; ")}`;
 };
+var shallowMessage = () => `commitlore guard: ${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`;
 var blockedIdentity = (match) => `recordId=${match.recordId ?? "-"}; sha=${match.sha}; score=${match.score.toFixed(2)}; signals=${match.signals.join(", ")}`;
 var formatHookContext = (result) => {
   const context = [];
@@ -15636,6 +15656,10 @@ var formatHookContext = (result) => {
   if (result.incomplete) {
     if (context.length > 0) context.push("");
     context.push(incompleteMessage(result).replace("the check", "the check on this edit"));
+  }
+  if (result.shallow) {
+    if (context.length > 0) context.push("");
+    context.push(shallowMessage().replace("commitlore guard: ", ""));
   }
   return context.join("\n");
 };
@@ -15704,6 +15728,8 @@ var register4 = (program3) => {
       });
       process.stderr.write(scopeCaveat(paths));
       if (result.incomplete) process.stderr.write(`${incompleteMessage(result)}
+`);
+      if (result.shallow) process.stderr.write(`${shallowMessage()}
 `);
       if (options.json === true) {
         process.stdout.write(`${JSON.stringify(toJson(result, at, paths, threshold), null, 2)}
@@ -15818,8 +15844,8 @@ var register5 = (program3) => {
 
 // src/commands/hooks.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
-import { chmodSync, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync3, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join4, resolve as resolve4 } from "node:path";
+import { chmodSync, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync3, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join4, resolve as resolve5 } from "node:path";
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure2 = (message) => ({
@@ -15840,7 +15866,7 @@ var resolveHooksDir = (cwd) => {
   if (result.code !== 0) {
     throw new Error(`not a git repository (${firstLine(result.stderr)})`);
   }
-  return resolve4(cwd, result.stdout.trim());
+  return resolve5(cwd, result.stdout.trim());
 };
 var isExecutable = (path2) => {
   try {
@@ -15850,7 +15876,7 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync4(hookPath)) return "absent";
+  if (!existsSync5(hookPath)) return "absent";
   let contents;
   try {
     contents = readFileSync10(hookPath, "utf8");
@@ -15869,7 +15895,7 @@ var readHookStatus = (cwd = process.cwd()) => {
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync4(chainedPath),
+    chained: existsSync5(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -15883,7 +15909,7 @@ var writeStub = (hookPath) => {
 var recordBinPath = (cwd) => {
   const entry = process.argv[1];
   if (entry === void 0 || entry === "") return;
-  execGit(["config", "--local", "commitlore.bin", resolve4(entry)], { cwd });
+  execGit(["config", "--local", "commitlore.bin", resolve5(entry)], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
 };
 var describeChained = (status) => {
@@ -16074,7 +16100,7 @@ var register7 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync11, realpathSync as realpathSync2 } from "node:fs";
-import { basename, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve5, sep as sep2 } from "node:path";
+import { basename, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -16323,18 +16349,6 @@ var buildInjection = (opts) => {
     noIndex,
     ablation: activeAblations(ablation)
   });
-  const empty = {
-    text: "",
-    included: 0,
-    omitted: 0,
-    cacheKey,
-    path: path2,
-    head,
-    at: at.toISOString(),
-    budgetTokens,
-    records: 0,
-    withheld: 0
-  };
   const result = runQuery({
     path: path2,
     at,
@@ -16345,6 +16359,20 @@ var buildInjection = (opts) => {
     // afterwards is not possible.
     ...ablation.noLifecycle ? { allHistory: true } : {}
   });
+  const diagnostics = result.diagnostics;
+  const empty = {
+    text: "",
+    included: 0,
+    omitted: 0,
+    cacheKey,
+    path: path2,
+    head,
+    at: at.toISOString(),
+    budgetTokens,
+    records: 0,
+    withheld: 0,
+    diagnostics
+  };
   const active = ablation.noLifecycle ? result.records : result.records.filter((record2) => record2.lifecycle === "active");
   if (active.length === 0) return empty;
   const authors = ablation.noGrade ? /* @__PURE__ */ new Map() : authorsOf(cwd, active.flatMap((record2) => record2.shas));
@@ -16382,7 +16410,8 @@ var buildInjection = (opts) => {
     at: at.toISOString(),
     budgetTokens,
     records: rendered.size,
-    withheld: withheld.length
+    withheld: withheld.length,
+    diagnostics
   };
 };
 
@@ -16440,7 +16469,7 @@ var repositoryRoot = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve5(target);
+  const absolute = resolve6(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
@@ -16471,7 +16500,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve5(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve6(cwd, raw));
   const scoped = relative2(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep2}`) || isAbsolute2(scoped)) {
@@ -16500,8 +16529,11 @@ var injectOptions = (path2, options, cwd) => {
   };
 };
 var emitInjection = (injection, options) => {
+  for (const diagnostic of injection.diagnostics) process.stderr.write(`commitlore: ${diagnostic}
+`);
   if (options.json === true) {
-    process.stdout.write(`${JSON.stringify(injection, null, 2)}
+    const { diagnostics: _diagnostics, ...report } = injection;
+    process.stdout.write(`${JSON.stringify(report, null, 2)}
 `);
     return;
   }
@@ -16519,7 +16551,8 @@ var hookResult = (raw, base) => {
     const injection = buildInjection({ ...base, cwd, path: path2 });
     return {
       stdout: injection.text === "" ? "" : hookOutput(injection.text),
-      stderr: "",
+      stderr: injection.diagnostics.map((diagnostic) => `commitlore: ${diagnostic}
+`).join(""),
       exitCode: 0
     };
   } catch (error2) {
@@ -16594,7 +16627,7 @@ var register8 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve6, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve7, sep as sep3 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -23914,7 +23947,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve7) => setTimeout(resolve7, pollInterval));
+        await new Promise((resolve8) => setTimeout(resolve8, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -23931,7 +23964,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve7, reject2) => {
+    return new Promise((resolve8, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -24009,7 +24042,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve7(parseResult.data);
+            resolve8(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -24270,12 +24303,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve7, reject2) => {
+    return new Promise((resolve8, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve7, interval);
+      const timeoutId = setTimeout(resolve8, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -25145,12 +25178,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve7) => {
+    return new Promise((resolve8) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve7();
+        resolve8();
       } else {
-        this._stdout.once("drain", resolve7);
+        this._stdout.once("drain", resolve8);
       }
     });
   }
@@ -25580,7 +25613,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve6(root, raw);
+  const resolved = resolve7(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep3}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -25686,7 +25719,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve6(opts.cwd ?? process.cwd());
+  const root = resolve7(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {

@@ -208,6 +208,7 @@ export interface Injection {
   records: number;
   /** **Records** excluded entirely because they graded `blocked`. */
   withheld: number;
+  diagnostics: string[];
 }
 
 /**
@@ -766,6 +767,17 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     ablation: activeAblations(ablation),
   });
 
+  const result = runQuery({
+    path,
+    at,
+    cwd,
+    noIndex,
+    // `runQuery` drops superseded and expired records unless told otherwise, so
+    // the ablation has to be asked for at the source; filtering them back in
+    // afterwards is not possible.
+    ...(ablation.noLifecycle ? { allHistory: true } : {}),
+  });
+  const diagnostics = result.diagnostics;
   const empty: Injection = {
     text: '',
     included: 0,
@@ -777,18 +789,8 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     budgetTokens,
     records: 0,
     withheld: 0,
+    diagnostics,
   };
-
-  const result = runQuery({
-    path,
-    at,
-    cwd,
-    noIndex,
-    // `runQuery` drops superseded and expired records unless told otherwise, so
-    // the ablation has to be asked for at the source; filtering them back in
-    // afterwards is not possible.
-    ...(ablation.noLifecycle ? { allHistory: true } : {}),
-  });
 
   // `runQuery` already drops non-active records; repeating the filter here is
   // the difference between relying on a default and stating a requirement
@@ -847,5 +849,6 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     budgetTokens,
     records: rendered.size,
     withheld: withheld.length,
+    diagnostics,
   };
 };

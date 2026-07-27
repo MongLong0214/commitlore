@@ -112,6 +112,16 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
 
 仓库中提交的 bundle 无需构建即可运行。但它没有携带原生 `better-sqlite3` 模块，因此仅靠 clone 无法打开 SQLite 索引。可以使用 `--no-index` 直接扫描 Git，或在 clone 中运行 `npm install` 来启用当前索引。移除原生模块的决定记录在 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) 中。
 
+## GitHub Actions
+
+运行 query、guard 或 inject 命令的 job 必须获取完整 history。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
+
 在 MCP 客户端中注册同一 clone 的入口：
 
 ```json
