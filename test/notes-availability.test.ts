@@ -15,7 +15,13 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { notesAvailability, coversNotes, NOTES_REF, writeRecord } from '../src/core/notes.js';
+import {
+  notesAvailability,
+  coversNotes,
+  NOTES_REF,
+  NOTES_REFSPEC,
+  writeRecord,
+} from '../src/core/notes.js';
 import { runQuery } from '../src/core/query.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -77,13 +83,13 @@ describe('notesAvailability', () => {
     // The distinction is "could this repository have missed records", not
     // "does it have them": a configured clone that fetched nothing found nothing.
     const dir = clone(makeRepo());
-    git(dir, ['config', '--add', 'remote.origin.fetch', `+${NOTES_REF}:${NOTES_REF}`]);
+    git(dir, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
     expect(notesAvailability({ cwd: dir })).toBe('absent');
   });
 
   it('reports present after the refspec is added and the notes are fetched', () => {
     const dir = clone(originWithRecords());
-    git(dir, ['config', '--add', 'remote.origin.fetch', `+${NOTES_REF}:${NOTES_REF}`]);
+    git(dir, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
     git(dir, ['fetch', '-q', 'origin']);
     expect(notesAvailability({ cwd: dir })).toBe('present');
   });
@@ -131,7 +137,7 @@ describe('an unfetched mirror does not read as an empty repository', () => {
 
   it('finds the records once they are fetched, and stops warning', () => {
     const dir = clone(originWithRecords());
-    git(dir, ['config', '--add', 'remote.origin.fetch', `+${NOTES_REF}:${NOTES_REF}`]);
+    git(dir, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
     git(dir, ['fetch', '-q', 'origin']);
 
     const result = runQuery({ cwd: dir, noIndex: true });

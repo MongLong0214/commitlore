@@ -12661,7 +12661,7 @@ var indexInfo = (handle) => ({
 
 // src/core/notes.ts
 var NOTES_REF2 = "refs/notes/commitlore";
-var NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
+var NOTES_REFSPEC = "+refs/notes/*:refs/notes/*";
 var REF_ARG = `--ref=${NOTES_REF2}`;
 var NO_NOTE_EXIT = 1;
 var SYNTHETIC_SUBJECT = "commitlore notes mirror";
@@ -13483,6 +13483,8 @@ var commitMsgStub = () => [
 
 // src/commands/doctor.ts
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
+var EXACT_NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
+var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
 var checkRefspec = (opts) => {
@@ -13497,21 +13499,24 @@ var checkRefspec = (opts) => {
       "add a remote, then rerun: commitlore doctor --fix"
     );
   }
-  let missing = remotes.filter(
-    (remote) => !fetchRefspecs(remote, opts).some(coversNotes)
-  );
+  let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   let fixed = false;
-  if (missing.length > 0 && opts.fix === true) {
-    const applied = [];
-    for (const remote of missing) {
-      const result = execGit(
-        ["config", "--add", `remote.${remote}.fetch`, NOTES_REFSPEC],
-        gitOptions2(opts)
-      );
-      if (result.code === 0) applied.push(remote);
+  if (opts.fix === true) {
+    for (const remote of remotes) {
+      const key = `remote.${remote}.fetch`;
+      const configured = fetchRefspecs(remote, opts);
+      if (configured.includes(EXACT_NOTES_REFSPEC)) {
+        const replaced = execGit(
+          ["config", "--replace-all", key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
+          gitOptions2(opts)
+        );
+        fixed = replaced.code === 0 || fixed;
+      } else if (!configured.some(coversNotes)) {
+        const added = execGit(["config", "--add", key, NOTES_REFSPEC], gitOptions2(opts));
+        fixed = added.code === 0 || fixed;
+      }
     }
-    fixed = applied.length > 0;
-    missing = missing.filter((remote) => !applied.includes(remote));
+    missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   }
   if (missing.length > 0) {
     return check(
@@ -13522,28 +13527,52 @@ var checkRefspec = (opts) => {
       missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n")
     );
   }
+  const failed = remotes.map((remote) => ({ remote, result: execGit(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
+  if (failed.length > 0) {
+    return check(
+      "notes-refspec",
+      title,
+      "warn",
+      `could not verify (${failed.map(({ remote, result }) => `${remote}: ${result.stderr.trim().split("\n")[0] ?? "git fetch failed"}`).join("; ")})`,
+      failed.map(({ remote }) => `git fetch ${remote}`).join("\n"),
+      fixed
+    );
+  }
   return check(
     "notes-refspec",
     title,
     "ok",
-    `${remotes.join(", ")} ${remotes.length === 1 ? "fetches" : "fetch"} ${NOTES_REF2}`,
+    `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF2}`,
     null,
     fixed
   );
 };
-var hasLocalNotes = (opts) => execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions2(opts)).code === 0;
 var checkPush = (opts) => {
   const title = "notes push";
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? "origin";
   const command = `git push ${remote} ${NOTES_REF2}`;
-  if (!hasLocalNotes(opts)) {
+  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions2(opts));
+  if (local.code !== 0) {
     return check(
       "notes-push",
       title,
       "ok",
       `no local mirror yet \u2014 nothing to push (${command}, once there is)`
     );
+  }
+  const advertised = execGit(["ls-remote", remote, NOTES_REF2], gitOptions2(opts));
+  if (advertised.code !== 0) {
+    return check(
+      "notes-push",
+      title,
+      "warn",
+      `could not verify (${remote}: ${advertised.stderr.trim().split("\n")[0] ?? "git ls-remote failed"})`,
+      command
+    );
+  }
+  if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
+    return check("notes-push", title, "ok", `${remote} has the current ${NOTES_REF2}`);
   }
   return check(
     "notes-push",
@@ -13553,7 +13582,7 @@ var checkPush = (opts) => {
     command
   );
 };
-var checkHook = (opts) => {
+var checkHook = (opts, runtime) => {
   const title = "commit-msg hook";
   const id = "commit-msg-hook";
   const install = "commitlore hooks install";
@@ -13594,6 +13623,15 @@ var checkHook = (opts) => {
     ...target.problems,
     ...override === void 0 || override === "" ? [] : ["COMMITLORE_BIN override is active"]
   ];
+  if (runtime.status !== "ok") {
+    return check(
+      id,
+      title,
+      runtime.status,
+      `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`,
+      install
+    );
+  }
   return problems.length === 0 ? check(id, title, "ok", `installed at ${path2}; ${targetDetail}`) : check(id, title, "warn", `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`, install);
 };
 var checkGit = (opts) => {
@@ -13735,12 +13773,13 @@ var checkIndex = (opts) => {
   }
 };
 var runDoctor = (opts = {}) => {
+  const hookRuntime = checkHookRuntime(opts);
   const checks = [
     checkRuntime(opts),
     checkRefspec(opts),
     checkPush(opts),
-    checkHook(opts),
-    checkHookRuntime(opts),
+    checkHook(opts, hookRuntime),
+    hookRuntime,
     checkGit(opts),
     checkIndex(opts)
   ];
