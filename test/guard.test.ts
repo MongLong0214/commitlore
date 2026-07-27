@@ -594,10 +594,10 @@ const runCommand = (dir: string, argv: string[]): CliRun => {
 const AT = ['--at', NOW.toISOString()];
 
 describe('commitlore guard', () => {
-  it('exits 2 and writes the reason to stderr on a match', () => {
+  it('exits 1 and writes the reason to stderr on a match', () => {
     const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT]);
 
-    expect(run.code).toBe(2);
+    expect(run.code).toBe(1);
     expect(run.stdout).toBe('');
     expect(run.stderr).toContain('ruled out: shared Redis cache');
     expect(run.stderr).toContain('because:   ops refuses another stateful dependency');
@@ -637,10 +637,10 @@ describe('commitlore guard', () => {
       '--',
       'docs',
     ]);
-    expect(unscoped.code).toBe(2);
+    expect(unscoped.code).toBe(1);
   });
 
-  it('emits JSON on stdout, and still exits 2', () => {
+  it('emits JSON on stdout, and still exits 1', () => {
     const run = runCommand(repo, [
       'guard',
       '--proposal',
@@ -649,7 +649,7 @@ describe('commitlore guard', () => {
       '--json',
     ]);
 
-    expect(run.code).toBe(2);
+    expect(run.code).toBe(1);
     expect(JSON.parse(run.stdout)).toEqual({
       command: 'guard',
       at: NOW.toISOString(),
@@ -690,25 +690,25 @@ describe('commitlore guard', () => {
     const path = join(repo, 'proposal.txt');
     writeFileSync(path, fixture('redis-named').text);
     const run = runCommand(repo, ['guard', '--proposal', `@${path}`, ...AT]);
-    expect(run.code).toBe(2);
+    expect(run.code).toBe(1);
     rmSync(path);
   });
 
   it('honours --threshold', () => {
     const argv = ['guard', '--proposal', fixture('redis-reworded').text, ...AT];
-    expect(runCommand(repo, [...argv]).code).toBe(2);
+    expect(runCommand(repo, [...argv]).code).toBe(1);
     expect(runCommand(repo, [...argv, '--threshold', '0.7']).code).toBe(0);
   });
 
-  it('exits 1 on a bad threshold, and 1 is not 2', () => {
+  it('exits 2 on a bad threshold, and 2 is not 1', () => {
     const run = runCommand(repo, ['guard', '--proposal', 'x', '--threshold', '7']);
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
     expect(run.stderr).toContain('--threshold is not a number between 0 and 1');
   });
 
-  it('exits 1 on a bad --at', () => {
+  it('exits 2 on a bad --at', () => {
     const run = runCommand(repo, ['guard', '--proposal', 'x', '--at', 'yesterday']);
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
     expect(run.stderr).toContain('--at is not a valid ISO 8601 instant');
   });
 
@@ -742,7 +742,7 @@ describe('commitlore guard', () => {
     const scanned = runCommand(repo, [...argv, '--no-index']);
 
     expect(scanned.stdout).toBe(indexed.stdout);
-    expect(scanned.code).toBe(2);
+    expect(scanned.code).toBe(1);
   });
 
   it('exits 3 when broken git makes the check incomplete', () => {
@@ -772,7 +772,7 @@ describe('commitlore guard', () => {
     expect(run.stderr).toContain('notes mirror has not been fetched');
   });
 
-  it('keeps exit 2 when a match is found during an incomplete scan', () => {
+  it('keeps exit 1 when a match is found during an incomplete scan', () => {
     const run = runCommand(cloneRepo(repo), [
       'guard',
       '--proposal',

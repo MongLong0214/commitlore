@@ -2,7 +2,7 @@
  * `commitlore validate` — machine refusal of malformed records (SPEC §6).
  *
  * Three contracts hold this command in place, because a hook and a CI job both
- * branch on them:
+ * branch on them (SPEC §10):
  *
  *   exit 0  no violations
  *   exit 1  violations found

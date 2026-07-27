@@ -14,6 +14,9 @@
  * commit must never fail because an optional enrichment step had nothing to
  * work with (ADR-0006: 전량 실패 시 비차단). Only two things are errors here: a
  * path the user named that cannot be read, and a draft that is not a draft.
+ * Both are usage errors, so both exit 2 (SPEC §10) -- neither is a finding,
+ * and harvest never gates on what a draft contains (a discarded record is
+ * reported on stderr, not failed on).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -40,6 +43,9 @@ export interface HarvestOutcome {
 }
 
 const PREFIX = 'commitlore:';
+
+/** The only failure mode: a usage error, never a finding (SPEC §10). */
+const USAGE_EXIT_CODE = 2;
 
 /** Nothing to harvest is a normal outcome, not a failure. */
 const skip = (reason: string): HarvestOutcome => ({
@@ -136,7 +142,7 @@ export const runHarvest = (options: HarvestOptions): HarvestOutcome => {
     return harvest(options);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { stdout: '', stderr: `${PREFIX} ${detail}\n`, exitCode: 1 };
+    return { stdout: '', stderr: `${PREFIX} ${detail}\n`, exitCode: USAGE_EXIT_CODE };
   }
 };
 
@@ -149,6 +155,11 @@ export const register = (program: Command): void => {
     .option('--out <file>', 'write the output here instead of stdout')
     .option('--prompt-only', 'print the prompt contract for the session and exit')
     .option('--draft <file>', 'check a draft the session produced and print what survived')
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft ' +
+        'that is not a draft (SPEC §10).',
+    )
     .action((options: HarvestOptions) => {
       const outcome = runHarvest(options);
       if (outcome.stdout !== '') process.stdout.write(outcome.stdout);

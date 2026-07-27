@@ -2,7 +2,7 @@
  * `commitlore validate` — machine refusal of malformed records (SPEC §6).
  *
  * Three contracts hold this command in place, because a hook and a CI job both
- * branch on them:
+ * branch on them (SPEC §10):
  *
  *   exit 0  no violations
  *   exit 1  violations found
@@ -635,7 +635,7 @@ export const register = (program: Command): void => {
     .option('--json', 'emit violations as JSON for the repair loop')
     .addHelpText(
       'after',
-      '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error.',
+      '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10).',
     )
     .action((flags: ValidateFlags) => {
       const result = runValidate({

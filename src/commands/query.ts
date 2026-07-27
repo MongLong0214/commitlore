@@ -36,6 +36,9 @@ import { STRUCTURAL_TRAILER_KEYS, type Lifecycle, type Trailer } from '../core/t
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
 
+/** Usage error: no repository, an unparseable flag (SPEC §10) -- not a finding. */
+const USAGE_EXIT_CODE = 2;
+
 const INCOMPLETE_EXIT_CODE = 3;
 
 interface Section {
@@ -450,9 +453,10 @@ const emit = (
       ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
       : render(presented),
   );
-  // Exit 1 means git could not answer at all; exit 3 means git answered from a
+  // Exit 2 means git could not answer at all -- no repository is a usage
+  // error (SPEC §10), not a finding; exit 3 means git answered from a
   // known-incomplete store, matching guard so callers can distinguish the two.
-  if (presented.history === 'unavailable') process.exitCode = 1;
+  if (presented.history === 'unavailable') process.exitCode = USAGE_EXIT_CODE;
   else if (presented.notes === 'unfetched') process.exitCode = INCOMPLETE_EXIT_CODE;
 };
 
@@ -478,6 +482,11 @@ const define = (
       collect,
       [],
     )
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), ' +
+        '3 answered, but the notes mirror has not been fetched (SPEC §10).',
+    )
     .action((paths: string[], options: QueryCommandOptions) => {
       try {
         emit(name, runQuery(queryOptions(paths, options, keys)), options, render);
@@ -485,7 +494,7 @@ const define = (
         process.stderr.write(
           `commitlore: ${error instanceof Error ? error.message : String(error)}\n`,
         );
-        process.exitCode = 1;
+        process.exitCode = USAGE_EXIT_CODE;
       }
     });
 };

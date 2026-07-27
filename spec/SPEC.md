@@ -220,5 +220,36 @@ An implementation conforms when it:
 2. Rejects every fixture in `spec/fixtures/invalid/` with the expected violation class.
 3. Round-trips: parse → canonical serialize → parse yields an identical list.
 4. Produces the expected outcome for every case in `spec/contract-cases/`.
+5. Follows the exit code contract of §10 in every command it exposes.
 
 The suite is the contract. This prose is explanation.
+
+---
+
+## 10. Process contract
+
+An implementation is invoked as a process, and its exit code is part of the
+protocol — not a detail one command is free to pick for itself. A caller that
+scripts against `commitlore` (a hook, a CI job, another tool shelling out)
+branches on the number, and it must mean the same thing regardless of which
+command produced it. Every command MUST draw from these four codes, and MUST
+NOT give a code a meaning another command does not also give it:
+
+| Code | Meaning |
+|---|---|
+| `0` | Ran, nothing to report |
+| `1` | Ran, found what the caller asked about — a violation, a match, a block |
+| `2` | Could not run — a usage error, an unresolvable reference, a missing dependency, a missing input file, or no repository |
+| `3` | Ran and answered, but could not see everything — an unfetched notes mirror, shallow history |
+
+A command need not use every code. `stale`, `inject`, and the query routes
+(`context`, `limits`, `ruled-out`, `warnings`) hand every finding back through
+their structured output and exit `0` regardless of what they found, on
+purpose: a route consumed by an agent must not turn "here is what I found"
+into a failed tool call (§4). That is a command choosing not to speak through
+its exit code, and it is documented at each command that makes the choice. It
+is not license to reuse a code: `1` MUST NOT mean anything but a finding, and
+`2` MUST NOT mean anything a finding could also mean, in any command that does
+use them.
+
+Every command MUST document its exit codes in `--help`.

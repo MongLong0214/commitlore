@@ -21,6 +21,8 @@ import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
+/** Usage error: no repository, an unparseable flag (SPEC §10) -- not a finding. */
+const USAGE_EXIT_CODE = 2;
 const INCOMPLETE_EXIT_CODE = 3;
 const SECTIONS = [
     { label: 'limits', key: LIMIT_KEY },
@@ -282,10 +284,11 @@ const emit = (name, result, options, render) => {
     process.stdout.write(options.json === true
         ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
         : render(presented));
-    // Exit 1 means git could not answer at all; exit 3 means git answered from a
+    // Exit 2 means git could not answer at all -- no repository is a usage
+    // error (SPEC §10), not a finding; exit 3 means git answered from a
     // known-incomplete store, matching guard so callers can distinguish the two.
     if (presented.history === 'unavailable')
-        process.exitCode = 1;
+        process.exitCode = USAGE_EXIT_CODE;
     else if (presented.notes === 'unfetched')
         process.exitCode = INCOMPLETE_EXIT_CODE;
 };
@@ -300,13 +303,15 @@ const define = (program, name, description, keys, render) => {
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option('--limit <n>', 'return at most n records')
         .option('--trusted-author <author>', 'an author whose records may render as instructions (repeatable)', collect, [])
+        .addHelpText('after', '\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), ' +
+        '3 answered, but the notes mirror has not been fetched (SPEC §10).')
         .action((paths, options) => {
         try {
             emit(name, runQuery(queryOptions(paths, options, keys)), options, render);
         }
         catch (error) {
             process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 1;
+            process.exitCode = USAGE_EXIT_CODE;
         }
     });
 };

@@ -37,7 +37,7 @@ Check whether it was already rejected:
 commitlore guard --proposal "switch the queue to RabbitMQ"
 ```
 
-Exit `2` means it matched something already ruled out. The output names the
+Exit `1` means it matched something already ruled out. The output names the
 alternative, the reason, and the commit. **Do not re-propose it because you did
 not know.** If you believe the rejection no longer holds, say what changed — new
 evidence is a legitimate reason to revisit a decision, and "I forgot" is not.

@@ -567,7 +567,7 @@ describe('collectRecords over a real repository', () => {
 
   it('rejects an unparseable --at with a message, not a stack trace', () => {
     const result = runCommand(['--at', 'yesterday']);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('commitlore: --at is not a valid ISO 8601 instant: yesterday\n');
   });

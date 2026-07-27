@@ -390,6 +390,7 @@ export const register = (program) => {
         .description('check that this repository can carry and share CommitLore records')
         .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
         .option('--json', 'emit the report as JSON')
+        .addHelpText('after', '\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC §10).')
         .action((options) => {
         const report = runDoctor({ fix: options.fix === true });
         process.stdout.write(options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report));

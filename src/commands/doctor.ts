@@ -62,7 +62,7 @@ export interface DoctorCheck {
 
 export interface DoctorReport {
   checks: DoctorCheck[];
-  /** 0 unless some check is `fail` — warnings do not fail the command. */
+  /** 0 unless some check is `fail` — warnings do not fail the command (SPEC §10: 1 is a finding). */
   exitCode: number;
 }
 
@@ -606,6 +606,7 @@ export const register = (program: Command): void => {
     .description('check that this repository can carry and share CommitLore records')
     .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
     .option('--json', 'emit the report as JSON')
+    .addHelpText('after', '\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC §10).')
     .action((options: { fix?: boolean; json?: boolean }) => {
       const report = runDoctor({ fix: options.fix === true });
       process.stdout.write(
