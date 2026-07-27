@@ -726,3 +726,68 @@ The product claim then rests where it already holds: decisions bound to the comm
 that made them, surviving rebase, squash and rename, with one trust grade across
 every route — each of which has a test, and none of which depends on this
 experiment.
+
+---
+
+## 17. Zero-context delegation — a validity condition, not a preference
+
+Registered before M4's qualification round.
+
+### The confound
+
+Every task given to an agent in this project is written by an operator who already
+knows the design decisions. When the brief says *"do not blend security into the
+score — ADR-0012 rejected it"*, the agent complies with the brief, and CommitLore's
+contribution is unmeasurable. The tool cannot be shown to deliver a constraint that
+was already delivered by hand.
+
+**This has been happening.** A count of the delegation briefs written for gitseed's
+v0.2 setup: one leaked rejected alternatives in twenty places, naming the exact
+options CommitLore's records exist to guard. Any compliance observed in that run
+says nothing about the tool.
+
+### The rule
+
+An agent working a task that CommitLore's records are supposed to inform starts
+from **zero context about those records**.
+
+The brief may state:
+- what to build, and the acceptance criteria it will be judged against
+- the file boundaries it owns
+- how to run the tests
+
+The brief may **not** state:
+- which alternatives were rejected, or why
+- what a `Ruled-out:`, `Limit:` or `Warn:` record says
+- that a particular approach was considered and dropped
+- a design decision whose reasoning lives in an ADR the agent has not been asked
+  to read
+
+If the agent needs a constraint in order to do the work correctly, it must reach it
+through the tool — `inject` at edit time, `guard` before it starts, or the MCP
+query — not through the operator.
+
+### Why this is a registration and not a note
+
+Without it there is no observation. With a leaking brief, the treatment and control
+arms differ only in a hook that repeats what both were told, and a null result
+would be uninterpretable: the effect could be absent, or the brief could have
+saturated both arms.
+
+**A run whose brief leaked a rejection is excluded from M4 and reported as
+excluded, with the leak quoted.** The exclusion count is part of the result.
+
+### What this does not change
+
+Verification tasks — *"run this command, report its output"* — carry no design
+choice and are unaffected. Measurement tasks may state their own method; a
+backtest's brief has to say what a backtest is.
+
+The line is: **a brief may not pre-answer a question the records answer.**
+
+### Practical consequence
+
+Briefs get shorter and less comfortable to write. The operator loses the ability to
+steer the agent toward the known-good design, which is precisely the ability whose
+absence is being measured. Work will be redone that a leaking brief would have got
+right the first time, and the cost of that redo is the measurement.
