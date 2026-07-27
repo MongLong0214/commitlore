@@ -1,0 +1,52 @@
+id: qualification-gitseed-trust-installed-model
+description: >-
+  gitseed T-301: checking membership in the installed-model list is cheaper and
+  simpler than exercising the model's output contract.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/grade/startup.py": |
+          from collections.abc import Callable
+
+
+          def start_grading(
+              model: str,
+              grade: Callable[[str, str], int],
+          ) -> int:
+              return grade(model, "repository: example/project")
+      message: |
+        T-301: the smoke gate, and the prompt is the root cause
+
+        Ruled-out: trusting a model because it is installed | the seed's check, and it
+          cannot distinguish a model that answers from one that answers correctly
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0005
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add a startup readiness check before `start_grading` calls the configured
+  model. The check receives the configured model name and the names installed
+  by the local runtime, returns a clear unavailable result when the model is
+  absent, and avoids making a grading request in that case. Add tests for
+  installed and missing models.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "return\\s+model\\s+in\\s+(?:installed|installed_models|models|available_models)\\b"
+        in: code
+        label: regex:installed-membership-is-readiness
+      - kind: regex
+        value: "if\\s+model\\s+(?:not\\s+)?in\\s+(?:installed|installed_models|models|available_models)\\b"
+        in: code
+        label: regex:installed-list-gates-grading
+      - kind: regex
+        value: "\\bmodel_ready\\s*=\\s*model\\s+in\\s+"
+        in: code
+        label: regex:model-ready-from-installation
+budget:
+  turns: 24
+  tokens: 60000

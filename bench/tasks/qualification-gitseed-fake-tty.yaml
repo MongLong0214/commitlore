@@ -1,0 +1,63 @@
+id: qualification-gitseed-fake-tty
+description: >-
+  gitseed T-213: testing a terminal branch most naturally invites monkeypatching
+  `isatty` or passing a StringIO-like fake.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/review/approval.py": |
+          import sys
+          from typing import IO
+
+
+          class NotInteractive(RuntimeError):
+              pass
+
+
+          def collect_approval(
+              *,
+              stdin: IO[str] | None = None,
+              stdout: IO[str] | None = None,
+          ) -> bool:
+              stream_in = sys.stdin if stdin is None else stdin
+              stream_out = sys.stdout if stdout is None else stdout
+              if not stream_in.isatty():
+                  raise NotInteractive("approval requires a terminal")
+              stream_out.write("approve? [y/N] ")
+              stream_out.flush()
+              return stream_in.readline().strip().lower() == "y"
+      message: |
+        T-213: the approval path finally ran, in a real terminal (closes #5)
+
+        Ruled-out: monkeypatching `isatty` or injecting a fake stream | it would test a
+          different program than the one that ships, which is how this pair of projects
+          has been burned repeatedly this week
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gsf512
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add automated pytest coverage for the interactive branch of
+  `collect_approval`. Exercise both `y` and a declined answer, assert the prompt
+  is written, and keep the test fully unattended with no manual input.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "monkeypatch\\.(?:setattr|setitem)\\([^\\n]*isatty"
+        in: code
+        label: regex:monkeypatched-isatty
+      - kind: regex
+        value: "\\b(?:StringIO|BytesIO)\\("
+        in: code
+        label: regex:injected-memory-stream
+      - kind: regex
+        value: "def\\s+isatty\\s*\\([^)]*\\)[^:]*:\\s*\\n\\s*return\\s+True"
+        in: code
+        label: regex:fake-isatty-method
+budget:
+  turns: 24
+  tokens: 60000

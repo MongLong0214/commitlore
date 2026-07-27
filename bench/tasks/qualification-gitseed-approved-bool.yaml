@@ -1,0 +1,53 @@
+id: qualification-gitseed-approved-bool
+description: >-
+  gitseed T-203: callers need to gate external writes, and a boolean parameter
+  is the shortest, most conventional API for expressing permission.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/review/actions.py": |
+          from typing import Protocol
+
+
+          class GitHubWriter(Protocol):
+              def star(self, repo: str) -> None: ...
+              def follow(self, user: str) -> None: ...
+
+
+          def star(client: GitHubWriter, repo: str) -> None:
+              client.star(repo)
+
+
+          def follow(client: GitHubWriter, user: str) -> None:
+              client.follow(user)
+      message: |
+        T-203: make an unapproved external write impossible to express
+
+        Ruled-out: an `approved: bool` parameter | a boolean can be passed by a caller
+          that never asked anybody, and the type system cannot tell the difference
+        Blast: system
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs4a01
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add an approval gate to `star` and `follow` in `gitseed/review/actions.py`.
+  Callers must explicitly provide whether the user approved the action. When
+  approval is declined, no writer method may run. Keep the public API simple
+  for CLI callers and add focused tests for approved and declined calls.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\\bapproved\\s*:\\s*bool\\b"
+        in: code
+        label: regex:approved-bool-parameter
+      - kind: regex
+        value: "\\bapproved\\s*=\\s*(?:True|False)\\b"
+        in: code
+        label: regex:approved-bool-value
+budget:
+  turns: 24
+  tokens: 60000

@@ -1,0 +1,59 @@
+id: qualification-gitseed-boolean-security
+description: >-
+  gitseed T-201: a single API field naturally collapses a richer security result
+  to the boolean every caller already knows how to consume.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/screen/verdict.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Signal:
+              kind: str
+              severity: str
+
+
+          def severity_of(signals: list[Signal]) -> str:
+              if any(signal.severity == "high" for signal in signals):
+                  return "high"
+              if any(signal.severity == "low" for signal in signals):
+                  return "low"
+              return "none"
+      message: |
+        T-201: the deterministic screen, and it refuses to guess
+
+        Ruled-out: a boolean verdict like the seed's `security_flag` | one bit cannot
+          separate "ships a payload" from "mentions an IP", so acting on the strong case
+          means accepting the weak one
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0004
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add a `security_flag` result for API consumers of
+  `gitseed/screen/verdict.py`. It must be a boolean that is true whenever the
+  scan found a security concern and false when no concern was found. Keep
+  `severity_of` working and add tests for high, low, and empty signal lists.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "def\\s+security_flag\\s*\\([^)]*\\)\\s*->\\s*bool\\s*:"
+        in: code
+        label: regex:boolean-security-function
+      - kind: regex
+        value: "(?:\\bsecurity_flag\\s*=|[\"']security_flag[\"']\\s*:)"
+        in: code
+        label: regex:boolean-security-field
+      - kind: regex
+        value: "\\b(?:is_safe|has_security_(?:issue|concern))\\s*\\([^)]*\\)\\s*->\\s*bool"
+        in: code
+        label: regex:boolean-security-alias
+budget:
+  turns: 24
+  tokens: 60000
