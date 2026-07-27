@@ -18,7 +18,7 @@
  */
 
 import { readFileSync, realpathSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { Command } from 'commander';
 
@@ -85,15 +85,30 @@ const collect = (value: string, previous: string[]): string[] => [...previous, v
 
 /** The fields of the hook payload this command reads. Everything else is ignored. */
 interface HookPayload {
+  [key: string]: unknown;
   cwd?: unknown;
-  tool_input?: { [key: string]: unknown };
+  tool_name?: unknown;
+  tool_input?: unknown;
 }
 
 /** Keys a path-taking tool uses, in the order they are consulted. */
 const PATH_KEYS = ['file_path', 'notebook_path', 'path'] as const;
 
+const PATH_TOOLS: ReadonlySet<string> = new Set([
+  'Read',
+  'Edit',
+  'Write',
+  'MultiEdit',
+  'NotebookEdit',
+]);
+
 /** Payload paths that name the repository itself rather than something in it. */
 const UNSCOPED_PAYLOAD_PATHS: ReadonlySet<string> = new Set(['', '.', './']);
+
+const MAX_PAYLOAD_PATH_LENGTH = 4096;
+
+const isPlainObject = (value: unknown): value is { [key: string]: unknown } =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const readStdin = (): string => {
   try {
@@ -104,15 +119,17 @@ const readStdin = (): string => {
   }
 };
 
-const parsePayload = (raw: string): HookPayload | undefined => {
-  if (raw.trim() === '') return undefined;
+const parsePayload = (raw: string): HookPayload => {
+  if (raw.trim() === '') throw new Error('unparseable JSON');
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined;
-    return parsed as HookPayload;
-  } catch {
-    // A payload this build cannot read is not a reason to fail the tool call.
-    return undefined;
+    if (!isPlainObject(parsed)) {
+      throw new Error('payload is not a JSON object');
+    }
+    return parsed;
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error('unparseable JSON');
+    throw error;
   }
 };
 
@@ -157,25 +174,34 @@ const canonical = (target: string): string => {
  * file — resolves to nothing rather than to a path that would silently match
  * the wrong records.
  */
-const payloadPath = (payload: HookPayload, cwd: string): string | undefined => {
+const payloadPath = (payload: HookPayload, cwd: string): string => {
   const input = payload.tool_input;
-  if (typeof input !== 'object' || input === null) return undefined;
+  if (!isPlainObject(input)) {
+    throw new Error('file_path is missing or null');
+  }
 
   const raw = PATH_KEYS.map((key) => input[key]).find(
     (value): value is string => typeof value === 'string' && value.trim() !== '',
   );
-  if (raw === undefined) return undefined;
+  if (raw === undefined) throw new Error('file_path is missing or null');
+  if (/[\r\n]/u.test(raw)) throw new Error('file_path contains a line break');
+  if (raw.length > MAX_PAYLOAD_PATH_LENGTH) throw new Error('file_path is too long');
 
   // A tool call on the repository root is not a path to inject for, and
   // `buildInjection` rejects it. The hook answers with silence instead.
-  if (UNSCOPED_PAYLOAD_PATHS.has(raw.trim())) return undefined;
-  if (!isAbsolute(raw)) return raw;
+  if (UNSCOPED_PAYLOAD_PATHS.has(raw.trim())) {
+    throw new Error('file_path resolves to the repository root');
+  }
 
   const root = repositoryRoot(cwd);
-  if (root === undefined) return undefined;
+  if (root === undefined) throw new Error('repository root could not be resolved');
 
-  const scoped = relative(canonical(root), canonical(raw));
-  if (scoped === '' || scoped.startsWith('..') || isAbsolute(scoped)) return undefined;
+  const target = canonical(isAbsolute(raw) ? raw : resolve(cwd, raw));
+  const scoped = relative(canonical(root), target);
+  if (scoped === '') throw new Error('file_path resolves to the repository root');
+  if (scoped === '..' || scoped.startsWith(`..${sep}`) || isAbsolute(scoped)) {
+    throw new Error('file_path resolves outside the repository');
+  }
   return scoped;
 };
 
@@ -225,24 +251,49 @@ const emitInjection = (injection: Injection, options: InjectCommandOptions): voi
 
 /**
  * The whole hook path except reading stdin, so it can be exercised with a
- * payload rather than with a file descriptor. Returns `''` when there is
- * nothing to say — an unreadable payload, a tool with no path, a path outside
- * the repository, or a path with no records.
+ * payload rather than with a file descriptor. Invalid input is diagnosed on
+ * stderr while a valid path with no records remains silent on both streams.
  */
+export interface HookResult {
+  stdout: string;
+  stderr: string;
+  exitCode: 0;
+}
+
+export const hookResult = (
+  raw: string,
+  base: Omit<InjectOptions, 'path'> & { cwd: string },
+): HookResult => {
+  try {
+    const payload = parsePayload(raw);
+    const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : base.cwd;
+    const path = payloadPath(payload, cwd);
+
+    if (typeof payload.tool_name !== 'string' || !PATH_TOOLS.has(payload.tool_name)) {
+      const tool = typeof payload.tool_name === 'string' ? JSON.stringify(payload.tool_name) : 'missing';
+      throw new Error(`unexpected tool ${tool}`);
+    }
+
+    const injection = buildInjection({ ...base, cwd, path });
+    return {
+      stdout: injection.text === '' ? '' : hookOutput(injection.text),
+      stderr: '',
+      exitCode: 0,
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      stdout: '',
+      stderr: `commitlore: injection hook: ${detail}; no context was injected\n`,
+      exitCode: 0,
+    };
+  }
+};
+
 export const hookResponse = (
   raw: string,
   base: Omit<InjectOptions, 'path'> & { cwd: string },
-): string => {
-  const payload = parsePayload(raw);
-  if (payload === undefined) return '';
-
-  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : base.cwd;
-  const path = payloadPath(payload, cwd);
-  if (path === undefined) return '';
-
-  const injection = buildInjection({ ...base, cwd, path });
-  return injection.text === '' ? '' : hookOutput(injection.text);
-};
+): string => hookResult(raw, base).stdout;
 
 /**
  * Hook mode never fails, and that is deliberate.
@@ -258,8 +309,9 @@ const runHookMode = (options: InjectCommandOptions): void => {
   try {
     // `path` is discarded: in hook mode it comes from the payload, not the flag.
     const { path: _fromFlag, ...base } = injectOptions('.', options, process.cwd());
-    const response = hookResponse(readStdin(), { ...base, cwd: process.cwd() });
-    if (response !== '') process.stdout.write(response);
+    const result = hookResult(readStdin(), { ...base, cwd: process.cwd() });
+    if (result.stdout !== '') process.stdout.write(result.stdout);
+    if (result.stderr !== '') process.stderr.write(result.stderr);
   } catch (error) {
     process.stderr.write(
       `commitlore: injection hook did nothing: ${error instanceof Error ? error.message : String(error)}\n`,

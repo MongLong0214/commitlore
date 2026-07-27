@@ -11,8 +11,8 @@
 #      exactly where it was before this plugin existed.
 #   2. Never touch the network. Resolution is a filesystem check and nothing
 #      else.
-#   3. No output on failure. A hook that prints to stdout when it cannot run
-#      feeds garbage into the payload the agent reads.
+#   3. No stdout on failure. Stderr carries diagnostics without becoming hook
+#      output, while stdout garbage would corrupt the payload the agent reads.
 set -u
 
 resolve() {
@@ -34,9 +34,17 @@ resolve() {
   return 1
 }
 
-BIN="$(resolve)" || exit 0    # rule 1: unresolvable is not an error
+BIN="$(resolve)" || {
+  printf '%s\n' "commitlore: injection hook: CLI could not be resolved; no context was injected" >&2
+  exit 0
+}
 
 case "$BIN" in
-  node\|*) exec node "${BIN#node|}" "$@" ;;
-  *)       exec "$BIN" "$@" ;;
+  node\|*) node "${BIN#node|}" "$@" ;;
+  *)       "$BIN" "$@" ;;
 esac
+status=$?
+if [ "$status" -ne 0 ]; then
+  printf '%s\n' "commitlore: injection hook: CLI exited $status; no context was injected" >&2
+fi
+exit 0
