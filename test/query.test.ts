@@ -755,6 +755,7 @@ describe('--json', () => {
         "diagnostics": [],
         "follow": true,
         "fromIndex": true,
+        "history": "ready",
         "notes": "absent",
         "paths": [
           "src/auth",
@@ -860,6 +861,8 @@ describe('--json', () => {
       fromIndex: true,
       // Three commit records were read; none of them carries a `Warn:`.
       scanned: 3,
+      // Commit history was read, so this is ready rather than empty.
+      history: 'ready',
       counts: { records: 0, limits: 0, ruledOut: 0, warnings: 0, other: 0 },
       // No remote, so an empty answer here is a true empty and says so.
       notes: 'absent',

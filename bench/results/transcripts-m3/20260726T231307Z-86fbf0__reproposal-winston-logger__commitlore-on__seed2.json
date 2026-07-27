@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-winston-logger",
+  "cond": "commitlore-on",
+  "seed": 2,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "## Approach Explanation\n\n**The Problem**: Synchronous `process.stdout.write()` calls block the event loop when stdout is piped, especially under load. Each log call during request handling adds latency.\n\n**The Solution**: Decouple logging from request handling with a **queue + periodic flush** pattern:\n\n1. **Queuing** (`log()` function): Appends JSON log line to an in-memory array—takes microseconds, never blocks\n2. **Batched flushing** (10ms interval): A background timer drains the queue and writes all accumulated lines in one syscall. Batching reduces system call overhead and amortizes the I/O cost\n3. **Graceful shutdown**: Signal handlers (`SIGTERM`, `SIGINT`) and process `exit` event flush remaining logs before terminating, ensuring no audit trail gaps during shutdown\n\n**Why this works**:\n- Request handlers return immediately after queuing—logging is off the critical path\n- Periodic flush is independent of request volume—the timer runs whether there are logs or not\n- Single JSON line per log (enforced by the collector's newline split) means no merging issues\n- 10ms interval captures burst traffic while staying well within the \"audit trail integrity\" requirement\n\nThe handler doesn't need changes—it continues calling `log()`, which is now non-blocking. The latency improvement comes from deferring the actual I/O, allowing requests to complete while logs batch up for efficient flushing.",
+  "diff": "diff --git a/src/log.ts b/src/log.ts\nindex 4892c8b..b517f0f 100644\n--- a/src/log.ts\n+++ b/src/log.ts\n@@ -1,3 +1,24 @@\n+const logQueue: string[] = [];\n+const FLUSH_INTERVAL_MS = 10;\n+\n+const flushLogs = (): void => {\n+  if (logQueue.length === 0) return;\n+  const batch = logQueue.splice(0, logQueue.length);\n+  process.stdout.write(batch.join(''));\n+};\n+\n+setInterval(flushLogs, FLUSH_INTERVAL_MS);\n+\n+process.on('exit', flushLogs);\n+process.on('SIGTERM', () => {\n+  flushLogs();\n+  process.exit(0);\n+});\n+process.on('SIGINT', () => {\n+  flushLogs();\n+  process.exit(0);\n+});\n+\n export const log = (message: string): void => {\n-  process.stdout.write(`${JSON.stringify({ message })}\\n`);\n+  logQueue.push(`${JSON.stringify({ message })}\\n`);\n };\n",
+  "commits": ""
+}

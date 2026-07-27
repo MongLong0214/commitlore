@@ -11127,6 +11127,15 @@ var execGitOrThrow = (args, opts = {}) => {
   }
   return result.stdout;
 };
+var GIT_NO_SUCH_REF = 1;
+var historyAvailability = (cwd) => {
+  const dir = execGit(["rev-parse", "--git-dir"], { cwd });
+  if (dir.code !== 0) return "unavailable";
+  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { cwd });
+  if (head.code === 0 && head.stdout.trim() !== "") return "ready";
+  if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === "") return "empty";
+  return "unavailable";
+};
 
 // src/core/harvest.ts
 import { readFileSync as readFileSync3 } from "node:fs";
@@ -14545,6 +14554,12 @@ var runQuery = (opts = {}) => {
     );
     const records = mergeByIdentity(visible, states).filter((record2) => opts.allHistory === true || record2.lifecycle === "active").filter((record2) => carriesKey(record2, opts.keys)).sort(compareRecords);
     gradeMerged(records, cwd, at, opts.trustedAuthors);
+    const history = historyAvailability(cwd);
+    if (history === "unavailable") {
+      diagnostics.push(
+        "git could not read this repository, so this is not an answer about its contents \u2014 treat it as unknown, not as empty"
+      );
+    }
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
       diagnostics.push(
@@ -14559,6 +14574,7 @@ var runQuery = (opts = {}) => {
       paths,
       aliases: scope.aliases,
       follow: scope.follow,
+      history,
       notes,
       diagnostics
     };
@@ -24830,6 +24846,7 @@ var toJson2 = (command, result) => ({
     warnings: countKey(result.records, WARN_KEY2),
     other: result.records.reduce((total, record2) => total + otherTrailers(record2).length, 0)
   },
+  history: result.history,
   notes: result.notes,
   diagnostics: result.diagnostics,
   records: result.records.map(toJsonRecord)
@@ -24864,7 +24881,8 @@ var otherLines = (records) => {
     )
   );
 };
-var emptyLine = (result, what) => result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
+var emptyLine = (result, what) => result.history === "unavailable" ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} \u2014 this is unknown, not empty
+` : result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
 ` : `no active ${what}${scopeSuffix(result)}
 `;
 var formatKind = (result, section2) => {
@@ -24902,6 +24920,7 @@ var emit4 = (name, result, options, render2) => {
     options.json === true ? `${JSON.stringify(toJson2(name, result), null, 2)}
 ` : render2(result)
   );
+  if (result.history === "unavailable") process.exitCode = 1;
 };
 var define = (program3, name, description, keys, render2) => {
   program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(

@@ -103,6 +103,7 @@ export const toJson = (command, result) => ({
         warnings: countKey(result.records, WARN_KEY),
         other: result.records.reduce((total, record) => total + otherTrailers(record).length, 0),
     },
+    history: result.history,
     notes: result.notes,
     diagnostics: result.diagnostics,
     records: result.records.map(toJsonRecord),
@@ -160,10 +161,13 @@ const otherLines = (records) => {
  * goes on the same line as the claim it qualifies, because a diagnostic on
  * stderr is not read by whoever is reading stdout.
  */
-const emptyLine = (result, what) => result.notes === 'unfetched'
-    ? `no active ${what}${scopeSuffix(result)} — but the notes mirror has not been ` +
-        'fetched here, so this is not the same as "none exist" (commitlore doctor --fix)\n'
-    : `no active ${what}${scopeSuffix(result)}\n`;
+const emptyLine = (result, what) => result.history === 'unavailable'
+    ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} — ` +
+        'this is unknown, not empty\n'
+    : result.notes === 'unfetched'
+        ? `no active ${what}${scopeSuffix(result)} — but the notes mirror has not been ` +
+            'fetched here, so this is not the same as "none exist" (commitlore doctor --fix)\n'
+        : `no active ${what}${scopeSuffix(result)}\n`;
 /** `limits`, `ruled-out` and `warnings`: one section, no header block. */
 export const formatKind = (result, section) => {
     const lines = valueLines(result.records, section.key, section.key === WARN_KEY);
@@ -206,6 +210,11 @@ const emit = (name, result, options, render) => {
         process.stderr.write(`commitlore: ${diagnostic}\n`);
     }
     process.stdout.write(options.json === true ? `${JSON.stringify(toJson(name, result), null, 2)}\n` : render(result));
+    // Fail closed. An answer git could not produce must not exit 0: a caller that
+    // branches on the exit code — a hook, a CI step, a shell `&&` — would read
+    // success and an empty list as "this path has no constraints".
+    if (result.history === 'unavailable')
+        process.exitCode = 1;
 };
 const define = (program, name, description, keys, render) => {
     program

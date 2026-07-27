@@ -43,7 +43,7 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
-import { execGit } from './git.js';
+import { execGit, historyAvailability } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeRecord } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
@@ -502,6 +502,11 @@ export const runQuery = (opts = {}) => {
         gradeMerged(records, cwd, at, opts.trustedAuthors);
         // Config only — no network. Cheap enough to run on every answer, and the
         // answer it qualifies is the empty one, which is the answer nobody inspects.
+        const history = historyAvailability(cwd);
+        if (history === 'unavailable') {
+            diagnostics.push('git could not read this repository, so this is not an answer about its contents — ' +
+                'treat it as unknown, not as empty');
+        }
         const notes = notesAvailability({ cwd });
         if (notes === 'unfetched') {
             diagnostics.push('the notes mirror has not been fetched here, so this answer may be missing records ' +
@@ -516,6 +521,7 @@ export const runQuery = (opts = {}) => {
             paths,
             aliases: scope.aliases,
             follow: scope.follow,
+            history,
             notes,
             diagnostics,
         };

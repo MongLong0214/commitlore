@@ -43,6 +43,7 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
+import { type HistoryAvailability } from './git.js';
 import { type RecordSource } from './index-db.js';
 import { type NotesAvailability } from './notes.js';
 import { type Lifecycle, type Record } from './types.js';
@@ -119,6 +120,16 @@ export interface QueryResult {
     aliases: string[];
     /** Whether renames were followed. `false` when several paths were given. */
     follow: boolean;
+    /**
+     * Whether git could read this repository's history at all.
+     *
+     * `unavailable` means the records below are **not** a statement about what
+     * this repository contains — git could not answer. Every consumer must treat
+     * that as a refusal rather than an empty answer, which is why it is a field
+     * and not a log line: `scanTrailers` used to take `null` from `git rev-parse`
+     * and return `[]`, so a broken git produced "no constraints" with exit 0.
+     */
+    history: HistoryAvailability;
     /**
      * Whether the notes mirror could be read here, and if not, why.
      *

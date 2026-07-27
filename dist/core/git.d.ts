@@ -41,3 +41,33 @@ export declare const execGit: (args: string[], opts?: ExecGitOptions) => GitResu
  * programmatically without a custom Error class.
  */
 export declare const execGitOrThrow: (args: string[], opts?: ExecGitOptions) => string;
+/**
+ * Whether this repository's history can be read, and if not, why.
+ *
+ * - `ready`       — git answered; an empty result is a statement about content
+ * - `empty`       — a repository with no commits yet: a true empty
+ * - `unavailable` — git could not answer. An empty result here is **not** a
+ *                   statement about content, and must not be reported as one
+ *
+ * The third case is the reason this exists. `scanTrailers` read `git rev-parse
+ * HEAD`, took `null` for an answer, and returned `[]` — so a repository whose
+ * git was broken, absent, or not a repository at all produced
+ * `{"records": [], "diagnostics": []}` and exit 0. That is the most dangerous
+ * output this tool can produce: an agent reads "no constraints" as "nothing is
+ * off limits", and here it was said with the same confidence as a genuine empty.
+ *
+ * `empty` is separated from `unavailable` deliberately. A freshly initialised
+ * repository legitimately has nothing, and folding it into the failure case
+ * would make `commitlore` refuse to run on the first commit of every project —
+ * which trains people to ignore the failure that matters.
+ */
+export type HistoryAvailability = 'ready' | 'empty' | 'unavailable';
+/**
+ * Asks git whether it can read this repository's history.
+ *
+ * Two questions, because one cannot separate the cases. `rev-parse --verify
+ * --quiet HEAD` exits 1 both when there are no commits and when this is not a
+ * repository, so `rev-parse --git-dir` is asked first: it succeeds for an empty
+ * repository and fails for everything else.
+ */
+export declare const historyAvailability: (cwd: string) => HistoryAvailability;

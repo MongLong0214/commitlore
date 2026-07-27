@@ -62,6 +62,11 @@ export interface JsonOutput {
      * `notes: "unfetched"` is an unknown, not an empty, and the two are otherwise
      * the same bytes.
      */
+    /**
+     * `ready` | `empty` | `unavailable`. On `unavailable` the `records` array is
+     * not a statement about this repository — git could not answer.
+     */
+    history: string;
     notes: string;
     diagnostics: string[];
     records: JsonRecord[];

@@ -533,6 +533,7 @@ describe('commitlore_query', () => {
       'diagnostics',
       'follow',
       'fromIndex',
+      'history',
       'notes',
       'paths',
       'records',

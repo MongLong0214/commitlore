@@ -79,3 +79,53 @@ export const execGitOrThrow = (args: string[], opts: ExecGitOptions = {}): strin
   }
   return result.stdout;
 };
+
+// ---------------------------------------------------------------------------
+// Availability — whether git could answer at all
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether this repository's history can be read, and if not, why.
+ *
+ * - `ready`       — git answered; an empty result is a statement about content
+ * - `empty`       — a repository with no commits yet: a true empty
+ * - `unavailable` — git could not answer. An empty result here is **not** a
+ *                   statement about content, and must not be reported as one
+ *
+ * The third case is the reason this exists. `scanTrailers` read `git rev-parse
+ * HEAD`, took `null` for an answer, and returned `[]` — so a repository whose
+ * git was broken, absent, or not a repository at all produced
+ * `{"records": [], "diagnostics": []}` and exit 0. That is the most dangerous
+ * output this tool can produce: an agent reads "no constraints" as "nothing is
+ * off limits", and here it was said with the same confidence as a genuine empty.
+ *
+ * `empty` is separated from `unavailable` deliberately. A freshly initialised
+ * repository legitimately has nothing, and folding it into the failure case
+ * would make `commitlore` refuse to run on the first commit of every project —
+ * which trains people to ignore the failure that matters.
+ */
+export type HistoryAvailability = 'ready' | 'empty' | 'unavailable';
+
+/** git's own exit code for "the ref does not exist", as opposed to a failure. */
+const GIT_NO_SUCH_REF = 1;
+
+/**
+ * Asks git whether it can read this repository's history.
+ *
+ * Two questions, because one cannot separate the cases. `rev-parse --verify
+ * --quiet HEAD` exits 1 both when there are no commits and when this is not a
+ * repository, so `rev-parse --git-dir` is asked first: it succeeds for an empty
+ * repository and fails for everything else.
+ */
+export const historyAvailability = (cwd: string): HistoryAvailability => {
+  const dir = execGit(['rev-parse', '--git-dir'], { cwd });
+  if (dir.code !== 0) return 'unavailable';
+
+  const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], { cwd });
+  if (head.code === 0 && head.stdout.trim() !== '') return 'ready';
+  // Exit 1 with no output is git saying the ref is absent — an unborn HEAD.
+  // Anything else (a spawn failure, 127, 128 from a corrupt object store) is git
+  // being unable to answer, which is not the same fact.
+  if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === '') return 'empty';
+  return 'unavailable';
+};

@@ -54,4 +54,28 @@ export const execGitOrThrow = (args, opts = {}) => {
     }
     return result.stdout;
 };
+/** git's own exit code for "the ref does not exist", as opposed to a failure. */
+const GIT_NO_SUCH_REF = 1;
+/**
+ * Asks git whether it can read this repository's history.
+ *
+ * Two questions, because one cannot separate the cases. `rev-parse --verify
+ * --quiet HEAD` exits 1 both when there are no commits and when this is not a
+ * repository, so `rev-parse --git-dir` is asked first: it succeeds for an empty
+ * repository and fails for everything else.
+ */
+export const historyAvailability = (cwd) => {
+    const dir = execGit(['rev-parse', '--git-dir'], { cwd });
+    if (dir.code !== 0)
+        return 'unavailable';
+    const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], { cwd });
+    if (head.code === 0 && head.stdout.trim() !== '')
+        return 'ready';
+    // Exit 1 with no output is git saying the ref is absent — an unborn HEAD.
+    // Anything else (a spawn failure, 127, 128 from a corrupt object store) is git
+    // being unable to answer, which is not the same fact.
+    if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === '')
+        return 'empty';
+    return 'unavailable';
+};
 //# sourceMappingURL=git.js.map
