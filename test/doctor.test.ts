@@ -86,6 +86,15 @@ const writeScript = (path: string, contents: string): void => {
   writeFileSync(path, contents);
 };
 
+const recordHookTarget = (
+  repo: string,
+  bin = resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'),
+  node = process.execPath,
+): void => {
+  git(repo, ['config', '--local', 'commitlore.bin', bin]);
+  git(repo, ['config', '--local', 'commitlore.node', node]);
+};
+
 describe('doctor: notes fetch refspec', () => {
   it('warns when the remote does not fetch the mirror, and says what fixes it', () => {
     const { repo } = repoWithRemote('doctor-refspec-missing');
@@ -191,6 +200,7 @@ describe('doctor: commit-msg hook', () => {
     const { repo } = repoWithRemote('doctor-hook-present');
     const contents = commitMsgStub();
     writeScript(hookPath(repo), contents);
+    recordHookTarget(repo);
 
     const check = runDoctor({ cwd: repo, fix: true }).checks.find(
       (entry) => entry.id === 'commit-msg-hook',
@@ -198,6 +208,8 @@ describe('doctor: commit-msg hook', () => {
 
     expect(check?.status).toBe('ok');
     expect(check?.fix).toBeNull();
+    expect(check?.detail).toContain(resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    expect(check?.detail).toContain(process.execPath);
     expect(readFileSync(hookPath(repo), 'utf8')).toBe(contents);
   });
 
@@ -220,6 +232,7 @@ describe('doctor: commit-msg hook', () => {
     const hooks = tempDir('doctor-hook-worktree-hooks');
     git(repo, ['config', 'core.hooksPath', hooks]);
     writeScript(join(hooks, 'commit-msg'), commitMsgStub());
+    recordHookTarget(repo);
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
 
@@ -250,10 +263,45 @@ describe('doctor: a stale stub', () => {
   it('reports ok for the current stub', () => {
     const { repo } = repoWithRemote('doctor-hook-current');
     writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
 
-    expect(runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook')?.status).toBe(
-      'ok',
-    );
+    const check = runDoctor({ cwd: repo }).checks.find((e) => e.id === 'commit-msg-hook');
+    expect(check?.status).toBe('ok');
+    expect(check?.detail).toContain('commitlore.bin:');
+    expect(check?.detail).toContain('commitlore.node:');
+  });
+
+  it('warns for a byte-current hook whose recorded CLI is outside the package root', () => {
+    const { repo } = repoWithRemote('doctor-hook-external-target');
+    writeScript(hookPath(repo), commitMsgStub());
+    const outside = join(tempDir('doctor-external-target'), 'commitlore.mjs');
+    writeFileSync(outside, 'process.exit(0);\n');
+    recordHookTarget(repo, outside);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain(outside);
+    expect(check?.detail).toContain(process.execPath);
+    expect(check?.fix).toContain('hooks install');
+  });
+
+  it('surfaces an active COMMITLORE_BIN override and where it points', () => {
+    const { repo } = repoWithRemote('doctor-hook-env-override');
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
+    const override = join(repo, 'override-bin');
+    const previous = process.env['COMMITLORE_BIN'];
+    process.env['COMMITLORE_BIN'] = override;
+    try {
+      const check = runDoctor({ cwd: repo }).checks.find(
+        (entry) => entry.id === 'commit-msg-hook',
+      );
+      expect(check?.status).toBe('warn');
+      expect(check?.detail).toContain(`COMMITLORE_BIN: ${override}`);
+    } finally {
+      if (previous === undefined) delete process.env['COMMITLORE_BIN'];
+      else process.env['COMMITLORE_BIN'] = previous;
+    }
   });
 });
 

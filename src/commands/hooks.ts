@@ -24,6 +24,11 @@ import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
 import {
+  type RecordedHookTarget,
+  describeRecordedHookTarget,
+  readRecordedHookTarget,
+} from '../core/hook-target.js';
+import {
   CHAINED_HOOK_NAME,
   HOOK_MARKER,
   HOOK_MODE,
@@ -46,6 +51,7 @@ export interface HookStatus {
   chained: boolean;
   /** git skips a non-executable hook, so a preserved hook without the bit never runs. */
   chainedExecutable: boolean;
+  recordedTarget: RecordedHookTarget;
 }
 
 export interface HookResult {
@@ -125,6 +131,7 @@ export const readHookStatus = (cwd = process.cwd()): HookStatus => {
     chainedPath,
     chained: existsSync(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
+    recordedTarget: readRecordedHookTarget(cwd),
   };
 };
 
@@ -255,10 +262,16 @@ export const hookStatus = (input: HookInput = {}): HookResult => {
     outdated: 'installed (commitlore), stub is out of date — run `commitlore hooks install`',
     foreign: 'present, not installed by commitlore',
   }[status.state];
+  const targetWarning =
+    status.state === 'installed' && status.recordedTarget.problems.length > 0
+      ? ', recorded target warning — run `commitlore hooks install`'
+      : '';
 
   return success(status, [
     `hooks dir: ${status.hooksDir}`,
-    `${HOOK_NAME}: ${state}`,
+    `${HOOK_NAME}: ${state}${targetWarning}`,
+    ...describeRecordedHookTarget(status.recordedTarget),
+    ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
     ...describeChained(status),
   ]);
 };

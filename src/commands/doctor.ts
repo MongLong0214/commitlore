@@ -24,6 +24,10 @@ import { join, resolve } from 'node:path';
 import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
+import {
+  describeRecordedHookTarget,
+  readRecordedHookTarget,
+} from '../core/hook-target.js';
 import { installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import {
@@ -182,8 +186,14 @@ const checkHook = (opts: DoctorOptions): DoctorCheck => {
   }
 
   const path = resolve(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
+  const override = process.env['COMMITLORE_BIN'];
+  const targetDetail = [
+    ...describeRecordedHookTarget(target),
+    ...(override === undefined || override === '' ? [] : [`COMMITLORE_BIN: ${override}`]),
+  ].join('; ');
   if (!existsSync(path)) {
-    return check(id, title, 'warn', `no commit-msg hook at ${path}`, install);
+    return check(id, title, 'warn', `no commit-msg hook at ${path}; ${targetDetail}`, install);
   }
 
   const contents = readFileSync(path, 'utf8');
@@ -192,7 +202,7 @@ const checkHook = (opts: DoctorOptions): DoctorCheck => {
       id,
       title,
       'warn',
-      `a commit-msg hook exists at ${path} but does not invoke commitlore`,
+      `a commit-msg hook exists at ${path} but does not invoke commitlore; ${targetDetail}`,
       install,
     );
   }
@@ -206,12 +216,18 @@ const checkHook = (opts: DoctorOptions): DoctorCheck => {
       id,
       title,
       'warn',
-      `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI`,
+      `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI; ${targetDetail}`,
       install,
     );
   }
 
-  return check(id, title, 'ok', `installed at ${path}`);
+  const problems = [
+    ...target.problems,
+    ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+  ];
+  return problems.length === 0
+    ? check(id, title, 'ok', `installed at ${path}; ${targetDetail}`)
+    : check(id, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
 };
 
 /**

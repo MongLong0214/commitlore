@@ -16,6 +16,7 @@
  * `core.hooksPath` can move the directory out of the repository entirely.
  */
 import type { Command } from 'commander';
+import { type RecordedHookTarget } from '../core/hook-target.js';
 /**
  * `installed` — our stub, current. `outdated` — our stub from an older build.
  * `foreign` — a hook somebody else installed.
@@ -30,6 +31,7 @@ export interface HookStatus {
     chained: boolean;
     /** git skips a non-executable hook, so a preserved hook without the bit never runs. */
     chainedExecutable: boolean;
+    recordedTarget: RecordedHookTarget;
 }
 export interface HookResult {
     code: 0 | 2;

@@ -19,6 +19,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
+import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_MODE, HOOK_NAME, commitMsgStub, } from '../hooks/commit-msg.js';
 const messageOf = (error) => error instanceof Error ? error.message : String(error);
 const firstLine = (text) => (text.trim().split('\n')[0] ?? '').trim();
@@ -78,6 +79,7 @@ export const readHookStatus = (cwd = process.cwd()) => {
         chainedPath,
         chained: existsSync(chainedPath),
         chainedExecutable: isExecutable(chainedPath),
+        recordedTarget: readRecordedHookTarget(cwd),
     };
 };
 /**
@@ -199,9 +201,14 @@ export const hookStatus = (input = {}) => {
         outdated: 'installed (commitlore), stub is out of date — run `commitlore hooks install`',
         foreign: 'present, not installed by commitlore',
     }[status.state];
+    const targetWarning = status.state === 'installed' && status.recordedTarget.problems.length > 0
+        ? ', recorded target warning — run `commitlore hooks install`'
+        : '';
     return success(status, [
         `hooks dir: ${status.hooksDir}`,
-        `${HOOK_NAME}: ${state}`,
+        `${HOOK_NAME}: ${state}${targetWarning}`,
+        ...describeRecordedHookTarget(status.recordedTarget),
+        ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
         ...describeChained(status),
     ]);
 };

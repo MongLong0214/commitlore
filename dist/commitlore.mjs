@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve6.call(this, root, ref);
+      let _sch = resolve7.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve6(root, ref) {
+    function resolve7(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,55 +3642,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve6(baseURI, relativeURI, options) {
+    function resolve7(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative3, options, skipNormalization) {
+    function resolveComponent(base, relative4, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse4(serialize(base, options), options);
-        relative3 = parse4(serialize(relative3, options), options);
+        relative4 = parse4(serialize(relative4, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative3.scheme) {
-        target.scheme = relative3.scheme;
-        target.userinfo = relative3.userinfo;
-        target.host = relative3.host;
-        target.port = relative3.port;
-        target.path = removeDotSegments(relative3.path || "");
-        target.query = relative3.query;
+      if (!options.tolerant && relative4.scheme) {
+        target.scheme = relative4.scheme;
+        target.userinfo = relative4.userinfo;
+        target.host = relative4.host;
+        target.port = relative4.port;
+        target.path = removeDotSegments(relative4.path || "");
+        target.query = relative4.query;
       } else {
-        if (relative3.userinfo !== void 0 || relative3.host !== void 0 || relative3.port !== void 0) {
-          target.userinfo = relative3.userinfo;
-          target.host = relative3.host;
-          target.port = relative3.port;
-          target.path = removeDotSegments(relative3.path || "");
-          target.query = relative3.query;
+        if (relative4.userinfo !== void 0 || relative4.host !== void 0 || relative4.port !== void 0) {
+          target.userinfo = relative4.userinfo;
+          target.host = relative4.host;
+          target.port = relative4.port;
+          target.path = removeDotSegments(relative4.path || "");
+          target.query = relative4.query;
         } else {
-          if (!relative3.path) {
+          if (!relative4.path) {
             target.path = base.path;
-            if (relative3.query !== void 0) {
-              target.query = relative3.query;
+            if (relative4.query !== void 0) {
+              target.query = relative4.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative3.path[0] === "/") {
-              target.path = removeDotSegments(relative3.path);
+            if (relative4.path[0] === "/") {
+              target.path = removeDotSegments(relative4.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative3.path;
+                target.path = "/" + relative4.path;
               } else if (!base.path) {
-                target.path = relative3.path;
+                target.path = relative4.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative3.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative4.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative3.query;
+            target.query = relative4.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3698,7 +3698,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative3.fragment;
+      target.fragment = relative4.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve6,
+      resolve: resolve7,
       resolveComponent,
       equal,
       serialize,
@@ -13329,7 +13329,58 @@ var register = (program3) => {
 import { spawnSync as spawnSync3 } from "node:child_process";
 import { existsSync as existsSync2, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { join as join2, resolve as resolve2 } from "node:path";
+import { join as join2, resolve as resolve3 } from "node:path";
+
+// src/core/hook-target.ts
+import { realpathSync, statSync } from "node:fs";
+import { isAbsolute, relative, resolve as resolve2, sep } from "node:path";
+var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
+var isFile = (path2) => {
+  try {
+    return statSync(path2).isFile();
+  } catch {
+    return false;
+  }
+};
+var isExecutableFile = (path2) => {
+  try {
+    const stat = statSync(path2);
+    return stat.isFile() && (stat.mode & 73) !== 0;
+  } catch {
+    return false;
+  }
+};
+var isInsidePackage = (path2) => {
+  const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path2));
+  return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+};
+var readRecordedHookTarget = (cwd) => {
+  const bin = configValue(cwd, "commitlore.bin");
+  const node = configValue(cwd, "commitlore.node");
+  const problems = [];
+  if (bin === "") problems.push("commitlore.bin is not recorded");
+  else {
+    const binPath = resolve2(cwd, bin);
+    if (!bin.endsWith(".js") && !bin.endsWith(".mjs")) {
+      problems.push("commitlore.bin is not a .js or .mjs file");
+    }
+    if (!isFile(binPath)) problems.push("commitlore.bin does not exist");
+    else if (!isInsidePackage(binPath)) problems.push("commitlore.bin is outside this package root");
+  }
+  if (node === "") problems.push("commitlore.node is not recorded");
+  else {
+    const nodePath = resolve2(cwd, node);
+    if (!isExecutableFile(nodePath)) problems.push("commitlore.node is not an executable file");
+    else if (realpathSync(nodePath) !== realpathSync(process.execPath)) {
+      problems.push("commitlore.node differs from this CLI interpreter");
+    }
+  }
+  return { bin, node, problems };
+};
+var describeRecordedHookTarget = (target) => [
+  `commitlore.bin: ${target.bin || "(unset)"}`,
+  `commitlore.node: ${target.node || "(unset)"}`
+];
 
 // src/hooks/commit-msg.ts
 var HOOK_MARKER = "# commitlore:commit-msg:v1";
@@ -13389,11 +13440,7 @@ var commitMsgStub = () => [
   '      if [ -x "$recorded_node" ]; then',
   '        exec "$recorded_node" "$recorded" validate --message-file "$1"',
   "      fi",
-  "      if command -v node >/dev/null 2>&1; then",
-  '        exec node "$recorded" validate --message-file "$1"',
-  "      fi",
   "      ;;",
-  '    *) exec "$recorded" validate --message-file "$1" ;;',
   "  esac",
   "fi",
   "",
@@ -13499,9 +13546,15 @@ var checkHook = (opts) => {
   if (located.code !== 0) {
     return check(id, title, "warn", "not inside a git repository", install);
   }
-  const path2 = resolve2(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const path2 = resolve3(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
+  const override = process.env["COMMITLORE_BIN"];
+  const targetDetail = [
+    ...describeRecordedHookTarget(target),
+    ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
+  ].join("; ");
   if (!existsSync2(path2)) {
-    return check(id, title, "warn", `no commit-msg hook at ${path2}`, install);
+    return check(id, title, "warn", `no commit-msg hook at ${path2}; ${targetDetail}`, install);
   }
   const contents = readFileSync5(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
@@ -13509,7 +13562,7 @@ var checkHook = (opts) => {
       id,
       title,
       "warn",
-      `a commit-msg hook exists at ${path2} but does not invoke commitlore`,
+      `a commit-msg hook exists at ${path2} but does not invoke commitlore; ${targetDetail}`,
       install
     );
   }
@@ -13518,11 +13571,15 @@ var checkHook = (opts) => {
       id,
       title,
       "warn",
-      `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI`,
+      `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI; ${targetDetail}`,
       install
     );
   }
-  return check(id, title, "ok", `installed at ${path2}`);
+  const problems = [
+    ...target.problems,
+    ...override === void 0 || override === "" ? [] : ["COMMITLORE_BIN override is active"]
+  ];
+  return problems.length === 0 ? check(id, title, "ok", `installed at ${path2}; ${targetDetail}`) : check(id, title, "warn", `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`, install);
 };
 var checkGit = (opts) => {
   const title = "git interpret-trailers";
@@ -13577,7 +13634,7 @@ var checkHookRuntime = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
-  const hook = resolve2(cwd, located.stdout.trim());
+  const hook = resolve3(cwd, located.stdout.trim());
   if (!existsSync2(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
   const probe = join2(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
@@ -15375,8 +15432,8 @@ var register5 = (program3) => {
 
 // src/commands/hooks.ts
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync9, renameSync, statSync, unlinkSync, writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join3, resolve as resolve3 } from "node:path";
+import { chmodSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync9, renameSync, statSync as statSync2, unlinkSync, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join3, resolve as resolve4 } from "node:path";
 var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure = (message) => ({
@@ -15397,11 +15454,11 @@ var resolveHooksDir = (cwd) => {
   if (result.code !== 0) {
     throw new Error(`not a git repository (${firstLine(result.stderr)})`);
   }
-  return resolve3(cwd, result.stdout.trim());
+  return resolve4(cwd, result.stdout.trim());
 };
 var isExecutable = (path2) => {
   try {
-    return (statSync(path2).mode & 73) !== 0;
+    return (statSync2(path2).mode & 73) !== 0;
   } catch {
     return false;
   }
@@ -15427,7 +15484,8 @@ var readHookStatus = (cwd = process.cwd()) => {
     state: readHookState(hookPath),
     chainedPath,
     chained: existsSync3(chainedPath),
-    chainedExecutable: isExecutable(chainedPath)
+    chainedExecutable: isExecutable(chainedPath),
+    recordedTarget: readRecordedHookTarget(cwd)
   };
 };
 var writeStub = (hookPath) => {
@@ -15439,7 +15497,7 @@ var writeStub = (hookPath) => {
 var recordBinPath = (cwd) => {
   const entry = process.argv[1];
   if (entry === void 0 || entry === "") return;
-  execGit(["config", "--local", "commitlore.bin", resolve3(entry)], { cwd });
+  execGit(["config", "--local", "commitlore.bin", resolve4(entry)], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
 };
 var describeChained = (status) => {
@@ -15518,9 +15576,12 @@ var hookStatus = (input = {}) => {
     outdated: "installed (commitlore), stub is out of date \u2014 run `commitlore hooks install`",
     foreign: "present, not installed by commitlore"
   }[status.state];
+  const targetWarning = status.state === "installed" && status.recordedTarget.problems.length > 0 ? ", recorded target warning \u2014 run `commitlore hooks install`" : "";
   return success(status, [
     `hooks dir: ${status.hooksDir}`,
-    `${HOOK_NAME}: ${state}`,
+    `${HOOK_NAME}: ${state}${targetWarning}`,
+    ...describeRecordedHookTarget(status.recordedTarget),
+    ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
     ...describeChained(status)
   ]);
 };
@@ -15626,8 +15687,8 @@ var register7 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync11, realpathSync } from "node:fs";
-import { basename, dirname as dirname4, isAbsolute, join as join5, relative, resolve as resolve4 } from "node:path";
+import { readFileSync as readFileSync11, realpathSync as realpathSync2 } from "node:fs";
+import { basename, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve5 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -15927,7 +15988,7 @@ var buildInjection = (opts) => {
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync10, renameSync as renameSync2, statSync as statSync3, unlinkSync as unlinkSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { dirname as dirname3, join as join4 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -16051,7 +16112,7 @@ var writeAtomic = (settingsPath, settings) => {
   mkdirSync3(dirname3(settingsPath), { recursive: true });
   let mode;
   try {
-    mode = statSync2(settingsPath).mode & 511;
+    mode = statSync3(settingsPath).mode & 511;
   } catch {
     mode = void 0;
   }
@@ -16209,12 +16270,12 @@ var repositoryRoot = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve4(target);
+  const absolute = resolve5(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
     try {
-      const real = realpathSync(current);
+      const real = realpathSync2(current);
       return tail.length === 0 ? real : join5(real, ...tail);
     } catch {
       const parent = dirname4(current);
@@ -16232,11 +16293,11 @@ var payloadPath = (payload, cwd) => {
   );
   if (raw === void 0) return void 0;
   if (UNSCOPED_PAYLOAD_PATHS.has(raw.trim())) return void 0;
-  if (!isAbsolute(raw)) return raw;
+  if (!isAbsolute2(raw)) return raw;
   const root = repositoryRoot(cwd);
   if (root === void 0) return void 0;
-  const scoped = relative(canonical(root), canonical(raw));
-  if (scoped === "" || scoped.startsWith("..") || isAbsolute(scoped)) return void 0;
+  const scoped = relative2(canonical(root), canonical(raw));
+  if (scoped === "" || scoped.startsWith("..") || isAbsolute2(scoped)) return void 0;
   return scoped;
 };
 var hookOutput = (text) => `${JSON.stringify({
@@ -16337,7 +16398,7 @@ var register8 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute2, relative as relative2, resolve as resolve5, sep } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve6, sep as sep2 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -23657,7 +23718,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve6) => setTimeout(resolve6, pollInterval));
+        await new Promise((resolve7) => setTimeout(resolve7, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -23674,7 +23735,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve6, reject2) => {
+    return new Promise((resolve7, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -23752,7 +23813,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve6(parseResult.data);
+            resolve7(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -24013,12 +24074,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve6, reject2) => {
+    return new Promise((resolve7, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve6, interval);
+      const timeoutId = setTimeout(resolve7, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -24888,12 +24949,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve6) => {
+    return new Promise((resolve7) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve6();
+        resolve7();
       } else {
-        this._stdout.once("drain", resolve6);
+        this._stdout.once("drain", resolve7);
       }
     });
   }
@@ -25301,14 +25362,14 @@ var packageVersion2 = () => {
 var resolveRepoPath = (root, raw) => {
   if (raw === "" || raw === ".") return "";
   if (raw.includes("\0")) throw new Error("path contains a NUL byte");
-  if (isAbsolute2(raw)) {
+  if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve5(root, raw);
-  if (resolved !== root && !resolved.startsWith(`${root}${sep}`)) {
+  const resolved = resolve6(root, raw);
+  if (resolved !== root && !resolved.startsWith(`${root}${sep2}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
-  return relative2(root, resolved);
+  return relative3(root, resolved);
 };
 var contextUriPath = (uri) => {
   const bare = uri === CONTEXT_URI_PREFIX.slice(0, -1);
@@ -25410,7 +25471,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve5(opts.cwd ?? process.cwd());
+  const root = resolve6(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {

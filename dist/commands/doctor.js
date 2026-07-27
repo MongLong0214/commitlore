@@ -20,6 +20,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
+import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
 import { installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
@@ -84,21 +85,33 @@ const checkHook = (opts) => {
         return check(id, title, 'warn', 'not inside a git repository', install);
     }
     const path = resolve(opts.cwd ?? process.cwd(), located.stdout.trim());
+    const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
+    const override = process.env['COMMITLORE_BIN'];
+    const targetDetail = [
+        ...describeRecordedHookTarget(target),
+        ...(override === undefined || override === '' ? [] : [`COMMITLORE_BIN: ${override}`]),
+    ].join('; ');
     if (!existsSync(path)) {
-        return check(id, title, 'warn', `no commit-msg hook at ${path}`, install);
+        return check(id, title, 'warn', `no commit-msg hook at ${path}; ${targetDetail}`, install);
     }
     const contents = readFileSync(path, 'utf8');
     if (!contents.includes(HOOK_MARKER)) {
-        return check(id, title, 'warn', `a commit-msg hook exists at ${path} but does not invoke commitlore`, install);
+        return check(id, title, 'warn', `a commit-msg hook exists at ${path} but does not invoke commitlore; ${targetDetail}`, install);
     }
     // `hooks status` has always reported this; doctor did not, and doctor is what
     // people run to ask whether their installation is healthy. A stale stub is
     // exactly how a fixed resolution order fails to reach anyone who installed
     // before it landed.
     if (contents !== commitMsgStub()) {
-        return check(id, title, 'warn', `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI`, install);
+        return check(id, title, 'warn', `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI; ${targetDetail}`, install);
     }
-    return check(id, title, 'ok', `installed at ${path}`);
+    const problems = [
+        ...target.problems,
+        ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+    ];
+    return problems.length === 0
+        ? check(id, title, 'ok', `installed at ${path}; ${targetDetail}`)
+        : check(id, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
 };
 /**
  * Runs the real parse path once. Trailer boundaries are git's to decide
