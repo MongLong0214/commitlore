@@ -1,6 +1,23 @@
 # ADR-0012 — Drop the native dependency: `better-sqlite3` → `node:sqlite`
 
-Status: accepted · Supersedes nothing · Enables [#39](https://github.com/MongLong0214/commitlore/issues/39)
+Status: accepted, implemented ([#64](https://github.com/MongLong0214/commitlore/issues/64)) · Supersedes nothing · Enables [#39](https://github.com/MongLong0214/commitlore/issues/39)
+
+> ⚠️ **Implemented.** `src/core/index-db.ts` now opens `node:sqlite`'s
+> `DatabaseSync`, `better-sqlite3` and `@types/better-sqlite3` are gone from
+> `package.json`, and `--external:better-sqlite3` is gone from the bundle
+> script. The nested-transaction risk this ADR flagged in "API surface to
+> adapt" was real, not hypothetical: the call-graph check found `rebuildIndex`
+> nesting into `insertRecords`, and `indexNotes` nesting into both
+> `deleteNoteRows` and `insertRecords`. The migration replaced
+> `db.transaction()` with a savepoint-based helper (`runInTransaction`) rather
+> than assuming a flat depth. The performance figure this ADR's Consequences
+> section required to be "re-measured and republished, or withdrawn" was
+> already withdrawn (`<!-- BENCH:WITHDRAWN -->`, enforced by
+> `scripts/check-readme-numbers.mjs`) before this migration and stays that way
+> here — republishing it is a separate, provenance-checked benchmark run, not
+> part of this change.
+>
+> The rest of this document is preserved as decision history.
 
 ## Context
 

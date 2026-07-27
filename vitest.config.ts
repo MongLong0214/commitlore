@@ -4,11 +4,14 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',
-    // `better-sqlite3` is a native addon, and loading it inside a worker thread
-    // kills the worker on Linux. The run still reported every other file green
-    // while the two index files were silently absent from the results, which is
-    // the worst shape a test failure can take. Forked processes are the
-    // supported way to use native addons under vitest; the cost is startup time.
+    // Historically `better-sqlite3` was a native addon here, and loading it
+    // inside a worker thread killed the worker on Linux — the run still
+    // reported every other file green while the two index files were silently
+    // absent from the results, the worst shape a test failure can take.
+    // ADR-0012 replaced it with `node:sqlite`, which is not a `.node` addon
+    // and does not carry that risk, but `pool: 'forks'` stays: it is what
+    // caught the original failure, changing it is not part of that migration,
+    // and the cost is only startup time.
     pool: 'forks',
     // The developer's git config is not an input. Without this, a test that
     // forgets to set an identity in its temporary repository passes on any

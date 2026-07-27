@@ -14,11 +14,23 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import Database from 'better-sqlite3';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Vite's transform pipeline (bundled with vitest) does not recognize
+ * `node:sqlite` as a builtin — a static `import` of it fails the suite with
+ * "Failed to load url sqlite". `src/core/index-db.ts` already reaches
+ * `node:sqlite` through `createRequire` for an unrelated reason (ADR-0012's
+ * laziness); the same call sidesteps this one too. Only `.prototype.close` is
+ * used below (to spy on it), so the cast names just that surface.
+ */
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (...args: never[]) => { close: () => void };
+};
 
 type InjectedGitFailure = {
   readonly matches: (args: readonly string[]) => boolean;
@@ -701,8 +713,13 @@ describe('index-db: notes as a second source', () => {
 
       expect(() => updateIndex(handle)).toThrow(/injected note read failure/);
       expect(queryTrailers(handle, { source: 'notes' })).toEqual(before);
+      // `node:sqlite` has no `.pluck()` (ADR-0012); read the row and pick the column.
       expect(
-        handle.db.prepare("SELECT v FROM meta WHERE k = 'notes_ref_sha'").pluck().get(),
+        (
+          handle.db.prepare("SELECT v FROM meta WHERE k = 'notes_ref_sha'").get() as
+            | { v: string }
+            | undefined
+        )?.v,
       ).toBe(indexedRef);
     } finally {
       closeIndex(handle);
@@ -757,7 +774,7 @@ describe('index-db: notes as a second source', () => {
       code: 70,
       stderr: 'injected notes list failure',
     };
-    const close = vi.spyOn(Database.prototype, 'close');
+    const close = vi.spyOn(DatabaseSync.prototype, 'close');
 
     expect(() => ensureIndex({ cwd: dir })).toThrow(/injected notes list failure/);
     expect(close).toHaveBeenCalledTimes(1);
