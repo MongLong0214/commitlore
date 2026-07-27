@@ -26428,7 +26428,7 @@ var inspectSource = (source) => {
     key: "trailer-block",
     value: "",
     rule: "format",
-    got: rawViolations[0]?.key ?? "unknown",
+    got: "an unknown trailer key",
     want: "a final paragraph that looks like a CommitLore trailer block"
   } : void 0;
   const violations = nonTrailerParagraph === void 0 ? rawViolations.map((violation) => {
@@ -26617,7 +26617,7 @@ var formatViolation = (violation) => {
   if (violation.line !== void 0) parts.push(String(violation.line));
   const where = parts.length === 0 ? "" : `${parts.join(":")}: `;
   if (violation.rule === "format" && violation.key === "trailer-block") {
-    return `${where}final paragraph does not look like a CommitLore trailer block; saw unknown key ${JSON.stringify(violation.got)}`;
+    return `${where}final paragraph does not look like a CommitLore trailer block; saw ${violation.got}`;
   }
   const got = JSON.stringify(violation.got);
   const want = JSON.stringify(violation.want);

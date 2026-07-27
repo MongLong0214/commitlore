@@ -166,7 +166,7 @@ describe('validate — prose/trailer boundary', () => {
       expect.objectContaining({ sha: merge, line: 3, rule: 'format', key: 'trailer-block' }),
     ]);
     expect(result.stdout).toContain(
-      `${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw unknown key "inject"`,
+      `${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw an unknown trailer key`,
     );
     expect(result.stderr).toBe('commitlore: 1 violation (SPEC §6) — the message was not modified\n');
   });
@@ -190,8 +190,33 @@ describe('validate — prose/trailer boundary', () => {
 
     expect(result.code).toBe(1);
     expect(result.secrets).toHaveLength(1);
-    expect(rendered).toContain('saw unknown key "inject"');
+    expect(rendered).toContain('saw an unknown trailer key');
     expect(rendered).not.toContain(secret);
+  });
+
+  it('does not echo a credential-shaped trailer key in text, JSON, or result fields', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    const secret = ['AKIA', '7CRHB6PVPDR7GPYV'].join('');
+    const merge = mergeBranch(
+      repo,
+      'feature',
+      `Merge pull request #72 from owner/feature\n\n${secret}: diagnose silent hook failures`,
+    );
+
+    const text = runValidate({ commit: merge, cwd: repo });
+    const json = runValidate({ commit: merge, cwd: repo, json: true });
+
+    expect(text.code).toBe(1);
+    expect(json.code).toBe(1);
+    expect(text.secrets).toHaveLength(1);
+    expect(json.secrets).toHaveLength(1);
+    expect(`${JSON.stringify(text)}${JSON.stringify(json)}`).not.toContain(secret);
+    expect(text.stdout).toContain('saw an unknown trailer key');
   });
 
   it('keeps a genuine unknown-key failure when a merge paragraph also has a valid trailer', () => {
