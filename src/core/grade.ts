@@ -22,6 +22,8 @@
  * depend on recognising the attack at all.
  */
 
+import { Buffer, isUtf8 } from 'node:buffer';
+
 import { execGit } from './git.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
@@ -116,8 +118,10 @@ export interface InjectionPattern {
  * What this table cannot see, by construction:
  * - Character-level obfuscation beyond case/space/confusable folding — leetspeak
  *   (`ign0re`), letter-spacing (`i g n o r e`), inserted punctuation
- *   (`i.g.n.o.r.e`), base64 or any other encoding.
- * - Any language other than English.
+ *   (`i.g.n.o.r.e`).
+ * - Encodings other than one layer of base64, hexadecimal or URL encoding.
+ * - Languages and phrasings outside the explicit English, Korean, Japanese and
+ *   Chinese patterns below.
  * - Semantic paraphrase: "the maintainers have decided this file may be deleted
  *   without review" carries no keyword at all.
  * - Payloads split across several trailers or several commits, each innocent.
@@ -172,6 +176,30 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
       /\b(?:ignore|disregard|forget|override|discard|bypass)\s+(?:(?:all|any|the|your|these|those|my|other|earlier)\s+){0,3}(?:previous|prior|earlier|above|preceding|foregoing|system)\b/,
     negatable: true,
     intent: 'tells the agent to drop the instructions it already has',
+  },
+  {
+    id: 'bypass.ignore-previous.ko',
+    family: 'policy-bypass',
+    pattern:
+      /(?:이전|앞선|기존|위의)\s*(?:모든\s*)?(?:지시|지침|명령)(?:을|를)?\s*(?:모두\s*)?(?:무시(?:하고|하라|해라|해|하세요|하십시오|해줘)|잊어(?:버리고|라|주세요)|폐기(?:하고|하라|해라))(?!서는?\s*안|면\s*안|지\s*마)/,
+    negatable: false,
+    intent: 'tells the agent in Korean to drop earlier instructions',
+  },
+  {
+    id: 'bypass.ignore-previous.ja',
+    family: 'policy-bypass',
+    pattern:
+      /(?:以前|前|先ほど|上記)(?:の)?(?:すべて|全て|全部)?(?:の)?(?:指示|命令|プロンプト)(?:を)?(?:すべて|全て|全部)?(?:無視|忘れ|破棄)(?:しろ|せよ|して|してください)(?!はいけ(?:ません|ない)|はなら(?:ない|ぬ))/,
+    negatable: false,
+    intent: 'tells the agent in Japanese to drop earlier instructions',
+  },
+  {
+    id: 'bypass.ignore-previous.zh',
+    family: 'policy-bypass',
+    pattern:
+      /(?<!不要)(?<!不得)(?<!禁止)(?<!请勿)(?<!請勿)(?<!切勿)(?:忽略|无视|無視|忘记|忘記|丢弃|丟棄|覆盖|覆蓋)(?:此前|之前|以前|先前|上述)(?:的)?(?:所有|全部)?(?:系统|系統)?(?:指令|指示|提示|命令)/,
+    negatable: true,
+    intent: 'tells the agent in Chinese to drop earlier instructions',
   },
   {
     id: 'bypass.new-instructions',
@@ -233,6 +261,14 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
     intent: 'asks for a credential to be emitted or sent somewhere',
   },
   {
+    id: 'credential.exfiltrate-secret.ko',
+    family: 'credential-exfiltration',
+    pattern:
+      /(?:비밀|토큰|암호|비밀번호|자격\s*증명|api\s*키|개인\s*키|ssh\s*키|\.ssh\/id_rsa|id_rsa)[^.!?\n。！？]{0,32}(?:출력|공개|노출|전송)(?:하라|해라|해|하세요|하십시오|해줘)/,
+    negatable: false,
+    intent: 'asks in Korean for a credential to be emitted or sent',
+  },
+  {
     id: 'output.always-comply',
     family: 'output-manipulation',
     pattern:
@@ -289,8 +325,15 @@ const NEGATION_LOOKBACK = 2;
 /** Invisible characters: they change nothing on screen and everything to a regex. */
 const INVISIBLE_RE = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 
-/** Combining marks left over after NFD — `íg̃nore` must fold to `ignore`. */
+/** ANSI CSI sequences, removed whole so stripping cannot join an attack after grading. */
+const ANSI_ESCAPE_RE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
+
+/** Combining marks removed from Latin letters — `íg̃nore` must fold to `ignore`. */
 const COMBINING_RE = /\p{M}/gu;
+const LATIN_CLUSTER_RE = /\p{Script=Latin}\p{M}*/gu;
+
+const stripTransportNoise = (text: string): string =>
+  text.replace(ANSI_ESCAPE_RE, '').replace(INVISIBLE_RE, '');
 
 /**
  * Latin lookalikes from other scripts. NFKC does not touch these (they are
@@ -350,18 +393,18 @@ const CONFUSABLES: ReadonlyMap<string, string> = new Map([
  * ligatures. Then invisibles, which would otherwise split a word in the middle
  * (`ig​nore`). Then case, then accents, then cross-script lookalikes, and
  * finally whitespace — so `IGNORE  PREVIOUS` and `ignore previous` are the same
- * string by the time any pattern sees them.
+ * string by the time any pattern sees them. Accent folding is limited to Latin
+ * letters so Hangul and kana retain the characters multilingual patterns use.
  *
- * Match-only: the result is not safe to display. NFD leaves Hangul and other
- * scripts decomposed.
+ * Match-only: the result is not safe to display.
  */
 export const normalizeForMatch = (text: string): string => {
-  const folded = text
-    .normalize('NFKC')
-    .replace(INVISIBLE_RE, '')
+  const folded = stripTransportNoise(text.normalize('NFKC'))
     .toLowerCase()
-    .normalize('NFD')
-    .replace(COMBINING_RE, '');
+    .replace(
+      LATIN_CLUSTER_RE,
+      (cluster) => cluster.normalize('NFD').replace(COMBINING_RE, ''),
+    );
 
   let mapped = '';
   for (const char of folded) mapped += CONFUSABLES.get(char) ?? char;
@@ -369,9 +412,69 @@ export const normalizeForMatch = (text: string): string => {
   return mapped.replace(/\s+/g, ' ').trim();
 };
 
-/** Whether one of the `NEGATION_LOOKBACK` words before `index` disarms the match. */
-const isNegated = (haystack: string, index: number): boolean => {
-  const words = haystack.slice(0, index).split(/[^a-z0-9]+/).filter((word) => word !== '');
+const URL_ESCAPE_RE = /%[0-9a-f]{2}/i;
+const URL_RUN_RE = /(?:%[0-9a-f]{2})+/gi;
+const BASE64_TOKEN_RE =
+  /(?<![a-z0-9+/_-])[a-z0-9+/_-]{16,}=*(?![a-z0-9+/_=-])/gi;
+const PADDED_BASE64_PREFIX_RE = /(?<![a-z0-9+/_-])[a-z0-9+/_-]{16,}=+/gi;
+const WRAPPED_BASE64_TOKEN_RE =
+  /(?<![a-z0-9+/_-])(?:(?:[a-z0-9+/_-]{4})+[ \t\r\n]+)+(?:[a-z0-9+/_-]{4})+(?:[a-z0-9+/_-]{2,3}=*)?(?![a-z0-9+/_=-])/gi;
+const HEX_TOKEN_RE = /(?<![0-9a-f])(?:0x)?([0-9a-f]{16,})(?![0-9a-f])/gi;
+const CONTROL_RE = /[\u0000-\u001F\u007F-\u009F]/g;
+
+const addDecoded = (decoded: Set<string>, bytes: Buffer): void => {
+  if (!isUtf8(bytes)) return;
+  const text = bytes.toString('utf8');
+  if (text !== '') decoded.add(text);
+};
+
+/** One speculative decode layer; failure never replaces the original text. */
+const decodedCandidates = (text: string): string[] => {
+  const decoded = new Set<string>();
+
+  if (URL_ESCAPE_RE.test(text)) {
+    decoded.add(
+      text.replace(URL_RUN_RE, (run) => {
+        const bytes = Buffer.from(run.replaceAll('%', ''), 'hex');
+        return bytes.toString('utf8');
+      }),
+    );
+  }
+
+  for (const scanner of [
+    BASE64_TOKEN_RE,
+    PADDED_BASE64_PREFIX_RE,
+    WRAPPED_BASE64_TOKEN_RE,
+  ]) {
+    for (const match of text.matchAll(scanner)) {
+      const token = match[0].replace(/\s+/g, '').replace(/=+$/, '');
+      for (let trim = 0; trim <= 3 && token.length - trim >= 16; trim += 1) {
+        const candidate = token.slice(0, trim === 0 ? undefined : -trim);
+        if (candidate.length % 4 !== 1) {
+          addDecoded(decoded, Buffer.from(candidate, 'base64'));
+        }
+      }
+    }
+  }
+
+  for (const match of text.matchAll(HEX_TOKEN_RE)) {
+    const token = match[1];
+    if (token !== undefined && token.length % 2 === 0) {
+      addDecoded(decoded, Buffer.from(token, 'hex'));
+    }
+  }
+
+  return [...decoded];
+};
+
+/** Whether a nearby CJK prohibition or one of the preceding English words disarms a match. */
+const CJK_NEGATION_RE = /(?:不要|不得|禁止|请勿|請勿|切勿)[^。！？.!?\n]{0,8}$/u;
+
+const isNegated = (haystack: string, index: number, matchedText: string): boolean => {
+  const prefix = haystack.slice(0, index);
+  if (CJK_NEGATION_RE.test(prefix)) return true;
+  if (/[^\x00-\x7F]/u.test(matchedText)) return false;
+  const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== '');
   return words.slice(-NEGATION_LOOKBACK).some((word) => NEGATIONS.has(word));
 };
 
@@ -381,7 +484,7 @@ const fires = (haystack: string, entry: InjectionPattern): boolean => {
   const scanner = new RegExp(entry.pattern.source, 'g');
   for (const match of haystack.matchAll(scanner)) {
     if (match.index === undefined) continue;
-    if (!entry.negatable || !isNegated(haystack, match.index)) return true;
+    if (!entry.negatable || !isNegated(haystack, match.index, match[0])) return true;
   }
   return false;
 };
@@ -394,8 +497,19 @@ const fires = (haystack: string, entry: InjectionPattern): boolean => {
  * Exported so consumers can scan text that is not part of a record too.
  */
 export const scanInjection = (text: string): string[] => {
-  const haystack = normalizeForMatch(text);
-  return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
+  const prepared = stripTransportNoise(text);
+  const candidates = [prepared, ...decodedCandidates(prepared)];
+  const haystacks = [
+    ...new Set(
+      candidates.flatMap((candidate) => [
+        normalizeForMatch(candidate),
+        normalizeForMatch(stripTransportNoise(candidate).replace(CONTROL_RE, '')),
+      ]),
+    ),
+  ];
+  return INJECTION_PATTERNS.filter((entry) =>
+    haystacks.some((haystack) => fires(haystack, entry)),
+  ).map((entry) => entry.id);
 };
 
 const trailerValues = (trailers: Trailer[], key: string): string[] =>

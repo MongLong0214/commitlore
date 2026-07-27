@@ -31,6 +31,7 @@ import {
   type QueryResult,
   type TrustGrade,
 } from '../core/query.js';
+import { validateRecord } from '../core/schema.js';
 import { STRUCTURAL_TRAILER_KEYS, type Lifecycle, type Trailer } from '../core/types.js';
 
 /** Identity is printed in its own column, never as a trailer line. */
@@ -68,23 +69,38 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
   ].sort();
   const source =
     keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
-  const records = result.records.map((record) =>
-    record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined
-      ? record
-      : {
-          ...record,
-          withheldTrailerKeys: [
-            ...new Set(
-              record.trailers
-                .filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key))
-                .map((trailer) => trailer.key),
-            ),
-          ],
-          trailers: record.trailers.filter((trailer) =>
-            STRUCTURAL_TRAILER_KEYS.has(trailer.key),
-          ),
-        },
-  );
+  const records = result.records.map((record) => {
+    if (record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined) return record;
+
+    const trailers = record.trailers.filter(
+      (trailer) =>
+        STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0,
+    );
+    const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
+    const provenanceValue = trailers.find(
+      (trailer) => trailer.key === 'Provenance',
+    )?.value;
+    const {
+      recordId: _unsafeRecordId,
+      provenanceValue: _unsafeProvenanceValue,
+      expiresAt: _unsafeExpiresAt,
+      ...safeRecord
+    } = record;
+
+    return {
+      ...safeRecord,
+      ...(recordId === undefined ? {} : { recordId }),
+      ...(provenanceValue === undefined ? {} : { provenanceValue }),
+      withheldTrailerKeys: [
+        ...new Set(
+          record.trailers
+            .filter((trailer) => !trailers.includes(trailer))
+            .map((trailer) => trailer.key),
+        ),
+      ],
+      trailers,
+    };
+  });
 
   return {
     ...result,

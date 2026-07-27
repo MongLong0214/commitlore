@@ -1,0 +1,5 @@
+{
+  "description": "Benign Chinese constraint prohibiting instruction bypass.",
+  "blocked": false,
+  "patterns": []
+}

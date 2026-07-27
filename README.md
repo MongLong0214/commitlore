@@ -30,7 +30,7 @@ Every previously published benchmark number is withdrawn. The dated verdicts rem
 
 - **Records survive normal Git workflows.** Commit trailers and the notes mirror are exercised across [rebase and squash](test/squash.test.ts), [history rewriting and remote transfer](test/notes.test.ts), and [single and multi-step renames](test/follow.test.ts).
 - **Trust has one meaning across routes.** Query output, CLI injection, the edit hook, MCP tools, and guard all use the same `directive | claim | blocked` grade. The route checks live in [`query.test.ts`](test/query.test.ts), [`inject.test.ts`](test/inject.test.ts), [`mcp.test.ts`](test/mcp.test.ts), and [`guard.test.ts`](test/guard.test.ts).
-- **Injection-like records do not reach a model as prose.** When any free-text trailer matches an injection pattern, the record is graded `blocked`; model-readable routes report that content was withheld without quoting it. The CLI/hook cases are in [`inject.test.ts`](test/inject.test.ts), and MCP is checked against the same answer in [`mcp.test.ts`](test/mcp.test.ts).
+- **Records matched by the shipped injection scanner do not reach a model as prose.** A match in any free-text trailer grades the record `blocked`; model-readable routes report withholding without quoting it. This deterministic lexical filter is not a real-world detection-rate claim: its [pattern-authored, independently authored, and benign corpora](spec/fixtures/injection/README.md) are reported separately. CLI/hook cases are in [`inject.test.ts`](test/inject.test.ts), with MCP parity in [`mcp.test.ts`](test/mcp.test.ts).
 - **Unknown is not empty.** Guard exits `0` for a readable repository with no records. Broken Git reports `history: unavailable`; an unfetched mirror reports `notes: unfetched`. Both incomplete checks exit `3`. The contract is pinned in [`notes-availability.test.ts`](test/notes-availability.test.ts), [`guard.test.ts`](test/guard.test.ts), and the [`RELEASE-GATE`](docs/RELEASE-GATE.md).
 
 ## A record
@@ -107,10 +107,10 @@ There is no CommitLore registry package. Distribution is the Git repository ([AD
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-The committed bundle runs without a build. One caveat remains: it does not carry the native `better-sqlite3` module, so a clone alone cannot open the SQLite index. Use `--no-index` to scan Git directly, or run `npm install` inside the clone to enable the current index. The accepted migration away from the native module is recorded in [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md).
+The committed bundle runs without a build and without `node_modules`. The SQLite index uses `node:sqlite`, which ships inside Node itself ([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)), so a clone alone can build and query it — no native module, no compiler, no `npm install`. `--no-index` is still there to answer from Git alone when you want to skip the index.
 
 ## GitHub Actions
 

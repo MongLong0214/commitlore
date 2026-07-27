@@ -134,6 +134,28 @@ jobs:
             echo "expected a violation to exit non-zero"; exit 1;
           } || test $? -eq 1
           node "$clone_dir/dist/commitlore.mjs" doctor
+          # #64: `doctor` recommends this exact command as its fix for a
+          # missing index, so it must actually work with no node_modules —
+          # this is what a `better-sqlite3` dependency broke silently, because
+          # nothing above this line ever built the index in a clean clone.
+          node "$clone_dir/dist/commitlore.mjs" index --rebuild
+          # And the query commands must actually use what was just built, not
+          # silently fall back to scanning git (ADR-0012). `index --json`
+          # rather than `context --json`: this clone's default `origin`
+          # refspec does not cover `refs/notes/commitlore`, so `context`
+          # correctly exits 3 for "notes unfetched" here regardless of the
+          # index, which is not what this step checks.
+          node "$clone_dir/dist/commitlore.mjs" index --json | node -e '
+            let s = "";
+            process.stdin.on("data", (d) => { s += d; });
+            process.stdin.on("end", () => {
+              const out = JSON.parse(s);
+              if (out.index?.lastIndexedSha == null || out.rebuilt !== false) {
+                console.error("index --json did not report a current, already-built index:", out);
+                process.exit(1);
+              }
+            });
+          '
           # The plugin resolves its entry point through this script, with
           # CLAUDE_PLUGIN_ROOT pointing at the clone.
           test -x "$clone_dir/scripts/commitlore-run.sh" || { echo "run script not executable"; exit 1; }
