@@ -15,16 +15,24 @@
  * The command never edits its input (SPEC §6: implementations MUST NOT silently
  * repair). It reads, reports, and exits.
  *
- * Scope: single-record rules only. `dangling-ref` asks whether a
- * `Supersedes:`/`Follows:` target exists elsewhere in history — a cross-record
- * question owned by the stale engine (T-205), not by this command.
+ * Shape checks run for every input. Reference checks additionally run when the
+ * input mode identifies a repository.
  */
 import { readFileSync } from 'node:fs';
+import { collectRecords } from './stale.js';
 import { execGit } from '../core/git.js';
+import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { validateRecord } from '../core/schema.js';
+import { findDanglingRefs, findIdCollisions, } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { SINGLE_VALUED } from '../core/types.js';
+import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
+export const CHECK_CLASS_NEEDS = {
+    shape: 'message',
+    reference: 'repository',
+    conservation: 'before and after',
+};
 const USAGE = 'usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]';
 const MODE_FLAGS = {
     messageFile: '--message-file',
@@ -38,6 +46,7 @@ const usageError = (message) => ({
     stderr: `commitlore: ${message}\n${USAGE}\n`,
     violations: [],
     secrets: [],
+    checks: [],
 });
 const messageOf = (error) => error instanceof Error ? error.message : String(error);
 const firstLine = (text) => (text.trim().split('\n')[0] ?? '').trim();
@@ -105,6 +114,27 @@ const locateTrailerLines = (message, trailers) => {
     }
     return trailers.map(() => undefined);
 };
+const knownTrailerCandidate = (line) => {
+    const tabIndented = line.startsWith('\t');
+    const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
+    const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+    return key === undefined ? undefined : { key, tabIndented };
+};
+const locateUnparsedTrailerWarnings = (message, trailers) => {
+    const lines = message.split('\n').map(stripCr);
+    const contentLines = lines.filter((line) => line !== '' && !isComment(line));
+    if (contentLines.length > 0 &&
+        contentLines.every((line) => knownTrailerCandidate(line) !== undefined)) {
+        return [];
+    }
+    const parsedLines = new Set(locateTrailerLines(message, trailers));
+    return lines.flatMap((line, index) => {
+        const candidate = knownTrailerCandidate(line);
+        if (candidate === undefined || parsedLines.has(index + 1))
+            return [];
+        return [{ line: index + 1, ...candidate }];
+    });
+};
 /**
  * Finds which trailer a violation came from, so it can carry that trailer's
  * line. `validateRecord` reports the rule, not the position, and the mapping
@@ -132,10 +162,43 @@ const lineForViolation = (violation, trailers, lines) => {
     const only = matches.length === 1 ? matches[0] : undefined;
     return only === undefined ? undefined : lines[only];
 };
-const locateViolations = (source) => {
+const inspectSource = (source) => {
     const trailers = parseCommitMessage(source.message);
     const lines = locateTrailerLines(source.message, trailers);
-    return validateRecord(trailers).map((violation) => {
+    const rawViolations = validateRecord(trailers);
+    const firstTrailerLine = lines[0];
+    const nonTrailerParagraph = source.merge === true &&
+        firstTrailerLine !== undefined &&
+        rawViolations.length > 0 &&
+        rawViolations.length === trailers.length &&
+        rawViolations.every((violation) => violation.rule === 'unknown-key')
+        ? source.message
+            .split('\n')
+            .map(stripCr)
+            .slice(firstTrailerLine - 1)
+            .filter((line) => line !== '')
+            .join('\n')
+        : undefined;
+    const violations = (nonTrailerParagraph === undefined ? rawViolations : []).map((violation) => {
+        const line = lineForViolation(violation, trailers, lines);
+        return {
+            ...(source.sha === undefined ? {} : { sha: source.sha }),
+            ...(line === undefined ? {} : { line }),
+            ...violation,
+        };
+    });
+    const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) => warning.tabIndented
+        ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
+        : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`);
+    if (nonTrailerParagraph !== undefined) {
+        warnings.push(`commitlore: ${source.sha?.slice(0, 10) ?? 'commit'}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`);
+    }
+    return { violations, warnings };
+};
+const locateReferenceViolations = (source, violations) => {
+    const trailers = parseCommitMessage(source.message);
+    const lines = locateTrailerLines(source.message, trailers);
+    return violations.map((violation) => {
         const line = lineForViolation(violation, trailers, lines);
         return {
             ...(source.sha === undefined ? {} : { sha: source.sha }),
@@ -152,12 +215,17 @@ const resolveCommit = (ref, cwd) => {
     }
     return result.stdout.trim();
 };
-const readCommitMessage = (sha, cwd) => {
-    const result = execGit(['log', '-1', '--format=%B', sha, '--'], { cwd });
+const readCommitSource = (sha, cwd) => {
+    const result = execGit(['log', '-1', '--format=%P%x00%B', sha, '--'], { cwd });
     if (result.code !== 0) {
         throw new Error(`cannot read commit ${sha}: ${firstLine(result.stderr)}`);
     }
-    return result.stdout;
+    const [parents = '', message = ''] = result.stdout.split('\0');
+    return {
+        sha,
+        message,
+        merge: parents.split(' ').filter(Boolean).length > 1,
+    };
 };
 const readRange = (range, cwd) => {
     const result = execGit(['rev-list', '--reverse', '--end-of-options', range, '--'], { cwd });
@@ -167,7 +235,7 @@ const readRange = (range, cwd) => {
     return result.stdout
         .split('\n')
         .filter((sha) => sha.length > 0)
-        .map((sha) => ({ sha, message: readCommitMessage(sha, cwd) }));
+        .map((sha) => readCommitSource(sha, cwd));
 };
 const readMessageFile = (path) => {
     try {
@@ -190,11 +258,121 @@ const collectSources = (input, cwd) => {
         return [{ message: readMessageFile(input.messageFile) }];
     if (input.commit !== undefined) {
         const sha = resolveCommit(input.commit, cwd);
-        return [{ sha, message: readCommitMessage(sha, cwd) }];
+        return [readCommitSource(sha, cwd)];
     }
     if (input.range !== undefined)
         return readRange(input.range, cwd);
     return [{ message: (input.readStdin ?? readStdinSync)() }];
+};
+const repositoryAvailable = (cwd) => execGit(['rev-parse', '--git-dir'], { cwd }).code === 0;
+const indexedHeadRecords = (cwd) => {
+    const { handle } = ensureIndex({ cwd });
+    try {
+        const records = new Map();
+        for (const row of queryTrailers(handle)) {
+            const identity = `${row.sha}\0${row.source}`;
+            const existing = records.get(identity);
+            if (existing !== undefined) {
+                existing.trailers.push({ key: row.key, value: row.value });
+                continue;
+            }
+            records.set(identity, {
+                sha: row.sha,
+                committedAt: row.committedAt,
+                source: row.source,
+                trailers: [{ key: row.key, value: row.value }],
+            });
+        }
+        return [...records.values()];
+    }
+    finally {
+        closeIndex(handle);
+    }
+};
+const recordsFor = (source, cwd) => {
+    if (source.sha !== undefined) {
+        return collectRecords({ cwd, allHistory: true, revision: source.sha });
+    }
+    try {
+        return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
+    }
+    catch {
+        return collectRecords({ cwd, allHistory: true, revision: 'HEAD' });
+    }
+};
+const reachableShas = (revision, cwd) => {
+    const result = execGit(['rev-list', revision], { cwd });
+    if (result.code !== 0) {
+        throw new Error(firstLine(result.stderr) || `cannot walk revision ${revision}`);
+    }
+    return new Set(result.stdout.trim().split('\n').filter(Boolean));
+};
+const checkReferences = (input, sources, cwd) => {
+    if (input.messageFile === undefined &&
+        input.commit === undefined &&
+        input.range === undefined) {
+        return {
+            check: { class: 'reference', status: 'not-checked', reason: 'no repository' },
+            violations: [],
+        };
+    }
+    if (!repositoryAvailable(cwd)) {
+        return {
+            check: { class: 'reference', status: 'not-checked', reason: 'no repository' },
+            violations: [],
+        };
+    }
+    try {
+        const violations = [];
+        for (const source of sources) {
+            const trailers = parseCommitMessage(source.message);
+            const candidate = {
+                trailers,
+                source: 'commit',
+                ...(source.sha === undefined ? {} : { sha: source.sha }),
+            };
+            const scan = recordsFor(source, cwd);
+            if (scan.notes === 'unfetched') {
+                return {
+                    check: {
+                        class: 'reference',
+                        status: 'not-checked',
+                        reason: 'notes mirror not fetched',
+                    },
+                    violations: [],
+                };
+            }
+            const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
+            const repositoryRecords = scan.records.filter((record) => record.sha !== undefined && reachable.has(record.sha));
+            const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
+            const dangling = findDanglingRefs(prior, [candidate]);
+            const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+            const collisions = recordId === undefined
+                ? []
+                : findIdCollisions([...repositoryRecords, candidate]).filter((violation) => violation.value === recordId);
+            violations.push(...locateReferenceViolations(source, [...dangling, ...collisions]));
+        }
+        return {
+            check: { class: 'reference', status: violations.length === 0 ? 'ok' : 'failed' },
+            violations,
+        };
+    }
+    catch (error) {
+        return {
+            check: {
+                class: 'reference',
+                status: 'not-checked',
+                reason: `repository scan failed: ${firstLine(messageOf(error))}`,
+            },
+            violations: [],
+        };
+    }
+};
+const formatCheck = (check) => {
+    const name = check.class === 'reference' ? 'references' : check.class;
+    return check.status === 'not-checked'
+        ? `${name} not checked (${check.reason ?? 'required information unavailable'})`
+        : `${name} ${check.status}`;
 };
 /** `a1b2c3d4e5:12: enum Blast — got "wide", want "local|module|system"` */
 const formatViolation = (violation) => {
@@ -223,11 +401,15 @@ export const runValidate = (input = {}) => {
         return usageError(`--range expects <a>..<b>, got ${JSON.stringify(input.range)}`);
     }
     const cwd = input.cwd ?? process.cwd();
-    let violations;
+    let shapeViolations;
+    let warnings;
     let secrets;
+    let sources;
     try {
-        const sources = collectSources(input, cwd);
-        violations = sources.flatMap(locateViolations);
+        sources = collectSources(input, cwd);
+        const inspections = sources.map(inspectSource);
+        shapeViolations = inspections.flatMap((inspection) => inspection.violations);
+        warnings = inspections.flatMap((inspection) => inspection.warnings);
         // A credential in a commit message is inscribed permanently -- rewriting
         // history does not reach the clones and forks that already have it. So the
         // scan runs on the same path as validation, which is what the commit-msg
@@ -237,19 +419,32 @@ export const runValidate = (input = {}) => {
     catch (error) {
         return usageError(messageOf(error));
     }
+    const references = checkReferences(input, sources, cwd);
+    const violations = [...shapeViolations, ...references.violations];
+    const checks = [
+        {
+            class: 'shape',
+            status: shapeViolations.length > 0 || secrets.length > 0 ? 'failed' : 'ok',
+        },
+        references.check,
+    ];
+    const status = `${checks.map(formatCheck).join(' · ')}\n`;
     const failed = violations.length > 0 || secrets.length > 0;
+    const warningText = warnings.length === 0 ? '' : `${warnings.join('\n')}\n`;
     if (input.json === true) {
         return {
             code: failed ? 1 : 0,
-            stdout: `${JSON.stringify({ violations, secrets })}\n`,
-            stderr: '',
+            stdout: `${JSON.stringify({ checks, violations, secrets })}\n`,
+            stderr: warningText,
             violations,
             secrets,
+            checks,
         };
     }
-    if (!failed)
-        return { code: 0, stdout: '', stderr: '', violations, secrets };
-    const parts = [];
+    if (!failed) {
+        return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
+    }
+    const parts = [status.trimEnd()];
     if (violations.length > 0)
         parts.push(violations.map(formatViolation).join('\n'));
     if (secrets.length > 0)
@@ -266,9 +461,10 @@ export const runValidate = (input = {}) => {
     return {
         code: 1,
         stdout: `${parts.join('\n')}\n`,
-        stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
+        stderr: `${warningText}commitlore: ${notes.join(', ')} — the message was not modified\n`,
         violations,
         secrets,
+        checks,
     };
 };
 export const register = (program) => {

@@ -276,6 +276,7 @@ const project = (records, grades) => {
                 sha: shortSha(record.sha),
                 patterns: grade.matchedPatterns ?? [],
                 keys: grade.matchedTrailerKeys ?? [],
+                reason: record.identityCollision === true ? 'identity-collision' : 'injection',
             });
             continue;
         }
@@ -319,15 +320,27 @@ const header = (path, ablation) => {
 const withheldLine = (withheld) => {
     if (withheld.length === 0)
         return [];
+    const collisions = withheld.filter((entry) => entry.reason === 'identity-collision');
+    const injections = withheld.filter((entry) => entry.reason === 'injection');
+    const collisionLine = collisions.length === 0
+        ? []
+        : [
+            `withheld: ${collisions.length} record(s) due to a Record-Id collision; content not shown: ` +
+                `${collisions.map((entry) => `${entry.recordId} ${entry.sha}`).join(', ')}.`,
+        ];
+    if (injections.length === 0)
+        return collisionLine;
     const named = withheld
+        .filter((entry) => entry.reason === 'injection')
         .map((entry) => `${entry.recordId} ${entry.sha}`)
         .join(', ');
-    const patterns = [...new Set(withheld.flatMap((entry) => entry.patterns))].sort();
-    const keys = [...new Set(withheld.flatMap((entry) => entry.keys))].sort();
+    const patterns = [...new Set(injections.flatMap((entry) => entry.patterns))].sort();
+    const keys = [...new Set(injections.flatMap((entry) => entry.keys))].sort();
     const because = patterns.length === 0 ? '' : ` (matched: ${patterns.join(', ')})`;
     const source = keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
     return [
-        `withheld: ${withheld.length} record(s) whose ${source} matched an injection pattern${because}; ` +
+        ...collisionLine,
+        `withheld: ${injections.length} record(s) whose ${source} matched an injection pattern${because}; ` +
             `content not shown: ${named}.`,
     ];
 };
@@ -533,7 +546,17 @@ export const buildInjection = (opts) => {
         : authorsOf(cwd, active.flatMap((record) => record.shas));
     const grades = new Map(active.map((record) => [
         record.recordId ?? `${record.sha}:${record.source}`,
-        ablation.noGrade ? ungraded(record) : gradeMerged(record, authors, at, opts.trustedAuthors),
+        record.identityCollision === true
+            ? {
+                provenance: record.provenance?.kind ?? 'unknown',
+                lifecycle: record.lifecycle,
+                trust: 'blocked',
+                reason: 'Record-Id collision',
+                matchedTrailerKeys: ['Record-Id'],
+            }
+            : ablation.noGrade
+                ? ungraded(record)
+                : gradeMerged(record, authors, at, opts.trustedAuthors),
     ]));
     const { entries, withheld, withheldValues } = project(active, grades);
     if (entries.length === 0 && withheld.length === 0)

@@ -35,6 +35,7 @@ export const REVIEW_FLAG = 'review';
 
 /** `want` text for a dangling reference, fixed by spec/fixtures/invalid/05. */
 const DANGLING_WANT = 'an existing Record-Id in history';
+const UNIQUE_ID_WANT = 'exactly one record per Record-Id';
 
 const DAY_MS = 86_400_000;
 
@@ -276,7 +277,10 @@ export const foldLifecycle = (records: StaleRecord[], opts: FoldOptions): Record
  * and reporting them twice under two rules makes the repair loop chase one
  * line with two fixes.
  */
-export const findDanglingRefs = (records: StaleRecord[]): Violation[] => {
+export const findDanglingRefs = (
+  records: StaleRecord[],
+  referencedBy: StaleRecord[] = records,
+): Violation[] => {
   const declared = new Set<string>();
   for (const record of records) {
     const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
@@ -284,7 +288,7 @@ export const findDanglingRefs = (records: StaleRecord[]): Violation[] => {
   }
 
   const violations: Violation[] = [];
-  for (const record of records) {
+  for (const record of referencedBy) {
     for (const trailer of record.trailers) {
       if (trailer.key !== SUPERSEDES_KEY && trailer.key !== FOLLOWS_KEY) continue;
       if (!RECORD_ID_RE.test(trailer.value)) continue;
@@ -300,6 +304,42 @@ export const findDanglingRefs = (records: StaleRecord[]): Violation[] => {
   }
 
   return violations;
+};
+
+const payloadSignature = (record: StaleRecord): string =>
+  record.trailers
+    .filter((trailer) => trailer.key !== RECORD_ID_KEY)
+    .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
+    .sort()
+    .join('\u0001');
+
+/**
+ * A note may mirror a commit byte-for-byte, but it may not add or replace
+ * content under an identity already declared elsewhere. Commit-only
+ * re-declarations remain lifecycle updates (SPEC §5).
+ */
+export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
+  const groups = new Map<string, StaleRecord[]>();
+  for (const record of records) {
+    const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
+    if (recordId === undefined) continue;
+    const group = groups.get(recordId);
+    if (group === undefined) groups.set(recordId, [record]);
+    else group.push(record);
+  }
+
+  return [...groups]
+    .filter(([, group]) => {
+      if (!group.some((record) => record.source === 'notes')) return false;
+      return new Set(group.map(payloadSignature)).size > 1;
+    })
+    .map(([recordId]) => ({
+      key: RECORD_ID_KEY,
+      value: recordId,
+      rule: 'duplicate-id',
+      got: recordId,
+      want: UNIQUE_ID_WANT,
+    }));
 };
 
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */

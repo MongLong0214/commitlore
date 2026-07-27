@@ -128,8 +128,15 @@ describe('validateRecord', () => {
     ]);
   });
 
-  it('never emits a rule outside the five in SPEC §6', () => {
-    const allowed = new Set(['unknown-key', 'enum', 'format', 'cardinality', 'dangling-ref']);
+  it('never emits a rule outside the six in SPEC §6', () => {
+    const allowed = new Set([
+      'unknown-key',
+      'enum',
+      'format',
+      'cardinality',
+      'dangling-ref',
+      'duplicate-id',
+    ]);
     const violations = [
       ...invalidFixtures.flatMap((fixture) => validateRecord(parseCommitMessage(fixture.message))),
       ...validateRecord([

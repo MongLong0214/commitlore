@@ -526,17 +526,30 @@ describe('stale filtering', () => {
 describe('notes merge and dedupe', () => {
   const { dir, identified, mirrored, inherited } = notesRepo();
 
-  it('merges a commit and its mirror into one record when both name it', () => {
+  it('blocks a divergent note that claims a commit message Record-Id', () => {
     const result = runQuery({ cwd: dir, path: 'src/queue/drain.ts' });
     expect(recordIds(result.records)).toEqual(['r-note11']);
 
     const [entry] = result.records;
     expect(entry?.sha).toBe(identified);
     expect(entry?.sources.sort()).toEqual(['commit', 'notes']);
-    expect(valuesOf(entry as GradedRecord, 'Limit')).toEqual([
-      'only three workers may run concurrently',
-    ]);
-    expect(valuesOf(entry as GradedRecord, 'Warn')).toEqual(['the drain order is load bearing']);
+    expect(entry?.identityCollision).toBe(true);
+    expect(entry?.trust).toBe('blocked');
+
+    const context = formatContext(result);
+    expect(context).not.toContain('only three workers may run concurrently');
+    expect(context).not.toContain('the drain order is load bearing');
+    expect(context).toContain('[blocked]');
+    expect(context).toContain('Record content was withheld because its Record-Id collides.');
+
+    const injection = buildInjection({
+      cwd: dir,
+      path: 'src/queue/drain.ts',
+      noIndex: true,
+    });
+    expect(injection.text).not.toContain('only three workers may run concurrently');
+    expect(injection.text).not.toContain('the drain order is load bearing');
+    expect(injection.text).toContain('Record-Id collision');
   });
 
   it('drops a mirror that only repeats the message, with no Record-Id to match on', () => {
@@ -1023,6 +1036,7 @@ describe('--json', () => {
             "committedAt": "2026-02-01T00:00:00Z",
             "expiresAt": "2026-02-15",
             "flags": [],
+            "identityCollision": false,
             "lifecycle": "expired",
             "paths": [
               "src/auth/pool.ts",
@@ -1058,6 +1072,7 @@ describe('--json', () => {
             "committedAt": "2026-01-01T00:00:00Z",
             "expiresAt": null,
             "flags": [],
+            "identityCollision": false,
             "lifecycle": "superseded",
             "paths": [
               "src/auth/sso.ts",

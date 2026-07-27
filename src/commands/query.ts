@@ -58,8 +58,10 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
   );
   if (blocked.length === 0) return result;
 
+  const collisions = blocked.filter((record) => record.identityCollision === true);
+  const injectionBlocked = blocked.filter((record) => record.identityCollision !== true);
   const keys = [
-    ...new Set(blocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
+    ...new Set(injectionBlocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
   ].sort();
   const source =
     keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
@@ -86,8 +88,17 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
     records,
     diagnostics: [
       ...result.diagnostics,
-      `withheld the content of ${blocked.length} record(s) graded blocked: a ${source} matching an ` +
-        'injection pattern is reported, never quoted (SPEC §7)',
+      ...(injectionBlocked.length === 0
+        ? []
+        : [
+            `withheld the content of ${injectionBlocked.length} record(s) graded blocked: a ${source} matching an ` +
+              'injection pattern is reported, never quoted (SPEC §7)',
+          ]),
+      ...(collisions.length === 0
+        ? []
+        : [
+            `withheld the content of ${collisions.length} record(s) whose Record-Id collides with a divergent note`,
+          ]),
     ],
   };
 };
@@ -169,6 +180,7 @@ export interface JsonRecord {
   lifecycle: Lifecycle;
   flags: string[];
   trust: TrustGrade | null;
+  identityCollision: boolean;
   provenance: string | null;
   supersededBy: string | null;
   expiresAt: string | null;
@@ -226,6 +238,7 @@ const toJsonRecord = (record: GradedRecord): JsonRecord => ({
   lifecycle: record.lifecycle,
   flags: record.flags,
   trust: record.trust ?? null,
+  identityCollision: record.identityCollision === true,
   provenance: record.provenanceValue ?? null,
   supersededBy: record.supersededBy ?? null,
   expiresAt: record.expiresAt ?? null,
@@ -296,6 +309,11 @@ const stateTag = (record: GradedRecord): string => {
 const trustTag = (record: GradedRecord): string =>
   record.trust === undefined ? '' : `[${record.trust}]  `;
 
+const blockedMessage = (record: GradedRecord): string =>
+  record.identityCollision === true
+    ? 'Record content was withheld because its Record-Id collides.'
+    : BLOCKED_RECORD_WITHHELD;
+
 const idColumn = (record: GradedRecord, width: number): string =>
   (record.recordId ?? '-').padEnd(width);
 
@@ -317,7 +335,7 @@ const valueLines = (
     const values =
       record.trust === 'blocked'
         ? record.withheldTrailerKeys?.includes(key) === true
-          ? [BLOCKED_RECORD_WITHHELD]
+          ? [blockedMessage(record)]
           : []
         : valuesOf(record, key);
     return values.map(
@@ -334,7 +352,7 @@ const otherLines = (records: readonly GradedRecord[]): string[] => {
     const withheld =
       record.trust === 'blocked' &&
       record.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true
-        ? [BLOCKED_RECORD_WITHHELD]
+        ? [blockedMessage(record)]
         : [];
     const values = [
       ...withheld,
