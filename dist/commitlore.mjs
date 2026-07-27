@@ -13522,13 +13522,14 @@ var checkGit = (opts) => {
 var checkRuntime = (opts) => {
   const title = "cli runtime";
   const id = "cli-runtime";
-  const entry = installedPath("dist/cli.js");
-  if (!existsSync2(entry)) {
+  const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
+  const entry = candidates.find((path2) => existsSync2(path2));
+  if (entry === void 0) {
     return check(
       id,
       title,
       "fail",
-      `no built CLI at ${entry} \u2014 this checkout has not been built`,
+      `no built CLI at ${candidates.join(" or ")} \u2014 this checkout has not been built`,
       "npm install && npm run build"
     );
   }
@@ -13542,14 +13543,7 @@ var checkRuntime = (opts) => {
   }
   if (run.status !== 0) {
     const detail = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
-    return check(
-      id,
-      title,
-      "fail",
-      `${entry} exits ${String(run.status)}: ${detail}`,
-      // A bundle that loads but throws on import is nearly always a missing dep.
-      "npm install"
-    );
+    return check(id, title, "fail", `${entry} exits ${String(run.status)}: ${detail}`, "npm install");
   }
   return check(id, title, "ok", `${entry} runs (${run.stdout.trim()})`);
 };

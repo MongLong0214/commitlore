@@ -321,7 +321,9 @@ describe('doctor: cli runtime', () => {
       (entry) => entry.id === 'cli-runtime',
     );
     expect(check?.status).toBe('ok');
-    expect(check?.detail).toContain('dist/cli.js');
+    // The bundle, not the tsc output: a clone has only the bundle, and probing
+    // the wrong artifact is what turned CI red for three commits.
+    expect(check?.detail).toContain('dist/commitlore.mjs');
   });
 });
 

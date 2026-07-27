@@ -129,25 +129,31 @@ const checkGit = (opts) => {
     return check(id, title, 'ok', `${version} parses trailers as the spec expects`);
 };
 /**
- * Whether the CLI a hook would invoke actually runs.
+ * Whether the CLI this installation actually uses runs.
  *
- * Every other check here reads configuration. This one executes, because the two
- * installation failures this project has actually shipped were both invisible to
- * configuration: a run script that assumed `node` was on the hook's PATH (it is
- * not — git hooks run with a shell whose PATH is not the user's), and a fresh
- * clone whose `dist/` was present but whose dependencies were never installed.
- * Both left every config check green and every command broken.
+ * **Which artifact is the installation is the whole question.** A git clone —
+ * the documented distribution (ADR-0011) — ships `dist/commitlore.mjs`, a bundle
+ * that needs no `node_modules`. A development checkout also has `dist/cli.js`,
+ * the `tsc` output, which imports its dependencies and cannot run without them.
  *
- * `--version` is the cheapest thing the CLI can be asked to do that still
- * requires the runtime to resolve, the bundle to load and its imports to
- * resolve.
+ * The first version of this check probed `dist/cli.js` unconditionally. On a
+ * fresh clone that is a file that exists and cannot run, so the check invented a
+ * failure in the one installation it was written to protect, and turned CI red
+ * for three commits. A health check that reports the supported path as broken is
+ * worse than no health check.
+ *
+ * `--version` is the cheapest thing the CLI can be asked to do that still forces
+ * the runtime to resolve, the bundle to load, and its imports to resolve.
  */
 const checkRuntime = (opts) => {
     const title = 'cli runtime';
     const id = 'cli-runtime';
-    const entry = installedPath('dist/cli.js');
-    if (!existsSync(entry)) {
-        return check(id, title, 'fail', `no built CLI at ${entry} — this checkout has not been built`, 'npm install && npm run build');
+    // The bundle first: it is what a clone has and what the plugin invokes. The
+    // tsc output is the fallback for a checkout that has not been bundled.
+    const candidates = ['dist/commitlore.mjs', 'dist/cli.js'].map((rel) => installedPath(rel));
+    const entry = candidates.find((path) => existsSync(path));
+    if (entry === undefined) {
+        return check(id, title, 'fail', `no built CLI at ${candidates.join(' or ')} — this checkout has not been built`, 'npm install && npm run build');
     }
     const run = spawnSync(process.execPath, [entry, '--version'], {
         shell: false,
@@ -159,9 +165,7 @@ const checkRuntime = (opts) => {
     }
     if (run.status !== 0) {
         const detail = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? `exit ${String(run.status)}`;
-        return check(id, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 
-        // A bundle that loads but throws on import is nearly always a missing dep.
-        'npm install');
+        return check(id, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 'npm install');
     }
     return check(id, title, 'ok', `${entry} runs (${run.stdout.trim()})`);
 };
