@@ -345,6 +345,7 @@ const resolveScope = (cwd: string, paths: readonly string[]): Scope => {
 interface CommitRecord {
   sha: string;
   source: RecordSource;
+  mirrored: boolean;
   committedAt: string;
   committedTs: number;
   trailers: Trailer[];
@@ -389,6 +390,7 @@ const groupByCommit = (rows: readonly IndexedTrailer[]): CommitRecord[] => {
       found.set(key, {
         sha: row.sha,
         source: row.source,
+        mirrored: false,
         committedAt: row.committedAt,
         committedTs: row.committedTs,
         trailers: [{ key: row.key, value: row.value }],
@@ -445,6 +447,7 @@ const foldMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => 
       return true;
     }
     mergeTrailers(commit.trailers, record.trailers);
+    commit.mirrored = true;
     return false;
   });
 };
@@ -611,6 +614,7 @@ const mergeByIdentity = (
       mergeTrailers(trailers, record.trailers);
       for (const path of record.paths) paths.add(path);
       if (!sources.includes(record.source)) sources.push(record.source);
+      if (record.mirrored && !sources.includes('notes')) sources.push('notes');
       if (!shas.includes(record.sha)) shas.push(record.sha);
     }
 

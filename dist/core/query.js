@@ -227,6 +227,7 @@ const groupByCommit = (rows) => {
             found.set(key, {
                 sha: row.sha,
                 source: row.source,
+                mirrored: false,
                 committedAt: row.committedAt,
                 committedTs: row.committedTs,
                 trailers: [{ key: row.key, value: row.value }],
@@ -279,6 +280,7 @@ const foldMirroredNotes = (records) => {
             return true;
         }
         mergeTrailers(commit.trailers, record.trailers);
+        commit.mirrored = true;
         return false;
     });
 };
@@ -431,6 +433,8 @@ const mergeByIdentity = (records, states) => {
                 paths.add(path);
             if (!sources.includes(record.source))
                 sources.push(record.source);
+            if (record.mirrored && !sources.includes('notes'))
+                sources.push('notes');
             if (!shas.includes(record.sha))
                 shas.push(record.sha);
         }

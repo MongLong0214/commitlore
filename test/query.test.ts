@@ -543,7 +543,7 @@ describe('notes merge and dedupe', () => {
     const result = runQuery({ cwd: dir, path: 'src/queue/reaper.ts' });
     expect(result.records).toHaveLength(1);
     expect(result.records[0]?.sha).toBe(mirrored);
-    expect(result.records[0]?.sources).toEqual(['commit']);
+    expect(result.records[0]?.sources).toEqual(['commit', 'notes']);
     expect(valuesOf(result.records[0] as GradedRecord, 'Limit')).toEqual([
       'the reaper may not run during a drain',
     ]);
