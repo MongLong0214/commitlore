@@ -611,3 +611,118 @@ One thing is added, and it is a precondition rather than a hypothesis: the harne
 must record the commit and the `dist/` digest each run actually executed, and the
 verdict must refuse to report if they are not identical across every row. A run
 that cannot prove what it measured has not measured anything.
+
+---
+
+## 16. M4 — the measurement designed against the reason the others failed
+
+Registered before any M4 run. M1, M1-b and M2 stand as recorded; M3 is void (§15).
+
+### What went wrong, measured rather than guessed
+
+M1 and M2 returned null. The cause is not "no effect" — it is that **seven of the
+ten tasks had a control base rate of zero**. Without CommitLore the agent never
+proposed the ruled-out approach, so seventy percent of the matrix could not show a
+difference no matter how well the tool worked.
+
+    task                              M1 off      M2 off
+    reproposal-index-server            3/3         4/4
+    reproposal-node20-floor            2/3         3/4
+    reproposal-jwt-sessions            1/3         2/4
+    the other seven                    0/9         0/28
+
+Power is governed by base rate far more than by sample size. To detect a halving at
+80% power, α = .05:
+
+| control base rate | n per arm |
+|---|---|
+| 20% (what M1/M2 had) | 98 |
+| 50% | 29 |
+| 70% | 16 |
+| 80% | 11 |
+
+M1 ran 30 per arm and M2 ran 40, against a 22% base rate. **The design could not
+have detected the effect it was looking for.** That is a defect in the instrument,
+and no amount of re-running fixes it.
+
+### The three changes
+
+**1. A qualification round, and the treatment arm is not run until it passes.**
+
+Before the hypothesis is tested, every candidate task runs **control-only**, six
+seeds. A task qualifies if the control arm re-proposes in **at least four of six**.
+Tasks below that threshold are dropped, and the treatment arm never runs on them.
+
+This is not selection on the outcome: the treatment arm is not looked at, not run,
+and not knowable at the moment of the decision. The threshold is fixed here, before
+any qualification run.
+
+If fewer than six tasks qualify, M4 does not proceed. A matrix of two tasks is a
+result about two tasks.
+
+**2. Task material comes from decisions a project actually made.**
+
+M1/M2's tasks were written to be re-proposal opportunities and mostly were not.
+`gitseed` now carries thirty `Ruled-out:` values from its own v0.2 design — real
+decisions, each rejecting the option an agent naturally reaches for:
+
+- *let the LLM decide the final ranking* — far less code than a deterministic one
+- *blend security results into the ranking score* — one number is simpler than a gate
+- *build the hosted web app first* — it demos better than a CLI
+- *predict a star count* — a number looks more like a product than a percentile
+
+**Prediction, recorded before measuring:** these produce a higher control base rate
+than the synthetic set, because doing the rejected thing is the path of least
+resistance rather than an error. The qualification round tests that prediction and
+may refute it.
+
+**3. A second outcome variable.**
+
+Re-proposal counts only what did not happen. Registered alongside it, with the same
+detector discipline:
+
+- **constraint violation** — the change contradicts a recorded `Limit:`
+- **cited compliance** — the agent names the rejection and chooses differently
+
+The primary test stays re-proposal. The second is reported whatever it shows and
+does not decide the verdict; it exists because if the value is real and re-proposal
+misses it, that is worth knowing before another null is published.
+
+### Arms and sizing
+
+Three arms, unchanged from §14: `commitlore-off`, `commitlore-on` (inject at
+PreToolUse), `commitlore-guard` (guard at PreToolUse). The primary comparison is
+**guard against on** — both receive a hook, both are path-scoped, and they differ
+only in which route `Ruled-out:` travels.
+
+Sizing follows qualification. At a 70% qualified base rate, 16 per arm detects a
+halving; M4 runs **24 per arm** to hold 80% power down to a 40% reduction. Final n
+is fixed after qualification and before the treatment arm runs, and recorded here.
+
+### Preconditions — any one failing voids the run
+
+1. Every row records `harness_commit` and `dist_digest`, and the verdict refuses on
+   a mixed dataset (§15, enforced in `bench/metrics.ts`).
+2. The matrix runs from a checkout **outside** the working tree it was built in.
+   §15 exists because that was not true.
+3. The qualification threshold and n are written here before the corresponding run.
+
+### What a positive result would and would not license
+
+A significant reduction supports one sentence: *records delivered before an edit
+reduce how often an agent revives an approach the project already rejected.*
+
+It would **not** support "CommitLore makes agents better", "improves code quality",
+or any figure about time saved. Those need their own measurements, and this project
+has already withdrawn one set of numbers for being published ahead of their
+evidence.
+
+### What a null result means
+
+That records do not measurably change this behaviour at this sample size, on these
+tasks, with these delivery routes. It is publishable and will be published.
+
+The product claim then rests where it already holds: decisions bound to the commit
+that made them, surviving rebase, squash and rename, with one trust grade across
+every route — each of which has a test, and none of which depends on this
+experiment.
