@@ -565,6 +565,7 @@ describe('commitlore_query', () => {
       'committedAt',
       'expiresAt',
       'flags',
+      'identityCollision',
       'lifecycle',
       'paths',
       'provenance',

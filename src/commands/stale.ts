@@ -18,7 +18,14 @@ import {
   readRecord,
   type NotesAvailability,
 } from '../core/notes.js';
-import { findDanglingRefs, foldLifecycle, isStale, type RecordState, type StaleRecord } from '../core/stale.js';
+import {
+  findDanglingRefs,
+  findIdCollisions,
+  foldLifecycle,
+  isStale,
+  type RecordState,
+  type StaleRecord,
+} from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import type { Violation } from '../core/types.js';
 
@@ -48,7 +55,7 @@ const LOG_FORMAT = `%H${UNIT}%cI${UNIT}%B`;
  * a commit with no trailers). The wording has changed across git versions, so
  * both are matched.
  */
-const EMPTY_REPO_RE = /does not have any commits yet|bad default revision/;
+const EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
 
 /**
  * A message with no line of the form `Key:` cannot contain a trailer under
@@ -64,6 +71,7 @@ export interface CollectOptions {
   cwd?: string;
   /** Read the whole reachable history instead of the most recent commits. */
   allHistory?: boolean;
+  revision?: string;
 }
 
 type RecordSource = NonNullable<StaleRecord['source']>;
@@ -104,6 +112,7 @@ export const collectRecords = (opts: CollectOptions = {}): Scan => {
   const notes = notesAvailability({ cwd });
   const args = ['log', '-z', `--format=${LOG_FORMAT}`];
   if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+  args.push('--end-of-options', opts.revision ?? 'HEAD');
 
   const result = execGit(args, { cwd });
   if (result.code !== 0) {
@@ -153,6 +162,7 @@ export interface StaleReport {
   /** The stale ones: superseded, expired, or flagged for review. */
   records: StaleReportRecord[];
   danglingRefs: Violation[];
+  idCollisions: Violation[];
 }
 
 export const buildReport = (scan: Scan, at: Date): StaleReport => {
@@ -176,6 +186,7 @@ export const buildReport = (scan: Scan, at: Date): StaleReport => {
     totalRecords: states.length,
     records: stale,
     danglingRefs: findDanglingRefs(scan.records),
+    idCollisions: findIdCollisions(scan.records),
   };
 };
 
@@ -212,6 +223,10 @@ export const formatReport = (report: StaleReport): string => {
     ...section(
       'dangling refs',
       report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`),
+    ),
+    ...section(
+      'id collisions',
+      report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`),
     ),
   ];
 

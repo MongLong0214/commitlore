@@ -61,7 +61,7 @@ export interface Record {
 export interface Violation {
     key: string;
     value: string;
-    rule: 'unknown-key' | 'enum' | 'format' | 'cardinality' | 'dangling-ref';
+    rule: 'unknown-key' | 'enum' | 'format' | 'cardinality' | 'dangling-ref' | 'duplicate-id';
     got: string;
     want: string;
 }

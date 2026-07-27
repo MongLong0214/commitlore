@@ -100,6 +100,12 @@ Enum values name **what to do**, not an abstract grade. `Undo: permanent` tells 
 
 `Record-Id` is a random-looking identifier, not a hash of anything: it must stay stable when the commit is rebased, amended, or squashed, which a content hash would not. `Follows:` and `Supersedes:` therefore reference `Record-Id`, never a commit SHA.
 
+A `Record-Id` MUST resolve to exactly one logical record. Re-declaring that
+record in later commits is a lifecycle update, and an exact notes mirror is a
+second transport channel for the same record. A note MUST NOT add or replace
+content under an id declared by a commit message; that is an identity collision,
+not an update, and consumer routes MUST withhold the colliding payload.
+
 `Evidence:` accepts a bare path. An earlier draft required an anchor, and the first records written against this spec — the ones in this repository's own history — hit that rule immediately: citing a whole file is a normal thing to do, and the harvest verifier can check a bare path exactly as well as an anchored one. Requiring an anchor only pressures authors to invent one.
 
 `Expires:` accepts free text, which gives a mistyped date somewhere to hide: `Expires: 2026-2-15` is a typo, but read as a condition it becomes a record that never expires and is flagged for review forever. Any value shaped like a date — `\d{4}-\d{1,2}-\d{1,2}` — is therefore held to `YYYY-MM-DD` and rejected as a `format` violation if it is not a real calendar date. Conditions that do not resemble a date (`Q3 2026`, `when the vendor ships v3`) are unconstrained.
@@ -147,6 +153,29 @@ No key exists without a consumer. If a proposed key has no route, it does not en
 
 ## 6. Validation
 
+### 6.1 Check classes
+
+Checks are classified by the information required to answer them, not by
+strictness:
+
+| Class | Question | Needs | Can run at |
+|---|---|---|---|
+| **Shape** | Is this trailer well-formed? | The message alone | Anywhere, including stdin |
+| **Reference** | Does this id resolve, and to exactly one record? | The repository | `--commit <sha>`, a repository-backed commit-msg hook, CI |
+| **Conservation** | Did records survive this transformation? | A before state and an after state | CI / pre-merge only |
+
+Every check MUST declare its class. A check that cannot state its information
+requirement has not been designed. A class that cannot run MUST be reported as
+not checked; it MUST NOT be presented as passing. That report does not by itself
+change exit status.
+
+Reference checks resolve `Follows:` and `Supersedes:` only against earlier
+history. A later declaration cannot repair a reference that was invalid when
+written. `validate` has no before state and therefore does not perform
+conservation checks.
+
+### 6.2 Violations
+
 `commitlore validate` MUST report violations as structured records — `{key, value, rule, got, want}` — not prose, because the repair loop consumes them programmatically.
 
 Violation classes:
@@ -158,6 +187,7 @@ Violation classes:
 | `format` | `Ruled-out: no pipe here`, `Record-Id: nope`, `Expires: 2026-13-45` |
 | `cardinality` | Two `Blast:` lines in one record |
 | `dangling-ref` | `Supersedes: r-abc123` where no such record exists in history |
+| `duplicate-id` | A note adds different content under a `Record-Id` already declared by a commit |
 
 A validation failure MUST exit non-zero. Implementations MUST NOT silently repair input.
 
