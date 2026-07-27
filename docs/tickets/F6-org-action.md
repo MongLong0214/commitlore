@@ -24,5 +24,5 @@
 - 동작: T-302 코어 함수로 브랜치 기록 집계 → 병합 커밋 notes 부착(`Provenance: inherited`) → `git push origin refs/notes/commitlore`.
 - 권한: `contents: write`.
 
-**테스트**: 데모 저장소 E2E — PR 생성→lint 코멘트→squash 병합→`commitlore limits`로 main에서 조회 성공, 로그 아카이브.
+**테스트**: 데모 저장소 E2E — PR 생성→lint 코멘트→squash 병합→`commitlore limits`로 PR 대상 브랜치에서 조회 성공, 로그 아카이브.
 **AC**: PRD-F6 AC 1 (E2E 1회 녹화 로그).
