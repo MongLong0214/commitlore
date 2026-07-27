@@ -21,6 +21,7 @@ import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core
 import { BOOKKEEPING_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
+const INCOMPLETE_EXIT_CODE = 3;
 const SECTIONS = [
     { label: 'limits', key: LIMIT_KEY },
     { label: 'ruled-out', key: RULED_OUT_KEY },
@@ -266,11 +267,12 @@ const emit = (name, result, options, render) => {
     process.stdout.write(options.json === true
         ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
         : render(presented));
-    // Fail closed. An answer git could not produce must not exit 0: a caller that
-    // branches on the exit code — a hook, a CI step, a shell `&&` — would read
-    // success and an empty list as "this path has no constraints".
+    // Exit 1 means git could not answer at all; exit 3 means git answered from a
+    // known-incomplete store, matching guard so callers can distinguish the two.
     if (presented.history === 'unavailable')
         process.exitCode = 1;
+    else if (presented.notes === 'unfetched')
+        process.exitCode = INCOMPLETE_EXIT_CODE;
 };
 const define = (program, name, description, keys, render) => {
     program

@@ -12184,7 +12184,13 @@ ${noteText}`);
 };
 var revParse = (cwd, rev) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], { cwd });
-  if (result.code !== 0) return null;
+  if (result.code === GIT_NO_SUCH_REF2 && result.stderr.trim() === "") return null;
+  if (result.code !== 0) {
+    throw Object.assign(new Error(`git could not resolve ${rev}: ${result.stderr.trim()}`), {
+      code: result.code,
+      stderr: result.stderr
+    });
+  }
   const sha = result.stdout.trim();
   return sha === "" ? null : sha;
 };
@@ -12200,11 +12206,7 @@ var revParseRef = (cwd, ref) => {
   const sha = result.stdout.trim();
   return sha === "" ? null : sha;
 };
-var revList = (cwd, range) => {
-  const result = execGit(["rev-list", range], { cwd, maxBuffer: LOG_MAX_BUFFER });
-  if (result.code !== 0) return null;
-  return result.stdout.split("\n").filter((line) => line !== "");
-};
+var revList = (cwd, range) => execGitOrThrow(["rev-list", range], { cwd, maxBuffer: LOG_MAX_BUFFER }).split("\n").filter((line) => line !== "");
 var tableExists = (db, name) => db.prepare(
   `SELECT count(*) AS n FROM sqlite_master WHERE type IN ('table','view') AND name = ?`
 ).get(name)?.n === 1;
@@ -12406,35 +12408,33 @@ var requireWritable = (handle) => {
 var rebuildIndex = (handle, opts = {}) => {
   requireWritable(handle);
   const started = Date.now();
+  const head = revParse(handle.cwd, "HEAD");
+  const shas = head === null ? [] : revList(handle.cwd, "HEAD");
+  const records = readCommitRecords(handle.cwd, shas);
+  const notesRef = revParseRef(handle.cwd, NOTES_REF);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd);
+  const stats = {
+    ...emptyStats(handle, started),
+    rebuilt: true,
+    rebuildReason: opts.reason ?? null,
+    headSha: head,
+    commitsScanned: shas.length,
+    notesScanned: noteRecords.length
+  };
   handle.db.transaction(() => {
     if (handle.fts) handle.db.exec("DELETE FROM trailers_fts");
     handle.db.exec("DELETE FROM trailers");
     handle.db.exec("DELETE FROM commit_paths");
     handle.db.exec(`DELETE FROM meta WHERE k <> 'schema_version'`);
-  })();
-  const head = revParse(handle.cwd, "HEAD");
-  const stats = {
-    ...emptyStats(handle, started),
-    rebuilt: true,
-    rebuildReason: opts.reason ?? null,
-    headSha: head
-  };
-  if (head !== null) {
-    const shas = revList(handle.cwd, "HEAD") ?? [];
-    stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas);
     const counts = insertRecords(handle, records);
     stats.trailersIndexed = counts.trailers;
     stats.pathsIndexed = counts.paths;
-  }
-  writeMeta(handle.db, "last_indexed_sha", head);
-  writeMeta(handle.db, "notes_ref_sha", null);
-  const noteRecords = readNoteRecords(handle.cwd);
-  stats.notesScanned = noteRecords.length;
-  const noteCounts = insertRecords(handle, noteRecords);
-  stats.noteTrailersIndexed = noteCounts.trailers;
-  stats.pathsIndexed += noteCounts.paths;
-  writeMeta(handle.db, "notes_ref_sha", revParseRef(handle.cwd, NOTES_REF));
+    const noteCounts = insertRecords(handle, noteRecords);
+    stats.noteTrailersIndexed = noteCounts.trailers;
+    stats.pathsIndexed += noteCounts.paths;
+    writeMeta(handle.db, "last_indexed_sha", head);
+    writeMeta(handle.db, "notes_ref_sha", notesRef);
+  })();
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -12478,9 +12478,6 @@ var updateIndex = (handle, opts = {}) => {
   const stats = { ...emptyStats(handle, started), headSha: head };
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
-    if (shas === null) {
-      return rebuildIndex(handle, { reason: `git could not list ${last}..HEAD` });
-    }
     stats.commitsScanned = shas.length;
     const records = readCommitRecords(handle.cwd, shas);
     try {
@@ -24962,6 +24959,7 @@ var StdioServerTransport = class {
 
 // src/commands/query.ts
 var RECORD_ID_KEY3 = "Record-Id";
+var INCOMPLETE_EXIT_CODE2 = 3;
 var SECTIONS = [
   { label: "limits", key: LIMIT_KEY },
   { label: "ruled-out", key: RULED_OUT_KEY },
@@ -25153,6 +25151,7 @@ var emit4 = (name, result, options, render2) => {
 ` : render2(presented)
   );
   if (presented.history === "unavailable") process.exitCode = 1;
+  else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
 };
 var define = (program3, name, description, keys, render2) => {
   program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(

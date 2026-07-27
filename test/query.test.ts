@@ -13,7 +13,7 @@
  * repository the tests run in.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -51,6 +51,32 @@ const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-query-'));
   temporaries.push(dir);
   return createTestRepo({ path: dir });
+};
+
+const cloneRepo = (origin: string): string => {
+  const parent = mkdtempSync(join(tmpdir(), 'commitlore-query-clone-'));
+  temporaries.push(parent);
+  return createTestRepo({ path: join(parent, 'repo'), source: origin });
+};
+
+const brokenGitPath = (): string => {
+  const dir = mkdtempSync(join(tmpdir(), 'commitlore-query-git-'));
+  temporaries.push(dir);
+  const git = join(dir, 'git');
+  writeFileSync(git, '#!/bin/sh\nexit 9\n');
+  chmodSync(git, 0o755);
+  return dir;
+};
+
+const withPath = <T>(path: string, body: () => T): T => {
+  const previous = process.env['PATH'];
+  process.env['PATH'] = path;
+  try {
+    return body();
+  } finally {
+    if (previous === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = previous;
+  }
 };
 
 /**
@@ -744,6 +770,7 @@ const PINNED = '2026-01-20T00:00:00Z';
 
 describe('the four commands', () => {
   const dir = generalRepo();
+  const commands = ['context', 'limits', 'ruled-out', 'warnings'] as const;
 
   it('limits reports only Limit:', () => {
     const run = runCommand(dir, ['limits', AT, PINNED, '--', 'src/auth']);
@@ -812,6 +839,21 @@ describe('the four commands', () => {
     const run = runCommand(dir, ['ruled-out', AT, PINNED, '--', 'src/auth']);
     expect(run.code).toBe(0);
     expect(run.stdout).toBe('no active Ruled-out records for src/auth\n');
+  });
+
+  it.each(commands)('%s exits 3 when the notes mirror is unfetched', (command) => {
+    expect(runCommand(cloneRepo(dir), [command, AT, PINNED]).code).toBe(3);
+  });
+
+  it.each(commands)('%s exits 0 in a readable repository with no records', (command) => {
+    expect(runCommand(makeRepo(), [command, AT, PINNED]).code).toBe(0);
+  });
+
+  it.each(commands)('%s keeps exit 1 when git cannot answer at all', (command) => {
+    const run = withPath(brokenGitPath(), () =>
+      runCommand(dir, [command, AT, PINNED, '--no-index']),
+    );
+    expect(run.code).toBe(1);
   });
 
   it('warns on stderr for several paths and still answers', () => {

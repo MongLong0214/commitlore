@@ -226,6 +226,114 @@ describe('index-db: rebuild identity', () => {
       closeIndex(handle);
     }
   });
+
+  it('keeps the previous index when commit reads fail, then replaces it on retry', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      commit(dir, record('Add the replacement', ['Limit: replacement row', 'Record-Id: r-rebuild1']));
+      gitInjection.failure = {
+        matches: (args) =>
+          args.includes('log') &&
+          args.includes('--stdin') &&
+          !args.includes('--name-only') &&
+          !args.includes('--notes=refs/notes/commitlore'),
+        code: 70,
+        stderr: 'injected commit read failure',
+      };
+
+      expect(() => rebuildIndex(handle)).toThrow(/injected commit read failure/);
+      expect(dumpIndex(handle)).toEqual(before);
+
+      gitInjection.failure = null;
+      rebuildIndex(handle);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+      expect(dumpIndex(handle)).not.toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it.each([
+    {
+      command: 'rev-parse',
+      matches: (args: readonly string[]) =>
+        args.includes('rev-parse') && args.includes('HEAD^{commit}'),
+    },
+    {
+      command: 'rev-list',
+      matches: (args: readonly string[]) => args.includes('rev-list'),
+    },
+  ])('raises on a $command failure without replacing the previous index', ({ command, matches }) => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      gitInjection.failure = {
+        matches,
+        code: 70,
+        stderr: `injected ${command} failure`,
+      };
+
+      expect(() => rebuildIndex(handle)).toThrow(`injected ${command} failure`);
+      expect(dumpIndex(handle)).toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('rebuilds an empty repository to an empty index', () => {
+    const dir = makeRepo();
+    const handle = openIndex({ cwd: dir });
+    try {
+      expect(() => rebuildIndex(handle)).not.toThrow();
+      expect(dumpIndex(handle)).toEqual([]);
+      expect(indexInfo(handle).lastIndexedSha).toBeNull();
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('shows a concurrent reader the old rows while git is read for a rebuild', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      commit(dir, record('Advance the index', ['Warn: new row', 'Record-Id: r-rebuild2']));
+      let observed: ReturnType<typeof dumpIndex> | undefined;
+      gitInjection.failure = {
+        matches: (args) => {
+          if (!args.includes('rev-list')) return false;
+          const reader = openIndex({ cwd: dir, readonly: true });
+          try {
+            observed = dumpIndex(reader);
+          } finally {
+            closeIndex(reader);
+          }
+          return false;
+        },
+        code: 70,
+        stderr: 'not injected',
+      };
+
+      rebuildIndex(handle);
+      expect(observed).toEqual(before);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+      expect(dumpIndex(handle)).not.toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
 });
 
 describe('index-db: incremental equals full', () => {

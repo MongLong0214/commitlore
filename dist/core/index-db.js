@@ -368,8 +368,14 @@ const readNoteRecords = (cwd) => {
 };
 const revParse = (cwd, rev) => {
     const result = execGit(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd });
-    if (result.code !== 0)
+    if (result.code === GIT_NO_SUCH_REF && result.stderr.trim() === '')
         return null;
+    if (result.code !== 0) {
+        throw Object.assign(new Error(`git could not resolve ${rev}: ${result.stderr.trim()}`), {
+            code: result.code,
+            stderr: result.stderr,
+        });
+    }
     const sha = result.stdout.trim();
     return sha === '' ? null : sha;
 };
@@ -387,12 +393,9 @@ const revParseRef = (cwd, ref) => {
     const sha = result.stdout.trim();
     return sha === '' ? null : sha;
 };
-const revList = (cwd, range) => {
-    const result = execGit(['rev-list', range], { cwd, maxBuffer: LOG_MAX_BUFFER });
-    if (result.code !== 0)
-        return null;
-    return result.stdout.split('\n').filter((line) => line !== '');
-};
+const revList = (cwd, range) => execGitOrThrow(['rev-list', range], { cwd, maxBuffer: LOG_MAX_BUFFER })
+    .split('\n')
+    .filter((line) => line !== '');
 // ---------------------------------------------------------------------------
 // Database lifecycle
 // ---------------------------------------------------------------------------
@@ -645,36 +648,34 @@ const requireWritable = (handle) => {
 export const rebuildIndex = (handle, opts = {}) => {
     requireWritable(handle);
     const started = Date.now();
+    const head = revParse(handle.cwd, 'HEAD');
+    const shas = head === null ? [] : revList(handle.cwd, 'HEAD');
+    const records = readCommitRecords(handle.cwd, shas);
+    const notesRef = revParseRef(handle.cwd, NOTES_REF);
+    const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd);
+    const stats = {
+        ...emptyStats(handle, started),
+        rebuilt: true,
+        rebuildReason: opts.reason ?? null,
+        headSha: head,
+        commitsScanned: shas.length,
+        notesScanned: noteRecords.length,
+    };
     handle.db.transaction(() => {
         if (handle.fts)
             handle.db.exec('DELETE FROM trailers_fts');
         handle.db.exec('DELETE FROM trailers');
         handle.db.exec('DELETE FROM commit_paths');
         handle.db.exec(`DELETE FROM meta WHERE k <> 'schema_version'`);
-    })();
-    const head = revParse(handle.cwd, 'HEAD');
-    const stats = {
-        ...emptyStats(handle, started),
-        rebuilt: true,
-        rebuildReason: opts.reason ?? null,
-        headSha: head,
-    };
-    if (head !== null) {
-        const shas = revList(handle.cwd, 'HEAD') ?? [];
-        stats.commitsScanned = shas.length;
-        const records = readCommitRecords(handle.cwd, shas);
         const counts = insertRecords(handle, records);
         stats.trailersIndexed = counts.trailers;
         stats.pathsIndexed = counts.paths;
-    }
-    writeMeta(handle.db, 'last_indexed_sha', head);
-    writeMeta(handle.db, 'notes_ref_sha', null);
-    const noteRecords = readNoteRecords(handle.cwd);
-    stats.notesScanned = noteRecords.length;
-    const noteCounts = insertRecords(handle, noteRecords);
-    stats.noteTrailersIndexed = noteCounts.trailers;
-    stats.pathsIndexed += noteCounts.paths;
-    writeMeta(handle.db, 'notes_ref_sha', revParseRef(handle.cwd, NOTES_REF));
+        const noteCounts = insertRecords(handle, noteRecords);
+        stats.noteTrailersIndexed = noteCounts.trailers;
+        stats.pathsIndexed += noteCounts.paths;
+        writeMeta(handle.db, 'last_indexed_sha', head);
+        writeMeta(handle.db, 'notes_ref_sha', notesRef);
+    })();
     stats.elapsedMs = Date.now() - started;
     return stats;
 };
@@ -734,9 +735,6 @@ export const updateIndex = (handle, opts = {}) => {
     const stats = { ...emptyStats(handle, started), headSha: head };
     if (last !== null && last !== head) {
         const shas = revList(handle.cwd, `${last}..HEAD`);
-        if (shas === null) {
-            return rebuildIndex(handle, { reason: `git could not list ${last}..HEAD` });
-        }
         stats.commitsScanned = shas.length;
         const records = readCommitRecords(handle.cwd, shas);
         try {

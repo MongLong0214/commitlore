@@ -36,6 +36,8 @@ import { BOOKKEEPING_KEYS, type Lifecycle, type Trailer } from '../core/types.js
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
 
+const INCOMPLETE_EXIT_CODE = 3;
+
 interface Section {
   /** The heading `context` prints, and the name of the command that isolates it. */
   label: string;
@@ -428,10 +430,10 @@ const emit = (
       ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
       : render(presented),
   );
-  // Fail closed. An answer git could not produce must not exit 0: a caller that
-  // branches on the exit code — a hook, a CI step, a shell `&&` — would read
-  // success and an empty list as "this path has no constraints".
+  // Exit 1 means git could not answer at all; exit 3 means git answered from a
+  // known-incomplete store, matching guard so callers can distinguish the two.
   if (presented.history === 'unavailable') process.exitCode = 1;
+  else if (presented.notes === 'unfetched') process.exitCode = INCOMPLETE_EXIT_CODE;
 };
 
 const define = (
