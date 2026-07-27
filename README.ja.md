@@ -1,39 +1,41 @@
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: コミット 4842356 の記録 r-2b58d4 は [claim] と評価され、guard は MATCH を返す">
+</p>
+
+<p align="center">
+  <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="ライセンス: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <strong>日本語</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
 # CommitLore
 
-[English](README.md) | [한국어](README.ko.md) | [简体中文](README.zh-CN.md) | **日本語**
+CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/commitlore` に保存するプロトコルです。
+主役はプロトコルであり、CLI は記録を検証・ルーティングして shell、hook、MCP クライアントへ渡します。
+コーディングエージェントを改善することは実証されていません。
 
-> **git コミット trailer を AI コーディングエージェントの組織的記憶に。**
-> 永久に無料。サーバーなし、DB なし、有料プランなし — **git が唯一の信頼できる情報源（SSOT）です。**
+## 測定の記録
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_リリース済み-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+<!-- BENCH:WITHDRAWN -->
 
-> ⚠️ **ステータス**: プロトコル自体は**今日から**素の git だけで使えます（[今すぐ使う](#今すぐ使う素の-git)参照）。
->
-> **v0.1.0 リリース済み。** CLI・MCP サーバー・フック・GitHub Actions はすべて実装済みで `main` の CI を通過しています。配布は git clone のみ — レジストリもアカウントも publish 手順もありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
->
-> clone すればインストールもビルドもなしに動きます: `dist/commitlore.mjs` はバンドルなので、`validate`・`context`・`guard`・MCP サーバーは素のチェックアウトで動作します。**SQLite インデックスだけが例外**です — バンドルが同梱しない `better-sqlite3` を必要とするため、clone しただけの状態では履歴を走査して答えます（`--no-index`）。[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) がこの例外をなくします。
->
-> この README のすべての主張は、今すぐ再現可能か計画中と明示されているかのいずれかで、数値は [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) のログからのみ提示します。このリポジトリは自分のプロトコルを自分の履歴に対して CI で強制しています — [ドッグフーディングは強制される](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)を参照。
+登録済みの行動測定では、CommitLore がエージェントの行動を変える証拠は得られませんでした。その後の実行は、実行中にバイナリが変わったため無効になりました。さらに根本的な問題として、既存データセットには各行を生成したビルドを証明できる provenance がありません。そのため [`bench/report.ts`](bench/report.ts) は集計を拒否します。
 
----
+以前公開したベンチマーク数値はすべて撤回しました。日付付きの判定文書は効果の主張ではなく、当時の記録として残します: [`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[無効実行の記録](bench/PREREGISTRATION.md#15-m3-is-void-the-binary-under-test-changed-while-it-ran)。ハーネスのコミットと実行したバンドルを特定できるデータセットができるまで数値は戻しません。詳細は [`bench/README.md`](bench/README.md) にあります。
 
-## 問題: あなたのエージェントは、セッションごとに退職するシニアエンジニアだ
+## リポジトリが実際に証明していること
 
-いまやコミットの多くを AI エージェントが書いています。作業中のエージェントは意思決定コンテキストの全体 — 発見した制約、試して却下した代替案、意図的にテストしなかった箇所 — を保持しています。そしてセッションが終わると、コンテキストウィンドウは消え、**diff だけが生き残ります**。
+- **記録は通常の Git ワークフローを生き残ります。** コミット trailer と notes mirror は、[rebase と squash](test/squash.test.ts)、[履歴の書き換えと remote 間の転送](test/notes.test.ts)、[一段・多段の rename](test/follow.test.ts)でテストされています。
+- **信頼の意味は全ルートで共通です。** query 出力、CLI injection、編集 hook、MCP tool、guard は同じ `directive | claim | blocked` グレードを使います。ルート検証は [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts)、[`guard.test.ts`](test/guard.test.ts) にあります。
+- **インジェクション形式の記録は文章としてモデルへ届きません。** どれか一つの自由記述 trailer がインジェクションパターンに一致すると、その記録全体が `blocked` になります。モデルが読むルートは内容を引用せず、保留した事実だけを伝えます。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
+- **不明と空は別です。** 読み取り可能で記録がないリポジトリでは guard は `0` で終了します。壊れた Git は `history: unavailable`、未取得の notes mirror は `notes: unfetched` と報告します。どちらの不完全な検査も `3` で終了します。この契約は [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts)、[`RELEASE-GATE`](docs/RELEASE-GATE.md) に固定されています。
 
-次のセッション（次のエージェント、次の同僚）はすべてを再導出し — そして**3 週間前に却下されたまさにそのアプローチを再提案**します。却下された事実も、その理由も、どこにも記録されていないからです。
+## 一つの記録
 
-これは 40 年間 *設計根拠キャプチャ問題（design rationale capture problem）* と呼ばれ、未解決のままでした。理由はただひとつ — 人間は根拠を書き残すコストを払わないからです。**エージェントはこの経済学を反転させます。** コミット時点で根拠はすでにエージェントのコンテキストにあり、直列化のコストは数百トークンです。CommitLore は「それをどこに置くか」に答えるプロトコルです。
-
-## 3 行で
-
-1. **キャプチャは無料** — エージェントは「なぜ」をすでに知っているので、どのみち作るコミットに構造化された *git trailer* として書き込みます。証拠を引用できない trailer は検証器が破棄します。
-2. **消費は pull ではなく push** — エージェントがファイルに触れた瞬間、*そのパス*の有効な制約と過去の却下履歴が自動注入されます。誰も問い合わせを覚えておく必要はありません。
-3. **git が唯一の真実** — 知識アトムはコミットメッセージと `refs/notes/commitlore` に住みます。それ以外（インデックス・ダッシュボード)はすべて捨てられる派生キャッシュです。clone はコミットメッセージに書かれた記録をすべて運びますが、**notes ミラーは運びません** — `git fetch` は既定で notes を取得しないからです。`commitlore doctor --fix` が refspec を追加し、追加されるまではクエリが空の答えではなくその事実を告げます。
-
-## 実際の姿
+この例は conformance fixture でもあります。Git の trailer parser は、全言語の README でこのブロックをバイト単位で同じように読む必要があります。
 
 ```text
 Prevent silent session drops during long-running operations
@@ -56,151 +58,94 @@ Unverified: Auth service cold-start > 500ms behavior
 CommitLore-Version: 2.0.0
 ```
 
-これは普通の git コミットです。書くのに道具は不要で、git 自身がパースできます — trailer は git ネイティブ機能です（`Signed-off-by`、Gerrit の `Change-Id`、Conventional Commits の footer と同じ仕組み）。
+### プロトコル語彙
 
-### Protocol v2 語彙
+| Trailer | 意味 |
+|---|---|
+| `Limit:` | 判断を制約した外部条件 |
+| `Record-Id:` | コミット hash が書き換わっても維持される識別子 |
+| `Ruled-out:` | `代案 \| 採用しなかった理由` |
+| `Certainty:` | `firm` \| `tentative` \| `guess` |
+| `Blast:` | `local` \| `module` \| `system` |
+| `Undo:` | `easy` \| `costly` \| `permanent` |
+| `Warn:` | 将来の変更者への警告。配信前に信頼グレードを適用 |
+| `Verified:` / `Unverified:` | 確認したこと・していないこと |
+| `Follows:` / `Supersedes:` | 判断チェーンと lifecycle の link |
+| `Expires:` | 制約が終わる日付または条件 |
+| `Evidence:` | claim を裏付ける path、anchor、URL |
+| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `CommitLore-Version:` / `X-*:` | プロトコル識別子と拡張 |
 
-| Trailer | 目的 | 消費先 |
+完全な契約は [`spec/SPEC.md`](spec/SPEC.md) にあります。
+
+## 信頼は badge ではなく routing
+
+コミット `4842356` には次の active record があります。
+
+```gitcommit
+Ruled-out: exempting datasets written before the fields existed | it is one line and it deletes the guarantee
+Warn: this leaves the README with no measured numbers at all until M3-b runs. That is the honest state and it is also a worse first impression. The alternative was publishing numbers produced by a binary nobody recorded
+Record-Id: r-2b58d4
+Provenance: authored
+```
+
+同じ `Warn:` がグレードにより次のようにルーティングされます。
+
+| グレード | 条件 | モデルが読むルートの出力 |
 |---|---|---|
-| `Limit:` | 決定を形づくった外部制約 | 注入、`commitlore limits` |
-| `Record-Id:` | 安定した同一性 — 廃止・継承のアンカー | ライフサイクル畳み込み |
-| `Ruled-out:` | `代替案 \| 理由` — 試して捨てたもの | **`commitlore guard`**（再提案ブロック） |
-| `Certainty:` | `firm` \| `tentative` \| `guess` | レビュールーティング |
-| `Blast:` | `local` \| `module` \| `system` | 承認ゲートルーティング |
-| `Undo:` | `easy` \| `costly` \| `permanent` | 承認ゲートルーティング |
-| `Warn:` | 未来の変更者への警告 | 注入（信頼グレード適用） |
-| `Verified:` / `Unverified:` | 検証したこと / していないこと | カバレッジ照会 |
-| `Follows:` | 決定の連鎖をつなぐコミット | コンテキスト組み立て |
-| `Supersedes:` | 既存の Record-Id を廃止 | **stale エンジン** |
-| `Expires:` | 制約が終わる日付・条件 | stale エンジン |
-| `Evidence:` | 主張→証拠リンク（`パス#アンカー`） | 収穫検証器 |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **信頼グレーディング** |
-| `CommitLore-Version:` / `X-*` | 同一性・バージョン・拡張 | ツール群 |
+| `[directive]` | `Provenance: authored`、active record、このリポジトリで明示的に信頼された author | 警告を指示として渡す |
+| `[claim]` | trusted author なし、外部 author、または reconstructed/unknown provenance | 「指示ではない」と明記した情報として渡す |
+| `blocked` | 自由記述 trailer がインジェクションパターンに一致 | 保留通知だけを渡し、一致した内容は描画しない |
 
-設計ルール（[「死にフィールド禁止」](docs/adr/ADR-0006-push-injection.md)）: すべての trailer は最低 1 つの消費ルート（クエリ・ゲート・注入規則）を持ちます。誰も読まない語彙は仕様から削除されます。
+既定では誰も trusted author ではありません。暗号学的な author 検証は未実装で、[issue #28](https://github.com/MongLong0214/commitlore/issues/28) で追跡しています。
 
-## クイックスタート
+## clone からインストール
 
-レジストリもパッケージマネージャーもアカウントも要らない。コードを取得する:
+CommitLore の registry package はありません。配布チャネルは Git リポジトリそのものです（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。CLI には Node.js 22 以上が必要です。
 
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
+node ~/.commitlore/dist/commitlore.mjs --version
+node ~/.commitlore/dist/commitlore.mjs doctor --fix
+node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
 ```
 
-あとは自分のエージェントの行を見るだけだ。どの行も行き着く先は同じ —
-エージェントが編集する**前に**そのパスの決定を見る。
+コミット済み bundle は build なしで動きます。ただし native module `better-sqlite3` は bundle に含まれないため、clone だけでは SQLite index を開けません。`--no-index` で Git を直接 scan するか、clone 内で `npm install` を実行して現在の index を有効にします。native module を外す決定は [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) に記録されています。
 
-| エージェント | 設定 |
-|---|---|
-| **MCP クライアント全般** — Codex, Gemini CLI, Cursor, Cline, Windsurf, Zed, Qwen Coder, Kimi… | 下のサーバー設定を追加 |
-| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` → `/plugin install commitlore` |
-| **シェルを実行できるエージェント全般** | [`AGENTS.md`](AGENTS.md) を自分のリポジトリにコピー |
-| **エージェントなし** | 素の `git log` — [下記](#今すぐ使う素の-git) |
-
-**MCP サーバー設定** — MCP を話すどのクライアントでも同じ 3 ツール
-(`commitlore_query`, `commitlore_stale`, `commitlore_guard`):
+MCP client には同じ clone の entry point を登録します。
 
 ```json
 {
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
+      "args": ["/absolute/path/to/commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }
 ```
 
-セットアップはこれで全部だ。エージェントは編集前にそのパスで既に決まったことを読み、
-却下済みの案を出せば `guard` が知らせる。
-
-**記録は普通のコミットトレーラーとして書く** — 上の例のままだ。覚えることはない。
-
-MCP クライアントがなければ、シェルから同じ答えが得られる:
+プロトコルを読むだけなら CLI は不要です。
 
 ```bash
-commitlore context src/auth/                       # このパスが決めたこと
-commitlore guard --proposal "RabbitMQ に置き換え"   # 却下済みなら非ゼロで終了
-```
-
-**期待値は正直に。** 記録は rebase・squash・リネームを越えて生き残り、大きな履歴でも
-速い（10 万コミットで p50 1.86ms）。**実証されていないのは**、これがエージェントの
-振る舞いをどれだけ変えるかだ。以前公開したベンチマーク結果は、実行 provenance を
-記録していなかったため、[以下で](#測定結果)撤回している。
-
-## 今すぐ使う（素の git）
-
-プロトコルにツールは一切不要です。コミットに trailer を書き（エージェントへの指示に任せても OK）、git 自身で照会します:
-
-```bash
-# 制約値の抽出、機械可読 — git ネイティブの trailer パーサー
-git log --format='%h %(trailers:key=Limit,valueonly,separator=%x3B)'
-
-# あるコミットの trailer ブロック全体をパース
-git log -1 --format=%B <sha> | git interpret-trailers --parse
-
-# 特定パスに関わった制約（リネーム追跡付き）
+git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
 git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
-> 注意: `--grep` ではなく `%(trailers:...)` を使ってください。テキスト grep は本文の散文を誤検出し、複数行折り返しで壊れます — [この失敗モードを実際に再現済み](docs/tickets/F2-core-cli.md)で、CLI が存在する理由のひとつがこれを構造的に不可能にすることです。
+text search ではなく Git の trailer parser を使ってください。文章中の `Key:` は trailer block とは限りません。
 
-## v0.1.0 で出荷されるもの（2026-08-23）
+## まだ行わないこと
 
-| レイヤー | 成果物 | マイルストーン |
-|---|---|---|
-| **L0 プロトコル** | `SPEC.md`、JSON Schema、適合性フィクスチャ、ルート契約テスト | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 コア CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` — SQLite 増分インデックス、`--no-index` フォールバック、10 万コミット p50 < 100ms 目標 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
-| **L1 生存** | `commitlore squash-preserve`（squash マージ継承）、`refs/notes/commitlore` ミラー（rebase 生存）、`--follow` デフォルト | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
-| **L2 エージェントファブリック** | `commitlore mcp`（MCP サーバー）、自動注入フック（パススコープ・予算制・決定論的）、transcript 収穫 + **証拠検証器**、`commitlore guard`、クリーンルーム skills | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
-| **L3 信頼** | provenance × lifecycle グレーディング、**Warn 降格**（未検証の指示は*主張*としてのみレンダリング、決して命令にしない）、注入ヒューリスティクス、secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
-| **L4 組織** | GitHub Actions: PR lint + 有効制約コメント、squash 継承自動化 — *あなた自身の* CI で動作、外部呼び出しゼロ | [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
-| **L5 CommitLoreBench** | 再提案率（CommitLore on/off）、ノイズアブレーション、受理アトムあたりコスト — README の数値はすべてログから再生成 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) / [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
-
-全体計画: [ADR](docs/adr/) · [PRD](docs/prd/) · [チケット仕様](docs/tickets/TICKETS.md) · [Issues](https://github.com/MongLong0214/commitlore/issues)
-
-## 測定結果
-
-<!-- BENCH:WITHDRAWN -->
-
-このベンチマーク数値は撤回しました。数値を生成した実行は、実行対象のコミットと `dist/` ダイジェストを記録していなかったため、現在リポジトリにあるどのデータセットも、どのバイナリが各行を生成したかを証明できません。この理由で M3 は全面的に無効とされ（§15）、M3-b として再実行中です。判定文書は、当時の結論を記録した日付付きの文書として残します: [`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[`ROUTE-GAP.md`](bench/ROUTE-GAP.md)、[`GUARD-CANNOT-BLOCK.md`](bench/GUARD-CANNOT-BLOCK.md)、[`DETECTOR-DEFECT.md`](bench/DETECTOR-DEFECT.md)。provenance が証明されたデータセットが存在するときに限り、数値を再掲載します。
-
-## 「それなら○○でいいのでは」への答え
-
-| 代替案 | なぜ足りないか |
-|---|---|
-| **ADR / Wiki / Notion** | 別ファイルはコードから乖離して腐ります。trailer は diff と同じコミットオブジェクトに住むため、非同期は構造的に不可能で、`git clone` が一緒に運びます。 |
-| **Slack/ドキュメントの RAG** | 低シグナルな成果物を読み取り時に検索するだけ。CommitLore は書き込み時に高シグナルな知識を*生成*し、説明対象のコードに束縛します。 |
-| **エージェント記憶フレームワーク**（ベクトルストア） | 無キュレーションのエピソード記憶は SE エージェントの性能を実測で*悪化*させます（ノイズ）。CommitLore のアトムは型付き・証拠検証済み・パススコープ・寿命管理付き — それぞれが公開された失敗モードへの直接の回答です。 |
-| **静的コンテキストファイル**（CLAUDE.md / AGENTS.md） | グローバルな一括投入で、実証結果もまちまち。CommitLore は*パス別*・*グレード別*・*有効なもののみ*をトークン予算内で注入します。 |
-| **ナレッジベース SaaS** | 組織の意思決定史が他人のデータベースに住む理由はありません。ここには落ちるサーバーも解約するサブスクもない — リポジトリこそがデータベースです。 |
-
-## セキュリティモデル（正直版）
-
-コミットメッセージはエージェントへの指示チャネルになり、それは同時にインジェクション面になるということです。v0.1 は正直な最小防御を出荷します: **未検証の `Warn:` はすべての注入・照会出力で「主張」に降格**（外部コントリビューションは常に降格）、インジェクションパターンのヒューリスティクスが敵対的アトムを隔離、secret guard が資格情報の永久刻印をブロック。暗号署名（sigstore）は[計画済み](https://github.com/MongLong0214/commitlore/issues/28)で、グレーディングモデルは署名が消費側を壊さずに組み込めるよう設計されています。
-
-## 設計原則
-
-- **ユーザーコストはゼロ、永遠に。** MIT、有料ティアなし、テレメトリなし、サーバーなし。LLM 依存機能（収穫・backfill）は、すでに使っているエージェントセッションの中でオプトインでのみ実行。コアパス — parse・query・inject・guard — は決定論的で LLM 非依存。
-- **証拠なきアトムなし。** 収穫検証器は transcript や diff を引用できない trailer を破棄します。偽のアトムより、無いほうがましです。
-- **ワークフローは交渉対象ではない。** squash・rebase・リネーム — 知識があなたのワークフローを生き延びるべきで、ワークフローがツールに合わせるべきではありません。
-- **数値か、沈黙か。** この README は `bench/results/` から再現できる測定値だけを引用します。
-
-## FAQ
-
-**本当に無料ですか？** はい — 全部、永久に、MIT です。クラウド版は存在せず、計画もありません。持続可能性は販売ではなく標準の採用から来ます（[ADR](docs/adr/ADR-0001-scope-v010.md)）。
-
-**どのエージェントで使えますか？** シェルコマンドを実行できるものなら今日からプロトコルを読めます。v0.1.0 の統合対象: Claude Code（フック+skills）と、`commitlore mcp` 経由のあらゆる MCP 対応エージェント。コミット形式自体は、コミットを書くすべてのエージェント — そして人間 — と互換です。
-
-**うちは全部 squash マージですが？** デフォルトでは trailer は破壊されます — 実際に再現しました。だからこそ `commitlore squash-preserve` + notes ミラー + GitHub Action があります（[ADR-0004](docs/adr/ADR-0004-workflow-survival.md)）。
-
-**巨大リポジトリでは？** インデックスは `.git/commitlore/` 配下の増分 SQLite キャッシュで、コマンド一発で再構築でき、決してコミットされません。目標: 10 万コミットでパス照会 p50 < 100ms — 約束ではなく CI で測定します。
-
-**Conventional Commits と併用できますか？** できます。CommitLore trailer は git footer であり、Conventional Commits が `BREAKING CHANGE` に使うのと同じ仕組みです。`feat:` / `fix:` の件名行はそのままに、本文の下に trailer を追加すれば commitlint と semantic-release はそのまま動きます。
+- author の暗号学的検証: [#28](https://github.com/MongLong0214/commitlore/issues/28)
+- リポジトリ全体の record coverage 集計: [#32](https://github.com/MongLong0214/commitlore/issues/32)
+- path ではなく symbol への anchor: [#33](https://github.com/MongLong0214/commitlore/issues/33)
+- 対話型 commit builder と自動 expiry 通知: [#34](https://github.com/MongLong0214/commitlore/issues/34)
+- 有効な benchmark による guard の行動効果の実証: [#37](https://github.com/MongLong0214/commitlore/issues/37)
+- Node.js なしで動く単一 static binary: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## コントリビュート
 
-仕様（F1）が最初に着地します — 適合性スイートが契約なので、代替実装を歓迎し、テストで検証できます。[good first issue](https://github.com/MongLong0214/commitlore/issues) から始め、「なぜ」は [ADR](docs/adr/) を読んでください。このリポジトリの履歴自体がプロトコルをドッグフーディングしています: ここでは `git log --format='%h %(trailers:key=Ruled-out,valueonly)'` が実際に動きます。
+[spec](spec/SPEC.md)、[ADR](docs/adr/)、[`CONTRIBUTING.md`](CONTRIBUTING.md) を先に読んでください。このリポジトリは自身の判断を記録しているため、ファイルを変更する前に `commitlore context <path>` を実行します。
 
 ## ライセンス
 
