@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -50,7 +50,7 @@ describe('shallow history caveat', () => {
     const cwd = shallowClone();
     const caveat = 'shallow history, so this answer may be missing records that exist upstream';
 
-    expect(existsSync(join(cwd, '.git', 'shallow'))).toBe(true);
+    expect(existsSync(resolve(cwd, git(cwd, ['rev-parse', '--git-path', 'shallow']).trim()))).toBe(true);
     expect(runQuery({ cwd, noIndex: true }).diagnostics).toContain(
       `this clone has ${caveat} (fix: git fetch --unshallow)`,
     );

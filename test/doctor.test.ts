@@ -82,7 +82,8 @@ const repoWithRemote = (label: string): { repo: string; remote: string; sha: str
 const statusOf = (report: DoctorReport, id: string): CheckStatus | undefined =>
   report.checks.find((entry) => entry.id === id)?.status;
 
-const hookPath = (repo: string): string => join(repo, '.git', 'hooks', 'commit-msg');
+const hookPath = (repo: string): string =>
+  resolve(repo, git(repo, ['rev-parse', '--git-path', 'hooks/commit-msg']).trim());
 
 /** Writes a script, creating its directory: an empty init template leaves no `hooks/`. */
 const writeScript = (path: string, contents: string): void => {
