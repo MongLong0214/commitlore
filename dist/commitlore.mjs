@@ -26422,23 +26422,27 @@ var inspectSource = (source) => {
   const lines = locateTrailerLines(source.message, trailers);
   const rawViolations = validateRecord(trailers);
   const firstTrailerLine = lines[0];
-  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
-  const violations = (nonTrailerParagraph === void 0 ? rawViolations : []).map((violation) => {
+  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? {
+    ...source.sha === void 0 ? {} : { sha: source.sha },
+    line: firstTrailerLine,
+    key: "trailer-block",
+    value: "",
+    rule: "format",
+    got: rawViolations[0]?.key ?? "unknown",
+    want: "a final paragraph that looks like a CommitLore trailer block"
+  } : void 0;
+  const violations = nonTrailerParagraph === void 0 ? rawViolations.map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
     return {
       ...source.sha === void 0 ? {} : { sha: source.sha },
       ...line === void 0 ? {} : { line },
       ...violation
     };
+  }) : [nonTrailerParagraph];
+  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) => {
+    const where = source.sha === void 0 ? `line ${warning.line}` : `${source.sha.slice(0, 10)}:${warning.line}`;
+    return warning.tabIndented ? `commitlore: ${where} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: ${where} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`;
   });
-  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map(
-    (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
-  );
-  if (nonTrailerParagraph !== void 0) {
-    warnings.push(
-      `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
-    );
-  }
   return { violations, warnings };
 };
 var locateReferenceViolations = (source, violations) => {
@@ -26612,6 +26616,9 @@ var formatViolation = (violation) => {
   if (violation.sha !== void 0) parts.push(violation.sha.slice(0, 10));
   if (violation.line !== void 0) parts.push(String(violation.line));
   const where = parts.length === 0 ? "" : `${parts.join(":")}: `;
+  if (violation.rule === "format" && violation.key === "trailer-block") {
+    return `${where}final paragraph does not look like a CommitLore trailer block; saw unknown key ${JSON.stringify(violation.got)}`;
+  }
   const got = JSON.stringify(violation.got);
   const want = JSON.stringify(violation.want);
   return `${where}${violation.rule} ${violation.key} \u2014 got ${got}, want ${want}`;

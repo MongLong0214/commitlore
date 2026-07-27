@@ -61,6 +61,18 @@ const commit = (repo: string, file: string, message: string): string => {
   }).trim();
 };
 
+const mergeBranch = (repo: string, branch: string, message: string): string => {
+  execFileSync('git', ['merge', '--no-ff', '-q', branch, '-m', message], {
+    cwd: repo,
+    env: GIT_ENV,
+  });
+  return execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repo,
+    env: GIT_ENV,
+    encoding: 'utf8',
+  }).trim();
+};
+
 afterAll(() => {
   for (const dir of temporaryDirectories) rmSync(dir, { recursive: true, force: true });
 });
@@ -141,31 +153,67 @@ describe('validate — prose/trailer boundary', () => {
     commit(repo, 'feature.txt', 'Feature\n');
     execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
     commit(repo, 'main.txt', 'Main\n');
-    execFileSync(
-      'git',
-      [
-        'merge',
-        '--no-ff',
-        '-q',
-        'feature',
-        '-m',
-        'Merge pull request #72 from owner/feature\n\ninject: diagnose silent hook failures on stderr (#67)',
-      ],
-      { cwd: repo, env: GIT_ENV },
+    const merge = mergeBranch(
+      repo,
+      'feature',
+      'Merge pull request #72 from owner/feature\n\ninject: diagnose silent hook failures on stderr (#67)',
     );
-    const merge = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: repo,
-      env: GIT_ENV,
-      encoding: 'utf8',
-    }).trim();
 
     const result = runValidate({ commit: merge, cwd: repo });
 
-    expect(result.code).toBe(0);
-    expect(result.violations).toEqual([]);
-    expect(result.stderr).toBe(
-      `commitlore: ${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw "inject: diagnose silent hook failures on stderr (#67)"\n`,
+    expect(result.code).toBe(1);
+    expect(result.violations).toEqual([
+      expect.objectContaining({ sha: merge, line: 3, rule: 'format', key: 'trailer-block' }),
+    ]);
+    expect(result.stdout).toContain(
+      `${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw unknown key "inject"`,
     );
+    expect(result.stderr).toBe('commitlore: 1 violation (SPEC §6) — the message was not modified\n');
+  });
+
+  it('does not echo a credential from a merge-title paragraph', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    const secret = ['ghp_', 'woQsV1K0ETSd7oY7wtnp83A4UTVAyjyr6VaT'].join('');
+    const merge = mergeBranch(
+      repo,
+      'feature',
+      `Merge pull request #72 from owner/feature\n\ninject: ${secret}`,
+    );
+
+    const result = runValidate({ commit: merge, cwd: repo });
+    const rendered = `${result.stdout}${result.stderr}`;
+
+    expect(result.code).toBe(1);
+    expect(result.secrets).toHaveLength(1);
+    expect(rendered).toContain('saw unknown key "inject"');
+    expect(rendered).not.toContain(secret);
+  });
+
+  it('keeps a genuine unknown-key failure when a merge paragraph also has a valid trailer', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    const merge = mergeBranch(
+      repo,
+      'feature',
+      'Merge pull request #72 from owner/feature\n\nConstraint: still invalid\nBlast: local',
+    );
+
+    const result = runValidate({ commit: merge, cwd: repo });
+
+    expect(result.code).toBe(1);
+    expect(result.violations).toEqual([
+      expect.objectContaining({ sha: merge, line: 3, rule: 'unknown-key', key: 'Constraint' }),
+    ]);
+    expect(result.stdout).not.toContain('final paragraph does not look');
   });
 });
 
@@ -218,6 +266,42 @@ describe('validate — input modes', () => {
       [bad, 'enum'],
       [worse, 'unknown-key'],
     ]);
+  });
+
+  it('attributes merge-title and genuine unknown-key failures across a range', () => {
+    const repo = makeRepo();
+    const base = commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    const merge = mergeBranch(
+      repo,
+      'feature',
+      'Merge pull request #72 from owner/feature\n\ninject: diagnose silent hook failures',
+    );
+    const invalid = commit(repo, 'invalid.txt', 'Invalid\n\nConstraint: still invalid\n');
+
+    const result = runValidate({ range: `${base}..HEAD`, cwd: repo });
+
+    expect(result.code).toBe(1);
+    expect(result.violations.map(({ sha, rule, key }) => [sha, rule, key])).toEqual([
+      [merge, 'format', 'trailer-block'],
+      [invalid, 'unknown-key', 'Constraint'],
+    ]);
+  });
+
+  it('attributes unparsed-trailer warnings to their commit in a range', () => {
+    const repo = makeRepo();
+    const base = commit(repo, 'base.txt', 'Base\n');
+    const warned = commit(repo, 'warned.txt', 'Subject\nLimit: token introspection unavailable\n');
+
+    const result = runValidate({ range: `${base}..HEAD`, cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe(
+      `commitlore: ${warned.slice(0, 10)}:2 looks like a Limit trailer, but git did not parse it; the trailer block needs a blank line before it\n`,
+    );
   });
 
   it('exits 0 on a range whose commits are all clean', () => {

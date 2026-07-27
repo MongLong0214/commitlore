@@ -277,33 +277,36 @@ const inspectSource = (
     rawViolations.length > 0 &&
     rawViolations.length === trailers.length &&
     rawViolations.every((violation) => violation.rule === 'unknown-key')
-      ? source.message
-          .split('\n')
-          .map(stripCr)
-          .slice(firstTrailerLine - 1)
-          .filter((line) => line !== '')
-          .join('\n')
+      ? {
+          ...(source.sha === undefined ? {} : { sha: source.sha }),
+          line: firstTrailerLine,
+          key: 'trailer-block',
+          value: '',
+          rule: 'format' as const,
+          got: rawViolations[0]?.key ?? 'unknown',
+          want: 'a final paragraph that looks like a CommitLore trailer block',
+        }
       : undefined;
 
-  const violations = (nonTrailerParagraph === undefined ? rawViolations : []).map((violation) => {
-    const line = lineForViolation(violation, trailers, lines);
-    return {
-      ...(source.sha === undefined ? {} : { sha: source.sha }),
-      ...(line === undefined ? {} : { line }),
-      ...violation,
-    };
-  });
+  const violations =
+    nonTrailerParagraph === undefined
+      ? rawViolations.map((violation) => {
+          const line = lineForViolation(violation, trailers, lines);
+          return {
+            ...(source.sha === undefined ? {} : { sha: source.sha }),
+            ...(line === undefined ? {} : { line }),
+            ...violation,
+          };
+        })
+      : [nonTrailerParagraph];
 
-  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) =>
-    warning.tabIndented
-      ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
-      : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`,
-  );
-  if (nonTrailerParagraph !== undefined) {
-    warnings.push(
-      `commitlore: ${source.sha?.slice(0, 10) ?? 'commit'}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`,
-    );
-  }
+  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) => {
+    const where =
+      source.sha === undefined ? `line ${warning.line}` : `${source.sha.slice(0, 10)}:${warning.line}`;
+    return warning.tabIndented
+      ? `commitlore: ${where} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
+      : `commitlore: ${where} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`;
+  });
 
   return { violations, warnings };
 };
@@ -525,6 +528,9 @@ const formatViolation = (violation: LocatedViolation): string => {
   if (violation.sha !== undefined) parts.push(violation.sha.slice(0, 10));
   if (violation.line !== undefined) parts.push(String(violation.line));
   const where = parts.length === 0 ? '' : `${parts.join(':')}: `;
+  if (violation.rule === 'format' && violation.key === 'trailer-block') {
+    return `${where}final paragraph does not look like a CommitLore trailer block; saw unknown key ${JSON.stringify(violation.got)}`;
+  }
   const got = JSON.stringify(violation.got);
   const want = JSON.stringify(violation.want);
   return `${where}${violation.rule} ${violation.key} — got ${got}, want ${want}`;
