@@ -1,0 +1,180 @@
+import { writeFileSync } from 'node:fs';
+
+import type {
+  DeterministicRow,
+  GuardQualityRow,
+  HookOverheadRow,
+  IndexCostRow,
+  InjectionDetectionRow,
+  QueryLatencyRow,
+  SurvivalRow,
+} from './types.ts';
+
+export const SCOPE_SENTENCE =
+  'These numbers say what CommitLore costs and what it catches. They say nothing about whether recorded context helps an agent; M4 is registered for that question and may still come back null.';
+
+export const percentile = (samples: readonly number[], proportion: number): number => {
+  if (samples.length === 0) throw new Error('cannot take a percentile of zero samples');
+  if (!(proportion > 0 && proportion <= 1)) {
+    throw new Error(`percentile proportion must be in (0, 1], got ${proportion}`);
+  }
+  const sorted = [...samples].sort((left, right) => left - right);
+  return sorted[Math.ceil(proportion * sorted.length) - 1] ?? Number.NaN;
+};
+
+const distinct = (
+  rows: readonly DeterministicRow[],
+  field: 'harness_commit' | 'dist_digest',
+): readonly string[] => [...new Set(rows.map((row) => row[field]))].sort();
+
+export const assertSingleProvenance = (rows: readonly DeterministicRow[]): void => {
+  const commits = distinct(rows, 'harness_commit');
+  const digests = distinct(rows, 'dist_digest');
+  if (rows.length === 0) throw new Error('refusing to report an empty deterministic dataset');
+  if (commits.length === 1 && digests.length === 1) return;
+  throw new Error(
+    'refusing mixed deterministic provenance: ' +
+      `${commits.length} harness_commit (${commits.join(', ')}); ` +
+      `${digests.length} dist_digest (${digests.join(', ')})`,
+  );
+};
+
+const fixed = (value: number, digits = 2): string => value.toFixed(digits);
+const percent = (value: number): string => `${fixed(value * 100, 1)}%`;
+
+const latencySection = (rows: readonly QueryLatencyRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 1. Query latency at scale',
+    '',
+    'Method: one discarded warmup, then the stated run count per CLI command and mode. Indexed mode uses a completed rebuild; `--no-index` scans Git directly.',
+    '',
+    '| commits | records | command | mode | runs | p50 ms | p95 ms |',
+    '|---:|---:|---|---|---:|---:|---:|',
+    ...rows.map(
+      (row) =>
+        `| ${row.commits} | ${row.records} | ${row.command} | ${row.mode} | ${row.timing.runs} | ` +
+        `${fixed(row.timing.p50_ms)} | ${fixed(row.timing.p95_ms)} |`,
+    ),
+    '',
+  ];
+};
+
+const survivalSection = (rows: readonly SurvivalRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 2. Record survival',
+    '',
+    'Method: seed the same number of trailer records in an isolated repository, run each Git operation, then count surviving `Record-Id` values in `HEAD`; rename cases query the new path through the shipped CLI.',
+    '',
+    '| operation | survived / total | rate |',
+    '|---|---:|---:|',
+    ...rows.map(
+      (row) => `| ${row.operation} | ${row.survived} / ${row.total} | ${percent(row.rate)} |`,
+    ),
+    '',
+  ];
+};
+
+const injectionSection = (rows: readonly InjectionDetectionRow[]): string[] => {
+  const row = rows[0];
+  if (row === undefined) return [];
+  return [
+    '## 3. Injection detection',
+    '',
+    `Method: scan the labelled payload and benign-record corpus in \`${row.corpus}\` with the shipped \`INJECTION_PATTERNS\`.`,
+    '',
+    `True positives: **${row.true_positives}/${row.positives} (${percent(row.true_positive_rate)})**. ` +
+      `False positives: **${row.false_positives}/${row.negatives} (${percent(row.false_positive_rate)})**. ` +
+      `False negatives: ${row.false_negatives}; true negatives: ${row.true_negatives}.`,
+    '',
+  ];
+};
+
+const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
+  const row = rows[0];
+  if (row === undefined) return [];
+  return [
+    '## 4. Guard precision and recall',
+    '',
+    `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard at threshold **${row.threshold}**.`,
+    '',
+    `Precision: **${percent(row.precision)}** (${row.true_positives} TP, ${row.false_positives} FP). ` +
+      `Recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
+      `Correct silence: ${row.true_negatives}.`,
+    'Ground truth is the frozen corpus label; the suite does not relabel archived agent output after seeing the guard result.',
+    '',
+  ];
+};
+
+const hookSection = (rows: readonly HookOverheadRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 5. Hook overhead',
+    '',
+    'Method: time the same operation with and without the installed hook after one discarded warmup; commit-msg wraps an empty Git commit, and PreToolUse wraps the same file write with the shipped inject hook.',
+    '',
+    '| hook | runs | without p50 / p95 ms | with p50 / p95 ms | delta p50 / p95 ms |',
+    '|---|---:|---:|---:|---:|',
+    ...rows.map(
+      (row) =>
+        `| ${row.hook} | ${row.with_hook.runs} | ${fixed(row.without_hook.p50_ms)} / ` +
+        `${fixed(row.without_hook.p95_ms)} | ${fixed(row.with_hook.p50_ms)} / ` +
+        `${fixed(row.with_hook.p95_ms)} | ${fixed(row.delta_p50_ms)} / ${fixed(row.delta_p95_ms)} |`,
+    ),
+    '',
+  ];
+};
+
+const indexSection = (rows: readonly IndexCostRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 6. Index cost',
+    '',
+    'Method: rebuild the derived index once in each fresh synthetic history, time the rebuild, then measure the on-disk database size after the process exits.',
+    '',
+    '| commits | records | build ms | size bytes | bytes / record |',
+    '|---:|---:|---:|---:|---:|',
+    ...rows.map(
+      (row) =>
+        `| ${row.commits} | ${row.records} | ${fixed(row.build_ms)} | ${row.size_bytes} | ` +
+        `${fixed(row.bytes_per_record)} |`,
+    ),
+    '',
+  ];
+};
+
+export const renderDeterministicReport = (rows: readonly DeterministicRow[]): string => {
+  assertSingleProvenance(rows);
+  const first = rows[0];
+  if (first === undefined) throw new Error('unreachable empty dataset');
+  const machine = first.machine;
+  const lines = [
+    '# CommitLore deterministic measurements',
+    '',
+    `Provenance: commit \`${first.harness_commit}\`; dist sha256 \`${first.dist_digest}\`.`,
+    '',
+    `Machine: ${machine.cpu}, ${machine.logical_cpus} logical CPUs, ` +
+      `${fixed(machine.memory_bytes / 1024 ** 3, 1)} GiB RAM, ${machine.platform} ${machine.release} ` +
+      `(${machine.arch}), Node ${machine.node}, ${machine.git}.`,
+    '',
+    SCOPE_SENTENCE,
+    '',
+    ...latencySection(rows.filter((row): row is QueryLatencyRow => row.metric === 'query_latency')),
+    ...survivalSection(rows.filter((row): row is SurvivalRow => row.metric === 'record_survival')),
+    ...injectionSection(
+      rows.filter((row): row is InjectionDetectionRow => row.metric === 'injection_detection'),
+    ),
+    ...guardSection(rows.filter((row): row is GuardQualityRow => row.metric === 'guard_quality')),
+    ...hookSection(rows.filter((row): row is HookOverheadRow => row.metric === 'hook_overhead')),
+    ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
+  ];
+  return `${lines.join('\n').trim()}\n`;
+};
+
+export const writeDeterministicReport = (
+  path: string,
+  rows: readonly DeterministicRow[],
+): void => {
+  writeFileSync(path, renderDeterministicReport(rows));
+};
