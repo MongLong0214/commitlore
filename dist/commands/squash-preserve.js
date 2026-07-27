@@ -53,8 +53,9 @@ const countCommits = (range, cwd) => {
     return Number(result.stdout.trim());
 };
 /**
- * The warnings a plan carries. Conflicts are one line each; a lost identity is
- * one line for the whole plan.
+ * The warnings a plan carries. Conflicts are one line each; unidentified
+ * records beyond the first that a later re-parse cannot tell apart from body
+ * prose are one line for the whole plan.
  *
  * Neither is silent. A record dropped without a word is worse than one never
  * written, because the next reader has no way to know a claim used to exist.
@@ -62,16 +63,18 @@ const countCommits = (range, cwd) => {
 const warningsFor = (plan) => {
     const lines = plan.conflicts.map((conflict) => `${PREFIX} conflict on ${conflict.recordId} — kept the version from ${shortSha(conflict.kept)}, ` +
         `dropped ${conflict.dropped.map(shortSha).join(', ')}`);
-    const declared = [
-        ...new Set(plan.provenance
-            .map((entry) => entry.recordId)
-            .filter((recordId) => recordId !== undefined)),
-    ];
-    const keeps = plan.merged.some((trailer) => trailer.key === 'Record-Id');
-    if (declared.length > 1 && !keeps) {
-        lines.push(`${PREFIX} ${declared.length} record ids were inherited (${declared.join(', ')}) and a record ` +
-            'may declare only one, so the merge record declares none — the mapping is in X-Inherited-From ' +
-            'in the notes mirror');
+    // Every block that already had a `Record-Id` keeps it (SPEC §2.4) — this
+    // plan cannot lose an identity the way the pre-multi-record format did.
+    // What remains a real limitation: `parseRecordBlocks` only recognizes a
+    // *non-final* block by its declared identity, so if more than one inherited
+    // record never declared one, only the last block written stays findable if
+    // this note or message is re-parsed later from stored text. The plan itself
+    // — and this run's `--json` output — still names every one of them.
+    const unidentified = plan.blocks.filter((block) => !block.some((trailer) => trailer.key === 'Record-Id')).length;
+    if (unidentified > 1) {
+        lines.push(`${PREFIX} ${unidentified} inherited records declared no Record-Id — only the last one ` +
+            'written stays recoverable if this note or message is re-parsed later; this plan (and ' +
+            '--json) still lists all of them');
     }
     return lines;
 };
@@ -161,7 +164,7 @@ export const runSquashPreserve = (input = {}) => {
     if (wrote.length === 0) {
         return {
             code: 0,
-            stdout: serializeTrailers(plan.merged),
+            stdout: plan.blocks.map(serializeTrailers).join('\n'),
             stderr: `${warnings}${summary} — plan only; pass --message-file or --target to apply\n`,
             plan,
         };

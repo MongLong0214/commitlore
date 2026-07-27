@@ -273,13 +273,23 @@ describe('a squash merge', () => {
     expect(note).toContain('the widget renders at most 50 rows');
     expect(note).toContain('virtualised list');
     expect(note).toContain('do not raise the row cap');
-    // The merge record says *that* it was inherited; the mirror says from what,
-    // once per source record (T-302 `INHERITED_FROM_KEY`).
-    expect(note).toContain('Provenance: inherited ');
-    expect(note?.match(/^X-Inherited-From: /gm)).toHaveLength(3);
-    // `Blast` collapses toward the value that asks for more scrutiny, not the
-    // last one written.
-    expect(note).toContain('Blast: module');
+
+    // Three distinct records (SPEC §2.4) — RECORDS declares a different
+    // Record-Id for each — keep their own identity rather than folding into
+    // one merged record (bug-issue-60, findings 2 and 3): every id survives,
+    // and every block carries its own accurate `Provenance:`, one per
+    // record instead of one for the whole note.
+    expect(note).toContain('Record-Id: r-000101');
+    expect(note).toContain('Record-Id: r-000102');
+    expect(note).toContain('Record-Id: r-000103');
+    expect(note?.match(/^Provenance: inherited /gm)).toHaveLength(3);
+    // The old format's per-source mapping extension is no longer written —
+    // each block's own `Provenance:` already says where it came from.
+    expect(note).not.toContain('X-Inherited-From');
+    // `Blast` is no longer collapsed across unrelated records: each keeps its
+    // own source's value (RECORDS: local, module, local).
+    expect(note?.match(/^Blast: local$/gm)).toHaveLength(2);
+    expect(note?.match(/^Blast: module$/gm)).toHaveLength(1);
 
     // The record reached the remote, which is the only place it survives the
     // runner being deleted.

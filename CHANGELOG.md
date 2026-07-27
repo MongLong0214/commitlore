@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Multi-record grammar (SPEC §2.4) — bug-issue-60
+
+A message MAY now carry more than one record block. `squash-preserve` used to
+fold every inherited record from a squashed branch into one merged record —
+correct only when the branch declared at most one `Record-Id`, and silently
+wrong about `Provenance:` whenever it declared more than one. It now emits one
+block per inherited record (`SquashPlan.blocks`), each keeping its own
+identity and its own accurate `Provenance:`. `commitlore validate`,
+`commitlore context`, and the index all recognize every block a message or
+note carries, not only the last paragraph — which is also the fix for a
+silent GitHub squash-button defect: when the squash button pastes full commit
+messages into the merge body, `git interpret-trailers` (SPEC §2.1 B1) only
+ever read the last one, and the rest silently became prose. A single-record
+message parses byte-identically to before.
+
+`commitlore doctor` gained a `squash-conservation` check: it warns when a
+local branch that looks like an un-preserved squash source declared a
+`Record-Id` that HEAD's history cannot find. Nothing invokes `squash-preserve`
+automatically — for a local `git merge --squash` this check catches the
+oversight; for GitHub's server-side squash button, nothing local can, and that
+remains a documented gap (ADR-0014).
+
+`X-Inherited-From:`, the previous format's only way to carry per-source
+provenance when identity was ambiguous, is no longer written — each block's
+own `Provenance:` says the same thing correctly. A note published before this
+change still reads back exactly as it did (`X-<Name>:` is an ordinary
+preserved extension, SPEC §3.2).
+
+See `docs/adr/ADR-0014-multi-record-grammar.md`.
+
 ### Breaking
 
 Exit codes are now one contract across every command (SPEC §10), not a

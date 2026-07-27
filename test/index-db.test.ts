@@ -79,6 +79,7 @@ import {
   openIndex,
   queryTrailers,
   rebuildIndex,
+  SCHEMA_VERSION,
   scanTrailers,
   updateIndex,
   type IndexHandle,
@@ -480,7 +481,7 @@ describe('index-db: the file is disposable', () => {
       expect(stats.rebuilt).toBe(true);
       expect(stats.rebuildReason).toContain('v999');
       expect(dumpIndex(second)).toEqual(before);
-      expect(indexInfo(second).schemaVersion).toBe('1');
+      expect(indexInfo(second).schemaVersion).toBe(String(SCHEMA_VERSION));
     } finally {
       closeIndex(second);
     }
@@ -987,7 +988,7 @@ describe('index-db: reporting', () => {
       expect(stats.headSha).toHaveLength(40);
 
       const info = indexInfo(handle);
-      expect(info.schemaVersion).toBe('1');
+      expect(info.schemaVersion).toBe(String(SCHEMA_VERSION));
       expect(info.commits).toBe(4);
       expect(info.trailers).toBe(dumpIndex(handle).length);
       expect(info.paths).toBeGreaterThan(0);

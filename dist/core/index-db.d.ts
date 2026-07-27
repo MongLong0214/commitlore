@@ -58,14 +58,27 @@ export type IndexDatabase = DatabaseSync;
  * index is derived, so the old file is deleted and rebuilt (ADR-0003). Without
  * this, a user upgrading the CLI would silently read a table that no longer
  * means what the code thinks it means.
+ *
+ * v2 adds `trailers.block`: a message MAY now carry several record blocks
+ * (SPEC §2.4, bug-issue-60), and rows from different blocks on the same
+ * commit need a column of their own to stay apart — `seq` alone repeats
+ * across blocks.
  */
-export declare const SCHEMA_VERSION = 1;
+export declare const SCHEMA_VERSION = 2;
 export declare const NOTES_REF = "refs/notes/commitlore";
 export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */
 export interface IndexedTrailer extends Trailer {
     sha: string;
-    /** Position within its record, preserving repeated-key order (SPEC §2.1 B5). */
+    /**
+     * Which record block within `(sha, source)` this trailer belongs to
+     * (SPEC §2.4), 0-indexed in the order the blocks appear. Almost always `0`
+     * — a message carries more than one block only when it inherited several
+     * records across a squash (`core/squash.ts`) or was pasted together from
+     * several commits' messages (bug-issue-60).
+     */
+    block: number;
+    /** Position within its block, preserving repeated-key order (SPEC §2.1 B5). */
     seq: number;
     committedAt: string;
     committedTs: number;

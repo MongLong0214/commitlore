@@ -9,6 +9,7 @@
  */
 import { execGitOrThrow } from './git.js';
 import { KNOWN_KEYS } from './types.js';
+const RECORD_ID_KEY = 'Record-Id';
 /**
  * `--parse` is `--only-trailers --only-input --unfold`: emit only the trailer
  * block, apply no configured trailer rules, and fold continuations (B4).
@@ -91,5 +92,77 @@ export const serializeTrailers = (trailers) => {
             ordered.push(trailer);
     }
     return ordered.map(serializeOne).join('');
+};
+// ---------------------------------------------------------------------------
+// Multi-record grammar (SPEC §2.4, bug-issue-60)
+// ---------------------------------------------------------------------------
+/**
+ * A message's paragraphs, in order: maximal runs of non-blank lines,
+ * separated by one or more fully blank lines (SPEC §2.2's `blank = LF, LF`).
+ * This decides nothing about trailers — it is the same paragraph boundary
+ * B1/B2 already rely on, made explicit so it can be walked.
+ */
+const splitParagraphs = (message) => message
+    .replace(/\r\n/g, '\n')
+    .split(/\n\n+/)
+    .filter((paragraph) => paragraph.trim() !== '');
+/**
+ * Whether `paragraph`, taken on its own, is entirely a trailer block.
+ *
+ * Delegates to `parseCommitMessage` under a synthetic one-line subject, which
+ * makes `paragraph` the last (and only) paragraph of a two-paragraph message —
+ * exactly the shape B1 already judges. No line is ever classified by matching
+ * a regex against it; git decides, the same as everywhere else in this module
+ * (SPEC §2.1 B3).
+ */
+const asIsolatedBlock = (paragraph) => parseCommitMessage(`x\n\n${paragraph}`);
+/**
+ * Parses a message into its record blocks (SPEC §2.4).
+ *
+ * A record block is a contiguous run of trailer lines terminated by
+ * `Record-Id:`. A message MAY carry several — squash-preserve emits one per
+ * inherited record (`core/squash.ts`), and GitHub's squash button produces
+ * one per original commit whenever it pastes full commit messages into the
+ * merge body (the trailer text survives; only recognizing it does not,
+ * bug-issue-60).
+ *
+ * The message's own trailer block — the last paragraph, exactly as B1 defines
+ * it — is always one block, with or without a `Record-Id` (SPEC §4 allows
+ * omitting it). That is `parseCommitMessage`'s existing, unchanged behavior:
+ * this function never overrides what the last paragraph means, which is why a
+ * single-record message parses identically to before this function existed —
+ * backward compatibility is a property of the grammar, not a special case
+ * bolted on top of it. A message with at most one `Record-Id` anywhere always
+ * has exactly one block, for the same reason: there is nothing to draw a
+ * boundary between.
+ *
+ * Every OTHER paragraph is a candidate *earlier* block. It is accepted only
+ * when, tested on its own (`asIsolatedBlock`), it is entirely trailer-shaped
+ * AND it declares a `Record-Id`. The `Record-Id` gate is what keeps an
+ * incidental `Key: value`-shaped body paragraph from being promoted into a
+ * record it never claimed to be — SPEC §2.1 B2's own worked example
+ * (`Context:` / `Source:`, neither in the vocabulary, neither carrying an
+ * identity) stays body prose under this function exactly as it does under
+ * `parseCommitMessage` alone. Every paragraph is tested, not just the ones
+ * contiguous with the tail: GitHub interleaves each squashed commit's own
+ * subject line between trailer blocks, and a contiguous walk from the end
+ * would stop at the first one and miss everything earlier.
+ *
+ * Returned in the order the blocks appear in the message.
+ */
+export const parseRecordBlocks = (message) => {
+    const last = parseCommitMessage(message);
+    const paragraphs = splitParagraphs(message);
+    const earlier = paragraphs.slice(0, -1);
+    const extra = [];
+    for (const paragraph of earlier) {
+        const candidate = asIsolatedBlock(paragraph);
+        if (candidate.length === 0)
+            continue;
+        if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY))
+            continue;
+        extra.push(candidate);
+    }
+    return last.length === 0 ? extra : [...extra, last];
 };
 //# sourceMappingURL=trailers.js.map

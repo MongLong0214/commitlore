@@ -57,7 +57,7 @@ import { dirname, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
-import { parseCommitMessage } from './trailers.js';
+import { parseRecordBlocks } from './trailers.js';
 import type { Trailer } from './types.js';
 
 /**
@@ -115,8 +115,13 @@ export type IndexDatabase = DatabaseSync;
  * index is derived, so the old file is deleted and rebuilt (ADR-0003). Without
  * this, a user upgrading the CLI would silently read a table that no longer
  * means what the code thinks it means.
+ *
+ * v2 adds `trailers.block`: a message MAY now carry several record blocks
+ * (SPEC §2.4, bug-issue-60), and rows from different blocks on the same
+ * commit need a column of their own to stay apart — `seq` alone repeats
+ * across blocks.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const NOTES_REF = 'refs/notes/commitlore';
 
@@ -166,6 +171,7 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS trailers (
   id           INTEGER PRIMARY KEY,
   commit_sha   TEXT    NOT NULL,
+  block        INTEGER NOT NULL DEFAULT 0,
   seq          INTEGER NOT NULL,
   key          TEXT    NOT NULL,
   value        TEXT    NOT NULL,
@@ -175,9 +181,9 @@ CREATE TABLE IF NOT EXISTS trailers (
   provenance   TEXT,
   source       TEXT    NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, seq);
+CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, block, seq);
 CREATE INDEX IF NOT EXISTS trailers_key ON trailers (key);
-CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, seq);
+CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, block, seq);
 
 CREATE TABLE IF NOT EXISTS commit_paths (
   commit_sha TEXT NOT NULL,
@@ -199,7 +205,15 @@ export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */
 export interface IndexedTrailer extends Trailer {
   sha: string;
-  /** Position within its record, preserving repeated-key order (SPEC §2.1 B5). */
+  /**
+   * Which record block within `(sha, source)` this trailer belongs to
+   * (SPEC §2.4), 0-indexed in the order the blocks appear. Almost always `0`
+   * — a message carries more than one block only when it inherited several
+   * records across a squash (`core/squash.ts`) or was pasted together from
+   * several commits' messages (bug-issue-60).
+   */
+  block: number;
+  /** Position within its block, preserving repeated-key order (SPEC §2.1 B5). */
   seq: number;
   committedAt: string;
   committedTs: number;
@@ -269,9 +283,11 @@ export interface OpenIndexOptions {
   fts?: boolean;
 }
 
-/** One record as git reports it, before it reaches SQLite. */
+/** One record block as git reports it, before it reaches SQLite. */
 interface RawRecord {
   sha: string;
+  /** Which block within `(sha, source)` this is (SPEC §2.4). 0-indexed. */
+  block: number;
   committedAt: string;
   committedTs: number;
   source: RecordSource;
@@ -388,10 +404,74 @@ const readPaths = (cwd: string, shas: readonly string[]): Map<string, string[]> 
 };
 
 /**
+ * Full messages for exactly the commits named, batched the same way
+ * `readPaths` batches its own second pass.
+ */
+const readFullMessages = (cwd: string, shas: readonly string[]): Map<string, string> => {
+  const byCommit = new Map<string, string>();
+  if (shas.length === 0) return byCommit;
+
+  for (const batch of chunked(shas, LOG_BATCH)) {
+    const result = gitLogByShas(cwd, batch, `%x01%H%x00%B%x00`, []);
+    if (result.code !== 0) {
+      throw Object.assign(new Error(`git log --format=%B failed: ${result.stderr.trim()}`), {
+        code: result.code,
+        stderr: result.stderr,
+      });
+    }
+    for (const record of splitRecords(result.stdout)) {
+      const fields = record.split(FIELD_SEP);
+      const [sha, message] = fields;
+      if (sha === undefined || message === undefined) continue;
+      byCommit.set(sha, message);
+    }
+  }
+
+  return byCommit;
+};
+
+/**
+ * Splits every already-detected record-bearing commit into its record blocks
+ * (SPEC §2.4). The bulk atom pass above answers "does this commit carry a
+ * trailer at all" from `%(trailers:...)`, which — like `git interpret-trailers`
+ * itself — only ever sees the message's last paragraph (B1). Recovering the
+ * earlier blocks needs the full message text, so this is a second, narrower
+ * pass restricted to the commits the first pass already flagged as carrying
+ * something: the same shape as `readPaths`, for the same reason — the pass
+ * that would dominate output size on a large repository is the one kept to
+ * the sliver of commits that recorded anything.
+ *
+ * A commit whose atom-based trailers and full-message trailers disagree in
+ * count never happens: both are `git`'s own `trailer_info` over the same
+ * bytes. When `parseRecordBlocks` finds only the one block the atom pass
+ * already had, the original record is kept untouched rather than rebuilt, so
+ * this pass changes nothing for the overwhelming majority of commits that
+ * never carry more than one block.
+ */
+const explodeRecordBlocks = (cwd: string, records: readonly RawRecord[]): RawRecord[] => {
+  const messages = readFullMessages(
+    cwd,
+    records.map((record) => record.sha),
+  );
+
+  return records.flatMap((record) => {
+    const message = messages.get(record.sha);
+    if (message === undefined) return [record];
+
+    const blocks = parseRecordBlocks(message);
+    if (blocks.length <= 1) return [record];
+
+    return blocks.map((trailers, block) => ({ ...record, block, trailers }));
+  });
+};
+
+/**
  * Reads the given commits, in one `git log` per batch, keeping only those that
  * carry at least one trailer. A second pass resolves paths for exactly those
  * commits — the pass that would dominate output size on a large repository is
- * the one restricted to the ~1% of commits that recorded anything.
+ * the one restricted to the ~1% of commits that recorded anything. A third
+ * pass (`explodeRecordBlocks`) recovers additional record blocks for that same
+ * sliver of commits (SPEC §2.4).
  */
 const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] => {
   const records: RawRecord[] = [];
@@ -416,6 +496,7 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
 
       batchRecords.push({
         sha,
+        block: 0,
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: 'commit',
@@ -424,12 +505,13 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
       });
     }
 
+    const exploded = explodeRecordBlocks(cwd, batchRecords);
     const paths = readPaths(
       cwd,
       batchRecords.map((record) => record.sha),
     );
-    for (const record of batchRecords) record.paths = paths.get(record.sha) ?? [];
-    records.push(...batchRecords);
+    for (const record of exploded) record.paths = paths.get(record.sha) ?? [];
+    records.push(...exploded);
   }
 
   return records;
@@ -446,8 +528,9 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
  * T-301 lands a reader, the body of this function is the only thing that
  * changes — `indexNotes` and the `source = 'notes'` rows it produces stay.
  *
- * Note text goes through `parseCommitMessage` (T-201) under the synthetic
- * subject of `NOTE_SUBJECT`, which costs one process per note. Notes are
+ * Note text goes through `parseRecordBlocks` (T-201, SPEC §2.4) under the
+ * synthetic subject of `NOTE_SUBJECT`, which costs one process per note (or a
+ * handful more, for each earlier block a note happens to carry). Notes are
  * sparse by construction, and correctness here is worth more than the
  * batching: a note is a message, and only git decides where its trailer block
  * starts.
@@ -494,16 +577,20 @@ const readNoteRecords = (cwd: string): RawRecord[] => {
       if (sha === undefined || rawTs === undefined || committedAt === undefined) continue;
       if (noteText === undefined || noteText.trim() === '') continue;
 
-      const trailers = parseCommitMessage(`${NOTE_SUBJECT}\n\n${noteText}`);
-      if (trailers.length === 0) continue;
-
-      batchRecords.push({
-        sha,
-        committedAt,
-        committedTs: Number.parseInt(rawTs, 10),
-        source: 'notes',
-        trailers,
-        paths: [],
+      // A note may itself carry several record blocks (SPEC §2.4): squash
+      // inheritance writes one per source record (`core/squash.ts`).
+      const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`);
+      blocks.forEach((trailers, block) => {
+        if (trailers.length === 0) return;
+        batchRecords.push({
+          sha,
+          block,
+          committedAt,
+          committedTs: Number.parseInt(rawTs, 10),
+          source: 'notes',
+          trailers,
+          paths: [],
+        });
       });
     }
 
@@ -804,8 +891,8 @@ interface InsertCounts {
 const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): InsertCounts => {
   const insertTrailer = handle.db.prepare(
     `INSERT INTO trailers
-       (commit_sha, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertFts = handle.fts
     ? handle.db.prepare('INSERT INTO trailers_fts (rowid, value_lc) VALUES (?, ?)')
@@ -825,6 +912,7 @@ const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): Inse
         const valueLc = trailer.value.toLowerCase();
         const inserted = insertTrailer.run(
           record.sha,
+          record.block,
           seq,
           trailer.key,
           trailer.value,
@@ -1044,6 +1132,7 @@ const compareTrailers = (a: IndexedTrailer, b: IndexedTrailer): number => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  if (a.block !== b.block) return a.block - b.block;
   return a.seq - b.seq;
 };
 
@@ -1059,6 +1148,7 @@ const ftsEligible = (term: string): boolean =>
 interface TrailerRow {
   id: number;
   commit_sha: string;
+  block: number;
   seq: number;
   key: string;
   value: string;
@@ -1140,11 +1230,11 @@ export const queryTrailers = (handle: IndexHandle, query: TrailerQuery = {}): In
 
   const rows = handle.db
     .prepare(
-      `SELECT t.id, t.commit_sha, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
+      `SELECT t.id, t.commit_sha, t.block, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
               t.provenance, t.source
          FROM trailers t
          ${where}
-        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.seq ASC
+        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.block ASC, t.seq ASC
         ${limit}`,
     )
     .all(...(params as (string | number)[])) as unknown as TrailerRow[];
@@ -1152,6 +1242,7 @@ export const queryTrailers = (handle: IndexHandle, query: TrailerQuery = {}): In
   const paths = attachPaths(handle, rows);
   return rows.map((row) => ({
     sha: row.commit_sha,
+    block: row.block,
     seq: row.seq,
     key: row.key,
     value: row.value,
@@ -1189,6 +1280,7 @@ const toIndexedTrailers = (records: readonly RawRecord[]): IndexedTrailer[] =>
     const provenance = record.trailers.find((t) => t.key === 'Provenance')?.value ?? null;
     return record.trailers.map((trailer, seq) => ({
       sha: record.sha,
+      block: record.block,
       seq,
       key: trailer.key,
       value: trailer.value,
