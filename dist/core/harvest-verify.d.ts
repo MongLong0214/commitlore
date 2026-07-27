@@ -36,7 +36,9 @@ export type RejectionReason =
 /** A key SPEC §3 does not define. */
  | 'unknown-key'
 /** `Ruled-out:` with nothing in the source showing the alternative turned down. */
- | 'ruled-out-no-rejection';
+ | 'ruled-out-no-rejection'
+/** `Verified:` cannot be established by harvesting prose. */
+ | 'verified-unsupported';
 export interface VerifiedRecord {
     record: DraftRecord;
 }

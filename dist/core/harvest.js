@@ -200,6 +200,8 @@ const RULES = [
     '   record — noise costs more than it returns.',
     '6. When unsure, emit less. Everything you emit will be read by an agent that',
     '   cannot check it.',
+    '7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.',
+    '   Record Verified only from the command or test run that performed the check.',
 ];
 /**
  * A list, not a markdown table. Two value grammars in SPEC §3 contain a literal
@@ -266,7 +268,7 @@ const outputBlock = (entries) => {
  * and diff always produce the same bytes.
  */
 export const buildHarvestPrompt = (input) => {
-    const entries = loadVocabulary();
+    const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
     const diff = input.diff.trim() === '' ? '(no diff)' : input.diff.replace(/\n+$/, '');
     return [
         '# CommitLore harvest',

@@ -105,6 +105,19 @@ describe('verifyDraft — citation existence', () => {
     expect(result.accepted).toHaveLength(1);
   });
 
+  it('refuses Verified even when its quote exists in the diff', () => {
+    const quote = 'export const exportNightly = async (): Promise<Buffer> => {';
+    const record = recordOf(
+      [{ key: 'Verified', value: 'the export has unit tests' }],
+      [cite('Verified', quote, 'diff')],
+    );
+
+    const result = verifyDraft([record], sources);
+
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected[0]?.reason).toBe('verified-unsupported');
+  });
+
   it('accepts every claim of a wholly truthful draft', () => {
     const result = verifyDraft(draftOf('draft-truthful.json'), sources);
 

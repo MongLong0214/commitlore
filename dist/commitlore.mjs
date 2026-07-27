@@ -11199,7 +11199,17 @@ var SINGLE_VALUED = /* @__PURE__ */ new Set([
   "Provenance",
   "CommitLore-Version"
 ]);
-var BOOKKEEPING_KEYS = /* @__PURE__ */ new Set([
+var STRUCTURAL_TRAILER_KEYS = /* @__PURE__ */ new Set([
+  "Blast",
+  "Undo",
+  "Certainty",
+  "Record-Id",
+  "Supersedes",
+  "Follows",
+  "Provenance",
+  "CommitLore-Version"
+]);
+var INJECT_OMITTED_KEYS = /* @__PURE__ */ new Set([
   "Record-Id",
   "Supersedes",
   "Follows",
@@ -11456,7 +11466,9 @@ var RULES = [
   "5. Record nothing for a trivial change. Typo fixes and formatting carry no",
   "   record \u2014 noise costs more than it returns.",
   "6. When unsure, emit less. Everything you emit will be read by an agent that",
-  "   cannot check it."
+  "   cannot check it.",
+  "7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.",
+  "   Record Verified only from the command or test run that performed the check."
 ];
 var vocabularyList = (entries) => entries.flatMap((entry) => [
   `- \`${entry.key}:\` = ${entry.grammar} (${entry.repeatable ? "repeatable" : "single-valued"})`,
@@ -11510,7 +11522,7 @@ var outputBlock = (entries) => {
   ];
 };
 var buildHarvestPrompt = (input) => {
-  const entries = loadVocabulary();
+  const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
   const diff = input.diff.trim() === "" ? "(no diff)" : input.diff.replace(/\n+$/, "");
   return [
     "# CommitLore harvest",
@@ -11813,6 +11825,11 @@ var reasonFor = (violation) => {
 };
 var describeViolation2 = (violation) => violation.got === violation.key ? `${violation.key} (${violation.rule}, want ${violation.want})` : `${violation.key}: ${JSON.stringify(brief(violation.got))} (${violation.rule}, want ${violation.want})`;
 var discard = (record2, reason, detail) => ({ record: record2, reason, detail });
+var unsupportedVerified = (record2) => record2.trailers.some((trailer) => trailer.key === "Verified") ? discard(
+  record2,
+  "verified-unsupported",
+  "Verified cannot be harvested from quoted prose; record it from the command or test run that performed the check"
+) : null;
 var uncitedClaims = (record2) => {
   const cited = new Set(record2.evidence.map((cite) => cite.key));
   const claims = claimKeySet();
@@ -11869,7 +11886,7 @@ var verifyDraft = (draft, sources) => {
   const accepted = [];
   const rejected = [];
   for (const record2 of draft) {
-    const failure3 = missingEvidence(record2) ?? unfoundEvidence(record2, scanned) ?? ungroundedRuledOut(record2, scanned) ?? invalid(record2);
+    const failure3 = unsupportedVerified(record2) ?? missingEvidence(record2) ?? unfoundEvidence(record2, scanned) ?? ungroundedRuledOut(record2, scanned) ?? invalid(record2);
     if (failure3 === null) accepted.push({ record: record2 });
     else rejected.push(failure3);
   }
@@ -11879,6 +11896,7 @@ var REPAIR_GUIDANCE = {
   "evidence-not-found": "Copy the quote out of the transcript or the diff character for character. Only whitespace may differ. If you cannot find the sentence, drop the record.",
   "evidence-missing": "Add a citation for every decision-context key the record carries, or drop the record.",
   "ruled-out-no-rejection": "Quote the place where the alternative was actually turned down, not where it was first suggested. If the source only mentions the alternative, drop the Ruled-out trailer.",
+  "verified-unsupported": "Remove Verified from the draft. Record it only from the command or test run that performed the check.",
   enum: "Use one of the values listed for that key, exactly. A synonym is a violation, not a shortcut.",
   format: "Match the value grammar the vocabulary states for that key.",
   "unknown-key": "Use a key from the vocabulary, or an X-<Name> extension key."
@@ -14215,16 +14233,6 @@ var scanInjection = (text) => {
   return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-var STRUCTURAL_TRAILER_KEYS = /* @__PURE__ */ new Set([
-  "Blast",
-  "Undo",
-  "Certainty",
-  "Record-Id",
-  "Follows",
-  "Supersedes",
-  PROVENANCE_KEY,
-  "CommitLore-Version"
-]);
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
@@ -14468,6 +14476,7 @@ var groupByCommit = (rows) => {
       found.set(key, {
         sha: row.sha,
         source: row.source,
+        mirrored: false,
         committedAt: row.committedAt,
         committedTs: row.committedTs,
         trailers: [{ key: row.key, value: row.value }],
@@ -14488,21 +14497,26 @@ var instantOf2 = (record2) => {
   const parsed = Date.parse(record2.committedAt);
   return Number.isNaN(parsed) ? void 0 : parsed;
 };
-var dropMirroredNotes = (records) => {
-  const commitTrailers = /* @__PURE__ */ new Map();
+var foldMirroredNotes = (records) => {
+  const commits = /* @__PURE__ */ new Map();
   for (const record2 of records) {
     if (record2.source !== "commit") continue;
-    const contents = commitTrailers.get(record2.sha) ?? /* @__PURE__ */ new Set();
-    for (const trailer of record2.trailers) contents.add(`${trailer.key}\0${trailer.value}`);
-    commitTrailers.set(record2.sha, contents);
+    commits.set(record2.sha, record2);
   }
   return records.filter((record2) => {
     if (record2.source !== "notes") return true;
-    const contents = commitTrailers.get(record2.sha);
-    if (contents === void 0) return true;
-    return !record2.trailers.every(
-      (trailer) => contents.has(`${trailer.key}\0${trailer.value}`)
+    if (trailerValue2(record2.trailers, RECORD_ID_KEY2) !== void 0) return true;
+    const commit = commits.get(record2.sha);
+    if (commit === void 0) return true;
+    const contents = new Set(
+      record2.trailers.map((trailer) => `${trailer.key}\0${trailer.value}`)
     );
+    if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\0${trailer.value}`))) {
+      return true;
+    }
+    mergeTrailers2(commit.trailers, record2.trailers);
+    commit.mirrored = true;
+    return false;
   });
 };
 var withIdentity = (record2) => {
@@ -14602,6 +14616,7 @@ var mergeByIdentity = (records, states) => {
       mergeTrailers2(trailers, record2.trailers);
       for (const path2 of record2.paths) paths.add(path2);
       if (!sources.includes(record2.source)) sources.push(record2.source);
+      if (record2.mirrored && !sources.includes("notes")) sources.push("notes");
       if (!shas.includes(record2.sha)) shas.push(record2.sha);
     }
     const state = states.get(identity);
@@ -14655,7 +14670,7 @@ var runQuery = (opts = {}) => {
     diagnostics.push(...scope.diagnostics);
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));
-    const visible = dropMirroredNotes(
+    const visible = foldMirroredNotes(
       commitRecords.filter((record2) => {
         const instant = instantOf2(record2);
         return instant === void 0 || instant <= cutoff;
@@ -15782,7 +15797,7 @@ var project = (records, grades) => {
     const identity = record2.recordId ?? `${record2.sha}:${record2.source}`;
     const grade2 = grades.get(identity);
     if (grade2 === void 0) continue;
-    const payload = record2.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key));
+    const payload = record2.trailers.filter((trailer) => !INJECT_OMITTED_KEYS.has(trailer.key));
     if (payload.length === 0) continue;
     if (grade2.trust === "blocked") {
       withheldValues += payload.length;
@@ -24980,10 +24995,12 @@ var withholdBlocked = (result) => {
       ...record2,
       withheldTrailerKeys: [
         ...new Set(
-          record2.trailers.filter((trailer) => !BOOKKEEPING_KEYS.has(trailer.key)).map((trailer) => trailer.key)
+          record2.trailers.filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key)).map((trailer) => trailer.key)
         )
       ],
-      trailers: record2.trailers.filter((trailer) => BOOKKEEPING_KEYS.has(trailer.key))
+      trailers: record2.trailers.filter(
+        (trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key)
+      )
     }
   );
   return {

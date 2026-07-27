@@ -146,7 +146,7 @@ export interface Injection {
      * Trailer values that did not reach the payload, in the same unit as
      * `included`: every value of a `blocked` record, plus every value the budget
      * cut. `included + omitted` is every *injectable* value the path's active
-     * records carry — the bookkeeping keys of `BOOKKEEPING_KEYS` are never
+     * records carry — the keys in `INJECT_OMITTED_KEYS` are never
      * candidates and are counted in neither.
      */
     omitted: number;

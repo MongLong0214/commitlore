@@ -27,18 +27,19 @@ export const SINGLE_VALUED = new Set([
     'Provenance',
     'CommitLore-Version',
 ]);
-/**
- * Keys carried for the machinery, not for the reader — identity, supersession
- * and provenance have done their work before a record reaches a consumer route.
- *
- * Shared rather than private to `inject.ts`, where it was written, because
- * "what is payload" has to mean the same thing in every route that withholds a
- * payload. `inject` strips these to save budget; the MCP server strips
- * everything *but* these when a record grades `blocked`, so that the fact of the
- * record survives and its content does not. Two definitions would let a key be
- * bookkeeping on one route and quotable attack text on the other.
- */
-export const BOOKKEEPING_KEYS = new Set([
+/** Keys whose validated values cannot carry prose. */
+export const STRUCTURAL_TRAILER_KEYS = new Set([
+    'Blast',
+    'Undo',
+    'Certainty',
+    'Record-Id',
+    'Supersedes',
+    'Follows',
+    'Provenance',
+    'CommitLore-Version',
+]);
+/** Keys omitted from the injection projection because they do not repay their token cost. */
+export const INJECT_OMITTED_KEYS = new Set([
     'Record-Id',
     'Supersedes',
     'Follows',

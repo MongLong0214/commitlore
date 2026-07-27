@@ -61,15 +61,16 @@ afterAll(() => {
 });
 
 describe('harvest prompt contract', () => {
-  it('states all sixteen keys of SPEC §3', () => {
+  it('states every harvestable key while excluding Verified', () => {
     const vocabulary = loadVocabulary();
     expect(vocabulary).toHaveLength(16);
-    for (const entry of vocabulary) {
+    for (const entry of vocabulary.filter((entry) => entry.key !== 'Verified')) {
       expect(vocabularyBlock).toContain(`- \`${entry.key}:\` = `);
     }
-    for (const key of KNOWN_KEYS) {
+    for (const key of KNOWN_KEYS.filter((entry) => entry !== 'Verified')) {
       expect(vocabularyBlock).toContain(`- \`${key}:\` = `);
     }
+    expect(vocabularyBlock).not.toContain('- `Verified:` = ');
     expect(vocabularyBlock).toContain('- `X-<Name>:` = ');
   });
 
@@ -121,7 +122,7 @@ describe('harvest prompt contract', () => {
 
   it('names the keys a citation must cover', () => {
     const claims = loadVocabulary()
-      .filter((entry) => entry.claim)
+      .filter((entry) => entry.claim && entry.key !== 'Verified')
       .map((entry) => entry.key);
     expect(claims).toEqual([
       'Limit',
@@ -130,7 +131,6 @@ describe('harvest prompt contract', () => {
       'Blast',
       'Undo',
       'Certainty',
-      'Verified',
       'Unverified',
     ]);
     expect(prompt).toContain(`  ${claims.join(', ')}.`);

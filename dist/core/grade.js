@@ -23,6 +23,7 @@
  */
 import { execGit } from './git.js';
 import { foldLifecycle } from './stale.js';
+import { STRUCTURAL_TRAILER_KEYS, } from './types.js';
 const PROVENANCE_KEY = 'Provenance';
 /** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
 const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
@@ -299,17 +300,6 @@ export const scanInjection = (text) => {
     return INJECTION_PATTERNS.filter((entry) => fires(haystack, entry)).map((entry) => entry.id);
 };
 const trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-// An allow-list would reopen the bug as the vocabulary grows; exclusion scans new prose by default.
-const STRUCTURAL_TRAILER_KEYS = new Set([
-    'Blast',
-    'Undo',
-    'Certainty',
-    'Record-Id',
-    'Follows',
-    'Supersedes',
-    PROVENANCE_KEY,
-    'CommitLore-Version',
-]);
 const scanRecord = (record) => {
     const matchedPatterns = new Set();
     const matchedKeys = new Set();
