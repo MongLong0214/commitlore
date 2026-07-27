@@ -34,6 +34,7 @@ const git = (args: string[]): string =>
 
 interface HistoryEntry {
   sha: string;
+  parents: string[];
   subject: string;
   trailers: Trailer[];
 }
@@ -43,14 +44,19 @@ interface HistoryEntry {
  * commit message can legally contain, which `\n` does not.
  */
 const readHistory = (): HistoryEntry[] => {
-  const raw = git(['log', '--reverse', '--format=%H%x00%s%x00%B%x1e']);
+  const raw = git(['log', '--reverse', '--format=%H%x00%P%x00%s%x00%B%x1e']);
   return raw
     .split('\x1e')
     .map((chunk) => chunk.replace(/^\n/, ''))
     .filter((chunk) => chunk.trim().length > 0)
     .map((chunk) => {
-      const [sha = '', subject = '', body = ''] = chunk.split('\x00');
-      return { sha, subject, trailers: parseCommitMessage(body) };
+      const [sha = '', parents = '', subject = '', body = ''] = chunk.split('\x00');
+      return {
+        sha,
+        parents: parents.split(' ').filter(Boolean),
+        subject,
+        trailers: parseCommitMessage(body),
+      };
     });
 };
 
@@ -72,7 +78,13 @@ const adoptionIndex = history.findIndex((entry) =>
   entry.trailers.some((t) => t.key === 'CommitLore-Version'),
 );
 
-const inScope = adoptionIndex === -1 ? [] : history.slice(adoptionIndex);
+// Commits with more than one parent are excluded: their platform-generated
+// merge messages carry no authored decision, so requiring a record would
+// require one nobody wrote.
+const inScope =
+  adoptionIndex === -1
+    ? []
+    : history.slice(adoptionIndex).filter((entry) => entry.parents.length <= 1);
 const withRecords = inScope.filter((entry) => entry.trailers.length > 0);
 
 describe('dogfooding: this repository obeys its own protocol', () => {

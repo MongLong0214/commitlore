@@ -34,7 +34,7 @@ import {
   type StaleRecord,
 } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
+import { KNOWN_KEYS, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
 import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
 
 /**
@@ -92,6 +92,7 @@ export interface ValidationCheck {
 interface MessageSource {
   sha?: string;
   message: string;
+  merge?: boolean;
 }
 
 const USAGE =
@@ -193,6 +194,42 @@ const locateTrailerLines = (message: string, trailers: Trailer[]): (number | und
   return trailers.map(() => undefined);
 };
 
+interface UnparsedTrailerWarning {
+  line: number;
+  key: string;
+  tabIndented: boolean;
+}
+
+const knownTrailerCandidate = (
+  line: string,
+): Pick<UnparsedTrailerWarning, 'key' | 'tabIndented'> | undefined => {
+  const tabIndented = line.startsWith('\t');
+  const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
+  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+  return key === undefined ? undefined : { key, tabIndented };
+};
+
+const locateUnparsedTrailerWarnings = (
+  message: string,
+  trailers: Trailer[],
+): UnparsedTrailerWarning[] => {
+  const lines = message.split('\n').map(stripCr);
+  const contentLines = lines.filter((line) => line !== '' && !isComment(line));
+  if (
+    contentLines.length > 0 &&
+    contentLines.every((line) => knownTrailerCandidate(line) !== undefined)
+  ) {
+    return [];
+  }
+
+  const parsedLines = new Set(locateTrailerLines(message, trailers));
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === undefined || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
+
 /**
  * Finds which trailer a violation came from, so it can carry that trailer's
  * line. `validateRecord` reports the rule, not the position, and the mapping
@@ -227,11 +264,28 @@ const lineForViolation = (
   return only === undefined ? undefined : lines[only];
 };
 
-const locateViolations = (source: MessageSource): LocatedViolation[] => {
+const inspectSource = (
+  source: MessageSource,
+): { violations: LocatedViolation[]; warnings: string[] } => {
   const trailers = parseCommitMessage(source.message);
   const lines = locateTrailerLines(source.message, trailers);
+  const rawViolations = validateRecord(trailers);
+  const firstTrailerLine = lines[0];
+  const nonTrailerParagraph =
+    source.merge === true &&
+    firstTrailerLine !== undefined &&
+    rawViolations.length > 0 &&
+    rawViolations.length === trailers.length &&
+    rawViolations.every((violation) => violation.rule === 'unknown-key')
+      ? source.message
+          .split('\n')
+          .map(stripCr)
+          .slice(firstTrailerLine - 1)
+          .filter((line) => line !== '')
+          .join('\n')
+      : undefined;
 
-  return validateRecord(trailers).map((violation) => {
+  const violations = (nonTrailerParagraph === undefined ? rawViolations : []).map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
     return {
       ...(source.sha === undefined ? {} : { sha: source.sha }),
@@ -239,6 +293,19 @@ const locateViolations = (source: MessageSource): LocatedViolation[] => {
       ...violation,
     };
   });
+
+  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map((warning) =>
+    warning.tabIndented
+      ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
+      : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`,
+  );
+  if (nonTrailerParagraph !== undefined) {
+    warnings.push(
+      `commitlore: ${source.sha?.slice(0, 10) ?? 'commit'}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`,
+    );
+  }
+
+  return { violations, warnings };
 };
 
 const locateReferenceViolations = (
@@ -266,12 +333,17 @@ const resolveCommit = (ref: string, cwd: string): string => {
   return result.stdout.trim();
 };
 
-const readCommitMessage = (sha: string, cwd: string): string => {
-  const result = execGit(['log', '-1', '--format=%B', sha, '--'], { cwd });
+const readCommitSource = (sha: string, cwd: string): MessageSource => {
+  const result = execGit(['log', '-1', '--format=%P%x00%B', sha, '--'], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine(result.stderr)}`);
   }
-  return result.stdout;
+  const [parents = '', message = ''] = result.stdout.split('\0');
+  return {
+    sha,
+    message,
+    merge: parents.split(' ').filter(Boolean).length > 1,
+  };
 };
 
 const readRange = (range: string, cwd: string): MessageSource[] => {
@@ -282,7 +354,7 @@ const readRange = (range: string, cwd: string): MessageSource[] => {
   return result.stdout
     .split('\n')
     .filter((sha) => sha.length > 0)
-    .map((sha) => ({ sha, message: readCommitMessage(sha, cwd) }));
+    .map((sha) => readCommitSource(sha, cwd));
 };
 
 const readMessageFile = (path: string): string => {
@@ -305,7 +377,7 @@ const collectSources = (input: ValidateInput, cwd: string): MessageSource[] => {
   if (input.messageFile !== undefined) return [{ message: readMessageFile(input.messageFile) }];
   if (input.commit !== undefined) {
     const sha = resolveCommit(input.commit, cwd);
-    return [{ sha, message: readCommitMessage(sha, cwd) }];
+    return [readCommitSource(sha, cwd)];
   }
   if (input.range !== undefined) return readRange(input.range, cwd);
   return [{ message: (input.readStdin ?? readStdinSync)() }];
@@ -476,11 +548,14 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   const cwd = input.cwd ?? process.cwd();
 
   let shapeViolations: LocatedViolation[];
+  let warnings: string[];
   let secrets: SecretFinding[];
   let sources: MessageSource[];
   try {
     sources = collectSources(input, cwd);
-    shapeViolations = sources.flatMap(locateViolations);
+    const inspections = sources.map(inspectSource);
+    shapeViolations = inspections.flatMap((inspection) => inspection.violations);
+    warnings = inspections.flatMap((inspection) => inspection.warnings);
     // A credential in a commit message is inscribed permanently -- rewriting
     // history does not reach the clones and forks that already have it. So the
     // scan runs on the same path as validation, which is what the commit-msg
@@ -501,19 +576,22 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   ];
   const status = `${checks.map(formatCheck).join(' · ')}\n`;
   const failed = violations.length > 0 || secrets.length > 0;
+  const warningText = warnings.length === 0 ? '' : `${warnings.join('\n')}\n`;
 
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
       stdout: `${JSON.stringify({ checks, violations, secrets })}\n`,
-      stderr: '',
+      stderr: warningText,
       violations,
       secrets,
       checks,
     };
   }
 
-  if (!failed) return { code: 0, stdout: status, stderr: '', violations, secrets, checks };
+  if (!failed) {
+    return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
+  }
 
   const parts: string[] = [status.trimEnd()];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join('\n'));
@@ -532,7 +610,7 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   return {
     code: 1,
     stdout: `${parts.join('\n')}\n`,
-    stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
+    stderr: `${warningText}commitlore: ${notes.join(', ')} — the message was not modified\n`,
     violations,
     secrets,
     checks,

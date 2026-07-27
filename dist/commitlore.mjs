@@ -26383,6 +26383,25 @@ var locateTrailerLines = (message, trailers) => {
   }
   return trailers.map(() => void 0);
 };
+var knownTrailerCandidate = (line) => {
+  const tabIndented = line.startsWith("	");
+  const candidate = tabIndented ? line.replace(/^\t+/, "") : line;
+  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+  return key === void 0 ? void 0 : { key, tabIndented };
+};
+var locateUnparsedTrailerWarnings = (message, trailers) => {
+  const lines = message.split("\n").map(stripCr);
+  const contentLines = lines.filter((line) => line !== "" && !isComment(line));
+  if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== void 0)) {
+    return [];
+  }
+  const parsedLines = new Set(locateTrailerLines(message, trailers));
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === void 0 || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
 var lineForViolation = (violation, trailers, lines) => {
   const indexesWithKey = trailers.flatMap(
     (trailer, index) => trailer.key === violation.key ? [index] : []
@@ -26398,10 +26417,13 @@ var lineForViolation = (violation, trailers, lines) => {
   const only = matches.length === 1 ? matches[0] : void 0;
   return only === void 0 ? void 0 : lines[only];
 };
-var locateViolations = (source) => {
+var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
   const lines = locateTrailerLines(source.message, trailers);
-  return validateRecord(trailers).map((violation) => {
+  const rawViolations = validateRecord(trailers);
+  const firstTrailerLine = lines[0];
+  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
+  const violations = (nonTrailerParagraph === void 0 ? rawViolations : []).map((violation) => {
     const line = lineForViolation(violation, trailers, lines);
     return {
       ...source.sha === void 0 ? {} : { sha: source.sha },
@@ -26409,6 +26431,15 @@ var locateViolations = (source) => {
       ...violation
     };
   });
+  const warnings = locateUnparsedTrailerWarnings(source.message, trailers).map(
+    (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
+  );
+  if (nonTrailerParagraph !== void 0) {
+    warnings.push(
+      `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
+    );
+  }
+  return { violations, warnings };
 };
 var locateReferenceViolations = (source, violations) => {
   const trailers = parseCommitMessage(source.message);
@@ -26429,19 +26460,24 @@ var resolveCommit2 = (ref, cwd) => {
   }
   return result.stdout.trim();
 };
-var readCommitMessage = (sha, cwd) => {
-  const result = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
+var readCommitSource = (sha, cwd) => {
+  const result = execGit(["log", "-1", "--format=%P%x00%B", sha, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine4(result.stderr)}`);
   }
-  return result.stdout;
+  const [parents = "", message = ""] = result.stdout.split("\0");
+  return {
+    sha,
+    message,
+    merge: parents.split(" ").filter(Boolean).length > 1
+  };
 };
 var readRange = (range, cwd) => {
   const result = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine4(result.stderr)}`);
   }
-  return result.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => ({ sha, message: readCommitMessage(sha, cwd) }));
+  return result.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => readCommitSource(sha, cwd));
 };
 var readMessageFile = (path2) => {
   try {
@@ -26461,7 +26497,7 @@ var collectSources2 = (input, cwd) => {
   if (input.messageFile !== void 0) return [{ message: readMessageFile(input.messageFile) }];
   if (input.commit !== void 0) {
     const sha = resolveCommit2(input.commit, cwd);
-    return [{ sha, message: readCommitMessage(sha, cwd) }];
+    return [readCommitSource(sha, cwd)];
   }
   if (input.range !== void 0) return readRange(input.range, cwd);
   return [{ message: (input.readStdin ?? readStdinSync)() }];
@@ -26591,11 +26627,14 @@ var runValidate = (input = {}) => {
   }
   const cwd = input.cwd ?? process.cwd();
   let shapeViolations;
+  let warnings;
   let secrets;
   let sources;
   try {
     sources = collectSources2(input, cwd);
-    shapeViolations = sources.flatMap(locateViolations);
+    const inspections = sources.map(inspectSource);
+    shapeViolations = inspections.flatMap((inspection) => inspection.violations);
+    warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
     return usageError2(messageOf5(error2));
@@ -26612,18 +26651,22 @@ var runValidate = (input = {}) => {
   const status = `${checks.map(formatCheck).join(" \xB7 ")}
 `;
   const failed = violations.length > 0 || secrets.length > 0;
+  const warningText = warnings.length === 0 ? "" : `${warnings.join("\n")}
+`;
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
       stdout: `${JSON.stringify({ checks, violations, secrets })}
 `,
-      stderr: "",
+      stderr: warningText,
       violations,
       secrets,
       checks
     };
   }
-  if (!failed) return { code: 0, stdout: status, stderr: "", violations, secrets, checks };
+  if (!failed) {
+    return { code: 0, stdout: status, stderr: warningText, violations, secrets, checks };
+  }
   const parts = [status.trimEnd()];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join("\n"));
   if (secrets.length > 0) parts.push(formatFindings(secrets));
@@ -26640,7 +26683,7 @@ var runValidate = (input = {}) => {
     code: 1,
     stdout: `${parts.join("\n")}
 `,
-    stderr: `commitlore: ${notes.join(", ")} \u2014 the message was not modified
+    stderr: `${warningText}commitlore: ${notes.join(", ")} \u2014 the message was not modified
 `,
     violations,
     secrets,

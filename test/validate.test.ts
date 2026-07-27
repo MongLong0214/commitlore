@@ -107,6 +107,68 @@ describe('validate — valid and boundary fixtures', () => {
   }
 });
 
+describe('validate — prose/trailer boundary', () => {
+  it('warns when known trailer-looking lines are outside Git’s trailer block', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'fix the auth bug\nLimit: token introspection unavailable\nRuled-out: extend TTL | security policy\nRecord-Id: r-typical00001\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toBe(
+      'commitlore: line 2 looks like a Limit trailer, but git did not parse it; the trailer block needs a blank line before it\n' +
+        'commitlore: line 3 looks like a Ruled-out trailer, but git did not parse it; the trailer block needs a blank line before it\n' +
+        'commitlore: line 4 looks like a Record-Id trailer, but git did not parse it; the trailer block needs a blank line before it\n',
+    );
+  });
+
+  it('warns when tab indentation keeps a known trailer out of Git’s trailer block', () => {
+    const result = runValidate({
+      readStdin: () => 'fix the auth bug\n\n\tLimit: token introspection unavailable\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe(
+      'commitlore: line 3 looks like a Limit trailer, but git did not parse it; remove the leading tab\n',
+    );
+  });
+
+  it('names a merge-title paragraph instead of reporting its word as an unknown key', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    execFileSync(
+      'git',
+      [
+        'merge',
+        '--no-ff',
+        '-q',
+        'feature',
+        '-m',
+        'Merge pull request #72 from owner/feature\n\ninject: diagnose silent hook failures on stderr (#67)',
+      ],
+      { cwd: repo, env: GIT_ENV },
+    );
+    const merge = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+
+    const result = runValidate({ commit: merge, cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toBe(
+      `commitlore: ${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw "inject: diagnose silent hook failures on stderr (#67)"\n`,
+    );
+  });
+});
+
 describe('validate — input modes', () => {
   it('validates a message file', () => {
     const fixture = loadFixtures('invalid').find((entry) => entry.name === '01-enum-blast');
