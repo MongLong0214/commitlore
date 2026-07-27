@@ -552,3 +552,62 @@ arm suffers it — stated here, before the data.
 As §9 and §12: per-arm false-positive report, achieved n in the first line. If
 the arms do not differ, that is the result. Three null measurements and a fourth
 would be the finding, not a reason for a fifth.
+
+---
+
+## 15. M3 is void: the binary under test changed while it ran
+
+Recorded **before any M3 outcome was examined**. §4 holds — no result below, no
+result read.
+
+### What happened
+
+`bench/hooks-settings.ts` writes each arm's PreToolUse hook as a command pointing
+at `CLI_ENTRY = <REPO_ROOT>/dist/cli.js` — the live working copy, not a snapshot.
+The matrix launched at 2026-07-26T23:13:08Z against the tree frozen at `68d4c92`.
+Over the following twelve hours this repository was under active repair, and
+`npm run build` overwrote `dist/` at least eight times. Two of those rebuilds
+changed the treatment itself:
+
+- `a7673d0` widened the injection scanner from `Warn:` to every free-text
+  trailer. That changes which records grade `blocked`, which changes what
+  `inject` withholds — the `commitlore-on` arm.
+- `27f73b0` rewrote `guard`: blocked records are no longer quoted, an incomplete
+  check exits 3 instead of 0, and `additionalContext` is worded by trust grade.
+  That is the `commitlore-guard` arm, the primary comparison of §14.
+
+102 of 120 runs completed. Early runs measured one product and later runs measured
+another, and the two are not the same intervention. No stratification recovers
+this: the change is in the treatment, not in a covariate.
+
+### The mistake
+
+The freeze was recorded — "freeze: 68d4c92, uncommitted: 0" — and then treated as
+if it had isolated anything. It had not. A commit hash pins what `git` will hand
+you; it does not pin the bytes a running process reads from a working directory
+that the same operator is editing. **A measurement that reads from the tree it is
+being run out of is not frozen.**
+
+This is the same class of error as three others closed this week: a check that
+read the inputs to a decision instead of the decision, a doctor that probed the
+artifact a developer has instead of the one a user gets, and a scanner keyed to
+one field of a record whose every field was a surface. In each case the thing
+being verified and the thing actually in play had drifted apart.
+
+### What replaces it
+
+`t702-m3.jsonl` and its transcripts are renamed `*-invalidated` and kept. They are
+not evidence for or against anything and must never be cited as a result; they are
+kept because deleting the record of a failed measurement is how a project stops
+being able to tell you it failed.
+
+M3 is re-registered as **M3-b** and re-run from an isolated checkout — a clone
+pinned to a commit, outside this working tree, with its own `dist/`. §14 is
+otherwise unchanged: same three arms, same 4 × 10 × 3 = 120 runs, same primary
+comparison (`commitlore-guard` against `commitlore-on`), same two-tailed Fisher
+exact at α = 0.05.
+
+One thing is added, and it is a precondition rather than a hypothesis: the harness
+must record the commit and the `dist/` digest each run actually executed, and the
+verdict must refuse to report if they are not identical across every row. A run
+that cannot prove what it measured has not measured anything.
