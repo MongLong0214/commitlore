@@ -28,8 +28,15 @@ const REPO_ROOT = resolve(BENCH_DIR, "..");
  * `src/` uses NodeNext `.js` specifiers, so `--experimental-strip-types` cannot
  * load it — verified: importing `src/cli.ts` fails on `commands/backfill.js`.
  * `dist/` is committed (ADR-0011) so it is always present in a checkout.
+ *
+ * Overridable via `COMMITLORE_BENCH_DIST_DIR`, which exists for exactly one
+ * caller: `test/bench-ablation.test.ts` points it at a private snapshot so
+ * the mid-run consistency check below cannot be tripped by an unrelated test
+ * file rebuilding this repository's own `dist/` at the same time
+ * (bug-issue-88). Nothing outside the test suite sets this variable, so a
+ * real benchmark run reads the repository's `dist/` exactly as before.
  */
-export const DIST_DIR = join(REPO_ROOT, "dist");
+export const DIST_DIR = process.env.COMMITLORE_BENCH_DIST_DIR ?? join(REPO_ROOT, "dist");
 export const CLI_ENTRY = join(DIST_DIR, "cli.js");
 
 export const digestDistTree = (distDir: string = DIST_DIR): string => {
@@ -80,7 +87,7 @@ export interface HookPlan {
  */
 const ablationShim = (ablation: Readonly<Record<string, boolean>>): string =>
   [
-    `import { buildInjection } from ${JSON.stringify(join(REPO_ROOT, "dist", "core", "inject.js"))};`,
+    `import { buildInjection } from ${JSON.stringify(join(DIST_DIR, "core", "inject.js"))};`,
     "let raw = '';",
     "for await (const chunk of process.stdin) raw += chunk;",
     "const payload = JSON.parse(raw || '{}');",

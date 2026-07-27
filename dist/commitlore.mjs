@@ -12008,6 +12008,27 @@ var parseRecordBlocks = (message) => {
   }
   return last.length === 0 ? extra : [...extra, last];
 };
+var labelRecordBlocks = (message) => {
+  const blocks = parseRecordBlocks(message);
+  const ids = blocks.map(
+    (block) => block.find((trailer) => trailer.key === RECORD_ID_KEY)?.value
+  );
+  const seen = /* @__PURE__ */ new Set();
+  const duplicated = /* @__PURE__ */ new Set();
+  for (const id of ids) {
+    if (id === void 0) continue;
+    if (seen.has(id)) duplicated.add(id);
+    seen.add(id);
+  }
+  return blocks.map((trailers, index) => {
+    const id = ids[index];
+    return {
+      own: index === blocks.length - 1,
+      identityCollision: id !== void 0 && duplicated.has(id),
+      trailers
+    };
+  });
+};
 
 // src/core/index-db.ts
 var cachedCtor = null;
@@ -27170,18 +27191,56 @@ var readMessage = (messageFile) => {
   }
   return readFileSync14(STDIN_FD2, "utf8");
 };
+var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+var recordLabel = (index, total, block) => {
+  const tags = [block.own ? "own" : "earlier", ...block.identityCollision ? ["Record-Id collision"] : []];
+  return `# record ${index + 1}/${total} \u2014 ${tags.join(", ")}`;
+};
 var runParse = (options) => {
-  const trailers = parseCommitMessage(readMessage(options.messageFile));
-  process.stdout.write(
-    options.json === true ? `${JSON.stringify({ trailers }, null, 2)}
+  const message = readMessage(options.messageFile);
+  const blocks = labelRecordBlocks(message);
+  if (blocks.length <= 1) {
+    const trailers = blocks[0]?.trailers ?? [];
+    process.stdout.write(
+      options.json === true ? `${JSON.stringify({ trailers }, null, 2)}
 ` : serializeTrailers(trailers)
+    );
+    return;
+  }
+  const reported = /* @__PURE__ */ new Set();
+  for (const block of blocks) {
+    const id = recordIdOf2(block);
+    if (id === void 0 || !block.identityCollision || reported.has(id)) continue;
+    reported.add(id);
+    process.stderr.write(
+      `commitlore: Record-Id ${id} is declared by more than one record block in this message
+`
+    );
+  }
+  if (options.json === true) {
+    process.stdout.write(
+      `${JSON.stringify(
+        // `trailers` keeps meaning what it always meant -- the message's own
+        // block -- so a consumer that only ever read that key never has to
+        // learn about `blocks` to keep working.
+        { trailers: blocks[blocks.length - 1]?.trailers ?? [], blocks },
+        null,
+        2
+      )}
+`
+    );
+    return;
+  }
+  process.stdout.write(
+    blocks.map((block, index) => `${recordLabel(index, blocks.length, block)}
+${serializeTrailers(block.trailers)}`).join("\n")
   );
 };
 var program2 = new Command();
 program2.name("commitlore").description("Git commit trailers as institutional memory for AI coding agents").version(pkg.version ?? "0.0.0");
 program2.command("parse").description("Parse a commit message into its CommitLore trailers (SPEC \xA72)").option("--message-file <path>", "read the message from a file instead of stdin").option("--json", "emit the parsed trailers as JSON").addHelpText(
   "after",
-  "\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read."
+  "\nA message carrying more than one record block (SPEC \xA72.4) prints every block, labeled own (the message's own last paragraph) or earlier (a block the grammar recovered), and flags any Record-Id declared by more than one block. A single-block message is unaffected.\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read."
 ).action((options) => {
   runParse(options);
 });

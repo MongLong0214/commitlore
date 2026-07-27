@@ -63,3 +63,30 @@ export declare const serializeTrailers: (trailers: Trailer[]) => string;
  * Returned in the order the blocks appear in the message.
  */
 export declare const parseRecordBlocks: (message: string) => Trailer[][];
+/** One block from `parseRecordBlocks`, labeled for display (`commitlore parse`). */
+export interface LabeledBlock {
+    /** Whether this is the message's own trailer block (the last paragraph, SPEC §2.1 B1) rather than an earlier one the grammar recovered (SPEC §2.4). */
+    own: boolean;
+    /** This block's `Record-Id` is also declared by another block in the same message. */
+    identityCollision: boolean;
+    trailers: Trailer[];
+}
+/**
+ * `parseRecordBlocks`, labeled with which block is the message's own and
+ * whether any block's `Record-Id` collides with another block's, both in the
+ * same message.
+ *
+ * The collision check here is deliberately local to one message. It is not
+ * `core/stale.ts` `findIdCollisions`: that function's job is detecting drift
+ * between a notes mirror and the commit it mirrors, so a group with no
+ * `notes`-sourced record in it never trips it — two commit-sourced blocks
+ * that declare the same `Record-Id` inside one message pass through it
+ * unflagged (confirmed by `commitlore context` and `commitlore validate`,
+ * neither of which reports one either; bug-issue-89). Whether that identity
+ * later collides with something elsewhere in the repository is a question
+ * only `context`/`validate` can answer, because it needs the rest of
+ * history; whether two blocks *in the message being written right now*
+ * already collide needs none of that, and is exactly what someone running
+ * `commitlore parse` on a draft message before committing it wants to know.
+ */
+export declare const labelRecordBlocks: (message: string) => LabeledBlock[];

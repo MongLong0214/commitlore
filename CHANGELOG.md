@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+### `parse` recognizes every record block, not only the message's own — bug-issue-89
+
+`commitlore parse` still answered from `parseCommitMessage` alone after
+bug-issue-60 taught `context`, `validate` and the index to recognize every
+record block a message carries (SPEC §2.4): for a message with more than one
+block, `parse` reported only the message's own last paragraph, while
+`context` correctly reported all of them — the exact pre-#86 answer next to
+the exact post-#86 one, for the same message. `parse --help` describes
+itself as "the command" for asking this question, so it is the one place a
+human or agent was still guaranteed a wrong answer.
+
+`parse` now reports every block (`core/trailers.ts` `labelRecordBlocks`),
+labeled `own` (the message's own last paragraph, SPEC §2.1 B1) or `earlier`
+(a block the grammar recovered). A single-block message is unaffected —
+verified byte-for-byte identical, text and `--json`, against the previously
+shipped `dist/commitlore.mjs`, across every fixture in `spec/fixtures/`. The
+multi-block form is additive: `--json`'s `trailers` key keeps meaning what it
+always meant (the message's own block), with a new `blocks` array alongside
+it only when there is more than one.
+
+Also checked: two blocks in one message declaring the same `Record-Id`.
+Neither `commitlore context --json` nor `commitlore validate` flags this
+today — `core/stale.ts`'s `findIdCollisions` (the mechanism behind
+`identityCollision`) only fires when a *notes*-sourced record disagrees with
+a commit's own content; a group with no `notes` record in it, which is what
+two same-message commit blocks are, never reaches it, and the two blocks are
+silently merged instead. `parse` now detects this itself — a check local to
+the one message being parsed, independent of `findIdCollisions` — and
+reports it on stdout (`identityCollision: true` per block in `--json`, a
+`Record-Id collision` marker in text) and stderr. Whether `context`/`validate`
+should also catch the same-message case is open; SPEC and those commands are
+unchanged here.
+
+### Eliminates a `dist/`-race flake in `bench-ablation.test.ts`; scales `mcp.test.ts`'s per-test budget — bug-issue-88
+
+`test/bench-ablation.test.ts`'s "accepts all six arms" test failed
+intermittently under concurrent load (CI #79, #87). Diagnosed before
+changing anything: `bench/runner.ts` hashes the whole `dist/` tree at startup
+and re-checks it before every one of the six arms
+(`bench/hooks-settings.ts` `writeArmSettings`), refusing an arm when the two
+disagree — a real, useful check (it caught a genuine `dist/core/guard.js`
+drift once before). `dist/` is one directory shared by every vitest worker,
+though, and four other test files (`cli.test.ts`, `mcp.test.ts`,
+`action-lint.test.ts`, `action-preserve.test.ts`) each rebuild it via their
+own `tsc` in a `beforeAll` — so a concurrent rebuild from any of those can
+legitimately trip the check on a digest that was never wrong, only
+concurrently rewritten. Reproduced directly (`bench/runner.ts` invoked in a
+loop against a competing `tsc` rebuild loop): ~1 run in 5 fails with exactly
+the reported `Command failed:` / `dist/ changed after the benchmark matrix
+started` error. `execFileSync` is fully synchronous, so vitest's own
+per-test timeout cannot even pre-empt it — this was never a timeout problem,
+raising one would not have helped.
+
+Fixed the contention, not the symptom: `DIST_DIR` (`bench/hooks-settings.ts`)
+is now overridable via `COMMITLORE_BENCH_DIST_DIR`, unset (and so unchanged)
+everywhere except `bench-ablation.test.ts`, which now snapshots `dist/` into
+a private, unshared copy once per file and points every run at it. 20/20
+clean runs of the previously-flaky test under the same concurrent-rebuild
+load that failed 4/20 before.
+
+`mcp.test.ts` does not share that cause — it never calls `bench/runner.ts` or
+the digest check — but its JSON-RPC round trips are `await`ed (unlike
+`bench-ablation`'s synchronous `execFileSync`), so they genuinely are subject
+to vitest's fixed 5000ms default under real concurrency. Scaled its budget to
+`5_000 * Math.max(availableParallelism() - 1, 1)` — the same worker count
+vitest's own default pool sizing already uses — rather than picking a bigger
+constant.
+
 ### Multi-record grammar (SPEC §2.4) — bug-issue-60
 
 A message MAY now carry more than one record block. `squash-preserve` used to
