@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execGitOrThrow } from '../src/core/git.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
@@ -102,11 +103,7 @@ const temporaries: string[] = [];
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-mcp-'));
   temporaries.push(dir);
-  execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
-  execGitOrThrow(['config', 'user.name', 'CommitLore Test'], { cwd: dir });
-  execGitOrThrow(['config', 'user.email', 'test@example.invalid'], { cwd: dir });
-  execGitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const commitAt = (

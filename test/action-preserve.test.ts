@@ -32,6 +32,8 @@ import { fileURLToPath } from 'node:url';
 import { load } from 'js-yaml';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { createTestRepo } from './git-fixtures.js';
+
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
 const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
@@ -66,39 +68,14 @@ const git = (cwd: string, args: string[], input = ''): string => {
   return result.stdout;
 };
 
-/**
- * The identity goes in the repository's own config, not on a `-c` flag. git
- * that this suite spawns would see a flag; the git the CLI spawns from inside
- * `squash-preserve` -- the one that writes the note, and therefore the one that
- * needs an author -- would not, and the suite would pass here and fail in CI
- * with "Author identity unknown".
- */
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, [
-    'init',
-    '--quiet',
-    `--template=${tempDir(`${label}-template`)}`,
-    '--initial-branch=main',
-    '.',
-  ]);
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const initBare = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, [
-    'init',
-    '--bare',
-    '--quiet',
-    `--template=${tempDir(`${label}-template`)}`,
-    '--initial-branch=main',
-    '.',
-  ]);
-  return dir;
+  return createTestRepo({ path: dir, bare: true });
 };
 
 const commit = (dir: string, path: string, contents: string, message: string): void => {
@@ -508,7 +485,12 @@ describe('a checkout that cannot answer the question', () => {
   it('refuses a shallow clone instead of inheriting part of a branch', () => {
     const scenario = squashScenario('shallow-source');
     const parent = tempDir('shallow');
-    git(parent, ['clone', '--quiet', '--depth', '1', '-b', 'main', `file://${scenario.repo}`, 'checkout']);
+    createTestRepo({
+      path: join(parent, 'checkout'),
+      source: `file://${scenario.repo}`,
+      depth: 1,
+      branch: 'main',
+    });
 
     const run = runPreserve({
       repo: join(parent, 'checkout'),

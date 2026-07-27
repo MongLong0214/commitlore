@@ -32,6 +32,7 @@ import {
   type ContractCommit,
 } from './contract-cases.js';
 import { loadFixtures } from './fixtures.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const staleCases = loadContractCases(STALE_PREFIX);
 
@@ -405,8 +406,7 @@ describe('collectRecords over a real repository', () => {
 
   beforeAll(() => {
     repo = mkdtempSync(join(tmpdir(), 'commitlore-stale-'));
-    const init = spawnSync('git', ['init', '-q'], { cwd: repo, shell: false, encoding: 'utf8' });
-    if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
+    createTestRepo({ path: repo });
   });
 
   afterAll(() => {
@@ -671,9 +671,14 @@ describe('collectRecords over a real repository', () => {
       spawnSync('git', args, { cwd, shell: false, encoding: 'utf8' });
 
     try {
-      expect(run(parent, ['init', '--bare', '-q', origin]).status).toBe(0);
+      commit('Seed the clone fixture', '2026-02-21T00:00:00Z');
+      const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+      writeRecord(sha, [trailer('Limit', 'the clone fixture keeps notes out of commit messages')], {
+        cwd: repo,
+      });
+      createTestRepo({ path: origin, bare: true });
       expect(run(repo, ['push', '-q', origin, 'HEAD:refs/heads/main', NOTES_REF]).status).toBe(0);
-      expect(run(parent, ['clone', '-q', origin, clone]).status).toBe(0);
+      createTestRepo({ path: clone, source: origin });
 
       const report = buildReport(collectRecords({ cwd: clone }), new Date('2026-03-01T00:00:00Z'));
       expect(report.notes).toBe('unfetched');

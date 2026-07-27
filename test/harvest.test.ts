@@ -32,6 +32,7 @@ import {
   UNDO_VALUES,
   type Trailer,
 } from '../src/core/types.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/harvest/', import.meta.url));
 const SPEC_PATH = fileURLToPath(new URL('../spec/SPEC.md', import.meta.url));
@@ -371,8 +372,7 @@ describe('commitlore harvest', () => {
 
   it('skips when nothing is staged and no --diff was given', () => {
     const repo = mkdtempSync(join(workspace, 'repo-'));
-    const init = spawnSync('git', ['init'], { cwd: repo, shell: false, encoding: 'utf8' });
-    expect(init.status).toBe(0);
+    createTestRepo({ path: repo });
 
     const outcome = runHarvest({ promptOnly: true, transcript: TRANSCRIPT_FILE, cwd: repo });
     expect(outcome.exitCode).toBe(0);

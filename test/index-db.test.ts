@@ -74,6 +74,7 @@ import {
 } from '../src/core/index-db.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { loadFixtures } from './fixtures.js';
+import { createTestRepo } from './git-fixtures.js';
 
 /** Config pinned per invocation: the developer's global git config is not input. */
 const GIT_CONFIG = [
@@ -101,8 +102,7 @@ afterEach(() => {
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-index-'));
   temporaries.push(dir);
-  execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 let clock = 1785000000;

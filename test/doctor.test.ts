@@ -34,6 +34,7 @@ import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
 
@@ -55,20 +56,14 @@ const git = (cwd: string, args: string[]): string => {
   return result.stdout;
 };
 
-/** An empty `--template` keeps git's sample hooks out of `.git/hooks/`. */
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--quiet', `--template=${tempDir(`${label}-template`)}`, '--initial-branch=main']);
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const initBare = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--bare', '--quiet', '--initial-branch=main']);
-  return dir;
+  return createTestRepo({ path: dir, bare: true });
 };
 
 /** A repo with `origin` wired to a local bare repo, and one commit. */

@@ -30,6 +30,7 @@ import {
 } from '../src/core/squash.js';
 import { parseCommitMessage } from '../src/core/trailers.js';
 import type { Trailer } from '../src/core/types.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
 
@@ -52,19 +53,9 @@ const git = (cwd: string, args: string[], stdin?: string): string => {
   return result.stdout;
 };
 
-/** An empty `--template` keeps git's sample hooks out of `.git/hooks/`. */
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, [
-    'init',
-    '--quiet',
-    `--template=${tempDir(`${label}-template`)}`,
-    '--initial-branch=main',
-  ]);
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const head = (repo: string): string => git(repo, ['rev-parse', 'HEAD']).trim();

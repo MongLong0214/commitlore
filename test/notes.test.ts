@@ -19,6 +19,7 @@ import { execGit } from '../src/core/git.js';
 import { NOTES_REF, listRecordShas, readRecord, writeRecord } from '../src/core/notes.js';
 import { serializeTrailers } from '../src/core/trailers.js';
 import type { Trailer } from '../src/core/types.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
 
@@ -41,24 +42,14 @@ const git = (cwd: string, args: string[]): string => {
   return result.stdout;
 };
 
-const configure = (dir: string): string => {
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
-};
-
-/** An empty `--template` keeps git's sample hooks out of `.git/hooks/`. */
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--quiet', `--template=${tempDir(`${label}-template`)}`, '--initial-branch=main']);
-  return configure(dir);
+  return createTestRepo({ path: dir });
 };
 
 const initBare = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--bare', '--quiet', '--initial-branch=main']);
-  return dir;
+  return createTestRepo({ path: dir, bare: true });
 };
 
 const commit = (dir: string, subject: string): string => {
@@ -69,8 +60,7 @@ const commit = (dir: string, subject: string): string => {
 const clone = (source: string, label: string): string => {
   const parent = tempDir(label);
   const dir = join(parent, 'clone');
-  git(parent, ['clone', '--quiet', `--template=${tempDir(`${label}-template`)}`, source, dir]);
-  return configure(dir);
+  return createTestRepo({ path: dir, source });
 };
 
 const RECORD: Trailer[] = [

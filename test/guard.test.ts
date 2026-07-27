@@ -44,6 +44,7 @@ import { execGitOrThrow } from '../src/core/git.js';
 import { DEFAULT_THRESHOLD, guard } from '../src/core/guard.js';
 import { runQuery } from '../src/core/query.js';
 import { RECORD_ID_RE } from '../src/core/types.js';
+import { createTestRepo } from './git-fixtures.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -166,7 +167,7 @@ const commitFixture = (dir: string, record: RecordFixture): void => {
 const makeRepo = (seed: readonly RecordFixture[]): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-guard-'));
   temporaries.push(dir);
-  execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
+  createTestRepo({ path: dir });
   for (const record of seed) commitFixture(dir, record);
   return dir;
 };
@@ -175,8 +176,7 @@ const cloneRepo = (origin: string): string => {
   const parent = mkdtempSync(join(tmpdir(), 'commitlore-guard-clone-'));
   temporaries.push(parent);
   const dir = join(parent, 'repo');
-  execGitOrThrow(['clone', '-q', origin, dir], { cwd: parent });
-  return dir;
+  return createTestRepo({ path: dir, source: origin });
 };
 
 const brokenGitPath = (): string => {

@@ -16,6 +16,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runValidate } from '../src/commands/validate.js';
 import { loadFixtures } from './fixtures.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const RULES = ['unknown-key', 'enum', 'format', 'cardinality', 'dangling-ref'];
 
@@ -41,8 +42,7 @@ const makeRepo = (): string => {
   // A test that escapes the temp dir would be writing into a real repository.
   expect(dir.startsWith(tmpdir())).toBe(true);
   temporaryDirectories.push(dir);
-  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: GIT_ENV });
-  return dir;
+  return createTestRepo({ path: dir, env: GIT_ENV });
 };
 
 const commit = (repo: string, file: string, message: string): string => {

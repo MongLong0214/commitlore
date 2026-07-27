@@ -17,6 +17,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { notesAvailability, coversNotes, NOTES_REF, writeRecord } from '../src/core/notes.js';
 import { runQuery } from '../src/core/query.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const temporaries: string[] = [];
 afterAll(() => {
@@ -29,10 +30,7 @@ const git = (cwd: string, args: string[]): string =>
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-notes-'));
   temporaries.push(dir);
-  git(dir, ['init', '-q', '-b', 'main', '--template=', '.']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'user.email', 'test@example.invalid']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
+  createTestRepo({ path: dir });
   writeFileSync(join(dir, 'a.txt'), 'a\n');
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-q', '-m', 'seed']);
@@ -58,10 +56,7 @@ const clone = (origin: string): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-clone-'));
   temporaries.push(dir);
   rmSync(dir, { recursive: true, force: true });
-  execFileSync('git', ['clone', '-q', origin, dir], { encoding: 'utf8' });
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'user.email', 'test@example.invalid']);
-  return dir;
+  return createTestRepo({ path: dir, source: origin });
 };
 
 describe('notesAvailability', () => {

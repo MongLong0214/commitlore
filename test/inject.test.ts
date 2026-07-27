@@ -37,6 +37,7 @@ import {
   installClaudeHook,
   uninstallClaudeHook,
 } from '../src/hooks/claude-settings.js';
+import { createTestRepo } from './git-fixtures.js';
 
 // ---------------------------------------------------------------------------
 // The fixture repository
@@ -69,8 +70,7 @@ afterAll(() => {
 const makeRepo = (prefix: string): string => {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   temporaries.push(dir);
-  execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 interface CommitInput {

@@ -24,6 +24,7 @@ import { load } from 'js-yaml';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { MARKER, buildComment, upsertComment } from '../action/lint/comment.mjs';
+import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
@@ -56,11 +57,7 @@ const git = (cwd: string, args: string[], input = ''): string => {
 
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--quiet', `--template=${tempDir(`${label}-template`)}`, '--initial-branch=main']);
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const commit = (dir: string, path: string, contents: string, message: string): void => {
@@ -176,7 +173,12 @@ beforeAll(() => {
   // A depth-1 clone over file:// is the same truncation `actions/checkout`
   // produces at its default depth.
   shallow = tempDir('shallow-parent');
-  git(shallow, ['clone', '--quiet', '--depth', '1', '-b', 'main', `file://${repo}`, 'checkout']);
+  createTestRepo({
+    path: join(shallow, 'checkout'),
+    source: `file://${repo}`,
+    depth: 1,
+    branch: 'main',
+  });
 }, 180_000);
 
 describe('lint.mjs against a pull request range', () => {

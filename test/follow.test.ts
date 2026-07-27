@@ -34,6 +34,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGitOrThrow } from '../src/core/git.js';
 import { runQuery, valuesOf, type GradedRecord } from '../src/core/query.js';
+import { createTestRepo } from './git-fixtures.js';
 
 /** Config pinned per invocation: the developer's global git config is not input. */
 const GIT_CONFIG = [
@@ -56,16 +57,7 @@ afterAll(() => {
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-follow-'));
   temporaries.push(dir);
-  execGitOrThrow(['init', '-q', '-b', 'main', '--template=', '.'], { cwd: dir });
-  // Written into the repository config, not only passed per invocation:
-  // production code invoked from these tests runs its own git and never sees
-  // the `-c` flags above. Without this the suite passes on a machine with a
-  // global git identity and fails on a clean runner with "Author identity
-  // unknown" -- `-c` alone does not reach git calls made inside `query.ts`.
-  execGitOrThrow(['config', 'user.name', 'CommitLore Test'], { cwd: dir });
-  execGitOrThrow(['config', 'user.email', 'test@example.invalid'], { cwd: dir });
-  execGitOrThrow(['config', 'commit.gpgsign', 'false'], { cwd: dir });
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 /** Commits at an explicit instant so ordering in a suite never depends on wall-clock time. */

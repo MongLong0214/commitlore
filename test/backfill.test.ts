@@ -24,6 +24,7 @@ import { runBackfill } from '../src/commands/backfill.js';
 import { backfill, type BackfillOptions, type BackfillResult } from '../src/core/backfill.js';
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, readRecord } from '../src/core/notes.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const scratch: string[] = [];
 
@@ -46,14 +47,9 @@ const git = (cwd: string, args: string[]): string => {
   return result.stdout;
 };
 
-/** An empty `--template` keeps git's sample hooks out of `.git/hooks/`. */
 const initRepo = (label: string): string => {
   const dir = tempDir(label);
-  git(dir, ['init', '--quiet', `--template=${tempDir(`${label}-template`)}`, '--initial-branch=main']);
-  git(dir, ['config', 'user.email', 'test@commitlore.invalid']);
-  git(dir, ['config', 'user.name', 'CommitLore Test']);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  return dir;
+  return createTestRepo({ path: dir });
 };
 
 const commit = (dir: string, file: string, contents: string, message: string): string => {
