@@ -173,7 +173,7 @@ describe('runner: accepted_records', () => {
 const row = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   run_id: 'r1',
   harness_commit: '1111111111111111111111111111111111111111',
-  cli_digest: '2222222222222222222222222222222222222222222222222222222222222222',
+  dist_digest: '2222222222222222222222222222222222222222222222222222222222222222',
   task: 'reproposal-redis-cache',
   cond: 'commitlore-on',
   seed: 1,

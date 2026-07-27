@@ -10,3 +10,6 @@ node_modules/
 bench/results/*.local.jsonl
 
 .DS_Store
+
+# Scratch files delegated runs leave behind.
+.debug-journal.md

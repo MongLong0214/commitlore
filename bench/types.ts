@@ -226,8 +226,8 @@ export interface RunRecord {
   readonly run_id: string;
   /** The commit the harness was run from, resolved once at startup. */
   readonly harness_commit: string;
-  /** sha256 of the CLI the hook actually executed, read once at startup. */
-  readonly cli_digest: string;
+  /** sha256 of the dist tree the hook actually executed, read once at startup. */
+  readonly dist_digest: string;
   readonly task: string;
   readonly cond: string;
   readonly seed: number;

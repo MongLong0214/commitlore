@@ -331,7 +331,7 @@ const pickArms = (conditions: readonly string[]): { treatment: string; baseline:
 
 const provenanceCounts = (
   rows: readonly RunRecord[],
-  field: "harness_commit" | "cli_digest",
+  field: "harness_commit" | "dist_digest",
 ): ReadonlyMap<string, number> => {
   const counts = new Map<string, number>();
   for (const row of rows) {
@@ -347,19 +347,19 @@ const formatProvenanceCounts = (counts: ReadonlyMap<string, number>): string =>
 const assertUniformProvenance = (rows: readonly RunRecord[]): void => {
   if (rows.length === 0) return;
   const harnessCommits = provenanceCounts(rows, "harness_commit");
-  const cliDigests = provenanceCounts(rows, "cli_digest");
+  const distDigests = provenanceCounts(rows, "dist_digest");
   if (
     harnessCommits.size === 1 &&
-    cliDigests.size === 1 &&
+    distDigests.size === 1 &&
     !harnessCommits.has("unrecorded") &&
-    !cliDigests.has("unrecorded")
+    !distDigests.has("unrecorded")
   ) {
     return;
   }
   throw new Error(
     `refusing to summarize benchmark rows with mixed or unrecorded provenance: ` +
       `${harnessCommits.size} distinct harness_commit (${formatProvenanceCounts(harnessCommits)}); ` +
-      `${cliDigests.size} distinct cli_digest (${formatProvenanceCounts(cliDigests)})`,
+      `${distDigests.size} distinct dist_digest (${formatProvenanceCounts(distDigests)})`,
   );
 };
 

@@ -8,7 +8,7 @@
   "required": [
     "run_id",
     "harness_commit",
-    "cli_digest",
+    "dist_digest",
     "task",
     "cond",
     "seed",
@@ -33,10 +33,10 @@
       "minLength": 1,
       "description": "Commit resolved from git HEAD once when the benchmark matrix started."
     },
-    "cli_digest": {
+    "dist_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
-      "description": "SHA-256 of dist/cli.js resolved once when the benchmark matrix started."
+      "description": "SHA-256 of every path and file in dist/, resolved once when the benchmark matrix started."
     },
     "task": {
       "type": "string",

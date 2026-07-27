@@ -6,7 +6,7 @@ import process from "node:process";
 import { Command } from "commander";
 
 import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
-import { digestCli, HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
+import { digestDistTree, HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
 import { countViolations, evaluateGroup } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
@@ -185,7 +185,7 @@ const main = async (): Promise<number> => {
     ...(options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode }),
   });
   const harnessCommit = resolveHarnessCommit();
-  const cliDigest = digestCli();
+  const distDigest = digestDistTree();
 
   const runId = makeRunId();
   const outPath = path.resolve(options.out ?? path.join(BENCH_DIR, "results", `${runId}.jsonl`));
@@ -233,7 +233,7 @@ const main = async (): Promise<number> => {
           const record: RunRecord = {
             run_id: runId,
             harness_commit: harnessCommit,
-            cli_digest: cliDigest,
+            dist_digest: distDigest,
             task: task.id,
             cond: condition.id,
             seed,
@@ -264,7 +264,7 @@ const main = async (): Promise<number> => {
           // without one the arm falls back to the harness's session-start
           // block. See bench/hooks-settings.ts (#36).
           const plan = HOOK_PLANS[condition.id] ?? {};
-          const settingsPath = writeArmSettings(plan, cliDigest);
+          const settingsPath = writeArmSettings(plan, distDigest);
           const injectedContext =
             settingsPath === null ? assembleContext(workspace.dir, condition) : null;
           const result: DriverResult = await driver.run({
@@ -319,7 +319,7 @@ const main = async (): Promise<number> => {
           record = {
             run_id: runId,
             harness_commit: harnessCommit,
-            cli_digest: cliDigest,
+            dist_digest: distDigest,
             task: task.id,
             cond: condition.id,
             seed,
@@ -341,7 +341,7 @@ const main = async (): Promise<number> => {
           record = {
             run_id: runId,
             harness_commit: harnessCommit,
-            cli_digest: cliDigest,
+            dist_digest: distDigest,
             task: task.id,
             cond: condition.id,
             seed,

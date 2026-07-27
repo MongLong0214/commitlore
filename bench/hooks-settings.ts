@@ -15,9 +15,9 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const BENCH_DIR = import.meta.dirname;
 const REPO_ROOT = resolve(BENCH_DIR, "..");
@@ -29,10 +29,27 @@ const REPO_ROOT = resolve(BENCH_DIR, "..");
  * load it — verified: importing `src/cli.ts` fails on `commands/backfill.js`.
  * `dist/` is committed (ADR-0011) so it is always present in a checkout.
  */
-export const CLI_ENTRY = join(REPO_ROOT, "dist", "cli.js");
+export const DIST_DIR = join(REPO_ROOT, "dist");
+export const CLI_ENTRY = join(DIST_DIR, "cli.js");
 
-export const digestCli = (): string =>
-  createHash("sha256").update(readFileSync(CLI_ENTRY)).digest("hex");
+export const digestDistTree = (distDir: string = DIST_DIR): string => {
+  const files: string[] = [];
+  const collect = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) collect(path);
+      else files.push(relative(distDir, path).split(sep).join("/"));
+    }
+  };
+  collect(distDir);
+
+  // M3 was invalidated when dist/core/guard.js changed mid-run while dist/cli.js stayed byte-identical.
+  const hash = createHash("sha256");
+  for (const path of files.sort()) {
+    hash.update(path).update("\0").update(readFileSync(join(distDir, path))).update("\0");
+  }
+  return hash.digest("hex");
+};
 
 export interface HookPlan {
   /** Which commitlore subcommand the PreToolUse hook runs, or none. */
@@ -94,11 +111,11 @@ const matcher = "Edit|Write|MultiEdit|NotebookEdit";
  * rather than "a hook that does nothing", because a hook that runs and returns
  * nothing still changes the agent's turn structure.
  */
-export const writeArmSettings = (plan: HookPlan, expectedCliDigest: string): string | null => {
-  const currentCliDigest = digestCli();
-  if (currentCliDigest !== expectedCliDigest) {
+export const writeArmSettings = (plan: HookPlan, expectedDistDigest: string): string | null => {
+  const currentDistDigest = digestDistTree();
+  if (currentDistDigest !== expectedDistDigest) {
     throw new Error(
-      `CLI changed after the benchmark matrix started: expected sha256 ${expectedCliDigest}, found ${currentCliDigest}`,
+      `dist/ changed after the benchmark matrix started: expected sha256 ${expectedDistDigest}, found ${currentDistDigest}`,
     );
   }
   if (plan.preToolUse === undefined && plan.ablation === undefined) return null;
