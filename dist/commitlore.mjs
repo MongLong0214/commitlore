@@ -14488,21 +14488,25 @@ var instantOf2 = (record2) => {
   const parsed = Date.parse(record2.committedAt);
   return Number.isNaN(parsed) ? void 0 : parsed;
 };
-var dropMirroredNotes = (records) => {
-  const commitTrailers = /* @__PURE__ */ new Map();
+var foldMirroredNotes = (records) => {
+  const commits = /* @__PURE__ */ new Map();
   for (const record2 of records) {
     if (record2.source !== "commit") continue;
-    const contents = commitTrailers.get(record2.sha) ?? /* @__PURE__ */ new Set();
-    for (const trailer of record2.trailers) contents.add(`${trailer.key}\0${trailer.value}`);
-    commitTrailers.set(record2.sha, contents);
+    commits.set(record2.sha, record2);
   }
   return records.filter((record2) => {
     if (record2.source !== "notes") return true;
-    const contents = commitTrailers.get(record2.sha);
-    if (contents === void 0) return true;
-    return !record2.trailers.every(
-      (trailer) => contents.has(`${trailer.key}\0${trailer.value}`)
+    if (trailerValue2(record2.trailers, RECORD_ID_KEY2) !== void 0) return true;
+    const commit = commits.get(record2.sha);
+    if (commit === void 0) return true;
+    const contents = new Set(
+      record2.trailers.map((trailer) => `${trailer.key}\0${trailer.value}`)
     );
+    if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\0${trailer.value}`))) {
+      return true;
+    }
+    mergeTrailers2(commit.trailers, record2.trailers);
+    return false;
   });
 };
 var withIdentity = (record2) => {
@@ -14655,7 +14659,7 @@ var runQuery = (opts = {}) => {
     diagnostics.push(...scope.diagnostics);
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));
-    const visible = dropMirroredNotes(
+    const visible = foldMirroredNotes(
       commitRecords.filter((record2) => {
         const instant = instantOf2(record2);
         return instant === void 0 || instant <= cutoff;

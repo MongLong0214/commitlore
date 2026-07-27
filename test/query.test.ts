@@ -298,7 +298,12 @@ const staleRepo = (): string => {
   return dir;
 };
 
-const notesRepo = (): { dir: string; mirrored: string; identified: string } => {
+const notesRepo = (): {
+  dir: string;
+  mirrored: string;
+  identified: string;
+  inherited: string;
+} => {
   const dir = makeRepo();
   const identified = commitAt(
     dir,
@@ -332,7 +337,22 @@ const notesRepo = (): { dir: string; mirrored: string; identified: string } => {
     cwd: dir,
   });
 
-  return { dir, mirrored, identified };
+  const inherited = commitAt(
+    dir,
+    '2026-04-03T00:00:00Z',
+    record('Preserve the inherited limit', ['Limit: inherited limit']),
+    { 'src/queue/inherited.ts': 'inherited' },
+  );
+  writeRecord(
+    inherited,
+    [
+      { key: 'Limit', value: 'inherited limit' },
+      { key: 'X-Inherited-From', value: 'abcdef1' },
+    ],
+    { cwd: dir },
+  );
+
+  return { dir, mirrored, identified, inherited };
 };
 
 // ---------------------------------------------------------------------------
@@ -504,7 +524,7 @@ describe('stale filtering', () => {
 // ---------------------------------------------------------------------------
 
 describe('notes merge and dedupe', () => {
-  const { dir, identified, mirrored } = notesRepo();
+  const { dir, identified, mirrored, inherited } = notesRepo();
 
   it('merges a commit and its mirror into one record when both name it', () => {
     const result = runQuery({ cwd: dir, path: 'src/queue/drain.ts' });
@@ -529,8 +549,16 @@ describe('notes merge and dedupe', () => {
     ]);
   });
 
-  it('reports two records in the repository, not four', () => {
-    expect(runQuery({ cwd: dir }).records).toHaveLength(2);
+  it('folds notes-only inheritance metadata without duplicating the mirrored record', () => {
+    const result = runQuery({ cwd: dir, path: 'src/queue/inherited.ts' });
+
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]?.sha).toBe(inherited);
+    expect(valuesOf(result.records[0] as GradedRecord, 'X-Inherited-From')).toEqual(['abcdef1']);
+  });
+
+  it('reports three records in the repository, not six', () => {
+    expect(runQuery({ cwd: dir }).records).toHaveLength(3);
   });
 });
 

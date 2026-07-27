@@ -422,30 +422,30 @@ const instantOf = (record: CommitRecord): number | undefined => {
 };
 
 /**
- * Drops a notes record whose trailers the commit's own message already
- * carries.
- *
- * The mirror is a second channel for the same record, not a second record
- * (`core/notes.ts`), so a record that lives in both places must be reported
- * once. Identity handles the case where both declare a `Record-Id:`; this
- * handles the case where neither does, by content.
+ * Folds an unidentified notes mirror into the same commit's record. Notes may
+ * add transport metadata, which is preserved without turning the mirror into a
+ * second record.
  */
-const dropMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => {
-  const commitTrailers = new Map<string, Set<string>>();
+const foldMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => {
+  const commits = new Map<string, CommitRecord>();
   for (const record of records) {
     if (record.source !== 'commit') continue;
-    const contents = commitTrailers.get(record.sha) ?? new Set<string>();
-    for (const trailer of record.trailers) contents.add(`${trailer.key}\u0000${trailer.value}`);
-    commitTrailers.set(record.sha, contents);
+    commits.set(record.sha, record);
   }
 
   return records.filter((record) => {
     if (record.source !== 'notes') return true;
-    const contents = commitTrailers.get(record.sha);
-    if (contents === undefined) return true;
-    return !record.trailers.every((trailer) =>
-      contents.has(`${trailer.key}\u0000${trailer.value}`),
+    if (trailerValue(record.trailers, RECORD_ID_KEY) !== undefined) return true;
+    const commit = commits.get(record.sha);
+    if (commit === undefined) return true;
+    const contents = new Set(
+      record.trailers.map((trailer) => `${trailer.key}\u0000${trailer.value}`),
     );
+    if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\u0000${trailer.value}`))) {
+      return true;
+    }
+    mergeTrailers(commit.trailers, record.trailers);
+    return false;
   });
 };
 
@@ -683,7 +683,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
 
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));
-    const visible = dropMirroredNotes(
+    const visible = foldMirroredNotes(
       commitRecords.filter((record) => {
         const instant = instantOf(record);
         return instant === undefined || instant <= cutoff;
