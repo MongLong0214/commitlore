@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, 'release-*', 'hotfix-*']
+    branches: [main, dev, 'release-*', 'hotfix-*']
   pull_request:
 
 # The conformance suite and the dogfooding gate are the two things that make
