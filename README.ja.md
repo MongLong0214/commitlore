@@ -13,7 +13,7 @@
 >
 > **v0.1.0 リリース済み。** CLI・MCP サーバー・フック・GitHub Actions はすべて実装済みで `main` の CI を通過しています。配布は git clone のみ — レジストリもアカウントも publish 手順もありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
-> clone がそのままインストールです: `dist/commitlore.mjs` が依存関係を同梱しているので、入れるものもビルドするものもありません。
+> clone すればインストールもビルドもなしに動きます: `dist/commitlore.mjs` はバンドルなので、`validate`・`context`・`guard`・MCP サーバーは素のチェックアウトで動作します。**SQLite インデックスだけが例外**です — バンドルが同梱しない `better-sqlite3` を必要とするため、clone しただけの状態では履歴を走査して答えます（`--no-index`）。[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) がこの例外をなくします。
 >
 > この README のすべての主張は、今すぐ再現可能か計画中と明示されているかのいずれかで、数値は [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) のログからのみ提示します。このリポジトリは自分のプロトコルを自分の履歴に対して CI で強制しています — [ドッグフーディングは強制される](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)を参照。
 
@@ -31,7 +31,7 @@
 
 1. **キャプチャは無料** — エージェントは「なぜ」をすでに知っているので、どのみち作るコミットに構造化された *git trailer* として書き込みます。証拠を引用できない trailer は検証器が破棄します。
 2. **消費は pull ではなく push** — エージェントがファイルに触れた瞬間、*そのパス*の有効な制約と過去の却下履歴が自動注入されます。誰も問い合わせを覚えておく必要はありません。
-3. **git が唯一の真実** — 知識アトムはコミットメッセージと `refs/notes/commitlore` に住みます。それ以外（インデックス・ダッシュボード)はすべて捨てられる派生キャッシュです。`git clone` ひとつで記憶全体が移動します。
+3. **git が唯一の真実** — 知識アトムはコミットメッセージと `refs/notes/commitlore` に住みます。それ以外（インデックス・ダッシュボード)はすべて捨てられる派生キャッシュです。clone はコミットメッセージに書かれた記録をすべて運びますが、**notes ミラーは運びません** — `git fetch` は既定で notes を取得しないからです。`commitlore doctor --fix` が refspec を追加し、追加されるまではクエリが空の答えではなくその事実を告げます。
 
 ## 実際の姿
 

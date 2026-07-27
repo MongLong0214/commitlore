@@ -13,7 +13,7 @@
 >
 > **v0.1.0 is released.** The CLI, MCP server, hooks and GitHub Actions are implemented and green on `main`. Distribution is a git clone — no registry, no account, no publish step ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
-> A clone is the whole installation: `dist/commitlore.mjs` carries its own dependencies, so nothing needs installing and nothing needs building.
+> A clone runs without installing or building: `dist/commitlore.mjs` is a bundle, so `validate`, `context`, `guard` and the MCP server work from a bare checkout. **The SQLite index is the exception** — it needs `better-sqlite3`, which the bundle does not carry, so a clone-only install answers by scanning history (`--no-index`) until you run `npm install`. [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) removes that exception.
 >
 > Every claim in this README is either reproducible now or explicitly marked as planned, and numbers will only ever come from [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) logs. This repository runs its own protocol against its own history in CI — see [dogfooding is enforced](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational).
 
@@ -31,7 +31,7 @@ For forty years this was called the *design rationale capture problem*, and it s
 
 1. **Capture is free** — the agent already knows why; it writes structured *git trailers* into the commit it was making anyway. A verifier rejects any trailer that can't cite its evidence.
 2. **Consumption is push, not pull** — when an agent touches a file, the active constraints and past rejections for *that path* are injected automatically. Nobody has to remember to ask.
-3. **Git is the single source of truth** — records live in commit messages and `refs/notes/commitlore`. Everything else (index, dashboards) is a derived, throwaway cache. `git clone` carries the entire memory.
+3. **Git is the single source of truth** — records live in commit messages and `refs/notes/commitlore`. Everything else (index, dashboards) is a derived, throwaway cache. A clone carries every record written into a commit message; **it does not carry the notes mirror**, because `git fetch` does not fetch notes by default — `commitlore doctor --fix` adds the refspec, and until it is added a query says so rather than reporting an empty answer.
 
 ## What it looks like
 

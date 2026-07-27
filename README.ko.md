@@ -13,7 +13,7 @@
 >
 > **v0.1.0 릴리스됨.** CLI·MCP 서버·훅·GitHub Action 모두 구현이 끝났고 `main`에서 CI를 통과합니다. 배포는 git clone 하나 — 레지스트리도 계정도 publish 단계도 없습니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
 >
-> clone이 곧 설치입니다: `dist/commitlore.mjs`가 의존성을 함께 담고 있어 설치할 것도 빌드할 것도 없습니다.
+> clone하면 설치도 빌드도 없이 바로 돕니다: `dist/commitlore.mjs`는 번들이라 `validate`·`context`·`guard`·MCP 서버가 맨 체크아웃에서 동작합니다. **SQLite 인덱스만 예외**입니다 — 번들이 담지 않는 `better-sqlite3`가 필요해서, clone만 한 상태에서는 이력을 스캔해 답합니다(`--no-index`). [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)가 이 예외를 없앱니다.
 >
 > 이 README의 모든 주장은 지금 재현 가능하거나 계획임이 명시돼 있고, 수치는 오직 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 로그에서만 나옵니다. 이 저장소는 자기 프로토콜을 자기 히스토리에 CI에서 강제합니다 — [도그푸딩은 강제된다](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational) 참조.
 
@@ -31,7 +31,7 @@
 
 1. **캡처는 공짜** — 에이전트는 이유를 이미 알고 있으므로, 어차피 만들던 커밋에 구조화된 *git trailer*로 적습니다. 근거를 인용하지 못하는 trailer는 검증자가 폐기합니다.
 2. **소비는 pull이 아니라 push** — 에이전트가 파일을 만지는 순간, *그 경로*의 활성 제약과 과거 기각 이력이 자동 주입됩니다. 아무도 조회를 기억할 필요가 없습니다.
-3. **git이 유일한 진실** — 기록는 커밋 메시지와 `refs/notes/commitlore`에 삽니다. 나머지(인덱스·대시보드)는 전부 버려도 되는 파생 캐시입니다. `git clone` 하나로 기억 전체가 이동합니다.
+3. **git이 유일한 진실** — 기록는 커밋 메시지와 `refs/notes/commitlore`에 삽니다. 나머지(인덱스·대시보드)는 전부 버려도 되는 파생 캐시입니다. clone은 커밋 메시지에 쓰인 기록을 모두 나르지만 **notes 미러는 나르지 않습니다** — `git fetch`가 기본으로 notes를 가져오지 않기 때문입니다. `commitlore doctor --fix`가 refspec을 추가하고, 추가되기 전까지 조회는 빈 답 대신 그 사실을 말합니다.
 
 ## 실제 모습
 

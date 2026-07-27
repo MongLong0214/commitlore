@@ -13,7 +13,7 @@
 >
 > **v0.1.0 已发布。** CLI、MCP 服务器、钩子和 GitHub Actions 均已实现，并在 `main` 上通过 CI。分发方式只有 git clone —— 没有注册表、没有账号、没有发布步骤（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 >
-> clone 就是完整安装：`dist/commitlore.mjs` 自带依赖，无需安装，也无需构建。
+> clone 后无需安装也无需构建即可运行：`dist/commitlore.mjs` 是打包产物，`validate`、`context`、`guard` 和 MCP 服务器在裸检出下都能工作。**只有 SQLite 索引是例外** —— 它需要打包产物未携带的 `better-sqlite3`，所以只 clone 的状态下会扫描历史来作答（`--no-index`）。[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) 将消除这个例外。
 >
 > 本 README 的每个论断要么现在可复现，要么明确标注为计划，数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。本仓库在 CI 中对自己的历史强制执行自己的协议 —— 见[狗粮是强制的](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)。
 
@@ -31,7 +31,7 @@
 
 1. **捕获是免费的** —— 智能体本来就知道"为什么"，它把结构化的 *git trailer* 写进本来就要创建的提交里。无法引用证据的 trailer 会被验证器丢弃。
 2. **消费是 push 而非 pull** —— 当智能体触碰某个文件时，*该路径*的活跃约束与历史否决会被自动注入。没有人需要记得去查询。
-3. **git 是唯一事实来源** —— 知识原子存在于提交信息和 `refs/notes/commitlore` 中。其余一切（索引、面板）都是可丢弃的派生缓存。一次 `git clone` 就带走全部记忆。
+3. **git 是唯一事实来源** —— 知识原子存在于提交信息和 `refs/notes/commitlore` 中。其余一切（索引、面板）都是可丢弃的派生缓存。clone 会带走写进提交信息的每一条记录，**但不会带走 notes 镜像** —— `git fetch` 默认不抓取 notes。`commitlore doctor --fix` 会加上 refspec；在加上之前，查询会明说这一点，而不是报告一个空答案。
 
 ## 长什么样
 
