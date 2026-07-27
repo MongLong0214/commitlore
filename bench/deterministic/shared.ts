@@ -48,6 +48,13 @@ export const git = (
   options: Omit<CommandOptions, 'cwd'> = {},
 ): CommandResult => command('git', args, { cwd, ...options });
 
+export const assertCleanCheckout = (repoRoot: string): void => {
+  const status = git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']).stdout.trim();
+  if (status !== '') {
+    throw new Error(`deterministic benchmark requires a clean checkout:\n${status}`);
+  }
+};
+
 export const timed = (run: () => void): number => {
   const started = process.hrtime.bigint();
   run();

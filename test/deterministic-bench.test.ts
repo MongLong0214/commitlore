@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -10,8 +11,11 @@ import {
   renderDeterministicReport,
   SCOPE_SENTENCE,
 } from '../bench/deterministic/report.ts';
+import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
 import type { InjectionDetectionRow } from '../bench/deterministic/types.ts';
+
+const REPO_ROOT = resolve(import.meta.dirname, '..');
 
 const row = (overrides: Partial<InjectionDetectionRow> = {}): InjectionDetectionRow => ({
   schema_version: 1,
@@ -58,8 +62,60 @@ describe('deterministic benchmark reporting', () => {
     ).toThrow(/mixed.*harness_commit.*dist_digest/i);
   });
 
+  it('rejects rows from different runs or machines of the same binary', () => {
+    expect(() =>
+      assertSingleProvenance([
+        row(),
+        row({
+          measured_at: '2026-07-28T00:00:00.000Z',
+          machine: { ...row().machine, cpu: 'Other CPU' },
+        }),
+      ]),
+    ).toThrow(/mixed.*measured_at.*machine/i);
+  });
+
   it('states that the measurements do not establish agent benefit', () => {
     expect(renderDeterministicReport([row()])).toContain(SCOPE_SENTENCE);
+  });
+
+  it('refuses uncommitted benchmark inputs', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'commitlore-clean-test-'));
+
+    try {
+      git(scratch, ['init', '--quiet']);
+      git(scratch, ['config', 'user.name', 'CommitLore Bench']);
+      git(scratch, ['config', 'user.email', 'bench@commitlore.local']);
+      writeFileSync(join(scratch, 'input.txt'), 'committed\n');
+      git(scratch, ['add', 'input.txt']);
+      git(scratch, ['commit', '--quiet', '-m', 'seed']);
+      expect(() => assertCleanCheckout(scratch)).not.toThrow();
+
+      writeFileSync(join(scratch, 'input.txt'), 'dirty\n');
+      expect(() => assertCleanCheckout(scratch)).toThrow(/clean checkout:[\s\S]*input\.txt/i);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('does not allow short production measurements', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', join(REPO_ROOT, 'bench', 'deterministic.ts')],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          COMMITLORE_DETERMINISTIC_ALLOW_SHORT: '1',
+          COMMITLORE_DETERMINISTIC_RUNS: '1',
+          COMMITLORE_DETERMINISTIC_SIZES: '1',
+        },
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/test-only.*fixed protocol/i);
   });
 
   it('runs rebase-onto when the cloned source HEAD is the feature branch', () => {

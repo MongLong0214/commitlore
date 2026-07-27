@@ -24,18 +24,42 @@ export const percentile = (samples: readonly number[], proportion: number): numb
 
 const distinct = (
   rows: readonly DeterministicRow[],
-  field: 'harness_commit' | 'dist_digest',
+  field: 'harness_commit' | 'dist_digest' | 'measured_at',
 ): readonly string[] => [...new Set(rows.map((row) => row[field]))].sort();
 
 export const assertSingleProvenance = (rows: readonly DeterministicRow[]): void => {
   const commits = distinct(rows, 'harness_commit');
   const digests = distinct(rows, 'dist_digest');
+  const measuredAt = distinct(rows, 'measured_at');
+  const machines = new Set(
+    rows.map(({ machine }) =>
+      JSON.stringify([
+        machine.platform,
+        machine.release,
+        machine.arch,
+        machine.cpu,
+        machine.logical_cpus,
+        machine.memory_bytes,
+        machine.node,
+        machine.git,
+      ]),
+    ),
+  );
   if (rows.length === 0) throw new Error('refusing to report an empty deterministic dataset');
-  if (commits.length === 1 && digests.length === 1) return;
+  if (
+    commits.length === 1 &&
+    digests.length === 1 &&
+    measuredAt.length === 1 &&
+    machines.size === 1
+  ) {
+    return;
+  }
   throw new Error(
     'refusing mixed deterministic provenance: ' +
       `${commits.length} harness_commit (${commits.join(', ')}); ` +
-      `${digests.length} dist_digest (${digests.join(', ')})`,
+      `${digests.length} dist_digest (${digests.join(', ')}); ` +
+      `${measuredAt.length} measured_at (${measuredAt.join(', ')}); ` +
+      `${machines.size} machine descriptor(s)`,
   );
 };
 

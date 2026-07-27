@@ -10,7 +10,13 @@ import {
   writeDeterministicReport,
 } from './deterministic/report.ts';
 import { measureScale } from './deterministic/scale.ts';
-import { git, parsePositiveInteger, parseSizes, rowBase } from './deterministic/shared.ts';
+import {
+  assertCleanCheckout,
+  git,
+  parsePositiveInteger,
+  parseSizes,
+  rowBase,
+} from './deterministic/shared.ts';
 import { measureSurvival } from './deterministic/survival.ts';
 import type { DeterministicRow } from './deterministic/types.ts';
 
@@ -34,12 +40,23 @@ const assertComplete = (rows: readonly DeterministicRow[]): void => {
 };
 
 const main = (): void => {
+  const testMode = process.env['NODE_ENV'] === 'test';
+  const testOnlyOverride = [
+    'COMMITLORE_DETERMINISTIC_SIZES',
+    'COMMITLORE_DETERMINISTIC_RUNS',
+    'COMMITLORE_DETERMINISTIC_ALLOW_SHORT',
+    'COMMITLORE_DETERMINISTIC_SURVIVAL_RECORDS',
+  ].find((name) => process.env[name] !== undefined);
+  if (!testMode && testOnlyOverride !== undefined) {
+    throw new Error(`${testOnlyOverride} is test-only; production measurements use the fixed protocol`);
+  }
+
   const sizes = parseSizes(process.env['COMMITLORE_DETERMINISTIC_SIZES'] ?? '1000,10000,100000');
   const runs = parsePositiveInteger(
     'COMMITLORE_DETERMINISTIC_RUNS',
     process.env['COMMITLORE_DETERMINISTIC_RUNS'] ?? '20',
   );
-  if (runs < 20 && process.env['COMMITLORE_DETERMINISTIC_ALLOW_SHORT'] !== '1') {
+  if (runs < 20 && (!testMode || process.env['COMMITLORE_DETERMINISTIC_ALLOW_SHORT'] !== '1')) {
     throw new Error('COMMITLORE_DETERMINISTIC_RUNS must be at least 20');
   }
   const survivalRecords = parsePositiveInteger(
@@ -50,6 +67,7 @@ const main = (): void => {
     REPO_ROOT,
     process.env['COMMITLORE_DETERMINISTIC_OUTPUT_DIR'] ?? join('bench', 'results'),
   );
+  assertCleanCheckout(REPO_ROOT);
   const measuredAt = new Date().toISOString();
   const harnessCommit = git(REPO_ROOT, ['rev-parse', 'HEAD']).stdout.trim();
   const distDigest = digestDistTree();
@@ -85,6 +103,7 @@ const main = (): void => {
           `dist ${distDigest} -> ${currentDigest}`,
       );
     }
+    assertCleanCheckout(REPO_ROOT);
 
     mkdirSync(outputDir, { recursive: true });
     const baseName = `deterministic-${stamp(measuredAt)}`;
