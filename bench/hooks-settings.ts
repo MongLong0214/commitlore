@@ -14,7 +14,8 @@
  * written here.
  */
 
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -29,6 +30,9 @@ const REPO_ROOT = resolve(BENCH_DIR, "..");
  * `dist/` is committed (ADR-0011) so it is always present in a checkout.
  */
 export const CLI_ENTRY = join(REPO_ROOT, "dist", "cli.js");
+
+export const digestCli = (): string =>
+  createHash("sha256").update(readFileSync(CLI_ENTRY)).digest("hex");
 
 export interface HookPlan {
   /** Which commitlore subcommand the PreToolUse hook runs, or none. */
@@ -90,7 +94,13 @@ const matcher = "Edit|Write|MultiEdit|NotebookEdit";
  * rather than "a hook that does nothing", because a hook that runs and returns
  * nothing still changes the agent's turn structure.
  */
-export const writeArmSettings = (plan: HookPlan): string | null => {
+export const writeArmSettings = (plan: HookPlan, expectedCliDigest: string): string | null => {
+  const currentCliDigest = digestCli();
+  if (currentCliDigest !== expectedCliDigest) {
+    throw new Error(
+      `CLI changed after the benchmark matrix started: expected sha256 ${expectedCliDigest}, found ${currentCliDigest}`,
+    );
+  }
   if (plan.preToolUse === undefined && plan.ablation === undefined) return null;
 
   const dir = mkdtempSync(join(tmpdir(), "commitlore-bench-settings-"));

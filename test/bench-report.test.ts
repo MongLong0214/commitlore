@@ -361,18 +361,19 @@ describe('a declared status follows the file, not the invocation', () => {
     expect(declarationFor(CLEAN)).toBeNull();
   });
 
-  it('renders the declared sources identically through both entry points', () => {
-    // `report.ts <the pilot> --section` must not quietly drop the label that
-    // `report.ts --section` applies to the same rows.
+  it('refuses pre-provenance declared sources identically through both entry points', () => {
     const files = README_SOURCES.map((source) => source.file).filter((file) =>
       fs.existsSync(path.join(REPO_ROOT, file)),
     );
     if (files.length === 0) return;
     const viaDefaults = runReport('--section');
     const viaPaths = runReport(...files, '--section');
-    expect(viaDefaults.status).toBe(0);
-    expect(viaPaths.status).toBe(0);
-    expect(viaPaths.stdout).toBe(viaDefaults.stdout);
+    expect(viaDefaults.status).toBe(1);
+    expect(viaPaths.status).toBe(1);
+    expect(viaDefaults.stdout).toBe('');
+    expect(viaPaths.stdout).toBe('');
+    expect(viaPaths.stderr).toBe(viaDefaults.stderr);
+    expect(viaDefaults.stderr).toMatch(/unrecorded/);
   });
 });
 

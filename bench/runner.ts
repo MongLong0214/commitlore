@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 
 import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
-import { HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
+import { digestCli, HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
 import { countViolations, evaluateGroup } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
@@ -19,6 +20,15 @@ const BENCH_DIR = import.meta.dirname;
 const REPO_ROOT = path.resolve(BENCH_DIR, "..");
 const DEFAULT_MAX_TOKENS = 500_000;
 const DEFAULT_TIMEOUT_MS = 600_000;
+
+const resolveHarnessCommit = (): string => {
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  }).trim();
+  if (commit === "") throw new Error("git rev-parse HEAD returned an empty harness commit");
+  return commit;
+};
 
 interface RunnerOptions {
   readonly tasks: string;
@@ -174,6 +184,8 @@ const main = async (): Promise<number> => {
     ...(options.model === undefined ? {} : { model: options.model }),
     ...(options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode }),
   });
+  const harnessCommit = resolveHarnessCommit();
+  const cliDigest = digestCli();
 
   const runId = makeRunId();
   const outPath = path.resolve(options.out ?? path.join(BENCH_DIR, "results", `${runId}.jsonl`));
@@ -220,6 +232,8 @@ const main = async (): Promise<number> => {
         if (remaining <= 0) {
           const record: RunRecord = {
             run_id: runId,
+            harness_commit: harnessCommit,
+            cli_digest: cliDigest,
             task: task.id,
             cond: condition.id,
             seed,
@@ -250,7 +264,7 @@ const main = async (): Promise<number> => {
           // without one the arm falls back to the harness's session-start
           // block. See bench/hooks-settings.ts (#36).
           const plan = HOOK_PLANS[condition.id] ?? {};
-          const settingsPath = writeArmSettings(plan);
+          const settingsPath = writeArmSettings(plan, cliDigest);
           const injectedContext =
             settingsPath === null ? assembleContext(workspace.dir, condition) : null;
           const result: DriverResult = await driver.run({
@@ -304,6 +318,8 @@ const main = async (): Promise<number> => {
 
           record = {
             run_id: runId,
+            harness_commit: harnessCommit,
+            cli_digest: cliDigest,
             task: task.id,
             cond: condition.id,
             seed,
@@ -324,6 +340,8 @@ const main = async (): Promise<number> => {
           errors += 1;
           record = {
             run_id: runId,
+            harness_commit: harnessCommit,
+            cli_digest: cliDigest,
             task: task.id,
             cond: condition.id,
             seed,

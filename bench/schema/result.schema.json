@@ -7,6 +7,8 @@
   "additionalProperties": false,
   "required": [
     "run_id",
+    "harness_commit",
+    "cli_digest",
     "task",
     "cond",
     "seed",
@@ -25,6 +27,16 @@
       "type": "string",
       "minLength": 1,
       "description": "Identifies the runner invocation. Every row of one invocation shares it."
+    },
+    "harness_commit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Commit resolved from git HEAD once when the benchmark matrix started."
+    },
+    "cli_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of dist/cli.js resolved once when the benchmark matrix started."
     },
     "task": {
       "type": "string",

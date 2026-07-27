@@ -329,6 +329,40 @@ const pickArms = (conditions: readonly string[]): { treatment: string; baseline:
   return { treatment: second, baseline: first };
 };
 
+const provenanceCounts = (
+  rows: readonly RunRecord[],
+  field: "harness_commit" | "cli_digest",
+): ReadonlyMap<string, number> => {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const value = row[field] ?? "unrecorded";
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return counts;
+};
+
+const formatProvenanceCounts = (counts: ReadonlyMap<string, number>): string =>
+  [...counts].sort(([left], [right]) => left.localeCompare(right)).map(([value, count]) => `${value}: ${count}`).join(", ");
+
+const assertUniformProvenance = (rows: readonly RunRecord[]): void => {
+  if (rows.length === 0) return;
+  const harnessCommits = provenanceCounts(rows, "harness_commit");
+  const cliDigests = provenanceCounts(rows, "cli_digest");
+  if (
+    harnessCommits.size === 1 &&
+    cliDigests.size === 1 &&
+    !harnessCommits.has("unrecorded") &&
+    !cliDigests.has("unrecorded")
+  ) {
+    return;
+  }
+  throw new Error(
+    `refusing to summarize benchmark rows with mixed or unrecorded provenance: ` +
+      `${harnessCommits.size} distinct harness_commit (${formatProvenanceCounts(harnessCommits)}); ` +
+      `${cliDigests.size} distinct cli_digest (${formatProvenanceCounts(cliDigests)})`,
+  );
+};
+
 export const compare = (rows: readonly RunRecord[], excluded: number): Comparison | null => {
   const arms = pickArms([...new Set(rows.map((row) => row.cond))].sort());
   if (arms === null) return null;
@@ -366,6 +400,7 @@ export const compare = (rows: readonly RunRecord[], excluded: number): Compariso
 };
 
 export const summarize = (rows: readonly RunRecord[], files: readonly string[]): Summary => {
+  assertUniformProvenance(rows);
   const conditions = [...new Set(rows.map((row) => row.cond))].sort();
   const usable = rows.filter(isUsable);
 
