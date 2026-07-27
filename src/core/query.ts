@@ -44,7 +44,13 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 
-import { execGit, historyAvailability, type HistoryAvailability } from './git.js';
+import {
+  execGit,
+  hasShallowHistory,
+  historyAvailability,
+  SHALLOW_HISTORY_CAVEAT,
+  type HistoryAvailability,
+} from './git.js';
 import {
   closeIndex,
   ensureIndex,
@@ -175,6 +181,7 @@ export interface QueryResult {
    * and return `[]`, so a broken git produced "no constraints" with exit 0.
    */
   history: HistoryAvailability;
+  shallow: boolean;
   /**
    * Whether the notes mirror could be read here, and if not, why.
    *
@@ -711,6 +718,9 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       );
     }
 
+    const shallow = hasShallowHistory(cwd);
+    if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
+
     const notes = notesAvailability({ cwd });
     if (notes === 'unfetched') {
       diagnostics.push(
@@ -730,6 +740,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       aliases: scope.aliases,
       follow: scope.follow,
       history,
+      shallow,
       notes,
       diagnostics,
     };

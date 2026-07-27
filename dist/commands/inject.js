@@ -184,8 +184,11 @@ const injectOptions = (path, options, cwd) => {
     };
 };
 const emitInjection = (injection, options) => {
+    for (const diagnostic of injection.diagnostics)
+        process.stderr.write(`commitlore: ${diagnostic}\n`);
     if (options.json === true) {
-        process.stdout.write(`${JSON.stringify(injection, null, 2)}\n`);
+        const { diagnostics: _diagnostics, ...report } = injection;
+        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
         return;
     }
     if (injection.text !== '')
@@ -203,7 +206,7 @@ export const hookResult = (raw, base) => {
         const injection = buildInjection({ ...base, cwd, path });
         return {
             stdout: injection.text === '' ? '' : hookOutput(injection.text),
-            stderr: '',
+            stderr: injection.diagnostics.map((diagnostic) => `commitlore: ${diagnostic}\n`).join(''),
             exitCode: 0,
         };
     }

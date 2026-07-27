@@ -553,6 +553,7 @@ describe('doctor: report', () => {
       'hook-runtime',
       'inject-runtime',
       'git-trailers',
+      'history-depth',
       'index-health',
     ]);
     for (const entry of report.checks) {
@@ -571,7 +572,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(8);
+    expect(parsed.checks).toHaveLength(9);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

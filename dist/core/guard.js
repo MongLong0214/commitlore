@@ -493,6 +493,7 @@ export const guard = (opts) => {
     });
     const availability = {
         history: result.history,
+        shallow: result.shallow,
         notes: result.notes,
         incomplete: result.history === 'unavailable' || result.notes === 'unfetched',
     };

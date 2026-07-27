@@ -133,6 +133,7 @@ export interface QueryResult {
      * and return `[]`, so a broken git produced "no constraints" with exit 0.
      */
     history: HistoryAvailability;
+    shallow: boolean;
     /**
      * Whether the notes mirror could be read here, and if not, why.
      *

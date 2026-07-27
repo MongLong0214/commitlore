@@ -112,6 +112,16 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
 
 The committed bundle runs without a build. One caveat remains: it does not carry the native `better-sqlite3` module, so a clone alone cannot open the SQLite index. Use `--no-index` to scan Git directly, or run `npm install` inside the clone to enable the current index. The accepted migration away from the native module is recorded in [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md).
 
+## GitHub Actions
+
+Jobs that run a query, guard, or inject command must fetch the complete history:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
+
 For an MCP client, register the same cloned entry point:
 
 ```json
