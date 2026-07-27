@@ -13,3 +13,9 @@ bench/results/*.local.jsonl
 
 # Scratch files delegated runs leave behind.
 .debug-journal.md
+
+# Agent skill installs — tooling, not product.
+.agents/
+.claude/
+skills/
+skills-lock.json
