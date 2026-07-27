@@ -24,6 +24,13 @@ const isInsidePackage = (path) => {
     const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path));
     return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
 };
+/**
+ * The shell stub's `case "$recorded" in *.mjs|*.js)` pattern, restated so
+ * TypeScript callers — `readRecordedHookTarget` below and `doctor`'s
+ * COMMITLORE_BIN report — agree with the stub about what it will run instead
+ * of guessing at it independently.
+ */
+export const hasAllowedBinExtension = (path) => path.endsWith('.js') || path.endsWith('.mjs');
 export const readRecordedHookTarget = (cwd) => {
     const bin = configValue(cwd, 'commitlore.bin');
     const node = configValue(cwd, 'commitlore.node');
@@ -32,7 +39,7 @@ export const readRecordedHookTarget = (cwd) => {
         problems.push('commitlore.bin is not recorded');
     else {
         const binPath = resolve(cwd, bin);
-        if (!bin.endsWith('.js') && !bin.endsWith('.mjs')) {
+        if (!hasAllowedBinExtension(bin)) {
             problems.push('commitlore.bin is not a .js or .mjs file');
         }
         if (!isFile(binPath))

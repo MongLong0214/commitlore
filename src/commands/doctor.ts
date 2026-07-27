@@ -26,6 +26,7 @@ import type { Command } from 'commander';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import {
   describeRecordedHookTarget,
+  hasAllowedBinExtension,
   readRecordedHookTarget,
 } from '../core/hook-target.js';
 import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
@@ -258,7 +259,14 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
 
   const problems = [
     ...target.problems,
-    ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+    ...(override === undefined || override === ''
+      ? []
+      : hasAllowedBinExtension(override)
+        ? ['COMMITLORE_BIN override is active']
+        : [
+            'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
+              'ignores it and falls through to the remaining resolution steps',
+          ]),
   ];
   if (runtime.status !== 'ok') {
     return check(
