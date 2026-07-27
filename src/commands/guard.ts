@@ -32,6 +32,7 @@ import {
   type GuardResult,
   type RenderedGuardMatch,
 } from '../core/guard.js';
+import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
 
 /** Exit status when at least one ruled-out alternative matched. */
 export const FLAGGED_EXIT_CODE = 2;
@@ -186,6 +187,9 @@ const incompleteMessage = (result: GuardResult): string => {
   return `commitlore guard: could not complete the check: ${reasons.join('; ')}`;
 };
 
+const shallowMessage = (): string =>
+  `commitlore guard: ${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`;
+
 const blockedIdentity = (match: Extract<RenderedGuardMatch, { trust: 'blocked' }>): string =>
   `recordId=${match.recordId ?? '-'}; sha=${match.sha}; score=${match.score.toFixed(2)}; ` +
   `signals=${match.signals.join(', ')}`;
@@ -227,6 +231,11 @@ export const formatHookContext = (result: GuardResult): string => {
   if (result.incomplete) {
     if (context.length > 0) context.push('');
     context.push(incompleteMessage(result).replace('the check', 'the check on this edit'));
+  }
+
+  if (result.shallow) {
+    if (context.length > 0) context.push('');
+    context.push(shallowMessage().replace('commitlore guard: ', ''));
   }
 
   return context.join('\n');
@@ -335,6 +344,7 @@ export const register = (program: Command): void => {
 
         process.stderr.write(scopeCaveat(paths));
         if (result.incomplete) process.stderr.write(`${incompleteMessage(result)}\n`);
+        if (result.shallow) process.stderr.write(`${shallowMessage()}\n`);
         if (options.json === true) {
           process.stdout.write(`${JSON.stringify(toJson(result, at, paths, threshold), null, 2)}\n`);
         } else {

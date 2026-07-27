@@ -23,7 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { execGit } from '../core/git.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
 import {
   describeRecordedHookTarget,
   readRecordedHookTarget,
@@ -555,6 +555,17 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
   }
 };
 
+const checkHistoryDepth = (opts: DoctorOptions): DoctorCheck =>
+  hasShallowHistory(opts.cwd ?? process.cwd())
+    ? check(
+        'history-depth',
+        'history depth',
+        'warn',
+        'this clone has shallow history, so queries may be missing records that exist upstream',
+        'git fetch --unshallow',
+      )
+    : check('history-depth', 'history depth', 'ok', 'full history is available');
+
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
   const hookRuntime = checkHookRuntime(opts);
   const checks = [
@@ -565,6 +576,7 @@ export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
     hookRuntime,
     checkInjectRuntime(opts),
     checkGit(opts),
+    checkHistoryDepth(opts),
     checkIndex(opts),
   ];
   return {

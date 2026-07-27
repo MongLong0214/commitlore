@@ -82,7 +82,8 @@ const repoWithRemote = (label: string): { repo: string; remote: string; sha: str
 const statusOf = (report: DoctorReport, id: string): CheckStatus | undefined =>
   report.checks.find((entry) => entry.id === id)?.status;
 
-const hookPath = (repo: string): string => join(repo, '.git', 'hooks', 'commit-msg');
+const hookPath = (repo: string): string =>
+  resolve(repo, git(repo, ['rev-parse', '--git-path', 'hooks/commit-msg']).trim());
 
 /** Writes a script, creating its directory: an empty init template leaves no `hooks/`. */
 const writeScript = (path: string, contents: string): void => {
@@ -553,6 +554,7 @@ describe('doctor: report', () => {
       'hook-runtime',
       'inject-runtime',
       'git-trailers',
+      'history-depth',
       'index-health',
     ]);
     for (const entry of report.checks) {
@@ -571,7 +573,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(8);
+    expect(parsed.checks).toHaveLength(9);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

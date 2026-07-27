@@ -242,8 +242,10 @@ const injectOptions = (
 };
 
 const emitInjection = (injection: Injection, options: InjectCommandOptions): void => {
+  for (const diagnostic of injection.diagnostics) process.stderr.write(`commitlore: ${diagnostic}\n`);
   if (options.json === true) {
-    process.stdout.write(`${JSON.stringify(injection, null, 2)}\n`);
+    const { diagnostics: _diagnostics, ...report } = injection;
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return;
   }
   if (injection.text !== '') process.stdout.write(injection.text);
@@ -277,7 +279,7 @@ export const hookResult = (
     const injection = buildInjection({ ...base, cwd, path });
     return {
       stdout: injection.text === '' ? '' : hookOutput(injection.text),
-      stderr: '',
+      stderr: injection.diagnostics.map((diagnostic) => `commitlore: ${diagnostic}\n`).join(''),
       exitCode: 0,
     };
   } catch (error) {

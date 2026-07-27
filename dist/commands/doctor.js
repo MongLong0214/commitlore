@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { execGit } from '../core/git.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
 import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
@@ -351,6 +351,9 @@ const checkIndex = (opts) => {
         }
     }
 };
+const checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd())
+    ? check('history-depth', 'history depth', 'warn', 'this clone has shallow history, so queries may be missing records that exist upstream', 'git fetch --unshallow')
+    : check('history-depth', 'history depth', 'ok', 'full history is available');
 export const runDoctor = (opts = {}) => {
     const hookRuntime = checkHookRuntime(opts);
     const checks = [
@@ -361,6 +364,7 @@ export const runDoctor = (opts = {}) => {
         hookRuntime,
         checkInjectRuntime(opts),
         checkGit(opts),
+        checkHistoryDepth(opts),
         checkIndex(opts),
     ];
     return {

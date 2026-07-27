@@ -112,6 +112,16 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
 
 コミット済み bundle は build なしで動きます。ただし native module `better-sqlite3` は bundle に含まれないため、clone だけでは SQLite index を開けません。`--no-index` で Git を直接 scan するか、clone 内で `npm install` を実行して現在の index を有効にします。native module を外す決定は [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) に記録されています。
 
+## GitHub Actions
+
+query、guard、inject を実行する job は全 history を取得する必要があります。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
+
 MCP client には同じ clone の entry point を登録します。
 
 ```json

@@ -509,6 +509,17 @@ export const buildInjection = (opts) => {
         noIndex,
         ablation: activeAblations(ablation),
     });
+    const result = runQuery({
+        path,
+        at,
+        cwd,
+        noIndex,
+        // `runQuery` drops superseded and expired records unless told otherwise, so
+        // the ablation has to be asked for at the source; filtering them back in
+        // afterwards is not possible.
+        ...(ablation.noLifecycle ? { allHistory: true } : {}),
+    });
+    const diagnostics = result.diagnostics;
     const empty = {
         text: '',
         included: 0,
@@ -520,17 +531,8 @@ export const buildInjection = (opts) => {
         budgetTokens,
         records: 0,
         withheld: 0,
+        diagnostics,
     };
-    const result = runQuery({
-        path,
-        at,
-        cwd,
-        noIndex,
-        // `runQuery` drops superseded and expired records unless told otherwise, so
-        // the ablation has to be asked for at the source; filtering them back in
-        // afterwards is not possible.
-        ...(ablation.noLifecycle ? { allHistory: true } : {}),
-    });
     // `runQuery` already drops non-active records; repeating the filter here is
     // the difference between relying on a default and stating a requirement
     // (ADR-0006: stale records are not injected).
@@ -582,6 +584,7 @@ export const buildInjection = (opts) => {
         budgetTokens,
         records: rendered.size,
         withheld: withheld.length,
+        diagnostics,
     };
 };
 //# sourceMappingURL=inject.js.map

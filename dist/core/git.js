@@ -8,6 +8,8 @@
  * plain `Error` carrying `code` and `stderr` as own properties.
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 /**
  * `code` reported when git never ran to completion (binary missing, output
  * over `maxBuffer`, killed by a signal). Distinct from any real git exit code,
@@ -77,5 +79,10 @@ export const historyAvailability = (cwd) => {
     if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === '')
         return 'empty';
     return 'unavailable';
+};
+export const SHALLOW_HISTORY_CAVEAT = 'this clone has shallow history, so this answer may be missing records that exist upstream';
+export const hasShallowHistory = (cwd) => {
+    const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
+    return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
 //# sourceMappingURL=git.js.map
