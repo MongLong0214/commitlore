@@ -144,6 +144,20 @@ export declare const isTrustedAuthor: (author: string | undefined, trustedAuthor
  * pass `record.lifecycle`) or use `gradeAll`.
  */
 export declare const gradeRecord: (record: Record, ctx: GradeContext) => Grade;
+/** blocked outranks claim outranks directive. */
+export declare const TRUST_RANK: {
+    readonly [K in Trust]: number;
+};
+/**
+ * Keeps the more restrictive of two grades for the same `Record-Id`.
+ *
+ * Records fold by identity (SPEC §5), so one `Record-Id` can be declared by
+ * several commits — and nothing stops one of them coming from an outside
+ * contributor. Latest-commit-wins is right for trailer *values*; for trust it
+ * would let an attacker upgrade their own record by appending a commit, so
+ * trust takes the floor of every declaration instead.
+ */
+export declare const restrictGrade: (a: Grade, b: Grade) => Grade;
 /**
  * Grades a whole stream, keyed by `Record-Id`.
  *

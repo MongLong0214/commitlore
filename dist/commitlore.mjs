@@ -14253,6 +14253,14 @@ var gradeRecord = (record2, ctx) => {
   const author = record2.author ?? ctx.author;
   return grade({ record: record2, author, folded: void 0 }, ctx);
 };
+var TRUST_RANK = { directive: 0, claim: 1, blocked: 2 };
+var restrictGrade = (a, b) => {
+  const kept = TRUST_RANK[b.trust] > TRUST_RANK[a.trust] ? b : a;
+  const patterns = [.../* @__PURE__ */ new Set([...a.matchedPatterns ?? [], ...b.matchedPatterns ?? []])];
+  if (patterns.length === 0) return kept;
+  const keys = [.../* @__PURE__ */ new Set([...a.matchedTrailerKeys ?? [], ...b.matchedTrailerKeys ?? []])];
+  return { ...kept, matchedPatterns: patterns, matchedTrailerKeys: keys };
+};
 var AUTHOR_BATCH = 200;
 var AUTHOR_RECORD_SEP = "";
 var AUTHOR_FIELD_SEP = "\0";
@@ -14475,21 +14483,27 @@ var gradeMerged = (merged, cwd, at, trustedAuthors) => {
   if (merged.length === 0) return;
   const authors = authorsOf(
     cwd,
-    merged.map((record2) => record2.sha)
+    merged.flatMap((record2) => record2.shas)
   );
   for (const record2 of merged) {
-    const author = authors.get(record2.sha);
-    const grade2 = gradeRecord(
-      { trailers: record2.trailers },
-      {
-        at,
-        ...author === void 0 ? {} : { author },
-        ...trustedAuthors === void 0 ? {} : { trustedAuthors }
-      }
-    );
-    record2.trust = grade2.trust;
-    if (grade2.matchedTrailerKeys !== void 0) {
-      record2.matchedTrailerKeys = grade2.matchedTrailerKeys;
+    const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
+    let grade2;
+    for (const sha of shas) {
+      const author = authors.get(sha);
+      const one = gradeRecord(
+        { trailers: record2.trailers },
+        {
+          at,
+          ...author === void 0 ? {} : { author },
+          ...trustedAuthors === void 0 ? {} : { trustedAuthors }
+        }
+      );
+      grade2 = grade2 === void 0 ? one : restrictGrade(grade2, one);
+    }
+    const resolved = grade2 ?? gradeRecord(record2, { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } });
+    record2.trust = resolved.trust;
+    if (resolved.matchedTrailerKeys !== void 0) {
+      record2.matchedTrailerKeys = resolved.matchedTrailerKeys;
     }
   }
 };
@@ -15651,7 +15665,6 @@ var resolveInstant = (cwd, at) => {
   const parsed = Date.parse(result.stdout.trim());
   return Number.isNaN(parsed) ? EPOCH : new Date(parsed);
 };
-var TRUST_RANK = { directive: 0, claim: 1, blocked: 2 };
 var gradeMerged2 = (record2, authors, at, trustedAuthors) => {
   const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
   let worst;
@@ -15662,7 +15675,7 @@ var gradeMerged2 = (record2, authors, at, trustedAuthors) => {
       ...author === void 0 ? {} : { author },
       ...trustedAuthors === void 0 ? {} : { trustedAuthors }
     });
-    if (worst === void 0 || TRUST_RANK[one.trust] > TRUST_RANK[worst.trust]) worst = one;
+    worst = worst === void 0 ? one : restrictGrade(worst, one);
   }
   return worst ?? gradeRecord(record2, { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } });
 };
@@ -25080,32 +25093,58 @@ var parseChunk = (chunk) => {
   };
 };
 var collectRecords = (opts = {}) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const notes = notesAvailability({ cwd });
   const args = ["log", "-z", `--format=${LOG_FORMAT2}`];
   if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
-  const result = execGit(args, opts.cwd === void 0 ? {} : { cwd: opts.cwd });
+  const result = execGit(args, { cwd });
   if (result.code !== 0) {
-    if (EMPTY_REPO_RE.test(result.stderr)) return { records: [], commits: 0, truncated: false };
+    if (EMPTY_REPO_RE.test(result.stderr)) {
+      return { records: [], commits: 0, truncated: false, notes };
+    }
     throw new Error(`git log failed (exit ${result.code}): ${result.stderr.trim()}`);
   }
-  const records = result.stdout.split("\0").filter((chunk) => chunk.length > 0).map(parseChunk).filter((record2) => record2 !== null);
+  const commitRecords = result.stdout.split("\0").filter((chunk) => chunk.length > 0).map(parseChunk).filter((record2) => record2 !== null);
+  const commitsBySha = new Map(commitRecords.map((record2) => [record2.sha, record2]));
+  const noteRecords = listRecordShas({ cwd }).flatMap((sha) => {
+    const commit = commitsBySha.get(sha);
+    if (commit === void 0) return [];
+    const trailers = readRecord(sha, { cwd });
+    const mirrored = trailers.every(
+      (note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value)
+    );
+    return trailers.length === 0 || mirrored ? [] : [{ sha, committedAt: commit.committedAt, trailers, source: "notes" }];
+  });
   return {
-    records,
-    commits: records.length,
-    truncated: opts.allHistory !== true && records.length >= DEFAULT_SCAN_LIMIT
+    records: [...commitRecords, ...noteRecords],
+    commits: commitRecords.length,
+    truncated: opts.allHistory !== true && commitRecords.length >= DEFAULT_SCAN_LIMIT,
+    notes
   };
 };
 var buildReport = (scan2, at) => {
   const states = foldLifecycle(scan2.records, { at });
+  const stale = states.filter(isStale).map((state) => {
+    const record2 = scan2.records.find(
+      (candidate) => candidate.sha === state.sha && candidate.trailers.some(
+        (trailer) => trailer.key === "Record-Id" && trailer.value === state.recordId
+      )
+    );
+    if (record2 === void 0) throw new Error(`no source for stale record ${state.recordId}`);
+    return { ...state, source: record2.source };
+  });
   return {
     at: at.toISOString(),
     commits: scan2.commits,
     truncated: scan2.truncated,
+    notes: scan2.notes,
     totalRecords: states.length,
-    records: states.filter(isStale),
+    records: stale,
     danglingRefs: findDanglingRefs(scan2.records)
   };
 };
 var shortSha5 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
+var location = (state) => `${state.recordId}  ${shortSha5(state.sha)}  [${state.source}]`;
 var section = (title, lines) => lines.length === 0 ? [] : ["", title, ...lines.map((line) => `  ${line}`)];
 var formatReport2 = (report) => {
   const superseded = report.records.filter((state) => state.lifecycle === "superseded");
@@ -25116,16 +25155,16 @@ var formatReport2 = (report) => {
     ...section(
       "superseded",
       superseded.map(
-        (state) => `${state.recordId}  ${shortSha5(state.sha)}  by ${shortSha5(state.supersededBy ?? "")}`
+        (state) => `${location(state)}  by ${shortSha5(state.supersededBy ?? "")}`
       )
     ),
     ...section(
       "expired",
-      expired.map((state) => `${state.recordId}  ${shortSha5(state.sha)}  ${state.expiresAt ?? ""}`)
+      expired.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
     ),
     ...section(
       "review",
-      review.map((state) => `${state.recordId}  ${shortSha5(state.sha)}  ${state.expiresAt ?? ""}`)
+      review.map((state) => `${location(state)}  ${state.expiresAt ?? ""}`)
     ),
     ...section(
       "dangling refs",
@@ -25137,6 +25176,9 @@ var formatReport2 = (report) => {
       "",
       `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`
     );
+  }
+  if (report.notes === "unfetched") {
+    lines.push("", "note: the notes mirror has not been fetched, so this scan is incomplete; run commitlore doctor --fix and fetch again.");
   }
   return `${lines.join("\n")}
 `;

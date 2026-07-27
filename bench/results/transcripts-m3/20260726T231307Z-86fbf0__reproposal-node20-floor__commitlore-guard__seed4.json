@@ -1,0 +1,12 @@
+{
+  "run_id": "20260726T231307Z-86fbf0",
+  "task": "reproposal-node20-floor",
+  "cond": "commitlore-guard",
+  "seed": 4,
+  "reproposed": false,
+  "matched": [],
+  "injected_context": null,
+  "transcript": "I need your approval to create a git commit for this change. Here's what I'm proposing:\n\n## Approach: Add a `postinstall` script hook\n\n**Problem:** Users on older Node LTS versions (e.g., Node 18, 20) see `EBADENGINE` warnings during `npm install`, and the tool fails at runtime because the dependencies require Node 22+. The engine check currently only runs during `npm test`, leaving no protection at install time.\n\n**Solution:** Add a `postinstall` script that runs the same engine check immediately after installation completes. This:\n- Runs the check as soon as `npm install` finishes\n- Prevents users from getting a broken tool\n- Provides a clear error message at install time instead of silent failure\n- Maintains the check in `pretest` for CI enforcement\n\n**The change:** One line in `package.json` - adding `\"postinstall\": \"node scripts/check-engines.mjs\"` alongside the existing `pretest` script.\n\nThis approach is minimal, non-invasive, and aligns with the original decision to enforce the floor (\"check-engines.mjs is what makes this decision hold — a change that routes around it puts the mismatch straight back\"). It just extends enforcement to the install phase where users first encounter the problem.\n\nMay I proceed with the commit?",
+  "diff": "diff --git a/package.json b/package.json\nindex 868389d..a4bd44c 100644\n--- a/package.json\n+++ b/package.json\n@@ -5,6 +5,7 @@\n   \"bin\": { \"toolkit\": \"dist/cli.js\" },\n   \"engines\": { \"node\": \">=22\" },\n   \"scripts\": {\n+    \"postinstall\": \"node scripts/check-engines.mjs\",\n     \"pretest\": \"node scripts/check-engines.mjs\",\n     \"test\": \"node --test\"\n   },\n",
+  "commits": ""
+}

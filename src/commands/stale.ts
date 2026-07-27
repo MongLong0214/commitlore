@@ -12,6 +12,12 @@
 import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
+import {
+  listRecordShas,
+  notesAvailability,
+  readRecord,
+  type NotesAvailability,
+} from '../core/notes.js';
 import { findDanglingRefs, foldLifecycle, isStale, type RecordState, type StaleRecord } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 import type { Violation } from '../core/types.js';
@@ -60,15 +66,20 @@ export interface CollectOptions {
   allHistory?: boolean;
 }
 
+type RecordSource = NonNullable<StaleRecord['source']>;
+
+type CollectedRecord = StaleRecord & { sha: string; committedAt: string; source: RecordSource };
+
 export interface Scan {
-  records: StaleRecord[];
+  records: CollectedRecord[];
   /** Commits read, including those that recorded nothing. */
   commits: number;
   /** The scan stopped at the window, so older records were not seen. */
   truncated: boolean;
+  notes: NotesAvailability;
 }
 
-const parseChunk = (chunk: string): StaleRecord | null => {
+const parseChunk = (chunk: string): CollectedRecord | null => {
   const firstSep = chunk.indexOf(UNIT);
   if (firstSep === -1) return null;
   const secondSep = chunk.indexOf(UNIT, firstSep + 1);
@@ -87,59 +98,91 @@ const parseChunk = (chunk: string): StaleRecord | null => {
 
 /**
  * Reads the record stream from git, newest commit first (the fold reorders it).
- *
- * Records also live in `refs/notes/commitlore` (SPEC §1); reading those is
- * T-301's mirror and is not merged here yet, so a repository whose records
- * survive only as notes reports nothing rather than something wrong.
  */
 export const collectRecords = (opts: CollectOptions = {}): Scan => {
+  const cwd = opts.cwd ?? process.cwd();
+  const notes = notesAvailability({ cwd });
   const args = ['log', '-z', `--format=${LOG_FORMAT}`];
   if (opts.allHistory !== true) args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
 
-  const result = execGit(args, opts.cwd === undefined ? {} : { cwd: opts.cwd });
+  const result = execGit(args, { cwd });
   if (result.code !== 0) {
-    if (EMPTY_REPO_RE.test(result.stderr)) return { records: [], commits: 0, truncated: false };
+    if (EMPTY_REPO_RE.test(result.stderr)) {
+      return { records: [], commits: 0, truncated: false, notes };
+    }
     throw new Error(`git log failed (exit ${result.code}): ${result.stderr.trim()}`);
   }
 
-  const records = result.stdout
+  const commitRecords = result.stdout
     .split('\u0000')
     .filter((chunk) => chunk.length > 0)
     .map(parseChunk)
-    .filter((record): record is StaleRecord => record !== null);
+    .filter((record): record is CollectedRecord => record !== null);
+  const commitsBySha = new Map(commitRecords.map((record) => [record.sha, record]));
+  const noteRecords = listRecordShas({ cwd }).flatMap((sha): CollectedRecord[] => {
+    const commit = commitsBySha.get(sha);
+    if (commit === undefined) return [];
+
+    const trailers = readRecord(sha, { cwd });
+    const mirrored = trailers.every((note) =>
+      commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value),
+    );
+    return trailers.length === 0 || mirrored
+      ? []
+      : [{ sha, committedAt: commit.committedAt, trailers, source: 'notes' }];
+  });
 
   return {
-    records,
-    commits: records.length,
-    truncated: opts.allHistory !== true && records.length >= DEFAULT_SCAN_LIMIT,
+    records: [...commitRecords, ...noteRecords],
+    commits: commitRecords.length,
+    truncated: opts.allHistory !== true && commitRecords.length >= DEFAULT_SCAN_LIMIT,
+    notes,
   };
 };
+
+export interface StaleReportRecord extends RecordState { source: RecordSource }
 
 export interface StaleReport {
   /** The evaluation instant, normalized to UTC. */
   at: string;
   commits: number;
   truncated: boolean;
+  notes: NotesAvailability;
   /** Every record the scan saw, stale or not. */
   totalRecords: number;
   /** The stale ones: superseded, expired, or flagged for review. */
-  records: RecordState[];
+  records: StaleReportRecord[];
   danglingRefs: Violation[];
 }
 
 export const buildReport = (scan: Scan, at: Date): StaleReport => {
   const states = foldLifecycle(scan.records, { at });
+  const stale = states.filter(isStale).map((state): StaleReportRecord => {
+    const record = scan.records.find(
+      (candidate) =>
+        candidate.sha === state.sha &&
+        candidate.trailers.some(
+          (trailer) => trailer.key === 'Record-Id' && trailer.value === state.recordId,
+        ),
+    );
+    if (record === undefined) throw new Error(`no source for stale record ${state.recordId}`);
+    return { ...state, source: record.source };
+  });
   return {
     at: at.toISOString(),
     commits: scan.commits,
     truncated: scan.truncated,
+    notes: scan.notes,
     totalRecords: states.length,
-    records: states.filter(isStale),
+    records: stale,
     danglingRefs: findDanglingRefs(scan.records),
   };
 };
 
 const shortSha = (sha: string): string => (sha.length > 8 ? sha.slice(0, 8) : sha);
+
+const location = (state: StaleReportRecord): string =>
+  `${state.recordId}  ${shortSha(state.sha)}  [${state.source}]`;
 
 const section = (title: string, lines: string[]): string[] =>
   lines.length === 0 ? [] : ['', title, ...lines.map((line) => `  ${line}`)];
@@ -155,16 +198,16 @@ export const formatReport = (report: StaleReport): string => {
     ...section(
       'superseded',
       superseded.map(
-        (state) => `${state.recordId}  ${shortSha(state.sha)}  by ${shortSha(state.supersededBy ?? '')}`,
+        (state) => `${location(state)}  by ${shortSha(state.supersededBy ?? '')}`,
       ),
     ),
     ...section(
       'expired',
-      expired.map((state) => `${state.recordId}  ${shortSha(state.sha)}  ${state.expiresAt ?? ''}`),
+      expired.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`),
     ),
     ...section(
       'review',
-      review.map((state) => `${state.recordId}  ${shortSha(state.sha)}  ${state.expiresAt ?? ''}`),
+      review.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`),
     ),
     ...section(
       'dangling refs',
@@ -177,6 +220,10 @@ export const formatReport = (report: StaleReport): string => {
       '',
       `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`,
     );
+  }
+
+  if (report.notes === 'unfetched') {
+    lines.push('', 'note: the notes mirror has not been fetched, so this scan is incomplete; run commitlore doctor --fix and fetch again.');
   }
 
   return `${lines.join('\n')}\n`;

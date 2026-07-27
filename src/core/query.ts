@@ -54,7 +54,7 @@ import {
   type RecordSource,
   type TrailerQuery,
 } from './index-db.js';
-import { authorsOf, gradeRecord } from './grade.js';
+import { authorsOf, gradeRecord, restrictGrade, type Grade } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
 import { foldLifecycle, type RecordState, type StaleRecord } from './stale.js';
 import {
@@ -551,21 +551,28 @@ const gradeMerged = (
   if (merged.length === 0) return;
   const authors = authorsOf(
     cwd,
-    merged.map((record) => record.sha),
+    merged.flatMap((record) => record.shas),
   );
   for (const record of merged) {
-    const author = authors.get(record.sha);
-    const grade = gradeRecord(
-      { trailers: record.trailers } as Record,
-      {
-        at,
-        ...(author === undefined ? {} : { author }),
-        ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
-      },
-    );
-    record.trust = grade.trust;
-    if (grade.matchedTrailerKeys !== undefined) {
-      record.matchedTrailerKeys = grade.matchedTrailerKeys;
+    const shas = record.shas.length > 0 ? record.shas : [record.sha];
+    let grade: Grade | undefined;
+    for (const sha of shas) {
+      const author = authors.get(sha);
+      const one = gradeRecord(
+        { trailers: record.trailers } as Record,
+        {
+          at,
+          ...(author === undefined ? {} : { author }),
+          ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
+        },
+      );
+      grade = grade === undefined ? one : restrictGrade(grade, one);
+    }
+    const resolved =
+      grade ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
+    record.trust = resolved.trust;
+    if (resolved.matchedTrailerKeys !== undefined) {
+      record.matchedTrailerKeys = resolved.matchedTrailerKeys;
     }
   }
 };

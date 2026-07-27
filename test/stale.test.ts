@@ -22,7 +22,8 @@ import {
   isStale,
   type StaleRecord,
 } from '../src/core/stale.js';
-import { buildReport, collectRecords, register } from '../src/commands/stale.js';
+import { buildReport, collectRecords, formatReport, register } from '../src/commands/stale.js';
+import { NOTES_REF, writeRecord } from '../src/core/notes.js';
 import {
   STALE_PREFIX,
   contractCaseFiles,
@@ -569,5 +570,116 @@ describe('collectRecords over a real repository', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('commitlore: --at is not a valid ISO 8601 instant: yesterday\n');
+  });
+
+  it('reports a dangling reference that exists only in notes', () => {
+    commit('Record a notes-only decision', '2026-02-11T00:00:00Z');
+    const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(
+      sha,
+      [
+        trailer('Ruled-out', 'RabbitMQ | slower'),
+        trailer('Provenance', 'authored'),
+        trailer('Record-Id', 'r-note99'),
+        trailer('Supersedes', 'r-gone01'),
+      ],
+      { cwd: repo },
+    );
+
+    const scan = collectRecords({ cwd: repo });
+    expect(
+      scan.records.find((record) => record.sha === sha && record.source === 'notes'),
+    ).toBeDefined();
+    expect(buildReport(scan, new Date('2026-03-01T00:00:00Z')).danglingRefs).toContainEqual({
+      key: 'Supersedes',
+      value: 'r-gone01',
+      rule: 'dangling-ref',
+      got: 'r-gone01',
+      want: 'an existing Record-Id in history',
+    });
+  });
+
+  it('reports a notes-only record with a past date-form Expires as expired', () => {
+    commit('Record another notes-only decision', '2026-02-12T00:00:00Z');
+    const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(
+      sha,
+      [trailer('Record-Id', 'r-note98'), trailer('Expires', '2026-02-15')],
+      { cwd: repo },
+    );
+
+    const report = buildReport(collectRecords({ cwd: repo }), new Date('2026-03-01T00:00:00Z'));
+    expect(report.records).toContainEqual(
+      expect.objectContaining({
+        recordId: 'r-note98',
+        lifecycle: 'expired',
+        source: 'notes',
+      }),
+    );
+  });
+
+  it('counts a record mirrored in a commit and notes once', () => {
+    const trailers = [
+      trailer('Limit', 'one mirror is one record'),
+      trailer('Record-Id', 'r-mirror1'),
+    ];
+    commit(
+      [
+        'Record the mirrored decision',
+        '',
+        ...trailers.map((item) => `${item.key}: ${item.value}`),
+      ].join('\n'),
+      '2026-02-13T00:00:00Z',
+    );
+    const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(sha, trailers, { cwd: repo });
+
+    const mirrored = collectRecords({ cwd: repo }).records.filter((record) =>
+      record.trailers.some((item) => item.key === 'Record-Id' && item.value === 'r-mirror1'),
+    );
+    expect(mirrored).toHaveLength(1);
+    expect(mirrored[0]?.source).toBe('commit');
+  });
+
+  it('reports a commit record superseded by a notes-only record', () => {
+    commit(
+      ['Record the original decision', '', 'Record-Id: r-original1'].join('\n'),
+      '2026-02-14T00:00:00Z',
+    );
+    const originalSha = git(['rev-parse', 'HEAD']).stdout.trim();
+    commit('Supersede it from notes', '2026-02-20T00:00:00Z');
+    const supersedingSha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(supersedingSha, [trailer('Supersedes', 'r-original1')], { cwd: repo });
+
+    const report = buildReport(collectRecords({ cwd: repo }), new Date('2026-03-01T00:00:00Z'));
+    expect(report.records).toContainEqual(
+      expect.objectContaining({
+        recordId: 'r-original1',
+        sha: originalSha,
+        lifecycle: 'superseded',
+        supersededBy: supersedingSha,
+        source: 'commit',
+      }),
+    );
+  });
+
+  it('says the scan is incomplete when a clone has not fetched notes', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'commitlore-stale-clone-'));
+    const origin = join(parent, 'origin.git');
+    const clone = join(parent, 'clone');
+    const run = (cwd: string, args: string[]) =>
+      spawnSync('git', args, { cwd, shell: false, encoding: 'utf8' });
+
+    try {
+      expect(run(parent, ['init', '--bare', '-q', origin]).status).toBe(0);
+      expect(run(repo, ['push', '-q', origin, 'HEAD:refs/heads/main', NOTES_REF]).status).toBe(0);
+      expect(run(parent, ['clone', '-q', origin, clone]).status).toBe(0);
+
+      const report = buildReport(collectRecords({ cwd: clone }), new Date('2026-03-01T00:00:00Z'));
+      expect(report.notes).toBe('unfetched');
+      expect(formatReport(report)).toContain('scan is incomplete');
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 });

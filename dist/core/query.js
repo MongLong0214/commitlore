@@ -45,7 +45,7 @@
  */
 import { execGit, historyAvailability } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
-import { authorsOf, gradeRecord } from './grade.js';
+import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
@@ -378,17 +378,23 @@ const parseProvenance = (value) => {
 const gradeMerged = (merged, cwd, at, trustedAuthors) => {
     if (merged.length === 0)
         return;
-    const authors = authorsOf(cwd, merged.map((record) => record.sha));
+    const authors = authorsOf(cwd, merged.flatMap((record) => record.shas));
     for (const record of merged) {
-        const author = authors.get(record.sha);
-        const grade = gradeRecord({ trailers: record.trailers }, {
-            at,
-            ...(author === undefined ? {} : { author }),
-            ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
-        });
-        record.trust = grade.trust;
-        if (grade.matchedTrailerKeys !== undefined) {
-            record.matchedTrailerKeys = grade.matchedTrailerKeys;
+        const shas = record.shas.length > 0 ? record.shas : [record.sha];
+        let grade;
+        for (const sha of shas) {
+            const author = authors.get(sha);
+            const one = gradeRecord({ trailers: record.trailers }, {
+                at,
+                ...(author === undefined ? {} : { author }),
+                ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
+            });
+            grade = grade === undefined ? one : restrictGrade(grade, one);
+        }
+        const resolved = grade ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
+        record.trust = resolved.trust;
+        if (resolved.matchedTrailerKeys !== undefined) {
+            record.matchedTrailerKeys = resolved.matchedTrailerKeys;
         }
     }
 };

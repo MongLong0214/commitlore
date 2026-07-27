@@ -572,7 +572,7 @@ export const gradeRecord = (record: Record, ctx: GradeContext): Grade => {
 };
 
 /** blocked outranks claim outranks directive. */
-const RANK: { readonly [K in Trust]: number } = { directive: 0, claim: 1, blocked: 2 };
+export const TRUST_RANK: { readonly [K in Trust]: number } = { directive: 0, claim: 1, blocked: 2 };
 
 /**
  * Keeps the more restrictive of two grades for the same `Record-Id`.
@@ -583,8 +583,8 @@ const RANK: { readonly [K in Trust]: number } = { directive: 0, claim: 1, blocke
  * would let an attacker upgrade their own record by appending a commit, so
  * trust takes the floor of every declaration instead.
  */
-const restrict = (a: Grade, b: Grade): Grade => {
-  const kept = RANK[b.trust] > RANK[a.trust] ? b : a;
+export const restrictGrade = (a: Grade, b: Grade): Grade => {
+  const kept = TRUST_RANK[b.trust] > TRUST_RANK[a.trust] ? b : a;
   const patterns = [...new Set([...(a.matchedPatterns ?? []), ...(b.matchedPatterns ?? [])])];
   if (patterns.length === 0) return kept;
   const keys = [...new Set([...(a.matchedTrailerKeys ?? []), ...(b.matchedTrailerKeys ?? [])])];
@@ -619,7 +619,7 @@ export const gradeAll = (records: AuthoredRecord[], ctx: GradeContext): Map<stri
     );
 
     const previous = graded.get(key);
-    graded.set(key, previous === undefined ? one : restrict(previous, one));
+    graded.set(key, previous === undefined ? one : restrictGrade(previous, one));
   });
 
   return graded;

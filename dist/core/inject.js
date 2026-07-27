@@ -60,7 +60,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execGit } from './git.js';
-import { authorsOf, gradeRecord } from './grade.js';
+import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from './query.js';
 import { BOOKKEEPING_KEYS } from './types.js';
 const NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
@@ -183,8 +183,6 @@ const SHA_RE = /^[0-9a-f]{4,40}$/;
 // ---------------------------------------------------------------------------
 // Grading
 // ---------------------------------------------------------------------------
-/** `blocked` outranks `claim` outranks `directive` (mirrors `core/grade.ts`). */
-const TRUST_RANK = { directive: 0, claim: 1, blocked: 2 };
 /**
  * Grades one merged record: `gradeRecord` once per commit that declared it,
  * keeping the most restrictive answer.
@@ -203,8 +201,7 @@ const gradeMerged = (record, authors, at, trustedAuthors) => {
             ...(author === undefined ? {} : { author }),
             ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
         });
-        if (worst === undefined || TRUST_RANK[one.trust] > TRUST_RANK[worst.trust])
-            worst = one;
+        worst = worst === undefined ? one : restrictGrade(worst, one);
     }
     return worst ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
 };

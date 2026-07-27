@@ -9,6 +9,7 @@
  * as the default for `--at`.
  */
 import type { Command } from 'commander';
+import { type NotesAvailability } from '../core/notes.js';
 import { type RecordState, type StaleRecord } from '../core/stale.js';
 import type { Violation } from '../core/types.js';
 /**
@@ -23,30 +24,37 @@ export interface CollectOptions {
     /** Read the whole reachable history instead of the most recent commits. */
     allHistory?: boolean;
 }
+type RecordSource = NonNullable<StaleRecord['source']>;
+type CollectedRecord = StaleRecord & {
+    sha: string;
+    committedAt: string;
+    source: RecordSource;
+};
 export interface Scan {
-    records: StaleRecord[];
+    records: CollectedRecord[];
     /** Commits read, including those that recorded nothing. */
     commits: number;
     /** The scan stopped at the window, so older records were not seen. */
     truncated: boolean;
+    notes: NotesAvailability;
 }
 /**
  * Reads the record stream from git, newest commit first (the fold reorders it).
- *
- * Records also live in `refs/notes/commitlore` (SPEC §1); reading those is
- * T-301's mirror and is not merged here yet, so a repository whose records
- * survive only as notes reports nothing rather than something wrong.
  */
 export declare const collectRecords: (opts?: CollectOptions) => Scan;
+export interface StaleReportRecord extends RecordState {
+    source: RecordSource;
+}
 export interface StaleReport {
     /** The evaluation instant, normalized to UTC. */
     at: string;
     commits: number;
     truncated: boolean;
+    notes: NotesAvailability;
     /** Every record the scan saw, stale or not. */
     totalRecords: number;
     /** The stale ones: superseded, expired, or flagged for review. */
-    records: RecordState[];
+    records: StaleReportRecord[];
     danglingRefs: Violation[];
 }
 export declare const buildReport: (scan: Scan, at: Date) => StaleReport;
@@ -57,3 +65,4 @@ export declare const formatReport: (report: StaleReport) => string;
  * wants CI to fail on a dangling reference reads `danglingRefs` from `--json`.
  */
 export declare const register: (program: Command) => void;
+export {};

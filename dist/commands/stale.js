@@ -9,6 +9,7 @@
  * as the default for `--at`.
  */
 import { execGit } from '../core/git.js';
+import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
 import { findDanglingRefs, foldLifecycle, isStale } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 /**
@@ -63,44 +64,64 @@ const parseChunk = (chunk) => {
 };
 /**
  * Reads the record stream from git, newest commit first (the fold reorders it).
- *
- * Records also live in `refs/notes/commitlore` (SPEC §1); reading those is
- * T-301's mirror and is not merged here yet, so a repository whose records
- * survive only as notes reports nothing rather than something wrong.
  */
 export const collectRecords = (opts = {}) => {
+    const cwd = opts.cwd ?? process.cwd();
+    const notes = notesAvailability({ cwd });
     const args = ['log', '-z', `--format=${LOG_FORMAT}`];
     if (opts.allHistory !== true)
         args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
-    const result = execGit(args, opts.cwd === undefined ? {} : { cwd: opts.cwd });
+    const result = execGit(args, { cwd });
     if (result.code !== 0) {
-        if (EMPTY_REPO_RE.test(result.stderr))
-            return { records: [], commits: 0, truncated: false };
+        if (EMPTY_REPO_RE.test(result.stderr)) {
+            return { records: [], commits: 0, truncated: false, notes };
+        }
         throw new Error(`git log failed (exit ${result.code}): ${result.stderr.trim()}`);
     }
-    const records = result.stdout
+    const commitRecords = result.stdout
         .split('\u0000')
         .filter((chunk) => chunk.length > 0)
         .map(parseChunk)
         .filter((record) => record !== null);
+    const commitsBySha = new Map(commitRecords.map((record) => [record.sha, record]));
+    const noteRecords = listRecordShas({ cwd }).flatMap((sha) => {
+        const commit = commitsBySha.get(sha);
+        if (commit === undefined)
+            return [];
+        const trailers = readRecord(sha, { cwd });
+        const mirrored = trailers.every((note) => commit.trailers.some((trailer) => trailer.key === note.key && trailer.value === note.value));
+        return trailers.length === 0 || mirrored
+            ? []
+            : [{ sha, committedAt: commit.committedAt, trailers, source: 'notes' }];
+    });
     return {
-        records,
-        commits: records.length,
-        truncated: opts.allHistory !== true && records.length >= DEFAULT_SCAN_LIMIT,
+        records: [...commitRecords, ...noteRecords],
+        commits: commitRecords.length,
+        truncated: opts.allHistory !== true && commitRecords.length >= DEFAULT_SCAN_LIMIT,
+        notes,
     };
 };
 export const buildReport = (scan, at) => {
     const states = foldLifecycle(scan.records, { at });
+    const stale = states.filter(isStale).map((state) => {
+        const record = scan.records.find((candidate) => candidate.sha === state.sha &&
+            candidate.trailers.some((trailer) => trailer.key === 'Record-Id' && trailer.value === state.recordId));
+        if (record === undefined)
+            throw new Error(`no source for stale record ${state.recordId}`);
+        return { ...state, source: record.source };
+    });
     return {
         at: at.toISOString(),
         commits: scan.commits,
         truncated: scan.truncated,
+        notes: scan.notes,
         totalRecords: states.length,
-        records: states.filter(isStale),
+        records: stale,
         danglingRefs: findDanglingRefs(scan.records),
     };
 };
 const shortSha = (sha) => (sha.length > 8 ? sha.slice(0, 8) : sha);
+const location = (state) => `${state.recordId}  ${shortSha(state.sha)}  [${state.source}]`;
 const section = (title, lines) => lines.length === 0 ? [] : ['', title, ...lines.map((line) => `  ${line}`)];
 export const formatReport = (report) => {
     const superseded = report.records.filter((state) => state.lifecycle === 'superseded');
@@ -109,13 +130,16 @@ export const formatReport = (report) => {
     const lines = [
         `stale at ${report.at} — ${superseded.length} superseded, ${expired.length} expired, ` +
             `${review.length} for review, of ${report.totalRecords} record(s) in ${report.commits} commit(s)`,
-        ...section('superseded', superseded.map((state) => `${state.recordId}  ${shortSha(state.sha)}  by ${shortSha(state.supersededBy ?? '')}`)),
-        ...section('expired', expired.map((state) => `${state.recordId}  ${shortSha(state.sha)}  ${state.expiresAt ?? ''}`)),
-        ...section('review', review.map((state) => `${state.recordId}  ${shortSha(state.sha)}  ${state.expiresAt ?? ''}`)),
+        ...section('superseded', superseded.map((state) => `${location(state)}  by ${shortSha(state.supersededBy ?? '')}`)),
+        ...section('expired', expired.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
+        ...section('review', review.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
         ...section('dangling refs', report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
     ];
     if (report.truncated) {
         lines.push('', `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`);
+    }
+    if (report.notes === 'unfetched') {
+        lines.push('', 'note: the notes mirror has not been fetched, so this scan is incomplete; run commitlore doctor --fix and fetch again.');
     }
     return `${lines.join('\n')}\n`;
 };
