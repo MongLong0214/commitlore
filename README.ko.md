@@ -107,10 +107,10 @@ CommitLore 레지스트리 패키지는 없다. 배포 채널은 Git 저장소 �
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-커밋된 번들은 빌드 없이 실행된다. 단, 네이티브 `better-sqlite3` 모듈은 번들에 들어 있지 않으므로 clone만으로는 SQLite 인덱스를 열 수 없다. `--no-index`로 Git을 직접 스캔하거나 clone 안에서 `npm install`을 실행해 현재 인덱스를 활성화한다. 네이티브 모듈 제거 결정은 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)에 기록돼 있다.
+커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
 
 ## GitHub Actions
 

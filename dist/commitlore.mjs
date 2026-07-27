@@ -11996,11 +11996,12 @@ var cachedCtor = null;
 var loadDatabaseCtor = () => {
   if (cachedCtor !== null) return cachedCtor;
   try {
-    cachedCtor = createRequire(import.meta.url)("better-sqlite3");
+    const nodeSqlite = createRequire(import.meta.url)("node:sqlite");
+    cachedCtor = nodeSqlite.DatabaseSync;
     return cachedCtor;
   } catch (cause) {
     throw new Error(
-      `the SQLite index needs better-sqlite3, which is not installed here \u2014 rerun with --no-index, or install it to get the index back (${cause instanceof Error ? cause.message : String(cause)})`
+      `the SQLite index needs node:sqlite, which this Node build does not provide \u2014 rerun with --no-index, or use a Node build with SQLite support to get the index back (${cause instanceof Error ? cause.message : String(cause)})`
     );
   }
 };
@@ -12267,6 +12268,24 @@ var createSchema = (db) => {
   db.exec(SCHEMA_SQL);
   initMeta(db, "schema_version", String(SCHEMA_VERSION));
 };
+var transactionDepth = /* @__PURE__ */ new WeakMap();
+var runInTransaction = (db, fn) => {
+  const depth = transactionDepth.get(db) ?? 0;
+  const savepoint = `commitlore_sp_${depth}`;
+  db.exec(depth === 0 ? "BEGIN" : `SAVEPOINT ${savepoint}`);
+  transactionDepth.set(db, depth + 1);
+  try {
+    const result = fn();
+    db.exec(depth === 0 ? "COMMIT" : `RELEASE ${savepoint}`);
+    return result;
+  } catch (error2) {
+    db.exec(depth === 0 ? "ROLLBACK" : `ROLLBACK TO ${savepoint}`);
+    if (depth !== 0) db.exec(`RELEASE ${savepoint}`);
+    throw error2;
+  } finally {
+    transactionDepth.set(db, depth);
+  }
+};
 var syncFts = (db, requested, writable) => {
   if (!writable) return requested && detectFts(db) && readMeta(db, "fts") === "1";
   if (!requested || !enableFts(db)) {
@@ -12274,11 +12293,11 @@ var syncFts = (db, requested, writable) => {
     return false;
   }
   if (readMeta(db, "fts") !== "1") {
-    db.transaction(() => {
+    runInTransaction(db, () => {
       db.exec("DELETE FROM trailers_fts");
       db.exec("INSERT INTO trailers_fts (rowid, value_lc) SELECT id, value_lc FROM trailers");
       writeMeta(db, "fts", "1");
-    })();
+    });
   }
   return true;
 };
@@ -12293,18 +12312,21 @@ var healthProblem = (db) => {
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
     }
-    const check2 = db.pragma("quick_check(1)", { simple: true });
-    if (check2 !== "ok") return `sqlite quick_check reported: ${String(check2)}`;
+    const check2 = db.prepare("PRAGMA quick_check(1)").get();
+    if (check2?.quick_check !== "ok") {
+      return `sqlite quick_check reported: ${String(check2?.quick_check)}`;
+    }
     return null;
   } catch (error2) {
     return `index is unreadable: ${errorMessage(error2)}`;
   }
 };
 var openDatabaseFile = (path2, readonly2) => {
-  const db = new (loadDatabaseCtor())(path2, { readonly: readonly2 });
+  const Ctor = loadDatabaseCtor();
+  const db = new Ctor(path2, { readOnly: readonly2 });
   if (!readonly2) {
-    db.pragma("journal_mode = WAL");
-    db.pragma("synchronous = NORMAL");
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
   }
   return db;
 };
@@ -12366,8 +12388,8 @@ var insertRecords = (handle, records) => {
     "INSERT OR IGNORE INTO commit_paths (commit_sha, path) VALUES (?, ?)"
   );
   const counts = { trailers: 0, paths: 0 };
-  const run = handle.db.transaction((batch) => {
-    for (const record2 of batch) {
+  runInTransaction(handle.db, () => {
+    for (const record2 of records) {
       const provenance = record2.trailers.find((trailer) => trailer.key === "Provenance")?.value ?? null;
       record2.trailers.forEach((trailer, seq) => {
         const valueLc = trailer.value.toLowerCase();
@@ -12386,34 +12408,33 @@ var insertRecords = (handle, records) => {
         counts.trailers += 1;
       });
       for (const path2 of record2.paths) {
-        counts.paths += insertPath.run(record2.sha, path2).changes;
+        counts.paths += Number(insertPath.run(record2.sha, path2).changes);
       }
     }
   });
-  run(records);
   return counts;
 };
 var deleteNoteRows = (handle) => {
-  handle.db.transaction(() => {
+  runInTransaction(handle.db, () => {
     if (handle.fts) {
       handle.db.exec(
         `DELETE FROM trailers_fts WHERE rowid IN (SELECT id FROM trailers WHERE source = 'notes')`
       );
     }
     handle.db.exec(`DELETE FROM trailers WHERE source = 'notes'`);
-  })();
+  });
 };
 var indexNotes = (handle, opts = {}) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
   const records = refSha === null ? [] : readNoteRecords(handle.cwd);
-  return handle.db.transaction(() => {
+  return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
     writeMeta(handle.db, "notes_ref_sha", refSha);
     return counts.trailers;
-  })();
+  });
 };
 var emptyStats = (handle, started) => ({
   rebuilt: false,
@@ -12446,7 +12467,7 @@ var rebuildIndex = (handle, opts = {}) => {
     commitsScanned: shas.length,
     notesScanned: noteRecords.length
   };
-  handle.db.transaction(() => {
+  runInTransaction(handle.db, () => {
     if (handle.fts) handle.db.exec("DELETE FROM trailers_fts");
     handle.db.exec("DELETE FROM trailers");
     handle.db.exec("DELETE FROM commit_paths");
@@ -12459,7 +12480,7 @@ var rebuildIndex = (handle, opts = {}) => {
     stats.pathsIndexed += noteCounts.paths;
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
-  })();
+  });
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -12543,9 +12564,7 @@ var attachPaths = (handle, rows) => {
   if (shas.length === 0) return byCommit;
   for (const batch of chunked(shas, 500)) {
     const placeholders = batch.map(() => "?").join(", ");
-    const found = handle.db.prepare(
-      `SELECT commit_sha, path FROM commit_paths WHERE commit_sha IN (${placeholders})`
-    ).all(...batch);
+    const found = handle.db.prepare(`SELECT commit_sha, path FROM commit_paths WHERE commit_sha IN (${placeholders})`).all(...batch);
     for (const row of found) {
       const existing = byCommit.get(row.commit_sha);
       if (existing === void 0) byCommit.set(row.commit_sha, [row.path]);

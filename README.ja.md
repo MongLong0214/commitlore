@@ -107,10 +107,10 @@ CommitLore の registry package はありません。配布チャネルは Git �
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-コミット済み bundle は build なしで動きます。ただし native module `better-sqlite3` は bundle に含まれないため、clone だけでは SQLite index を開けません。`--no-index` で Git を直接 scan するか、clone 内で `npm install` を実行して現在の index を有効にします。native module を外す決定は [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) に記録されています。
+コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
 
 ## GitHub Actions
 

@@ -107,10 +107,10 @@ CommitLore 没有 registry package。发布渠道就是 Git 仓库本身（[ADR-
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-仓库中提交的 bundle 无需构建即可运行。但它没有携带原生 `better-sqlite3` 模块，因此仅靠 clone 无法打开 SQLite 索引。可以使用 `--no-index` 直接扫描 Git，或在 clone 中运行 `npm install` 来启用当前索引。移除原生模块的决定记录在 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) 中。
+仓库中提交的 bundle 无需构建、也无需 `node_modules` 即可运行。SQLite 索引使用 Node 自带的 `node:sqlite`（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)），因此仅靠 clone 就能构建并查询索引——不需要原生模块，不需要编译器，也不需要 `npm install`。想跳过索引、只用 Git 回答时，仍可以使用 `--no-index`。
 
 ## GitHub Actions
 

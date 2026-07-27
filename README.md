@@ -107,10 +107,10 @@ There is no CommitLore registry package. Distribution is the Git repository ([AD
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-The committed bundle runs without a build. One caveat remains: it does not carry the native `better-sqlite3` module, so a clone alone cannot open the SQLite index. Use `--no-index` to scan Git directly, or run `npm install` inside the clone to enable the current index. The accepted migration away from the native module is recorded in [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md).
+The committed bundle runs without a build and without `node_modules`. The SQLite index uses `node:sqlite`, which ships inside Node itself ([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)), so a clone alone can build and query it — no native module, no compiler, no `npm install`. `--no-index` is still there to answer from Git alone when you want to skip the index.
 
 ## GitHub Actions
 
