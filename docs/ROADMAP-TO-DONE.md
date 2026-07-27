@@ -1,168 +1,168 @@
-# 최종 로드맵 — 세 목표, 판정 가능한 완결 조건
+# Final roadmap — three goals, decidable completion conditions
 
-> 갱신 근거: 프로덕션 재리뷰 7블로커 전건 종결, gitseed v0.2 PRD 접수, 브랜치
-> 모델 마이그레이션 완료.
+> Basis for update: all 7 production re-review blockers closed, gitseed v0.2 PRD received, branch
+> model migration complete.
 >
-> 이 문서의 모든 단계는 **명령으로 판정된다**. 명령으로 판정할 수 없는 항목은
-> 여기 넣지 않는다. 그렇게 하지 않은 체크리스트가 gitseed에서 산출물 세 개를
-> 통째로 건너뛰게 만들었다.
+> Every step in this document is **decided by a command**. Do not put an item here if a command
+> cannot decide it. A checklist that failed this rule caused gitseed to skip three
+> entire artifacts.
 
 ---
 
-## 세 목표는 하나의 루프다
+## The three goals form one loop
 
 ```
-        공장 스킬 (목표 3)
-     Phase 게이트 · 브랜치 모델 · 실행 프로토콜
-              │ 짓는다                    │ 규약을 강제한다
+        Factory Skills (Goal 3)
+     Phase gates · branch model · execution protocol
+              │ build                     │ enforce the protocol
               ▼                           ▼
-       gitseed (목표 2)  ──기록──▶  CommitLore (목표 1)
-      v0.2 Discovery Radar        트레일러 · guard · inject
+       gitseed (Goal 2)  ──record──▶  CommitLore (Goal 1)
+      v0.2 Discovery Radar        trailers · guard · inject
               │                           │
-              └──── 실사용에서 결함 ───────┘
+              └──── defects in real use ─────┘
                         │
-                  한 번은 버그, 두 번은 스킬 결함
+              Once is a bug; twice is a skill defect
 ```
 
-**목표 3만 다른 둘의 함수다.** 프로젝트를 더 짓지 않으면 스킬은 개선되지 않는다.
+**Only goal 3 is a function of the other two.** The skill does not improve unless more projects are built.
 
-절차: `~/.claude/skills/repo-factory/references/self-improvement-loop.md`
+Procedure: `~/.claude/skills/repo-factory/references/self-improvement-loop.md`
 
 ---
 
-## 목표 1 — CommitLore 프로덕션 레디
+## Goal 1 — CommitLore production-ready
 
-현재: `dev` 기본 브랜치, CI 초록, 테스트 1171/33파일, 리뷰 블로커 10/10 종결.
+Current: `dev` default branch, CI green, 1171 tests/33 files, 10/10 review blockers closed.
 
-### 남은 Phase
+### Remaining phases
 
-| Phase | 내용 | 게이트 |
+| Phase | Work | Gate |
 |---|---|---|
-| **3** | 플러그인 매니페스트가 관례 위치 `hooks`를 재선언 — 이중 등록 유력. 매니페스트 테스트 전무 | 매니페스트 스위트 초록 + 클론이 선언 파일 전부 포함 |
-| **4** | **M4 설계·실행** (아래) + `docs/RELEASE-GATE.md` 전항 실행 | 게이트 6절 전부 통과, 그 커밋에서 CI 초록 |
+| **3** | Plugin manifest redeclares conventional-location `hooks` — double registration likely. No manifest tests | Manifest suite green + clone contains every declared file |
+| **4** | **Design and run M4** (below) + execute every item in `docs/RELEASE-GATE.md` | All 6 gate sections pass, CI green at that commit |
 
-### M4 — 왜 M1·M2가 null이었는지에 대한 답
+### M4 — the answer to why M1 and M2 were null
 
-**진단(실측)**: 과제 10개 중 **7개가 대조군 기저율 0**이다. CommitLore 없이도
-에이전트가 기각된 접근을 제안하지 않는다. 막을 것이 없는 과제가 집계의 70%를
-차지했다. null은 "효과 없음"이 아니라 **"측정 장치가 대부분 비어 있었음"**이다.
+**Diagnosis (measured)**: of 10 tasks, **7 have a control base rate of 0**. Even without CommitLore,
+the agent does not propose the rejected approach. Tasks with nothing to block made up 70% of the
+aggregate. The null means not "no effect," but **"most of the measuring instrument was empty."**
 
-검정력은 표본보다 기저율에 지배된다. 절반으로 줄이는 효과, 80% 검정력 기준:
+Power is governed more by the base rate than the sample. For an effect that cuts the rate in half, at 80% power:
 
-| 대조군 기저율 | 팔당 필요 n |
+| Control base rate | Required n per arm |
 |---|---|
-| 20% (현재) | 98 |
+| 20% (current) | 98 |
 | 50% | 29 |
 | 80% | 11 |
 
-**설계 변경 세 가지**
+**Three design changes**
 
-1. **과제 자격 라운드.** 가설 검정 전에 대조군만 돌려 기저율을 잰다. 낮은 과제는
-   **처치군을 아예 돌리지 않고** 탈락시킨다. 처치군을 보지 않고 결정하므로
-   p-해킹이 아니다. 임계값과 절차를 사전등록 §16에 먼저 박는다.
-2. **과제 원천을 실제 결정으로.** gitseed v0.2 PRD §35가 기각한 7개는 에이전트가
-   자연스럽게 고를 오답이다 — "LLM이 최종 순위를 정한다"는 코드가 훨씬 적게 든다.
-   합성 과제보다 기저율이 높을 것으로 예상한다(예상이지 측정이 아니다).
-3. **결과 변수 추가.** 재제안률은 "안 했다"만 센다. 후보: 기록된 `Limit:` 위반,
-   기각 이유를 인용한 대안 설계, 추측 대신 질문, **리뷰어가 "그거 해봤다"를
-   말해야 했는가**. 마지막이 실제 사업 가치일 수 있고, 그러면 지금 재는 축이
-   틀린 것이다.
+1. **Task qualification round.** Before hypothesis testing, run only the control arm to measure base rates.
+   Reject low-rate tasks **without running the treatment arm at all**. The decision does not inspect
+   the treatment arm, so this is not p-hacking. Fix the threshold and procedure in preregistration §16 first.
+2. **Source tasks from real decisions.** The 7 options rejected by gitseed v0.2 PRD §35 are wrong answers
+   an agent would naturally choose — "let the LLM decide the final ranking" takes far less code.
+   Their base rate is expected to exceed synthetic tasks (an expectation, not a measurement).
+3. **Add outcome variables.** Re-proposal rate counts only "did not do it." Candidates: violation of a recorded `Limit:`,
+   an alternative design that cites the rejection reason, asking rather than guessing, **whether the reviewer had to
+   say "we tried that."** The last may be the actual business value, in which case the current measurement axis
+   is wrong.
 
-**M3는 무효다.** 훅이 워킹 카피의 `dist/`를 읽는 동안 운영자가 8번 재빌드했다
-(사전등록 §15). 데이터는 `*-invalidated`로 보존하며 결과로 인용 금지.
+**M3 is void.** While the hook read `dist/` from the working copy, the operator rebuilt it 8 times
+(preregistration §15). Preserve the data as `*-invalidated`; do not cite it as a result.
 
-### 완결 조건
+### Completion condition
 
-`RELEASE-GATE.md` 전 절이 실행되어 통과하고, **그 커밋에서** CI가 초록이며,
-남은 이슈가 전부 결함이 아니라 방어 가능한 축 위의 기능이다.
+Every section of `RELEASE-GATE.md` has been executed and passed, CI is green **at that commit**,
+and every remaining issue is a feature on a defensible axis rather than a defect.
 
-**긍정적 벤치마크는 요구하지 않는다.** M4가 또 null이면 그것이 결과이고
-발표한다. 그 경우 제품의 주장은 "에이전트를 낫게 만든다"가 아니라 **"결정 이력을
-git에 결박해 사람이 검증 가능한 형태로 보존한다"**가 되며, 후자는 이미 테스트로
-증명돼 있고 벤치마크와 무관하게 참이다.
+**A positive benchmark is not required.** If M4 is null again, that is the result, and it will be
+published. In that case, the product claim is not "makes agents better," but **"binds decision history
+to git and preserves it in a human-verifiable form."** The latter is already proven by tests
+and remains true independent of the benchmark.
 
 ---
 
-## 목표 2 — gitseed v0.2 Discovery Radar
+## Goal 2 — gitseed v0.2 Discovery Radar
 
-현재: v0.1 완주(테스트 151, CI 초록, Phase 4 게이트 exit 0, 이슈 #5 종결).
-v0.2 PRD 접수 — 6 마일스톤.
+Current: v0.1 complete (151 tests, CI green, Phase 4 gate exit 0, issue #5 closed).
+v0.2 PRD received — 6 milestones.
 
-### 마일스톤 (PRD §32)
+### Milestones (PRD §32)
 
-| # | 이름 | 핵심 산출 |
+| # | Name | Core output |
 |---|---|---|
-| 1 | **Truthful Core** | ports/domain/application 분리 · run artifact · model smoke 연결 |
-| 2 | Persistence | SQLite 어댑터 · 마이그레이션 · replay |
-| 3 | Categories | CategoryPack 스키마 · 검증기 · 결정적 분류기 |
-| 4 | Scoring | Quality/Risk → Momentum → Undervalued → 추천 gate |
+| 1 | **Truthful Core** | ports/domain/application separation · run artifact · model smoke connection |
+| 2 | Persistence | SQLite adapter · migration · replay |
+| 3 | Categories | CategoryPack schema · validator · deterministic classifier |
+| 4 | Scoring | Quality/Risk → Momentum → Undervalued → recommendation gate |
 | 5 | Product CLI | radar · explain · export · init/doctor |
-| 6 | Seeded at | 불변 discovery event · lifecycle · static HTML |
+| 6 | Seeded at | immutable discovery event · lifecycle · static HTML |
 
-**Milestone 1이 키스톤이다.** 나머지 전부가 port/adapter 경계에 의존한다.
+**Milestone 1 is the keystone.** Everything else depends on the port/adapter boundary.
 
-### 보존해야 할 불변식 (PRD §3.1)
+### Invariants to preserve (PRD §3.1)
 
-INV-001 불완전은 조용하지 않다 · INV-002 high risk는 추천 차단 · INV-003 미평가는
-삭제하지 않는다 · INV-004 외부 쓰기는 Approval 필수 · INV-005 dry-run 기본 ·
-INV-006 발견 이력 불변 · INV-007 결정적 사실 > 모델 산문 · INV-008 모든 점수에
-버전 · INV-009 백테스트는 라이브가 아니다 · INV-010 근거 커버리지 노출.
+INV-001 incompleteness is not silent · INV-002 high risk blocks recommendation · INV-003 unevaluated items
+are not deleted · INV-004 external writes require Approval · INV-005 dry-run by default ·
+INV-006 discovery history is immutable · INV-007 deterministic facts > model prose · INV-008 every score
+has a version · INV-009 backtest is not live · INV-010 expose evidence coverage.
 
-INV-004·005는 이미 구현·검증됐다(pty 사이클, 뮤테이션 5건). 나머지는 v0.2 범위다.
+INV-004·005 are already implemented and verified (pty cycle, 5 mutations). The rest are in v0.2 scope.
 
-### 완결 조건
+### Completion condition
 
-Phase 4·5·6 게이트가 각각 exit 0, CI 초록, 그리고 **제품이 한 사이클을 실제로
-완주한 기록**. v0.2는 PRD §30의 EPIC A~G 수용 기준으로 판정한다.
+The Phase 4, 5, and 6 gates each exit 0, CI is green, and there is a **record of the product
+actually completing one cycle**. Decide v0.2 by the EPIC A~G acceptance criteria in PRD §30.
 
 ---
 
-## 목표 3 — 공장 스킬
+## Goal 3 — factory skill
 
-현재: SKILL.md(6 Phase, 불변식 11) · references 9편 · scripts 3개.
-`phase-gate.py`가 양방향 실증됨 — 진짜 결손 6건 포착, 거짓 실패 1건 노출 후 수정.
+Current: SKILL.md (6 phases, 11 invariants) · 9 references · 3 scripts.
+`phase-gate.py` was demonstrated in both directions — caught 6 real gaps, exposed and then fixed 1 false failure.
 
-### 남은 것
+### What remains
 
-| 항목 | 왜 |
+| Item | Why |
 |---|---|
-| `create-issues.py`·`verify-citations.py`가 디렉터리·읽기 불가 파일에 raw traceback | 발견 완료(STATUS.md). 수정은 별도 티켓 — 발견과 수정을 한 커밋에 섞으면 수정이 검토를 건너뛴다 |
-| 게이트가 **Phase 4만** 덮는다 | 불변식 11을 만들어놓고 한 Phase에만 적용한 상태다. Phase 5·6이 다음 |
-| `phase-gate.py`가 `~/.claude/skills/`에 있어 **CI 러너에 없다** | CI에서 쓰려면 vendoring 필요. 아무도 안 하고 있다 |
+| `create-issues.py` and `verify-citations.py` produce raw tracebacks on directories and unreadable files | Discovery complete (STATUS.md). Fix in a separate ticket — mixing discovery and the fix in one commit lets the fix skip review |
+| The gate covers **only Phase 4** | 11 invariants were created but applied to only one phase. Phase 5 and 6 are next |
+| `phase-gate.py` lives in `~/.claude/skills/`, so it is **absent from the CI runner** | CI use requires vendoring. Nobody is doing it |
 
-### 완결 조건
+### Completion condition
 
-프로젝트 둘 이상을 짓는 동안 발견된 **반복 결함 형태**가 전부 게이트 또는
-불변식이 되어 있고, 각 게이트가 **진짜 결손에서 실패하고 정상 상태에서 통과하는
-것**이 실증되어 있다.
-
----
-
-## 전 구간 적용 규칙 — 전부 실제로 당해서 생겼다
-
-1. **레포당 위임 1건.** 동시 실행이 거짓 테스트 수(1108 기준에 943)와 혼합 diff를
-   냈다. 다른 레포끼리는 병렬 가능.
-2. **커밋은 경로 지정.** `git add -A`가 문서를 무관한 커밋에 두 번 쓸어담았다.
-3. **CI를 보기 전에 "초록"이라고 쓰지 않는다.** 하루에 다섯 번 어겼고, 그 규칙을
-   만든 커밋에서도 어겼다.
-4. **위임 보고는 주장이다.** 통과 보고를 낸 수정이 원래 사건을 못 잡은 사례가
-   있다. **수정은 자기 테스트가 아니라 사건에 대고 검증한다.**
-5. **검증 대상과 실제 작동물이 같은지 한 번 더 묻는다.** 이 어긋남이 나흘간 여섯
-   번이었다 — 로컬↔CI, 커밋해시↔바이트, 진입점해시↔모듈, YAML파스↔워크플로수용,
-   체크리스트↔정지선, 샌드박스 조건↔프로젝트 상태.
+Every **recurring defect pattern** discovered while building two or more projects has become a gate
+or invariant, and each gate has been demonstrated to **fail on a real gap and pass in a healthy
+state**.
 
 ---
 
-## 브랜치 모델 (양 레포 적용 완료)
+## Rules for every phase — every one came from a real incident
 
-| 브랜치 | 역할 | 분기 | 병합 |
+1. **1 delegation per repository.** Concurrent execution produced a false test count (943 against
+   a 1108 baseline) and mixed diffs. Different repositories may run in parallel.
+2. **Specify paths when committing.** `git add -A` swept documents into unrelated commits twice.
+3. **Do not write "green" before checking CI.** This was violated five times in one day, including
+   in the commit that created the rule.
+4. **Delegation reports are claims.** A fix reported as passing failed to catch the original incident.
+   **Verify a fix against the incident, not its own test.**
+5. **Ask once more whether the verification target is the actual running artifact.** This mismatch
+   happened six times in four days — local↔CI, commit hash↔bytes, entry-point hash↔module, YAML parse↔workflow acceptance,
+   checklist↔stop line, sandbox condition↔project state.
+
+---
+
+## Branch model (applied to both repositories)
+
+| Branch | Role | Cut from | Merge into |
 |---|---|---|---|
-| `main` | 프로덕션. 태그가 붙는 곳. 보호됨 | — | — |
-| `dev` | 통합. 기본 브랜치 | — | — |
-| `feat-issue-<id>` | 기능 1개 | `dev` | `dev` |
-| `bug-issue-<id>` | 버그 1개 | `dev` | `dev` |
-| `release-<semver>` | 릴리스 준비 | `dev` | `main` + `dev` |
-| `hotfix-issue-<id>` | 긴급 수정 | `main`의 태그 | `main` + `dev` |
+| `main` | Production. Tags land here. Protected | — | — |
+| `dev` | Integration. Default branch | — | — |
+| `feat-issue-<id>` | 1 feature | `dev` | `dev` |
+| `bug-issue-<id>` | 1 bug | `dev` | `dev` |
+| `release-<semver>` | Release preparation | `dev` | `main` + `dev` |
+| `hotfix-issue-<id>` | Emergency fix | Tag on `main` | `main` + `dev` |
 
-병합은 항상 `--no-ff`. 릴리스·핫픽스가 `main`에 들어간 뒤 `git tag -a`.
-**브랜치 이름이 이슈 ID를 요구하므로, 이슈 없이는 웨이브를 시작할 수 없다.**
+Merges always use `--no-ff`. After a release or hotfix enters `main`, run `git tag -a`.
+**Because branch names require an issue ID, a wave cannot start without an issue.**

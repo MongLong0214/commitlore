@@ -1,8 +1,8 @@
-# Tickets 인덱스 — v0.1.0 (기한 2026-08-23)
+# Tickets index — v0.1.0 (deadline 2026-08-23)
 
-> 티켓 상세(구현 개요·모듈 경로·인터페이스·테스트 목록·AC)는 기능별 파일에 있다. GitHub Issues와 1:1.
+> Ticket details (implementation outline, module paths, interfaces, test list, and AC) are in per-feature files. 1:1 with GitHub Issues.
 
-| 파일 | 티켓 | 마일스톤 | 이슈 |
+| File | Tickets | Milestone | Issues |
 |---|---|---|---|
 | [F1-protocol-spec.md](F1-protocol-spec.md) | T-101 ~ T-103 (3) | M1 | #1–#3 |
 | [F2-core-cli.md](F2-core-cli.md) | T-201 ~ T-205 (5) | M2 | #4–#8 |
@@ -11,20 +11,20 @@
 | [F5-trust-minimal.md](F5-trust-minimal.md) | T-501 ~ T-502 (2) | M3 | #18–#19 |
 | [F6-org-action.md](F6-org-action.md) | T-601 ~ T-602 (2) | M4 | #20–#21 |
 | [F7-commitlorebench.md](F7-commitlorebench.md) | T-701 ~ T-704 (4) | M1 / M4 | #22–#25 |
-| [F8-backfill.md](F8-backfill.md) | T-801 (1, 스트레치) | M4 | #26 |
+| [F8-backfill.md](F8-backfill.md) | T-801 (1, stretch) | M4 | #26 |
 | [release.md](release.md) | T-901 (1) | M4 | #27 |
 
-합계: v0.1.0 티켓 27 · Backlog 7 (#28–#34, ADR-0001 범위 컷 항목)
+Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001)
 
-## 의존성 개요 (critical path)
+## Dependency overview (critical path)
 
 ```
 T-101 → T-102 → T-201 → T-203 → T-204 → T-402 → T-703 → T-704 → T-901
                   ├→ T-202 → T-502, T-601
                   ├→ T-205 → T-501 ─┘(T-402)
                   └→ T-301 → T-302 → T-602 → T-901
-T-701 → T-702 (M1, 독립 트랙 — 최우선)
-T-403 → T-404 → T-801(스트레치)
+T-701 → T-702 (M1, independent track — highest priority)
+T-403 → T-404 → T-801 (stretch)
 ```
 
-주의: **T-701/T-702(CommitLoreBench)는 다른 모든 것과 독립 — M1에서 병렬 최우선 실행** (효용 가설 조기 판별, ADR-0001).
+Warning: **T-701/T-702 (CommitLoreBench) is independent of everything else — run it in parallel with top priority in M1** (early decision on the utility hypothesis, ADR-0001).

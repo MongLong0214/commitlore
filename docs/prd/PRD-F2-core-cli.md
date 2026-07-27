@@ -2,26 +2,26 @@
 
 - Milestone: M2 (08-09) · ADR: 0002, 0003
 
-## 목표
-논문이 명세만 한 CLI를 실제로 배달한다. 오탐 0(D2), 전 히스토리 조회, 형식 오류의 기계 거부(D5), 제약 라이프사이클(D6).
+## Goal
+Actually deliver the CLI that the paper only specified. 0 false positives (D2), full-history queries, mechanical rejection of format errors (D5), and constraint lifecycle (D6).
 
-## 비목표
-coverage 명령(Backlog), 인터랙티브 commit 빌더(Backlog — `commitlore commit --from-json`은 포함).
+## Non-goals
+coverage command (Backlog), interactive commit builder (Backlog — `commitlore commit --from-json` is included).
 
-## 사용자 스토리
-- 에이전트로서, `commitlore context src/auth/`로 그 경로의 활성 결정사를 1초 안에 받는다.
-- CI로서, `commitlore validate` 비정상 종료 코드로 기형 trailer 커밋을 거부한다.
+## User stories
+- As an agent, I receive the active decision history for that path within 1 second using `commitlore context src/auth/`.
+- As CI, I reject commits with malformed trailers through a nonzero `commitlore validate` exit code.
 
-## 요구사항
-1. 파서: `git interpret-trailers --parse` 위임 + 스키마 검증. `--grep` 스캔 금지.
-2. 조회: `context | limits | ruled-out | warnings` — 경로 스코프, `--follow` 기본, `--json` 출력.
-3. `validate`: enum·형식·근거 규칙 검사, 위반 상세 출력(유계 수리 루프의 입력), commit-msg 훅 설치 서브커맨드.
-4. 인덱스: SQLite 증분(신규 커밋만 스캔), 손상 시 `--rebuild`, 부재 시 무인덱스 폴백.
-5. `stale`: Supersedes/Expires 기반 활성 집합 계산.
-6. `doctor`: notes refspec·훅 설치 상태 점검/자동 구성.
+## Requirements
+1. Parser: delegate to `git interpret-trailers --parse` + schema validation. No `--grep` scanning.
+2. Query: `context | limits | ruled-out | warnings` — path scope, `--follow` by default, `--json` output.
+3. `validate`: check enum, format, and evidence rules; output violation details (input to the bounded repair loop); commit-msg hook installation subcommand.
+4. Index: incremental SQLite (scan only new commits), `--rebuild` on corruption, no-index fallback when absent.
+5. `stale`: compute the active set from Supersedes/Expires.
+6. `doctor`: inspect and automatically configure the notes refspec and hook installation state.
 
 ## AC
-- [ ] F1 적합성 스위트 + 라우트 계약 테스트 전부 통과
-- [x] 10만 커밋 합성 저장소에서 경로 조회 p50 < 100ms (인덱스 on) — **실측 p50 1.86ms** (2026-07-26). 10만 커밋 중 967개가 기록 보유. `--no-index` 폴백은 동일 결과에 105ms(2284배). `COMMITLORE_PERF_LARGE=1 npx vitest run test/index-perf.test.ts`
-- [ ] D2 오탐 재현 케이스에서 오탐 0 · D4 리네임 케이스에서 조회 성공
-- [ ] `--no-index` 폴백 동작 (기능 동일, 속도만 저하)
+- [ ] Pass the entire F1 conformance suite + route-contract tests
+- [x] Path-query p50 < 100ms in a synthetic repository with 10 myriad commits (index on) — **measured p50 1.86ms** (2026-07-26). 967 of 10 myriad commits contain records. The `--no-index` fallback returns the same result in 105ms (2284×). `COMMITLORE_PERF_LARGE=1 npx vitest run test/index-perf.test.ts`
+- [ ] 0 false positives in the D2 reproduction case · successful query in the D4 rename case
+- [ ] `--no-index` fallback works (same functionality, only slower)

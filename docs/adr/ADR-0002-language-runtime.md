@@ -1,30 +1,30 @@
-# ADR-0002: 구현 언어·런타임 — TypeScript + Node 20, npm/npx 배포
+# ADR-0002: implementation language and runtime — TypeScript + Node 20, npm/npx distribution
 
-> ⚠️ **런타임 하한은 [ADR-0010](ADR-0010-node-floor.md)으로 대체됐다.** 지원 하한은 Node 20이 아니라 **Node 22**다 — Node 20은 2026-04-30에 EOL이 됐고, 의존성 두 개가 이미 그 하한을 지키지 않고 있었다.
-> ⚠️ **배포 채널은 [ADR-0011](ADR-0011-plugin-first-distribution.md)로 대체됐다.** 배포는 npm publish가 아니라 **레지스트리 없는 git clone**이며, 에이전트 통합은 MCP 서버와 Claude Code 플러그인이다. 언어(TypeScript strict)·단일 패키지 결정은 그대로 유효하다. 이 문서에 남은 npm 표기는 결정 이력이므로 보존한다.
+> ⚠️ **The runtime floor was superseded by [ADR-0010](ADR-0010-node-floor.md).** The supported floor is **Node 22**, not Node 20 — Node 20 reached EOL on 2026-04-30, and two dependencies had already stopped honoring that floor.
+> ⚠️ **The distribution channel was superseded by [ADR-0011](ADR-0011-plugin-first-distribution.md).** Distribution uses a **registry-free git clone**, not npm publish, and agent integration uses the MCP server and Claude Code plugin. The language (TypeScript strict) and single-package decisions remain valid. The npm references remaining in this document are preserved as decision history.
 >
-> 언어(TypeScript strict)·배포 채널(npm/npx)·단일 패키지 결정은 **그대로 유효하다.** 이 문서에 남은 "Node 20" 표기는 결정 이력이므로 보존한다.
+> The language (TypeScript strict), distribution channel (npm/npx), and single-package decisions **remain valid.** The "Node 20" references remaining in this document are preserved as decision history.
 
-- Status: Accepted (2026-07-26) · 런타임 조항 Superseded by ADR-0010 (2026-07-26)
+- Status: Accepted (2026-07-26) · Runtime clause Superseded by ADR-0010 (2026-07-26)
 
 ## Context
 
-CLI·MCP 서버·훅·GitHub Action을 4주 안에 구현해야 한다. 배포 채널은 npm(`npx commitlore`)과 skills.sh 생태계. 오너 스택은 TypeScript 중심.
+The CLI, MCP server, hooks, and GitHub Action must be implemented within 4 weeks. The distribution channels are npm (`npx commitlore`) and the skills.sh ecosystem. The owner's stack centers on TypeScript.
 
 ## Decision
 
-- 언어: TypeScript (strict), 런타임: Node ≥ 20. 단일 패키지 `commitlore` (bin: `commitlore`).
-- 배포: npm publish + `npx commitlore <cmd>`. MCP 서버는 같은 패키지의 서브커맨드(`commitlore mcp`).
-- 인덱스 저장: better-sqlite3 (네이티브 의존 1개 허용 — ADR-0003의 파생 캐시이므로 실패 시 무인덱스 폴백 경로 유지).
-- git 접근: 자식 프로세스로 시스템 `git` 호출 (`interpret-trailers`, `log --format=%(trailers)`, `notes`). libgit2 바인딩 금지.
+- Language: TypeScript (strict), runtime: Node ≥ 20. Single package `commitlore` (bin: `commitlore`).
+- Distribution: npm publish + `npx commitlore <cmd>`. The MCP server is a subcommand of the same package (`commitlore mcp`).
+- Index storage: better-sqlite3 (allow 1 native dependency — because this is ADR-0003's derived cache, retain a no-index fallback path when it fails).
+- git access: call the system `git` as a child process (`interpret-trailers`, `log --format=%(trailers)`, `notes`). No libgit2 bindings.
 
 ## Ruled-out
 
-- Rust 단일 바이너리 | 배포·성능 우위는 인정하나 4주 제약과 팀 스택 불일치. Backlog에서 재평가 가능
-- Bun 런타임 | 훅·CI 환경 호환성 검증 비용. Node가 최소 리스크
-- libgit2/isomorphic-git | git 네이티브 trailer 기능(`interpret-trailers`)이 정확성의 원천 — 시스템 git 위임이 가장 단순하고 검증 용이
+- Rust single binary | distribution and performance advantages are acknowledged, but it conflicts with the 4-week constraint and team stack. Can be reevaluated in the Backlog
+- Bun runtime | cost of verifying compatibility with hook and CI environments. Node carries the least risk
+- libgit2/isomorphic-git | git's native trailer functionality (`interpret-trailers`) is the source of correctness — delegating to system git is simplest and easiest to verify
 
 ## Consequences
 
-- 코어 조회 경로는 LLM·네트워크 0 의존 (비용 0 원칙 정합).
-- better-sqlite3 설치 실패 환경(사내 프록시 등)에서는 `--no-index` 폴백으로 기능 저하 없이 느리게 동작해야 한다 (T-203 AC).
+- The core query path has 0 LLM or network dependencies (consistent with the 0-cost principle).
+- In environments where better-sqlite3 installation fails (corporate proxies, etc.), the `--no-index` fallback must run more slowly without losing functionality (T-203 AC).

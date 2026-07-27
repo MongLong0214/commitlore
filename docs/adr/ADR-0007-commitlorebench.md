@@ -1,26 +1,26 @@
-# ADR-0007: CommitLoreBench — 재제안율 최우선, 어블레이션 lite
+# ADR-0007: CommitLoreBench — re-proposal rate first, ablation lite
 
 - Status: Accepted (2026-07-26)
 
 ## Context
 
-이 프로젝트의 유일한 존재론적 리스크는 "효용 가설이 틀렸을 가능성"이며, 이는 4주 기한 안에서 가장 먼저 판별해야 한다.
+This project's only existential risk is "the utility hypothesis may be wrong," and that must be determined first within the 4-week deadline.
 
 ## Decision
 
-- **지표 우선순위**: ① 재제안율(과거 Ruled-out 접근을 다시 제안하는 빈도 — 핵심 효용), ② 제약위반율, ③ 수렴시간(토큰·턴). v0.1 필수는 ①, ②③은 하니스에 계측만 넣는다.
-- **방법**: 동일 저장소·동일 과제 시퀀스에서 CommitLore on/off 에이전트 비교. 과제는 "기각 이력이 있는 결정 지점을 다시 만나는" 시나리오를 인위 구성(자체 저장소 + 공개 저장소 1곳).
-- **어블레이션 lite (M4)**: 주입 스코프 제거(전역 덤프) / 등급 제거 / 라이프사이클 제거 3개 조건만 — CTIM-Rover 노이즈 가설의 방향 검증.
-- **운영 지표**: CPAA(수용 기록당 비용) 병기.
-- M1에서 첫 유의차 측정 실패 시 즉시 오너 에스컬레이션(ADR-0001).
+- **Metric priority**: ① re-proposal rate (frequency of proposing previously Ruled-out approaches again — core utility), ② constraint-violation rate, ③ convergence time (tokens and turns). v0.1 requires ①; only instrument ②③ in the harness.
+- **Method**: compare agents with CommitLore on/off on the same repository and task sequence. Construct tasks around scenarios that "revisit a decision point with a rejection history" (this repository + 1 public repository).
+- **Ablation lite (M4)**: only 3 conditions — remove injection scope (global dump) / remove grades / remove lifecycle — to verify the direction of the CTIM-Rover noise hypothesis.
+- **Operational metric**: also report CPAA (cost per accepted record).
+- If the first M1 measurement fails to find a significant difference, escalate to the owner immediately (ADR-0001).
 
 ## Ruled-out
 
-- 2팀 6개월 현장 비교(전통적 방법론) | 비용·기한 불가 — 시뮬레이션 압축이 에이전트 시대의 이점
-- SWE-bench 전체 재현 | 범위 과잉. 재제안율은 자체 시나리오로 더 직접 측정된다
-- 풀 어블레이션 매트릭스 | 4주 제약 — 방향 검증(lite)만 하고 전체는 Backlog
+- 6-month field comparison with 2 teams (traditional methodology) | impossible on cost and deadline — compressed simulation is an advantage of the agent era
+- Reproduce all of SWE-bench | excessive scope. Re-proposal rate is measured more directly with custom scenarios
+- Full ablation matrix | 4-week constraint — verify direction only (lite) and leave the full matrix in Backlog
 
 ## Consequences
 
-- 벤치 하니스는 M1에 골격이 서야 M2~M3 기능이 계측 가능한 상태로 개발된다(계측 우선 개발).
-- 결과 수치는 README와 릴리스 노트에 실측으로만 기재 — 미검증 주장 금지.
+- The benchmark harness must have a skeleton in M1 so M2~M3 features are developed in an instrumentable state (instrumentation-first development).
+- Put only measured result numbers in the README and release notes — no unverified claims.

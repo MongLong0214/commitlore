@@ -1,27 +1,27 @@
-# ADR-0010: 지원 Node 하한을 22로 올린다
+# ADR-0010: raise the supported Node floor to 22
 
 - Status: Accepted (2026-07-26)
 - Owner: CTO
-- Supersedes: ADR-0002의 런타임 조항(“Node ≥ 20”). 언어(TypeScript strict)·배포 채널(npm/npx)·단일 패키지 결정은 그대로 유효하다.
+- Supersedes: ADR-0002's runtime clause (“Node ≥ 20”). The language (TypeScript strict), distribution channel (npm/npx), and single-package decisions remain valid.
 
 ## Context
 
-ADR-0002는 “Node ≥ 20, Node가 최소 리스크”로 하한을 정했다. 그 판단은 작성 시점에는 맞았고 지금은 틀리다.
+ADR-0002 set the floor at “Node ≥ 20; Node carries the least risk.” That judgment was correct when written and is wrong now.
 
-**Node 20은 2026-04-30에 EOL이다**(nodejs/Release `schedule.json` 실측, 오늘 2026-07-26 기준 약 3개월 경과). 보안 패치가 나오지 않는 런타임을 하한으로 두는 것은 “최소 리스크”의 반대다.
+**Node 20 reached EOL on 2026-04-30** (measured from nodejs/Release `schedule.json`, about 3 months before today, 2026-07-26). Making a runtime with no security patches the floor is the opposite of “least risk.”
 
-동시에 의존성이 이미 그 하한을 지키지 않고 있었다:
+At the same time, dependencies had already stopped honoring that floor:
 
-| 의존성 | 요구 | 우리 선언 |
+| Dependency | Requirement | Our declaration |
 |---|---|---|
 | `commander` | `>=22.12.0` | `>=20` |
 | `better-sqlite3@13` | `>=22` | `>=20` |
 
-npm은 `EBADENGINE`을 **경고로만** 내고 설치를 진행하므로 이 불일치는 조용히 통과했다. 드러난 경로도 우회적이었다 — CI에서 인덱스 테스트 워커 2개가 이유 없이 죽었고, 로컬(Node 24)에서는 재현되지 않았다. **의존성을 추가한 사람은 대개 자기가 깨뜨린 하한보다 새 런타임 위에 있다.**
+npm reports `EBADENGINE` **only as a warning** and continues installation, so this mismatch passed silently. The discovery path was indirect — 2 index-test workers died in CI for no stated reason, and the failure did not reproduce locally (Node 24). **The person adding a dependency usually runs a newer runtime than the floor they broke.**
 
-Node 릴리스 상태(실측):
+Node release status (measured):
 
-| 버전 | 상태 | 지원 종료 |
+| Version | Status | End of support |
 |---|---|---|
 | v20 | **EOL** | 2026-04-30 |
 | v22 | Maintenance | 2027-04-30 |
@@ -29,21 +29,21 @@ Node 릴리스 상태(실측):
 
 ## Decision
 
-1. **하한을 `>=22`로 올린다.** `package.json`의 `engines.node`, CI 매트릭스, 문서를 함께 바꾼다.
-2. **v24가 아니라 v22를 고른다.** v24를 하한으로 두면 아직 v22를 쓰는 사용자를 지금 배제한다. v22는 2027-04까지 지원되므로 v0.1.0의 수명에 충분하다.
-3. **CI는 하한과 Active LTS를 모두 돈다** — 22와 24. 하한만 돌면 최신에서 깨지는 것을 못 잡고, 최신만 돌면 하한이 거짓말이 된다.
-4. **`scripts/check-engines.mjs`가 이 결정을 강제한다.** 직접 의존성 중 선언한 하한을 지원하지 않는 것이 있으면 빌드를 실패시킨다. 이 ADR은 문서이고, 그 스크립트가 그 문서의 집행이다.
+1. **Raise the floor to `>=22`.** Change `engines.node` in `package.json`, the CI matrix, and documentation together.
+2. **Choose v22, not v24.** Making v24 the floor would exclude users still on v22 now. v22 is supported through 2027-04, enough to cover v0.1.0's lifetime.
+3. **CI runs both the floor and Active LTS** — 22 and 24. Running only the floor misses breakage on the latest version; running only the latest makes the floor a lie.
+4. **`scripts/check-engines.mjs` enforces this decision.** Fail the build if any direct dependency does not support the declared floor. This ADR is the document; that script enforces the document.
 
 ## Rejected
 
-- **Node 20을 유지하고 의존성을 낮춘다** | `commander`와 `better-sqlite3` 최신 계열을 모두 내려야 하고, 그렇게 해서 얻는 것이 EOL 런타임 지원이다. 유지 비용을 치르고 보안이 없는 바닥을 사는 셈
-- **하한을 24로** | 지금 v22 사용자를 배제할 이유가 없다. v22는 v0.1.0 수명을 덮는다
-- **`engines`를 지우고 아무 말도 하지 않는다** | 하한을 명시하지 않으면 사용자가 자기 런타임에서 되는지 알 방법이 없고, 실패는 설치가 아니라 실행 시점에 난다
-- **경고만 남기고 진행** | npm이 이미 그렇게 하고 있고, 그 결과가 이 ADR이다
+- **Keep Node 20 and downgrade dependencies** | both `commander` and `better-sqlite3` would need to be moved off their latest lines, and the gain would be support for an EOL runtime. That pays maintenance cost to buy an insecure floor
+- **Set the floor to 24** | there is no reason to exclude v22 users now. v22 covers the lifetime of v0.1.0
+- **Remove `engines` and say nothing** | without a declared floor, users cannot know whether their runtime works, and failure moves from installation to execution
+- **Leave only a warning and continue** | npm already does that, and this ADR is the result
 
 ## Consequences
 
-- `package.json`의 `engines.node`가 `>=22`가 된다. npm이 그 아래 런타임에서 경고를 낸다.
-- CI가 22·24 두 버전을 돈다. `git-matrix` 잡은 ubuntu·macos와 곱해진다.
-- **`scripts/check-engines.mjs`가 CI 단계로 편입된다.** 다음에 하한을 깨는 의존성이 들어오면 병합 전에 멈춘다 — 이 사건은 이미 이슈가 닫힌 뒤에 발견됐고, 그 재발을 막는 것이 이 스크립트의 존재 이유다.
-- 하한을 다시 올릴 때는 이 ADR을 대체하는 새 ADR을 쓴다. `package.json`만 고치는 변경은 반려한다.
+- `engines.node` in `package.json` becomes `>=22`. npm warns on runtimes below it.
+- CI runs both 22 and 24. The `git-matrix` job multiplies these across ubuntu and macos.
+- **`scripts/check-engines.mjs` becomes a CI step.** The next dependency that breaks the floor will stop before merge — this incident was discovered only after the issue had closed, and preventing its recurrence is why this script exists.
+- When raising the floor again, write a new ADR that supersedes this one. Reject any change that edits only `package.json`.

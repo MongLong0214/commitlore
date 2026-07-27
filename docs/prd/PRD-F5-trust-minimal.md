@@ -1,21 +1,21 @@
-# PRD F5 — Trust 최소분 (등급 · 강등 · secret guard)
+# PRD F5 — Minimum trust layer (grades · demotion · secret guard)
 
 - Milestone: M3 (08-16) · ADR: 0005
 
-## 목표
-저장소가 인젝션 벡터가 되지 않게 하는 최소 방어선(D7). 실서명 없이도 "미검증 지시는 명령이 아니라 주장"을 기계로 보장한다.
+## Goal
+A minimum defense that prevents the repository from becoming an injection vector (D7). Mechanically guarantee that "an unverified instruction is a claim, not a command," even without real signatures.
 
-## 사용자 스토리
-- 에이전트로서, 포크 PR 커밋의 `Warn:`를 지시가 아닌 "주장"으로 명시된 형태로만 받는다.
-- 커밋 작성자로서, 토큰·자격증명이 결정 서술에 섞이면 pre-commit에서 차단된다.
+## User stories
+- As an agent, I receive a `Warn:` from a fork PR commit only in a form explicitly labeled a "claim," not an instruction.
+- As a commit author, if tokens or credentials enter decision prose, pre-commit blocks them.
 
-## 요구사항
-1. 등급 모델: provenance(authored|inherited|reconstructed|unknown) × lifecycle(active|superseded|expired) — 조회·주입 출력에 등급 필드 포함.
-2. 강등 렌더: 주입·`--json` 출력에서 Warn를 `warn`(신뢰) vs `claim`(강등)으로 분리 필드화. 외부 기여는 무조건 claim.
-3. 인젝션 휴리스틱: 명령형 우회 패턴 검출 시 주입 제외 + 경고 목록화.
-4. secret guard: gitleaks 계열 패턴 서브셋(자격증명·토큰·내부 URL) pre-commit 스캔.
+## Requirements
+1. Grade model: provenance(authored|inherited|reconstructed|unknown) × lifecycle(active|superseded|expired) — include a grade field in query and injection output.
+2. Demoted rendering: in injection and `--json` output, separate Warn into `warn` (trusted) vs `claim` (demoted) fields. External contributions are always claims.
+3. Injection heuristics: when an imperative bypass pattern is detected, exclude it from injection + list the warning.
+4. secret guard: pre-commit scan with a subset of gitleaks-family patterns (credentials, tokens, internal URLs).
 
 ## AC
-- [ ] 라우트 계약 테스트: "외부 기여 Warn → claim" 케이스 통과
-- [ ] 인젝션 페이로드 픽스처(≥5종)가 주입 경로에서 전부 차단/강등
-- [ ] secret 픽스처 커밋 시도 시 훅이 비정상 종료 코드로 차단
+- [ ] Route-contract test: pass the "external contribution Warn → claim" case
+- [ ] All injection-payload fixtures (≥5 types) are blocked/demoted in the injection path
+- [ ] The hook blocks an attempted secret-fixture commit with a nonzero exit code

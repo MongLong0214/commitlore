@@ -1,26 +1,26 @@
-# ADR-0005: 신뢰 최소분 — 규칙 기반 등급과 Warn 강등 (실서명은 Backlog)
+# ADR-0005: minimum trust layer — rule-based grades and Warn demotion (real signatures in Backlog)
 
 - Status: Accepted (2026-07-26)
 
 ## Context
 
-커밋 메시지는 에이전트가 지시문으로 읽는 채널이다. 서명 없는 `Warn:`는 저장소를 프롬프트 인젝션 벡터로 만든다(D7). 그러나 sigstore/gitsign 실서명 체계는 4주 범위에 맞지 않는다.
+Commit messages are a channel agents read as instructions. An unsigned `Warn:` turns the repository into a prompt-injection vector (D7). But a real sigstore/gitsign signature system does not fit the 4-week scope.
 
 ## Decision
 
-v0.1은 **규칙 기반 등급 + 강등 렌더링**으로 최소 방어선을 구축한다.
+v0.1 establishes a minimum defense with **rule-based grades + demoted rendering**.
 
-- 기록 등급 = provenance 축(`authored | inherited | reconstructed | unknown`) × lifecycle 축(`active | superseded | expired`).
-- **강등 규칙**: 주입·조회 출력에서 `Warn:`는 등급이 검증 가능한 경우에만 "지시"로, 그 외에는 "주장(claim)"으로 명시 표기해 전달한다. 외부 기여(포크 PR) 커밋의 Warn는 항상 주장으로 강등.
-- 명령형 인젝션 패턴(도구 호출 유도·정책 우회 문구) 휴리스틱 검출 시 해당 기록를 주입에서 제외하고 경고.
-- secret guard: pre-commit에서 자격증명·토큰·내부 URL 패턴 스캔 후 차단.
+- Record grade = provenance axis (`authored | inherited | reconstructed | unknown`) × lifecycle axis (`active | superseded | expired`).
+- **Demotion rule**: in injection and query output, label and deliver `Warn:` as an "instruction" only when its grade can be verified; otherwise explicitly label it a "claim." Warn entries from external contribution commits (fork PRs) are always demoted to claims.
+- When heuristics detect imperative injection patterns (inducing tool calls or policy-bypass language), exclude that record from injection and warn.
+- secret guard: scan for credential, token, and internal URL patterns at pre-commit and block them.
 
 ## Ruled-out
 
-- sigstore/gitsign 실서명을 v0.1에 포함 | 4주 제약. 등급 모델의 provenance 축은 서명 도입 시 그대로 확장 가능하도록 설계
-- 신뢰 문제를 문서 경고로만 처리 | D7은 실측된 공격면 — 기계적 최소 방어 없이는 출시 불가
+- Include real sigstore/gitsign signatures in v0.1 | 4-week constraint. Design the grading model's provenance axis so signatures can extend it directly
+- Handle the trust problem only with a documentation warning | D7 is a measured attack surface — cannot release without a mechanical minimum defense
 
 ## Consequences
 
-- 강등 규칙은 라우트 계약 테스트(F1)의 필수 케이스다: "외부 기여 Warn는 반드시 claim으로 렌더".
-- 실서명(Backlog) 도입 시 등급 축만 확장하면 되고 소비 측 라우팅은 불변.
+- The demotion rule is a required route-contract test case (F1): "an external contribution's Warn must render as a claim."
+- When real signatures are introduced (Backlog), only the grading axis needs extension; consumer routing remains unchanged.
