@@ -108,6 +108,35 @@ describe('validate — valid and boundary fixtures', () => {
   }
 });
 
+describe('validate — unparsed trailer-looking lines', () => {
+  it('warns for every run-on known trailer line without changing the clean exit', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'fix the auth bug\nLimit: token introspection unavailable\nRuled-out: extend TTL | security policy\nRecord-Id: r-typical00001\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(
+      'commitlore: line 2 looks like a Limit trailer, but git did not parse it; the trailer block needs a blank line before it\n' +
+        'commitlore: line 3 looks like a Ruled-out trailer, but git did not parse it; the trailer block needs a blank line before it\n' +
+        'commitlore: line 4 looks like a Record-Id trailer, but git did not parse it; the trailer block needs a blank line before it\n',
+    );
+  });
+
+  it('warns for tab-indented known trailer lines Git cannot parse', () => {
+    const result = runValidate({
+      readStdin: () => 'fix the auth bug\n\n\tLimit: token introspection unavailable\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe(
+      'commitlore: line 3 looks like a Limit trailer, but git did not parse it; remove the leading tab\n',
+    );
+  });
+});
+
 describe('validate — input modes', () => {
   it('validates a message file', () => {
     const fixture = loadFixtures('invalid').find((entry) => entry.name === '01-enum-blast');

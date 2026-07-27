@@ -27,7 +27,7 @@ import type { Command } from 'commander';
 import { execGit } from '../core/git.js';
 import { validateRecord } from '../core/schema.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
+import { KNOWN_KEYS, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
 import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
 
 /**
@@ -169,6 +169,36 @@ const locateTrailerLines = (message: string, trailers: Trailer[]): (number | und
   return trailers.map(() => undefined);
 };
 
+interface UnparsedTrailerWarning {
+  line: number;
+  key: string;
+  tabIndented: boolean;
+}
+
+const knownTrailerCandidate = (line: string): Pick<UnparsedTrailerWarning, 'key' | 'tabIndented'> | undefined => {
+  const tabIndented = line.startsWith('\t');
+  const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
+  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+  return key === undefined ? undefined : { key, tabIndented };
+};
+
+const locateUnparsedTrailerWarnings = (
+  message: string,
+  trailers: Trailer[],
+): UnparsedTrailerWarning[] => {
+  const lines = message.split('\n').map(stripCr);
+  const contentLines = lines.filter((line) => line !== '' && !isComment(line));
+  if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== undefined)) return [];
+
+  const parsedLines = new Set(locateTrailerLines(message, trailers));
+
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === undefined || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
+
 /**
  * Finds which trailer a violation came from, so it can carry that trailer's
  * line. `validateRecord` reports the rule, not the position, and the mapping
@@ -216,6 +246,11 @@ const locateViolations = (source: MessageSource): LocatedViolation[] => {
     };
   });
 };
+
+const formatUnparsedTrailerWarning = (warning: UnparsedTrailerWarning): string =>
+  warning.tabIndented
+    ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
+    : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`;
 
 /** Resolves a revision to a full sha so the reported `sha` is unambiguous. */
 const resolveCommit = (ref: string, cwd: string): string => {
@@ -301,9 +336,13 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
 
   let violations: LocatedViolation[];
   let secrets: SecretFinding[];
+  let warnings: UnparsedTrailerWarning[];
   try {
     const sources = collectSources(input, cwd);
     violations = sources.flatMap(locateViolations);
+    warnings = sources.flatMap((source) =>
+      locateUnparsedTrailerWarnings(source.message, parseCommitMessage(source.message)),
+    );
     // A credential in a commit message is inscribed permanently -- rewriting
     // history does not reach the clones and forks that already have it. So the
     // scan runs on the same path as validation, which is what the commit-msg
@@ -315,17 +354,20 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
 
   const failed = violations.length > 0 || secrets.length > 0;
 
+  const warningText = warnings.map(formatUnparsedTrailerWarning).join('\n');
+  const stderr = warningText === '' ? '' : `${warningText}\n`;
+
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
       stdout: `${JSON.stringify({ violations, secrets })}\n`,
-      stderr: '',
+      stderr,
       violations,
       secrets,
     };
   }
 
-  if (!failed) return { code: 0, stdout: '', stderr: '', violations, secrets };
+  if (!failed) return { code: 0, stdout: '', stderr, violations, secrets };
 
   const parts: string[] = [];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join('\n'));
@@ -344,7 +386,7 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   return {
     code: 1,
     stdout: `${parts.join('\n')}\n`,
-    stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
+    stderr: `${stderr}commitlore: ${notes.join(', ')} — the message was not modified\n`,
     violations,
     secrets,
   };

@@ -26324,6 +26324,23 @@ var locateTrailerLines = (message, trailers) => {
   }
   return trailers.map(() => void 0);
 };
+var knownTrailerCandidate = (line) => {
+  const tabIndented = line.startsWith("	");
+  const candidate = tabIndented ? line.replace(/^\t+/, "") : line;
+  const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+  return key === void 0 ? void 0 : { key, tabIndented };
+};
+var locateUnparsedTrailerWarnings = (message, trailers) => {
+  const lines = message.split("\n").map(stripCr);
+  const contentLines = lines.filter((line) => line !== "" && !isComment(line));
+  if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== void 0)) return [];
+  const parsedLines = new Set(locateTrailerLines(message, trailers));
+  return lines.flatMap((line, index) => {
+    const candidate = knownTrailerCandidate(line);
+    if (candidate === void 0 || parsedLines.has(index + 1)) return [];
+    return [{ line: index + 1, ...candidate }];
+  });
+};
 var lineForViolation = (violation, trailers, lines) => {
   const indexesWithKey = trailers.flatMap(
     (trailer, index) => trailer.key === violation.key ? [index] : []
@@ -26351,6 +26368,7 @@ var locateViolations = (source) => {
     };
   });
 };
+var formatUnparsedTrailerWarning = (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`;
 var resolveCommit2 = (ref, cwd) => {
   const result = execGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], { cwd });
   if (result.code !== 0) {
@@ -26416,25 +26434,32 @@ var runValidate = (input = {}) => {
   const cwd = input.cwd ?? process.cwd();
   let violations;
   let secrets;
+  let warnings;
   try {
     const sources = collectSources2(input, cwd);
     violations = sources.flatMap(locateViolations);
+    warnings = sources.flatMap(
+      (source) => locateUnparsedTrailerWarnings(source.message, parseCommitMessage(source.message))
+    );
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
     return usageError2(messageOf5(error2));
   }
   const failed = violations.length > 0 || secrets.length > 0;
+  const warningText = warnings.map(formatUnparsedTrailerWarning).join("\n");
+  const stderr = warningText === "" ? "" : `${warningText}
+`;
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
       stdout: `${JSON.stringify({ violations, secrets })}
 `,
-      stderr: "",
+      stderr,
       violations,
       secrets
     };
   }
-  if (!failed) return { code: 0, stdout: "", stderr: "", violations, secrets };
+  if (!failed) return { code: 0, stdout: "", stderr, violations, secrets };
   const parts = [];
   if (violations.length > 0) parts.push(violations.map(formatViolation).join("\n"));
   if (secrets.length > 0) parts.push(formatFindings(secrets));
@@ -26451,7 +26476,7 @@ var runValidate = (input = {}) => {
     code: 1,
     stdout: `${parts.join("\n")}
 `,
-    stderr: `commitlore: ${notes.join(", ")} \u2014 the message was not modified
+    stderr: `${stderr}commitlore: ${notes.join(", ")} \u2014 the message was not modified
 `,
     violations,
     secrets

@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { execGit } from '../core/git.js';
 import { validateRecord } from '../core/schema.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { SINGLE_VALUED } from '../core/types.js';
+import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 const USAGE = 'usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]';
 const MODE_FLAGS = {
@@ -105,6 +105,25 @@ const locateTrailerLines = (message, trailers) => {
     }
     return trailers.map(() => undefined);
 };
+const knownTrailerCandidate = (line) => {
+    const tabIndented = line.startsWith('\t');
+    const candidate = tabIndented ? line.replace(/^\t+/, '') : line;
+    const key = KNOWN_KEYS.find((known) => candidate.startsWith(`${known}: `));
+    return key === undefined ? undefined : { key, tabIndented };
+};
+const locateUnparsedTrailerWarnings = (message, trailers) => {
+    const lines = message.split('\n').map(stripCr);
+    const contentLines = lines.filter((line) => line !== '' && !isComment(line));
+    if (contentLines.length > 0 && contentLines.every((line) => knownTrailerCandidate(line) !== undefined))
+        return [];
+    const parsedLines = new Set(locateTrailerLines(message, trailers));
+    return lines.flatMap((line, index) => {
+        const candidate = knownTrailerCandidate(line);
+        if (candidate === undefined || parsedLines.has(index + 1))
+            return [];
+        return [{ line: index + 1, ...candidate }];
+    });
+};
 /**
  * Finds which trailer a violation came from, so it can carry that trailer's
  * line. `validateRecord` reports the rule, not the position, and the mapping
@@ -144,6 +163,9 @@ const locateViolations = (source) => {
         };
     });
 };
+const formatUnparsedTrailerWarning = (warning) => warning.tabIndented
+    ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
+    : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`;
 /** Resolves a revision to a full sha so the reported `sha` is unambiguous. */
 const resolveCommit = (ref, cwd) => {
     const result = execGit(['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`], { cwd });
@@ -225,9 +247,11 @@ export const runValidate = (input = {}) => {
     const cwd = input.cwd ?? process.cwd();
     let violations;
     let secrets;
+    let warnings;
     try {
         const sources = collectSources(input, cwd);
         violations = sources.flatMap(locateViolations);
+        warnings = sources.flatMap((source) => locateUnparsedTrailerWarnings(source.message, parseCommitMessage(source.message)));
         // A credential in a commit message is inscribed permanently -- rewriting
         // history does not reach the clones and forks that already have it. So the
         // scan runs on the same path as validation, which is what the commit-msg
@@ -238,17 +262,19 @@ export const runValidate = (input = {}) => {
         return usageError(messageOf(error));
     }
     const failed = violations.length > 0 || secrets.length > 0;
+    const warningText = warnings.map(formatUnparsedTrailerWarning).join('\n');
+    const stderr = warningText === '' ? '' : `${warningText}\n`;
     if (input.json === true) {
         return {
             code: failed ? 1 : 0,
             stdout: `${JSON.stringify({ violations, secrets })}\n`,
-            stderr: '',
+            stderr,
             violations,
             secrets,
         };
     }
     if (!failed)
-        return { code: 0, stdout: '', stderr: '', violations, secrets };
+        return { code: 0, stdout: '', stderr, violations, secrets };
     const parts = [];
     if (violations.length > 0)
         parts.push(violations.map(formatViolation).join('\n'));
@@ -266,7 +292,7 @@ export const runValidate = (input = {}) => {
     return {
         code: 1,
         stdout: `${parts.join('\n')}\n`,
-        stderr: `commitlore: ${notes.join(', ')} — the message was not modified\n`,
+        stderr: `${stderr}commitlore: ${notes.join(', ')} — the message was not modified\n`,
         violations,
         secrets,
     };
