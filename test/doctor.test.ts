@@ -381,9 +381,12 @@ describe('doctor: hook runtime', () => {
     installedHook(repo);
     git(repo, ['config', '--local', 'commitlore.node', '/nonexistent/node']);
 
-    const check = runtimeCheck(repo);
-    expect(check?.status).toBe('fail');
-    expect(check?.fix).toContain('hooks install');
+    const report = runDoctor({ cwd: repo });
+    const runtime = report.checks.find((entry) => entry.id === 'hook-runtime');
+    const installation = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.fix).toContain('hooks install');
+    expect(installation?.status).toBe('fail');
   });
 
   it('fails when the hook has no recorded path at all', () => {

@@ -96,7 +96,7 @@ const checkPush = (opts) => {
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-const checkHook = (opts) => {
+const checkHook = (opts, runtime) => {
     const title = 'commit-msg hook';
     const id = 'commit-msg-hook';
     const install = 'commitlore hooks install';
@@ -131,6 +131,9 @@ const checkHook = (opts) => {
         ...target.problems,
         ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
     ];
+    if (runtime.status !== 'ok') {
+        return check(id, title, runtime.status, `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`, install);
+    }
     return problems.length === 0
         ? check(id, title, 'ok', `installed at ${path}; ${targetDetail}`)
         : check(id, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
@@ -294,12 +297,13 @@ const checkIndex = (opts) => {
     }
 };
 export const runDoctor = (opts = {}) => {
+    const hookRuntime = checkHookRuntime(opts);
     const checks = [
         checkRuntime(opts),
         checkRefspec(opts),
         checkPush(opts),
-        checkHook(opts),
-        checkHookRuntime(opts),
+        checkHook(opts, hookRuntime),
+        hookRuntime,
         checkGit(opts),
         checkIndex(opts),
     ];

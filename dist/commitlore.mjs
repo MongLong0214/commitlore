@@ -13582,7 +13582,7 @@ var checkPush = (opts) => {
     command
   );
 };
-var checkHook = (opts) => {
+var checkHook = (opts, runtime) => {
   const title = "commit-msg hook";
   const id = "commit-msg-hook";
   const install = "commitlore hooks install";
@@ -13623,6 +13623,15 @@ var checkHook = (opts) => {
     ...target.problems,
     ...override === void 0 || override === "" ? [] : ["COMMITLORE_BIN override is active"]
   ];
+  if (runtime.status !== "ok") {
+    return check(
+      id,
+      title,
+      runtime.status,
+      `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`,
+      install
+    );
+  }
   return problems.length === 0 ? check(id, title, "ok", `installed at ${path2}; ${targetDetail}`) : check(id, title, "warn", `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`, install);
 };
 var checkGit = (opts) => {
@@ -13764,12 +13773,13 @@ var checkIndex = (opts) => {
   }
 };
 var runDoctor = (opts = {}) => {
+  const hookRuntime = checkHookRuntime(opts);
   const checks = [
     checkRuntime(opts),
     checkRefspec(opts),
     checkPush(opts),
-    checkHook(opts),
-    checkHookRuntime(opts),
+    checkHook(opts, hookRuntime),
+    hookRuntime,
     checkGit(opts),
     checkIndex(opts)
   ];
