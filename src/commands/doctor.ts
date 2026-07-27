@@ -72,6 +72,8 @@ export interface DoctorOptions {
 
 /** Probe message for the git capability check — one trailer of each shape. */
 const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
+const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 
 const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
 
@@ -98,22 +100,25 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
-  let missing = remotes.filter(
-    (remote) => !fetchRefspecs(remote, opts).some(coversNotes),
-  );
+  let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   let fixed = false;
 
-  if (missing.length > 0 && opts.fix === true) {
-    const applied: string[] = [];
-    for (const remote of missing) {
-      const result = execGit(
-        ['config', '--add', `remote.${remote}.fetch`, NOTES_REFSPEC],
-        gitOptions(opts),
-      );
-      if (result.code === 0) applied.push(remote);
+  if (opts.fix === true) {
+    for (const remote of remotes) {
+      const key = `remote.${remote}.fetch`;
+      const configured = fetchRefspecs(remote, opts);
+      if (configured.includes(EXACT_NOTES_REFSPEC)) {
+        const replaced = execGit(
+          ['config', '--replace-all', key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
+          gitOptions(opts),
+        );
+        fixed = replaced.code === 0 || fixed;
+      } else if (!configured.some(coversNotes)) {
+        const added = execGit(['config', '--add', key, NOTES_REFSPEC], gitOptions(opts));
+        fixed = added.code === 0 || fixed;
+      }
     }
-    fixed = applied.length > 0;
-    missing = missing.filter((remote) => !applied.includes(remote));
+    missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
   }
 
   if (missing.length > 0) {
@@ -126,18 +131,31 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
+  const failed = remotes
+    .map((remote) => ({ remote, result: execGit(['fetch', '--dry-run', remote], gitOptions(opts)) }))
+    .filter(({ result }) => result.code !== 0);
+  if (failed.length > 0) {
+    return check(
+      'notes-refspec',
+      title,
+      'warn',
+      `could not verify (${failed
+        .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
+        .join('; ')})`,
+      failed.map(({ remote }) => `git fetch ${remote}`).join('\n'),
+      fixed,
+    );
+  }
+
   return check(
     'notes-refspec',
     title,
     'ok',
-    `${remotes.join(', ')} ${remotes.length === 1 ? 'fetches' : 'fetch'} ${NOTES_REF}`,
+    `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`,
     null,
     fixed,
   );
 };
-
-const hasLocalNotes = (opts: DoctorOptions): boolean =>
-  execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts)).code === 0;
 
 /**
  * Pushing is never automatic: `git push` writes to a ref other people read,
@@ -148,14 +166,29 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? 'origin';
   const command = `git push ${remote} ${NOTES_REF}`;
+  const local = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
 
-  if (!hasLocalNotes(opts)) {
+  if (local.code !== 0) {
     return check(
       'notes-push',
       title,
       'ok',
       `no local mirror yet — nothing to push (${command}, once there is)`,
     );
+  }
+
+  const advertised = execGit(['ls-remote', remote, NOTES_REF], gitOptions(opts));
+  if (advertised.code !== 0) {
+    return check(
+      'notes-push',
+      title,
+      'warn',
+      `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
+      command,
+    );
+  }
+  if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
+    return check('notes-push', title, 'ok', `${remote} has the current ${NOTES_REF}`);
   }
 
   return check(

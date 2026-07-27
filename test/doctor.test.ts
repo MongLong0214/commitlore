@@ -119,6 +119,42 @@ describe('doctor: notes fetch refspec', () => {
     expect(statusOf(runDoctor({ cwd: repo }), 'notes-refspec')).toBe('ok');
   });
 
+  it('keeps fetch working after --fix when the remote has no notes ref', () => {
+    const { repo } = repoWithRemote('doctor-refspec-empty-remote');
+
+    runDoctor({ cwd: repo, fix: true });
+    const fetched = execGit(['fetch', 'origin'], { cwd: repo });
+
+    expect(fetched.code).toBe(0);
+  });
+
+  it('does not report ok when the fixed refspec cannot be verified', () => {
+    const { repo, remote } = repoWithRemote('doctor-refspec-offline');
+    rmSync(remote, { recursive: true, force: true });
+
+    const check = runDoctor({ cwd: repo, fix: true }).checks.find(
+      (entry) => entry.id === 'notes-refspec',
+    );
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('could not verify');
+  });
+
+  it('replaces the unsafe exact refspec under --fix', () => {
+    const { repo } = repoWithRemote('doctor-refspec-repair');
+    const exact = `+${NOTES_REF}:${NOTES_REF}`;
+    git(repo, ['config', '--add', 'remote.origin.fetch', exact]);
+
+    const check = runDoctor({ cwd: repo, fix: true }).checks.find(
+      (entry) => entry.id === 'notes-refspec',
+    );
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch']);
+
+    expect(check?.status).toBe('ok');
+    expect(configured).toContain(NOTES_REFSPEC);
+    expect(configured).not.toContain(exact);
+  });
+
   it('is idempotent: a second --fix adds no duplicate refspec', () => {
     const { repo } = repoWithRemote('doctor-refspec-idempotent');
 
@@ -141,8 +177,10 @@ describe('doctor: notes fetch refspec', () => {
     const report = runDoctor({ cwd: repo });
 
     expect(statusOf(report, 'notes-refspec')).toBe('ok');
-    // No redundant line was added.
-    expect(git(repo, ['config', '--get-all', 'remote.origin.fetch'])).not.toContain(NOTES_REFSPEC);
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch'])
+      .split('\n')
+      .filter((line) => line === NOTES_REFSPEC);
+    expect(configured).toHaveLength(1);
   });
 
   it('warns when there is no remote at all', () => {
@@ -179,6 +217,18 @@ describe('doctor: notes push', () => {
     expect(check?.fix).toBe(`git push origin ${NOTES_REF}`);
     // --fix is local-only: the shared ref is untouched.
     expect(git(remote, ['for-each-ref', '--format=%(refname)', 'refs/notes/'])).toBe('');
+  });
+
+  it('reports ok after the local mirror has reached the remote', () => {
+    const { repo, sha } = repoWithRemote('doctor-push-complete');
+    writeRecord(sha, [{ key: 'Blast', value: 'local' }], { cwd: repo });
+    git(repo, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+    git(repo, ['push', '--quiet', 'origin', NOTES_REF]);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'notes-push');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.fix).toBeNull();
   });
 });
 
