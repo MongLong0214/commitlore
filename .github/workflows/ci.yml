@@ -455,6 +455,13 @@ jobs:
               [ -x /root/.local/bin/commitlore ] || { echo "binary was not installed"; exit 1; }
               v="$(/root/.local/bin/commitlore --version)"
               [ "$v" = "$EXPECTED_VERSION" ] || { echo "unexpected --version output: $v (expected $EXPECTED_VERSION)"; exit 1; }
+              if command -v commitlore >/dev/null 2>&1; then
+                v_by_name="$(commitlore --version)"
+                [ "$v_by_name" = "$EXPECTED_VERSION" ] || { echo "unexpected by-name --version output: $v_by_name (expected $EXPECTED_VERSION)"; exit 1; }
+                echo "commitlore-ci: commitlore is invokable by name"
+              else
+                echo "commitlore-ci: commitlore is not on PATH"
+              fi
               # None of the six clients this script knows about exist in this
               # container. All six must be reported absent, none "wired", and
               # -- the part a clean summary line alone does not prove -- no
@@ -470,6 +477,25 @@ jobs:
             "$RUNNER_TEMP/debian-success.log" || {
             echo "::error::the six-agent-absent summary line is missing or changed"; exit 1;
           }
+          if ! grep -qF "commitlore-ci: commitlore is invokable by name" "$RUNNER_TEMP/debian-success.log"; then
+            grep -qF "commitlore-install: note: /root/.local/bin is not on PATH." \
+              "$RUNNER_TEMP/debian-success.log" || {
+              echo "::error::install.sh neither made commitlore invokable by name nor explained its missing PATH entry"; exit 1;
+            }
+            grep -qF "commitlore-install: add this line to /root/.profile:" \
+              "$RUNNER_TEMP/debian-success.log" || {
+              echo "::error::install.sh did not name the shell file to update"; exit 1;
+            }
+            grep -qF 'commitlore-install:   export PATH="/root/.local/bin:$PATH"' \
+              "$RUNNER_TEMP/debian-success.log" || {
+              echo "::error::install.sh did not print the exact PATH export line"; exit 1;
+            }
+            note_line="$(grep -nF "commitlore-install: note: /root/.local/bin is not on PATH." "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
+            next_line="$(grep -nF "commitlore-install: Next: cd into a repository and run 'commitlore init'" "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
+            [ -n "$note_line" ] && [ -n "$next_line" ] && [ "$note_line" -lt "$next_line" ] || {
+              echo "::error::PATH guidance must be printed before the Next instruction"; exit 1;
+            }
+          fi
 
       # === alpine:latest -- busybox sh, not bash. The real portability test. ==
 
