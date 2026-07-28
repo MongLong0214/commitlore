@@ -20,7 +20,7 @@
 
 ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
 
-一度インストールしたら、普段どおりコミットしてください。CommitLore が残すのは、引き継ぐ価値のある意思決定だけです。
+一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
@@ -34,6 +34,16 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 - record がある場合、commit-msg hook が検証します。record を作成することはありません。
 - エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
 - path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+
+## リポジトリで試す
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+その後もコーディングエージェントと作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
 
 <details>
 <summary>インストールを確認または固定したいですか？</summary>
@@ -96,11 +106,36 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 
 すべてのコミットに trailer を手書きする必要はありません。ほとんどのコミットには record がないべきです。外部制約、除外した代案、warning、verification gap のように、diff だけでは復元できない意思決定にだけ record を追加します。
 
-現在、record がコミットに届く方法は二つです。保存する価値がある意思決定コンテキストがあるとき、エージェントが `skills/commitlore-commits/` の指針に従って trailer block を作成するか、人が通常の Git trailer を手書きします。commit-msg hook はすでにある record を検証するだけです。record を発明したり、黙って追加したりしません。
+### コーディングエージェント経由
+
+エージェントには、普段どおりコミットし、diff では説明できない意思決定コンテキストだけを残すよう頼みます。
+
+> この変更をコミットしてください。diff で重要な制約、除外した代案、warning、または verification gap を復元できない場合にだけ、CommitLore record を追加してください。
+
+ほとんどのコミットには、やはり record は不要です。エージェント向けの指針は `skills/commitlore-commits/` にあり、commit hook はエージェントが追加した record を検証します。
+
+### 高度な経路: harvest
 
 `commitlore harvest` は session transcript と staged diff から prompt contract を作り、`commitlore harvest-verify` はそれに対する draft を検証します。これらは draft を支援しますが、自動でコミットしません。interactive record builder は未実装です。
 
-## 一つの記録
+### 手書き
+
+逃げ道として、人は通常の Git trailer を手書きできます。commit-msg hook はすでにある record を検証するだけで、record を発明したり黙って追加したりしません。
+
+## 最小の record
+
+record は小さくできます。失われるものだけを入れてください。
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+ほとんどの record に protocol field のすべては不要です。意思決定が必要とするときは、identity、lifecycle、risk、provenance、verification field を使えます。
+
+## 完全な record
 
 この例は conformance fixture でもあります。Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
 
@@ -163,6 +198,14 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 ## Evidence: より狭い製品上の主張
 
 112 回の実験は記録されましたが、M4 には run ごとの `guard_exposure` 記録がありません。treatment があったか検証できないため、agent behavior の主張を検証も支持も反証もしていません。上記のより狭い製品上の主張は独立して検証可能な動作に基づきます。クリーンなデータセットと撤回については [M4 verdict](bench/VERDICT-M4.md) を読んでください。
+
+### コストと損益分岐
+
+guard が一回実行されるコストは、注入される context と測定した hook overhead です。commit-msg は p50 185.85 ms、injection hook は p50 102.40 ms です（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
+
+測定した sensitivity range の中ほどでは、re-proposal の防止が 500-token の注入では 7.7%、3,000-token では 46.2%、12,000-token では 184.6% の頻度で起きて初めて損益分岐になります。この大きさでは費用を回収できません。
+
+guard がこれらの率のいずれかに達するかは確立されていません。これは測定済みコストに対する算術であり、効果の証拠ではありません。
 
 <details>
 <summary>完全な benchmark record（112 回の実験）</summary>
