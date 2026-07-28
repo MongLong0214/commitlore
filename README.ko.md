@@ -162,7 +162,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 ## 근거: 더 좁은 제품 주장
 
-112회 실험은 기록됐지만 M4는 어느 arm에도 record를 전달하지 않았다. 따라서 에이전트 행동 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
+112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
 
 <details>
 <summary>전체 benchmark 기록 (112회 실험)</summary>
@@ -224,7 +224,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Alpine 및 다른 musl Linux host는 지원하지 않는다: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
-- M4는 guard 효과를 시험하지 못했다. 어느 arm도 injected record를 받지 못했다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
+- M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 
 ## 기여하기
 
