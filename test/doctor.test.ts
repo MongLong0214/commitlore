@@ -506,6 +506,24 @@ describe('doctor: PreToolUse hook runtime', () => {
     }
   });
 
+  it('reports when the configured executable is not resolvable', () => {
+    const repo = recordedRepo('doctor-inject-not-resolvable');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = '/usr/bin:/bin';
+
+    try {
+      const check = runtimeCheck(repo);
+
+      expect(check?.status).toBe('fail');
+      expect(check?.detail).toContain('configured PreToolUse hook executable "commitlore" is not resolvable from PATH');
+      expect(check?.fix).toContain('PATH');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
   it('does not run an unrecognised configured command', () => {
     const repo = recordedRepo('doctor-inject-unrecognised');
     installClaudeHook({

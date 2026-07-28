@@ -468,6 +468,8 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'PreToolUse hook runtime';
   const id = 'inject-runtime';
   const fix = 'reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor';
+  const unavailableFix =
+    'install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor';
   const cwd = opts.cwd ?? process.cwd();
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
 
@@ -522,6 +524,15 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
   });
 
   if (run.error !== undefined) {
+    if ('code' in run.error && run.error.code === 'ENOENT') {
+      return check(
+        id,
+        title,
+        'fail',
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix,
+      );
+    }
     return check(id, title, 'fail', `could not run the PreToolUse hook: ${run.error.message}`, fix);
   }
   if (run.status !== 0) {
