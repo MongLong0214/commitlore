@@ -11,7 +11,7 @@ import {
   assertSingleProvenance,
   writeDeterministicReport,
 } from './deterministic/report.ts';
-import { measureScale } from './deterministic/scale.ts';
+import { measureScale, SCALE_SIZES } from './deterministic/scale.ts';
 import {
   assertCleanCheckout,
   git,
@@ -68,7 +68,7 @@ const main = (): void => {
     throw new Error(`${testOnlyOverride} is test-only; production measurements use the fixed protocol`);
   }
 
-  const sizes = parseSizes(process.env['COMMITLORE_DETERMINISTIC_SIZES'] ?? '1000,10000,100000');
+  const sizes = parseSizes(process.env['COMMITLORE_DETERMINISTIC_SIZES'] ?? SCALE_SIZES.join(','));
   const runs = parsePositiveInteger(
     'COMMITLORE_DETERMINISTIC_RUNS',
     process.env['COMMITLORE_DETERMINISTIC_RUNS'] ?? '20',
