@@ -93,12 +93,14 @@ const survivalSection = (rows: readonly SurvivalRow[]): string[] => {
   return [
     '## 2. Record survival',
     '',
-    'Method: seed the same number of trailer records in an isolated repository, run each Git operation, then count surviving `Record-Id` values in `HEAD`; rename cases query the new path through the shipped CLI.',
+    'Method: history-retention rows count `Record-Id` values in `HEAD` with `historyCount`; path-reachability rows query the new path through the shipped CLI with `pathCount`. These are distinct outcomes and are never averaged.',
     '',
-    '| operation | survived / total | rate |',
-    '|---|---:|---:|',
+    'The local `squash-merge` row exercises the installed `prepare-commit-msg` hook. GitHub’s server-side squash button runs no local hook, remains uncovered, and still loses records. `rename-heavy-edit` is a path lookup miss, not preservation: its record remains in Git history and is retrievable by commit or `Record-Id`.',
+    '',
+    '| operation | outcome | counter | survived / total | rate |',
+    '|---|---|---|---:|---:|',
     ...rows.map(
-      (row) => `| ${row.operation} | ${row.survived} / ${row.total} | ${percent(row.rate)} |`,
+      (row) => `| ${row.operation} | ${row.outcome} | ${row.measurement} | ${row.survived} / ${row.total} | ${percent(row.rate)} |`,
     ),
     '',
   ];

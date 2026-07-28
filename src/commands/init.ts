@@ -36,6 +36,7 @@ import { formatReport, runDoctor, type DoctorReport } from './doctor.js';
 import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
+import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -52,7 +53,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult;
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult];
 }
 
 interface IndexStepDetail {
@@ -98,17 +99,19 @@ const runDoctorStep = (opts: InitOptions): InitStep => {
 };
 
 const runHooksStep = (opts: InitOptions): InitStep => {
-  const result = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
-  const lines =
+  const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
+  const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg].flatMap((result) =>
     result.code === 0
       ? result.stdout.trimEnd().split('\n')
-      : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'];
+      : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'],
+  );
   return {
     step: 'hooks',
     title: 'hooks install',
-    code: result.code,
+    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
     lines,
-    detail: result,
+    detail: [commitMsg, prepareCommitMsg],
   };
 };
 

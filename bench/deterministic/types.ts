@@ -59,10 +59,11 @@ export type SurvivalOperation =
 export interface SurvivalRow extends BaseRow {
   readonly metric: 'record_survival';
   readonly operation: SurvivalOperation;
+  readonly outcome: 'history-retention' | 'path-reachability';
+  readonly measurement: 'historyCount' | 'pathCount';
   readonly survived: number;
   readonly total: number;
   readonly rate: number;
-  readonly method: 'history' | 'path-query';
 }
 
 export interface InjectionDetectionRow extends BaseRow {
