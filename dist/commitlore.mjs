@@ -13669,6 +13669,7 @@ var findIdCollisions = (records) => {
     else group.push(record2);
   }
   return [...groups].filter(([, group]) => {
+    if (sharesACommit(group)) return true;
     if (!group.some((record2) => record2.source === "notes")) return false;
     return new Set(group.map(payloadSignature)).size > 1;
   }).map(([recordId]) => ({
@@ -13678,6 +13679,15 @@ var findIdCollisions = (records) => {
     got: recordId,
     want: UNIQUE_ID_WANT
   }));
+};
+var sharesACommit = (group) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const record2 of group) {
+    if (record2.source !== "commit" || record2.sha === void 0) continue;
+    if (seen.has(record2.sha)) return true;
+    seen.add(record2.sha);
+  }
+  return false;
 };
 var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
@@ -14251,7 +14261,7 @@ var collectRows = (source, aliases) => {
   const rows = [];
   for (const alias of aliases) {
     for (const row of source.fetch({ path: alias })) {
-      const identity = `${row.sha}\0${row.source}\0${row.seq}`;
+      const identity = `${row.sha}\0${row.source}\0${row.block}\0${row.seq}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
       rows.push(row);
@@ -26855,6 +26865,8 @@ var stripCr = (line) => line.endsWith("\r") ? line.slice(0, -1) : line;
 var CONTINUATION = /^[ \t]/;
 var LEADING_WHITESPACE = /^[ \t]+/;
 var isComment = (line) => line.startsWith("#");
+var MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
+var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine4(message));
 var matchTrailersAt = (lines, start, trailers) => {
   const found = [];
   let cursor = start;
@@ -26935,7 +26947,7 @@ var inspectSource = (source) => {
   const lines = locateTrailerLines(source.message, trailers);
   const rawViolations = validateRecord(trailers);
   const firstTrailerLine = lines[0];
-  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
+  const nonTrailerParagraph = looksLikeMergeTitle(source.message) && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
   const lastViolations = (nonTrailerParagraph === void 0 ? rawViolations : []).map(
     (violation) => {
       const line = lineForViolation(violation, trailers, lines);
@@ -26977,16 +26989,11 @@ var resolveCommit2 = (ref, cwd) => {
   return result.stdout.trim();
 };
 var readCommitSource = (sha, cwd) => {
-  const result = execGit(["log", "-1", "--format=%P%x00%B", sha, "--"], { cwd });
+  const result = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine4(result.stderr)}`);
   }
-  const [parents = "", message = ""] = result.stdout.split("\0");
-  return {
-    sha,
-    message,
-    merge: parents.split(" ").filter(Boolean).length > 1
-  };
+  return { sha, message: result.stdout };
 };
 var readRange = (range, cwd) => {
   const result = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
@@ -27092,6 +27099,16 @@ var checkReferences = (input, sources, cwd) => {
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
+      const ownRecords = [
+        ...blocks.map((trailers) => ({
+          trailers,
+          source: "commit",
+          ...source.sha === void 0 ? {} : { sha: source.sha }
+        })),
+        ...repositoryRecords.filter(
+          (record2) => record2.sha === source.sha && record2.source === "notes"
+        )
+      ];
       for (const trailers of blocks) {
         const candidate = {
           trailers,
@@ -27100,7 +27117,7 @@ var checkReferences = (input, sources, cwd) => {
         };
         const dangling = findDanglingRefs(prior, [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...repositoryRecords, candidate]).filter(
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter(
           (violation) => violation.value === recordId
         );
         violations.push(

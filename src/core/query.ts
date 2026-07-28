@@ -393,7 +393,14 @@ const collectRows = (source: RowSource, aliases: readonly string[]): IndexedTrai
   const rows: IndexedTrailer[] = [];
   for (const alias of aliases) {
     for (const row of source.fetch({ path: alias })) {
-      const identity = `${row.sha}\u0000${row.source}\u0000${row.seq}`;
+      // Must match the row's real identity, the `trailers` table's own unique
+      // index: `(commit_sha, source, block, seq)`. `seq` alone restarts at 0
+      // within every block (SPEC §2.4), so a commit with two blocks has a
+      // `seq: 1` row in *each* block. Without `block` here, a later alias
+      // pass reads block 1's row as a repeat of block 0's row and drops it —
+      // which is how two blocks sharing a `Record-Id` silently read as one
+      // record at a scoped path (bug-issue-92).
+      const identity = `${row.sha}\u0000${row.source}\u0000${row.block}\u0000${row.seq}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
       rows.push(row);

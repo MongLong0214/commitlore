@@ -92,7 +92,14 @@ export declare const findDanglingRefs: (records: StaleRecord[], referencedBy?: S
 /**
  * A note may mirror a commit byte-for-byte, but it may not add or replace
  * content under an identity already declared elsewhere. Commit-only
- * re-declarations remain lifecycle updates (SPEC §5).
+ * re-declarations remain lifecycle updates (SPEC §5) *only when they are
+ * declared by different commits* — two commit-sourced blocks that share a
+ * `sha` never got there by a later commit re-declaring the id over time, they
+ * got there because the multi-record grammar (SPEC §2.4) recovered more than
+ * one block from a single message, and an id must resolve to exactly one
+ * record *within* a message exactly as much as it must across notes and
+ * commits (bug-issue-92; `commitlore parse`'s `labelRecordBlocks` already
+ * enforces this locally to one message, in `core/trailers.ts`).
  */
 export declare const findIdCollisions: (records: StaleRecord[]) => Violation[];
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */
