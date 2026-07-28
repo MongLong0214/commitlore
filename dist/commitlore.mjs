@@ -16839,15 +16839,33 @@ var runIndexStep = (opts) => {
     }
   }
 };
+var runClaudeHookStep = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const settingsPath = claudeSettingsPath(cwd);
+  const result = installClaudeHook({ settingsPath });
+  const lines = result.stdout.trimEnd().split("\n").filter((line) => line.length > 0);
+  if (result.stderr) {
+    lines.push(...result.stderr.trimEnd().split("\n").filter((line) => line.length > 0));
+  }
+  const code = result.code === 0 ? 0 : result.status?.state === "unreadable" && result.status.problem?.includes("cannot read") ? 0 : 2;
+  return {
+    step: "claude-hook",
+    title: "claude hook install",
+    code,
+    lines: lines.length > 0 ? lines : [result.stderr.trim() || "failed with no diagnostic"],
+    detail: result
+  };
+};
 var runInit = (opts = {}) => {
-  const steps = [runHooksStep(opts), runIndexStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, exitCode };
 };
 var STEP_HEADING = {
-  hooks: "[1/3] hooks install",
-  index: "[2/3] index --rebuild",
-  doctor: "[3/3] doctor --fix (final check)"
+  hooks: "[1/4] hooks install",
+  index: "[2/4] index --rebuild",
+  "claude-hook": "[3/4] claude hook install",
+  doctor: "[4/4] doctor --fix (final check)"
 };
 var INDENT = "        ";
 var formatInitReport = (report) => {
@@ -16858,14 +16876,14 @@ ${body}`;
   });
   const failed = report.steps.filter((step) => step.code === 2).map((step) => step.title);
   const needsAttention = report.steps.filter((step) => step.code === 1).map((step) => step.title);
-  const summary2 = failed.length > 0 ? `init: ${failed.length}/3 step(s) could not run \u2014 ${failed.join(", ")}` : needsAttention.length > 0 ? `init: 3/3 steps ran, ${needsAttention.length} need(s) attention \u2014 ${needsAttention.join(", ")} (see detail above)` : "init: 3/3 steps completed cleanly";
+  const summary2 = failed.length > 0 ? `init: ${failed.length}/4 step(s) could not run \u2014 ${failed.join(", ")}` : needsAttention.length > 0 ? `init: 4/4 steps ran, ${needsAttention.length} need(s) attention \u2014 ${needsAttention.join(", ")} (see detail above)` : "init: 4/4 steps completed cleanly";
   return `${[...blocks, summary2].join("\n\n")}
 `;
 };
 var register8 = (program3) => {
-  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
+  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
     "after",
-    "\nRuns the same three steps the README used to list separately \u2014 hooks install, then index --rebuild, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, and `index --rebuild` still exist on their own for anyone who wants one piece rather than all three.\n\nExit codes: 0 all three steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install or the index rebuild could not run at all (SPEC \xA710)."
+    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
   ).action((options) => {
     const report = runInit(options.force === void 0 ? {} : { force: options.force });
     process.stdout.write(

@@ -131,13 +131,13 @@ const trailerCount = (repo: string): number => {
 };
 
 describe('commitlore init — the happy path', () => {
-  it('installs the hook and the index, and reports 0/0/0 codes on a repo with a working remote', () => {
+  it('installs the hook and the index, and reports 0/0/0/0 codes on a repo with a working remote', () => {
     const repo = repoWithRemote('happy');
 
     const report = runInitAsCli({ cwd: repo });
 
-    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'index', 'doctor']);
-    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0]);
+    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'index', 'claude-hook', 'doctor']);
+    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0]);
     expect(report.exitCode).toBe(0);
 
     expect(readHookStatus(repo).state).toBe('installed');
@@ -165,10 +165,11 @@ describe('commitlore init — the happy path', () => {
     const repo = repoWithRemote('format-clean');
     const text = formatInitReport(runInitAsCli({ cwd: repo }));
 
-    expect(text).toContain('[1/3] hooks install');
-    expect(text).toContain('[2/3] index --rebuild');
-    expect(text).toContain('[3/3] doctor --fix');
-    expect(text).toContain('init: 3/3 steps completed cleanly');
+    expect(text).toContain('[1/4] hooks install');
+    expect(text).toContain('[2/4] index --rebuild');
+    expect(text).toContain('[3/4] claude hook install');
+    expect(text).toContain('[4/4] doctor --fix');
+    expect(text).toContain('init: 4/4 steps completed cleanly');
   });
 });
 
@@ -249,7 +250,7 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     const report = runInitAsCli({ cwd: repo });
 
     // Nothing here is a thrown exception: every step reports its own outcome.
-    expect(report.steps).toHaveLength(3);
+    expect(report.steps).toHaveLength(4);
     for (const step of report.steps) {
       expect(step.lines.length).toBeGreaterThan(0);
     }

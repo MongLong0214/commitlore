@@ -33,12 +33,13 @@ import type { Command } from 'commander';
 import { type DoctorReport } from './doctor.js';
 import { type HookResult } from './hooks.js';
 import { type IndexStats } from '../core/index-db.js';
+import { type ClaudeHookResult } from '../hooks/claude-settings.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
     force?: boolean;
 }
-type StepName = 'doctor' | 'hooks' | 'index';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook';
 export interface InitStep {
     step: StepName;
     title: string;
@@ -46,7 +47,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail;
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult;
 }
 interface IndexStepDetail {
     ok: boolean;
@@ -59,16 +60,21 @@ export interface InitReport {
     exitCode: 0 | 1 | 2;
 }
 /**
- * Not the order the old four-command README recipe listed — doctor runs
- * *last* here, on purpose. `doctor` diagnoses the hook and the index among
+ * Order of execution:
+ * 1. Hooks install — sets up the commit-msg hook
+ * 2. Index rebuild — builds the index of trailers
+ * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
+ * 4. Doctor (final check) — verifies everything is working
+ *
+ * Doctor runs last on purpose. `doctor` diagnoses the hook and the index among
  * its checks, and it does not install either: run it first and its own
  * report would open with "no commit-msg hook" and "no index yet" for
- * conditions this same invocation is about to fix two steps later. That is
+ * conditions this same invocation is about to fix in earlier steps. That is
  * not wrong, but it reads as though `init` shipped with a problem it did not
- * — a false alarm this command is specifically trying not to raise. Hooks
- * install and the index rebuild do not depend on each other or on doctor's
- * fixes, so running doctor last costs nothing and makes its report describe
- * the state `init` actually leaves behind, not the state it started from.
+ * — a false alarm this command is specifically trying not to raise. The other
+ * steps do not depend on each other or on doctor's fixes, so running doctor
+ * last costs nothing and makes its report describe the state `init` actually
+ * leaves behind, not the state it started from.
  */
 export declare const runInit: (opts?: InitOptions) => InitReport;
 export declare const formatInitReport: (report: InitReport) => string;
