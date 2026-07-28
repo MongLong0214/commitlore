@@ -1,19 +1,19 @@
 # CommitLoreBench
 
-**M4 is the citable dataset.** `bench/results/t702-m4-final.jsonl` records the
-harness commit and the `dist/` digest for every row, `bench/report.ts` summarizes
-it, and the README's numbers block is generated from it. M3 was voided for
-lacking that provenance (§15); M4 was designed, registered and run to supply it,
-and its result is null. The historical executed report is
-`bench/VERDICT-M4.md`; the canonical paired-and-clustered correction is
-`docs/VERDICT-M4.md`. Every earlier dataset
-(M1, M1-b, M2) still lacks the fields and is not pooled into the generated block
-for that reason, not because it was withdrawn as a record; each has its own
-verdict document.
+**M4 is a citable, clean-provenance dataset, not a guard test.**
+`bench/results/t702-m4-final.jsonl` records the harness commit and `dist/`
+digest for every row, and `bench/report.ts` summarizes it. M3 was voided for
+lacking that provenance (§15); M4 has it. But M4's 112 transcripts contain no
+injected context in either arm, so its valid data do not answer the guard
+question. The withdrawal and the corrected statistics as observations about
+the data are in `bench/VERDICT-M4.md`. Every earlier dataset (M1, M1-b, M2)
+still lacks the fields and is not pooled into the generated block for that
+reason, not because it was withdrawn as a record; each has its own verdict
+document.
 
-Measures the one thing that decides whether CommitLore is worth building: does an
-agent that can see recorded decisions stop re-proposing the approaches a team
-already rejected?
+The benchmark is designed to ask whether an agent that receives recorded
+decisions stops re-proposing approaches a team already rejected. M4 did not
+deliver those decisions, so it does not answer that question.
 
 - Design: `docs/adr/ADR-0007-commitlorebench.md`
 - Requirements: `docs/prd/PRD-F7-commitlorebench.md`
@@ -80,6 +80,11 @@ Conditions are an open string enum, so M4 adds arms without touching the runner.
 | `records-uninjected` | planned | yes | no |
 
 Planned arms are rejected at CLI parse time with a pointer to their ticket.
+
+**M4 correction:** although its labels were `commitlore-on` and
+`commitlore-guard`, all 112 stored M4 transcripts have `injected_context: null`.
+The condition table describes the intended harness behavior; M4 did not receive
+the treatment and is not evidence about it.
 
 `--cond both` is the two arms of the primary comparison and `--cond all` is
 every supported arm. Until T-703 those were the same list; they are not any
@@ -938,8 +943,9 @@ Fisher exact also treats runs as independent, while the design is paired by
 (task, seed). The output says so. The test is the one ADR-0007 and T-702
 registered, but it does not provide a valid hypothesis test for paired data.
 The original number remains part of the historical report; the registered
-replacement and M4 correction are in `docs/MEASUREMENT-PROTOCOL.md` and
-`docs/VERDICT-M4.md`.
+replacement is in `docs/MEASUREMENT-PROTOCOL.md`. M4's paired/clustered
+statistics are preserved in `bench/VERDICT-M4.md` as descriptions of rows that
+did not receive the treatment, not as a correction of a guard estimate.
 
 ### What makes the measured effect a floor — one thing, not two
 

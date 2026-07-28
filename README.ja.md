@@ -162,7 +162,7 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 
 ## Evidence: より狭い製品上の主張
 
-112 回の実験を行いましたが、測定した agent behavior の主張は裏付けられませんでした。そのため CommitLore は上記の、より狭い製品上の主張をします。全ての限界は [M4 verdict](bench/VERDICT-M4.md) で読めます。
+112 回の実験は記録されましたが、M4 はどちらの arm にも record を届けませんでした。したがって agent behavior の主張を検証も支持も反証もしていません。上記のより狭い製品上の主張は独立して検証可能な動作に基づきます。クリーンなデータセットと撤回については [M4 verdict](bench/VERDICT-M4.md) を読んでください。
 
 <details>
 <summary>完全な benchmark record（112 回の実験）</summary>
@@ -224,7 +224,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - Alpine および他の musl Linux host は未対応です: [#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- benchmark は agent behavior に対する guard の効果を実証していません: [#37](https://github.com/MongLong0214/commitlore/issues/37)。
+- M4 は guard の効果を検証していません。どちらの arm にも injected record が届きませんでした: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 
 ## コントリビュート
 
