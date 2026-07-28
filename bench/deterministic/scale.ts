@@ -16,6 +16,8 @@ interface SyntheticSummary {
   readonly trailerCommits: number;
 }
 
+export const SCALE_SIZES = [1_000, 10_000, 100_000, 300_000] as const;
+
 const parseSummary = (stdout: string): SyntheticSummary => {
   const parsed: unknown = JSON.parse(stdout);
   if (typeof parsed !== 'object' || parsed === null) {

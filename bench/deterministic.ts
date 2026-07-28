@@ -11,7 +11,7 @@ import {
   assertSingleProvenance,
   writeDeterministicReport,
 } from './deterministic/report.ts';
-import { measureScale } from './deterministic/scale.ts';
+import { measureScale, SCALE_SIZES } from './deterministic/scale.ts';
 import {
   assertCleanCheckout,
   git,
@@ -45,11 +45,18 @@ const assertComplete = (rows: readonly DeterministicRow[]): void => {
 const assertNoConcurrentDeterministicBench = (): void => {
   const ps = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
   if (ps.error !== undefined) throw ps.error;
+  // Match only a node process actually executing the bench, not every process
+  // whose command line mentions it. A shell that launched this run carries the
+  // path in its own argv, and so does the wrapper any CI or tool harness uses,
+  // so a substring test refuses the first honest run and teaches the user to
+  // delete the guard.
   const matches = ps.stdout
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => /\bbench\/deterministic\.ts\b/.test(line))
-    .filter((line) => Number(line.split(/\s+/, 1)[0]) !== process.pid);
+    .filter((line) => /\bnode\b[^\n]*\bbench\/deterministic\.ts\b/.test(line))
+    .filter((line) => !/\b(?:z|ba|)sh\b\s+-[a-z]*c\b/.test(line))
+    .filter((line) => Number(line.split(/\s+/, 1)[0]) !== process.pid)
+    .filter((line) => Number(line.split(/\s+/, 1)[0]) !== process.ppid);
   if (matches.length > 0) {
     throw new Error(`deterministic benchmark refused: another bench/deterministic process is running:\n${matches.join('\n')}`);
   }
@@ -68,7 +75,7 @@ const main = (): void => {
     throw new Error(`${testOnlyOverride} is test-only; production measurements use the fixed protocol`);
   }
 
-  const sizes = parseSizes(process.env['COMMITLORE_DETERMINISTIC_SIZES'] ?? '1000,10000,100000');
+  const sizes = parseSizes(process.env['COMMITLORE_DETERMINISTIC_SIZES'] ?? SCALE_SIZES.join(','));
   const runs = parsePositiveInteger(
     'COMMITLORE_DETERMINISTIC_RUNS',
     process.env['COMMITLORE_DETERMINISTIC_RUNS'] ?? '20',
