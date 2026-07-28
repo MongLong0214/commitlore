@@ -162,7 +162,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 ## Evidence：更窄的产品主张
 
-完成了 112 次实验，但所测 agent behavior 的主张未获支持。因此 CommitLore 提出的是上面更窄的产品主张。完整限制见 [M4 verdict](bench/VERDICT-M4.md)。
+已记录 112 次实验，但 M4 没有向任何 arm 交付 record。因此它没有检验、支持或反驳 agent behavior 的主张。上面更窄的产品主张基于可独立验证的行为。关于干净的数据集和撤回，请见 [M4 verdict](bench/VERDICT-M4.md)。
 
 <details>
 <summary>完整 benchmark 记录（112 次实验）</summary>
@@ -224,7 +224,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - 不支持 Windows：[#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - 不支持 Alpine 与其他 musl Linux host：[#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- benchmark 未能证明 guard 对 agent behavior 有效果：[#37](https://github.com/MongLong0214/commitlore/issues/37)。
+- M4 没有检验 guard 效果：没有任何 arm 收到 injected record（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
 
 ## 贡献
 
