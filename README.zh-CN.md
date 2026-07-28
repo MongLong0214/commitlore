@@ -18,6 +18,26 @@ CommitLore 是一套把决策背景保存在 Git 提交 trailer 和 `refs/notes/
 协议是第一位的；CLI 负责验证和路由这些记录，并把它们提供给 shell、hook 和 MCP 客户端。
 目前没有证据表明它能让编程智能体表现得更好。
 
+## 安装
+
+安装一次，每个仓库再各一次——不会压缩成一个命令,这是刻意的:下面的 hook 和索引是每个仓库自己的状态,面向机器全局的安装无法替一个它还没见过的仓库预先设置好这些（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+为这台机器下载一个经过 checksum 校验的 release 二进制文件——不需要 Node（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）,并把 `commitlore` 命令放上 `PATH`。接着检测这台机器上装了哪些编程智能体——Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。对检测到的每一个,都会把 CommitLore 的 MCP 服务器(Claude Code 则是插件)接进去。它不会在未告知的情况下覆盖已有配置,也不会为未安装的智能体写配置,并会原样打印出接了什么、跳过了什么。
+
+然后,在每个想启用 CommitLore 的仓库里:
+
+```bash
+commitlore init
+```
+
+为该仓库安装 commit-msg 校验 hook,构建本地记录索引。它会报告做了什么,并且可以放心重复运行——已经配置好的仓库只会如实报告,不会做任何改动。
+
+只是读取协议的话根本不需要安装:每条记录都是普通的 git trailer(见[下文](#一条记录))。不想把脚本 pipe 进 `sh`,而是想用 Node clone、从源码构建,或者手动校验下载?[从 clone 安装](#从-clone-安装)这三种都写了。
+
 ## 测量记录
 
 <!-- BENCH:WITHDRAWN -->
@@ -106,9 +126,11 @@ CommitLore 没有 registry package。发布渠道就是 Git 仓库本身（[ADR-
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
+node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
+
+`init` 会把 `doctor --fix`、`hooks install`、`index --rebuild` 一起跑完,报告做了什么、没能做成什么,并且可以放心重复运行——自己解决不了的 `warn` 或 `fail` 会如实报告,不会被吞进一句"成功"里。这三个命令各自也都还在,想单独用哪个都行:`commitlore doctor`、`commitlore hooks install`、`commitlore index --rebuild`。
 
 仓库中提交的 bundle 无需构建、也无需 `node_modules` 即可运行。SQLite 索引使用 Node 自带的 `node:sqlite`（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)），因此仅靠 clone 就能构建并查询索引——不需要原生模块，不需要编译器，也不需要 `npm install`。想跳过索引、只用 Git 回答时，仍可以使用 `--no-index`。
 
@@ -135,6 +157,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 ```
 
 `install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.1.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
+
+二进制文件装好之后，同一个脚本会检测这台机器上装了哪些编程智能体（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode），给检测到的每一个接上 CommitLore 的 MCP 服务器（Claude Code 则是插件），并打印出接了什么、跳过了什么。它不会在未告知的情况下覆盖已有配置，也不会为未安装的智能体写配置。
 
 传给 shell 执行不应是唯一有文档记录的方式。手动完成同样的安装：
 
@@ -174,6 +198,8 @@ tar -xzf "commitlore-$version-$target.tar.gz"
   }
 }
 ```
+
+`install.sh` 会为这台机器上已经装好的每个受支持客户端（Codex、Gemini CLI、Cursor、Windsurf、opencode）自动写入等价的这段配置——它没检测到的客户端，或者 CI 环境，就照抄这段。
 
 读取协议并不需要 CLI：
 

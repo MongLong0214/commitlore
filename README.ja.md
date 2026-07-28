@@ -18,6 +18,26 @@ CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/
 主役はプロトコルであり、CLI は記録を検証・ルーティングして shell、hook、MCP クライアントへ渡します。
 コーディングエージェントを改善することは実証されていません。
 
+## インストール
+
+インストールは一度、リポジトリごとにもう一度 — 一つのコマンドに収まらないのは意図的です。以下の hook と index はリポジトリごとの状態であり、まだ見たことのないリポジトリのためにマシン全体のインストールがあらかじめ用意しておけるものではありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+このマシン向けに checksum を検証済みのリリースバイナリをダウンロードします — Node は不要です（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）。そのうえで `commitlore` コマンドを `PATH` に通します。続けて、このマシンにインストールされているコーディングエージェントを検出します — Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。何を接続し、何をスキップしたかをそのまま出力します。
+
+続けて、CommitLore を使いたい各リポジトリの中で:
+
+```bash
+commitlore init
+```
+
+そのリポジトリに commit-msg 検証 hook をインストールし、ローカルの記録 index を構築します。何を行ったかを報告し、再実行しても安全です — すでに設定済みのリポジトリはその旨を報告するだけで、何も変更しません。
+
+プロトコルを読むだけならインストールは不要です。記録はどれも普通の git trailer だからです（[後述](#一つの記録)）。`sh` にスクリプトを流し込む代わりに、Node での clone、ソースからの build、手動で検証したダウンロードを使いたい場合は、[clone からインストール](#clone-からインストール)に三つとも書いてあります。
+
 ## 測定の記録
 
 <!-- BENCH:WITHDRAWN -->
@@ -106,9 +126,11 @@ CommitLore の registry package はありません。配布チャネルは Git �
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
+node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
+
+`init` は `doctor --fix`・`hooks install`・`index --rebuild` をまとめて実行し、何を行い何ができなかったかを報告し、再実行しても安全です — 自分では解決できない `warn` や `fail` は成功メッセージに紛れ込ませず、そのまま報告します。三つを個別に使いたい場合は `commitlore doctor`・`commitlore hooks install`・`commitlore index --rebuild` もそれぞれ残っています。
 
 コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
 
@@ -135,6 +157,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 ```
 
 `install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.1.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
+
+バイナリが配置されると、同じスクリプトがこのマシンにインストールされているコーディングエージェントを検出し（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode）、見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続し、何を接続し何をスキップしたかを出力します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。
 
 シェルへのパイプが唯一の文書化された方法であってはいけません。同じインストールを手動で行う場合:
 
@@ -174,6 +198,8 @@ MCP client には同じ clone の entry point を登録します。
   }
 }
 ```
+
+`install.sh` はマシンに既にインストールされている対応クライアント（Codex、Gemini CLI、Cursor、Windsurf、opencode）それぞれに、これと同等のブロックを自動で書き込みます — 検出できなかったクライアントや CI 向けには、これをそのまま使ってください。
 
 プロトコルを読むだけなら CLI は不要です。
 

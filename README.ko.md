@@ -18,6 +18,26 @@ CommitLore는 결정 맥락을 Git 커밋 trailer와 `refs/notes/commitlore`에 
 프로토콜이 먼저이고, CLI는 기록을 검증하고 라우팅해 셸·훅·MCP 클라이언트에 제공한다.
 코딩 에이전트를 더 낫게 만든다는 것은 입증되지 않았다.
 
+## 설치
+
+설치는 한 번, 저장소마다 한 번 — 딱 한 명령으로 끝나지 않는 이유가 있다: 아래의 훅과 인덱스는 저장소별 상태이고, 아직 본 적 없는 저장소를 위해 머신 전역 설치가 미리 만들어 둘 수 있는 것이 아니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+이 머신에 맞는, checksum까지 검증된 release 바이너리를 내려받는다 — Node가 필요 없다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)). 그리고 `commitlore` 명령을 `PATH`에 등록한다. 이어서 이 머신에 설치된 코딩 에이전트를 감지한다 — Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode. 감지된 각 에이전트에는 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다. 무엇을 연결했고 무엇을 건너뛰었는지 그대로 출력한다.
+
+그다음, CommitLore를 쓸 각 저장소 안에서:
+
+```bash
+commitlore init
+```
+
+해당 저장소에 commit-msg 검증 훅을 설치하고 로컬 기록 인덱스를 만든다. 무엇을 했는지 보고하며, 다시 실행해도 안전하다 — 이미 설정된 저장소는 그렇다고 보고할 뿐 아무것도 바꾸지 않는다.
+
+프로토콜을 읽기만 한다면 설치 자체가 필요 없다: 모든 기록은 평범한 git trailer이다([아래](#기록-하나) 참고). `sh`로 스크립트를 파이프하는 대신 Node로 clone하거나, 소스에서 빌드하거나, 직접 검증하며 내려받고 싶다면 [clone으로 설치](#clone으로-설치)에 세 방법이 모두 있다.
+
 ## 측정 기록
 
 <!-- BENCH:WITHDRAWN -->
@@ -106,9 +126,11 @@ CommitLore 레지스트리 패키지는 없다. 배포 채널은 Git 저장소 �
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
+node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
+
+`init`은 `doctor --fix`, `hooks install`, `index --rebuild`를 한 번에 실행하고, 무엇을 했고 무엇을 하지 못했는지 보고하며, 다시 실행해도 안전하다 — 스스로 해결할 수 없는 `warn`이나 `fail`은 성공 메시지에 묻히지 않고 그대로 보고된다. 세 개씩 따로 쓰고 싶다면 `commitlore doctor`, `commitlore hooks install`, `commitlore index --rebuild` 각각도 그대로 남아 있다.
 
 커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
 
@@ -135,6 +157,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 ```
 
 `install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.1.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
+
+바이너리가 준비되면 같은 스크립트가 이 머신에 설치된 코딩 에이전트를 감지해(Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) 찾아낸 각각에 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결하고, 무엇을 연결했고 무엇을 건너뛰었는지 출력한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다.
 
 쉘로 파이프하는 것이 유일한 문서화된 경로여서는 안 된다. 같은 설치를 수동으로:
 
@@ -174,6 +198,8 @@ MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
   }
 }
 ```
+
+`install.sh`는 머신에 이미 설치돼 있는 지원 클라이언트(Codex, Gemini CLI, Cursor, Windsurf, opencode)마다 이와 동등한 블록을 자동으로 써 준다 — 감지하지 못한 클라이언트나 CI에서는 이걸 그대로 옮겨 쓰면 된다.
 
 프로토콜을 읽는 데 CLI는 필요 없다.
 

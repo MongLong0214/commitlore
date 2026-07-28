@@ -18,6 +18,26 @@ CommitLore is a protocol for keeping decision context in Git commit trailers and
 The protocol comes first; the CLI validates, routes, and exposes those records to shells, hooks, and MCP clients.
 It has not been shown to make coding agents better.
 
+## Install
+
+One command to install, one command per repository — not one command total, on purpose: the hook and the index below are per-repository state, and nothing a machine-wide install runs can set that up for a repository it has not seen yet ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+Downloads a checksum-verified release binary for this machine — no Node required ([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)) — and puts a `commitlore` command on `PATH`. Then it detects which coding agents are on this machine — Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode — and wires CommitLore's MCP server (the plugin, for Claude Code) into each one it finds. It never overwrites an existing agent config without saying so, never writes one for an agent that is not installed, and prints exactly what it wired and what it skipped.
+
+Then, in each repository you want CommitLore active in:
+
+```bash
+commitlore init
+```
+
+Installs the commit-msg validation hook and builds the local record index for that repository, reports what it did, and is safe to run again — a repository that is already set up says so and changes nothing.
+
+No install step is required just to read the protocol: every record is an ordinary git trailer (see [below](#a-record)). Prefer `git clone` with a Node runtime, a source build, or a hand-verified download instead of piping a script into `sh`? [Install from the clone](#install-from-the-clone) covers all three.
+
 ## The measurement record
 
 <!-- BENCH:WITHDRAWN -->
@@ -106,9 +126,11 @@ There is no CommitLore registry package. Distribution is the Git repository ([AD
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
+node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
+
+`init` runs `doctor --fix`, `hooks install`, and `index --rebuild` together, reports what it did and what it could not, and is safe to run again — a `warn` or `fail` check it cannot resolve itself is reported, never folded into a success message. Each of the three still exists on its own (`commitlore doctor`, `commitlore hooks install`, `commitlore index --rebuild`) for anyone who wants one piece rather than all three.
 
 The committed bundle runs without a build and without `node_modules`. The SQLite index uses `node:sqlite`, which ships inside Node itself ([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)), so a clone alone can build and query it — no native module, no compiler, no `npm install`. `--no-index` is still there to answer from Git alone when you want to skip the index.
 
@@ -135,6 +157,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 ```
 
 `install.sh` detects your OS and architecture, downloads the matching asset and `SHA256SUMS` from the same release, and verifies the checksum **before** installing anything — read it before piping it to `sh`, the same way you would any install script. Pass a version to pin one: `sh install.sh v0.1.0`. Published targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. There is no Windows binary yet — the SEA build and the commit-msg hook shim are unverified there; see [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md).
+
+Once the binary is in place, the same script detects which coding agents are installed on this machine (Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) and registers CommitLore's MCP server — the plugin, for Claude Code — with each one it finds, printing what it wired and what it skipped. It never overwrites an existing agent config without saying so and never writes one for an agent that is not installed.
 
 Piping to a shell should never be the *only* documented path. The same install, by hand:
 
@@ -174,6 +198,8 @@ For an MCP client, register the same cloned entry point:
   }
 }
 ```
+
+`install.sh` writes an equivalent block automatically for every supported client it finds already installed on the machine (Codex, Gemini CLI, Cursor, Windsurf, opencode) — this is what to copy by hand for one it does not detect, or for CI.
 
 No CLI is required to read the protocol:
 
