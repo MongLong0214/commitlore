@@ -2,6 +2,94 @@
 
 ## Unreleased
 
+### `package.json` no longer describes a package this project can publish — bug-issue-93
+
+`npm publish` would have succeeded: nothing in `package.json` enforced
+ADR-0011's decision that there is no registry package. `"private": true`
+makes that structural instead of a convention nobody checks.
+
+`bin` pointed `dist/cli.js` at a package-manager install (`npm install -g` /
+`npx`) that ADR-0011 already replaced with a git clone — and that entry
+never worked: a fresh clone with no `node_modules` (exactly what a `bin`
+install produces without a compatible registry flow) crashes
+`ERR_MODULE_NOT_FOUND: commander`, because `dist/cli.js` is the unbundled
+`tsc` output, not the esbuild bundle. Removed rather than repointed, per the
+owner's instruction — it exists only to serve an install that will never
+happen. `dist/cli.js` itself stays: CI and `scripts/commitlore-run.sh` both
+still run it directly as the "`node_modules` is already sitting next to it"
+fallback, which is unrelated to what `bin` does.
+
+The five `dependencies` moved to `devDependencies`: rebuilt and ran the
+bundle with `node_modules` deleted (`--version`, `validate`) to confirm
+esbuild inlines all five — they are build-time inputs, and listing them as
+runtime dependencies advertised a runtime that does not exist. `files`
+(`dist`, `spec`) is untouched even though #39's single-executable binary has
+since landed: it was not part of this audit's own "not clean" findings, and
+folding it in here would be scope creep past what #93 asked for rather than
+the "single cleanup" the issue anticipated.
+
+Not touched: `npm run build`/`npm test`/`devDependencies`' existing entries
+(the dev toolchain), and the npm text in ADR-0002 and ADR-0011 (the decision
+history explaining why npm was rejected).
+
+### Shape's verdict no longer depends on whether a repository is attached — bug-issue-90
+
+SPEC §6.1 defines Shape as needing "the message alone" and running
+"anywhere, including stdin." It did not: the same merge commit message got
+`shape ok` through `--commit` and `shape failed` (an `unknown-key` on the
+GitHub PR-title paragraph) through `--message-file`, reproduced against
+gitseed's own history before changing anything.
+
+The two paths had diverged, not the check class: bug-issue-76's merge-title
+exclusion (`validate.ts`'s `nonTrailerParagraph`) gated on `source.merge`,
+computed from `git log --format=%P` parent-counting — repository
+information a `--message-file`/stdin caller never has. `--commit` and
+`--range` populated it; `--message-file` and stdin silently left it
+`undefined`, so the exact same excuse applied to one path and not the other
+for the identical text.
+
+Reconciled by making the signal message-only: `looksLikeMergeTitle` matches
+the message's own first line against the subject `git merge` and GitHub's
+PR-merge button write on their own (`Merge pull request #N from …`, `Merge
+branch '…'`, `Merge remote-tracking branch '…'`, `Merge tag '…'`) — text
+available identically in every input mode, so both paths now compute the
+same excuse the same way. `readCommitSource` no longer fetches `%P` at all.
+
+### `context` and `validate` now refuse two blocks in one message sharing a `Record-Id`, the same way `parse` already does — bug-issue-92
+
+Continuing bug-issue-89's finding: `core/stale.ts`'s `findIdCollisions` only
+fired when a *notes*-sourced record disagreed with a commit's own content —
+a group with no `notes` record in it, which is what two same-message commit
+blocks are, never reached it. `parse` already detected the same-message case
+itself (bug-issue-89); `context` and `validate` disagreed with it about the
+very same message.
+
+`findIdCollisions` now also flags a `Record-Id` claimed by two *commit*-sourced
+records that share a `sha` — declared by the same message, not a later
+commit re-declaring the id over time (which stays a legitimate SPEC §5
+lifecycle update, unflagged). A clean note mirroring its own commit is
+unaffected: that always shares a `sha` too, and stays gated on payload drift
+exactly as before.
+
+`validate`'s reference check (`checkReferences`) built its collision-check
+array by pairing `repositoryRecords` — which already carries the single
+last-paragraph record `collectRecords` derives for the commit being
+checked — with a per-block `candidate`, so checking the message's own last
+block duplicated that same block instead of ever placing two *different*
+blocks side by side. Rebuilt to pass the message's own blocks once each
+(`ownRecords`, plus any notes record already found for that `sha`, so
+bug-issue-74's divergent-note case stays covered) alongside `prior`.
+
+Also fixed in the same investigation, without which the fix above could not
+be observed through `commitlore context <path>` — the shape a user actually
+runs: `core/query.ts`'s `collectRows` deduplicated rows fetched across
+aliases by `sha`+`source`+`seq` alone. `seq` restarts at 0 within every
+record block (SPEC §2.4), so a commit with two blocks has a `seq: 1` row in
+*each* — `collectRows` was silently dropping the second block's rows as
+"already seen," which is what made `context --json` show one clean record
+instead of a blocked collision at a scoped path. Fixed by keying on `block`
+too, matching the `trailers` table's own unique index.
+
 ### Compiled single-executable binary — feat-issue-39
 
 `npm run build:binary` (`scripts/build-binary.mjs`) builds `dist/commitlore`,

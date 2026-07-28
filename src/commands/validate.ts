@@ -92,7 +92,6 @@ export interface ValidationCheck {
 interface MessageSource {
   sha?: string;
   message: string;
-  merge?: boolean;
 }
 
 const USAGE =
@@ -135,6 +134,23 @@ const LEADING_WHITESPACE = /^[ \t]+/;
  * `.git/COMMIT_EDITMSG` can have them interleaved with trailers.
  */
 const isComment = (line: string): boolean => line.startsWith('#');
+
+/**
+ * Matches the subject line `git merge` and GitHub's PR-merge button write on
+ * their own, never something a person typed as a trailer.
+ *
+ * This is text, not `git log --format=%P` parent-counting (bug-issue-90): SPEC
+ * §6.1 defines Shape as needing "the message alone" and running "anywhere,
+ * including stdin," so whether a paragraph is platform-generated prose cannot
+ * depend on repository state a `--message-file`/stdin caller never has —
+ * otherwise the same message gets a different Shape verdict depending on how
+ * it arrived, which is the defect this pattern replaces. The subject line
+ * itself is exactly the signal available in every input mode alike.
+ */
+const MERGE_TITLE =
+  /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
+
+const looksLikeMergeTitle = (message: string): boolean => MERGE_TITLE.test(firstLine(message));
 
 /**
  * Tries to read `trailers` off `lines` starting at `start`, reproducing git's
@@ -292,7 +308,9 @@ const violationsForBlock = (source: MessageSource, trailers: Trailer[]): Located
  * key" from "GitHub wrote a PR title here and it happens to contain a colon"
  * (bug-issue-76) — a merge commit's platform-generated last paragraph is not
  * additionally re-checked as if it declared a `Record-Id`, because it never
- * claims to be a record at all.
+ * claims to be a record at all. The merge subject is recognized from
+ * `source.message` itself (`looksLikeMergeTitle`), not from the repository,
+ * so this excuse applies the same way to every input mode (bug-issue-90).
  *
  * Earlier blocks the multi-record grammar recovers do not get that special
  * case: `parseRecordBlocks` only accepts one when it is entirely
@@ -311,7 +329,7 @@ const inspectSource = (
   const rawViolations = validateRecord(trailers);
   const firstTrailerLine = lines[0];
   const nonTrailerParagraph =
-    source.merge === true &&
+    looksLikeMergeTitle(source.message) &&
     firstTrailerLine !== undefined &&
     rawViolations.length > 0 &&
     rawViolations.length === trailers.length &&
@@ -380,16 +398,11 @@ const resolveCommit = (ref: string, cwd: string): string => {
 };
 
 const readCommitSource = (sha: string, cwd: string): MessageSource => {
-  const result = execGit(['log', '-1', '--format=%P%x00%B', sha, '--'], { cwd });
+  const result = execGit(['log', '-1', '--format=%B', sha, '--'], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine(result.stderr)}`);
   }
-  const [parents = '', message = ''] = result.stdout.split('\0');
-  return {
-    sha,
-    message,
-    merge: parents.split(' ').filter(Boolean).length > 1,
-  };
+  return { sha, message: result.stdout };
 };
 
 const readRange = (range: string, cwd: string): MessageSource[] => {
@@ -534,6 +547,26 @@ const checkReferences = (
         (record) => record.sha !== undefined && reachable.has(record.sha),
       );
       const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
+      // This message's own blocks, exactly once each — not `repositoryRecords`,
+      // which already carries the single last-paragraph record `collectRecords`
+      // derives for `source.sha`. Two blocks sharing a `Record-Id` inside one
+      // message must collide with *each other* (bug-issue-92); pairing
+      // `repositoryRecords` with a per-block `candidate` below would instead
+      // pair the message's last block with a second copy of itself and never
+      // see an earlier block at all. A notes mirror on this same commit is
+      // carried over from `repositoryRecords` rather than rebuilt, so a
+      // divergent note still collides with the message's own block exactly as
+      // it did before this message could carry more than one (bug-issue-74).
+      const ownRecords: StaleRecord[] = [
+        ...blocks.map((trailers) => ({
+          trailers,
+          source: 'commit' as const,
+          ...(source.sha === undefined ? {} : { sha: source.sha }),
+        })),
+        ...repositoryRecords.filter(
+          (record) => record.sha === source.sha && record.source === 'notes',
+        ),
+      ];
 
       for (const trailers of blocks) {
         const candidate: StaleRecord = {
@@ -546,7 +579,7 @@ const checkReferences = (
         const collisions =
           recordId === undefined
             ? []
-            : findIdCollisions([...repositoryRecords, candidate]).filter(
+            : findIdCollisions([...prior, ...ownRecords]).filter(
                 (violation) => violation.value === recordId,
               );
         violations.push(
