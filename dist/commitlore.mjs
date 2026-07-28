@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve8.call(this, root, ref);
+      let _sch = resolve9.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve8(root, ref) {
+    function resolve9(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve8(baseURI, relativeURI, options) {
+    function resolve9(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve8,
+      resolve: resolve9,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -16792,6 +16792,98 @@ var register7 = (program3) => {
   });
 };
 
+// src/hooks/prepare-commit-msg.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync9, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { resolve as resolve6 } from "node:path";
+var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
+var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
+var PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_NAME}${CHAINED_SUFFIX}`;
+var RECORD_KEYS = new Set(KNOWN_KEYS);
+var prepareCommitMsgStub = () => commitMsgStub().replaceAll("commit-msg", PREPARE_COMMIT_MSG_HOOK_NAME).replaceAll('validate --message-file "$1"', 'prepare-commit-msg "$@"');
+var isRecordBlock = (trailers) => trailers.some((trailer) => RECORD_KEYS.has(trailer.key));
+var squashMessagePath = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", "SQUASH_MSG"], { cwd });
+  if (result.code !== 0) return null;
+  return resolve6(cwd, result.stdout.trim());
+};
+var squashCommitIds = (message) => {
+  const ids = [];
+  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+    const id = match[1];
+    if (id !== void 0) ids.push(id);
+  }
+  return ids;
+};
+var recordsFromSquashMessage = (cwd, message) => {
+  const blocks = [];
+  for (const id of squashCommitIds(message)) {
+    const result = execGit(["show", "--no-patch", "--format=%B", "--end-of-options", id], { cwd });
+    if (result.code !== 0) {
+      throw new Error(`could not read squashed commit ${id}: ${result.stderr.trim()}`);
+    }
+    blocks.push(...parseRecordBlocks(result.stdout).filter(isRecordBlock));
+  }
+  return blocks;
+};
+var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
+  const squashPath = squashMessagePath(cwd);
+  if (squashPath === null || !existsSync6(squashPath)) return false;
+  const draft = readFileSync9(messageFile, "utf8");
+  if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
+  const blocks = recordsFromSquashMessage(cwd, readFileSync9(squashPath, "utf8"));
+  if (blocks.length === 0) return false;
+  const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
+  writeFileSync6(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
+  return true;
+};
+var prepareHookPath = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
+  if (result.code !== 0) throw new Error(result.stderr.trim() || "not a git repository");
+  return resolve6(cwd, result.stdout.trim());
+};
+var hookSuccess = (line) => ({ code: 0, stdout: `${line}
+`, stderr: "" });
+var hookFailure = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
+` });
+var writePrepareHook = (path2) => {
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes3(4).toString("hex")}`;
+  writeFileSync6(temporary, prepareCommitMsgStub(), { mode: HOOK_MODE });
+  chmodSync2(temporary, HOOK_MODE);
+  renameSync3(temporary, path2);
+};
+var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
+  let path2;
+  try {
+    path2 = prepareHookPath(cwd);
+    mkdirSync4(resolve6(path2, ".."), { recursive: true });
+  } catch (error2) {
+    return hookFailure(error2 instanceof Error ? error2.message : String(error2));
+  }
+  try {
+    if (existsSync6(path2)) {
+      const current = readFileSync9(path2, "utf8");
+      if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
+        return hookFailure(`${path2} is not a commitlore hook \u2014 left in place`);
+      }
+      if (current === prepareCommitMsgStub()) {
+        return hookSuccess(`${PREPARE_COMMIT_MSG_HOOK_NAME} hook already installed: ${path2} (unchanged)`);
+      }
+      writePrepareHook(path2);
+      return hookSuccess(`updated ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+    }
+    writePrepareHook(path2);
+    return hookSuccess(`installed ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+  } catch (error2) {
+    return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
+  }
+};
+var register8 = (program3) => {
+  program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
+    preserveSquashRecords(messageFile);
+  });
+};
+
 // src/commands/init.ts
 var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
@@ -16807,14 +16899,17 @@ var runDoctorStep = (opts) => {
   };
 };
 var runHooksStep = (opts) => {
-  const result = installHook({ ...cwdOption(opts), ...opts.force === void 0 ? {} : { force: opts.force } });
-  const lines = result.code === 0 ? result.stdout.trimEnd().split("\n") : [result.stderr.trimEnd() || "hooks install failed with no diagnostic"];
+  const commitMsg = installHook({ ...cwdOption(opts), ...opts.force === void 0 ? {} : { force: opts.force } });
+  const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg].flatMap(
+    (result) => result.code === 0 ? result.stdout.trimEnd().split("\n") : [result.stderr.trimEnd() || "hooks install failed with no diagnostic"]
+  );
   return {
     step: "hooks",
     title: "hooks install",
-    code: result.code,
+    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
     lines,
-    detail: result
+    detail: [commitMsg, prepareCommitMsg]
   };
 };
 var runIndexStep = (opts) => {
@@ -16900,7 +16995,7 @@ ${body}`;
   return `${[...blocks, summary2].join("\n\n")}
 `;
 };
-var register8 = (program3) => {
+var register9 = (program3) => {
   program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
     "after",
     "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
@@ -16915,8 +17010,8 @@ var register8 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync9, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync10, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve7, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -17266,7 +17361,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync9(0, "utf8");
+    return readFileSync10(0, "utf8");
   } catch {
     return "";
   }
@@ -17289,7 +17384,7 @@ var repositoryRoot = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve6(target);
+  const absolute = resolve7(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
@@ -17320,7 +17415,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve6(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve7(cwd, raw));
   const scoped = relative2(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep2}`) || isAbsolute2(scoped)) {
@@ -17414,7 +17509,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register9 = (program3) => {
+var register10 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -17450,7 +17545,7 @@ var register9 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve7, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve8, sep as sep3 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -24770,7 +24865,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve8) => setTimeout(resolve8, pollInterval));
+        await new Promise((resolve9) => setTimeout(resolve9, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -24787,7 +24882,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve8, reject2) => {
+    return new Promise((resolve9, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -24865,7 +24960,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve8(parseResult.data);
+            resolve9(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -25126,12 +25221,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve8, reject2) => {
+    return new Promise((resolve9, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve8, interval);
+      const timeoutId = setTimeout(resolve9, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -26001,12 +26096,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve8) => {
+    return new Promise((resolve9) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve8();
+        resolve9();
       } else {
-        this._stdout.once("drain", resolve8);
+        this._stdout.once("drain", resolve9);
       }
     });
   }
@@ -26255,7 +26350,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   define(
     program3,
     "context",
@@ -26399,7 +26494,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -26457,7 +26552,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve7(root, raw);
+  const resolved = resolve8(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep3}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -26563,7 +26658,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve7(opts.cwd ?? process.cwd());
+  const root = resolve8(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -26661,7 +26756,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -26674,7 +26769,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
+import { readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -26715,14 +26810,14 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync10(path2, "utf8");
+    return readFileSync11(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync6(path2, text);
+    writeFileSync7(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -26800,7 +26895,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -26819,7 +26914,7 @@ var register13 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync11 } from "node:fs";
+import { readFileSync as readFileSync12 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -27146,14 +27241,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync11(path2, "utf8");
+    return readFileSync12(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync11(0, "utf8");
+    return readFileSync12(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -27369,7 +27464,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register14 = (program3) => {
+var register15 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -27390,11 +27485,11 @@ var register14 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync12(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync13(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync12(STDIN_FD2, "utf8");
+  return readFileSync13(STDIN_FD2, "utf8");
 };
 var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -27449,20 +27544,21 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register14(program2);
+register15(program2);
 register6(program2);
 register7(program2);
-register10(program2);
 register11(program2);
+register12(program2);
 register2(program2);
-register8(program2);
+register9(program2);
 register3(program2);
 register5(program2);
-register13(program2);
+register14(program2);
+register8(program2);
 register4(program2);
-register9(program2);
+register10(program2);
 register(program2);
-register12(program2);
+register13(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
