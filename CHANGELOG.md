@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+### install.sh runs in CI now, on clean containers with nothing preinstalled — feat-issue-99
+
+install.sh had never run on a machine that was not the author's: it was only
+ever tested against a simulated release in a sandboxed `$HOME` on macOS. A
+new CI job (`install-script` in `.github/workflows/ci.yml`) runs it inside
+`debian:stable-slim` and `alpine:latest` containers with nothing
+preinstalled — no curl/jq/tar/git added ahead of time to hide what the
+script actually requires.
+
+Debian ships neither curl nor wget by default; install.sh's own
+`command -v` check already handles that cleanly (exit 2, a named message),
+verified rather than assumed. A second step adds curl — the one missing
+piece — and verifies the full path: binary installed, `--version` matches,
+and all six coding-agent detections report absent with no config file
+written for any of them.
+
+Alpine surfaced a real bug: busybox ships wget/sha256sum/tar by default, so
+the download and checksum-verify steps ran with nothing added, but the
+published binaries are `-unknown-linux-gnu` (glibc) and Alpine is musl.
+install.sh copied the unusable binary into place, printed "installed to
+...", and then crashed on its own `"$dest" --version` sanity check with a
+bare `not found` and exit 127 — not one of the four exit codes this script
+documents for itself. Fixed by executing the freshly extracted binary
+before installing it anywhere and `die`-ing with a named, attributed
+message (exit 1, the existing "unsupported platform" bucket) if it cannot
+run.
+
+The checksum path is exercised deliberately: a corrupted copy of the staged
+release asset (SHA256SUMS left pointing at the original, now-wrong hash) is
+served to both images, and both must refuse it (exit 3, nothing written to
+the install directory).
+
+The real GitHub release (`v0.1.0`) currently has zero attached assets — the
+job checks that first and runs every assertion above against a locally
+staged, `release.yml`-shaped artifact via `COMMITLORE_INSTALL_BASE_URL`
+(install.sh's own documented escape hatch for exactly this). The one step
+that exercises the true `github.com` download path is conditional on a real
+asset existing, so it starts running with no workflow edit the day a
+release actually publishes one.
+
+Not touched: `release.yml`'s build matrix (the SEA binary still has to
+build on its real target OS, not a container standing in for one), and no
+part of local development or the test suite was containerized — this is one
+CI job for one script.
+
 ### `package.json` no longer describes a package this project can publish — bug-issue-93
 
 `npm publish` would have succeeded: nothing in `package.json` enforced
