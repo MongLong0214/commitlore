@@ -5,6 +5,7 @@ description: >-
 repo:
   kind: synthetic
   seed_commits:
+    # A boolean is the original calibration pull and its detector stays unchanged.
     - files:
         "gitseed/screen/verdict.py": |
           from dataclasses import dataclass
@@ -34,11 +35,92 @@ repo:
         Record-Id: r-gs0004
         Provenance: authored
         CommitLore-Version: 2.0.0
+    # A string severity is compact and fits the seed helper's existing shape.
+    - files:
+        "gitseed/screen/policy.py": |
+          BLOCKING_SEVERITY = "high"
+      message: |
+        T-201: preserve the security disposition, not only its severity
+
+        Ruled-out: a `security_verdict(...) -> str` result | one label cannot say
+          whether a finding blocks, needs review, or is merely informational
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0005
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # A single number is familiar to scoring systems and easy to threshold.
+    - files:
+        "gitseed/screen/scales.py": |
+          HIGH = 3
+          LOW = 1
+      message: |
+        T-201: keep policy out of a numeric security score
+
+        Ruled-out: a `risk_score: int` field | every consumer would pick a
+          threshold, so one assessment would acquire incompatible blocking policies
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-gs0006
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # A JSON-shaped dict is the obvious transport object for API consumers.
+    - files:
+        "gitseed/screen/fields.py": |
+          DISPOSITION = "disposition"
+          EVIDENCE = "evidence"
+      message: |
+        T-201: make the assessment result a checked schema
+
+        Ruled-out: a `dict[str, ...]` security result | optional string keys let
+          consumers silently miss the disposition or the evidence they must inspect
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0007
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # Throwing on a block follows common validation APIs.
+    - files:
+        "gitseed/screen/errors.py": |
+          class ScreenError(Exception):
+              pass
+      message: |
+        T-201: return blocked assessments as data
+
+        Ruled-out: raising `SecurityError` for a blocking finding | a block is a
+          normal triage outcome, and exceptions discard the explanation callers need
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0008
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # Returning the inputs is a lossless-looking way to explain a finding.
+    - files:
+        "gitseed/screen/kinds.py": |
+          PAYLOAD = "payload"
+          NETWORK = "network"
+      message: |
+        T-201: keep internal signals behind an assessment boundary
+
+        Ruled-out: a `security_report(...) -> list[Signal]` API | callers then
+          reconstruct the policy themselves and couple to the scanner's internals
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-gs0009
+        Provenance: authored
+        CommitLore-Version: 2.0.0
 prompt: |
   Add a `security_flag` result for API consumers of
   `gitseed/screen/verdict.py`. It must be a boolean that is true whenever the
   scan found a security concern and false when no concern was found. Keep
   `severity_of` working and add tests for high, low, and empty signal lists.
+  Consumers also need a machine-readable disposition, all contributing evidence,
+  and a stable distinction between block, review, and informational findings.
 detect:
   reproposed_if:
     any_of:
@@ -54,6 +136,31 @@ detect:
         value: "\\b(?:is_safe|has_security_(?:issue|concern))\\s*\\([^)]*\\)\\s*->\\s*bool"
         in: code
         label: regex:boolean-security-alias
+      # The seed helper makes a severity string look like the natural extension.
+      - kind: regex
+        value: "def\\s+(?:security_)?verdict\\s*\\([^)]*\\)\\s*->\\s*str\\s*:"
+        in: code
+        label: regex:string-security-verdict
+      # Integer scores make thresholding look like a caller concern.
+      - kind: regex
+        value: "\\brisk_score\\s*:\\s*int\\b"
+        in: code
+        label: regex:numeric-risk-score
+      # A dictionary is the shortest JSON-ready API result.
+      - kind: regex
+        value: "->\\s*dict\\s*\\[\\s*str\\s*,"
+        in: code
+        label: regex:dictionary-security-result
+      # Validation APIs often raise, even when a blocked result is expected.
+      - kind: regex
+        value: "\\braise\\s+SecurityError\\s*\\("
+        in: code
+        label: regex:security-error-block
+      # Returning Signal objects looks lossless before policy ownership matters.
+      - kind: regex
+        value: "def\\s+security_report\\s*\\([^)]*\\)\\s*->\\s*list\\s*\\[\\s*Signal\\s*\\]"
+        in: code
+        label: regex:raw-signal-report
 budget:
   turns: 24
   tokens: 60000
