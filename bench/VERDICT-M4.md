@@ -47,6 +47,110 @@ to give the hypothesis a fair matrix, and re-cutting a fair result after
 seeing it would be the one move that could manufacture significance out of
 the exact design meant to prevent that.
 
+The Fisher exact test above is `PREREGISTRATION.md` §2's registered test, and
+this document reports it as registered. It is also the wrong test for this
+design, for a reason that has nothing to do with the p-value it produced —
+see the next section.
+
+---
+
+## The registered test does not fit the design
+
+Recorded here because a null result computed on an invalid test is not a
+settled null; it is an open question with a number attached. Both problems
+below are properties of the design, not of what the numbers came back as —
+they would be exactly as true if p had come back significant. Independently
+computed against `bench/results/t702-m4-final.jsonl`; a parallel branch,
+`feat-measurement-protocol`, is registering the corrected statistical
+protocol formally and will supersede the analysis in this section.
+
+### 1. The 112 runs are not 112 independent observations — they are 56 pairs
+
+Every seed × task cell ran once under `commitlore-on` and once under
+`commitlore-guard`, sharing the workspace, task and seed. That is a paired
+design. Fisher exact assumes two independent groups; the literature on
+matched binary data is explicit that Fisher does not provide a valid
+hypothesis test when the two samples are paired rather than independent — it
+does not use the pairing and does not correct for it.
+
+The correct paired test is McNemar's, on the pairs where the arms disagreed:
+
+| | `commitlore-guard`: reproposed | `commitlore-guard`: did not |
+|---|---:|---:|
+| `commitlore-on`: reproposed | 33 | 2 |
+| `commitlore-on`: did not | 8 | 13 |
+
+56 pairs. Concordant 46 (33 both re-proposed, 13 both clean) — these carry no
+information about a difference between the arms and Fisher's test spends
+statistical power on them anyway. Discordant 10: 2 where `commitlore-on`
+re-proposed and `commitlore-guard` did not, 8 where `commitlore-guard`
+re-proposed and `commitlore-on` did not.
+
+**McNemar's exact test (two-sided, binomial on the 10 discordant pairs):
+p = 0.1094.**
+
+**Still null.** That is exactly why it is safe to report this plainly rather
+than treat it as a threat to the conclusion — nothing above turns the result
+significant, so correcting the test cannot be read as motivated. It does mean
+the p = 0.3117 in *Result* above is the registered number, not the right one,
+and both facts belong in the same document.
+
+### 2. The runs are also clustered by task, and were analyzed as if they were not
+
+One-way ANOVA on `reproposed` (0/1) with task as the cluster, 8 clusters of
+14 (both arms, all seven seeds, per task):
+
+```
+ICC = 0.581 · cluster size 14 · DEFF = 1 + (14-1)×0.581 = 8.56
+effective n = 112 / 8.56 ≈ 13, against a nominal 112
+```
+
+A design effect this large means the 112 rows carry roughly the statistical
+information of 13 independent ones. The published Newcombe interval,
+[−27.1pp, +6.5pp], is a 95% interval under an independence assumption this
+design does not satisfy.
+
+**Two different quantities, two different factors — stated explicitly so the
+next reader does not have to re-derive it:**
+
+```
+n_eff = n / DEFF        sample size divides by the design effect
+SE ×= √DEFF              standard error, and CI half-width, scale with its square root
+```
+
+Design effect (`DEFF = 8.56`) corrects *variance*; a confidence interval's
+half-width is proportional to standard error, i.e. to √variance, not to
+variance itself. Scaling each half-width of the published interval by
+√8.56 ≈ 2.92, as an illustrative approximation rather than a formal
+re-analysis, gives **roughly [−58.7pp, +39.6pp]**.
+
+That interval spans zero by a wide margin in both directions. The honest
+statement is sharper than "not significant": at this design's actual
+information content, **the study cannot distinguish a large benefit from a
+large harm.** That is the finding, and it is the reason the statistical
+protocol is being re-registered rather than this one number being patched in
+place.
+
+### 3. Four of the eight qualifying tasks are saturated, and that is itself a finding
+
+`qualification-gitseed-boolean-security`, `-fake-tty`, `-grading-fail-fast`
+and `-single-smoke-sample` ran 7/7 in **both** arms — every seed, every
+condition, always reproposed. A task at ceiling in both arms contributes zero
+information to a paired or clustered comparison: there is no discordant pair
+it could produce and no variance it could contribute.
+
+`PREREGISTRATION.md` §16's qualification round used a **floor** — 4-of-6
+control re-proposals — to screen out silent tasks. It did not screen for a
+ceiling, so the tasks that qualified most strongly are exactly the ones with
+no headroom left to show an effect in either direction. M1 and M2 died of an
+empty instrument, seven of ten tasks silent at zero. M4's paired analysis
+dies of a saturated one, four of eight tasks pinned at one.
+
+**Not dropped, and not re-run.** §4 forbids cutting a subset after seeing
+outcomes, and it applies here with the same force it applies everywhere else
+in this document: the saturation is the finding, not an inconvenience to
+filter around before reporting the next number.
+
 ---
 
 ## What the qualification round changed, and what it did not
@@ -91,6 +195,13 @@ at the rate the design predicted, and against a fully powered, non-silent
 instrument the guard route did not reduce re-proposal below the injection
 route. The absence of an effect here is not the absence of an opportunity to
 see one.
+
+Full is not the same claim as informative, though, and the next section
+narrows it: four of these eight tasks are saturated at 7/7 in *both* arms,
+which contribute nothing to a paired or clustered analysis even though they
+are not silent. M1/M2 failed by emptiness; the paired/clustered re-analysis
+below shows M4 failing by a related but distinct mechanism — see
+*The registered test does not fit the design*.
 
 ---
 
