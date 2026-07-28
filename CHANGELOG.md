@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 0.2.0 — 2026-07-28
+
+Second release. 21 defects found and closed by dogfooding this tool on its own
+history (2026-07-26 to 2026-07-28) — several of them in CommitLore's own
+install and check paths, listed below. Ships a single static binary (no Node
+required), `commitlore init`, agent auto-detection, a `node:sqlite` index
+(19x on 100k commits), the multi-record grammar for squashed history,
+reference-integrity checking, and unified exit codes across every command.
+
+Windows is not shipped, and won't be until [#95](https://github.com/MongLong0214/commitlore/issues/95)
+is done: the SEA build crashes on Windows path handling, and shipping the
+binary today would let the install hook bypass [#71](https://github.com/MongLong0214/commitlore/issues/71)'s
+containment check, which has only been verified on the platforms this
+release does ship.
+
+Alpine/musl is not a supported target either — the published Linux binaries
+are glibc (`*-unknown-linux-gnu`). [#99](https://github.com/MongLong0214/commitlore/issues/99)
+does not add musl support; it makes the failure on Alpine attributed (a
+named, exit-coded message) instead of a bare `not found`.
+
+CommitLoreBench's fourth measurement (M4) is registered and running as of
+this release. It may come back null — that question is open and this
+release does not answer it.
+
 ### install.sh runs in CI now, on clean containers with nothing preinstalled — feat-issue-99
 
 install.sh had never run on a machine that was not the author's: it was only

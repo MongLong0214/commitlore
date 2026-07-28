@@ -156,14 +156,14 @@ npm run build:binary
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-`install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.1.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
+`install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.2.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
 
 二进制文件装好之后，同一个脚本会检测这台机器上装了哪些编程智能体（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode），给检测到的每一个接上 CommitLore 的 MCP 服务器（Claude Code 则是插件），并打印出接了什么、跳过了什么。它不会在未告知的情况下覆盖已有配置，也不会为未安装的智能体写配置。
 
 传给 shell 执行不应是唯一有文档记录的方式。手动完成同样的安装：
 
 ```bash
-version=0.1.0   # 或者: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+version=0.2.0   # 或者: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
 target=aarch64-apple-darwin   # 或 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
 
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"

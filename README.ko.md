@@ -156,14 +156,14 @@ Node도 clone도 없는 머신을 위해: 모든 `vX.Y.Z` 태그는 플랫폼별
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-`install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.1.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
+`install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.2.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
 
 바이너리가 준비되면 같은 스크립트가 이 머신에 설치된 코딩 에이전트를 감지해(Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) 찾아낸 각각에 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결하고, 무엇을 연결했고 무엇을 건너뛰었는지 출력한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다.
 
 쉘로 파이프하는 것이 유일한 문서화된 경로여서는 안 된다. 같은 설치를 수동으로:
 
 ```bash
-version=0.1.0   # 또는: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+version=0.2.0   # 또는: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
 target=aarch64-apple-darwin   # 또는 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
 
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"

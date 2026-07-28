@@ -156,14 +156,14 @@ For a machine with neither Node nor a clone: every `vX.Y.Z` tag builds one binar
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-`install.sh` detects your OS and architecture, downloads the matching asset and `SHA256SUMS` from the same release, and verifies the checksum **before** installing anything — read it before piping it to `sh`, the same way you would any install script. Pass a version to pin one: `sh install.sh v0.1.0`. Published targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. There is no Windows binary yet — the SEA build and the commit-msg hook shim are unverified there; see [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md).
+`install.sh` detects your OS and architecture, downloads the matching asset and `SHA256SUMS` from the same release, and verifies the checksum **before** installing anything — read it before piping it to `sh`, the same way you would any install script. Pass a version to pin one: `sh install.sh v0.2.0`. Published targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. There is no Windows binary yet — the SEA build and the commit-msg hook shim are unverified there; see [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md).
 
 Once the binary is in place, the same script detects which coding agents are installed on this machine (Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) and registers CommitLore's MCP server — the plugin, for Claude Code — with each one it finds, printing what it wired and what it skipped. It never overwrites an existing agent config without saying so and never writes one for an agent that is not installed.
 
 Piping to a shell should never be the *only* documented path. The same install, by hand:
 
 ```bash
-version=0.1.0   # or: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+version=0.2.0   # or: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
 target=aarch64-apple-darwin   # or x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
 
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"

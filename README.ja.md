@@ -156,14 +156,14 @@ Node も clone もないマシン向け: すべての `vX.Y.Z` タグは platfor
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-`install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.1.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
+`install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.2.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
 
 バイナリが配置されると、同じスクリプトがこのマシンにインストールされているコーディングエージェントを検出し（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode）、見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続し、何を接続し何をスキップしたかを出力します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。
 
 シェルへのパイプが唯一の文書化された方法であってはいけません。同じインストールを手動で行う場合:
 
 ```bash
-version=0.1.0   # または: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+version=0.2.0   # または: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
 target=aarch64-apple-darwin   # または x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
 
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
