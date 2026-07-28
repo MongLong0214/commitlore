@@ -69,6 +69,7 @@ export const assertSingleProvenance = (rows: readonly DeterministicRow[]): void 
 
 const fixed = (value: number, digits = 2): string => value.toFixed(digits);
 const percent = (value: number): string => `${fixed(value * 100, 1)}%`;
+const optionalPercent = (value: number | null): string => (value === null ? 'n/a' : percent(value));
 
 const latencySection = (rows: readonly QueryLatencyRow[]): string[] => {
   if (rows.length === 0) return [];
@@ -142,11 +143,17 @@ const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
   return [
     '## 4. Guard precision and recall',
     '',
-    `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard at threshold **${row.threshold}**.`,
+    `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard across the full **0.00–1.00** score range in **${row.curve_step.toFixed(2)}** steps. The shipped default is **${row.threshold}**.`,
     '',
-    `Precision is reported by score band, never as one figure (issue #61): a rate computed from a ` +
-      'handful of firings has a wide interval, and a single number invites reading it as more ' +
-      `precise than it is. **Firings: ${row.firings}** (of ${row.true_positives + row.false_positives + row.false_negatives + row.true_negatives} replayed decisions).`,
+    `Corpus limit: **${row.true_positives + row.false_positives + row.false_negatives + row.true_negatives} labelled decisions**. At the default, precision is ${row.true_positives}/${row.firings}; its 95% Wilson interval is **${percent(row.precision_interval.lower)}–${percent(row.precision_interval.upper)}**.`,
+    '',
+    '| threshold | precision | recall | F1 | firings | correct silences |',
+    '|---:|---:|---:|---:|---:|---:|',
+    ...row.curve.map(
+      (entry) =>
+        `| ${fixed(entry.threshold)} | ${optionalPercent(entry.precision)} | ${percent(entry.recall)} | ` +
+        `${optionalPercent(entry.f1)} | ${entry.firings} | ${entry.correct_silences} |`,
+    ),
     '',
     '| score band | firings | correct |',
     '|---|---:|---:|',
@@ -158,7 +165,7 @@ const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
           `| [${band(entry.min)}, ${band(entry.max)}${entry.max >= 1 ? ']' : ')'} | ${entry.firings} | ${entry.correct} |`,
       ),
     '',
-    `Recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
+    `Default-point recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
       `Correct silence: ${row.true_negatives}.`,
     'Ground truth is the frozen corpus label; the suite does not relabel archived agent output after seeing the guard result.',
     'No guard precision figure is carried into the README until the corpus is large enough for one to mean something.',

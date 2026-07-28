@@ -19,10 +19,17 @@ import {
   NOISE_SIZES,
   TARGET_PATH,
 } from '../bench/deterministic/noise.ts';
+import {
+  sweepGuardThresholds,
+  wilsonPrecisionInterval,
+} from '../bench/deterministic/quality.ts';
 import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
-import type { InjectionDetectionRow } from '../bench/deterministic/types.ts';
-import type { NoiseExposureRow } from '../bench/deterministic/types.ts';
+import type {
+  GuardQualityRow,
+  InjectionDetectionRow,
+  NoiseExposureRow,
+} from '../bench/deterministic/types.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 
@@ -53,6 +60,37 @@ const row = (overrides: Partial<InjectionDetectionRow> = {}): InjectionDetection
   false_positive_rate: 0.2,
   ...overrides,
 });
+
+const guardRow = (): GuardQualityRow => {
+  const curve = sweepGuardThresholds(
+    [
+      { reproposed: true, score: 0.8 },
+      { reproposed: false, score: 0.6 },
+      { reproposed: true, score: 0.4 },
+      { reproposed: false, score: undefined },
+    ],
+    0.2,
+  );
+  const point = curve.find((entry) => entry.threshold === 0.6);
+  if (point === undefined) throw new Error('hand-checked curve fixture is missing 0.60');
+  return {
+    ...row(),
+    metric: 'guard_quality',
+    corpus: 'bench/results/transcripts-final',
+    threshold: 0.6,
+    true_positives: point.true_positives,
+    false_positives: point.false_positives,
+    false_negatives: point.false_negatives,
+    true_negatives: point.true_negatives,
+    precision: point.precision,
+    recall: point.recall,
+    firings: point.firings,
+    bands: [],
+    curve_step: 0.2,
+    curve,
+    precision_interval: wilsonPrecisionInterval(point.true_positives, point.firings),
+  };
+};
 
 describe('deterministic benchmark reporting', () => {
   it('computes nearest-rank p50 and p95 when samples are unsorted', () => {
@@ -85,6 +123,77 @@ describe('deterministic benchmark reporting', () => {
 
   it('states that the measurements do not establish agent benefit', () => {
     expect(renderDeterministicReport([row()])).toContain(SCOPE_SENTENCE);
+  });
+
+  it('keeps guard firing counts monotonic as the threshold rises', () => {
+    const curve = sweepGuardThresholds(
+      [
+        { reproposed: true, score: 0.8 },
+        { reproposed: false, score: 0.6 },
+        { reproposed: true, score: 0.4 },
+        { reproposed: false, score: undefined },
+      ],
+      0.2,
+    );
+
+    for (let index = 1; index < curve.length; index += 1) {
+      expect(curve[index - 1]?.firings).toBeGreaterThanOrEqual(curve[index]?.firings ?? 0);
+    }
+  });
+
+  it('rejects threshold steps that would make an unboundedly large report', () => {
+    expect(() =>
+      sweepGuardThresholds(
+        [{ reproposed: true, score: 0.8 }],
+        0.001,
+      ),
+    ).toThrow(/step must be between 0.01 and 1/i);
+  });
+
+  it('includes the 1.00 endpoint when the threshold step does not divide the range', () => {
+    const curve = sweepGuardThresholds([{ reproposed: true, score: 0.8 }], 0.3);
+
+    expect(curve.map((entry) => entry.threshold)).toEqual([0, 0.3, 0.6, 0.9, 1]);
+  });
+
+  it('computes guard precision, recall, and F1 from a hand-checked fixture', () => {
+    const curve = sweepGuardThresholds(
+      [
+        { reproposed: true, score: 0.8 },
+        { reproposed: false, score: 0.6 },
+        { reproposed: true, score: 0.4 },
+        { reproposed: false, score: undefined },
+      ],
+      0.2,
+    );
+    const point = curve.find((entry) => entry.threshold === 0.6);
+
+    expect(point).toMatchObject({
+      true_positives: 1,
+      false_positives: 1,
+      false_negatives: 1,
+      true_negatives: 1,
+      precision: 0.5,
+      recall: 0.5,
+      f1: 0.5,
+      firings: 2,
+      correct_silences: 1,
+    });
+  });
+
+  it('computes the 95% Wilson interval for the archived 3-of-8 precision', () => {
+    const interval = wilsonPrecisionInterval(3, 8);
+
+    expect(interval.level).toBe(0.95);
+    expect(interval.lower).toBeCloseTo(0.1368, 4);
+    expect(interval.upper).toBeCloseTo(0.6943, 4);
+  });
+
+  it('renders the guard corpus-size limit with the threshold curve', () => {
+    const report = renderDeterministicReport([guardRow()]);
+
+    expect(report).toContain('4 labelled decisions');
+    expect(report).toContain('| threshold | precision | recall | F1 | firings | correct silences |');
   });
 
   it('refuses uncommitted benchmark inputs', () => {

@@ -95,6 +95,25 @@ export interface GuardScoreBand {
   readonly correct: number;
 }
 
+export interface GuardThresholdPoint {
+  readonly threshold: number;
+  readonly true_positives: number;
+  readonly false_positives: number;
+  readonly false_negatives: number;
+  readonly true_negatives: number;
+  readonly precision: number | null;
+  readonly recall: number;
+  readonly f1: number | null;
+  readonly firings: number;
+  readonly correct_silences: number;
+}
+
+export interface PrecisionInterval {
+  readonly level: 0.95;
+  readonly lower: number;
+  readonly upper: number;
+}
+
 export interface GuardQualityRow extends BaseRow {
   readonly metric: 'guard_quality';
   readonly corpus: string;
@@ -103,17 +122,14 @@ export interface GuardQualityRow extends BaseRow {
   readonly false_positives: number;
   readonly false_negatives: number;
   readonly true_negatives: number;
-  /**
-   * Kept for programmatic use (trend tracking as the corpus grows). Never
-   * rendered alone in the report: issue #61 decided precision is reported by
-   * score band, because a rate computed from a handful of firings has a wide
-   * interval and a single number invites reading it as more than it is.
-   */
   readonly precision: number;
   readonly recall: number;
   /** True positives + false positives; the denominator the bands partition. */
   readonly firings: number;
   readonly bands: readonly GuardScoreBand[];
+  readonly curve_step: number;
+  readonly curve: readonly GuardThresholdPoint[];
+  readonly precision_interval: PrecisionInterval;
 }
 
 export type HookName = 'commit-msg' | 'pre-tool-use-inject';
