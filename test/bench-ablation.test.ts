@@ -14,14 +14,14 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { computeCpaa, explainCpaa, summarize } from '../bench/metrics.ts';
 import {
@@ -43,6 +43,34 @@ afterAll(() => {
 });
 
 /**
+ * A private copy of `dist/`, snapshotted once before any run (bug-issue-88).
+ *
+ * `bench/runner.ts` hashes the whole `dist/` tree at startup and again before
+ * every arm, and refuses to continue an arm when the two disagree
+ * (`bench/hooks-settings.ts` `writeArmSettings`) — a real, useful check: it is
+ * what caught `dist/core/guard.js` changing mid-run under the previous
+ * measurement (see that file's own comment). But `dist/` is one directory
+ * shared by every vitest worker, and four other test files
+ * (`cli.test.ts`, `mcp.test.ts`, `action-lint.test.ts`,
+ * `action-preserve.test.ts`) each run their own `tsc` build against it in a
+ * `beforeAll` — so a run here that reads the live, shared tree can lose a
+ * race against a sibling file's rebuild and trip that same check on a
+ * digest that was never wrong, only concurrently rewritten. Reproduced
+ * directly: invoking `bench/runner.ts` in a loop while another process
+ * rebuilds `dist/` fails about 1 run in 5 with exactly this message.
+ * Pointing every invocation at a private, unshared copy via
+ * `COMMITLORE_BENCH_DIST_DIR` removes the shared mutable state instead of
+ * loosening the check that (correctly) depends on it.
+ */
+let privateDistDir = '';
+beforeAll(() => {
+  const dir = mkdtempSync(join(tmpdir(), 'commitlore-t703-dist-'));
+  temporaries.push(dir);
+  privateDistDir = join(dir, 'dist');
+  cpSync(join(REPO_ROOT, 'dist'), privateDistDir, { recursive: true });
+});
+
+/**
  * Runs the real runner against the real tasks with the dry-run driver.
  *
  * Never against `bench/results/`: a test that writes there would land in the
@@ -57,6 +85,7 @@ const runRunner = (args: readonly string[]): readonly RunRecord[] => {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, COMMITLORE_BENCH_DIST_DIR: privateDistDir },
   });
   return readFileSync(out, 'utf8')
     .split('\n')

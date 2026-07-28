@@ -8,7 +8,7 @@
         { "key": "Blast", "value": "module" },
         { "key": "Undo", "value": "easy" },
         { "key": "Certainty", "value": "firm" },
-        { "key": "Verified", "value": "replayed the 503 fixture in test/uploader.test.ts" },
+        { "key": "X-Reported-Check", "value": "the 503 fixture replay completed" },
         { "key": "Unverified", "value": "the 429 path has no fixture" },
         { "key": "Record-Id", "value": "r-8f2c41" },
         { "key": "Provenance", "value": "authored" }
@@ -51,7 +51,7 @@
           "locator": "L5-L5"
         },
         {
-          "key": "Verified",
+          "key": "X-Reported-Check",
           "source": "transcript",
           "quote": "I replayed the 503 fixture in test/uploader.test.ts and the upload now completes.",
           "locator": "L6-L6"

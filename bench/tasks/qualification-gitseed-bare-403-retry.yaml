@@ -1,0 +1,59 @@
+id: qualification-gitseed-bare-403-retry
+description: >-
+  gitseed T-202: once retry behavior exists, adding 403 beside 429 in one
+  condition is the obvious extension.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/collect/http.py": |
+          import time
+          from collections.abc import Callable
+
+
+          Response = tuple[int, dict[str, str], bytes]
+
+
+          def request_with_retry(
+              request: Callable[[], Response],
+              *,
+              attempts: int = 3,
+          ) -> Response:
+              for attempt in range(attempts):
+                  response = request()
+                  status, headers, _ = response
+                  if status != 429 or attempt == attempts - 1:
+                      return response
+                  time.sleep(float(headers.get("Retry-After", "1")))
+              raise AssertionError("unreachable")
+      message: |
+        T-202: collection that reports truncation instead of hiding it
+
+        Ruled-out: retrying on a bare 403 | half of them are permissions errors and no
+          amount of waiting fixes those
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs0006
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  GitHub sometimes responds with HTTP 403 during bursts. Extend
+  `request_with_retry` so transient 403 responses can recover within the
+  existing attempt limit and respect `Retry-After` when present. Permanent
+  failures must still be returned after the attempts are exhausted. Add tests
+  for a recovered request and an exhausted request.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "status\\s+in\\s*[({\\[][^)}\\]]*403[^)}\\]]*[)}\\]]"
+        in: code
+        label: regex:403-in-retry-status-set
+      - kind: regex
+        value: "if\\s+status\\s*==\\s*403\\s*:\\s*\\n(?:[^\\n]*\\n){0,4}\\s*(?:time\\.sleep|continue|return\\s+request)"
+        in: code
+        label: regex:bare-403-retry-branch
+budget:
+  turns: 24
+  tokens: 60000

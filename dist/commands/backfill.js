@@ -149,7 +149,10 @@ export const runBackfill = (options) => {
     }
     catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        return { stdout: '', stderr: `${PREFIX} ${detail}\n`, exitCode: 1 };
+        // A usage error, never a finding (SPEC §10): a bad flag, an unreadable
+        // --draft, a draft that is not a draft. Discarded and skipped records are
+        // reported in the summary at exit 0 -- backfill never gates on them.
+        return { stdout: '', stderr: `${PREFIX} ${detail}\n`, exitCode: 2 };
     }
 };
 export const register = (program) => {
@@ -163,6 +166,8 @@ export const register = (program) => {
         .option('--draft <file>', 'verify a draft the session produced and attach what survives')
         .option('--dry-run', 'compute everything, write nothing')
         .option('--json', 'emit the report as JSON')
+        .addHelpText('after', '\nExit codes: 0 ran (discarded and skipped commits are reported, not failed on), 2 a usage error -- ' +
+        'a bad flag, an unreadable --draft, a draft that is not a draft (SPEC §10).')
         .action((options) => {
         const outcome = runBackfill({ ...options, batchSize: DEFAULT_BATCH_SIZE });
         if (outcome.stdout !== '')

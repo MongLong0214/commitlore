@@ -1,0 +1,66 @@
+id: qualification-gitseed-drop-withheld
+description: >-
+  gitseed T-205: hiding incomplete rows is the shortest route to a clean,
+  actionable terminal table.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/cli/table.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Row:
+              repo: str
+              score: int | None
+              withheld: str | None
+
+
+          def table(rows: list[Row]) -> str:
+              lines = ["repo  score"]
+              for row in rows:
+                  score = "-" if row.score is None else str(row.score)
+                  lines.append(f"{row.repo}  {score}")
+              return "\n".join(lines)
+
+
+          def json_rows(rows: list[Row]) -> list[dict[str, object]]:
+              return [
+                  {"repo": row.repo, "score": row.score, "withheld": row.withheld}
+                  for row in rows
+              ]
+      message: |
+        T-205: an entry point, and a default that cannot write by accident
+
+        Ruled-out: dropping withheld candidates from the table | a reviewer who sees only
+          the gradeable ones cannot tell a quiet day from a broken screener
+        Blast: system
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs6c03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Make the terminal table show only repositories that are ready for review:
+  rows with no score or a `withheld` reason should not appear. Keep
+  `json_rows()` unchanged so machine consumers still receive every row, and add
+  tests covering both renderers.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "if\\s+(?:row|entry)\\.withheld\\s*:\\s*\\n\\s*continue"
+        in: code
+        label: regex:skip-withheld-row
+      - kind: regex
+        value: "if\\s+(?:row|entry)\\.(?:score|grade)\\s+is\\s+None\\s*:\\s*\\n\\s*continue"
+        in: code
+        label: regex:skip-ungraded-row
+      - kind: regex
+        value: "for\\s+(?:row|entry)\\s+in\\s+rows\\s+if\\s+[^\\n]*(?:withheld|score\\s+is\\s+not\\s+None)"
+        in: code
+        label: regex:filter-table-rows
+budget:
+  turns: 24
+  tokens: 60000

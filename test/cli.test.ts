@@ -47,7 +47,7 @@ describe('commitlore CLI', () => {
   // LANDED in the same change that wires it into src/cli.ts.
   const LANDED = [
     'parse', 'validate', 'hooks', 'index', 'context', 'limits',
-    'ruled-out', 'warnings', 'stale', 'doctor', 'harvest',
+    'ruled-out', 'warnings', 'stale', 'doctor', 'init', 'harvest',
     'harvest-verify', 'squash-preserve', 'guard', 'mcp', 'inject', 'backfill',
   ];
   const UNLANDED: string[] = [];
@@ -113,9 +113,81 @@ describe('commitlore CLI', () => {
 
   it('fails with a message, not a stack trace, on an unreadable file', () => {
     const result = runCli(['parse', '--message-file', 'no/such/message.txt']);
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stderr).toContain('commitlore:');
     expect(result.stderr).not.toContain('at Object.');
+  });
+
+  // bug-issue-89: `parse` used to show only the message's own last paragraph
+  // (git interpret-trailers's B1 behavior) even after #86 taught `context` and
+  // `validate` to recognize every block a message carries (SPEC §2.4). These
+  // reproduce the exact shape GitHub's squash button produces.
+  describe('parse and multi-record messages (bug-issue-89)', () => {
+    const ghSquashMessage =
+      'Feat (#1)\n\n* change 1\n\nLimit: only a test 1\nRecord-Id: r-ghtest1\n\n' +
+      '* change 2\n\nLimit: only a test 2\nRecord-Id: r-ghtest2\n';
+
+    it('reports every record block, not only the message\'s own last paragraph', () => {
+      const result = runCli(['parse'], ghSquashMessage);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('r-ghtest1');
+      expect(result.stdout).toContain('r-ghtest2');
+    });
+
+    it('marks exactly one block own — the message\'s own last paragraph — and the rest earlier', () => {
+      const result = runCli(['parse', '--json'], ghSquashMessage);
+      const parsed = JSON.parse(result.stdout) as {
+        blocks: { own: boolean; trailers: { key: string; value: string }[] }[];
+      };
+      expect(parsed.blocks.map((block) => block.own)).toEqual([false, true]);
+      expect(parsed.blocks[1]?.trailers.find((t) => t.key === 'Record-Id')?.value).toBe(
+        'r-ghtest2',
+      );
+    });
+
+    it('--json keeps `trailers` as the message\'s own block, unchanged in meaning', () => {
+      const result = runCli(['parse', '--json'], ghSquashMessage);
+      const parsed = JSON.parse(result.stdout) as { trailers: { key: string; value: string }[] };
+      expect(parsed.trailers.find((t) => t.key === 'Record-Id')?.value).toBe('r-ghtest2');
+    });
+
+    it('a single-record message is completely unaffected (byte-identical text output)', () => {
+      const before = runCli(['parse'], 'Subject\n\nBlast: local\nLimit: only 3 workers\n');
+      expect(before.stdout).toBe('Limit: only 3 workers\nBlast: local\n');
+      expect(before.stderr).toBe('');
+    });
+
+    it('a single-record message is completely unaffected (byte-identical --json output)', () => {
+      const result = runCli(['parse', '--json'], 'Subject\n\nUndo: costly\n');
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ trailers: [{ key: 'Undo', value: 'costly' }] });
+    });
+
+    it('flags two blocks that declare the same Record-Id, on stdout and stderr', () => {
+      const dup =
+        'Feat (#2)\n\n* change 1\n\nLimit: only a test 1\nRecord-Id: r-dupdup\n\n' +
+        '* change 2\n\nLimit: only a test 2\nRecord-Id: r-dupdup\n';
+      const result = runCli(['parse'], dup);
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain('r-dupdup');
+      expect(result.stderr).toContain('more than one record block');
+      expect(result.stdout).toContain('collision');
+    });
+
+    it('flags the same collision in --json, per block', () => {
+      const dup =
+        'Feat (#2)\n\n* change 1\n\nLimit: only a test 1\nRecord-Id: r-dupdup\n\n' +
+        '* change 2\n\nLimit: only a test 2\nRecord-Id: r-dupdup\n';
+      const result = runCli(['parse', '--json'], dup);
+      const parsed = JSON.parse(result.stdout) as { blocks: { identityCollision: boolean }[] };
+      expect(parsed.blocks.every((block) => block.identityCollision)).toBe(true);
+    });
+
+    it('does not flag a collision when two blocks declare different Record-Ids', () => {
+      const result = runCli(['parse'], ghSquashMessage);
+      expect(result.stderr).toBe('');
+      expect(result.stdout).not.toContain('collision');
+    });
   });
 
   it('resolves spec/schema/record.schema.json from the built dist/ layout', () => {

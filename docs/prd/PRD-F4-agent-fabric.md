@@ -1,28 +1,28 @@
-# PRD F4 — Agent Fabric (MCP · 주입 · 수확+검증자 · guard · skills)
+# PRD F4 — Agent Fabric (MCP · injection · harvest+verifier · guard · skills)
 
 - Milestone: M3 (08-16) · ADR: 0006
 
-## 목표
-pull을 push로 뒤집는다(D8) + 캡처를 공짜로 만든다(D5·Grudin 역전). 이 기능이 제품의 심장이다.
+## Goal
+Turn pull into push (D8) + make capture free (D5 · reverse Grudin). This feature is the heart of the product.
 
-## 비목표
-GCC류 세션 메모리 통합(Backlog), 임베딩 검색(Backlog).
+## Non-goals
+GCC-style session-memory integration (Backlog), embedding search (Backlog).
 
-## 사용자 스토리
-- Claude Code 사용자로서, 파일을 열면 그 경로의 활성 제약 요약이 자동으로 컨텍스트에 도착한다 — 아무것도 기억할 필요 없다.
-- 커밋 시 에이전트가 결정 맥락 초안을 만들고, 검증자가 근거 없는 기록를 버린 뒤, 나는 승인만 한다.
-- 기각된 접근을 다시 제안하면 `commitlore guard`가 실행 전에 "abc1234에서 '경합 조건'으로 기각됨"을 보여준다.
+## User stories
+- As a Claude Code user, when I open a file, a summary of active constraints for that path automatically arrives in context — I do not need to remember anything.
+- At commit time, the agent drafts decision context, the verifier discards unsupported records, and I only approve.
+- If I propose a rejected approach again, `commitlore guard` shows "rejected in abc1234 due to 'race condition'" before execution.
 
-## 요구사항
-1. `commitlore mcp`: 리소스 `commitlore://context/<path>` + 조회 툴 세트 (stdio).
-2. 주입 훅: Claude Code PreToolUse(Read|Edit|Write) → 경로 스코프 결정론적 프로젝션 주입. 예산 상한(기본 800 토큰 상당) + 등급 라우팅(ADR-0005) + 스테일 제외.
-3. 자동 수확: Stop/커밋 직전 훅 → transcript에서 초안 trailer 생성(사용자의 기존 에이전트 세션 활용, 별도 API 비용 없음).
-4. 수확 검증자: 각 trailer에 transcript/diff 근거 인용 필수, 인용 검증 실패 시 폐기. 유계 수리 ≤ 2회 후 기록 없이 커밋 + 로그.
-5. `commitlore guard`: 제안 텍스트 ↔ 경로의 Ruled-out 기록 결정론적 매치(키워드+Record-Id) 경고.
-6. 스킬 3종(commits/query/setup) 클린룸 재작성 — 내부는 전부 CLI 호출, 마케팅 문구 없음(D10).
+## Requirements
+1. `commitlore mcp`: resource `commitlore://context/<path>` + query tool set (stdio).
+2. Injection hook: Claude Code PreToolUse(Read|Edit|Write) → inject a path-scoped deterministic projection. Budget cap (equivalent to 800 tokens by default) + grade routing (ADR-0005) + exclude stale records.
+3. Automatic harvest: Stop/pre-commit hook → generate draft trailers from the transcript (use the user's existing agent session, no separate API cost).
+4. Harvest verifier: each trailer requires a transcript/diff evidence citation; discard it if citation verification fails. After ≤ 2 bounded repairs, commit without a record + log.
+5. `commitlore guard`: warn on a deterministic match between proposal text ↔ path Ruled-out records (keyword+Record-Id).
+6. Clean-room rewrite of 3 skills (commits/query/setup) — all internals call the CLI, with no marketing language (D10).
 
 ## AC
-- [ ] 훅 설치 후 파일 편집 시나리오에서 주입 발생·예산 준수·스테일 미주입 검증
-- [ ] 수확→검증 파이프라인에서 근거 없는 조작 기록가 기계적으로 폐기되는 테스트
-- [ ] guard가 기각 이력 재제안 시나리오에서 경고 발화(CommitLoreBench 재제안율 지표와 동일 픽스처)
-- [ ] 스킬 3종이 skills 디렉토리 규격으로 설치·동작
+- [ ] After hook installation, verify injection occurs, respects the budget, and excludes stale records in a file-editing scenario
+- [ ] Test that unsupported fabricated records are mechanically discarded in the harvest→verification pipeline
+- [ ] guard emits a warning in a rejected-history re-proposal scenario (same fixture as the CommitLoreBench re-proposal-rate metric)
+- [ ] 3 skills install and work under the skills directory specification

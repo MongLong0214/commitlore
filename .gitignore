@@ -3,6 +3,13 @@ node_modules/
 # registry and no publish step (ADR-0011). CI fails if it drifts from src/.
 *.tsbuildinfo
 
+# The compiled single-executable build (#39, ADR-0015, `npm run build:binary`)
+# is a reproducible local/CI/release artifact, not part of the committed
+# distribution — unlike dist/commitlore.mjs it is large, platform- and
+# architecture-specific, and not meaningfully diffable.
+/dist/commitlore
+/dist/commitlore.exe
+
 # derived index — never committed (ADR-0003)
 .git/commitlore/
 
@@ -13,3 +20,9 @@ bench/results/*.local.jsonl
 
 # Scratch files delegated runs leave behind.
 .debug-journal.md
+
+# Agent skill installs — tooling, not product.
+.agents/
+.claude/
+skills/
+skills-lock.json

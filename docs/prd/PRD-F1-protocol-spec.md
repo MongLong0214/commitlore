@@ -1,25 +1,25 @@
-# PRD F1 — Protocol v2 스펙 + 적합성 스위트
+# PRD F1 — Protocol v2 spec + conformance suite
 
 - Milestone: M1 (08-02) · ADR: 0001, 0005, 0006
 
-## 목표
-누가 구현해도 같은 동작이 나오는 단일 정본 스펙. 어휘 enum을 정본화해 구현체 간 동작 분기(D1)를 원천 차단한다.
+## Goal
+A single canonical spec that produces the same behavior regardless of who implements it. Canonicalize the vocabulary enums to prevent behavioral divergence between implementations (D1) at the source.
 
-## 비목표
-심볼 앵커링 문법 확정(Backlog), 서명 필드 상세(Backlog — provenance 축만 예약).
+## Non-goals
+Finalizing symbol-anchoring syntax (Backlog), signature-field details (Backlog — reserve only the provenance axis).
 
-## 사용자 스토리
-- 구현자로서, JSON Schema와 픽스처만 보고 파서를 만들어 적합성 스위트를 통과시킬 수 있다.
-- 에이전트로서, 어휘 enum이 유일해 `Certainty: yes` 같은 형식 오류가 기계 거부된다.
+## User stories
+- As an implementer, I can build a parser from only the JSON Schema and fixtures and pass the conformance suite.
+- As an agent, the vocabulary enums are unique, so format errors such as `Certainty: yes` are mechanically rejected.
 
-## 요구사항
-1. trailer 어휘: v1 9종 + `CommitLore-Version` `Decision-Id` `Record-Id` `Supersedes` `Expires` `Evidence` `Provenance` + `X-` 확장 네임스페이스.
-2. enum 정본: `Certainty: firm|tentative|guess`, `Blast: local|module|system`, `Undo: easy|costly|permanent` (레포 계열 채택 — 이유: 이미 배포된 스킬 사용자와의 호환).
-3. 문법: git interpret-trailers 호환(멀티라인 폴딩 포함) + EBNF.
-4. **죽은 필드 금지**: 모든 어휘는 스펙에 소비자 라우트(쿼리·게이트·주입 규칙) 1개 이상을 명시.
-5. 적합성 스위트: 파서 왕복 픽스처 + 라우트 계약 테스트(stale 판정·승인 게이트 라우팅·Warn 강등).
+## Requirements
+1. Trailer vocabulary: v1's 9 types + `CommitLore-Version` `Decision-Id` `Record-Id` `Supersedes` `Expires` `Evidence` `Provenance` + the `X-` extension namespace.
+2. Canonical enums: `Certainty: firm|tentative|guess`, `Blast: local|module|system`, `Undo: easy|costly|permanent` (adopt the repo family — reason: compatibility with users of already-distributed skills).
+3. Grammar: compatible with git interpret-trailers (including multiline folding) + EBNF.
+4. **No dead fields**: for every vocabulary term, specify at least 1 consumer route (query, gate, or injection rule) in the spec.
+5. Conformance suite: parser round-trip fixtures + route-contract tests (stale decision, approval-gate routing, Warn demotion).
 
 ## AC
-- [ ] SPEC.md + JSON Schema 커밋, 픽스처 ≥ 20개(정상 10·경계 5·거부 5)
-- [ ] 라우트 계약 테스트 케이스 ≥ 8개 정의(실행은 F2에서)
-- [ ] 어휘표의 모든 행에 소비자 라우트 열 존재 (빈 칸 0)
+- [ ] Commit SPEC.md + JSON Schema, fixtures ≥ 20 (10 valid, 5 boundary, 5 rejected)
+- [ ] Define ≥ 8 route-contract test cases (executed in F2)
+- [ ] Every row in the vocabulary table has a consumer-route column (0 blanks)

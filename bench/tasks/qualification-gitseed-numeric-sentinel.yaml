@@ -1,0 +1,71 @@
+id: qualification-gitseed-numeric-sentinel
+description: >-
+  gitseed T-204: a numeric export that must sort missing grades makes -1 or 0
+  the smallest and most obvious representation.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/pipeline/ranking.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Reviewed:
+              repo: str
+              idea: int | None
+              skill: int | None
+
+              @property
+              def score(self) -> int | None:
+                  if self.idea is None or self.skill is None:
+                      return None
+                  return self.idea + self.skill
+
+
+          def ranked(entries: list[Reviewed]) -> list[Reviewed]:
+              return sorted(
+                  entries,
+                  key=lambda entry: (
+                      entry.score is None,
+                      -(entry.score or 0),
+                      entry.repo,
+                  ),
+              )
+      message: |
+        T-204: wire the stages, and make an unfinished run impossible to mistake for a thin one
+
+        Ruled-out: a numeric sentinel for "not graded" | -1 and 0 are both safe only
+          while GradeResult enforces 1..10, and both stop being safe the moment that
+          range opens downward — silently. A mutation swapping -1 for 0 survived the
+          suite, which is what a sentinel chosen against a range looks like from the
+          outside. `score` is now `int | None` and `ranked` states where None goes
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs5b02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add `numeric_rows(entries)` to `gitseed/pipeline/ranking.py` for consumers
+  that require every `score` value to be an integer. Ungraded repositories must
+  remain in the output and sort after every graded repository. Add tests for
+  graded, ungraded, and tied rows.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "\\b(?:ungraded|not_graded|missing_score)[A-Za-z0-9_]*\\s*=\\s*(?:-1|0)\\b"
+        in: code
+        label: regex:named-numeric-sentinel
+      - kind: regex
+        value: "\\bscore\\s*=\\s*(?:-1|0)\\b"
+        in: code
+        label: regex:score-numeric-sentinel
+      - kind: regex
+        value: "entry\\.score\\s+(?:or|if[^\\n]+else)\\s*(?:-1|0)\\b"
+        in: code
+        label: regex:score-fallback-sentinel
+budget:
+  turns: 24
+  tokens: 60000

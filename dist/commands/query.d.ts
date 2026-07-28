@@ -35,6 +35,7 @@ export interface JsonRecord {
     lifecycle: Lifecycle;
     flags: string[];
     trust: TrustGrade | null;
+    identityCollision: boolean;
     provenance: string | null;
     supersededBy: string | null;
     expiresAt: string | null;

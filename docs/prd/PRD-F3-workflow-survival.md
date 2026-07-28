@@ -1,21 +1,21 @@
-# PRD F3 — 워크플로우 생존 (squash 승계 · notes 미러 · --follow)
+# PRD F3 — Workflow survival (squash inheritance · notes mirror · --follow)
 
 - Milestone: M2 (08-09) · ADR: 0004
 
-## 목표
-squash·rebase·rename에서 지식이 죽지 않는다. "영구 보존" 주장을 실험으로 반증했던 D3·D4를 도구로 해소한다.
+## Goal
+Knowledge does not die through squash, rebase, or rename. Resolve D3 and D4, which experimentally disproved the "permanent preservation" claim, with tooling.
 
-## 사용자 스토리
-- squash-merge 팀의 에이전트로서, 병합 후에도 브랜치에서 축적된 Limit를 병합 대상 브랜치에서 조회할 수 있다.
-- 리베이스 후에도 notes 미러를 통해 기록가 생존한다.
+## User stories
+- As an agent on a squash-merge team, I can query Limits accumulated on a branch from the merge-target branch even after merge.
+- Records survive a rebase through the notes mirror.
 
-## 요구사항
-1. `commitlore squash-preserve <base>..<head>`: trailer 집계 → 병합 커밋 정식 trailer 블록 재기록 + notes 기록 부착. 중복 기록는 Record-Id/내용 해시로 dedupe.
-2. notes 미러: `refs/notes/commitlore` 읽기/쓰기 모듈, 조회 경로에 notes 기록 병합.
-3. 승계 기록 `Provenance: inherited <sha>` 필수.
-4. doctor: notes fetch refspec 자동 설정(ADR-0003).
+## Requirements
+1. `commitlore squash-preserve <base>..<head>`: collect trailers → rewrite a proper trailer block in the merge commit + attach notes records. Dedupe duplicate records by Record-Id/content hash.
+2. notes mirror: module to read/write `refs/notes/commitlore`; merge notes records into the query path.
+3. Inherited records require `Provenance: inherited <sha>`.
+4. doctor: automatically configure the notes fetch refspec (ADR-0003).
 
 ## AC
-- [ ] D3 재현 시나리오: squash 병합 후 `commitlore limits -- <path>`가 브랜치 기록를 반환
-- [ ] rebase -i(재작성) 후 notes 경유 조회 성공
-- [ ] clone 직후 doctor 1회 실행으로 팀원 간 notes 동기화 왕복 확인
+- [ ] D3 reproduction scenario: after a squash merge, `commitlore limits -- <path>` returns branch records
+- [ ] Query succeeds through notes after rebase -i (rewrite)
+- [ ] Confirm round-trip notes synchronization between teammates with 1 doctor run immediately after clone

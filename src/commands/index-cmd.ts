@@ -31,9 +31,10 @@ interface IndexCommandOptions {
   stats?: boolean;
 }
 
+/** Every failure here is a usage error or a missing dependency, never a finding (SPEC §10). */
 const fail = (message: string): void => {
   process.stderr.write(`commitlore: ${message}\n`);
-  process.exitCode = 1;
+  process.exitCode = 2;
 };
 
 const plural = (count: number, unit: string): string =>
@@ -114,6 +115,11 @@ export const register = (program: Command): void => {
     .option('--no-index', 'answer from git alone, writing nothing (the fallback path)')
     .option('--json', 'emit the run as JSON')
     .option('--stats', 'report what the index currently holds')
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or better-sqlite3 is not ' +
+        'installed (SPEC §10).',
+    )
     .action((options: IndexCommandOptions) => {
       try {
         if (!options.index) {

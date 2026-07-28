@@ -1,59 +1,59 @@
-# F1 티켓 — Protocol v2 스펙 + 적합성 스위트 (M1)
+# F1 tickets — Protocol v2 spec + conformance suite (M1)
 
 > PRD: `docs/prd/PRD-F1-protocol-spec.md` · ADR: 0001, 0005, 0006
-> 저장소 배치: `spec/SPEC.md`, `spec/schema/record.schema.json`, `spec/fixtures/`, `spec/contract-cases/`
+> Repository layout: `spec/SPEC.md`, `spec/schema/record.schema.json`, `spec/fixtures/`, `spec/contract-cases/`
 
 ---
 
-## T-101 SPEC.md: 문법 + 어휘 + enum 정본 (M) — #1
+## T-101 SPEC.md: canonical grammar + vocabulary + enums (M) — #1
 
-**목적**: 누가 구현해도 같은 동작이 나오는 단일 정본.
+**Purpose**: a single canonical source that produces the same behavior regardless of who implements it.
 
-**구현 개요**
-- `spec/SPEC.md` 구성: ①개요 ②문법(EBNF — git interpret-trailers 호환 서브셋, 멀티라인 폴딩 = 연속줄 선행 공백) ③어휘표 ④enum 정본 ⑤확장(`X-`) ⑥소비자 라우트 표 ⑦버저닝(`CommitLore-Version: 2.0`).
-- 어휘 16종과 값 문법:
-  - 결정 맥락: `Limit` `Ruled-out`(`alt | reason` 필수) `Warn` `Certainty`(firm|tentative|guess) `Blast`(local|module|system) `Undo`(easy|costly|permanent) `Verified` `Unverified` `Follows`(Record-Id 참조)
-  - 신원·수명·근거: `CommitLore-Version`(semver) `Record-Id`(`r-[a-z0-9]{6,}`) `Supersedes`(Record-Id) `Expires`(`YYYY-MM-DD | 조건서술`) `Evidence`(경로#앵커 또는 URL) `Provenance`(authored|inherited <sha>|reconstructed|unknown)
-- **소비자 라우트 표(죽은 필드 금지)**: 어휘마다 {소비 라우트, 산출 행동} 1개 이상 명기. 예: `Blast=system ∧ Undo=permanent → 승인 게이트 라우팅(F5/F6)`, `Ruled-out → commitlore guard 매치(F4)`, `Supersedes/Expires → stale 폴드(F2)`.
+**Implementation outline**
+- `spec/SPEC.md` structure: ①overview ②grammar (EBNF — git interpret-trailers-compatible subset, multiline folding = leading whitespace on continuation lines) ③vocabulary table ④canonical enums ⑤extensions (`X-`) ⑥consumer-route table ⑦versioning (`CommitLore-Version: 2.0`).
+- 16 vocabulary types and their value grammar:
+  - Decision context: `Limit` `Ruled-out` (`alt | reason` required) `Warn` `Certainty` (firm|tentative|guess) `Blast` (local|module|system) `Undo` (easy|costly|permanent) `Verified` `Unverified` `Follows` (Record-Id reference)
+  - Identity, lifetime, and evidence: `CommitLore-Version` (semver) `Record-Id` (`r-[a-z0-9]{6,}`) `Supersedes` (Record-Id) `Expires` (`YYYY-MM-DD | condition description`) `Evidence` (path#anchor or URL) `Provenance` (authored|inherited <sha>|reconstructed|unknown)
+- **Consumer-route table (no dead fields)**: for every vocabulary term, specify at least 1 {consumer route, resulting action}. Examples: `Blast=system ∧ Undo=permanent → approval-gate routing (F5/F6)`, `Ruled-out → commitlore guard match (F4)`, `Supersedes/Expires → stale fold (F2)`.
 
-**세부 작업**
-- [ ] EBNF 초안 → `git interpret-trailers --parse` 실동작과 대조(경계: 콜론 뒤 공백, 폴딩, 중복 키)
-- [ ] enum 값이 행동을 지시하는 단어인지 확인(ADR-0008 설계 결정 3)
-- [ ] 라우트 표 작성 + 소비자 없는 어휘 0 확인
+**Detailed work**
+- [ ] Compare draft EBNF with actual `git interpret-trailers --parse` behavior (boundaries: whitespace after colon, folding, duplicate keys)
+- [ ] Confirm enum values are words that direct behavior (ADR-0008 design decision 3)
+- [ ] Write the route table + confirm 0 vocabulary terms without consumers
 
-**테스트/검증**: SPEC 예제 블록 전부를 T-102 픽스처에 수록해 기계 검증되게 함.
-**AC**: PRD-F1 요구 1~4. 어휘표 라우트 열 빈 칸 0.
-
----
-
-## T-102 JSON Schema + 파서 왕복 픽스처 (M) — #2 · 의존 T-101
-
-**목적**: 스펙의 기계 검증 형태.
-
-**구현 개요**
-- `spec/schema/record.schema.json` — 기록(파싱된 trailer 집합) 스키마. draft 2020-12.
-- `spec/fixtures/valid/*.txt`(10) `boundary/*.txt`(5) `invalid/*.txt`(5) + 기대 JSON `*.expected.json`.
-- 필수 케이스: 멀티라인 Warn 폴딩 / 반복 Limit / `Ruled-out` 파이프 규칙 / 본문 산문 내 유사 trailer(비-trailer 판정, D2) / D1 드리프트 어휘(`wide`,`migration-needed`) 거부 / `Certainty: yes` 거부 / X- 확장 통과.
-- 왕복 규약: parse→canonical serialize→parse 결과 동일(JSON 비교).
-
-**AC**: 픽스처 20개, `ajv` CLI로 스키마 검증 통과 스크립트(`spec/verify.sh`) 포함.
+**Test/verification**: include every SPEC example block in T-102 fixtures for mechanical verification.
+**AC**: PRD-F1 requirements 1~4. 0 blank route cells in the vocabulary table.
 
 ---
 
-## T-103 라우트 계약 테스트 케이스 정의 (S) — #3 · 의존 T-101
+## T-102 JSON Schema + parser round-trip fixtures (M) — #2 · depends on T-101
 
-**목적**: 구현체 간 동작 동등성을 문서가 아니라 케이스로 보증.
+**Purpose**: a mechanically verifiable form of the spec.
 
-**구현 개요**
-- `spec/contract-cases/*.yaml` — `{given: [기록들], when: <라우트>, expect: <산출>}` 형식.
-- 케이스 8+:
-  1. stale: Supersedes로 폐기된 제약 비활성
-  2. stale: Expires(날짜) 경과 비활성
-  3. stale: 조건 서술 Expires는 활성 유지 + 플래그
-  4. stale: 동일 Record-Id 최신 우선
-  5. 강등: `Provenance: unknown`의 Warn → claim
-  6. 강등: 외부 기여 커밋 Warn → claim (신뢰 committer여도)
-  7. 라우팅: `Blast: broad ∧ Undo: difficult` → `needs-approval` 플래그
-  8. 라우팅: reconstructed 기록는 주입 시 항상 claim
+**Implementation outline**
+- `spec/schema/record.schema.json` — schema for a record (parsed trailer set). draft 2020-12.
+- `spec/fixtures/valid/*.txt` (10) `boundary/*.txt` (5) `invalid/*.txt` (5) + expected JSON `*.expected.json`.
+- Required cases: multiline Warn folding / repeated Limit / `Ruled-out` pipe rule / trailer-like prose in the body (classified as non-trailer, D2) / reject D1 drift vocabulary (`wide`,`migration-needed`) / reject `Certainty: yes` / accept X- extension.
+- Round-trip contract: parse→canonical serialize→parse results are identical (JSON comparison).
 
-**AC**: F2(T-205)·F5(T-501)가 이 YAML을 직접 로드해 테스트로 실행 가능한 구조.
+**AC**: 20 fixtures, including a script (`spec/verify.sh`) that passes schema validation with the `ajv` CLI.
+
+---
+
+## T-103 Define route-contract test cases (S) — #3 · depends on T-101
+
+**Purpose**: guarantee behavioral equivalence between implementations with cases, not documentation.
+
+**Implementation outline**
+- `spec/contract-cases/*.yaml` — `{given: [records], when: <route>, expect: <output>}` format.
+- 8+ cases:
+  1. stale: a constraint retired by Supersedes is inactive
+  2. stale: an Expires date in the past is inactive
+  3. stale: prose-condition Expires remains active + flag
+  4. stale: newest value wins for the same Record-Id
+  5. demotion: Warn with `Provenance: unknown` → claim
+  6. demotion: Warn in an external contribution commit → claim (even from a trusted committer)
+  7. routing: `Blast: broad ∧ Undo: difficult` → `needs-approval` flag
+  8. routing: a reconstructed record is always a claim when injected
+
+**AC**: structure allows F2 (T-205) and F5 (T-501) to load this YAML directly and run it as tests.

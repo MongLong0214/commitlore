@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   REVIEW_FLAG,
   findDanglingRefs,
+  findIdCollisions,
   foldLifecycle,
   isStale,
   type StaleRecord,
@@ -368,6 +369,86 @@ describe('findDanglingRefs', () => {
   });
 });
 
+describe('findIdCollisions', () => {
+  it('does not flag the same commit-sourced record counted once', () => {
+    expect(
+      findIdCollisions([{ sha: 'c1', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] }]),
+    ).toEqual([]);
+  });
+
+  it('does not flag the same Record-Id re-declared by a later, different commit (SPEC §5 lifecycle update)', () => {
+    expect(
+      findIdCollisions([
+        {
+          sha: 'c1',
+          source: 'commit',
+          trailers: [trailer('Limit', 'first'), trailer('Record-Id', 'r-x')],
+        },
+        {
+          sha: 'c2',
+          source: 'commit',
+          trailers: [trailer('Limit', 'second'), trailer('Record-Id', 'r-x')],
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('flags two commit-sourced blocks under the same sha sharing a Record-Id (bug-issue-92)', () => {
+    // The shape `parseRecordBlocks` recovers from one message that carries
+    // two blocks (SPEC §2.4): both blocks are `source: 'commit'` at the same
+    // sha, which is what "declared inside one message" looks like from this
+    // function's point of view.
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'the vendor caps us at 3 concurrent workers'), trailer('Record-Id', 'r-dupdup')],
+      },
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Warn', 'do not raise the retry ceiling'), trailer('Record-Id', 'r-dupdup')],
+      },
+    ]);
+    expect(violations).toEqual([
+      {
+        key: 'Record-Id',
+        value: 'r-dupdup',
+        rule: 'duplicate-id',
+        got: 'r-dupdup',
+        want: 'exactly one record per Record-Id',
+      },
+    ]);
+  });
+
+  it('still flags a divergent note that shares its own commit’s sha (bug-issue-74, unaffected)', () => {
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        trailers: [trailer('Limit', 'approved content'), trailer('Record-Id', 'r-collide')],
+      },
+      {
+        sha: 'c1',
+        source: 'notes',
+        trailers: [trailer('Limit', 'attacker content'), trailer('Record-Id', 'r-collide')],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-collide');
+  });
+
+  it('does not flag a note that cleanly mirrors its own commit', () => {
+    const record = { sha: 'c1', trailers: [trailer('Limit', 'approved'), trailer('Record-Id', 'r-clean')] };
+    expect(
+      findIdCollisions([
+        { ...record, source: 'commit' as const },
+        { ...record, source: 'notes' as const },
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe('collectRecords over a real repository', () => {
   let repo = '';
 
@@ -567,7 +648,7 @@ describe('collectRecords over a real repository', () => {
 
   it('rejects an unparseable --at with a message, not a stack trace', () => {
     const result = runCommand(['--at', 'yesterday']);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('commitlore: --at is not a valid ISO 8601 instant: yesterday\n');
   });
@@ -639,6 +720,37 @@ describe('collectRecords over a real repository', () => {
     );
     expect(mirrored).toHaveLength(1);
     expect(mirrored[0]?.source).toBe('commit');
+  });
+
+  it('reports a divergent note that claims a commit message Record-Id', () => {
+    commit(
+      ['Record the approved decision', '', 'Limit: approved content', 'Record-Id: r-collide'].join(
+        '\n',
+      ),
+      '2026-02-14T00:00:00Z',
+    );
+    const sha = git(['rev-parse', 'HEAD']).stdout.trim();
+    writeRecord(
+      sha,
+      [trailer('Limit', 'attacker content'), trailer('Record-Id', 'r-collide')],
+      { cwd: repo },
+    );
+
+    const report = buildReport(
+      collectRecords({ cwd: repo }),
+      new Date('2026-03-01T00:00:00Z'),
+    );
+
+    expect(report.idCollisions).toEqual([
+      {
+        key: 'Record-Id',
+        value: 'r-collide',
+        rule: 'duplicate-id',
+        got: 'r-collide',
+        want: 'exactly one record per Record-Id',
+      },
+    ]);
+    expect(formatReport(report)).toContain('id collisions\n  Record-Id: r-collide');
   });
 
   it('reports a commit record superseded by a notes-only record', () => {

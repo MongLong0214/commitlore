@@ -30,12 +30,34 @@ export const HOOK_MODE = 0o755;
  *
  * `COMMITLORE_BIN` exists so a checkout can point the hook at a specific build
  * (a test harness, a monorepo's local bin) without the installer writing an
- * absolute path into the repository.
+ * absolute path into the repository. It carries the same `.js`/`.mjs`
+ * allowlist as the recorded path below: an env var is reachable from CI
+ * configuration, a sourced profile, or a compromised toolchain — places a
+ * reviewer does not read as executable config, so it gets no more trust than
+ * `commitlore.bin` does. A value that fails the check falls through to the
+ * remaining resolution steps rather than being executed.
+ *
+ * The recorded `commitlore.bin` gets one more check `COMMITLORE_BIN` deliberately
+ * does not: it must resolve inside `commitlore.root`, also recorded at install
+ * time (#71). Naming a file `.js` costs a `.git/config` editor nothing, so the
+ * extension check alone does not stop a post-install edit from pointing
+ * `commitlore.bin` at an attacker's own script — only its location, which the
+ * installer controls and a later config edit cannot rewrite without also
+ * rewriting `commitlore.root`. `COMMITLORE_BIN` is exempt on purpose: its whole
+ * reason to exist is aiming the hook at a build outside the install root.
  *
  * There is no `npx` fallback on purpose. `npx --no` still queries the registry
  * when the package is not installed locally, which would put a network call on
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
+ *
+ * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
+ * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
+ * plain executable named `commitlore`. It is recognized by that name rather
+ * than by "has no extension", which would allow-list every other executable
+ * on the machine, and its containment check is an exact match against
+ * `commitlore.root` rather than a directory prefix: a binary has no
+ * subdirectory for a foreign file to hide in, it *is* the whole install.
  */
 export const commitMsgStub = () => [
     '#!/bin/sh',
@@ -61,7 +83,15 @@ export const commitMsgStub = () => [
     'fi',
     '',
     'if [ -n "${COMMITLORE_BIN:-}" ]; then',
-    '  exec "$COMMITLORE_BIN" validate --message-file "$1"',
+    '  # Same allowlist as the recorded commitlore.bin case below: any executable',
+    '  # here used to run unchecked, which is exactly the gap an env var is for.',
+    '  # A compiled binary (#39) needs no interpreter to reach here either, so it',
+    '  # execs the same way a properly shebanged script does.',
+    '  case "$COMMITLORE_BIN" in',
+    '    *.mjs|*.js|*/commitlore|commitlore)',
+    '      exec "$COMMITLORE_BIN" validate --message-file "$1"',
+    '      ;;',
+    '  esac',
     'fi',
     '',
     '# Where `hooks install` was run from. A clone is a complete installation',
@@ -80,20 +110,46 @@ export const commitMsgStub = () => [
     '# also validates commits with a different version than the one installed here.',
     'recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)',
     'if [ -n "$recorded" ]; then',
+    "  # Shared by every recognized branch below: what `hooks install` recorded",
+    "  # as this install's trusted location, whether that is a directory a script",
+    '  # sits under or, for a binary, the one trusted file itself.',
+    '  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)',
     '  case "$recorded" in',
     '    *.mjs|*.js)',
     '      # The interpreter is recorded as an absolute path too. A bare `node`',
     "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
     '      # same environment this whole branch exists to survive.',
     '      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)',
-    '      if [ -x "$recorded_node" ]; then',
-    '        exec "$recorded_node" "$recorded" validate --message-file "$1"',
-    '      fi',
-    '      if command -v node >/dev/null 2>&1; then',
-    '        exec node "$recorded" validate --message-file "$1"',
+    '      # An extension match alone lets a config edit after install point this',
+    '      # at any .js file, anywhere. `doctor` has warned about a recorded path',
+    '      # outside the install root since the extension check was added; this is',
+    '      # that same fact enforced here instead of only reported. `-L` closes the',
+    '      # gap a directory-only containment check would leave open: a symlink',
+    '      # planted inside the root but pointing outside it.',
+    '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
+    '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
+    '        case "$recorded_dir" in',
+    '          "$recorded_root"|"$recorded_root"/*)',
+    '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
+    '            ;;',
+    '        esac',
     '      fi',
     '      ;;',
-    '    *) exec "$recorded" validate --message-file "$1" ;;',
+    '    */commitlore|commitlore)',
+    '      # A compiled single-executable build (#39): no extension, no separate',
+    '      # interpreter to check — the binary reads and validates the message',
+    '      # itself. Its "install root" is the one file recorded at the same key,',
+    '      # so containment is an exact match rather than a directory prefix.',
+    '      # `-L` still rejects a symlink planted at the recorded location, and',
+    '      # `pwd -P` still resolves a symlinked ancestor directory before the',
+    '      # comparison, exactly as the script branch above.',
+    '      if [ -n "$recorded_root" ] && [ -x "$recorded" ] && [ ! -L "$recorded" ]; then',
+    '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
+    '        if [ "$recorded_dir/${recorded##*/}" = "$recorded_root" ]; then',
+    '          exec "$recorded" validate --message-file "$1"',
+    '        fi',
+    '      fi',
+    '      ;;',
     '  esac',
     'fi',
     '',

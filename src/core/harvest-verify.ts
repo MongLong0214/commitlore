@@ -45,7 +45,9 @@ export type RejectionReason =
   /** A key SPEC §3 does not define. */
   | 'unknown-key'
   /** `Ruled-out:` with nothing in the source showing the alternative turned down. */
-  | 'ruled-out-no-rejection';
+  | 'ruled-out-no-rejection'
+  /** `Verified:` cannot be established by harvesting prose. */
+  | 'verified-unsupported';
 
 export interface VerifiedRecord {
   record: DraftRecord;
@@ -310,6 +312,15 @@ const discard = (
   detail: string,
 ): RejectedRecord => ({ record, reason, detail });
 
+const unsupportedVerified = (record: DraftRecord): RejectedRecord | null =>
+  record.trailers.some((trailer) => trailer.key === 'Verified')
+    ? discard(
+        record,
+        'verified-unsupported',
+        'Verified cannot be harvested from quoted prose; record it from the command or test run that performed the check',
+      )
+    : null;
+
 /** Every claim key in the record that no citation names. */
 const uncitedClaims = (record: DraftRecord): string[] => {
   const cited = new Set(record.evidence.map((cite) => cite.key));
@@ -412,6 +423,7 @@ export const verifyDraft = (draft: DraftRecord[], sources: Sources): VerifyResul
 
   for (const record of draft) {
     const failure =
+      unsupportedVerified(record) ??
       missingEvidence(record) ??
       unfoundEvidence(record, scanned) ??
       ungroundedRuledOut(record, scanned) ??
@@ -453,6 +465,8 @@ const REPAIR_GUIDANCE: Readonly<Record<RejectionReason, string>> = {
   'ruled-out-no-rejection':
     'Quote the place where the alternative was actually turned down, not where it was ' +
     'first suggested. If the source only mentions the alternative, drop the Ruled-out trailer.',
+  'verified-unsupported':
+    'Remove Verified from the draft. Record it only from the command or test run that performed the check.',
   enum: 'Use one of the values listed for that key, exactly. A synonym is a violation, not a shortcut.',
   format: 'Match the value grammar the vocabulary states for that key.',
   'unknown-key': 'Use a key from the vocabulary, or an X-<Name> extension key.',

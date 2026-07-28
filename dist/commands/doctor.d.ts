@@ -14,6 +14,14 @@
  *   command and lets a human run it.
  * - The commit-msg hook is *reported*, never installed. `commitlore hooks
  *   install` (T-202) owns that file; doctor only reads it.
+ *
+ * `checkSquashConservation` (ADR-0014, bug-issue-60 finding 1) is the same
+ * shape of problem one route over: nothing runs `squash-preserve`
+ * automatically, and a squash that happened without it silently drops
+ * records the same way an unfetched mirror silently drops them. It is a
+ * `doctor` check rather than a CI step because it runs at the moment the
+ * mistake is still local and cheap to fix — see the check's own doc comment
+ * for the full "Ruled-out" reasoning.
  */
 import type { Command } from 'commander';
 /**
@@ -34,7 +42,7 @@ export interface DoctorCheck {
 }
 export interface DoctorReport {
     checks: DoctorCheck[];
-    /** 0 unless some check is `fail` — warnings do not fail the command. */
+    /** 0 unless some check is `fail` — warnings do not fail the command (SPEC §10: 1 is a finding). */
     exitCode: number;
 }
 export interface DoctorOptions {

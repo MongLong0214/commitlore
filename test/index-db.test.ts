@@ -14,11 +14,23 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import Database from 'better-sqlite3';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Vite's transform pipeline (bundled with vitest) does not recognize
+ * `node:sqlite` as a builtin — a static `import` of it fails the suite with
+ * "Failed to load url sqlite". `src/core/index-db.ts` already reaches
+ * `node:sqlite` through `createRequire` for an unrelated reason (ADR-0012's
+ * laziness); the same call sidesteps this one too. Only `.prototype.close` is
+ * used below (to spy on it), so the cast names just that surface.
+ */
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (...args: never[]) => { close: () => void };
+};
 
 type InjectedGitFailure = {
   readonly matches: (args: readonly string[]) => boolean;
@@ -67,6 +79,7 @@ import {
   openIndex,
   queryTrailers,
   rebuildIndex,
+  SCHEMA_VERSION,
   scanTrailers,
   updateIndex,
   type IndexHandle,
@@ -226,6 +239,114 @@ describe('index-db: rebuild identity', () => {
       closeIndex(handle);
     }
   });
+
+  it('keeps the previous index when commit reads fail, then replaces it on retry', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      commit(dir, record('Add the replacement', ['Limit: replacement row', 'Record-Id: r-rebuild1']));
+      gitInjection.failure = {
+        matches: (args) =>
+          args.includes('log') &&
+          args.includes('--stdin') &&
+          !args.includes('--name-only') &&
+          !args.includes('--notes=refs/notes/commitlore'),
+        code: 70,
+        stderr: 'injected commit read failure',
+      };
+
+      expect(() => rebuildIndex(handle)).toThrow(/injected commit read failure/);
+      expect(dumpIndex(handle)).toEqual(before);
+
+      gitInjection.failure = null;
+      rebuildIndex(handle);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+      expect(dumpIndex(handle)).not.toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it.each([
+    {
+      command: 'rev-parse',
+      matches: (args: readonly string[]) =>
+        args.includes('rev-parse') && args.includes('HEAD^{commit}'),
+    },
+    {
+      command: 'rev-list',
+      matches: (args: readonly string[]) => args.includes('rev-list'),
+    },
+  ])('raises on a $command failure without replacing the previous index', ({ command, matches }) => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      gitInjection.failure = {
+        matches,
+        code: 70,
+        stderr: `injected ${command} failure`,
+      };
+
+      expect(() => rebuildIndex(handle)).toThrow(`injected ${command} failure`);
+      expect(dumpIndex(handle)).toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('rebuilds an empty repository to an empty index', () => {
+    const dir = makeRepo();
+    const handle = openIndex({ cwd: dir });
+    try {
+      expect(() => rebuildIndex(handle)).not.toThrow();
+      expect(dumpIndex(handle)).toEqual([]);
+      expect(indexInfo(handle).lastIndexedSha).toBeNull();
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('shows a concurrent reader the old rows while git is read for a rebuild', () => {
+    const dir = makeRepo();
+    seedRepo(dir);
+    const handle = openIndex({ cwd: dir });
+
+    try {
+      updateIndex(handle);
+      const before = dumpIndex(handle);
+      commit(dir, record('Advance the index', ['Warn: new row', 'Record-Id: r-rebuild2']));
+      let observed: ReturnType<typeof dumpIndex> | undefined;
+      gitInjection.failure = {
+        matches: (args) => {
+          if (!args.includes('rev-list')) return false;
+          const reader = openIndex({ cwd: dir, readonly: true });
+          try {
+            observed = dumpIndex(reader);
+          } finally {
+            closeIndex(reader);
+          }
+          return false;
+        },
+        code: 70,
+        stderr: 'not injected',
+      };
+
+      rebuildIndex(handle);
+      expect(observed).toEqual(before);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+      expect(dumpIndex(handle)).not.toEqual(before);
+    } finally {
+      closeIndex(handle);
+    }
+  });
 });
 
 describe('index-db: incremental equals full', () => {
@@ -360,7 +481,7 @@ describe('index-db: the file is disposable', () => {
       expect(stats.rebuilt).toBe(true);
       expect(stats.rebuildReason).toContain('v999');
       expect(dumpIndex(second)).toEqual(before);
-      expect(indexInfo(second).schemaVersion).toBe('1');
+      expect(indexInfo(second).schemaVersion).toBe(String(SCHEMA_VERSION));
     } finally {
       closeIndex(second);
     }
@@ -593,8 +714,13 @@ describe('index-db: notes as a second source', () => {
 
       expect(() => updateIndex(handle)).toThrow(/injected note read failure/);
       expect(queryTrailers(handle, { source: 'notes' })).toEqual(before);
+      // `node:sqlite` has no `.pluck()` (ADR-0012); read the row and pick the column.
       expect(
-        handle.db.prepare("SELECT v FROM meta WHERE k = 'notes_ref_sha'").pluck().get(),
+        (
+          handle.db.prepare("SELECT v FROM meta WHERE k = 'notes_ref_sha'").get() as
+            | { v: string }
+            | undefined
+        )?.v,
       ).toBe(indexedRef);
     } finally {
       closeIndex(handle);
@@ -649,7 +775,7 @@ describe('index-db: notes as a second source', () => {
       code: 70,
       stderr: 'injected notes list failure',
     };
-    const close = vi.spyOn(Database.prototype, 'close');
+    const close = vi.spyOn(DatabaseSync.prototype, 'close');
 
     expect(() => ensureIndex({ cwd: dir })).toThrow(/injected notes list failure/);
     expect(close).toHaveBeenCalledTimes(1);
@@ -862,7 +988,7 @@ describe('index-db: reporting', () => {
       expect(stats.headSha).toHaveLength(40);
 
       const info = indexInfo(handle);
-      expect(info.schemaVersion).toBe('1');
+      expect(info.schemaVersion).toBe(String(SCHEMA_VERSION));
       expect(info.commits).toBe(4);
       expect(info.trailers).toBe(dumpIndex(handle).length);
       expect(info.paths).toBeGreaterThan(0);

@@ -1,24 +1,24 @@
-# ADR-0004: 워크플로우 생존 — squash 승계 + notes 미러 + --follow
+# ADR-0004: workflow survival — squash inheritance + notes mirror + --follow
 
 - Status: Accepted (2026-07-26)
 
 ## Context
 
-재현 실험으로 확인된 결함: squash-merge 시 trailer 블록이 파괴되어 `%(trailers)` 조회 불가(D3), 리네임 후 경로 조회 0건(D4). "영구 불변" 주장은 이 두 경로를 살아남지 못하면 거짓이다.
+Defects confirmed by reproduction: squash-merge destroys the trailer block, making `%(trailers)` queries impossible (D3), and path queries return 0 results after a rename (D4). The "permanently immutable" claim is false unless records survive both paths.
 
 ## Decision
 
-1. **squash 승계**: `commitlore squash-preserve`가 병합 전 브랜치 커밋들의 trailer를 집계해 (a) 병합 커밋 메시지의 정식 trailer 블록으로 재기록하고 (b) 동시에 notes 미러에 기록 단위로 부착한다. GitHub Action(T-602)이 이를 PR 병합 시 자동 실행.
-2. **notes 미러**: `refs/notes/commitlore`에 기록를 커밋 SHA 기준으로 미러링 — rebase/amend로 히스토리가 재작성돼도 기록가 생존하는 2차 채널.
-3. **경로 추적**: 모든 경로 스코프 조회는 `--follow` 기본. 승계·미러에는 `Provenance:` trailer로 원본 커밋 SHA를 남긴다.
+1. **squash inheritance**: `commitlore squash-preserve` collects trailers from branch commits before merge, (a) rewrites them as a proper trailer block in the merge commit message, and (b) attaches them to the notes mirror as individual records. GitHub Action (T-602) runs this automatically when a PR merges.
+2. **notes mirror**: mirror records to `refs/notes/commitlore` by commit SHA — a 2nd channel where records survive history rewrites by rebase/amend.
+3. **path tracking**: all path-scoped queries use `--follow` by default. Inherited and mirrored records retain the original commit SHA in a `Provenance:` trailer.
 
 ## Ruled-out
 
-- 서버 측 보존(외부 DB) | ADR-0003 위반
-- squash 금지 정책 강요 | 팀 워크플로우를 프로토콜이 강제할 수 없음 — 도구가 워크플로우에 적응해야 한다
-- 커밋 메시지 재기록만(notes 없이) | rebase/amend 계열 재작성에는 무방비
+- Server-side preservation (external DB) | violates ADR-0003
+- Enforce a no-squash policy | the protocol cannot dictate team workflow — the tool must adapt to the workflow
+- Rewrite only the commit message (without notes) | offers no protection against rebase/amend history rewrites
 
 ## Consequences
 
-- notes 공유를 위해 doctor의 refspec 자동 설정이 선행 조건(ADR-0003).
-- 승계된 기록는 `Provenance: inherited <sha>`로 원본과 구분 — 신뢰 등급(ADR-0005) 입력이 된다.
+- Automatic refspec configuration by doctor is a prerequisite for sharing notes (ADR-0003).
+- Inherited records are distinguished from originals by `Provenance: inherited <sha>` — an input to trust grading (ADR-0005).

@@ -1,151 +1,168 @@
-# Roadmap to done — the three goals, sequenced by what unblocks what
+# Final roadmap — three goals, decidable completion conditions
 
-Written 2026-07-27, after an external re-review returned FAIL / NO-GO at
-`7efba5c` with seven blockers, six of which reproduced here.
-
-This is not a wish list. Every phase has a gate that is a command, and no phase
-starts before the previous gate passes. The order is chosen so that each phase
-makes the next one *verifiable*, not merely because of severity.
+> Basis for update: all 7 production re-review blockers closed, gitseed v0.2 PRD received, branch
+> model migration complete.
+>
+> Every step in this document is **decided by a command**. Do not put an item here if a command
+> cannot decide it. A checklist that failed this rule caused gitseed to skip three
+> entire artifacts.
 
 ---
 
-## Phase 0 — CI green (blocks everything)
+## The three goals form one loop
 
-**Why first.** CI has been red for five commits. While it is red, no other fix can
-be shown to work: the only evidence that matters is a clean runner, and a clean
-runner currently fails for an unrelated reason. Every claim made on top of a red
-CI is a claim about a local machine.
+```
+        Factory Skills (Goal 3)
+     Phase gates · branch model · execution protocol
+              │ build                     │ enforce the protocol
+              ▼                           ▼
+       gitseed (Goal 2)  ──record──▶  CommitLore (Goal 1)
+      v0.2 Discovery Radar        trailers · guard · inject
+              │                           │
+              └──── defects in real use ─────┘
+                        │
+              Once is a bug; twice is a skill defect
+```
 
-| item | what |
+**Only goal 3 is a function of the other two.** The skill does not improve unless more projects are built.
+
+Procedure: `~/.claude/skills/repo-factory/references/self-improvement-loop.md`
+
+---
+
+## Goal 1 — CommitLore production-ready
+
+Current: `dev` default branch, CI green, 1171 tests/33 files, 10/10 review blockers closed.
+
+### Remaining phases
+
+| Phase | Work | Gate |
+|---|---|---|
+| **3** | Plugin manifest redeclares conventional-location `hooks` — double registration likely. No manifest tests | Manifest suite green + clone contains every declared file |
+| **4** | **Design and run M4** (below) + execute every item in `docs/RELEASE-GATE.md` | All 6 gate sections pass, CI green at that commit |
+
+### M4 — the answer to why M1 and M2 were null
+
+**Diagnosis (measured)**: of 10 tasks, **7 have a control base rate of 0**. Even without CommitLore,
+the agent does not propose the rejected approach. Tasks with nothing to block made up 70% of the
+aggregate. The null means not "no effect," but **"most of the measuring instrument was empty."**
+
+Power is governed more by the base rate than the sample. For an effect that cuts the rate in half, at 80% power:
+
+| Control base rate | Required n per arm |
 |---|---|
-| B3 | Five `test/stale.test.ts` cases fail on a clean runner: identity passed with `-c` never reaches `writeRecord`'s own git. One further case differs on count. |
+| 20% (current) | 98 |
+| 50% | 29 |
+| 80% | 11 |
 
-Also in scope: one shared repository factory, because these five tests repeated a
-trap already documented in a sibling file's comment. A rule that lives in a
-comment gets re-broken; a rule that lives in a function does not.
+**Three design changes**
 
-**Gate.** `gh run list` shows `success` at the pushed HEAD. Not a local run.
+1. **Task qualification round.** Before hypothesis testing, run only the control arm to measure base rates.
+   Reject low-rate tasks **without running the treatment arm at all**. The decision does not inspect
+   the treatment arm, so this is not p-hacking. Fix the threshold and procedure in preregistration §16 first.
+2. **Source tasks from real decisions.** The 7 options rejected by gitseed v0.2 PRD §35 are wrong answers
+   an agent would naturally choose — "let the LLM decide the final ranking" takes far less code.
+   Their base rate is expected to exceed synthetic tasks (an expectation, not a measurement).
+3. **Add outcome variables.** Re-proposal rate counts only "did not do it." Candidates: violation of a recorded `Limit:`,
+   an alternative design that cites the rejection reason, asking rather than guessing, **whether the reviewer had to
+   say "we tried that."** The last may be the actual business value, in which case the current measurement axis
+   is wrong.
+
+**M3 is void.** While the hook read `dist/` from the working copy, the operator rebuilt it 8 times
+(preregistration §15). Preserve the data as `*-invalidated`; do not cite it as a result.
+
+### Completion condition
+
+Every section of `RELEASE-GATE.md` has been executed and passed, CI is green **at that commit**,
+and every remaining issue is a feature on a defensible axis rather than a defect.
+
+**A positive benchmark is not required.** If M4 is null again, that is the result, and it will be
+published. In that case, the product claim is not "makes agents better," but **"binds decision history
+to git and preserves it in a human-verifiable form."** The latter is already proven by tests
+and remains true independent of the benchmark.
 
 ---
 
-## Phase 1 — what the agent is told (the product's only claim)
+## Goal 2 — gitseed v0.2 Discovery Radar
 
-Both of these decide what reaches a model. Nothing else in the backlog does.
+Current: v0.1 complete (151 tests, CI green, Phase 4 gate exit 0, issue #5 closed).
+v0.2 PRD received — 6 milestones.
 
-| item | what |
+### Milestones (PRD §32)
+
+| # | Name | Core output |
+|---|---|---|
+| 1 | **Truthful Core** | ports/domain/application separation · run artifact · model smoke connection |
+| 2 | Persistence | SQLite adapter · migration · replay |
+| 3 | Categories | CategoryPack schema · validator · deterministic classifier |
+| 4 | Scoring | Quality/Risk → Momentum → Undervalued → recommendation gate |
+| 5 | Product CLI | radar · explain · export · init/doctor |
+| 6 | Seeded at | immutable discovery event · lifecycle · static HTML |
+
+**Milestone 1 is the keystone.** Everything else depends on the port/adapter boundary.
+
+### Invariants to preserve (PRD §3.1)
+
+INV-001 incompleteness is not silent · INV-002 high risk blocks recommendation · INV-003 unevaluated items
+are not deleted · INV-004 external writes require Approval · INV-005 dry-run by default ·
+INV-006 discovery history is immutable · INV-007 deterministic facts > model prose · INV-008 every score
+has a version · INV-009 backtest is not live · INV-010 expose evidence coverage.
+
+INV-004·005 are already implemented and verified (pty cycle, 5 mutations). The rest are in v0.2 scope.
+
+### Completion condition
+
+The Phase 4, 5, and 6 gates each exit 0, CI is green, and there is a **record of the product
+actually completing one cycle**. Decide v0.2 by the EPIC A~G acceptance criteria in PRD §30.
+
+---
+
+## Goal 3 — factory skill
+
+Current: SKILL.md (6 phases, 11 invariants) · 9 references · 3 scripts.
+`phase-gate.py` was demonstrated in both directions — caught 6 real gaps, exposed and then fixed 1 false failure.
+
+### What remains
+
+| Item | Why |
 |---|---|
-| B4 | CLI prints the payload of a record graded `blocked`. `inject`, MCP and `guard` all withhold it. Agents run the CLI through a shell — that is the product's premise — so "a human reads the terminal" is not a defence. |
-| B4b | `limits` and `ruled-out` show no grade at all, so `blocked` and `directive` render identically. An invisible grade does nothing. |
-| B1 | `git config commitlore.bin /anything` redirects the hook to an arbitrary executable, and `hooks status` + `doctor` still report the hook healthy. |
+| `create-issues.py` and `verify-citations.py` produce raw tracebacks on directories and unreadable files | Discovery complete (STATUS.md). Fix in a separate ticket — mixing discovery and the fix in one commit lets the fix skip review |
+| The gate covers **only Phase 4** | 11 invariants were created but applied to only one phase. Phase 5 and 6 are next |
+| `phase-gate.py` lives in `~/.claude/skills/`, so it is **absent from the CI runner** | CI use requires vendoring. Nobody is doing it |
 
-**B1 is a tamper-detection bypass, not a privilege escalation.** Measured: the
-malicious config does not survive `git clone`, and `.git/config` and `.git/hooks`
-sit behind the same permission — an attacker who can set one can overwrite the
-other. It is closed because *our own integrity check looks at a channel the hook
-does not use*, and because setting a config key is quieter than writing an
-executable into `.git/hooks`.
+### Completion condition
 
-**Gate.** The two reproductions in `PRODUCTION-REREVIEW` no longer reproduce, shown
-by command output; CI green.
+Every **recurring defect pattern** discovered while building two or more projects has become a gate
+or invariant, and each gate has been demonstrated to **fail on a real gap and pass in a healthy
+state**.
 
 ---
 
-## Phase 2 — the index cannot lie about being complete
+## Rules for every phase — every one came from a real incident
 
-| item | what |
-|---|---|
-| B5 | `rebuildIndex` commits a full DELETE, then reads git, then inserts. A failure between them leaves an index that is empty and reports itself healthy. |
-| B5b | Audit the whole module. r-4b17f8 fixed this exact shape in `indexNotes` and the class survived in a sibling — a named-function fix left the pattern alive. |
-| B6 | A query over an unfetched notes mirror exits 0. `guard` exits 3 for the same condition. One incompleteness, two exit codes. |
-
-**Gate.** A rebuild interrupted mid-flight leaves the previous index intact,
-proven by an injected failure; `context` and `guard` agree on the exit code for
-an incomplete answer; CI green.
-
----
-
-## Phase 3 — the documented installation is the one that works
-
-| item | what |
-|---|---|
-| B2 | `plugin.json` declares `"hooks": "./hooks/hooks.json"` while that file already sits at the conventional path. The manifest field is documented as additive, so the PreToolUse hook is likely registered twice. |
-| B7 | README says CI is green on `main`. It has not been for five commits. |
-
-The manifest also has no test at all: nothing checks that its version matches
-`package.json`, that its command paths exist, or that a clone carries the files.
-
-**Honest limit:** a true Claude Code plugin install/load end-to-end needs Claude
-Code in CI and cannot be faked. What is testable is the manifest and its
-references, and the test must say so in its own header rather than implying more.
-
-**Gate.** Manifest test suite green; a fresh clone carries every declared file;
-`plugin.json` no longer re-declares a conventional path; CI green.
+1. **1 delegation per repository.** Concurrent execution produced a false test count (943 against
+   a 1108 baseline) and mixed diffs. Different repositories may run in parallel.
+2. **Specify paths when committing.** `git add -A` swept documents into unrelated commits twice.
+3. **Do not write "green" before checking CI.** This was violated five times in one day, including
+   in the commit that created the rule.
+4. **Delegation reports are claims.** A fix reported as passing failed to catch the original incident.
+   **Verify a fix against the incident, not its own test.**
+5. **Ask once more whether the verification target is the actual running artifact.** This mismatch
+   happened six times in four days — local↔CI, commit hash↔bytes, entry-point hash↔module, YAML parse↔workflow acceptance,
+   checklist↔stop line, sandbox condition↔project state.
 
 ---
 
-## Phase 4 — the evidence
+## Branch model (applied to both repositories)
 
-| item | what |
-|---|---|
-| M3-b | Re-run the guard-route measurement from a clone pinned to a commit, outside this working tree, with its own `dist/`. §14 unchanged; §15 records why M3 was voided. |
-| Gate | `docs/RELEASE-GATE.md`, every line, run and recorded. |
+| Branch | Role | Cut from | Merge into |
+|---|---|---|---|
+| `main` | Production. Tags land here. Protected | — | — |
+| `dev` | Integration. Default branch | — | — |
+| `feat-issue-<id>` | 1 feature | `dev` | `dev` |
+| `bug-issue-<id>` | 1 bug | `dev` | `dev` |
+| `release-<semver>` | Release preparation | `dev` | `main` + `dev` |
+| `hotfix-issue-<id>` | Emergency fix | Tag on `main` | `main` + `dev` |
 
-M3 was voided because the harness read `dist/` out of the tree its operator was
-rebuilding. The clone is prepared; `dist_digest` now covers the whole tree, so a
-mid-run change refuses at report time instead of passing silently.
-
-**This phase produces a verdict, not a result we want.** M1, M1-b and M2 are null.
-M3-b may be null too. The release gate deliberately does not require a positive
-benchmark: a tool that answers honestly ships whether or not the effect is large.
-
----
-
-## Phase 5 — goal 2: gitseed is a product, not a library
-
-Done: four features, a pipeline that refuses to hide an incomplete run, a CLI
-whose default cannot write, 147 tests, and five defects found by running it for
-real rather than by testing it.
-
-| item | what |
-|---|---|
-| G6 | CI. gitseed has none. Everything known about it comes from this machine. |
-| G7 | The review queue has never completed a cycle: approval needs a TTY, and no run has reached it — the first was killed by a timeout, the second by an unencoded URL, the third by an exhausted quota. Prove one full cycle with a scripted pty, ending in a CommitLore trailer block that `commitlore validate` accepts. |
-| G8 | The forbidden-resource branch of the 403 classifier is covered only by injected responses. Either exercise it or mark it unverified in the README. |
-
-**No live star or follow is performed.** The cycle is proven up to the approval
-and the trailer block. Performing the action against a third party is the owner's
-to run, not this session's.
-
----
-
-## Phase 6 — goal 3: the loop writes itself down
-
-The feedback loop worked: gitseed's live use found six CommitLore or gitseed
-defects that the test suites did not. What has not happened is folding what was
-learned back into `~/.claude/skills/repo-factory` so the next project starts
-ahead of this one.
-
-| item | what |
-|---|---|
-| S1 | The recurring defect shape — *two different facts collapsed into one message* — appeared five times in four days: unfetched notes read as an empty repository, broken git read as no records, a `contains` probe read as an unknown key, a rate limit read as a refusal, and an incomplete scan read as a clean one. Write it into the skill as a review question, not as prose. |
-| S2 | The verification rule that actually caught things: **test the fix against the incident, not against its own tests.** Two fixes for the M3 failure passed their own suites and did not cover the M3 failure. |
-| S3 | The delegation rules earned this session: report `Test Files N` not just a count; never `git add -A`; a delegate's green suite is a claim to re-run. |
-
----
-
-## Sequencing rules that hold throughout
-
-**One delegated task at a time per repository.** Two concurrent runs in one
-worktree produced a false test count (943 of a 1108 baseline) and a mixed diff.
-Different repositories may run in parallel.
-
-**Commit by named path.** `git add -A` swept documents into two unrelated commits
-today.
-
-**CI is checked before the word "green" is used.** It was claimed five times
-today against a red CI, including in the commit that introduced the rule saying
-not to.
-
-**A delegate's report is a claim.** T9 reported a green suite for a fix that would
-not have caught the incident it was written for; it was found by testing the fix
-against the incident.
+Merges always use `--no-ff`. After a release or hotfix enters `main`, run `git tag -a`.
+**Because branch names require an issue ID, a wave cannot start without an issue.**

@@ -449,7 +449,7 @@ describe('backfill budget caps', () => {
   it('rejects a cap that is not a non-negative integer', () => {
     const outcome = runBackfill({ cwd: fixture.dir, promptOnly: true, limit: '-3' });
 
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('--limit is not a non-negative integer');
   });
 });
@@ -527,7 +527,7 @@ describe('backfill drafts that name the wrong commit', () => {
     writeFileSync(path, '{"records": []}\n');
     const outcome = runBackfill({ cwd: fixture.dir, draft: path });
 
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('"commits" array');
   });
 });
@@ -734,14 +734,14 @@ describe('backfill reporting', () => {
     writeFileSync(path, '{"commits": []}\n');
     const outcome = runBackfill({ cwd: fixture.dir, promptOnly: true, draft: path });
 
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('mutually exclusive');
   });
 
   it('reports a --draft path it cannot read', () => {
     const outcome = runBackfill({ cwd: fixture.dir, draft: join(fixture.dir, 'absent.json') });
 
-    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr).toContain('cannot read --draft');
   });
 });

@@ -1,19 +1,19 @@
-# PRD F8 — Backfill MVP (스트레치)
+# PRD F8 — Backfill MVP (stretch)
 
-- Milestone: M4 (08-23) · Stretch — 실패해도 v0.1.0 릴리스를 차단하지 않음 · ADR: 0006
+- Milestone: M4 (08-23) · Stretch — failure does not block the v0.1.0 release · ADR: 0006
 
-## 목표
-콜드스타트 해소: 기존 저장소의 과거 커밋·PR 텍스트에서 결정 맥락을 소급 재구성해 도입 첫날부터 조회 가치를 만든다.
+## Goal
+Resolve cold start: retrospectively reconstruct decision context from past commits and PR text in an existing repository, creating query value from the first day of adoption.
 
-## 사용자 스토리
-- 신규 도입자로서, `commitlore backfill --limit 200`을 돌리면 과거 결정사가 notes에 재구성되어 즉시 조회된다.
+## User stories
+- As a new adopter, when I run `commitlore backfill --limit 200`, past decision history is reconstructed in notes and becomes immediately queryable.
 
-## 요구사항
-1. 입력: 최근 N 커밋(+연결된 PR 본문, gh CLI 옵트인). 출력: notes 기록, 전부 `Provenance: reconstructed`.
-2. 검증자 필수 통과(근거 = 원 커밋/PR 텍스트 인용). 재구성 실패는 스킵+표기, 날조 금지.
-3. 이중 정지: 수렴(신규 기록 0 연속 2배치) 또는 커밋 수·토큰 예산 캡.
-4. LLM 사용은 사용자의 기존 에이전트 세션/키로만(옵트인) — 무LLM 모드는 trailer 존재 커밋의 인덱싱만 수행.
+## Requirements
+1. Input: latest N commits (+ linked PR bodies, gh CLI opt-in). Output: notes records, all `Provenance: reconstructed`.
+2. Must pass the verifier (evidence = citation from original commit/PR text). Skip+mark reconstruction failures; no fabrication.
+3. Dual stopping: convergence (0 new records for 2 consecutive batches) or commit-count and token-budget caps.
+4. LLM use only through the user's existing agent session/key (opt-in) — no-LLM mode only indexes commits that already contain trailers.
 
 ## AC
-- [ ] 자체 레포 또는 임의의 공개 저장소 대상 1회 실행: 재구성 기록 ≥ 10개, 전수 Provenance 표기, 검증자 통과율 로그
-- [ ] 예산 캡 강제 종료 경로 테스트
+- [ ] Run 1 time against this repository or any public repository: reconstructed records ≥ 10, Provenance on every record, verifier pass-rate log
+- [ ] Test the forced-stop path at the budget cap

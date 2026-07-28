@@ -21,11 +21,43 @@
  *
  * Nothing here talks to a network. Writing `refs/notes/commitlore` is local;
  * publishing it is the user's or the Action's decision.
+ *
+ * ## One block per inherited record (bug-issue-60)
+ *
+ * This module used to fold every source record in the range into one merged
+ * record: the branch's `Limit:`s, `Warn:`s and the rest all landed in a single
+ * trailer block, `Record-Id:` was kept only when the range declared exactly
+ * one, and `Provenance: inherited <sha>` named the newest source commit
+ * regardless of how many records actually contributed. Two commits sharing a
+ * `Record-Id` — an ordinary lifecycle update across a branch — is one record
+ * and folds correctly. Two commits declaring *different* ids are two separate
+ * decisions, and folding them into one record with a single identity was
+ * always wrong: it either kept one id and silently discarded the other's
+ * (findable-only-by-`Follows:` identity gone for good) or, with two or more,
+ * kept neither.
+ *
+ * `planSquash` now produces one block per distinct record (`SquashPlan.blocks`
+ * — SPEC §2.4's multi-record grammar), each keeping its own `Record-Id` when
+ * the sources declared one, and its own `Provenance: inherited <sha>` naming
+ * *that record's* newest source, never a different record's. `renderMessage`
+ * and `attachToNotes` write the blocks as separate, blank-line-separated
+ * paragraphs, so `commitlore validate`/`context`/the index recover every one
+ * of them individually (`core/trailers.ts` `parseRecordBlocks`,
+ * `core/index-db.ts`, `core/notes.ts` `readRecordBlocks`/`writeRecordBlocks`).
+ *
+ * `X-Inherited-From` — the old format's only way to say which source commit
+ * an inherited record with an ambiguous identity actually came from — is no
+ * longer written: a canonical `Provenance:` inside each record's own block
+ * says that now, correctly, without an extension. `attachToNotes` still
+ * reads an old note through the ordinary trailer parser and never rejects
+ * one that carries the old key, because `X-<Name>:` is preserved and never
+ * interpreted by the core (SPEC §3.2) — an already-published note keeps
+ * resolving exactly as it did before this change.
  */
 
 import { execGit } from './git.js';
-import { listRecordShas, readRecord, writeRecord } from './notes.js';
-import { parseCommitMessage, serializeTrailers } from './trailers.js';
+import { listRecordShas, readRecordBlocks, writeRecordBlocks } from './notes.js';
+import { parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
 import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
@@ -68,8 +100,16 @@ export interface ProvenanceEntry {
 
 export interface SquashPlan {
   sources: CollectedRecord[];
-  /** The final trailers, after dedupe and conflict resolution. */
-  merged: Trailer[];
+  /**
+   * One resolved trailer array per inherited record (SPEC §2.4), in the
+   * order each record's identity first appears in the range — an
+   * unidentified source contributes its own block at its own position.
+   * Every block carries its own `Record-Id` (when the sources declared one)
+   * and its own `Provenance: inherited <sha>`, naming that record's newest
+   * source and no other's. Written out as separate paragraphs by
+   * `renderMessage` / `attachToNotes`.
+   */
+  blocks: Trailer[][];
   /** Same `Record-Id`, contradictory content. Warned about, never silent. */
   conflicts: RecordConflict[];
   /** One entry per source record, in range order. */
@@ -82,16 +122,16 @@ const EXPIRES_KEY = 'Expires';
 const VERSION_KEY = 'CommitLore-Version';
 
 /**
- * The repeatable extension that carries per-source provenance in the mirror.
- *
- * `Provenance:` cannot do this job. It is single-valued (SPEC §3.2) and its
- * grammar admits exactly one sha — `^(authored|reconstructed|unknown|inherited
- * [0-9a-f]{7,40})$` in `spec/schema/record.schema.json` — so a record that
- * inherited from four commits has no legal way to say so with that key. An
- * `X-<Name>:` extension is repeatable and is preserved verbatim by every
- * conforming implementation (SPEC §3.2, §8), which makes it the only place the
- * per-source mapping can live without producing a record that fails
- * `commitlore validate`. See `attachToNotes`.
+ * The extension the pre-multi-record format used to carry per-source
+ * provenance in the mirror, back when one ambiguous `Record-Id` situation
+ * forced every inherited record into a single merged block (see this
+ * module's own doc comment). `attachToNotes` no longer writes it — each
+ * block's own `Provenance:` says the same thing correctly, without an
+ * extension — but a note published before this change still carries it, and
+ * nothing here refuses that note: `X-<Name>:` is preserved and never
+ * interpreted by the core (SPEC §3.2), so it reads back exactly as before.
+ * Exported for exactly that: tests and callers that need to construct or
+ * recognize the old shape.
  */
 export const INHERITED_FROM_KEY = 'X-Inherited-From';
 
@@ -118,11 +158,11 @@ const DATE_SHAPE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SEMVER_CORE_RE = /^(\d+)\.(\d+)\.(\d+)/;
 
 /**
- * How many paragraphs `stripTrailerBlock` will drop before giving up. The
- * trailer block is the last paragraph (SPEC §2.1 B1/B2), so one drop is enough
- * unless the draft has trailing `#` comment paragraphs that git skipped; a
- * handful covers any real editor template, and the bound keeps a message shaped
- * unlike anything anticipated from looping.
+ * How many paragraphs `stripTrailerBlock` will drop before giving up. A
+ * message may legitimately carry several record-block paragraphs at its tail
+ * now (SPEC §2.4) rather than one, plus any trailing `#` comment paragraphs an
+ * editor draft leaves behind; a handful covers any real draft without the
+ * bound looking like a message shaped unlike anything anticipated.
  */
 const MAX_PARAGRAPH_DROPS = 8;
 
@@ -137,15 +177,73 @@ const trailerValue = (trailers: Trailer[], key: string): string | undefined =>
 const recordIdOf = (record: CollectedRecord): string | undefined =>
   record.recordId ?? trailerValue(record.trailers, RECORD_ID_KEY);
 
+/** Every distinct `(key, value)` pair in a block, as the fold's dedupe keys it. */
+const contentSet = (trailers: readonly Trailer[]): Set<string> =>
+  new Set(trailers.map((trailer) => `${trailer.key}${NUL}${trailer.value}`));
+
+/**
+ * Matches one commit's message blocks against its mirrored note blocks
+ * (SPEC §2.4), so a source commit that itself carries several record blocks —
+ * ordinarily the previous squash-preserve run's own output, being squashed
+ * again — contributes each of them once, message and note merged, rather
+ * than the note's blocks being lost or duplicated.
+ *
+ * A message block and a note block are the same record when they declare the
+ * same `Record-Id`, or — when neither declares one — when the message
+ * block's trailers are all present in the note block's (the same rule
+ * `core/query.ts`'s `foldMirroredNotes` uses to fold an unidentified mirror
+ * into its commit). Matched pairs merge, keeping every distinct trailer of
+ * either; an unmatched note block still contributes, on its own.
+ */
+const mergeCommitBlocks = (
+  messageBlocks: readonly Trailer[][],
+  noteBlocks: readonly Trailer[][],
+): Trailer[][] => {
+  const claimed = new Set<number>();
+  const blocks: Trailer[][] = [];
+
+  for (const messageBlock of messageBlocks) {
+    const messageId = trailerValue(messageBlock, RECORD_ID_KEY);
+    const contents = contentSet(messageBlock);
+    const matchIndex = noteBlocks.findIndex((noteBlock, index) => {
+      if (claimed.has(index)) return false;
+      const noteId = trailerValue(noteBlock, RECORD_ID_KEY);
+      if (messageId !== undefined || noteId !== undefined) return messageId === noteId;
+      const noteContents = contentSet(noteBlock);
+      return [...contents].every((entry) => noteContents.has(entry));
+    });
+
+    if (matchIndex === -1) {
+      blocks.push(messageBlock);
+      continue;
+    }
+    claimed.add(matchIndex);
+    const merged = [...messageBlock];
+    for (const trailer of noteBlocks[matchIndex] ?? []) {
+      const duplicate = merged.some(
+        (existing) => existing.key === trailer.key && existing.value === trailer.value,
+      );
+      if (!duplicate) merged.push(trailer);
+    }
+    blocks.push(merged);
+  }
+
+  noteBlocks.forEach((noteBlock, index) => {
+    if (!claimed.has(index)) blocks.push(noteBlock);
+  });
+
+  return blocks;
+};
+
 /**
  * Reads the records of every commit in `range`, oldest first — the order the
  * merge rules mean by "latest".
  *
- * Both channels of SPEC §1 are read for each commit: the message block and the
- * notes mirror, merged with `(key, value)` duplicates dropped. A record that
- * only ever existed as a note — one an earlier `squash-preserve` attached, or
- * one `harvest` wrote out of band — is inherited exactly like one in a message,
- * because the protocol does not rank the two sources.
+ * Both channels of SPEC §1 are read for each commit: the message's own record
+ * blocks and the notes mirror's, matched and merged by `mergeCommitBlocks`. A
+ * record that only ever existed as a note — one an earlier `squash-preserve`
+ * attached, or one `harvest` wrote out of band — is inherited exactly like one
+ * in a message, because the protocol does not rank the two sources.
  *
  * Commits that recorded nothing are absent from the result rather than present
  * and empty: they contribute no trailers and no provenance, and listing them
@@ -183,20 +281,15 @@ export const collectRange = (range: string, opts: SquashOptions = {}): Collected
 
     const sha = chunk.slice(0, separator);
     const message = chunk.slice(separator + 1);
-    const trailers = CANDIDATE_LINE_RE.test(message) ? parseCommitMessage(message) : [];
+    const messageBlocks = CANDIDATE_LINE_RE.test(message) ? parseRecordBlocks(message) : [];
+    const noteBlocks = mirrored.has(sha) ? readRecordBlocks(sha, opts) : [];
+    const blocks = mergeCommitBlocks(messageBlocks, noteBlocks);
 
-    if (mirrored.has(sha)) {
-      for (const trailer of readRecord(sha, opts)) {
-        const duplicate = trailers.some(
-          (existing) => existing.key === trailer.key && existing.value === trailer.value,
-        );
-        if (!duplicate) trailers.push(trailer);
-      }
+    for (const trailers of blocks) {
+      if (trailers.length === 0) continue;
+      const recordId = trailerValue(trailers, RECORD_ID_KEY);
+      collected.push({ sha, trailers, ...(recordId === undefined ? {} : { recordId }) });
     }
-
-    if (trailers.length === 0) continue;
-    const recordId = trailerValue(trailers, RECORD_ID_KEY);
-    collected.push({ sha, trailers, ...(recordId === undefined ? {} : { recordId }) });
   }
 
   return collected;
@@ -296,8 +389,9 @@ const highestVersion: Resolver = (candidates) => {
 
 /**
  * How a single-valued key (SPEC §3 cardinality) is resolved when the sources
- * disagree. Every key in `SINGLE_VALUED` has an entry here or is handled
- * outside the fold, so nothing falls through to an accident:
+ * that declare *the same record* disagree. Every key in `SINGLE_VALUED` has an
+ * entry here or is handled outside the fold, so nothing falls through to an
+ * accident:
  *
  * | Key                  | Rule                                              |
  * |----------------------|---------------------------------------------------|
@@ -306,19 +400,23 @@ const highestVersion: Resolver = (candidates) => {
  * | `Certainty`          | most conservative: `guess` > `tentative` > `firm`  |
  * | `Expires`            | earliest expiry; a date beats a condition          |
  * | `CommitLore-Version` | highest semver                                     |
- * | `Record-Id`          | kept only when unambiguous (`planSquash`)          |
- * | `Provenance`         | never inherited; rewritten (`planSquash`)          |
+ * | `Record-Id`          | the group's own identity, carried as-is            |
+ * | `Provenance`         | never inherited; rewritten per block (`planSquash`)|
  *
- * The first three exist because the approval gate consumes them (SPEC §5):
- * `Blast: system` and `Undo: permanent` route a change to a human. If a branch
- * carried `Blast: local` on one commit and `Blast: system` on another, taking
- * the latest would let the order in which the branch happened to be written
- * decide whether a human ever sees the merge. Collapsing toward the optimistic
- * value turns a gate into a coin flip, so the merge keeps the value that asks
- * for more scrutiny — the one direction where being wrong costs a review rather
- * than an incident. `Certainty: guess` is the same argument one route over: it
- * is what the stale sweep surfaces first, and a merge must not quietly promote
- * a guess to firm.
+ * The fold runs per record identity (`foldGroup`), not across the whole
+ * range: two *different* records disagreeing about `Blast` is not a conflict
+ * to resolve, because they are not the same record (that was the bug this
+ * module used to have — see the module doc comment). Within one record, the
+ * first three exist because the approval gate consumes them (SPEC §5):
+ * `Blast: system` and `Undo: permanent` route a change to a human. If a
+ * record's own history carried `Blast: local` on one commit and `Blast:
+ * system` on a later one, taking the latest would let the order in which the
+ * branch happened to be written decide whether a human ever sees the merge.
+ * Collapsing toward the optimistic value turns a gate into a coin flip, so the
+ * fold keeps the value that asks for more scrutiny — the one direction where
+ * being wrong costs a review rather than an incident. `Certainty: guess` is
+ * the same argument one route over: it is what the stale sweep surfaces
+ * first, and a merge must not quietly promote a guess to firm.
  */
 const RESOLVERS: ReadonlyMap<string, Resolver> = new Map<string, Resolver>([
   ['Blast', conservative(BLAST_VALUES)],
@@ -328,15 +426,38 @@ const RESOLVERS: ReadonlyMap<string, Resolver> = new Map<string, Resolver>([
   [VERSION_KEY, highestVersion],
 ]);
 
-const groupByRecordId = (records: CollectedRecord[]): Map<string, CollectedRecord[]> => {
-  const groups = new Map<string, CollectedRecord[]>();
+/** One inherited record: the sources — oldest first — that all declare it, or the one that does not. */
+interface RecordGroup {
+  recordId?: string;
+  members: CollectedRecord[];
+}
+
+/**
+ * Groups the range's collected records by identity, in the order each
+ * identity is first seen. An unidentified record forms a singleton group of
+ * its own — there is no basis to fold two unidentified records together, only
+ * a shared `Record-Id` says two declarations are the same decision (SPEC
+ * §3.3).
+ */
+const groupRecords = (records: readonly CollectedRecord[]): RecordGroup[] => {
+  const groups: RecordGroup[] = [];
+  const byId = new Map<string, RecordGroup>();
+
   for (const record of records) {
     const recordId = recordIdOf(record);
-    if (recordId === undefined) continue;
-    const members = groups.get(recordId) ?? [];
-    members.push(record);
-    groups.set(recordId, members);
+    if (recordId === undefined) {
+      groups.push({ members: [record] });
+      continue;
+    }
+    let group = byId.get(recordId);
+    if (group === undefined) {
+      group = { recordId, members: [] };
+      byId.set(recordId, group);
+      groups.push(group);
+    }
+    group.members.push(record);
   }
+
   return groups;
 };
 
@@ -345,12 +466,13 @@ const groupByRecordId = (records: CollectedRecord[]): Map<string, CollectedRecor
  * is against the canonical block (SPEC §2.3), so a record merely restated in a
  * follow-up commit is not a conflict — only one whose content changed.
  */
-const findConflicts = (groups: Map<string, CollectedRecord[]>): RecordConflict[] => {
+const findConflicts = (groups: readonly RecordGroup[]): RecordConflict[] => {
   const conflicts: RecordConflict[] = [];
 
-  for (const [recordId, members] of groups) {
+  for (const group of groups) {
+    const { recordId, members } = group;
     const winner = members[members.length - 1];
-    if (members.length < 2 || winner === undefined) continue;
+    if (recordId === undefined || members.length < 2 || winner === undefined) continue;
 
     const kept = serializeTrailers(winner.trailers);
     const dropped = members
@@ -365,49 +487,28 @@ const findConflicts = (groups: Map<string, CollectedRecord[]>): RecordConflict[]
 };
 
 /**
- * Folds the source records into the one record the merge commit will carry.
- *
- * `records` is expected oldest first, as `collectRange` returns it; "latest"
- * everywhere below means "later in that order".
+ * Folds one record's sources into the payload half of its block: every
+ * distinct repeatable trailer, and each single-valued one resolved once by
+ * `RESOLVERS`. `Record-Id` and `Provenance` are excluded here and added by
+ * the caller — the group's identity and the record's own accurate
+ * provenance are not sources to fold, they are what the fold is naming.
  *
  * Dedupe:
- * - **Repeatable keys** accumulate, dropping exact `(key, value)` repeats. That
- *   is the content dedupe for records with no `Record-Id`, and it is also what
- *   happens inside a `Record-Id` group — a record refined across three commits
- *   contributes each distinct `Limit:` once, matching how the stale engine
- *   already resolves a re-declared record (`core/stale.ts`).
- * - **Single-valued keys** collect every candidate and are resolved once, by
- *   `RESOLVERS`. The merged record is one record, so it may carry at most one
- *   of each (SPEC §4) — folding them any other way produces output that fails
- *   `commitlore validate`.
- * - **Conflicts** are reported at `Record-Id` granularity and never resolved
- *   silently: `conflicts` names the commit whose version was kept and the ones
- *   that differed, and the caller prints them.
- *
- * Identity is the one thing a squash can genuinely lose. `Record-Id` is
- * single-valued, so when the range declared two of them neither can be the
- * merge record's identity, and inventing or arbitrarily picking one would
- * re-attribute context to a record that never carried it. The rule is
- * therefore: keep the `Record-Id` when the range declared exactly one, omit it
- * otherwise. Every identity, kept or not, survives in `provenance` and reaches
- * the mirror through `attachToNotes`, so the mapping from a record to where it
- * lived stays auditable even when it stops being declared. SPEC §3.3 wants an
- * identity to be stable across a squash, and this delivers that for the case
- * that matters most — one record refined over a branch — while refusing to fake
- * it for the case a single-record note cannot represent.
- *
- * `Provenance:` is not inherited from the sources: a source's value describes
- * the source. The merge record's own value is `inherited <sha>` naming the
- * newest source commit — the one sha that reaches the whole squashed branch
- * through its ancestry, and the only one the key's grammar has room for.
+ * - **Repeatable keys** accumulate, dropping exact `(key, value)` repeats —
+ *   a record refined across three commits contributes each distinct `Limit:`
+ *   once, matching how the stale engine already resolves a re-declared
+ *   record (`core/stale.ts`).
+ * - **Single-valued keys** collect every candidate across the group's members
+ *   and are resolved once. The merged record is one record, so it may carry
+ *   at most one of each (SPEC §4) — folding them any other way produces
+ *   output that fails `commitlore validate`.
  */
-export const planSquash = (records: CollectedRecord[]): SquashPlan => {
-  const groups = groupByRecordId(records);
+const foldGroup = (members: readonly CollectedRecord[]): Trailer[] => {
   const merged: Trailer[] = [];
   const candidates = new Map<string, Candidate[]>();
   const slots = new Map<string, number>();
 
-  for (const record of records) {
+  for (const record of members) {
     for (const trailer of record.trailers) {
       if (trailer.key === PROVENANCE_KEY || trailer.key === RECORD_ID_KEY) continue;
 
@@ -437,19 +538,51 @@ export const planSquash = (records: CollectedRecord[]): SquashPlan => {
     merged[slot] = { key, value: (RESOLVERS.get(key) ?? latest)(list) };
   }
 
-  const [onlyId, ...otherIds] = [...groups.keys()];
-  if (onlyId !== undefined && otherIds.length === 0) {
-    merged.push({ key: RECORD_ID_KEY, value: onlyId });
-  }
+  return merged;
+};
 
-  const newest = records[records.length - 1];
-  if (newest !== undefined) {
-    merged.push({ key: PROVENANCE_KEY, value: `inherited ${newest.sha}` });
-  }
+/**
+ * Folds the range's collected records into one block per distinct record —
+ * findings 2 and 3 of bug-issue-60, together: identity survives (a group's
+ * `Record-Id`, when it has one, is carried on its own block, never dropped
+ * for ambiguity — there is nothing ambiguous about it once records are not
+ * folded across identities), and `Provenance: inherited <sha>` names that
+ * block's own newest source, correct for every block instead of true for at
+ * most one.
+ *
+ * Blocks are ordered identified groups first (each at the position its
+ * identity first appears in the range), then unidentified singleton records
+ * last, in their own range order. That placement is not cosmetic: SPEC §2.4's
+ * multi-record grammar recovers a *non-final* block only when it declares a
+ * `Record-Id` (there being no other way to tell it apart from an incidental
+ * `Key: value`-shaped body paragraph — see `parseRecordBlocks`). Putting the
+ * unidentified ones last means that when there is exactly one, it is the
+ * message's own last paragraph and needs no identity to be found again — the
+ * ordinary, unconditional way `parseCommitMessage` has always recognized a
+ * trailer block. When there is more than one, only the last survives a later
+ * re-parse of the stored text; the plan computed here still names all of
+ * them (`SquashPlan.blocks`, `warningsFor` in `commands/squash-preserve.ts`).
+ */
+export const planSquash = (records: CollectedRecord[]): SquashPlan => {
+  const groups = groupRecords(records);
+  const identified = groups.filter((group) => group.recordId !== undefined);
+  const unidentified = groups.filter((group) => group.recordId === undefined);
+  const ordered = [...identified, ...unidentified];
+
+  const blocks = ordered.map((group) => {
+    const newest = group.members[group.members.length - 1];
+    const payload = foldGroup(group.members);
+    const block: Trailer[] = [...payload];
+    if (group.recordId !== undefined) block.push({ key: RECORD_ID_KEY, value: group.recordId });
+    if (newest !== undefined) {
+      block.push({ key: PROVENANCE_KEY, value: `inherited ${newest.sha}` });
+    }
+    return block;
+  });
 
   return {
     sources: [...records],
-    merged,
+    blocks,
     conflicts: findConflicts(groups),
     provenance: records.map((record) => {
       const recordId = recordIdOf(record);
@@ -476,13 +609,19 @@ const dropLastParagraph = (message: string): string | null => {
 };
 
 /**
- * Removes the existing trailer block from a draft, leaving the prose.
+ * Removes the trailing record-block paragraphs from a draft, leaving the
+ * prose.
  *
- * The block is the last paragraph (SPEC §2.1 B1/B2), but a draft out of an
- * editor can have `#` comment paragraphs after it, which git skips and a
- * paragraph count does not. Rather than re-deciding where the block is — the
- * mistake B3 exists to forbid — this drops the last paragraph and asks git
- * again, until git reports no trailers.
+ * A draft this module previously wrote may carry several trailing blocks now
+ * (SPEC §2.4), one per inherited record, rather than the single block earlier
+ * versions produced. This drops trailing paragraphs one at a time for as long
+ * as each new last paragraph is still a trailer block — which correctly
+ * strips any number of contiguous ones — and stops at the first paragraph
+ * that is not (`stripTrailerBlock`'s original job: a draft out of an editor
+ * can have `#` comment paragraphs after the real block, which git skips and a
+ * paragraph count does not). Rather than re-deciding where a block ends —
+ * the mistake SPEC §2.1 B3 exists to forbid — this only ever asks git again,
+ * until git reports no trailers for what is currently last.
  */
 const stripTrailerBlock = (message: string): string => {
   let text = message;
@@ -496,64 +635,55 @@ const stripTrailerBlock = (message: string): string => {
 };
 
 /**
- * Rewrites a merge message draft so it carries the inherited record: the prose
- * of `base` with its trailer block replaced by the plan's canonical one.
+ * Rewrites a merge message draft so it carries the inherited records: the
+ * prose of `base` with its trailing record-block paragraphs replaced by the
+ * plan's, one block per paragraph, blank-line separated (SPEC §2.4).
  *
  * Replaced, not appended — running this twice on the same draft has to produce
  * the same message, because a re-run of the Action on an amended PR is ordinary
- * and a second block would leave the first one as prose (B2), where nothing
- * would ever read it again.
+ * and a second set of blocks would leave the first as prose (B2), where
+ * nothing would ever read it again.
  *
- * A plan with no trailers returns `base` untouched. Emptying somebody's merge
+ * A plan with no blocks returns `base` untouched. Emptying somebody's merge
  * message because there was nothing to inherit is not an improvement.
  */
 export const renderMessage = (base: string, plan: SquashPlan): string => {
-  const block = serializeTrailers(plan.merged);
-  if (block === '') return base;
+  const body = plan.blocks
+    .map(serializeTrailers)
+    .filter((block) => block !== '')
+    .join('\n');
+  if (body === '') return base;
 
   const prose = stripTrailerBlock(base).replace(/\n+$/, '');
-  return prose === '' ? block : `${prose}\n\n${block}`;
+  return prose === '' ? body : `${prose}\n\n${body}`;
 };
 
 /**
- * Mirrors the inherited record onto the merge commit (SPEC §1: notes are "the
+ * Mirrors the inherited records onto the merge commit (SPEC §1: notes are "the
  * destination for records inherited across squash merges").
  *
- * The note is the plan's canonical block plus one `X-Inherited-From:` per
- * source record — `<record-id> <sha>` when the source declared an id, `<sha>`
- * when it did not. That is where "which original did this come from" is
- * answered per record: the message can only carry one `Provenance: inherited
- * <sha>` (see `INHERITED_FROM_KEY`), so the message says *that* the record was
- * inherited and the mirror says *from what*. Both halves validate — `X-<Name>`
- * is repeatable and preserved verbatim by the core (SPEC §3.2) — so a merge
- * commit produced here passes `commitlore validate` on both channels.
+ * One note, one block per inherited record (SPEC §2.4, `writeRecordBlocks`) —
+ * the same shape `renderMessage` writes into a commit message, so a consumer
+ * reading either channel recovers the same records with the same identities
+ * and the same per-record provenance. Earlier versions of this function also
+ * wrote `X-Inherited-From:` here to carry per-source provenance the message
+ * channel's single `Provenance:` could not hold; that extension is no longer
+ * needed (see this module's doc comment) and is not written by this version.
  *
- * Refuses to write an empty record: `git notes add` reads an empty body as a
- * deletion, and a plan with nothing in it must not remove a note somebody else
- * put there.
+ * Refuses to write when the plan inherited nothing: `git notes add` reads an
+ * empty body as a deletion, and a plan with no blocks must not remove a note
+ * somebody else put there.
  */
 export const attachToNotes = (
   targetSha: string,
   plan: SquashPlan,
   opts: AttachOptions = {},
 ): void => {
-  const seen = new Set<string>();
-  const inherited: Trailer[] = [];
-
-  for (const entry of plan.provenance) {
-    const value =
-      entry.recordId === undefined ? entry.fromSha : `${entry.recordId} ${entry.fromSha}`;
-    if (seen.has(value)) continue;
-    seen.add(value);
-    inherited.push({ key: INHERITED_FROM_KEY, value });
-  }
-
-  const trailers = [...plan.merged, ...inherited];
-  if (trailers.length === 0) {
+  if (plan.blocks.length === 0) {
     throw new Error(`nothing to attach to ${targetSha}: the plan inherited no records`);
   }
 
-  writeRecord(targetSha, trailers, {
+  writeRecordBlocks(targetSha, plan.blocks, {
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
     ...(opts.force === undefined ? {} : { force: opts.force }),
   });

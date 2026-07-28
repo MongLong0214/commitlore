@@ -18,16 +18,15 @@
  * (T-404): maker and checker stay separate (ADR-0006 ruled out self-checking
  * harvest agents).
  */
-import { readFileSync } from 'node:fs';
 import { validateRecord } from './schema.js';
-import { installedPath } from './paths.js';
+import { readInstalledFile } from './paths.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, KNOWN_KEYS, PROVENANCE_PREFIXES, RECORD_ID_RE, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
- * Resolved relative to this module so it works from `src/` under vitest and
- * from `dist/` after install — both sit one directory below the package root,
- * and `package.json#files` ships `spec/`. Same arrangement as `schema.ts`.
+ * Read relative to this module's own installation, same arrangement as
+ * `schema.ts` — a checkout's `spec/SPEC.md` on disk, or a compiled binary's
+ * embedded copy of it.
  */
-const SPEC_PATH = installedPath('spec', 'SPEC.md');
+const SPEC_ASSET = ['spec', 'SPEC.md'];
 /**
  * The two SPEC §3 tables, in order. Their titles are load-bearing, not
  * decorative: §3.1 is what a record *claims* and therefore what evidence must
@@ -150,7 +149,7 @@ let vocabulary = null;
 /** The vocabulary of SPEC §3, read once per process. */
 export const loadVocabulary = () => {
     if (vocabulary === null)
-        vocabulary = parseVocabulary(readFileSync(SPEC_PATH, 'utf8'));
+        vocabulary = parseVocabulary(readInstalledFile(...SPEC_ASSET));
     return vocabulary;
 };
 /**
@@ -200,6 +199,8 @@ const RULES = [
     '   record — noise costs more than it returns.',
     '6. When unsure, emit less. Everything you emit will be read by an agent that',
     '   cannot check it.',
+    '7. Do not emit Verified. Reading a transcript or diff cannot prove a check ran.',
+    '   Record Verified only from the command or test run that performed the check.',
 ];
 /**
  * A list, not a markdown table. Two value grammars in SPEC §3 contain a literal
@@ -266,7 +267,7 @@ const outputBlock = (entries) => {
  * and diff always produce the same bytes.
  */
 export const buildHarvestPrompt = (input) => {
-    const entries = loadVocabulary();
+    const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
     const diff = input.diff.trim() === '' ? '(no diff)' : input.diff.replace(/\n+$/, '');
     return [
         '# CommitLore harvest',

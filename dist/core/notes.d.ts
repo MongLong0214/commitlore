@@ -18,7 +18,7 @@ export declare const NOTES_REF = "refs/notes/commitlore";
  * `git fetch` does not fetch notes by default, so a fresh clone reads an empty
  * mirror until this is configured — `commitlore doctor --fix` adds it.
  */
-export declare const NOTES_REFSPEC = "+refs/notes/commitlore:refs/notes/commitlore";
+export declare const NOTES_REFSPEC = "+refs/notes/*:refs/notes/*";
 export interface NotesOptions {
     cwd?: string;
 }
@@ -40,6 +40,16 @@ export interface WriteRecordOptions extends NotesOptions {
  */
 export declare const writeRecord: (sha: string, trailers: Trailer[], opts?: WriteRecordOptions) => void;
 /**
+ * Attaches several record blocks to `sha` in one note (SPEC §2.4) — each
+ * block its own canonical trailer paragraph, blank-line separated, so a
+ * `parseRecordBlocks` read (`readRecordBlocks` below, and `core/index-db.ts`)
+ * recovers every one of them individually rather than folding them back into
+ * one flat trailer list. `writeRecord` cannot do this: it calls
+ * `serializeTrailers` once over the whole array, which reorders into SPEC §3
+ * vocabulary order and would scramble two blocks' trailers together.
+ */
+export declare const writeRecordBlocks: (sha: string, blocks: readonly Trailer[][], opts?: WriteRecordOptions) => void;
+/**
  * Reads the record mirrored for `sha`, or `[]` when the object carries no note.
  * An object with no note is not an error — most commits record nothing
  * (SPEC §4).
@@ -48,8 +58,20 @@ export declare const writeRecord: (sha: string, trailers: Trailer[], opts?: Writ
  * the mirror is a second channel for the same record, not a disjoint store.
  * Merging the two sources and dropping duplicates belongs to the query engine
  * (T-204) and the inheritance path (T-302), not here.
+ *
+ * A note carrying several record blocks (SPEC §2.4, `writeRecordBlocks`)
+ * answers here as one flat list — the message's own last paragraph, exactly
+ * as `parseCommitMessage` sees it elsewhere. Callers that need every block
+ * individually want `readRecordBlocks`.
  */
 export declare const readRecord: (sha: string, opts?: NotesOptions) => Trailer[];
+/**
+ * Reads every record block mirrored for `sha` (SPEC §2.4), or `[]` when the
+ * object carries no note. Unlike `readRecord`, a note squash-preserve wrote
+ * with `writeRecordBlocks` comes back as one array per block rather than
+ * folded flat.
+ */
+export declare const readRecordBlocks: (sha: string, opts?: NotesOptions) => Trailer[][];
 /**
  * Every object name that carries a note, in `git notes list` order.
  *

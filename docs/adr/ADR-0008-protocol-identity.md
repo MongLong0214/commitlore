@@ -1,69 +1,69 @@
-# ADR-0008: 프로토콜 정체성 — 이름과 어휘를 자체 설계로 확정
+# ADR-0008: protocol identity — establish the name and vocabulary as an independent design
 
-> ⚠️ **§1(명칭)은 [ADR-0009](ADR-0009-rename-commitlore.md)로 대체됐다.** 프로토콜 명칭은 `Annals`가 아니라 **CommitLore**이며, 패키지·바이너리·저장소는 `commitlore`다.
-> 이 문서에 남은 `Annals` 표기는 결정 이력이므로 의도적으로 보존한다 — 기계 치환하면 무엇이 왜 바뀌었는지가 사라진다.
-> **§2(어휘 재유도)와 그 근거는 그대로 유효하다.** 어휘·enum은 한 글자도 바뀌지 않았고, `Annals-Version:` → `CommitLore-Version:` 하나만 명칭 파생으로 따라 바뀌었다.
+> ⚠️ **§1 (name) was superseded by [ADR-0009](ADR-0009-rename-commitlore.md).** The protocol is named **CommitLore**, not `Annals`, and the package, binary, and repository use `commitlore`.
+> The `Annals` references remaining in this document are deliberately preserved as decision history — mechanical replacement would erase what changed and why.
+> **§2 (vocabulary re-derivation) and its rationale remain valid.** Not one vocabulary term or enum changed; only `Annals-Version:` → `CommitLore-Version:` followed from the name change.
 
-- Status: Accepted (2026-07-26, 오너 결정) · §1 Superseded by ADR-0009 (2026-07-26)
+- Status: Accepted (2026-07-26, owner decision) · §1 Superseded by ADR-0009 (2026-07-26)
 - Owner: CTO
-- Supersedes: 이전 문서에서 쓰이던 잠정 명칭·어휘 일체
+- Supersedes: all provisional names and vocabulary used in earlier documents
 
 ## Context
 
-초기 설계는 선행 자료의 명칭과 trailer 어휘를 그대로 계승한 상태였다. 그 상태로는 프로젝트가 파생물로 읽히고, 어휘 각각이 "왜 이 필드가 존재하는가"에 답하지 못한 채(계승했으니까) 남아 있었다.
+The initial design inherited the name and trailer vocabulary of the preceding material unchanged. That made the project read as a derivative, and each vocabulary term remained unable to answer "why does this field exist?" (because it was inherited).
 
-동시에 우리는 이미 **"죽은 필드 금지"** 원칙을 세워 둔 상태였다: *모든 필드는 그것을 읽고 행동을 바꾸는 소비자 라우트를 최소 1개 가져야 한다.* 이 원칙을 계승 어휘에 적용하면 어휘 자체를 재유도해야 한다는 결론이 나온다 — 계승된 필드 중 일부는 소비자가 없었다.
+At the same time, we had already established the **"no dead fields"** principle: *every field must have at least 1 consumer route that reads it and changes behavior.* Applying this principle to the inherited vocabulary means re-deriving the vocabulary itself — some inherited fields had no consumer.
 
-코드가 한 줄도 작성되지 않은 시점이므로 지금이 가장 저렴한 교체 시점이다.
+Because not one line of code has been written, this is the cheapest point to replace it.
 
 ## Decision
 
-### 1. 프로토콜·도구 명칭: **Annals**
+### 1. Protocol and tool name: **Annals**
 
-`annals` = 당대의 기록자가 후대를 위해 남기는 연대기적 기록. 이 프로젝트의 정의 그 자체다.
-- npm 패키지 `annals`, CLI 바이너리 `annals`, 저장소 `MongLong0214/annals`
-- 지식 단위 명칭은 **record**(기록). 커밋 하나가 record 하나를 남긴다.
+`annals` = chronological records left by contemporary recorders for posterity. The exact definition of this project.
+- npm package `annals`, CLI binary `annals`, repository `MongLong0214/annals`
+- The unit of knowledge is a **record**. One commit leaves one record.
 
-배제한 후보와 이유: `menhir`(OCaml 파서 생성기와 충돌), `rune`·`stele`·`waymark`·`lodestone`(npm 선점), `cairn`(npm 선점), `markstone`·`blazemark`(가용하나 CLI 가독성 열위).
+Rejected candidates and reasons: `menhir` (conflicts with the OCaml parser generator), `rune`·`stele`·`waymark`·`lodestone` (taken on npm), `cairn` (taken on npm), `markstone`·`blazemark` (available but less readable as CLIs).
 
-### 2. 어휘: 소비자 라우트에서 재유도
+### 2. Vocabulary: re-derived from consumer routes
 
-각 필드는 **"어떤 라우트가 이걸 읽고 무엇을 하는가"** 에 답할 수 있을 때만 존재한다. 답하지 못하면 어휘에서 뺀다.
+Each field exists only if it can answer **"which route reads this, and what does it do?"** If it cannot answer, remove it from the vocabulary.
 
-| Trailer | 의미 | 값 문법 | 소비자 라우트 (존재 근거) |
+| Trailer | Meaning | Value grammar | Consumer route (reason to exist) |
 |---|---|---|---|
-| `Limit:` | 결정을 제약한 외부 조건 | 자유 서술 | 경로 주입 · `annals limits` |
-| `Ruled-out:` | 기각된 대안과 이유 | `대안 \| 이유` (파이프 필수) | **`annals guard`** — 재제안 사전 차단 |
-| `Warn:` | 다음 수정자를 향한 경고 | 자유 서술 (폴딩 허용) | 등급 주입 (미검증 시 강등) |
-| `Blast:` | 변경의 영향 반경 | `local \| module \| system` | 승인 게이트 라우팅 |
-| `Undo:` | 되돌리기 비용 | `easy \| costly \| permanent` | 승인 게이트 라우팅 |
-| `Certainty:` | 판단의 확신도 | `firm \| tentative \| guess` | 스테일 스윕 우선순위 (guess부터 재검토) |
-| `Verified:` | 검증한 것과 방법 | 자유 서술 | 커버리지 조회 |
-| `Unverified:` | 알려진 검증 공백 | 자유 서술 | 커버리지 조회 |
-| `Follows:` | 결정 사슬의 선행 record | Record-Id | 컨텍스트 조립 |
-| `Record-Id:` | record의 안정적 신원 | `r-[a-z0-9]{6,}` | 라이프사이클 폴드 |
-| `Supersedes:` | 이전 record 폐기 | Record-Id | 스테일 엔진 |
-| `Expires:` | 유효 종료 시점·조건 | `YYYY-MM-DD` 또는 조건 서술 | 스테일 엔진 |
-| `Evidence:` | 주장→근거 링크 | `path#anchor` 또는 URL | 수확 검증자 (인용 대조) |
-| `Provenance:` | record의 출처 등급 | `authored \| inherited <sha> \| reconstructed` | 신뢰 등급 판정 |
-| `Annals-Version:` | 프로토콜 버전 | semver | 도구 호환성 |
-| `X-*` | 조직 확장 | 자유 | 보존하되 코어 미해석 |
+| `Limit:` | External condition that constrained the decision | Free text | Path injection · `annals limits` |
+| `Ruled-out:` | Rejected alternative and reason | `alternative \| reason` (pipe required) | **`annals guard`** — block re-proposal in advance |
+| `Warn:` | Warning for the next modifier | Free text (folding allowed) | Graded injection (demoted when unverified) |
+| `Blast:` | Change impact radius | `local \| module \| system` | Approval-gate routing |
+| `Undo:` | Cost of reversal | `easy \| costly \| permanent` | Approval-gate routing |
+| `Certainty:` | Confidence in the judgment | `firm \| tentative \| guess` | Stale-sweep priority (review guess first) |
+| `Verified:` | What was verified and how | Free text | Coverage query |
+| `Unverified:` | Known verification gap | Free text | Coverage query |
+| `Follows:` | Preceding record in the decision chain | Record-Id | Context assembly |
+| `Record-Id:` | Stable identity of the record | `r-[a-z0-9]{6,}` | Lifecycle fold |
+| `Supersedes:` | Retires a previous record | Record-Id | Stale engine |
+| `Expires:` | Validity end date or condition | `YYYY-MM-DD` or condition text | Stale engine |
+| `Evidence:` | Claim→evidence link | `path#anchor` or URL | Harvest verifier (citation comparison) |
+| `Provenance:` | Source grade of the record | `authored \| inherited <sha> \| reconstructed` | Trust-grade decision |
+| `Annals-Version:` | Protocol version | semver | Tool compatibility |
+| `X-*` | Organization extension | Free text | Preserve, but core does not interpret |
 
-**설계 결정 3가지:**
-- `Follows:`는 커밋 해시가 아니라 **Record-Id**를 가리킨다 — 해시는 rebase·squash로 바뀌지만 Record-Id는 불변이다(ADR-0004의 워크플로우 생존 원칙과 정합).
-- `Certainty:`는 라우트가 있어서 살아남았다 — 스테일 스윕이 `guess`를 우선 재검토 대상으로 올린다. 라우트를 못 만들었다면 뺐을 것이다.
-- 값 enum은 **행동을 지시하는 단어**로 골랐다. `permanent`는 승인 게이트가 즉시 이해하지만, 추상적 등급어는 매번 해석이 필요하다.
+**3 design decisions:**
+- `Follows:` points to a **Record-Id**, not a commit hash — hashes change through rebase and squash, but Record-Id is immutable (consistent with ADR-0004's workflow-survival principle).
+- `Certainty:` survived because it has a route — the stale sweep moves `guess` records to the front of the review queue. If we could not create a route, we would have removed it.
+- Value enums use **words that direct behavior**. An approval gate understands `permanent` immediately, while abstract grade words require interpretation every time.
 
 ## Rejected
 
-- **선행 자료의 명칭·어휘 계승 유지** | 파생물로 읽히고, 계승된 필드가 "왜 존재하는가"에 답하지 못한다. 무엇보다 우리 자신의 "죽은 필드 금지" 원칙을 어휘 자체가 위반하고 있었다
-- **이름만 바꾸고 어휘는 유지** | 절반의 조치. 어휘가 프로토콜의 본체이므로 이름만 바꾸면 실질은 그대로다
-- **`Certainty:` 삭제** | 라우트(스테일 우선순위)를 실제로 설계할 수 있었으므로 원칙상 유지가 옳다. 라우트 없이 "유용해 보여서" 남기는 것만 금지된다
-- **구현 후 교체** | 27개 티켓 구현 후에는 스펙·픽스처·인덱스·훅·문서 전체를 다시 만져야 한다. 코드 0줄인 지금이 유일하게 저렴한 시점
+- **Keep the preceding material's name and vocabulary** | reads as a derivative, and inherited fields cannot answer "why do I exist?" Above all, the vocabulary itself violated our own "no dead fields" principle
+- **Change only the name and keep the vocabulary** | half a measure. The vocabulary is the substance of the protocol, so changing only the name leaves the substance unchanged
+- **Delete `Certainty:`** | we could design a real route (stale priority), so the principle says to keep it. What is forbidden is retaining a field merely because it "looks useful" without a route
+- **Replace after implementation** | after implementing 27 tickets, we would have to touch the spec, fixtures, index, hooks, and every document again. With 0 lines of code, now is the only cheap moment
 
 ## Consequences
 
-- 모든 문서(README 4개 언어, ADR, PRD, 티켓)와 GitHub 이슈 34건이 새 명칭·어휘로 갱신된다.
-- 진행 중이던 스펙·파서·하니스 작업은 구어휘 기준이므로 폐기하고 재착수한다(코드 0줄 상태라 손실은 시간뿐).
-- 적합성 스위트의 **거부 픽스처**에는 계승 어휘가 아니라 *우리 enum을 벗어난 값*이 들어간다 — 예: `Blast: wide`, `Undo: clean`, `Certainty: high`.
-- 이 프로토콜은 선행 자료와 명칭·어휘·값 체계가 모두 다르므로, 독립 설계로서 서술한다.
+- Every document (README in 4 languages, ADRs, PRDs, tickets) and 34 GitHub issues is updated with the new name and vocabulary.
+- The in-progress spec, parser, and harness work uses the old vocabulary, so discard it and restart (with 0 lines of code, the only loss is time).
+- The conformance suite's **rejection fixtures** contain *values outside our enums*, not inherited vocabulary — for example: `Blast: wide`, `Undo: clean`, `Certainty: high`.
+- This protocol differs from the preceding material in name, vocabulary, and value system, so describe it as an independent design.

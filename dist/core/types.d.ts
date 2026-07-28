@@ -4,18 +4,10 @@ export declare const KNOWN_KEYS: readonly ["Limit", "Ruled-out", "Warn", "Blast"
 export type KnownKey = (typeof KNOWN_KEYS)[number];
 /** Keys that may appear at most once per record (SPEC §3, §6 cardinality). */
 export declare const SINGLE_VALUED: ReadonlySet<string>;
-/**
- * Keys carried for the machinery, not for the reader — identity, supersession
- * and provenance have done their work before a record reaches a consumer route.
- *
- * Shared rather than private to `inject.ts`, where it was written, because
- * "what is payload" has to mean the same thing in every route that withholds a
- * payload. `inject` strips these to save budget; the MCP server strips
- * everything *but* these when a record grades `blocked`, so that the fact of the
- * record survives and its content does not. Two definitions would let a key be
- * bookkeeping on one route and quotable attack text on the other.
- */
-export declare const BOOKKEEPING_KEYS: ReadonlySet<string>;
+/** Keys whose validated values cannot carry prose. */
+export declare const STRUCTURAL_TRAILER_KEYS: ReadonlySet<string>;
+/** Keys omitted from the injection projection because they do not repay their token cost. */
+export declare const INJECT_OMITTED_KEYS: ReadonlySet<string>;
 export declare const BLAST_VALUES: readonly ["local", "module", "system"];
 export declare const UNDO_VALUES: readonly ["easy", "costly", "permanent"];
 export declare const CERTAINTY_VALUES: readonly ["firm", "tentative", "guess"];
@@ -69,7 +61,7 @@ export interface Record {
 export interface Violation {
     key: string;
     value: string;
-    rule: 'unknown-key' | 'enum' | 'format' | 'cardinality' | 'dangling-ref';
+    rule: 'unknown-key' | 'enum' | 'format' | 'cardinality' | 'dangling-ref' | 'duplicate-id';
     got: string;
     want: string;
 }

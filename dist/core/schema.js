@@ -6,9 +6,8 @@
  * repair loop consumes. AJV's own messages never escape this file — they name
  * JSON Schema keywords, not protocol rules.
  */
-import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import { installedPath } from './paths.js';
+import { readInstalledFile } from './paths.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, EXTENSION_KEY_RE, KNOWN_KEYS, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
  * Static import so a bundler can follow it.
@@ -27,11 +26,12 @@ import { BLAST_VALUES, CERTAINTY_VALUES, EXTENSION_KEY_RE, KNOWN_KEYS, SINGLE_VA
 import ajvFormats from "ajv-formats";
 const addFormats = ajvFormats.default;
 /**
- * Resolved relative to this module so it works from `src/` under vitest and
- * from `dist/` after install — both sit one directory below the package root,
- * and `package.json#files` ships `spec/`.
+ * Read relative to this module's own installation so it works from `src/`
+ * under vitest, from `dist/` after a checkout install, and from a compiled
+ * binary's embedded assets (`core/paths.ts`) — all three ship `spec/schema/`
+ * one way or another.
  */
-const SCHEMA_PATH = installedPath('spec', 'schema', 'record.schema.json');
+const SCHEMA_ASSET = ['spec', 'schema', 'record.schema.json'];
 /** `want` text for the three closed enums (SPEC §3.1). */
 const ENUM_WANT = {
     Blast: BLAST_VALUES.join('|'),
@@ -53,7 +53,7 @@ const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';
 let compiled = null;
 const getValidator = () => {
     if (compiled === null) {
-        const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
+        const schema = JSON.parse(readInstalledFile(...SCHEMA_ASSET));
         const ajv = new Ajv2020({ allErrors: true, strict: true });
         addFormats(ajv);
         compiled = ajv.compile(schema);
@@ -182,10 +182,9 @@ const cardinalityViolations = (trailers) => {
  * is well-formed (SPEC §4).
  *
  * Scope: this function sees one record and nothing else. It therefore never
- * reports `dangling-ref`, which asks whether a `Follows:`/`Supersedes:` target
- * exists elsewhere in history — a cross-record question owned by the stale
- * engine (T-205). A syntactically valid `Supersedes:` pointing at nothing is
- * clean here by design.
+ * reports the reference-class `dangling-ref` or `duplicate-id` violations.
+ * A syntactically valid `Supersedes:` pointing at nothing is clean here by
+ * design.
  */
 export const validateRecord = (trailers) => [...schemaViolations(trailers), ...cardinalityViolations(trailers)]
     .sort((a, b) => a.index - b.index)

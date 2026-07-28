@@ -1,39 +1,61 @@
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：提交 4842356 中的记录 r-2b58d4 被分为 [claim]，guard 返回 MATCH">
+</p>
+
+<p align="center">
+  <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 或更高版本" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <strong>简体中文</strong>
+</p>
+
 # CommitLore
 
-[English](README.md) | [한국어](README.ko.md) | **简体中文** | [日本語](README.ja.md)
+CommitLore 是一套把决策背景保存在 Git 提交 trailer 和 `refs/notes/commitlore` 中的协议。
+协议是第一位的；CLI 负责验证和路由这些记录，并把它们提供给 shell、hook 和 MCP 客户端。
+目前没有证据表明它能让编程智能体表现得更好。
 
-> **把 git commit trailer 变成 AI 编码智能体的组织记忆。**
-> 永久免费。无服务器、无数据库、无付费计划 —— **git 就是唯一事实来源（SSOT）。**
+## 安装
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1.0_已发布-brightgreen.svg)](https://github.com/MongLong0214/commitlore/milestones)
-[![Protocol](https://img.shields.io/badge/protocol-CommitLore_v2-8A2BE2.svg)](docs/adr/ADR-0001-scope-v010.md)
+安装一次，每个仓库再各一次——不会压缩成一个命令,这是刻意的:下面的 hook 和索引是每个仓库自己的状态,面向机器全局的安装无法替一个它还没见过的仓库预先设置好这些（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
 
-> ⚠️ **状态**：协议本身**今天**就能用纯 git 使用（见[立即使用](#立即使用纯-git)）。
->
-> **v0.1.0 已发布。** CLI、MCP 服务器、钩子和 GitHub Actions 均已实现，并在 `main` 上通过 CI。分发方式只有 git clone —— 没有注册表、没有账号、没有发布步骤（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
->
-> clone 后无需安装也无需构建即可运行：`dist/commitlore.mjs` 是打包产物，`validate`、`context`、`guard` 和 MCP 服务器在裸检出下都能工作。**只有 SQLite 索引是例外** —— 它需要打包产物未携带的 `better-sqlite3`，所以只 clone 的状态下会扫描历史来作答（`--no-index`）。[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) 将消除这个例外。
->
-> 本 README 的每个论断要么现在可复现，要么明确标注为计划，数字只会来自 [CommitLoreBench](docs/prd/PRD-F7-commitlorebench.md) 日志。本仓库在 CI 中对自己的历史强制执行自己的协议 —— 见[狗粮是强制的](CONTRIBUTING.md#dogfooding-is-enforced-not-aspirational)。
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
 
----
+为这台机器下载一个经过 checksum 校验的 release 二进制文件——不需要 Node（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）,并把 `commitlore` 命令放上 `PATH`。接着检测这台机器上装了哪些编程智能体——Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。对检测到的每一个,都会把 CommitLore 的 MCP 服务器(Claude Code 则是插件)接进去。它不会在未告知的情况下覆盖已有配置,也不会为未安装的智能体写配置,并会原样打印出接了什么、跳过了什么。
 
-## 问题：你的智能体是一位每个会话都会离职的资深工程师
+然后,在每个想启用 CommitLore 的仓库里:
 
-如今大量提交由 AI 智能体完成。工作中的智能体掌握着完整的决策上下文 —— 它发现的约束、尝试后否决的替代方案、有意未测试的部分。然后会话结束，上下文窗口消亡，**只有 diff 幸存**。
+```bash
+commitlore init
+```
 
-下一个会话（或下一个智能体、下一位同事）会重新推导一切 —— 并且经常**重新提出三周前刚被否决的那个方案**，因为没有任何地方记录过它被否决，以及为什么。
+为该仓库安装 commit-msg 校验 hook,构建本地记录索引。它会报告做了什么,并且可以放心重复运行——已经配置好的仓库只会如实报告,不会做任何改动。
 
-四十年来，这被称为*设计依据捕获问题（design rationale capture problem）*，始终无解，原因只有一个：人类不愿支付记录依据的成本。**智能体改变了这个经济学。** 提交时，依据已经完整存在于智能体的上下文中，序列化只需几百个 token。CommitLore 就是回答"把它放在哪里"的协议。
+只是读取协议的话根本不需要安装:每条记录都是普通的 git trailer(见[下文](#一条记录))。不想把脚本 pipe 进 `sh`,而是想用 Node clone、从源码构建,或者手动校验下载?[从 clone 安装](#从-clone-安装)这三种都写了。
 
-## 三行核心
+## 测量记录
 
-1. **捕获是免费的** —— 智能体本来就知道"为什么"，它把结构化的 *git trailer* 写进本来就要创建的提交里。无法引用证据的 trailer 会被验证器丢弃。
-2. **消费是 push 而非 pull** —— 当智能体触碰某个文件时，*该路径*的活跃约束与历史否决会被自动注入。没有人需要记得去查询。
-3. **git 是唯一事实来源** —— 知识原子存在于提交信息和 `refs/notes/commitlore` 中。其余一切（索引、面板）都是可丢弃的派生缓存。clone 会带走写进提交信息的每一条记录，**但不会带走 notes 镜像** —— `git fetch` 默认不抓取 notes。`commitlore doctor --fix` 会加上 refspec；在加上之前，查询会明说这一点，而不是报告一个空答案。
+<!-- BENCH:WITHDRAWN -->
 
-## 长什么样
+已注册的行为测量没有显示 CommitLore 会改变智能体行为。后续一次运行因运行期间二进制文件发生变化而作废。更根本的问题是，现有数据集没有记录足以证明每一行由哪个构建生成的 provenance，因此 [`bench/report.ts`](bench/report.ts) 拒绝汇总它们。
+
+此前发布的所有基准数字都已撤回。带日期的判定文档继续作为当时的记录保存，而不是效果声明：[`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)，以及[作废运行记录](bench/PREREGISTRATION.md#15-m3-is-void-the-binary-under-test-changed-while-it-ran)。只有当数据集能够标明其运行的 harness commit 和 bundle 时，数字才会恢复。详见 [`bench/README.md`](bench/README.md)。
+
+## 仓库确实能证明什么
+
+- **记录能经受常见 Git 工作流。** 提交 trailer 和 notes mirror 在 [rebase 与 squash](test/squash.test.ts)、[历史重写与远程传递](test/notes.test.ts)，以及[单步和多步重命名](test/follow.test.ts)中都有测试。
+- **信任在每条路由上的含义一致。** 查询输出、CLI 注入、编辑 hook、MCP 工具和 guard 都使用同一套 `directive | claim | blocked` 分级。路由测试位于 [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts) 和 [`guard.test.ts`](test/guard.test.ts)。
+- **命中内置注入扫描器的记录不会作为正文送给模型。** 任一自由文本 trailer 命中时，整条记录都会被分为 `blocked`；模型可读路由只说明内容已被隐藏，不会引用其正文。这个确定性词法过滤器的结果不代表真实环境中的检测率；[由模式作者编写、独立编写及正常文本三个语料集](spec/fixtures/injection/README.md)分别报告。CLI 与 hook 由 [`inject.test.ts`](test/inject.test.ts) 验证，MCP 的一致结果由 [`mcp.test.ts`](test/mcp.test.ts) 验证。
+- **未知不等于为空。** 对于可读但没有记录的仓库，guard 以 `0` 退出。Git 损坏时报告 `history: unavailable`；notes mirror 未拉取时报告 `notes: unfetched`。两种不完整检查都以 `3` 退出。该契约固定在 [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts) 和 [`RELEASE-GATE`](docs/RELEASE-GATE.md) 中。
+
+## 一条记录
+
+这个示例也是 conformance fixture。Git 的 trailer parser 必须在四种语言的 README 中逐字节读出相同内容。
 
 ```text
 Prevent silent session drops during long-running operations
@@ -56,150 +78,149 @@ Unverified: Auth service cold-start > 500ms behavior
 CommitLore-Version: 2.0.0
 ```
 
-这是一个普通的 git 提交。书写无需任何工具，git 自身即可解析 —— trailer 是 git 原生特性（`Signed-off-by`、Gerrit 的 `Change-Id`、Conventional Commits 的 footer 用的是同一机制）。
+### 协议词汇
 
-### Protocol v2 词汇表
+| Trailer | 含义 |
+|---|---|
+| `Limit:` | 约束决策的外部条件 |
+| `Record-Id:` | 提交 hash 被重写后仍保持稳定的标识 |
+| `Ruled-out:` | `备选方案 \| 未采用原因` |
+| `Certainty:` | `firm` \| `tentative` \| `guess` |
+| `Blast:` | `local` \| `module` \| `system` |
+| `Undo:` | `easy` \| `costly` \| `permanent` |
+| `Warn:` | 给未来修改者的警告；传递前会经过信任分级 |
+| `Verified:` / `Unverified:` | 已验证和未验证的事项 |
+| `Follows:` / `Supersedes:` | 决策链和 lifecycle 链接 |
+| `Expires:` | 约束结束的日期或条件 |
+| `Evidence:` | 支持 claim 的路径、anchor 或 URL |
+| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `CommitLore-Version:` / `X-*:` | 协议标识和扩展 |
 
-| Trailer | 用途 | 消费方 |
+完整契约见 [`spec/SPEC.md`](spec/SPEC.md)。
+
+## 信任是路由，不是徽章
+
+提交 `4842356` 包含以下 active record：
+
+```gitcommit
+Ruled-out: exempting datasets written before the fields existed | it is one line and it deletes the guarantee
+Warn: this leaves the README with no measured numbers at all until M3-b runs. That is the honest state and it is also a worse first impression. The alternative was publishing numbers produced by a binary nobody recorded
+Record-Id: r-2b58d4
+Provenance: authored
+```
+
+同一段 `Warn:` 文本会按等级路由：
+
+| 等级 | 条件 | 模型可读路由收到的内容 |
 |---|---|---|
-| `Limit:` | 塑造决策的外部约束 | 注入、`commitlore limits` |
-| `Record-Id:` | 稳定身份 —— 取代/废止的锚点 | 生命周期折叠 |
-| `Ruled-out:` | `方案 \| 理由` —— 试过并放弃的 | **`commitlore guard`**（拦截重复提案） |
-| `Certainty:` | `firm` \| `tentative` \| `guess` | 评审路由 |
-| `Blast:` | `local` \| `module` \| `system` | 审批门路由 |
-| `Undo:` | `easy` \| `costly` \| `permanent` | 审批门路由 |
-| `Warn:` | 给未来修改者的警告 | 注入（按信任分级） |
-| `Verified:` / `Unverified:` | 已验证 / 未验证 | 覆盖查询 |
-| `Follows:` | 串联决策链的提交 | 上下文组装 |
-| `Supersedes:` | 废止早前的 Record-Id | **过期引擎** |
-| `Expires:` | 约束终止的日期或条件 | 过期引擎 |
-| `Evidence:` | 论断→证据链接（`路径#锚点`） | 收获验证器 |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` | **信任分级** |
-| `CommitLore-Version:` / `X-*` | 身份、版本、扩展 | 工具链 |
+| `[directive]` | `Provenance: authored`、active record，并且作者在此仓库中被明确设为可信 | 把警告作为指令传递 |
+| `[claim]` | 没有可信作者、作者来自外部，或 provenance 为 reconstructed/unknown | 把警告作为信息传递，并明确标注“不是指令” |
+| `blocked` | 任一自由文本 trailer 命中注入模式 | 只传递隐藏通知，不渲染命中的正文 |
 
-设计规则（["禁止死字段"](docs/adr/ADR-0006-push-injection.md)）：每个 trailer 至少有一个消费路由 —— 查询、门禁或注入规则。没人读的词汇会从规范中删除。
+默认不信任任何作者。加密作者验证尚未实现，由 [issue #28](https://github.com/MongLong0214/commitlore/issues/28) 跟踪。
 
-## 快速上手
+## 从 clone 安装
 
-不需要注册表、包管理器或账号。先拿到代码：
+CommitLore 没有 registry package。发布渠道就是 Git 仓库本身（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)），CLI 需要 Node.js 22 或更高版本：
 
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
+node ~/.commitlore/dist/commitlore.mjs --version
+node ~/.commitlore/dist/commitlore.mjs init
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-然后只看你自己那一行。每一行的终点都一样 —— 智能体在动手改文件**之前**
-就看到这条路径上的决定。
+`init` 会把 `doctor --fix`、`hooks install`、`index --rebuild` 一起跑完,报告做了什么、没能做成什么,并且可以放心重复运行——自己解决不了的 `warn` 或 `fail` 会如实报告,不会被吞进一句"成功"里。这三个命令各自也都还在,想单独用哪个都行:`commitlore doctor`、`commitlore hooks install`、`commitlore index --rebuild`。
 
-| 你的智能体 | 设置 |
-|---|---|
-| **所有 MCP 客户端** —— Codex、Gemini CLI、Cursor、Cline、Windsurf、Zed、Qwen Coder、Kimi… | 添加下面的服务器配置 |
-| **Claude Code** | `/plugin marketplace add MongLong0214/commitlore` → `/plugin install commitlore` |
-| **任何能执行 shell 的智能体** | 把 [`AGENTS.md`](AGENTS.md) 复制到你的仓库 |
-| **完全不用智能体** | 纯 `git log` —— 见[下文](#立即使用纯-git) |
+仓库中提交的 bundle 无需构建、也无需 `node_modules` 即可运行。SQLite 索引使用 Node 自带的 `node:sqlite`（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)），因此仅靠 clone 就能构建并查询索引——不需要原生模块，不需要编译器，也不需要 `npm install`。想跳过索引、只用 Git 回答时，仍可以使用 `--no-index`。
 
-**MCP 服务器配置** —— 任何讲 MCP 的客户端里都是同样三个工具
-(`commitlore_query`、`commitlore_stale`、`commitlore_guard`)：
+### 无需 Node，作为编译好的二进制运行
+
+`git clone` + Node 运行时仍是正式的安装方式。对于 PATH 中完全没有 Node 的机器，可以从同一个 clone 构建单个编译后的可执行文件（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）：
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` 在运行时不需要 Node、不需要解释器，也不需要 `node_modules`——`doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` 都能在 `PATH=/usr/bin:/bin` 下运行。它不会被提交（体积大、与平台/架构相关，且由 CI 在每次 push 时重新构建而不是 diff）；`commitlore hooks install` 和插件的 `PreToolUse` hook 一旦构建完成都会自动解析到它。
+
+### 安装预构建的发布二进制文件
+
+对于既没有 Node 也没有 clone 的机器：每个 `vX.Y.Z` 标签都会为每个平台构建一个二进制文件（`.github/workflows/release.yml`），附带覆盖全部文件的 `SHA256SUMS`，并通过 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) 为每个资产生成证明（基于 Sigstore，可公开验证，本项目无需管理任何密钥）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.2.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
+
+二进制文件装好之后，同一个脚本会检测这台机器上装了哪些编程智能体（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode），给检测到的每一个接上 CommitLore 的 MCP 服务器（Claude Code 则是插件），并打印出接了什么、跳过了什么。它不会在未告知的情况下覆盖已有配置，也不会为未安装的智能体写配置。
+
+传给 shell 执行不应是唯一有文档记录的方式。手动完成同样的安装：
+
+```bash
+version=0.2.0   # 或者: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # 或 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 解压前先验证。结果必须是 "OK"，否则到此为止——不要运行未通过校验的二进制文件。
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
+## GitHub Actions
+
+运行 query、guard 或 inject 命令的 job 必须获取完整 history。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
+
+在 MCP 客户端中注册同一 clone 的入口：
 
 ```json
 {
   "mcpServers": {
     "commitlore": {
       "command": "node",
-      "args": ["~/.commitlore/dist/commitlore.mjs", "mcp"]
+      "args": ["/absolute/path/to/commitlore/dist/commitlore.mjs", "mcp"]
     }
   }
 }
 ```
 
-安装到此为止。智能体在动手改文件前会读取这条路径已经做过的决定；一旦提出被否决过
-的方案，`guard` 会告诉它。
+`install.sh` 会为这台机器上已经装好的每个受支持客户端（Codex、Gemini CLI、Cursor、Windsurf、opencode）自动写入等价的这段配置——它没检测到的客户端，或者 CI 环境，就照抄这段。
 
-**记录就写成普通的提交 trailer** —— 就是上面的例子，没有别的要学。
-
-没有 MCP 客户端时，用命令行拿到同样的答案：
+读取协议并不需要 CLI：
 
 ```bash
-commitlore context src/auth/                     # 这条路径决定过什么
-commitlore guard --proposal "换成 RabbitMQ"       # 已被否决？以非零状态退出
-```
-
-**诚实地说说预期。** 记录能挺过 rebase、squash 与重命名，在大型历史上依然很快
-（10 万次提交下 p50 1.86ms）。**尚未被证明的**是它能在多大程度上改变智能体的行为
-。此前发布的基准测试结果因运行时没有记录 provenance，已在[下文](#测量结果)撤回。
-
-## 立即使用（纯 git）
-
-协议零工具依赖。在提交里写 trailer（或交给智能体的指令去写），然后用 git 本身查询：
-
-```bash
-# 提取约束值，机器可读 —— git 原生 trailer 解析器
-git log --format='%h %(trailers:key=Limit,valueonly,separator=%x3B)'
-
-# 解析某个提交的完整 trailer 块
-git log -1 --format=%B <sha> | git interpret-trailers --parse
-
-# 涉及某路径的约束（跟踪重命名）
+git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
 git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
-> 注意：用 `%(trailers:...)`，别用 `--grep`。文本 grep 会误匹配正文散文，且在多行折叠时失效 —— 我们[复现了这个失败模式](docs/tickets/F2-core-cli.md)，CLI 存在的意义之一就是让它不可能发生。
+应使用 Git 的 trailer parser，而不是文本搜索；正文中的 `Key:` 不一定属于 trailer block。
 
-## v0.1.0 交付内容（2026-08-23）
+## 尚未实现
 
-| 层 | 交付物 | 里程碑 |
-|---|---|---|
-| **L0 协议** | `SPEC.md`、JSON Schema、一致性夹具、路由契约测试 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) |
-| **L1 核心 CLI** | `commitlore validate / context / limits / ruled-out / warnings / stale / index / doctor` —— SQLite 增量索引、`--no-index` 回退、10 万提交 p50 < 100ms 目标 | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
-| **L1 存续** | `commitlore squash-preserve`（squash 合并继承）、`refs/notes/commitlore` 镜像（rebase 存活）、默认 `--follow` | [M2](https://github.com/MongLong0214/commitlore/milestone/2) |
-| **L2 智能体织物** | `commitlore mcp`（MCP 服务器）、自动注入钩子（按路径、限预算、确定性）、transcript 收获 + **证据校验器**、`commitlore guard`、洁净室 skills | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
-| **L3 信任** | provenance × lifecycle 分级、**Warn 降级**（未验证指令只渲染为*主张*，绝不作为指令）、注入启发式、secret guard | [M3](https://github.com/MongLong0214/commitlore/milestone/3) |
-| **L4 组织** | GitHub Actions：PR lint + 活跃约束评论、squash 继承自动化 —— 跑在*你自己的* CI 上，零外部调用 | [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
-| **L5 CommitLoreBench** | 重复提案率（CommitLore 开/关）、噪声消融、每个被接受原子的成本 —— README 所有数字均可从日志再生 | [M1](https://github.com/MongLong0214/commitlore/milestone/1) / [M4](https://github.com/MongLong0214/commitlore/milestone/4) |
-
-完整计划：[ADR](docs/adr/) · [PRD](docs/prd/) · [票据规格](docs/tickets/TICKETS.md) · [Issues](https://github.com/MongLong0214/commitlore/issues)
-
-## 测量结果
-
-<!-- BENCH:WITHDRAWN -->
-
-这些基准数字现已撤回。生成这些数字的运行没有记录所执行的提交或 `dist/` 摘要，因此仓库中目前没有任何数据集能够证明其每一行由哪个二进制文件生成。M3 因此被直接判为无效（§15），并正以 M3-b 重新运行。判定文档继续保留，作为当时所得结论的带日期记录：[`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[`ROUTE-GAP.md`](bench/ROUTE-GAP.md)、[`GUARD-CANNOT-BLOCK.md`](bench/GUARD-CANNOT-BLOCK.md)、[`DETECTOR-DEFECT.md`](bench/DETECTOR-DEFECT.md)。只有在存在可证明 provenance 的数据集时才恢复数字，在此之前不会恢复。
-
-## 为什么不直接用……
-
-| 替代方案 | 为什么不够 |
-|---|---|
-| **ADR / Wiki / Notion** | 独立文件会与代码脱节并腐烂。trailer 与 diff 同处一个提交对象 —— 脱同步在结构上不可能，`git clone` 顺带携带。 |
-| **对 Slack/文档做 RAG** | 在低信号产物上做读取时搜索。CommitLore 在写入时*生成*高信号知识，并绑定到它所解释的代码上。 |
-| **智能体记忆框架**（向量库） | 无策展的情景记忆经实测会*损害* SE 智能体（噪声）。CommitLore 原子是类型化、证据校验、路径限定、生命周期管理的 —— 每一条都直接回应已发表的失败模式。 |
-| **静态上下文文件**（CLAUDE.md / AGENTS.md） | 全局倾倒，实证结果参差。CommitLore 按*路径*、按*等级*、只注入*活跃*内容，且有 token 预算。 |
-| **知识库 SaaS** | 组织的决策史不应住在别人的数据库里。这里没有会宕的服务器、没有可取消的订阅 —— 仓库本身就是数据库。 |
-
-## 安全模型（诚实版）
-
-提交信息会成为智能体的指令通道 —— 这意味着它也是注入面。v0.1 交付诚实的最小防御：**未验证的 `Warn:` 在所有注入与查询输出中降级为"主张"**（外部贡献一律降级），注入模式启发式隔离恶意原子，secret guard 阻止凭据被永久刻入。密码学签名（sigstore）[已在计划中](https://github.com/MongLong0214/commitlore/issues/28)，分级模型的设计保证签名接入时不破坏消费者。
-
-## 设计原则
-
-- **用户成本为零，永远。** MIT，无付费层、无遥测、无服务器。依赖 LLM 的功能（收获、backfill）只在你已付费的智能体会话内以 opt-in 方式运行。核心路径 —— parse、query、inject、guard —— 是确定性的、与 LLM 无关。
-- **无证据，不成原子。** 收获验证器丢弃任何无法引用 transcript 或 diff 的 trailer。宁缺毋假。
-- **工作流不容谈判。** squash、rebase、重命名 —— 知识必须在你的工作流中存活，而不是让工作流迁就工具。
-- **要么数字，要么沉默。** 本 README 只引用可从 `bench/results/` 复现的测量值。
-
-## FAQ
-
-**真的免费吗？** 是 —— 全部、永久、MIT。不存在也不计划云版本。可持续性来自标准被采纳，而非销售（[ADR](docs/adr/ADR-0001-scope-v010.md)）。
-
-**支持哪些智能体？** 任何能执行 shell 命令的东西今天就能读这个协议。v0.1.0 集成目标：Claude Code（钩子+skills），以及通过 `commitlore mcp` 的一切支持 MCP 的智能体。提交格式与所有会写提交的智能体兼容 —— 包括人类。
-
-**我们全用 squash 合并，trailer 不就没了？** 默认情况下会 —— 我们亲自复现过。所以才有 `commitlore squash-preserve` + notes 镜像 + GitHub Action（[ADR-0004](docs/adr/ADR-0004-workflow-survival.md)）。
-
-**超大仓库呢？** 索引是 `.git/commitlore/` 下的增量 SQLite 缓存，一条命令重建，永不提交。目标：10 万提交路径查询 p50 < 100ms —— 在 CI 中测量，不是口头承诺。
-
-**能和 Conventional Commits 一起用吗？** 可以。CommitLore trailer 就是 git footer，与 Conventional Commits 的 `BREAKING CHANGE` 使用同一机制。保留 `feat:` / `fix:` 标题行，在正文下方追加 trailer 即可，commitlint 与 semantic-release 照常工作。
+- 加密验证作者身份：[#28](https://github.com/MongLong0214/commitlore/issues/28)
+- 报告整个仓库的 record coverage：[#32](https://github.com/MongLong0214/commitlore/issues/32)
+- 把记录 anchor 到 symbol 而不是 path：[#33](https://github.com/MongLong0214/commitlore/issues/33)
+- 交互式 commit builder 和自动 expiry 提醒：[#34](https://github.com/MongLong0214/commitlore/issues/34)
+- 用有效 benchmark 证明 guard 对智能体行为的影响：[#37](https://github.com/MongLong0214/commitlore/issues/37)
 
 ## 参与贡献
 
-规范（F1）最先落地 —— 一致性套件即契约，欢迎并可验证替代实现。从 [good first issue](https://github.com/MongLong0214/commitlore/issues) 开始，"为什么"请读 [ADR](docs/adr/)。本仓库的历史本身就在吃自己的狗粮：在这里 `git log --format='%h %(trailers:key=Ruled-out,valueonly)'` 真的能用。
+请先阅读 [spec](spec/SPEC.md)、[ADR](docs/adr/) 和 [`CONTRIBUTING.md`](CONTRIBUTING.md)。本仓库会记录自身决策；修改文件前请运行 `commitlore context <path>`。
 
 ## 许可证
 

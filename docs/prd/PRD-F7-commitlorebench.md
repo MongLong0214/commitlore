@@ -1,62 +1,62 @@
-# PRD F7 — CommitLoreBench (재제안율 · 어블레이션 lite · CPAA)
+# PRD F7 — CommitLoreBench (re-proposal rate · ablation lite · CPAA)
 
-- Milestone: M1 골격+첫 측정 (08-02) → M4 어블레이션·리포트 (08-23) · ADR: 0007
+- Milestone: M1 skeleton+first measurement (08-02) → M4 ablation+report (08-23) · ADR: 0007
 
-## 목표
-효용 가설을 4주 안에 실측한다. 이 기능이 실패하면 프로젝트 방향을 바꾼다 — 그래서 가장 먼저 만든다.
+## Goal
+Measure the utility hypothesis within 4 weeks. If this feature fails, change the project's direction — that is why it comes first.
 
-## 사용자 스토리
-- 오너로서, M1 주말에 "CommitLore on/off 재제안율 유의차" 첫 수치를 본다.
-- 릴리스 독자로서, README의 수치가 전부 재현 가능한 실측임을 하니스 로그로 확인할 수 있다.
+## User stories
+- As the owner, I see the first "significant difference in CommitLore on/off re-proposal rate" number at the end of M1.
+- As a release reader, I can confirm from harness logs that every number in the README is a reproducible measurement.
 
-## 요구사항
-1. 하니스: 과제 시퀀스 러너(CommitLore on/off 두 조건), 세션 간 상태 격리, 결과 JSONL.
-2. 시나리오: "기각 이력이 있는 결정 지점 재조우" 과제 ≥ 10개 (자체 저장소 + 공개 저장소 1곳 포팅).
-3. 지표: 재제안율(필수), 제약위반율·수렴시간(계측만), CPAA(수확 비용/수용 기록).
-4. 어블레이션 lite(M4): 스코프 제거 / 등급 제거 / 라이프사이클 제거 3조건.
-5. 이중 정지: 조건당 시도 상한 + 토큰 예산 캡.
+## Requirements
+1. Harness: task-sequence runner (two conditions, CommitLore on/off), state isolation between sessions, result JSONL.
+2. Scenarios: ≥ 10 tasks that "revisit a decision point with a rejection history" (this repository + port from 1 public repository).
+3. Metrics: re-proposal rate (required), constraint-violation rate and convergence time (instrumentation only), CPAA (harvest cost/accepted record).
+4. Ablation lite (M4): 3 conditions — remove scope / remove grades / remove lifecycle.
+5. Dual stopping: attempt cap per condition + token-budget cap.
 
 ## AC
-- [ ] M1: 과제 10개 × on/off 실행 완료, 재제안율 산출 + 유의성 검정 1회
-- [ ] M4: 어블레이션 3조건 결과 + CPAA 리포트 → README 실측 섹션 갱신
-- [ ] 전체 러너 재실행으로 수치 재현 (seed 고정)
+- [ ] M1: complete 10 tasks × on/off, calculate re-proposal rate + run 1 significance test
+- [ ] M4: results for 3 ablation conditions + CPAA report → update the README measured-results section
+- [ ] Reproduce the numbers by rerunning the entire runner (fixed seed)
 
-> ⚠️ **M4 AC는 아래 §측정 범위 정정으로 제한된다** (2026-07-26). 위 원문은 결정
-> 이력이므로 고치지 않고 그대로 둔다.
+> ⚠️ **The M4 AC is limited by §Measurement Scope Correction below** (2026-07-26). The original text above is decision
+> history, so leave it unchanged.
 
-## 측정 범위 정정 (2026-07-26 · 결과 확인 전)
+## Measurement Scope Correction (2026-07-26 · before inspecting results)
 
-주 매트릭스가 수집 중이고 **어떤 결과도 집계하기 전에** 기록한다. 결과를 본 뒤
-AC를 낮추면 그건 사후 조정이다. 두 항목은 측정 불가이고, 사유는 결과와 무관하다.
+Record this while the primary matrix is being collected and **before aggregating any results**. Lowering
+the AC after seeing the results would be a post hoc adjustment. Two items cannot be measured, for reasons independent of the results.
 
-### 어블레이션 3조건 → 2조건 (`no-scope` 제외)
+### 3 ablation conditions → 2 conditions (exclude `no-scope`)
 
-`no-scope`는 이 하니스에서 **무력(inert)**하다. 하니스의 플레이스홀더 주입기
-`bench/context.ts`가 경로 스코프를 전혀 적용하지 않고 워크스페이스 히스토리의 모든
-기록을 조립하기 때문이다. 기준 팔인 `commitlore-on`이 이미 무스코프이므로 스코프를
-"제거"해도 제거할 것이 없다.
+`no-scope` is **inert** in this harness. The harness's placeholder injector,
+`bench/context.ts`, applies no path scope and assembles every record in the workspace
+history. The baseline arm, `commitlore-on`, is already unscoped, so there is nothing
+to "remove."
 
-검증: 7개 어블레이션 과제 전부에서 `no-grade`·`no-lifecycle`은 페이로드가 기준과
-달라지지만(`DIFFERS`, 각각 0/7 무력), `no-scope`는 대비가 0이다. 심어둔 미끼
-`r-lock05`(`docs/publishing.md`)가 `commitlore-on`에도 들어 있는 것을 페이로드에서
-직접 확인했다.
+Verification: across all 7 ablation tasks, the `no-grade` and `no-lifecycle` payloads differ from
+baseline (`DIFFERS`, each inert in 0/7), while `no-scope` has 0 contrast. Direct payload inspection
+confirmed that the planted decoy `r-lock05` (`docs/publishing.md`) is also present in
+`commitlore-on`.
 
-**따라서 이번 측정은 라우트 스코핑을 검정하지 않는다.** "기록 있음 vs 없음"을 재는
-것이지 "스코프된 주입 vs 안 된 주입"이 아니다. 후자는 하니스 주입기를 실제
-`src/core/inject.ts`로 교체(#36)한 뒤에야 측정 가능하다.
+**Therefore this measurement does not test route scoping.** It measures "records present vs absent,"
+not "scoped injection vs unscoped injection." The latter can be measured only after replacing the
+harness injector with the actual `src/core/inject.ts` (#36).
 
-### CPAA — 미측정, 사유 기재
+### CPAA — not measured, reason recorded
 
-CPAA는 수확 비용/수용 기록이다. `harvest`는 **의도적으로 model-free**다 — 무료 영구
-원칙에 따라 CLI가 모델도 API 키도 싣지 않고, 판단은 사용자 자신의 에이전트 세션이
-한다(ADR-0006 §5). 그래서 CPAA에는 `harvest_tokens`·`verify_tokens`가 필요한데,
-재제안 과제는 harvest를 실행하지 않으므로 두 필드가 결과 행에 **존재하지 않는다**.
-어블레이션 과제도 같은 형태라 마찬가지다.
+CPAA is harvest cost/accepted record. `harvest` is **deliberately model-free** — under the permanently
+free principle, the CLI carries neither a model nor an API key, and judgment occurs in the user's own agent
+session (ADR-0006 §5). CPAA therefore requires `harvest_tokens` and `verify_tokens`, but because
+re-proposal tasks do not run harvest, those two fields **do not exist** in result rows.
+Ablation tasks have the same shape.
 
-`bench/metrics.ts`의 CPAA 구현은 완료돼 있고, 값을 지어내지 않고
-`undefined_because: "not-instrumented"`로 보고한다. 세션 전체 토큰을 수확 비용으로
-대입하면 숫자는 나오지만 정의가 틀린다 — `metrics.ts`의 주석이 바로 그 혼동을 막으려
-넣은 가드다. **그 가드를 우회하지 않는다.**
+The CPAA implementation in `bench/metrics.ts` is complete and reports
+`undefined_because: "not-instrumented"` instead of inventing a value. Substituting total session tokens
+for harvest cost produces a number with the wrong definition — the comment in `metrics.ts` is a guard
+added specifically to prevent that confusion. **Do not bypass that guard.**
 
-측정하려면 harvest 형태의 과제가 필요하고 그건 러너 변경, 즉 동결 해제를 뜻한다.
-v0.1.0 범위 밖으로 둔다. 리포트에는 숫자 대신 이 사유를 싣는다.
+Measurement requires a harvest-shaped task, which means changing the runner and therefore lifting the freeze.
+Leave it outside v0.1.0 scope. Put this reason in the report instead of a number.

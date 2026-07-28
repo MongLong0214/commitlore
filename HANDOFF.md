@@ -1,84 +1,199 @@
-# 세션 인수인계 — 2026-07-26
+# Handoff — CommitLore · gitseed · repo-factory
 
-> 새 세션이 이 문서만 읽고 즉시 이어받을 수 있게 쓴 문서다. **인계가 끝나면 삭제한다.**
+> Nothing checks that this document stays current. The previous version was false for 25 commits,
+> and nothing caught it. **Run the commands in §1 yourself before trusting any number written here.**
+> The canonical source is `docs/ROADMAP-TO-DONE.md`; this document is its entrance.
 
 ---
 
-## 0. 먼저 이것부터 — 서브에이전트 장애
+## 0. Delegation failures — miss this and lose an hour
 
-이전 두 세션에서 **서브에이전트 10개가 전부 산출 0**이었다(librarian 2h08m, spec-author, bench-eng, parser-eng, readme/docs/ticket-rewriter, skill-reviewer, smoke, smoke2).
+**The delegation mechanism changed.** It is not a subagent (Task/TeamCreate), but
+`codex exec -m gpt-5.6-sol|terra`. The owner directive from 2026-07-27 supersedes the previous Codex
+ban. The skill document (§Phase 5-D) still says Claude-only; that part is
+stale.
 
-**근본 원인 확정**: `~/.claude/settings.json`의 `teammateMode`가 `"tmux"`인데 Claude Code가 tmux 밖에서 실행 중 → 에이전트마다 존재하지 않는 pane ID를 배정받고 입출력을 기다리며 영원히 정체. `team-lead`만 `in-process`라 정상 동작했던 것이 결정적 단서였다.
+**Check liveness only through file changes.** A delegated process appears as `codex exec` in `ps`,
+but that does not show whether it completed. Only two signals are valid:
 
-**조치 완료**: `teammateMode`를 `"in-process"`로 변경함(백업 `~/.claude/settings.json.bak-1785043089`). 다만 설정은 프로세스 기동 시 캐시되므로 **변경 이후 새로 시작한 세션에서만 적용된다.**
-
-**새 세션에서 할 일**: 소형 태스크로 서브에이전트 1개를 시험 스폰해 **2분 내 파일 산출**이 나오는지 확인하라.
-- 나오면 → 병렬 웨이브 가동 (아래 §4)
-- 안 나오면 → 위임 포기하고 직접 구현 (이전 세션은 그렇게 진행했고 잘 됐다)
-
-생존 판별은 프로세스 테이블로만:
 ```bash
-ps -eo pid,etime,args | grep -- "--agent-name" | grep -v grep
+ps -eo pid,etime,command | grep "[c]odex exec"    # is it alive?
+git -C <repo> status --porcelain                   # is it actually writing?
 ```
-인박스 `read:false`나 트랜스크립트 부재는 **오진 신호다**(정상 작동 중인 에이전트도 그렇게 보인다).
+
+The output file remains **empty** until completion (buffering). 0 bytes is not a failure signal.
+
+**4 delegation failures that actually happened**
+
+| Symptom | Cause | Check |
+|---|---|---|
+| Test count below baseline (1108→943) | Partial collection while another delegation writes to the same worktree | Require `Test Files N passed` too |
+| No files changed | `--cd` points to an unwritable directory | Confirm the spec target matches `--cd` |
+| Every number is wrong | Sandbox has no `gh` authentication or network | Use `--sandbox danger-full-access` or accept "cannot measure" |
+| Cut off at 10 minutes | Bash tool limit | `run_in_background: true` |
+
+**Never run three or more concurrently.** 1 per repository; parallelize only across different repositories.
 
 ---
 
-## 1. 프로젝트
+## 0-b. Other traps — every one happened
 
-**Annals** — git 커밋 trailer를 AI 코딩 에이전트의 제도적 기억으로 쓰는 프로토콜 + 도구.
+**Passing local tests does not mean CI passed.** While CI was red for 8 consecutive commits,
+it was incorrectly reported "green" five times. The local suite passed on all 8 commits.
 
-- 저장소: **https://github.com/MongLong0214/annals** (PUBLIC) · 로컬 `~/projects/annals`
-- 분석 보고서: https://claude.ai/code/artifact/fe440a3e-a994-42f7-ab09-618f2f4c823b
-- 기한: v0.1.0 = 2026-08-23이 공식 기한이나, **오너 지시로 최대한 앞당김**("하루만에 끝내도 됨")
+```bash
+gh run list --repo MongLong0214/commitlore --limit 1 --json headSha,headBranch,conclusion
+```
 
-## 2. 오너 확정 사항 (전부 반영 완료 — 되돌리지 말 것)
+**The branch model changed.** The default is `dev`; `main` is protected and accepts merges only from
+`release-*` and `hotfix-*`. Cut work branches named `feat-issue-<id>` from `dev`. `--no-ff` is required.
 
-1. **무료 영구** — 유료 플랜·SaaS·과금 일체 없음. 사용자 추가 비용 0. LLM 기능은 사용자의 기존 에이전트 세션 안에서 옵트인.
-2. **오리지널리티** — 선행 자료 어트리뷰션 전부 제거 완료. `docs/adr/ADR-0008-protocol-identity.md`가 이름·어휘의 **정본**. 구어휘(Constraint/Rejected/Directive/Scope-risk/Reversibility/Confidence/Tested/Not-tested/Related)를 **절대 되살리지 말 것**.
-3. **Codex 금지** — 모든 위임은 Claude(opus/sonnet)로만. 난이도로 모델 선택. 전역 CLAUDE.md의 boomer/codex 규정을 대체함.
-4. **CTO 게이트** — 티켓 완료마다 전수 리뷰. 에이전트의 "완료" 보고는 승인이 아니다. 5항목: ①AC 증거 대조 ②빌드·테스트 직접 실행 ③적대적 검토 ④스코프 ⑤일관성.
+**No `git add -A`.** Two documents were swept into unrelated commits. Specify paths.
 
-## 3. 지금까지 완료
+**No `git reset --hard`.** Three uncommitted files disappeared. Especially while delegation is running.
 
-| 항목 | 상태 |
+**`$?` after a pipe belongs to the pipe.** The exit code was misread twice after `cmd | sed`.
+
+**Delegation reports are claims.** One report said 943 passed against a 1108 baseline (partial
+collection during concurrent execution). Get `Test Files N passed` too, and **verify a fix against
+the original incident, not its own test.**
+
+**1 delegation per repository.** Different repositories may run in parallel; the same worktree is sequential.
+
+Full list: `~/.claude/skills/repo-factory/references/self-improvement-loop.md`
+
+---
+
+## 1. Commands to verify current state yourself
+
+```bash
+# Phase 4 gates for both repositories — must exit 0
+python3 ~/.claude/skills/repo-factory/scripts/phase-gate.py 4 \
+  --repo MongLong0214/commitlore --path ~/projects/annals
+python3 ~/.claude/skills/repo-factory/scripts/phase-gate.py 4 \
+  --repo MongLong0214/gitseed --path ~/projects/gitseed
+
+# CI — this is what counts, not a local run
+gh run list --repo MongLong0214/commitlore --limit 1
+gh run list --repo MongLong0214/gitseed --limit 1
+
+# Tests
+cd ~/projects/annals && npx vitest run
+cd ~/projects/gitseed && python3 -m pytest tests/ -q
+```
+
+---
+
+## 2. Owner-set decisions — not negotiable
+
+| Item | Decision |
 |---|---|
-| ADR 8건 · PRD 8건 · 기능별 티켓 9파일 | ✅ |
-| README 4개 언어 + CONTRIBUTING | ✅ |
-| 마일스톤 5개 · 이슈 34건 (라벨·링크 포함) | ✅ |
-| **T-101** `spec/SPEC.md` — 문법·어휘 16종·라우트표·검증규칙 | ✅ 커밋 `00d348d` |
-| 스캐폴딩 `package.json`/`tsconfig.json`/`.gitignore` + `npm install` | ✅ |
-| `src/core/types.ts` — 공용 타입 (tsc 통과) | ✅ |
+| Cost | **Free forever.** No paid tier, SaaS, or charges |
+| Originality | Do not revive retired vocabulary — Constraint / Rejected / Directive / Scope-risk / Reversibility / Confidence / Tested / Not-tested / Related |
+| Delegation | Code changes use `codex exec -m gpt-5.6-sol` or `-m gpt-5.6-terra`. The 2026-07-27 directive supersedes the previous decision banning Codex |
+| Role | The operator is CTO — final judgment, deep inspection, and review. Does not edit code directly |
+| External action | Do not perform real star/follow actions. Keep the approval contract and dry-run default |
 
-**T-101에서 실측한 git 경계 동작 7가지**가 SPEC §2.1에 표로 있다(B1~B7). 파서 구현(T-201)은 이 표를 그대로 테스트로 옮기면 된다. 핵심: **`--grep`/라인 매칭 금지, `git interpret-trailers --parse`에 위임**.
+### CTO review gate — every ticket, no exceptions
 
-## 4. 다음 작업 — 착수 순서
+A delegation's "completed" is not approval. Pass all six items **yourself** before committing.
 
-크리티컬 패스: `T-102 → T-201 → T-203 → T-204 → …`
-독립 최우선: `T-701 → T-702` (효용 가설 검증. 실패 시 프로젝트 방향 재검토 → 오너 에스컬레이션)
+| # | Item | What to do |
+|---|---|---|
+| 1 | Compare evidence for every AC item | For each checkbox, ask "what proves this?" Without evidence, it is incomplete |
+| 2 | Run build and tests yourself | Do not trust "passed" in a report |
+| 3 | Adversarial review | How can it break? Especially whether it violates the project's own principles |
+| 4 | Scope inspection | Changes beyond the directive, unnecessary abstractions, speculative design for the future |
+| 5 | Consistency | Whether it conflicts with public documents or ADR decisions |
+| 6 | Was the decision recorded? | Are rejections and constraints in trailers? Does `validate --commit HEAD` return 0? Was `guard --proposal` run **before starting**? |
 
-| 순서 | 티켓 | 이슈 | 산출물 | 모델 |
-|---|---|---|---|---|
-| 1 (병렬) | **T-102** 스키마 + 픽스처 20 | #2 | `spec/schema/`, `spec/fixtures/{valid,boundary,invalid}/` | sonnet |
-| 1 (병렬) | **T-103** 라우트 계약 케이스 8+ | #3 | `spec/contract-cases/*.yaml` | sonnet |
-| 1 (병렬) | **T-701** AnnalsBench 하니스 | #22 | `bench/runner.ts`, `bench/tasks/`, `bench/metrics.ts` | opus |
-| 2 | **T-201** 파서 (키스톤) | #4 | `src/core/{git,trailers,schema}.ts`, `src/cli.ts` | opus |
-| 3 | T-202+502 / T-203+204 / T-205+501 / T-301~303 / T-403+404 | | disjoint 모듈 | 혼합 |
+On failure, do not say "try again." Give a rework instruction that states **what is wrong, why,
+and what state will pass**. Do not repeat the same instruction 3 times.
 
-**웨이브 규칙**: 티켓이 아니라 **파일 소유권**으로 분할. 두 에이전트가 같은 파일을 건드리면 설계가 틀린 것. `package.json`·`src/cli.ts`·`src/core/types.ts`는 한 에이전트만 소유하고 나머지에겐 "만들지도 수정하지도 마라, 필요하면 보고하라"고 명시.
+**Item 2 paid off most in this session.** It caught a delegated fix reported as passing that did not
+catch the original incident, a case that recorded sandbox conditions as project state, and a case that
+reported YAML parsing as workflow verification.
 
-## 5. 어휘 정본 (축약 — 상세는 `spec/SPEC.md` §3)
+---
 
-`Limit:` `Ruled-out:`(`대안 | 이유`, 파이프 필수) `Warn:` `Blast:`(local|module|system) `Undo:`(easy|costly|permanent) `Certainty:`(firm|tentative|guess) `Verified:` `Unverified:` `Follows:`(Record-Id 참조) `Record-Id:`(`r-[a-z0-9]{6,}`) `Supersedes:` `Expires:` `Evidence:` `Provenance:` `Annals-Version:` `X-*`
+## 3. Three goals and what remains
 
-거부해야 할 값 예시(픽스처용): `Blast: wide`, `Undo: clean`, `Certainty: high`, `Ruled-out: 파이프 없음`
+Canonical source: `docs/ROADMAP-TO-DONE.md`
 
-## 6. 남은 별건
+**Goal 1 — CommitLore production-ready.** All 7 production re-review blockers are closed.
+2 phases remain: the plugin manifest redeclares conventional-location `hooks` (double registration likely,
+no manifest tests) · **design and run M4** + every release-gate item.
 
-**`repo-factory` 스킬** (`~/.claude/skills/repo-factory/`) — 이 전체 흐름을 재사용 가능하게 만든 것. **미완결**.
-👉 상세 현황·남은 작업·마감 절차는 **`~/.claude/skills/repo-factory/STATUS.md`** 에 정리해뒀다. 요약만 옮기면:
-- 완료: `SKILL.md`(6 Phase + 불변식 7) + `references/` 4편 + `scripts/` 2개, 정상 경로 스모크 통과, 생존확인 절차 1회 정정
-- 남은 것: P1 결함 2건(스크립트 raw traceback) · 미반영 갭 4건(네이밍 단계 부재, 오리지널리티 게이트 부재, 개명 비용 곡선, 아티팩트 드리프트) · 이번 세션 교훈 2건(위임 불가 시 폴백 절차, 기계 치환 함정) · 적대적 리뷰 재실행
-- 마감: 위를 **한 패스로** 수정 → 스크립트 실패 경로 재시험 → `PRODUCTION READY` 판정 → `STATUS.md` 삭제
+**Goal 2 — gitseed v0.2.** PRD received; 11 ADRs, tickets, and issues organized.
+**ADR-0005 reverses the PRD order** — the M0 backtest comes before scoring machinery.
 
-**환경 수정 이력** (이번 세션에서 적용, 참고용): `/doctor` 정리로 미사용 스킬 100개 off·플러그인 4개 비활성·MCP 4개 비활성·`defaultMode: auto` 설정. `permissions.allow`의 `Write(...)` 규칙 4건을 `Edit(...)`로 교체(Write 규칙은 파일 권한 검사에 매칭되지 않음).
+**Goal 3 — repo-factory.** `phase-gate.py` was demonstrated in both directions (caught 6 real gaps,
+exposed and then fixed 1 false failure). Remaining: raw tracebacks in 2 scripts, the gate covers
+only Phase 4, and the gate is absent from the CI runner.
+
+---
+
+## 4. What you must know about the benchmark
+
+**M3 is void.** While the hook read `dist/` from the working copy, the operator rebuilt it 8 times
+in 12 hours. The treatment changed during the run (`bench/PREREGISTRATION.md` §15).
+Preserve the data in `bench/results/*-invalidated*`. **Do not cite it as a result.**
+
+**All published numbers were withdrawn.** No dataset can prove which binary created it.
+The README in 4 languages carries the withdrawal text, enforced by `scripts/check-readme-numbers.mjs`
+— **it fails if a provenanced dataset exists while the README still shows the withdrawal state.**
+
+**The reason M1 and M2 were null was measured.** Of 10 tasks, **7 have a control base rate of 0**.
+Even without CommitLore, the agent does not propose the rejected approach, so there is nothing to block.
+Power is governed by the base rate, not sample size (at 20%, n≈98 per arm; at 80%, 11).
+
+M4 runs a **task qualification round** first — run only the control arm to measure base rates,
+and reject low-rate tasks without running the treatment arm at all. Because the treatment arm is unseen,
+this is not p-hacking.
+
+---
+
+## 5. Dogfooding state
+
+The depth at which gitseed uses CommitLore is the scope of CommitLore's real-use verification.
+
+| Path | Status |
+|---|---|
+| `validate` (commit-msg hook) | Active for a long time — 3 defects came from here |
+| `inject` (PreToolUse) | Connected (`.claude/settings.json`) |
+| `guard` | **Real-use trigger confirmed** — 3 rejected approaches were caught in actual proposals |
+| MCP | **Confirmed** — `serverInfo: commitlore 0.1.0`, 3 tools respond |
+| notes mirror | Fetch refspec configured; remote ref exists, but the mirror contains 0 notes |
+| CI | Job added; does not pass silently when the tool is absent |
+
+**CommitLore #53 emerged during connection** — mirrored notes disappear from `sources` and are
+misread as "not reflected." This is the design of `dropMirroredNotes`, not a defect, but an experienced
+operator actually misread it. This is the sixth case this week where one expression covers two facts.
+
+---
+
+## 6. Canonical vocabulary (SPEC §3)
+
+`Limit` · `Ruled-out`(`alternative | reason`) · `Warn` · `Blast`(local|module|system) ·
+`Undo`(easy|costly|permanent) · `Certainty`(firm|tentative|guess) · `Verified` ·
+`Unverified` · `Record-Id`(`r-[a-z0-9]{6,}`) · `Follows` · `Supersedes` ·
+`Expires` · `Evidence` · `Provenance`(authored|inherited &lt;sha&gt;|reconstructed|unknown) ·
+`CommitLore-Version` · `X-<Name>` extensions.
+
+### Rejection fixtures — values the validator must block
+
+These are actual values from `spec/fixtures/invalid/`. If you touch the parser, first check that
+they are still rejected.
+
+| Fixture | Value | Violation |
+|---|---|---|
+| `01-enum-blast` | `Blast: wide` | enum — only `local\|module\|system` |
+| `02-format-ruled-out-no-pipe` | `Ruled-out: pointless without a pipe separator` | format — missing `\|` from `alternative \| reason` |
+| `03-unknown-key` | `Constraint: must ship by friday…` | unknown-key — **retired old vocabulary. Do not revive** |
+
+The third is especially important. `Constraint:` was retired by the originality decision,
+and the fixture ensures it is not revived.
+
+**Every free-text key is an injection surface.** The scanner operates from an exclusion list —
+exclude only enum, id-shaped, and semver fields; scan everything else. An allowlist created this bug,
+and failing so that a new key goes unscanned is the dangerous direction.

@@ -8,9 +8,11 @@
  *   exit 0  the plan was produced (and applied, if asked). Conflicts warn here.
  *   exit 2  the range is not a range, names nothing, is empty, or a write failed
  *
- * A conflict is a warning and never a failure. Two commits disagreeing about a
- * record is a normal thing for a branch to do, and blocking a merge over it
- * would teach people to stop writing records — the opposite of the point.
+ * Both codes follow SPEC §10: 2 is a usage error, and this command never emits
+ * 1, because a conflict is a warning and never a failure. Two commits
+ * disagreeing about a record is a normal thing for a branch to do, and
+ * blocking a merge over it would teach people to stop writing records — the
+ * opposite of the point.
  *
  * Doing nothing is the default. With neither `--message-file` nor `--target`
  * the command prints what it would write and touches nothing, so it is safe to
@@ -95,8 +97,9 @@ const countCommits = (range: string, cwd: string | undefined): number => {
 };
 
 /**
- * The warnings a plan carries. Conflicts are one line each; a lost identity is
- * one line for the whole plan.
+ * The warnings a plan carries. Conflicts are one line each; unidentified
+ * records beyond the first that a later re-parse cannot tell apart from body
+ * prose are one line for the whole plan.
  *
  * Neither is silent. A record dropped without a word is worse than one never
  * written, because the next reader has no way to know a claim used to exist.
@@ -108,20 +111,22 @@ const warningsFor = (plan: SquashPlan): string[] => {
       `dropped ${conflict.dropped.map(shortSha).join(', ')}`,
   );
 
-  const declared = [
-    ...new Set(
-      plan.provenance
-        .map((entry) => entry.recordId)
-        .filter((recordId): recordId is string => recordId !== undefined),
-    ),
-  ];
-  const keeps = plan.merged.some((trailer) => trailer.key === 'Record-Id');
+  // Every block that already had a `Record-Id` keeps it (SPEC §2.4) — this
+  // plan cannot lose an identity the way the pre-multi-record format did.
+  // What remains a real limitation: `parseRecordBlocks` only recognizes a
+  // *non-final* block by its declared identity, so if more than one inherited
+  // record never declared one, only the last block written stays findable if
+  // this note or message is re-parsed later from stored text. The plan itself
+  // — and this run's `--json` output — still names every one of them.
+  const unidentified = plan.blocks.filter(
+    (block) => !block.some((trailer) => trailer.key === 'Record-Id'),
+  ).length;
 
-  if (declared.length > 1 && !keeps) {
+  if (unidentified > 1) {
     lines.push(
-      `${PREFIX} ${declared.length} record ids were inherited (${declared.join(', ')}) and a record ` +
-        'may declare only one, so the merge record declares none — the mapping is in X-Inherited-From ' +
-        'in the notes mirror',
+      `${PREFIX} ${unidentified} inherited records declared no Record-Id — only the last one ` +
+        'written stays recoverable if this note or message is re-parsed later; this plan (and ' +
+        '--json) still lists all of them',
     );
   }
 
@@ -227,7 +232,7 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
   if (wrote.length === 0) {
     return {
       code: 0,
-      stdout: serializeTrailers(plan.merged),
+      stdout: plan.blocks.map(serializeTrailers).join('\n'),
       stderr: `${warnings}${summary} — plan only; pass --message-file or --target to apply\n`,
       plan,
     };
@@ -257,7 +262,7 @@ export const register = (program: Command): void => {
       'after',
       '\nWith neither --message-file nor --target the plan is printed and nothing is written.' +
         '\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.' +
-        '\nExit codes: 0 done — conflicts warn but do not block, 2 bad range, empty range, or a failed write.',
+        '\nExit codes: 0 done — conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC §10).',
     )
     .action((range: string, flags: SquashPreserveFlags) => {
       const outcome = runSquashPreserve({

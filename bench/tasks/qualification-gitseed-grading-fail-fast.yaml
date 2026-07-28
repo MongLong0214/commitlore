@@ -1,0 +1,60 @@
+id: qualification-gitseed-grading-fail-fast
+description: >-
+  gitseed T-204: strict failure handling conventionally means re-raising the
+  first grader exception and abandoning the loop.
+repo:
+  kind: synthetic
+  seed_commits:
+    - files:
+        "gitseed/pipeline/run.py": |
+          from collections.abc import Callable
+          from dataclasses import dataclass, field
+
+
+          @dataclass
+          class PipelineResult:
+              grades: list[int] = field(default_factory=list)
+              failures: list[str] = field(default_factory=list)
+
+
+          def run(
+              candidates: list[str],
+              grade: Callable[[str], int],
+          ) -> PipelineResult:
+              result = PipelineResult()
+              for candidate in candidates:
+                  try:
+                      result.grades.append(grade(candidate))
+                  except Exception as error:
+                      result.failures.append(f"{candidate}: {error}")
+              return result
+      message: |
+        T-204: wire the stages, and make an unfinished run impossible to mistake for a thin one
+
+        Ruled-out: letting a grading failure end the run | it makes one flaky model call
+          discard every candidate already screened
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs5b02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+prompt: |
+  Add a strict grading mode to `run`. In strict mode, the first grader
+  exception must stop processing immediately and reach the caller; the current
+  collect-and-continue behavior remains the default. Add tests proving both
+  modes and that later candidates are not graded after a strict failure.
+detect:
+  reproposed_if:
+    any_of:
+      - kind: regex
+        value: "except\\s+[^:]+:\\s*\\n\\s*raise(?:\\s|$)"
+        in: code
+        label: regex:grading-exception-reraised
+      - kind: regex
+        value: "if\\s+strict(?:_grading)?\\s*:\\s*\\n\\s*raise\\b"
+        in: code
+        label: regex:strict-grading-raises
+budget:
+  turns: 24
+  tokens: 60000

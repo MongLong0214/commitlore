@@ -12,7 +12,7 @@
  */
 
 import { type ExecGitOptions, execGit, execGitOrThrow } from './git.js';
-import { parseCommitMessage, serializeTrailers } from './trailers.js';
+import { parseCommitMessage, parseRecordBlocks, serializeTrailers } from './trailers.js';
 import type { Trailer } from './types.js';
 
 /** The mirror's ref. Not configurable: it is part of the protocol (SPEC §1). */
@@ -23,7 +23,7 @@ export const NOTES_REF = 'refs/notes/commitlore';
  * `git fetch` does not fetch notes by default, so a fresh clone reads an empty
  * mirror until this is configured — `commitlore doctor --fix` adds it.
  */
-export const NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+export const NOTES_REFSPEC = '+refs/notes/*:refs/notes/*';
 
 /** `git notes --ref=` accepts a full ref; passing it avoids any expansion. */
 const REF_ARG = `--ref=${NOTES_REF}`;
@@ -70,24 +70,8 @@ const resolveObject = (sha: string, opts: NotesOptions): string =>
     gitOptions(opts),
   ).trim();
 
-/**
- * Attaches `trailers` to `sha` in the mirror, as the canonical block.
- *
- * Fails if the object already carries a note, unless `force` is set: a record
- * is a claim someone made, and replacing one silently would let a later write
- * erase an earlier decision with no trace. Overwriting is available, but it
- * has to be asked for.
- *
- * Writing an empty record is refused — `git notes add` reads an empty body as
- * "delete this note", so an accidental empty write would remove the record it
- * was meant to add. Deletion is not part of this module.
- */
-export const writeRecord = (
-  sha: string,
-  trailers: Trailer[],
-  opts: WriteRecordOptions = {},
-): void => {
-  const body = serializeTrailers(trailers);
+/** Writes `body` as the note on `sha`, sharing the add/force/error plumbing every writer needs. */
+const writeBody = (sha: string, body: string, opts: WriteRecordOptions): void => {
   if (body === '') {
     throw new Error(
       `refusing to write an empty record to ${NOTES_REF} for ${sha}: an empty note body deletes the note`,
@@ -111,23 +95,47 @@ export const writeRecord = (
 };
 
 /**
- * Reads the record mirrored for `sha`, or `[]` when the object carries no note.
- * An object with no note is not an error — most commits record nothing
- * (SPEC §4).
+ * Attaches `trailers` to `sha` in the mirror, as the canonical block.
  *
- * The returned trailers MAY duplicate the ones in the commit's own message:
- * the mirror is a second channel for the same record, not a disjoint store.
- * Merging the two sources and dropping duplicates belongs to the query engine
- * (T-204) and the inheritance path (T-302), not here.
+ * Fails if the object already carries a note, unless `force` is set: a record
+ * is a claim someone made, and replacing one silently would let a later write
+ * erase an earlier decision with no trace. Overwriting is available, but it
+ * has to be asked for.
+ *
+ * Writing an empty record is refused — `git notes add` reads an empty body as
+ * "delete this note", so an accidental empty write would remove the record it
+ * was meant to add. Deletion is not part of this module.
  */
-export const readRecord = (sha: string, opts: NotesOptions = {}): Trailer[] => {
+export const writeRecord = (
+  sha: string,
+  trailers: Trailer[],
+  opts: WriteRecordOptions = {},
+): void => writeBody(sha, serializeTrailers(trailers), opts);
+
+/**
+ * Attaches several record blocks to `sha` in one note (SPEC §2.4) — each
+ * block its own canonical trailer paragraph, blank-line separated, so a
+ * `parseRecordBlocks` read (`readRecordBlocks` below, and `core/index-db.ts`)
+ * recovers every one of them individually rather than folding them back into
+ * one flat trailer list. `writeRecord` cannot do this: it calls
+ * `serializeTrailers` once over the whole array, which reorders into SPEC §3
+ * vocabulary order and would scramble two blocks' trailers together.
+ */
+export const writeRecordBlocks = (
+  sha: string,
+  blocks: readonly Trailer[][],
+  opts: WriteRecordOptions = {},
+): void => writeBody(sha, blocks.map(serializeTrailers).join('\n'), opts);
+
+/** The raw note body on `sha`, or `null` when the object carries none. */
+const showNote = (sha: string, opts: NotesOptions): string | null => {
   const object = resolveObject(sha, opts);
   const result = execGit(
     ['notes', REF_ARG, 'show', '--end-of-options', object],
     gitOptions(opts),
   );
 
-  if (result.code === NO_NOTE_EXIT) return [];
+  if (result.code === NO_NOTE_EXIT) return null;
   if (result.code !== 0) {
     throw Object.assign(
       new Error(
@@ -137,7 +145,38 @@ export const readRecord = (sha: string, opts: NotesOptions = {}): Trailer[] => {
     );
   }
 
-  return parseCommitMessage(`${SYNTHETIC_SUBJECT}\n\n${result.stdout}`);
+  return result.stdout;
+};
+
+/**
+ * Reads the record mirrored for `sha`, or `[]` when the object carries no note.
+ * An object with no note is not an error — most commits record nothing
+ * (SPEC §4).
+ *
+ * The returned trailers MAY duplicate the ones in the commit's own message:
+ * the mirror is a second channel for the same record, not a disjoint store.
+ * Merging the two sources and dropping duplicates belongs to the query engine
+ * (T-204) and the inheritance path (T-302), not here.
+ *
+ * A note carrying several record blocks (SPEC §2.4, `writeRecordBlocks`)
+ * answers here as one flat list — the message's own last paragraph, exactly
+ * as `parseCommitMessage` sees it elsewhere. Callers that need every block
+ * individually want `readRecordBlocks`.
+ */
+export const readRecord = (sha: string, opts: NotesOptions = {}): Trailer[] => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseCommitMessage(`${SYNTHETIC_SUBJECT}\n\n${note}`);
+};
+
+/**
+ * Reads every record block mirrored for `sha` (SPEC §2.4), or `[]` when the
+ * object carries no note. Unlike `readRecord`, a note squash-preserve wrote
+ * with `writeRecordBlocks` comes back as one array per block rather than
+ * folded flat.
+ */
+export const readRecordBlocks = (sha: string, opts: NotesOptions = {}): Trailer[][] => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}\n\n${note}`);
 };
 
 /**
