@@ -16772,6 +16772,128 @@ var register7 = (program3) => {
   });
 };
 
+// src/commands/init.ts
+var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var runDoctorStep = (opts) => {
+  const report = runDoctor({ ...cwdOption(opts), fix: true });
+  const code = report.checks.some((entry) => entry.status === "warn" || entry.status === "fail") ? 1 : 0;
+  return {
+    step: "doctor",
+    title: "doctor --fix",
+    code,
+    lines: formatReport(report).trimEnd().split("\n"),
+    detail: report
+  };
+};
+var runHooksStep = (opts) => {
+  const result = installHook({ ...cwdOption(opts), ...opts.force === void 0 ? {} : { force: opts.force } });
+  const lines = result.code === 0 ? result.stdout.trimEnd().split("\n") : [result.stderr.trimEnd() || "hooks install failed with no diagnostic"];
+  return {
+    step: "hooks",
+    title: "hooks install",
+    code: result.code,
+    lines,
+    detail: result
+  };
+};
+var runIndexStep = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  let handle;
+  try {
+    handle = openIndex({ cwd });
+  } catch (error2) {
+    const message = `could not open the index: ${messageOf4(error2)}`;
+    return {
+      step: "index",
+      title: "index --rebuild",
+      code: 2,
+      lines: [message],
+      detail: { ok: false, message }
+    };
+  }
+  try {
+    const stats = rebuildIndex(handle, { reason: "commitlore init" });
+    const info = indexInfo(handle);
+    const message = `rebuilt: scanned ${stats.commitsScanned} commit(s), indexed ${stats.trailersIndexed + stats.noteTrailersIndexed} trailer(s) in ${stats.elapsedMs}ms`;
+    return {
+      step: "index",
+      title: "index --rebuild",
+      code: 0,
+      lines: [message, `index holds ${info.trailers} trailer(s) over ${info.commits} commit(s)`],
+      detail: { ok: true, message, stats }
+    };
+  } catch (error2) {
+    const message = `could not rebuild the index: ${messageOf4(error2)}`;
+    return {
+      step: "index",
+      title: "index --rebuild",
+      code: 2,
+      lines: [message],
+      detail: { ok: false, message }
+    };
+  } finally {
+    try {
+      closeIndex(handle);
+    } catch {
+    }
+  }
+};
+var runClaudeHookStep = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const settingsPath = claudeSettingsPath(cwd);
+  const result = installClaudeHook({ settingsPath });
+  const lines = result.stdout.trimEnd().split("\n").filter((line) => line.length > 0);
+  if (result.stderr) {
+    lines.push(...result.stderr.trimEnd().split("\n").filter((line) => line.length > 0));
+  }
+  const code = result.code === 0 ? 0 : result.status?.state === "unreadable" && result.status.problem?.includes("cannot read") ? 0 : 2;
+  return {
+    step: "claude-hook",
+    title: "claude hook install",
+    code,
+    lines: lines.length > 0 ? lines : [result.stderr.trim() || "failed with no diagnostic"],
+    detail: result
+  };
+};
+var runInit = (opts = {}) => {
+  const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+  const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
+  return { steps, exitCode };
+};
+var STEP_HEADING = {
+  hooks: "[1/4] hooks install",
+  index: "[2/4] index --rebuild",
+  "claude-hook": "[3/4] claude hook install",
+  doctor: "[4/4] doctor --fix (final check)"
+};
+var INDENT = "        ";
+var formatInitReport = (report) => {
+  const blocks = report.steps.map((step) => {
+    const body = step.lines.map((line) => `${INDENT}${line}`).join("\n");
+    return `${STEP_HEADING[step.step]}
+${body}`;
+  });
+  const failed = report.steps.filter((step) => step.code === 2).map((step) => step.title);
+  const needsAttention = report.steps.filter((step) => step.code === 1).map((step) => step.title);
+  const summary2 = failed.length > 0 ? `init: ${failed.length}/4 step(s) could not run \u2014 ${failed.join(", ")}` : needsAttention.length > 0 ? `init: 4/4 steps ran, ${needsAttention.length} need(s) attention \u2014 ${needsAttention.join(", ")} (see detail above)` : "init: 4/4 steps completed cleanly";
+  return `${[...blocks, summary2].join("\n\n")}
+`;
+};
+var register8 = (program3) => {
+  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
+    "after",
+    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
+  ).action((options) => {
+    const report = runInit(options.force === void 0 ? {} : { force: options.force });
+    process.stdout.write(
+      options.json === true ? `${JSON.stringify(report, null, 2)}
+` : formatInitReport(report)
+    );
+    process.exitCode = report.exitCode;
+  });
+};
+
 // src/commands/inject.ts
 import { readFileSync as readFileSync9, realpathSync as realpathSync3 } from "node:fs";
 import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
@@ -17272,7 +17394,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register8 = (program3) => {
+var register9 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -26113,7 +26235,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register9 = (program3) => {
+var register10 = (program3) => {
   define(
     program3,
     "context",
@@ -26257,7 +26379,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -26519,7 +26641,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -26536,7 +26658,7 @@ import { readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from 
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
-var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
 var usageError = (message) => ({
@@ -26575,14 +26697,14 @@ var readDraft2 = (path2) => {
   try {
     return readFileSync10(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf4(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
     writeFileSync6(path2, text);
   } catch (error2) {
-    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf4(error2)}`);
+    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var runSquashPreserve = (input = {}) => {
@@ -26601,7 +26723,7 @@ var runSquashPreserve = (input = {}) => {
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
   } catch (error2) {
-    return usageError(messageOf4(error2));
+    return usageError(messageOf5(error2));
   }
   const warnings = warningsFor(plan).map((line) => `${line}
 `).join("");
@@ -26630,7 +26752,7 @@ var runSquashPreserve = (input = {}) => {
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf4(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf5(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -26658,7 +26780,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -26859,7 +26981,7 @@ ${USAGE2}
   secrets: [],
   checks: []
 });
-var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line) => line.endsWith("\r") ? line.slice(0, -1) : line;
 var CONTINUATION = /^[ \t]/;
@@ -27006,14 +27128,14 @@ var readMessageFile = (path2) => {
   try {
     return readFileSync11(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
     return readFileSync11(0, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read the commit message from stdin: ${messageOf5(error2)}`);
+    throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
 };
 var collectSources2 = (input, cwd) => {
@@ -27134,7 +27256,7 @@ var checkReferences = (input, sources, cwd) => {
       check: {
         class: "reference",
         status: "not-checked",
-        reason: `repository scan failed: ${firstLine4(messageOf5(error2))}`
+        reason: `repository scan failed: ${firstLine4(messageOf6(error2))}`
       },
       violations: []
     };
@@ -27174,7 +27296,7 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
-    return usageError2(messageOf5(error2));
+    return usageError2(messageOf6(error2));
   }
   const references = checkReferences(input, sources, cwd);
   const violations = [...shapeViolations, ...references.violations];
@@ -27227,7 +27349,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -27307,19 +27429,20 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register13(program2);
+register14(program2);
 register6(program2);
 register7(program2);
-register9(program2);
 register10(program2);
+register11(program2);
 register2(program2);
+register8(program2);
 register3(program2);
 register5(program2);
-register12(program2);
+register13(program2);
 register4(program2);
-register8(program2);
+register9(program2);
 register(program2);
-register11(program2);
+register12(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
