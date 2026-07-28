@@ -194,9 +194,20 @@ chmod +x "$dest"
 log "installed to $dest"
 "$dest" --version
 
+path_file="$HOME/.profile"
+case "${SHELL:-}" in
+  */bash) path_file="$HOME/.bashrc" ;;
+  */zsh) path_file="$HOME/.zshrc" ;;
+esac
+path_export="export PATH=\"$dest_dir:\$PATH\""
+
 case ":$PATH:" in
   *":$dest_dir:"*) ;;
-  *) log "note: $dest_dir is not on PATH — add it, e.g. export PATH=\"$dest_dir:\$PATH\"" ;;
+  *)
+    log "note: $dest_dir is not on PATH."
+    log "add this line to $path_file:"
+    log "  $path_export"
+    ;;
 esac
 
 # --- 5. detect and wire coding agents --------------------------------------
