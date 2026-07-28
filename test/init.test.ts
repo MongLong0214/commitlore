@@ -54,16 +54,6 @@ beforeAll(() => {
   }
 }, 120_000);
 
-const runInitAsCli = (opts: InitOptions): InitReport => {
-  const original = process.argv[1];
-  process.argv[1] = CLI_JS;
-  try {
-    return runInit(opts);
-  } finally {
-    process.argv[1] = original;
-  }
-};
-
 const scratch: string[] = [];
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
@@ -73,6 +63,29 @@ const tempDir = (label: string): string => {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), `commitlore-init-${label}-`));
   scratch.push(dir);
   return dir;
+};
+
+const injectBin = tempDir('inject-bin');
+const injectCommand = join(injectBin, 'commitlore');
+writeFileSync(
+  injectCommand,
+  '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n',
+  { mode: 0o755 },
+);
+chmodSync(injectCommand, 0o755);
+
+const runInitAsCli = (opts: InitOptions): InitReport => {
+  const originalArgv = process.argv[1];
+  const originalPath = process.env['PATH'];
+  process.argv[1] = CLI_JS;
+  process.env['PATH'] = `${injectBin}:/usr/bin:/bin`;
+  try {
+    return runInit(opts);
+  } finally {
+    process.argv[1] = originalArgv;
+    if (originalPath === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = originalPath;
+  }
 };
 
 const git = (cwd: string, args: string[]): string => {

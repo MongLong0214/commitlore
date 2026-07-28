@@ -13465,7 +13465,7 @@ var register = (program3) => {
 import { spawnSync as spawnSync3 } from "node:child_process";
 import { existsSync as existsSync4, readFileSync as readFileSync4, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { dirname as dirname4, join as join3, resolve as resolve4 } from "node:path";
+import { join as join3, resolve as resolve4 } from "node:path";
 
 // src/core/hook-target.ts
 import { realpathSync, statSync } from "node:fs";
@@ -15405,19 +15405,31 @@ var checkHookRuntime = (opts) => {
 var checkInjectRuntime = (opts) => {
   const title = "PreToolUse hook runtime";
   const id = "inject-runtime";
-  const fix = "commitlore inject install-claude-hook";
+  const fix = "reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor";
+  const unavailableFix = "install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor";
   const cwd = opts.cwd ?? process.cwd();
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
   if (settings.state !== "installed") {
+    const command2 = settings.commands[0];
+    if (settings.state === "outdated" && command2 !== void 0) {
+      return check(
+        id,
+        title,
+        "skipped",
+        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`
+      );
+    }
     const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
-    return check(id, title, "warn", detail, fix);
+    return check(id, title, "warn", detail, "commitlore inject install-claude-hook");
+  }
+  const command = settings.commands[0];
+  if (command !== CLAUDE_HOOK_COMMAND) {
+    return check(id, title, "skipped", "not checked: the configured command is not recognised");
   }
   const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
   if (path2 === void 0) {
     return check(id, title, "skipped", "no recorded path is available for a runtime probe");
   }
-  const configuredRoot = process.env["CLAUDE_PLUGIN_ROOT"];
-  const pluginRoot = configuredRoot === void 0 || configuredRoot === "" ? PACKAGE_ROOT : resolve4(process.cwd(), configuredRoot);
   const payload = JSON.stringify({
     session_id: "commitlore-doctor",
     cwd,
@@ -15425,22 +15437,29 @@ var checkInjectRuntime = (opts) => {
     tool_name: "Edit",
     tool_input: { file_path: resolve4(cwd, path2) }
   });
-  const run = spawnSync3(
-    "/bin/bash",
-    [installedPath("scripts/commitlore-run.sh"), "inject", "--hook-input"],
-    {
-      shell: false,
-      encoding: "utf8",
-      cwd,
-      input: payload,
-      env: {
-        PATH: `${dirname4(process.execPath)}:/usr/bin:/bin`,
-        HOME: process.env["HOME"] ?? "",
-        CLAUDE_PLUGIN_ROOT: pluginRoot
-      }
+  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
+  const executable = configured.slice(0, configured.indexOf(" "));
+  const args = configured.slice(executable.length + 1).split(" ");
+  const run = spawnSync3(executable, args, {
+    shell: false,
+    encoding: "utf8",
+    cwd,
+    input: payload,
+    env: {
+      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+      HOME: process.env["HOME"] ?? ""
     }
-  );
+  });
   if (run.error !== void 0) {
+    if ("code" in run.error && run.error.code === "ENOENT") {
+      return check(
+        id,
+        title,
+        "fail",
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix
+      );
+    }
     return check(id, title, "fail", `could not run the PreToolUse hook: ${run.error.message}`, fix);
   }
   if (run.status !== 0) {
@@ -16897,7 +16916,7 @@ var register8 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync9, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
+import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -17278,7 +17297,7 @@ var canonical = (target) => {
       const real = realpathSync3(current);
       return tail.length === 0 ? real : join5(real, ...tail);
     } catch {
-      const parent = dirname5(current);
+      const parent = dirname4(current);
       if (parent === current) return absolute;
       tail.unshift(basename2(current));
       current = parent;

@@ -26,16 +26,16 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
-import { PACKAGE_ROOT, installedPath, isSea, packageVersion } from '../core/paths.js';
+import { installedPath, isSea, packageVersion } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { runQuery } from '../core/query.js';
 import { collectRange } from '../core/squash.js';
 import { parseCommitMessage } from '../core/trailers.js';
-import { claudeSettingsPath, readClaudeHookStatus } from '../hooks/claude-settings.js';
+import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_MARKER, claudeSettingsPath, readClaudeHookStatus, } from '../hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
 /** Probe message for the git capability check — one trailer of each shape. */
 const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
@@ -294,14 +294,23 @@ const checkHookRuntime = (opts) => {
 const checkInjectRuntime = (opts) => {
     const title = 'PreToolUse hook runtime';
     const id = 'inject-runtime';
-    const fix = 'commitlore inject install-claude-hook';
+    const fix = 'reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor';
+    const unavailableFix = 'install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor';
     const cwd = opts.cwd ?? process.cwd();
     const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
     if (settings.state !== 'installed') {
+        const command = settings.commands[0];
+        if (settings.state === 'outdated' && command !== undefined) {
+            return check(id, title, 'skipped', `not checked: configured command ${JSON.stringify(command)} is not recognised; running it might have side effects`);
+        }
         const detail = settings.state === 'absent'
             ? `not installed in ${settings.settingsPath}`
             : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
-        return check(id, title, 'warn', detail, fix);
+        return check(id, title, 'warn', detail, 'commitlore inject install-claude-hook');
+    }
+    const command = settings.commands[0];
+    if (command !== CLAUDE_HOOK_COMMAND) {
+        return check(id, title, 'skipped', 'not checked: the configured command is not recognised');
     }
     const path = runQuery({ cwd, noIndex: true }).records
         .flatMap((record) => record.paths)
@@ -309,10 +318,6 @@ const checkInjectRuntime = (opts) => {
     if (path === undefined) {
         return check(id, title, 'skipped', 'no recorded path is available for a runtime probe');
     }
-    const configuredRoot = process.env['CLAUDE_PLUGIN_ROOT'];
-    const pluginRoot = configuredRoot === undefined || configuredRoot === ''
-        ? PACKAGE_ROOT
-        : resolve(process.cwd(), configuredRoot);
     const payload = JSON.stringify({
         session_id: 'commitlore-doctor',
         cwd,
@@ -320,18 +325,23 @@ const checkInjectRuntime = (opts) => {
         tool_name: 'Edit',
         tool_input: { file_path: resolve(cwd, path) },
     });
-    const run = spawnSync('/bin/bash', [installedPath('scripts/commitlore-run.sh'), 'inject', '--hook-input'], {
+    const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
+    const executable = configured.slice(0, configured.indexOf(' '));
+    const args = configured.slice(executable.length + 1).split(' ');
+    const run = spawnSync(executable, args, {
         shell: false,
         encoding: 'utf8',
         cwd,
         input: payload,
         env: {
-            PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+            PATH: process.env['PATH'] ?? '/usr/bin:/bin',
             HOME: process.env['HOME'] ?? '',
-            CLAUDE_PLUGIN_ROOT: pluginRoot,
         },
     });
     if (run.error !== undefined) {
+        if ('code' in run.error && run.error.code === 'ENOENT') {
+            return check(id, title, 'fail', `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`, unavailableFix);
+        }
         return check(id, title, 'fail', `could not run the PreToolUse hook: ${run.error.message}`, fix);
     }
     if (run.status !== 0) {
