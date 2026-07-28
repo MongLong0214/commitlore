@@ -64,17 +64,7 @@ No install step is required just to read the protocol: every record is an ordina
 
 **Analysis set — all 112 rows.** Nothing was excluded: no simulated rows, no failed runs, no run that never started.
 
-**Significance:**
-
-| Quantity | Value |
-|---|---|
-| Arms | `commitlore-on` (treatment) vs `commitlore-guard` (baseline) |
-| Re-proposed / did not | `commitlore-on` 35/21, `commitlore-guard` 41/15 |
-| Fisher exact, two-tailed | p = 0.3117 |
-| Rate difference, treatment minus baseline | -10.7pp, 95% CI [-27.1pp, 6.5pp] |
-| Odds ratio | 0.6098 |
-| Paired (task, seed) cells | 56 |
-| Rows excluded from the analysis set | 0 |
+**Significance:** not computed — guard exposure is unknown for 112 analysis rows
 
 **How the runs ended** — failures are reported, not filtered:
 
@@ -87,8 +77,7 @@ No install step is required just to read the protocol: every record is an ordina
 
 - No model is recorded — neither on the rows nor in a manifest. A re-proposal rate whose model is unknown is not a comparable number, and these figures must not be quoted against another model's.
 - Every rate here is conditional on the model that produced it. Re-proposal is a behaviour, and behaviours differ between models, so these figures are not evidence about any other model.
-- 56 and 56 runs per arm: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
-- Fisher exact treats the runs as independent while the design is paired by (task, seed). It is the pre-registered test and, on paired data, the conservative choice rather than the most powerful one.
+- 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
 <!-- BENCH:END -->
 
 The registered hypothesis — that an agent which can see recorded decisions re-proposes a rejected approach less often — has not been supported by any measurement run so far. M1, M1-b and M2 were null on a task set that was mostly silent (seven of ten tasks never showed a control-arm re-proposal); a later run, M3, was voided because the binary under test changed while it ran ([`PREREGISTRATION.md` §15](bench/PREREGISTRATION.md#15-m3-is-void-the-binary-under-test-changed-while-it-ran)).
