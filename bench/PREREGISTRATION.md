@@ -786,6 +786,35 @@ registered control-only six-seed threshold and isolated-checkout rule. The sole
 discrepancy is the supplied aggregate label above; it changes neither which tasks
 qualified nor the fixed n.
 
+### Executed M4 measurement — result
+
+Recorded after both treatment arms ran. The full verdict is `bench/VERDICT-M4.md`;
+this is the registered outcome stated once, for the record this document keeps of
+every measurement it describes.
+
+8 tasks × 7 seeds × 2 arms = **112 runs**, `commitlore-on` and `commitlore-guard`,
+from the isolated checkout at `081d858c1667455f90b6d012e62a2cd2a549c50c`. Every
+row carries that `harness_commit` and one `dist_digest`
+(`f658927cae15c92a1cba2b7f0dc21119f47e2d72aea412d90489c42eb890b75e`), satisfying
+the precondition above. Data: `bench/results/t702-m4-final.jsonl`.
+
+| arm | re-proposed | rate |
+|---|---:|---:|
+| `commitlore-on` | 35/56 | 62.5% |
+| `commitlore-guard` | 41/56 | 73.2% |
+
+Fisher exact, two-tailed: **p = 0.3117.** Rate difference −10.7pp, 95% CI
+[−27.1pp, +6.5pp]. Odds ratio 0.6098. Violations: 0/56 in both arms. One
+`commitlore-on` row (`qualification-gitseed-grading-fail-fast`, seed 5) stopped
+by `over-turns`; it is counted, not excluded (§4).
+
+**Not significant at α = 0.05.** Unlike M1 and M2, this instrument was not
+silent: all eight tasks produced re-proposals in both arms, at aggregate rates
+(62.5%, 73.2%) in the band the qualification round predicted (77% supplied
+aggregate, §16 above). The null here is not attributable to an empty
+instrument. Per §16, "what a null result means": the product claim rests where
+it already held, independent of this benchmark.
+
 ---
 
 ## 17. Zero-context delegation — a validity condition, not a preference
