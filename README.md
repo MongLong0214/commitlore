@@ -126,6 +126,32 @@ npm run build:binary
 
 `dist/commitlore` needs no Node, no interpreter and no `node_modules` at runtime — `doctor`, `validate`, `context`, `guard`, `inject`, and `index --rebuild` all run against `PATH=/usr/bin:/bin`. It is not committed (it is large, platform- and architecture-specific, and rebuilt by CI on every push rather than diffed); `commitlore hooks install` and the plugin's `PreToolUse` hook both resolve it automatically once built.
 
+### Install a prebuilt release binary
+
+For a machine with neither Node nor a clone: every `vX.Y.Z` tag builds one binary per platform (`.github/workflows/release.yml`), attaches a `SHA256SUMS` covering all of them, and attests each asset with [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) (Sigstore-backed, publicly verifiable, no key this project manages).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` detects your OS and architecture, downloads the matching asset and `SHA256SUMS` from the same release, and verifies the checksum **before** installing anything — read it before piping it to `sh`, the same way you would any install script. Pass a version to pin one: `sh install.sh v0.1.0`. Published targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. There is no Windows binary yet — the SEA build and the commit-msg hook shim are unverified there; see [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md).
+
+Piping to a shell should never be the *only* documented path. The same install, by hand:
+
+```bash
+version=0.1.0   # or: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # or x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# Verify before extracting. "OK" or it stops here — do not run a binary that fails this.
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
 ## GitHub Actions
 
 Jobs that run a query, guard, or inject command must fetch the complete history:

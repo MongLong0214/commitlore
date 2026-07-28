@@ -4,6 +4,7 @@
   "description": "Git commit trailers as institutional memory for AI coding agents",
   "license": "MIT",
   "type": "module",
+  "private": true,
   "bin": {
     "commitlore": "dist/cli.js"
   },
