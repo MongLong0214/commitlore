@@ -11,6 +11,7 @@ const CLEAN = path.join(FIXTURES, 'clean.jsonl');
 const GENERATED_README = path.join(FIXTURES, 'readme-in-sync.md');
 const PUBLIC_READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh-CN.md'] as const;
 const WITHDRAWAL_MARKER = '<!-- BENCH:WITHDRAWN -->';
+const GENERATED_BEGIN = '<!-- BENCH:BEGIN -->';
 const tempDirs: string[] = [];
 
 const runChecker = (...args: string[]) => {
@@ -34,13 +35,18 @@ afterEach(() => {
 });
 
 describe('README benchmark publication state', () => {
-  it('accepts the withdrawal notice in all four READMEs while the declared datasets lack provenance', () => {
+  it('publishes the generated numbers block in all four READMEs now that the declared M4 dataset has provenance', () => {
+    // README_SOURCES (bench/report.ts) declares bench/results/t702-m4-final.jsonl, and
+    // every row in that file carries a uniform harness_commit and dist_digest — the M1/M1-b/M2
+    // datasets it replaced did not, which is why the withdrawal notice existed at all.
     const result = runChecker();
 
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
     for (const readme of PUBLIC_READMES) {
-      expect(fs.readFileSync(path.join(REPO_ROOT, readme), 'utf8')).toContain(WITHDRAWAL_MARKER);
+      const markdown = fs.readFileSync(path.join(REPO_ROOT, readme), 'utf8');
+      expect(markdown).not.toContain(WITHDRAWAL_MARKER);
+      expect(markdown).toContain(GENERATED_BEGIN);
     }
   });
 

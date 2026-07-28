@@ -39,9 +39,20 @@ Current: `dev` default branch, CI green, 1171 tests/33 files, 10/10 review block
 | Phase | Work | Gate |
 |---|---|---|
 | **3** | Plugin manifest redeclares conventional-location `hooks` — double registration likely. No manifest tests | Manifest suite green + clone contains every declared file |
-| **4** | **Design and run M4** (below) + execute every item in `docs/RELEASE-GATE.md` | All 6 gate sections pass, CI green at that commit |
+| **4** | ~~Design and run M4~~ **Done, null.** Execute every remaining item in `docs/RELEASE-GATE.md` | All 6 gate sections pass, CI green at that commit |
 
 ### M4 — the answer to why M1 and M2 were null
+
+**Executed.** `bench/PREREGISTRATION.md` §16, run from an isolated checkout, 8 qualifying
+tasks × 7 seeds × 2 arms = 112 runs, every row carrying a uniform `harness_commit` and
+`dist_digest`. The qualification round's diagnosis held: all eight tasks reproposed in
+both arms (62.5% and 73.2% aggregate), against M1/M2's seven-of-ten silent tasks. The
+registered test — `commitlore-guard` against `commitlore-on`, two-tailed Fisher exact —
+is **not significant** (`bench/VERDICT-M4.md`). Two limitations the tooling itself
+surfaced: no manifest was written, so the model behind these 112 rows is unrecorded
+(filed as [#106](https://github.com/MongLong0214/commitlore/issues/106)); one
+`commitlore-on` row was truncated by `over-turns` and is recorded, not excluded. The
+product claim below is now the operative one — see *Completion condition*.
 
 **Diagnosis (measured)**: of 10 tasks, **7 have a control base rate of 0**. Even without CommitLore,
 the agent does not propose the rejected approach. Tasks with nothing to block made up 70% of the
@@ -76,10 +87,11 @@ Power is governed more by the base rate than the sample. For an effect that cuts
 Every section of `RELEASE-GATE.md` has been executed and passed, CI is green **at that commit**,
 and every remaining issue is a feature on a defensible axis rather than a defect.
 
-**A positive benchmark is not required.** If M4 is null again, that is the result, and it will be
-published. In that case, the product claim is not "makes agents better," but **"binds decision history
-to git and preserves it in a human-verifiable form."** The latter is already proven by tests
-and remains true independent of the benchmark.
+**A positive benchmark is not required.** M4 came back null, on a fully-powered,
+non-silent instrument (`bench/VERDICT-M4.md`) — the exact outcome this section committed to
+publishing in advance. The product claim is therefore not "makes agents better," but
+**"binds decision history to git and preserves it in a human-verifiable form."** The latter
+is already proven by tests and remains true independent of the benchmark.
 
 ---
 

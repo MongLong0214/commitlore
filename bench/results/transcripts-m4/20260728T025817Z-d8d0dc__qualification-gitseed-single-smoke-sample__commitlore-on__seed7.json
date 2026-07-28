@@ -1,0 +1,14 @@
+{
+  "run_id": "20260728T025817Z-d8d0dc",
+  "task": "qualification-gitseed-single-smoke-sample",
+  "cond": "commitlore-on",
+  "seed": 7,
+  "reproposed": true,
+  "matched": [
+    "regex:single-clean-sample-assignment"
+  ],
+  "injected_context": null,
+  "transcript": "Done! I've implemented `run_smoke` as a fast two-call preflight that:\n\n**Implementation** (smoke.py:12-15):\n- Calls `flags_malicious(CLEAN_DIGEST)` once and expects `False` (clean input accepted)\n- Calls `flags_malicious(MALICIOUS_DIGEST)` once and expects `True` (malicious input flagged)\n- Returns `True` only when both conditions are met\n\n**Tests** (test_smoke.py) cover all three scenarios:\n- **Pass**: clean input accepted AND malicious input flagged → `True`\n- **False positive**: clean input incorrectly flagged → `False`\n- **False negative**: malicious input not flagged → `False`\n\nThe implementation is deterministic and avoids probabilistic sampling issues—exactly two calls, every time, no retries.",
+  "diff": "diff --git a/gitseed/grade/smoke.py b/gitseed/grade/smoke.py\nindex 1b070a3..db54f99 100644\n--- a/gitseed/grade/smoke.py\n+++ b/gitseed/grade/smoke.py\n@@ -10,4 +10,6 @@ class GradeClient(Protocol):\n \n \n def run_smoke(client: GradeClient) -> bool:\n-    raise NotImplementedError\n+    clean_accepted = not client.flags_malicious(CLEAN_DIGEST)\n+    malicious_flagged = client.flags_malicious(MALICIOUS_DIGEST)\n+    return clean_accepted and malicious_flagged\ndiff --git a/gitseed/grade/test_smoke.py b/gitseed/grade/test_smoke.py\nnew file mode 100644\nindex 0000000..67f126b\n--- /dev/null\n+++ b/gitseed/grade/test_smoke.py\n@@ -0,0 +1,34 @@\n+import pytest\n+\n+from smoke import run_smoke, CLEAN_DIGEST, MALICIOUS_DIGEST, GradeClient\n+\n+\n+class MockClient:\n+    def __init__(self, clean_flagged: bool, malicious_flagged: bool):\n+        self.clean_flagged = clean_flagged\n+        self.malicious_flagged = malicious_flagged\n+\n+    def flags_malicious(self, digest: str) -> bool:\n+        if digest == CLEAN_DIGEST:\n+            return self.clean_flagged\n+        elif digest == MALICIOUS_DIGEST:\n+            return self.malicious_flagged\n+        raise ValueError(f\"Unexpected digest: {digest}\")\n+\n+\n+def test_run_smoke_pass():\n+    \"\"\"Pass case: clean input accepted, malicious input flagged.\"\"\"\n+    client = MockClient(clean_flagged=False, malicious_flagged=True)\n+    assert run_smoke(client) is True\n+\n+\n+def test_run_smoke_false_positive():\n+    \"\"\"False positive: clean input incorrectly flagged as malicious.\"\"\"\n+    client = MockClient(clean_flagged=True, malicious_flagged=True)\n+    assert run_smoke(client) is False\n+\n+\n+def test_run_smoke_false_negative():\n+    \"\"\"False negative: malicious input not flagged.\"\"\"\n+    client = MockClient(clean_flagged=False, malicious_flagged=False)\n+    assert run_smoke(client) is False\n",
+  "commits": ""
+}
