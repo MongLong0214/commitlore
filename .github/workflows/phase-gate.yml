@@ -1,0 +1,124 @@
+name: Phase Gate
+
+# Runs `phase-gate.py` from the repo-factory skill against this repo's live
+# GitHub state and fails the build when a phase's conditions are not met.
+#
+# The script itself has always exited non-zero on failure; the gap this
+# workflow closes is that it previously could not run anywhere but the
+# operator's own machine (`~/.claude/skills/repo-factory/scripts/`), which no
+# CI runner can reach — recorded in docs/ROADMAP-TO-DONE.md's Goal 3 table.
+# See github.com/MongLong0214/repo-factory-gate for the published, pinned
+# copy this workflow fetches, and that repo's README for why it is fetched
+# by commit SHA + sha256 rather than vendored into this repo (vendoring would
+# create a second copy of the gate that can answer the same question
+# differently than gitseed's copy — the exact class of defect ADR/issue
+# history here already closed repeatedly for CommitLore's own trust logic).
+#
+# Trigger design (deliberately not "every push"): Phase 5's own condition —
+# zero open non-Backlog issues — is false for most of an active wave by
+# construction (planned work sits open until closed; #52 is open right now
+# for exactly that reason). Gating it on every commit to `dev` would keep
+# this repo's CI red through ordinary, unremarkable development and train
+# reviewers to ignore it — the "brittle gate" failure `github_checks()`
+# itself was written to avoid (see its own comment on exact vs. prefix
+# matching for the Backlog milestone). Phase 4 and 5 are therefore on-demand
+# (`workflow_dispatch`), asked at the moment someone actually wants the
+# phase-completion answer, exactly as `references/self-improvement-loop.md`
+# describes using the gate. Phase 6 (ship) is different: once its conditions
+# are met they stay met (the tag stays reachable from `main`/`dev`, CI at
+# that commit does not un-succeed), so it is safe — and useful — to also run
+# automatically on every release tag push.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "repo-factory phase to check (4 = repo genesis, 5 = wave execution, 6 = ship)"
+        required: true
+        type: choice
+        options:
+          - "4"
+          - "5"
+          - "6"
+        default: "5"
+      release_tag:
+        description: "Phase 6 only — override which release tag to check (default: latest annotated vX.Y.Z reachable from main)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+env:
+  GATE_MIRROR_REPO: MongLong0214/repo-factory-gate
+  # Pin by commit SHA, not a branch — bump both together via
+  # `~/.claude/skills/repo-factory/scripts/publish-gate.sh`, never by editing
+  # just one.
+  GATE_SHA: b98ffa3e144c02b17a1da73c84c5fe1b07e3eef1
+  GATE_SHA256: bc8987b63fc7a2111e18fb4d08e69bb96083f677e604be2d5c2a316d3bc7a397
+
+jobs:
+  phase-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine which phase to check
+        id: which
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "phase=${{ inputs.phase }}" >> "$GITHUB_OUTPUT"
+          else
+            # Tag push (v*.*.*): the natural, automatic trigger for the
+            # Phase 6 (ship) gate.
+            echo "phase=6" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch phase-gate.py (pinned commit SHA, verified by sha256)
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/${GATE_MIRROR_REPO}/${GATE_SHA}/phase-gate.py" -o phase-gate.py
+          echo "${GATE_SHA256}  phase-gate.py" | sha256sum -c -
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        if: steps.which.outputs.phase == '4'
+        with:
+          node-version: 22
+
+      - name: "Phase 4 only: point commitlore.bin/commitlore.node at this checkout's own build"
+        if: steps.which.outputs.phase == '4'
+        run: |
+          set -euo pipefail
+          test -f "$GITHUB_WORKSPACE/dist/commitlore.mjs" || { echo "::error::dist/commitlore.mjs missing — is dist/ checked in at this ref?"; exit 1; }
+          git config --local commitlore.bin "$GITHUB_WORKSPACE/dist/commitlore.mjs"
+          git config --local commitlore.node "$(command -v node)"
+
+      - name: "Phase gate — fails the build (nonzero exit) when the phase's conditions are not met"
+        env:
+          # gh needs a token to answer branch/milestone/issue/tag/CI-run
+          # questions. If this were absent, phase-gate.py does not skip those
+          # checks — `github_checks()` / `_gh_unavailable_reason()` report each
+          # of them as an explicit FAIL ("gh CLI 인증 실패"), so a
+          # misconfigured runner shows up as a red build, not a quiet pass.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          phase="${{ steps.which.outputs.phase }}"
+          cmd=(python3 phase-gate.py "$phase" --repo "${{ github.repository }}" --path "$PWD")
+          release_tag="${{ inputs.release_tag }}"
+          if [ "$phase" = "6" ] && [ -n "$release_tag" ]; then
+            cmd+=(--release-tag "$release_tag")
+          fi
+          "${cmd[@]}"

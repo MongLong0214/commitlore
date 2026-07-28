@@ -128,7 +128,7 @@ Current: SKILL.md (6 phases, 11 invariants) · 9 references · 3 scripts.
 |---|---|
 | `create-issues.py` and `verify-citations.py` produce raw tracebacks on directories and unreadable files | Discovery complete (STATUS.md). Fix in a separate ticket — mixing discovery and the fix in one commit lets the fix skip review |
 | The gate covers **only Phase 4** | 11 invariants were created but applied to only one phase. Phase 5 and 6 are next |
-| `phase-gate.py` lives in `~/.claude/skills/`, so it is **absent from the CI runner** | CI use requires vendoring. Nobody is doing it |
+| ~~`phase-gate.py` lives in `~/.claude/skills/`, so it is **absent from the CI runner**~~ — **resolved**, pending review | Published to `github.com/MongLong0214/repo-factory-gate`, pinned by commit SHA + sha256. Both this repo and gitseed gained `.github/workflows/phase-gate.yml` (`workflow_dispatch` for Phase 4/5, automatic on `vX.Y.Z` tag push for Phase 6). Vendoring was ruled out — it would create a second copy of the gate free to drift from CommitLore's own, the same defect class #89/#90 closed. Moving the gate into a project was ruled out too — it inverts the dependency. See gitseed#76, commitlore#103, and the PRs each references |
 
 ### Completion condition
 
