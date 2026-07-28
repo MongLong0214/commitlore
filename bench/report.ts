@@ -83,7 +83,8 @@ export const README_SOURCES: readonly DeclaredSource[] = [
       "The registered M4 measurement (PREREGISTRATION.md §16), the qualification-gated matrix whose primary " +
       "comparison is `commitlore-guard` against `commitlore-on`. Run from an isolated checkout against frozen " +
       "code `081d858c1`, under the environment controls of §5-b; every row carries a uniform `harness_commit` " +
-      "and `dist_digest`. The verdict is bench/VERDICT-M4.md. M1 (bench/VERDICT-M1.md), M1-b " +
+      "and `dist_digest`. bench/VERDICT-M4.md is historical; docs/VERDICT-M4.md is the correction. M1 " +
+      "(bench/VERDICT-M1.md), M1-b " +
       "(bench/VERDICT-M1b.md) and M2 (bench/VERDICT-M2.md) are not revised and are not pooled here — a " +
       "different task set and a third arm make them a different matrix, the same reason the ablation log below " +
       "stays out of this list. M3 is void (§15). No manifest exists for this file: `runner.ts` does not write " +
@@ -679,7 +680,8 @@ export const buildReport = (sources: Sources): string => {
   if (comparison !== null) {
     lines.push(
       "- Fisher exact treats the runs as independent while the design is paired by (task, seed). It is the " +
-        "pre-registered test and, on paired data, the conservative choice rather than the most powerful one.",
+        "pre-registered result, but it is not a valid paired-data test. See the correction in " +
+        "[`docs/VERDICT-M4.md`](docs/VERDICT-M4.md).",
     );
   }
 

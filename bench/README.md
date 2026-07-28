@@ -4,7 +4,9 @@
 harness commit and the `dist/` digest for every row, `bench/report.ts` summarizes
 it, and the README's numbers block is generated from it. M3 was voided for
 lacking that provenance (§15); M4 was designed, registered and run to supply it,
-and its result is null — see `bench/VERDICT-M4.md`. Every earlier dataset
+and its result is null. The historical executed report is
+`bench/VERDICT-M4.md`; the canonical paired-and-clustered correction is
+`docs/VERDICT-M4.md`. Every earlier dataset
 (M1, M1-b, M2) still lacks the fields and is not pooled into the generated block
 for that reason, not because it was withdrawn as a record; each has its own
 verdict document.
@@ -934,8 +936,10 @@ Anyone reading a null result from this harness has to read this table with it.
 
 Fisher exact also treats runs as independent, while the design is paired by
 (task, seed). The output says so. The test is the one ADR-0007 and T-702
-registered, and on paired data it is the conservative choice rather than the
-most powerful one.
+registered, but it does not provide a valid hypothesis test for paired data.
+The original number remains part of the historical report; the registered
+replacement and M4 correction are in `docs/MEASUREMENT-PROTOCOL.md` and
+`docs/VERDICT-M4.md`.
 
 ### What makes the measured effect a floor — one thing, not two
 
@@ -1058,9 +1062,10 @@ Still open:
    runs can and cannot detect*. Raising seeds or tasks is the only fix; no choice
    of test recovers power that the sample size does not contain.
 4. **Fisher exact ignores the pairing.** The design is paired by (task, seed);
-   the registered test treats runs as independent. A paired test (McNemar, or a
-   mixed model over tasks) would use the design, and should be decided in ADR-0007
-   rather than swapped in after seeing a p-value.
+   the registered test treats runs as independent and is invalid here. M4 keeps
+   that original result beside its post-result correction; future measurements
+   use the paired and clustered design registered in
+   `docs/MEASUREMENT-PROTOCOL.md`.
 5. Transcript-level re-proposal detection (negation) — see *Detection surfaces*.
    The saved transcripts from this run are the calibration input.
 6. Whether `records-uninjected` becomes a third arm — see *the control arm*. This

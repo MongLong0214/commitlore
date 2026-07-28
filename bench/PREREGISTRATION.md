@@ -879,3 +879,180 @@ Briefs get shorter and less comfortable to write. The operator loses the ability
 steer the agent toward the known-good design, which is precisely the ability whose
 absence is being measured. Work will be redone that a leaking brief would have got
 right the first time, and the cost of that redo is the measurement.
+
+---
+
+## 18. M4 outcome correction and the protocol registered before any re-run
+
+Appended after M4's result was visible. Sections 1–17 remain the rules that were
+actually registered; nothing above is rewritten to make the executed run match a
+later design. This section records the divergence and registers
+[`docs/MEASUREMENT-PROTOCOL.md`](../docs/MEASUREMENT-PROTOCOL.md) for every
+measurement whose collection starts after this entry. No benchmark was re-run for
+this correction.
+
+### M4's data and original result
+
+The final artifact has 112 usable rows: eight tasks × seven seeds × two arms. All
+rows carry one harness commit and one dist digest, with no exclusions. The raw rates
+are `commitlore-on` 35/56 and `commitlore-guard` 41/56.
+
+Section 16 registered three arms, but this artifact contains only the two arms in
+the primary `guard`-against-`on` comparison; no `commitlore-off` result is
+fabricated. It records zero constraint violations in each present arm (0/56,
+Wilson 95% CI 0%–6.4%) but no separate cited-compliance outcome, so that
+registered secondary outcome cannot be reported. One `commitlore-on`
+`grading-fail-fast` row finished on its own past the unenforced turn budget and
+is labelled `over-turns`; all other rows finished within budget. The row was not
+stopped or truncated, re-proposed, and remains in every analysis.
+
+This supersedes §16's historical phrase "stopped by `over-turns`." Section 11
+defines the label as an observation after natural completion, not an enforced
+stop, so §16's wording was wrong even though its inclusion decision was right.
+
+The registered independent-groups analysis reported:
+
+- two-tailed Fisher exact `p = 0.3117`;
+- `on − guard = −10.7pp`; and
+- independent Newcombe 95% CI `[−27.1pp, +6.5pp]`.
+
+That test is not valid for the executed design. Each `(task, seed)` appears in both
+arms, so the 112 rows form 56 pairs rather than two independent samples.
+
+### Corrected paired and clustered result
+
+The paired table has 46 concordant pairs, `b = 2` where guard prevented a
+re-proposal, and `c = 8` where guard re-proposed and `on` did not.
+
+- McNemar mid-p: `p = 0.0654`.
+- Exact conditional McNemar sensitivity: `p = 0.1094`.
+- Equal-weight analysis of all eight task-cluster differences:
+  `on − guard = −10.7pp`, 95% CI `[−23.1pp, +1.6pp]`,
+  `t(7) = −2.049`, `p = 0.0796`.
+
+The task analysis is the transparent cluster correction available without
+choosing a new GEE or GLMM after the outcome was visible. It does not alter the
+prospective protocol: future paired clustered benchmarks use the permutation
+test registered below. GEE, GLMM and the unweighted task analysis are
+sensitivity analyses only.
+
+The test was changed after the result was seen. This is a correction of an error,
+not a re-cut in search of significance. The honest reason it is safe here is that
+**both analyses are null, so nothing about the conclusion turns on the change**. If
+they had disagreed, the corrected analysis could not simply replace the original;
+an independently registered run would be required.
+
+The pooled binary outcome has ANOVA `ICC = 0.581`, equal task-cluster size 14,
+`DEFF = 8.56`, and effective `n = 112 / 8.56 = 13.09` (13 rounded). Nominal n,
+pair count, cluster count, ICC, design effect and effective n are now reported
+together.
+
+### The executed qualification diverged from the usable-instrument rule
+
+Section 16 registered a floor only: at least 4/6 comparator re-proposals. Four of
+the eight selected tasks then ran 7/7 in both measured arms and contributed no
+discordance. Five candidates had qualified at 6/6; four of them became those four
+saturated tasks.
+
+The 4/6–5/6 rule registered in the first version of the prospective protocol is
+withdrawn before any future collection. It treated the binary symptom rather
+than the measurement defect. A count outcome preserves the difference between
+one and several re-proposals; a 5/6 ceiling would then discard the tasks with
+the most observable events, while a 4/6 floor would dichotomize the new count
+during selection. Dichotomizing counts loses granularity and power
+([Geroldinger et al.,
+2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10729462/)), and ceiling/floor
+compression makes a measure insensitive to real differences
+([Šimkovic and Träuble,
+2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6699673/)).
+
+Future calibration therefore evaluates the prespecified task pool as a whole.
+It estimates the count distribution and task ICC for the power simulation but
+does not drop individual tasks. The pool proceeds intact or collection stops
+before a treatment run. The completed M4 is not subset: §4 still holds, and all
+eight tasks remain in the corrected analysis.
+
+Implementation is tracked in
+[#109](https://github.com/MongLong0214/commitlore/issues/109).
+
+### Protocol registered for future measurements
+
+The full registration is
+[`docs/MEASUREMENT-PROTOCOL.md`](../docs/MEASUREMENT-PROTOCOL.md). Its
+confirmatory choices are fixed here:
+
+1. **Outcome:** `RunRecord.violations`, the non-negative count of distinct,
+   mechanically detected re-proposal clauses matched in one run, with one
+   labelled `violation_if` clause per prohibited re-proposal fixed before
+   collection. The current row type already records that integer count and
+   `matched` evidence, but not a first-event time or calibrated ordinal
+   severity. Count is chosen over
+   binary because dichotomization reduced power in small cross-over studies
+   ([Geroldinger et al.,
+   2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10729462/)). Time-to-event is
+   rejected because `RunRecord` has no first-event timestamp and would discard
+   later events; ordinal severity is rejected because no registered scale or
+   thresholds exist, although ordinal models can preserve information under
+   ceiling/floor effects
+   ([Hedeker, 2015](https://pmc.ncbi.nlm.nih.gov/articles/PMC4270960/)).
+2. **Test:** for each `(task, seed)` pair, swap the arm label within the pair.
+   The two-sided `α = 0.05` statistic is the equal-weight mean of the task-level
+   mean paired count differences. Fully enumerate `2^P` assignments for
+   `P ≤ 20`; otherwise use 99,999 random assignments plus the observed one and
+   the plus-one p-value. The 95% interval is obtained by inverting that same
+   permutation test. Permutation is chosen over GEE/GLMM because model-based
+   inference can inflate type I error with few clusters, whereas permutation
+   procedures preserve nominal error without that approximation
+   ([Leyrat et al.,
+   2018](https://academic.oup.com/ije/article/47/1/321/4091562);
+   [Maleyeff et al.,
+   2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12365356/)).
+3. **Size:** M4's eight tasks × seven seeds are only
+   `56 / (1 + 6 × 0.581) = 12.48` effective pairs and detect approximately
+   `d = 0.87`, not the registered one-third binary-rate reduction. The shipping
+   threshold is 0.5 fewer re-proposal violations per run, planned as `d = 0.5`;
+   one prevented revival every two runs is worth the avoided rework. At 80%
+   power, two-sided 5%, seven seeds and ICC 0.581, the planning minimum is **22
+   tasks × 7 seeds = 154 pairs and 154 runs per arm**. At least 10,000 design
+   simulations using the exact registered permutation analysis must confirm 80%
+   power before collection; otherwise add tasks. The alternatives rejected are
+   56/arm and adding seeds to the same eight clusters, whose effective
+   information asymptotes at `8 / 0.581 = 13.77`
+   ([Leyrat et al.,
+   2018](https://academic.oup.com/ije/article/47/1/321/4091562);
+   [Watson, Akinyemi and Hemming,
+   2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+4. **Multiplicity:** the pooled test is the single primary test. If all eight
+   current task effects are tested, they are one secondary family controlled by
+   the Romano–Wolf stepdown procedure using the same joint permutations, with
+   adjusted p-values and simultaneous 95% intervals. A larger future pool keeps
+   all task effects in one family. No correction, Bonferroni and Holm are
+   rejected: the first inflates family-wise error, Bonferroni was conservative
+   under correlation, and Romano–Wolf was more efficient than Holm while
+   retaining nominal error and coverage
+   ([Watson, Akinyemi and Hemming,
+   2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+
+### Exposure and model were not recorded
+
+In all 112 rows, `matched.length > 0` is identical to `reproposed`. That is outcome
+evidence, not evidence that guard fired. The artifact records assignment but no
+treatment opportunity or exposure, so it cannot distinguish "applied and did
+nothing" from "never applied." Future experiments fail the exposure gate and are
+not analysed when exposure is unverifiable
+([#108](https://github.com/MongLong0214/commitlore/issues/108)).
+
+The original 93-row tranche and the final 112-row artifact also carry no `model`,
+and no M4 manifest supplies one. The observations cannot be attributed to a
+specific model ([#106](https://github.com/MongLong0214/commitlore/issues/106)).
+The prospective protocol therefore applies the same pre-analysis gate to model,
+harness and executable provenance: identities must be present and uniform (or
+registered as strata), otherwise no confirmatory analysis is performed.
+
+Section 16 calls `bench/VERDICT-M4.md` the "full verdict." That remains the
+historical executed report, including the registered Fisher result; it is not
+the canonical corrected analysis. The complete corrected verdict is
+[`docs/VERDICT-M4.md`](../docs/VERDICT-M4.md), and the historical report now
+links to it explicitly. M4's observations remain valid and its result remains
+null. What failed is the measurement design's ability to discriminate.
+Recorded harness/dist provenance is uniform; model provenance is missing.
