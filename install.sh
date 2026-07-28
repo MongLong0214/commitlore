@@ -145,6 +145,21 @@ log "checksum verified ($actual)"
 tar -xzf "$asset_file" -C "$work" commitlore
 chmod +x "$work/commitlore"
 
+# The checksum proves the bytes are the ones the release published — it says
+# nothing about whether this machine can *run* them. The published target is
+# `<arch>-unknown-linux-gnu`: built against glibc, dynamically linked against
+# glibc's loader. A musl-libc host (Alpine and its `#!/bin/sh` -> busybox ash
+# are the common case; there is no `-musl` asset for this target) has no
+# `/lib/ld-linux-*.so.*` for that binary to run against, and the kernel's
+# refusal to exec it surfaces as a bare "not found" from the shell — which
+# reads exactly like a typo in this script, not a platform gap. Executing the
+# freshly extracted binary here, before it is copied anywhere, turns that
+# into the same clear, attributed failure every other unsupported-platform
+# case in this script already gives.
+if ! "$work/commitlore" --version >/dev/null 2>&1; then
+  die "the downloaded binary for $target does not run on this machine (nothing was installed). This usually means a musl-libc host such as Alpine — only glibc (\"-gnu\") Linux binaries are published, and Alpine's dynamic linker cannot load them. Install from source instead: https://github.com/$REPO#install-from-the-clone" 1
+fi
+
 if [ -n "${COMMITLORE_INSTALL_DIR:-}" ]; then
   dest_dir="$COMMITLORE_INSTALL_DIR"
 elif [ -n "${PREFIX:-}" ]; then
