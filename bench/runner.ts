@@ -7,7 +7,7 @@ import { Command } from "commander";
 
 import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
 import { digestDistTree, HOOK_PLANS, noGuardExposure, readGuardExposure, writeArmSettings } from "./hooks-settings.ts";
-import { countViolations, evaluateGroup } from "./detect.ts";
+import { countReproposalMatches, countViolations } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
 import { readCommits } from "./git.ts";
@@ -249,6 +249,7 @@ const main = async (): Promise<number> => {
             seed,
             model: recordedModel,
             reproposed: false,
+            reproposal_matches: 0,
             violations: 0,
             turns: 0,
             tokens: 0,
@@ -299,7 +300,7 @@ const main = async (): Promise<number> => {
           });
 
           const surfaces = collectSurfaces(workspace, result.transcript);
-          const reproposed = evaluateGroup(task.detect.reproposed_if, surfaces);
+          const reproposed = countReproposalMatches(task.detect.reproposed_if, surfaces);
           const violations = countViolations(task.detect.violation_if, surfaces);
 
           // A detector verdict nobody can re-read is a verdict nobody can
@@ -318,6 +319,7 @@ const main = async (): Promise<number> => {
                   cond: condition.id,
                   seed,
                   reproposed: reproposed.matched,
+                  reproposal_matches: reproposed.count,
                   matched: [...reproposed.labels, ...violations.labels],
                   injected_context: injectedContext,
                   ...surfaces,
@@ -340,6 +342,7 @@ const main = async (): Promise<number> => {
             seed,
             model: recordedModel,
             reproposed: reproposed.matched,
+            reproposal_matches: reproposed.count,
             violations: violations.labels.length,
             turns: result.turns,
             tokens: result.tokens,
@@ -365,6 +368,7 @@ const main = async (): Promise<number> => {
             seed,
             model: recordedModel,
             reproposed: false,
+            reproposal_matches: 0,
             violations: 0,
             turns: 0,
             tokens: 0,
@@ -385,7 +389,7 @@ const main = async (): Promise<number> => {
 
         fs.appendFileSync(outPath, `${JSON.stringify(record)}\n`);
         process.stderr.write(
-          `${label} reproposed=${record.reproposed} violations=${record.violations} ` +
+          `${label} reproposed=${record.reproposed} reproposal_matches=${record.reproposal_matches} violations=${record.violations} ` +
             `turns=${record.turns} tokens=${record.tokens} stopped_by=${record.stopped_by}\n`,
         );
       }

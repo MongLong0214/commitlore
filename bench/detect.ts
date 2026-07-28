@@ -14,6 +14,10 @@ export interface DetectionResult {
   readonly labels: readonly string[];
 }
 
+export interface ReproposalMatchResult extends DetectionResult {
+  readonly count: number;
+}
+
 /**
  * Case, unicode form and whitespace are not signal — an agent proposing
  * "Redis" and one proposing "redis  cache" made the same proposal.
@@ -108,6 +112,11 @@ export const evaluateGroup = (group: MatcherGroup | undefined, surfaces: Surface
   const allSatisfied = allHits.length === allOf.length;
   const labels = [...anyHits, ...allHits].map(labelOf);
   return { matched: anySatisfied && allSatisfied, labels };
+};
+
+export const countReproposalMatches = (group: MatcherGroup, surfaces: Surfaces): ReproposalMatchResult => {
+  const result = evaluateGroup(group, surfaces);
+  return { ...result, count: new Set(result.labels).size };
 };
 
 /** Violations are counted per matched clause, so one run can carry several. */

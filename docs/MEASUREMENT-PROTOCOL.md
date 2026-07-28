@@ -11,15 +11,31 @@ test statistic, confidence level, pairing key, clustering key, count rule,
 power simulation, multiplicity family, and exposure gate. Any later divergence
 is recorded without editing the registered rule.
 
-## 1. Primary outcome: re-proposal violation count
+## 1. Primary outcome: re-proposal label count
 
-The primary outcome is `RunRecord.violations`, the non-negative count of
-distinct, mechanically detected re-proposal clauses matched in one run. The
-benchmark-specific registration defines `violation_if` with one labelled clause
-per prohibited re-proposal, fixes the match surface before collection, and
-includes fixtures proving that one matched clause scores 1 and five matched
-clauses score 5. `RunRecord.matched` retains the evidence for each counted
-clause.
+The primary outcome is `RunRecord.reproposal_matches`, the non-negative count
+of distinct, mechanically detected `reproposed_if` labels matched in one run.
+A label matched more than once still counts once. The runner records this field
+directly from `reproposed_if`; it does not derive it from `matched`, because
+`matched` combines re-proposal and `violation_if` evidence.
+
+The previous registration named `RunRecord.violations` and described it as a
+re-proposal count. That field does not measure what that description claimed:
+it counts task-specific `violation_if` clause matches. It remains recorded as
+instrumentation only. This corrects the registration's measurement label; it
+does not change the hypothesis mid-study.
+
+Before this outcome can be registered, the current-harness pilot is checked for
+non-zero variance, for not being zero on every row, and for not being at each
+task's structural maximum on every row. Refusal names the outcome and every
+failed condition. A task's structural maximum is its number of distinct
+`reproposed_if` labels, not the length of `matched`.
+
+M5 cannot be registered from M4's data. M4 recorded no per-run
+`guard_exposure`, so its rows cannot establish that a treatment was applied
+(issue #122 and `bench/VERDICT-M4.md`). A pilot on the current harness, whose
+rows carry `guard_exposure`, is required first; the registration guard runs on
+that pilot.
 
 This is a count rather than the old `reproposed: boolean`. Dichotomizing a count
 loses granularity and reduced power in small cross-over studies, while
@@ -29,8 +45,8 @@ ceiling/floor compression makes a measure insensitive to real differences
 2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6699673/)). That loss occurred in
 M4: a run with one re-proposal and a run with five both scored `true`.
 
-This choice uses fields that `bench/types.ts` already defines: the integer
-`violations` count and optional `matched` evidence. The type also carries
+This choice uses the integer `reproposal_matches` count and optional `matched`
+evidence. The type also carries
 numeric effort measures (`turns`, `tokens`, and `duration_ms`), but not the turn
 or time of the first re-proposal or an ordered severity judgment.
 

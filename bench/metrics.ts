@@ -14,6 +14,8 @@ import type { GuardExposure, RunRecord, StopReason } from "./types.ts";
  * this label everywhere a model is reported.
  */
 export const UNRECORDED_MODEL = "(unrecorded)";
+export const PRIMARY_OUTCOME = "reproposal_matches";
+export type PrimaryOutcome = typeof PRIMARY_OUTCOME;
 
 const modelOf = (row: RunRecord): string => {
   const value = row.model;
@@ -60,6 +62,44 @@ export const guardExposureState = (row: RunRecord): GuardExposureState => {
     return "unknown";
   }
   return exposure.fires > 0 ? "yes" : "no";
+};
+
+export const assertPrimaryOutcomeCanBeRegistered = (
+  outcome: PrimaryOutcome,
+  rows: readonly RunRecord[],
+  structuralMaximums: ReadonlyMap<string, number>,
+): void => {
+  if (rows.length === 0) throw new Error(`refusing to register primary outcome \`${outcome}\`: no pilot rows`);
+  const unexposed = rows.filter((row) => guardExposureState(row) === "unknown");
+  if (unexposed.length > 0) {
+    throw new Error(
+      `refusing to register primary outcome \`${outcome}\`: guard exposure is unknown for ${unexposed.length} pilot row(s)`,
+    );
+  }
+
+  const counts: number[] = [];
+  const taskMaxima: number[] = [];
+  for (const row of rows) {
+    const count = row.reproposal_matches;
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
+      throw new Error(`refusing to register primary outcome \`${outcome}\`: it is not a non-negative integer on every pilot row`);
+    }
+    const maximum = structuralMaximums.get(row.task);
+    if (typeof maximum !== "number" || !Number.isInteger(maximum) || maximum < 0) {
+      throw new Error(`refusing to register primary outcome \`${outcome}\`: structural maximum is missing for a pilot task`);
+    }
+    counts.push(count);
+    taskMaxima.push(maximum);
+  }
+  const failures: string[] = [];
+  if (new Set(counts).size === 1) failures.push("zero variance");
+  if (counts.every((count) => count === 0)) failures.push("pinned at 0 on every row");
+  if (counts.every((count, index) => count === taskMaxima[index])) {
+    failures.push("pinned at its structural maximum on every row");
+  }
+  if (failures.length > 0) {
+    throw new Error(`refusing to register primary outcome \`${outcome}\`: ${failures.join("; ")}`);
+  }
 };
 
 /**
@@ -318,6 +358,15 @@ export const parseRows = (file: string, contents: string): readonly RunRecord[] 
     const row = parsed as Record<string, unknown>;
     for (const field of REQUIRED_FIELDS) {
       if (row[field] === undefined) throw new Error(`${file}:${index + 1}: missing field \`${field}\``);
+    }
+    const reproposalMatches = row.reproposal_matches;
+    if (
+      reproposalMatches !== undefined &&
+      (typeof reproposalMatches !== "number" ||
+        !Number.isInteger(reproposalMatches) ||
+        reproposalMatches < 0)
+    ) {
+      throw new Error(`${file}:${index + 1}: \`reproposal_matches\` must be a non-negative integer`);
     }
     rows.push(parsed as RunRecord);
   });
