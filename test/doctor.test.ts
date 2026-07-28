@@ -26,6 +26,7 @@ import {
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
+import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -82,7 +83,8 @@ const repoWithRemote = (label: string): { repo: string; remote: string; sha: str
 const statusOf = (report: DoctorReport, id: string): CheckStatus | undefined =>
   report.checks.find((entry) => entry.id === id)?.status;
 
-const hookPath = (repo: string): string => join(repo, '.git', 'hooks', 'commit-msg');
+const hookPath = (repo: string): string =>
+  resolve(repo, git(repo, ['rev-parse', '--git-path', 'hooks/commit-msg']).trim());
 
 /** Writes a script, creating its directory: an empty init template leaves no `hooks/`. */
 const writeScript = (path: string, contents: string): void => {
@@ -90,13 +92,22 @@ const writeScript = (path: string, contents: string): void => {
   writeFileSync(path, contents);
 };
 
+/**
+ * `root` defaults to this project's own install root, matching where the
+ * default `bin` actually lives — the same thing a real `hooks install` would
+ * have recorded. Callers that pass an out-of-root `bin` (simulating a
+ * `.git/config` edit after install, #71) get that mismatch for free: `root`
+ * still reflects the legitimate install, `bin` no longer sits under it.
+ */
 const recordHookTarget = (
   repo: string,
   bin = resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'),
   node = process.execPath,
+  root = realpathSync(PACKAGE_ROOT),
 ): void => {
   git(repo, ['config', '--local', 'commitlore.bin', bin]);
   git(repo, ['config', '--local', 'commitlore.node', node]);
+  git(repo, ['config', '--local', 'commitlore.root', root]);
 };
 
 describe('doctor: notes fetch refspec', () => {
@@ -325,7 +336,14 @@ describe('doctor: a stale stub', () => {
     expect(check?.detail).toContain('commitlore.node:');
   });
 
-  it('warns for a byte-current hook whose recorded CLI is outside the package root', () => {
+  /**
+   * Before #71's install-root enforcement, a recorded CLI outside the package
+   * root was merely `warn` — a fact worth noting, not something the stub acted
+   * on, because it would run the file either way. Now the stub refuses it, so
+   * in the PATH-less environment `hook-runtime` probes with, the hook genuinely
+   * cannot resolve a CLI: `fail`, not `warn`, is the honest status.
+   */
+  it('fails for a byte-current hook whose recorded CLI is outside the package root', () => {
     const { repo } = repoWithRemote('doctor-hook-external-target');
     writeScript(hookPath(repo), commitMsgStub());
     const outside = join(tempDir('doctor-external-target'), 'commitlore.mjs');
@@ -333,7 +351,7 @@ describe('doctor: a stale stub', () => {
     recordHookTarget(repo, outside);
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
-    expect(check?.status).toBe('warn');
+    expect(check?.status).toBe('fail');
     expect(check?.detail).toContain(outside);
     expect(check?.detail).toContain(process.execPath);
     expect(check?.fix).toContain('hooks install');
@@ -357,6 +375,31 @@ describe('doctor: a stale stub', () => {
       else process.env['COMMITLORE_BIN'] = previous;
     }
   });
+
+  /**
+   * #39: a compiled binary is a recognized COMMITLORE_BIN shape too — it gets
+   * the same active-override notice a valid `.mjs` override already gets
+   * (`warn`, not `fail`: an override is a deliberate bypass of the recorded
+   * install, worth surfacing, not a broken one), rather than the "is not a
+   * .js, .mjs, or compiled commitlore binary" rejection wording.
+   */
+  it('accepts a COMMITLORE_BIN override named the way a compiled binary is named', () => {
+    const { repo } = repoWithRemote('doctor-hook-env-override-binary');
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
+    const override = join(repo, 'commitlore');
+    const previous = process.env['COMMITLORE_BIN'];
+    process.env['COMMITLORE_BIN'] = override;
+    try {
+      const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
+      expect(check?.status).toBe('warn');
+      expect(check?.detail).toContain('COMMITLORE_BIN override is active');
+      expect(check?.detail).not.toContain('is not a .js, .mjs, or compiled commitlore binary');
+    } finally {
+      if (previous === undefined) delete process.env['COMMITLORE_BIN'];
+      else process.env['COMMITLORE_BIN'] = previous;
+    }
+  });
 });
 
 describe('doctor: hook runtime', () => {
@@ -364,6 +407,7 @@ describe('doctor: hook runtime', () => {
     writeScript(hookPath(repo), commitMsgStub());
     git(repo, ['config', '--local', 'commitlore.bin', resolve(PACKAGE_ROOT, 'dist/cli.js')]);
     git(repo, ['config', '--local', 'commitlore.node', process.execPath]);
+    git(repo, ['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)]);
   };
 
   const runtimeCheck = (repo: string) =>
@@ -553,7 +597,9 @@ describe('doctor: report', () => {
       'hook-runtime',
       'inject-runtime',
       'git-trailers',
+      'history-depth',
       'index-health',
+      'squash-conservation',
     ]);
     for (const entry of report.checks) {
       expect(['ok', 'warn', 'fail', 'skipped']).toContain(entry.status);
@@ -571,7 +617,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(8);
+    expect(parsed.checks).toHaveLength(10);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -587,5 +633,76 @@ describe('doctor: report', () => {
     expect(text).toContain('notes fetch refspec');
     expect(text).toContain(`fix: git config --add remote.origin.fetch '${NOTES_REFSPEC}'`);
     expect(text).toContain('index health');
+  });
+});
+
+describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
+  /** A feature branch off `main`, one commit declaring `recordId`. */
+  const growFeatureBranch = (repo: string, recordId: string): { base: string; featureSha: string } => {
+    const base = git(repo, ['rev-parse', 'HEAD']).trim();
+    git(repo, ['checkout', '--quiet', '-b', 'feature']);
+    writeFileSync(join(repo, 'feature.ts'), 'export const x = 1;\n');
+    git(repo, ['add', '--', 'feature.ts']);
+    git(repo, [
+      'commit',
+      '--quiet',
+      '-m',
+      `add the feature\n\nLimit: the vendor caps concurrency\nRecord-Id: ${recordId}\n`,
+    ]);
+    const featureSha = git(repo, ['rev-parse', 'HEAD']).trim();
+    git(repo, ['checkout', '--quiet', 'main']);
+    return { base, featureSha };
+  };
+
+  /** Collapses `feature` onto `main` the way `git merge --squash` does, alone. */
+  const squashWithoutPreserving = (repo: string): string => {
+    git(repo, ['merge', '--squash', 'feature']);
+    git(repo, ['commit', '--quiet', '-m', 'Squash in the feature']);
+    return git(repo, ['rev-parse', 'HEAD']).trim();
+  };
+
+  it('skips when no local branch looks like a squash source', () => {
+    const repo = initRepo('squash-conservation-none');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
+
+    const report = runDoctor({ cwd: repo });
+    expect(statusOf(report, 'squash-conservation')).toBe('skipped');
+  });
+
+  it('warns when a squashed branch left a Record-Id behind that HEAD cannot find', () => {
+    const repo = initRepo('squash-conservation-lost');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    growFeatureBranch(repo, 'r-lost01');
+    squashWithoutPreserving(repo);
+
+    const report = runDoctor({ cwd: repo });
+    expect(statusOf(report, 'squash-conservation')).toBe('warn');
+    const entry = report.checks.find((check) => check.id === 'squash-conservation');
+    expect(entry?.detail).toContain('r-lost01');
+    expect(entry?.detail).toContain('feature');
+    expect(entry?.fix).toContain('squash-preserve');
+  });
+
+  it('reports ok once squash-preserve has attached the branch records', () => {
+    const repo = initRepo('squash-conservation-fixed');
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    const { base, featureSha } = growFeatureBranch(repo, 'r-fixed01');
+    const mergeSha = squashWithoutPreserving(repo);
+
+    const before = runDoctor({ cwd: repo });
+    expect(statusOf(before, 'squash-conservation')).toBe('warn');
+
+    const outcome = runSquashPreserve({
+      range: `${base}..${featureSha}`,
+      target: mergeSha,
+      cwd: repo,
+    });
+    expect(outcome.code).toBe(0);
+    rebuildIndex(openIndex({ cwd: repo }));
+
+    const after = runDoctor({ cwd: repo });
+    const entry = after.checks.find((check) => check.id === 'squash-conservation');
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toContain('reachable from HEAD');
   });
 });

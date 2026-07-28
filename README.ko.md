@@ -18,6 +18,26 @@ CommitLore는 결정 맥락을 Git 커밋 trailer와 `refs/notes/commitlore`에 
 프로토콜이 먼저이고, CLI는 기록을 검증하고 라우팅해 셸·훅·MCP 클라이언트에 제공한다.
 코딩 에이전트를 더 낫게 만든다는 것은 입증되지 않았다.
 
+## 설치
+
+설치는 한 번, 저장소마다 한 번 — 딱 한 명령으로 끝나지 않는 이유가 있다: 아래의 훅과 인덱스는 저장소별 상태이고, 아직 본 적 없는 저장소를 위해 머신 전역 설치가 미리 만들어 둘 수 있는 것이 아니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+이 머신에 맞는, checksum까지 검증된 release 바이너리를 내려받는다 — Node가 필요 없다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)). 그리고 `commitlore` 명령을 `PATH`에 등록한다. 이어서 이 머신에 설치된 코딩 에이전트를 감지한다 — Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode. 감지된 각 에이전트에는 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다. 무엇을 연결했고 무엇을 건너뛰었는지 그대로 출력한다.
+
+그다음, CommitLore를 쓸 각 저장소 안에서:
+
+```bash
+commitlore init
+```
+
+해당 저장소에 commit-msg 검증 훅을 설치하고 로컬 기록 인덱스를 만든다. 무엇을 했는지 보고하며, 다시 실행해도 안전하다 — 이미 설정된 저장소는 그렇다고 보고할 뿐 아무것도 바꾸지 않는다.
+
+프로토콜을 읽기만 한다면 설치 자체가 필요 없다: 모든 기록은 평범한 git trailer이다([아래](#기록-하나) 참고). `sh`로 스크립트를 파이프하는 대신 Node로 clone하거나, 소스에서 빌드하거나, 직접 검증하며 내려받고 싶다면 [clone으로 설치](#clone으로-설치)에 세 방법이 모두 있다.
+
 ## 측정 기록
 
 <!-- BENCH:WITHDRAWN -->
@@ -30,7 +50,7 @@ CommitLore는 결정 맥락을 Git 커밋 trailer와 `refs/notes/commitlore`에 
 
 - **기록은 일반적인 Git 워크플로우를 견딘다.** 커밋 trailer와 notes 미러는 [rebase와 squash](test/squash.test.ts), [히스토리 재작성과 원격 전달](test/notes.test.ts), [한 단계·여러 단계 rename](test/follow.test.ts)에서 검증된다.
 - **신뢰는 모든 라우트에서 같은 뜻이다.** 쿼리 출력, CLI 주입, 편집 훅, MCP 도구, guard는 모두 `directive | claim | blocked` 등급을 공유한다. 라우트 검사는 [`query.test.ts`](test/query.test.ts), [`inject.test.ts`](test/inject.test.ts), [`mcp.test.ts`](test/mcp.test.ts), [`guard.test.ts`](test/guard.test.ts)에 있다.
-- **인젝션 형태의 기록은 산문으로 모델에 전달되지 않는다.** 자유 서술 trailer 하나라도 인젝션 패턴과 일치하면 기록 전체가 `blocked` 등급을 받는다. 모델이 읽는 라우트는 내용을 인용하지 않고 보류 사실만 알린다. CLI·훅은 [`inject.test.ts`](test/inject.test.ts), MCP의 동일한 응답은 [`mcp.test.ts`](test/mcp.test.ts)가 검증한다.
+- **내장 인젝션 스캐너와 일치한 기록은 산문으로 모델에 전달되지 않는다.** 자유 서술 trailer 하나라도 일치하면 기록 전체가 `blocked` 등급을 받으며, 모델이 읽는 라우트는 내용을 인용하지 않고 보류 사실만 알린다. 이 결정적 어휘 필터의 결과는 실제 탐지율 주장이 아니다. [패턴 작성자가 만든 corpus, 독립 작성 corpus, 무해한 corpus](spec/fixtures/injection/README.md)는 따로 보고한다. CLI·훅은 [`inject.test.ts`](test/inject.test.ts), MCP의 동일한 응답은 [`mcp.test.ts`](test/mcp.test.ts)가 검증한다.
 - **알 수 없음과 비어 있음은 다르다.** 읽을 수 있는 빈 저장소에서 guard는 `0`으로 종료한다. 고장 난 Git은 `history: unavailable`, 가져오지 않은 notes 미러는 `notes: unfetched`로 보고한다. 두 불완전한 검사는 모두 `3`으로 종료한다. 계약은 [`notes-availability.test.ts`](test/notes-availability.test.ts), [`guard.test.ts`](test/guard.test.ts), [`RELEASE-GATE`](docs/RELEASE-GATE.md)에 고정돼 있다.
 
 ## 기록 하나
@@ -106,11 +126,65 @@ CommitLore 레지스트리 패키지는 없다. 배포 채널은 Git 저장소 �
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs init
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-커밋된 번들은 빌드 없이 실행된다. 단, 네이티브 `better-sqlite3` 모듈은 번들에 들어 있지 않으므로 clone만으로는 SQLite 인덱스를 열 수 없다. `--no-index`로 Git을 직접 스캔하거나 clone 안에서 `npm install`을 실행해 현재 인덱스를 활성화한다. 네이티브 모듈 제거 결정은 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)에 기록돼 있다.
+`init`은 `doctor --fix`, `hooks install`, `index --rebuild`를 한 번에 실행하고, 무엇을 했고 무엇을 하지 못했는지 보고하며, 다시 실행해도 안전하다 — 스스로 해결할 수 없는 `warn`이나 `fail`은 성공 메시지에 묻히지 않고 그대로 보고된다. 세 개씩 따로 쓰고 싶다면 `commitlore doctor`, `commitlore hooks install`, `commitlore index --rebuild` 각각도 그대로 남아 있다.
+
+커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
+
+### Node 없이 컴파일된 바이너리로 실행하기
+
+`git clone` + Node 런타임이 여전히 정식 설치 방법이다. Node가 PATH에 전혀 없는 머신을 위해, 같은 clone에서 단일 컴파일 실행 파일을 빌드할 수 있다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)):
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore`는 런타임에 Node도, 인터프리터도, `node_modules`도 필요 없다 — `doctor`, `validate`, `context`, `guard`, `inject`, `index --rebuild` 모두 `PATH=/usr/bin:/bin`에서 동작한다. 커밋되지 않으며(용량이 크고 플랫폼·아키텍처별로 다르며, diff 대신 CI가 매 push마다 다시 빌드한다), `commitlore hooks install`과 플러그인의 `PreToolUse` hook 모두 빌드되면 자동으로 이를 찾아 사용한다.
+
+### 미리 빌드된 릴리스 바이너리 설치하기
+
+Node도 clone도 없는 머신을 위해: 모든 `vX.Y.Z` 태그는 플랫폼별 바이너리 하나씩을 빌드하고(`.github/workflows/release.yml`), 전체를 커버하는 `SHA256SUMS`를 첨부하며, 각 asset을 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations)로 증명한다(Sigstore 기반, 공개 검증 가능, 이 프로젝트가 관리하는 키 없음).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.1.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
+
+바이너리가 준비되면 같은 스크립트가 이 머신에 설치된 코딩 에이전트를 감지해(Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) 찾아낸 각각에 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결하고, 무엇을 연결했고 무엇을 건너뛰었는지 출력한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다.
+
+쉘로 파이프하는 것이 유일한 문서화된 경로여서는 안 된다. 같은 설치를 수동으로:
+
+```bash
+version=0.1.0   # 또는: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # 또는 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 추출 전에 검증한다. "OK"가 아니면 여기서 멈춘다 — 이 검증에 실패한 바이너리는 실행하지 말 것.
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
+## GitHub Actions
+
+query, guard 또는 inject 명령을 실행하는 job은 전체 history를 받아야 한다.
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
 
@@ -124,6 +198,8 @@ MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
   }
 }
 ```
+
+`install.sh`는 머신에 이미 설치돼 있는 지원 클라이언트(Codex, Gemini CLI, Cursor, Windsurf, opencode)마다 이와 동등한 블록을 자동으로 써 준다 — 감지하지 못한 클라이언트나 CI에서는 이걸 그대로 옮겨 쓰면 된다.
 
 프로토콜을 읽는 데 CLI는 필요 없다.
 
@@ -141,7 +217,6 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 - 경로가 아닌 심볼에 기록 고정: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 대화형 commit builder와 자동 만료 알림: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 유효한 벤치마크로 guard의 에이전트 행동 효과 입증: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Node.js 없는 단일 정적 바이너리: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## 기여하기
 

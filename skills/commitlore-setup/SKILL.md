@@ -5,6 +5,12 @@ description: Use when a git repository needs CommitLore wired up for the first t
 
 # CommitLore setup
 
+**Shortcut for a repository that just needs wiring up, nothing broken to diagnose:**
+`commitlore init` runs steps 2-4 below (`hooks install`, `index --rebuild`, then
+`doctor --fix` as a final check) in one command, reports what it did and what it
+could not, and is safe to re-run. Use the four steps below one at a time when
+something specific looks broken and you want to isolate which piece.
+
 Four checks, in order. Each one is independent and re-runnable — running any of
 them twice on an already-configured repo is a no-op, not an error.
 

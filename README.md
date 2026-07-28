@@ -18,6 +18,26 @@ CommitLore is a protocol for keeping decision context in Git commit trailers and
 The protocol comes first; the CLI validates, routes, and exposes those records to shells, hooks, and MCP clients.
 It has not been shown to make coding agents better.
 
+## Install
+
+One command to install, one command per repository — not one command total, on purpose: the hook and the index below are per-repository state, and nothing a machine-wide install runs can set that up for a repository it has not seen yet ([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+Downloads a checksum-verified release binary for this machine — no Node required ([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)) — and puts a `commitlore` command on `PATH`. Then it detects which coding agents are on this machine — Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode — and wires CommitLore's MCP server (the plugin, for Claude Code) into each one it finds. It never overwrites an existing agent config without saying so, never writes one for an agent that is not installed, and prints exactly what it wired and what it skipped.
+
+Then, in each repository you want CommitLore active in:
+
+```bash
+commitlore init
+```
+
+Installs the commit-msg validation hook and builds the local record index for that repository, reports what it did, and is safe to run again — a repository that is already set up says so and changes nothing.
+
+No install step is required just to read the protocol: every record is an ordinary git trailer (see [below](#a-record)). Prefer `git clone` with a Node runtime, a source build, or a hand-verified download instead of piping a script into `sh`? [Install from the clone](#install-from-the-clone) covers all three.
+
 ## The measurement record
 
 <!-- BENCH:WITHDRAWN -->
@@ -30,7 +50,7 @@ Every previously published benchmark number is withdrawn. The dated verdicts rem
 
 - **Records survive normal Git workflows.** Commit trailers and the notes mirror are exercised across [rebase and squash](test/squash.test.ts), [history rewriting and remote transfer](test/notes.test.ts), and [single and multi-step renames](test/follow.test.ts).
 - **Trust has one meaning across routes.** Query output, CLI injection, the edit hook, MCP tools, and guard all use the same `directive | claim | blocked` grade. The route checks live in [`query.test.ts`](test/query.test.ts), [`inject.test.ts`](test/inject.test.ts), [`mcp.test.ts`](test/mcp.test.ts), and [`guard.test.ts`](test/guard.test.ts).
-- **Injection-like records do not reach a model as prose.** When any free-text trailer matches an injection pattern, the record is graded `blocked`; model-readable routes report that content was withheld without quoting it. The CLI/hook cases are in [`inject.test.ts`](test/inject.test.ts), and MCP is checked against the same answer in [`mcp.test.ts`](test/mcp.test.ts).
+- **Records matched by the shipped injection scanner do not reach a model as prose.** A match in any free-text trailer grades the record `blocked`; model-readable routes report withholding without quoting it. This deterministic lexical filter is not a real-world detection-rate claim: its [pattern-authored, independently authored, and benign corpora](spec/fixtures/injection/README.md) are reported separately. CLI/hook cases are in [`inject.test.ts`](test/inject.test.ts), with MCP parity in [`mcp.test.ts`](test/mcp.test.ts).
 - **Unknown is not empty.** Guard exits `0` for a readable repository with no records. Broken Git reports `history: unavailable`; an unfetched mirror reports `notes: unfetched`. Both incomplete checks exit `3`. The contract is pinned in [`notes-availability.test.ts`](test/notes-availability.test.ts), [`guard.test.ts`](test/guard.test.ts), and the [`RELEASE-GATE`](docs/RELEASE-GATE.md).
 
 ## A record
@@ -106,11 +126,65 @@ There is no CommitLore registry package. Distribution is the Git repository ([AD
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs init
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-The committed bundle runs without a build. One caveat remains: it does not carry the native `better-sqlite3` module, so a clone alone cannot open the SQLite index. Use `--no-index` to scan Git directly, or run `npm install` inside the clone to enable the current index. The accepted migration away from the native module is recorded in [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md).
+`init` runs `doctor --fix`, `hooks install`, and `index --rebuild` together, reports what it did and what it could not, and is safe to run again — a `warn` or `fail` check it cannot resolve itself is reported, never folded into a success message. Each of the three still exists on its own (`commitlore doctor`, `commitlore hooks install`, `commitlore index --rebuild`) for anyone who wants one piece rather than all three.
+
+The committed bundle runs without a build and without `node_modules`. The SQLite index uses `node:sqlite`, which ships inside Node itself ([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)), so a clone alone can build and query it — no native module, no compiler, no `npm install`. `--no-index` is still there to answer from Git alone when you want to skip the index.
+
+### Run as a compiled binary, without Node installed
+
+`git clone` plus a Node runtime is still the canonical install above. For a machine with no Node on `PATH` at all, build a single compiled executable from the same clone ([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)):
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` needs no Node, no interpreter and no `node_modules` at runtime — `doctor`, `validate`, `context`, `guard`, `inject`, and `index --rebuild` all run against `PATH=/usr/bin:/bin`. It is not committed (it is large, platform- and architecture-specific, and rebuilt by CI on every push rather than diffed); `commitlore hooks install` and the plugin's `PreToolUse` hook both resolve it automatically once built.
+
+### Install a prebuilt release binary
+
+For a machine with neither Node nor a clone: every `vX.Y.Z` tag builds one binary per platform (`.github/workflows/release.yml`), attaches a `SHA256SUMS` covering all of them, and attests each asset with [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) (Sigstore-backed, publicly verifiable, no key this project manages).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` detects your OS and architecture, downloads the matching asset and `SHA256SUMS` from the same release, and verifies the checksum **before** installing anything — read it before piping it to `sh`, the same way you would any install script. Pass a version to pin one: `sh install.sh v0.1.0`. Published targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. There is no Windows binary yet — the SEA build and the commit-msg hook shim are unverified there; see [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md).
+
+Once the binary is in place, the same script detects which coding agents are installed on this machine (Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) and registers CommitLore's MCP server — the plugin, for Claude Code — with each one it finds, printing what it wired and what it skipped. It never overwrites an existing agent config without saying so and never writes one for an agent that is not installed.
+
+Piping to a shell should never be the *only* documented path. The same install, by hand:
+
+```bash
+version=0.1.0   # or: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # or x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# Verify before extracting. "OK" or it stops here — do not run a binary that fails this.
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
+## GitHub Actions
+
+Jobs that run a query, guard, or inject command must fetch the complete history:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 For an MCP client, register the same cloned entry point:
 
@@ -124,6 +198,8 @@ For an MCP client, register the same cloned entry point:
   }
 }
 ```
+
+`install.sh` writes an equivalent block automatically for every supported client it finds already installed on the machine (Codex, Gemini CLI, Cursor, Windsurf, opencode) — this is what to copy by hand for one it does not detect, or for CI.
 
 No CLI is required to read the protocol:
 
@@ -141,7 +217,6 @@ Use Git's trailer parser, not a text search; prose containing `Key:` is not nece
 - Anchor records to symbols rather than paths: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - Provide an interactive commit builder or automatic expiry reminders: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - Demonstrate guard's effect on agent behavior with a valid benchmark: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Run as a static binary without Node.js: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## Contributing
 

@@ -31,10 +31,14 @@ import {
   type QueryResult,
   type TrustGrade,
 } from '../core/query.js';
+import { validateRecord } from '../core/schema.js';
 import { STRUCTURAL_TRAILER_KEYS, type Lifecycle, type Trailer } from '../core/types.js';
 
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
+
+/** Usage error: no repository, an unparseable flag (SPEC §10) -- not a finding. */
+const USAGE_EXIT_CODE = 2;
 
 const INCOMPLETE_EXIT_CODE = 3;
 
@@ -58,36 +62,62 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
   );
   if (blocked.length === 0) return result;
 
+  const collisions = blocked.filter((record) => record.identityCollision === true);
+  const injectionBlocked = blocked.filter((record) => record.identityCollision !== true);
   const keys = [
-    ...new Set(blocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
+    ...new Set(injectionBlocked.flatMap((record) => record.matchedTrailerKeys ?? [])),
   ].sort();
   const source =
     keys.length === 1 ? `${keys[0]} trailer` : keys.length > 1 ? `${keys.join(', ')} trailers` : 'a trailer';
-  const records = result.records.map((record) =>
-    record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined
-      ? record
-      : {
-          ...record,
-          withheldTrailerKeys: [
-            ...new Set(
-              record.trailers
-                .filter((trailer) => !STRUCTURAL_TRAILER_KEYS.has(trailer.key))
-                .map((trailer) => trailer.key),
-            ),
-          ],
-          trailers: record.trailers.filter((trailer) =>
-            STRUCTURAL_TRAILER_KEYS.has(trailer.key),
-          ),
-        },
-  );
+  const records = result.records.map((record) => {
+    if (record.trust !== 'blocked' || record.withheldTrailerKeys !== undefined) return record;
+
+    const trailers = record.trailers.filter(
+      (trailer) =>
+        STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0,
+    );
+    const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
+    const provenanceValue = trailers.find(
+      (trailer) => trailer.key === 'Provenance',
+    )?.value;
+    const {
+      recordId: _unsafeRecordId,
+      provenanceValue: _unsafeProvenanceValue,
+      expiresAt: _unsafeExpiresAt,
+      ...safeRecord
+    } = record;
+
+    return {
+      ...safeRecord,
+      ...(recordId === undefined ? {} : { recordId }),
+      ...(provenanceValue === undefined ? {} : { provenanceValue }),
+      withheldTrailerKeys: [
+        ...new Set(
+          record.trailers
+            .filter((trailer) => !trailers.includes(trailer))
+            .map((trailer) => trailer.key),
+        ),
+      ],
+      trailers,
+    };
+  });
 
   return {
     ...result,
     records,
     diagnostics: [
       ...result.diagnostics,
-      `withheld the content of ${blocked.length} record(s) graded blocked: a ${source} matching an ` +
-        'injection pattern is reported, never quoted (SPEC §7)',
+      ...(injectionBlocked.length === 0
+        ? []
+        : [
+            `withheld the content of ${injectionBlocked.length} record(s) graded blocked: a ${source} matching an ` +
+              'injection pattern is reported, never quoted (SPEC §7)',
+          ]),
+      ...(collisions.length === 0
+        ? []
+        : [
+            `withheld the content of ${collisions.length} record(s) whose Record-Id collides with a divergent note`,
+          ]),
     ],
   };
 };
@@ -169,6 +199,7 @@ export interface JsonRecord {
   lifecycle: Lifecycle;
   flags: string[];
   trust: TrustGrade | null;
+  identityCollision: boolean;
   provenance: string | null;
   supersededBy: string | null;
   expiresAt: string | null;
@@ -226,6 +257,7 @@ const toJsonRecord = (record: GradedRecord): JsonRecord => ({
   lifecycle: record.lifecycle,
   flags: record.flags,
   trust: record.trust ?? null,
+  identityCollision: record.identityCollision === true,
   provenance: record.provenanceValue ?? null,
   supersededBy: record.supersededBy ?? null,
   expiresAt: record.expiresAt ?? null,
@@ -296,6 +328,11 @@ const stateTag = (record: GradedRecord): string => {
 const trustTag = (record: GradedRecord): string =>
   record.trust === undefined ? '' : `[${record.trust}]  `;
 
+const blockedMessage = (record: GradedRecord): string =>
+  record.identityCollision === true
+    ? 'Record content was withheld because its Record-Id collides.'
+    : BLOCKED_RECORD_WITHHELD;
+
 const idColumn = (record: GradedRecord, width: number): string =>
   (record.recordId ?? '-').padEnd(width);
 
@@ -317,7 +354,7 @@ const valueLines = (
     const values =
       record.trust === 'blocked'
         ? record.withheldTrailerKeys?.includes(key) === true
-          ? [BLOCKED_RECORD_WITHHELD]
+          ? [blockedMessage(record)]
           : []
         : valuesOf(record, key);
     return values.map(
@@ -334,7 +371,7 @@ const otherLines = (records: readonly GradedRecord[]): string[] => {
     const withheld =
       record.trust === 'blocked' &&
       record.withheldTrailerKeys?.some((key) => !SECTION_KEYS.includes(key)) === true
-        ? [BLOCKED_RECORD_WITHHELD]
+        ? [blockedMessage(record)]
         : [];
     const values = [
       ...withheld,
@@ -432,9 +469,10 @@ const emit = (
       ? `${JSON.stringify(toJson(name, presented), null, 2)}\n`
       : render(presented),
   );
-  // Exit 1 means git could not answer at all; exit 3 means git answered from a
+  // Exit 2 means git could not answer at all -- no repository is a usage
+  // error (SPEC §10), not a finding; exit 3 means git answered from a
   // known-incomplete store, matching guard so callers can distinguish the two.
-  if (presented.history === 'unavailable') process.exitCode = 1;
+  if (presented.history === 'unavailable') process.exitCode = USAGE_EXIT_CODE;
   else if (presented.notes === 'unfetched') process.exitCode = INCOMPLETE_EXIT_CODE;
 };
 
@@ -460,6 +498,11 @@ const define = (
       collect,
       [],
     )
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), ' +
+        '3 answered, but the notes mirror has not been fetched (SPEC §10).',
+    )
     .action((paths: string[], options: QueryCommandOptions) => {
       try {
         emit(name, runQuery(queryOptions(paths, options, keys)), options, render);
@@ -467,7 +510,7 @@ const define = (
         process.stderr.write(
           `commitlore: ${error instanceof Error ? error.message : String(error)}\n`,
         );
-        process.exitCode = 1;
+        process.exitCode = USAGE_EXIT_CODE;
       }
     });
 };

@@ -6,9 +6,10 @@
  * Three conventions here are load-bearing, because this command is designed to
  * run from a PreToolUse hook on every edit an agent proposes (ADR-0006 §4):
  *
- * **Exit 2 means "flagged".** 0 is a complete clean check, 1 is a broken
- * invocation, 2 is a warning, and 3 means the check was incomplete. Distinct
- * states keep an unavailable repository from being mistaken for approval.
+ * **Exit 1 means "flagged".** 0 is a complete clean check, 1 is a warning, 2
+ * is a broken invocation, and 3 means the check was incomplete (SPEC §10).
+ * Distinct states keep an unavailable repository from being mistaken for
+ * approval.
  *
  * **Nothing is printed when a complete check finds nothing.** Incomplete checks
  * must speak because silence is otherwise indistinguishable from approval.
@@ -21,8 +22,11 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch, } from '../core/guard.js';
-/** Exit status when at least one ruled-out alternative matched. */
-export const FLAGGED_EXIT_CODE = 2;
+import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
+/** Exit status when at least one ruled-out alternative matched (SPEC §10: a finding). */
+export const FLAGGED_EXIT_CODE = 1;
+/** Usage error: a broken invocation, not a finding (SPEC §10). */
+export const USAGE_EXIT_CODE = 2;
 export const INCOMPLETE_EXIT_CODE = 3;
 const STDIN_FD = 0;
 // ---------------------------------------------------------------------------
@@ -123,6 +127,7 @@ const incompleteMessage = (result) => {
     ];
     return `commitlore guard: could not complete the check: ${reasons.join('; ')}`;
 };
+const shallowMessage = () => `commitlore guard: ${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`;
 const blockedIdentity = (match) => `recordId=${match.recordId ?? '-'}; sha=${match.sha}; score=${match.score.toFixed(2)}; ` +
     `signals=${match.signals.join(', ')}`;
 export const formatHookContext = (result) => {
@@ -150,6 +155,11 @@ export const formatHookContext = (result) => {
         if (context.length > 0)
             context.push('');
         context.push(incompleteMessage(result).replace('the check', 'the check on this edit'));
+    }
+    if (result.shallow) {
+        if (context.length > 0)
+            context.push('');
+        context.push(shallowMessage().replace('commitlore guard: ', ''));
     }
     return context.join('\n');
 };
@@ -216,6 +226,7 @@ export const register = (program) => {
         .option("--require-content", "do not flag on a Record-Id reference alone — for blocking hooks, where citing a record is what compliance looks like")
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .option('--hook-input', 'read a PreToolUse payload on stdin and answer as hook JSON, scoping the proposal to the edit')
+        .addHelpText('after', '\nExit codes: 0 clean, 1 a ruled-out alternative matched, 2 usage error, 3 the check was incomplete (SPEC §10).')
         .action(async (paths, options) => {
         try {
             if (options.hookInput === true) {
@@ -238,6 +249,8 @@ export const register = (program) => {
             process.stderr.write(scopeCaveat(paths));
             if (result.incomplete)
                 process.stderr.write(`${incompleteMessage(result)}\n`);
+            if (result.shallow)
+                process.stderr.write(`${shallowMessage()}\n`);
             if (options.json === true) {
                 process.stdout.write(`${JSON.stringify(toJson(result, at, paths, threshold), null, 2)}\n`);
             }
@@ -251,7 +264,7 @@ export const register = (program) => {
         }
         catch (error) {
             process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 1;
+            process.exitCode = USAGE_EXIT_CODE;
         }
     });
 };

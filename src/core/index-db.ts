@@ -54,61 +54,81 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-
-import type * as BetterSqlite3 from 'better-sqlite3';
+import type { DatabaseSync } from 'node:sqlite';
 
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
-import { parseCommitMessage } from './trailers.js';
+import { parseRecordBlocks } from './trailers.js';
 import type { Trailer } from './types.js';
 
 /**
- * better-sqlite3 is CommonJS and this package compiles without
- * `esModuleInterop`, so the constructor is reached through `createRequire` —
- * the same approach `schema.ts` uses for ajv-formats. The construct signature
- * is declared locally because `@types/better-sqlite3` keeps
- * `DatabaseConstructor` inside a namespace it does not export.
+ * `node:sqlite` ships inside Node itself (ADR-0012), so unlike `better-sqlite3`
+ * this is never resolved from `node_modules` — but it is still reached through
+ * `createRequire` rather than a static `import`, and still resolved lazily
+ * below rather than at module scope, for the same reason ADR-0003 gave for
+ * `better-sqlite3`: importing this file must never throw before a caller can
+ * choose `--no-index`. `node:sqlite` is experimental and version-gated (it
+ * does not exist before Node 22.5, which satisfies but predates the `>=22`
+ * floor in `package.json`), so that guarantee still matters. The construct
+ * signature is declared locally to name exactly the surface this file uses;
+ * `@types/node` exports `DatabaseSync` itself directly, unlike
+ * `@types/better-sqlite3`'s buried `DatabaseConstructor`.
  */
-type DatabaseConstructor = new (
-  path: string,
-  options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number },
-) => BetterSqlite3.Database;
+type DatabaseConstructor = new (path: string, options?: { readOnly?: boolean }) => DatabaseSync;
 
 /**
  * Resolved on first use, not at import.
  *
  * ADR-0003 makes the index a derived cache and ADR-0002 requires the CLI to
- * degrade to `--no-index` when better-sqlite3 is unavailable. Requiring it at
- * module scope broke both: importing this file threw before any caller could
- * choose the fallback, so a missing native module took down `validate`,
+ * degrade to `--no-index` when the SQLite binding is unavailable. Requiring it
+ * at module scope broke both: importing this file threw before any caller
+ * could choose the fallback, so a missing binding took down `validate`,
  * `guard` and `parse` — none of which touch the index at all.
  *
  * That is not hypothetical. It is what a distribution without node_modules
- * does, which is exactly the shape this project now ships (ADR-0011).
+ * does, which is exactly the shape this project now ships (ADR-0011) — and it
+ * is also what a Node build without SQLite support, or a Node 22 minor older
+ * than 22.5, would do to `node:sqlite` today.
  */
 let cachedCtor: DatabaseConstructor | null = null;
 
 const loadDatabaseCtor = (): DatabaseConstructor => {
   if (cachedCtor !== null) return cachedCtor;
   try {
-    cachedCtor = createRequire(import.meta.url)('better-sqlite3') as DatabaseConstructor;
+    // `createRequire` only needs *a* valid absolute path here, not a
+    // meaningful one — `node:sqlite` is a builtin, so resolution never
+    // touches the filesystem relative to it. `process.execPath` over
+    // `import.meta.url` on purpose: it stays a real path under every format
+    // this module ships in, including the CommonJS bundle
+    // `scripts/build-binary.mjs` produces for the compiled binary (#39),
+    // where a CJS `import.meta` is empty and would throw here instead.
+    const nodeSqlite = createRequire(process.execPath)('node:sqlite') as {
+      DatabaseSync: DatabaseConstructor;
+    };
+    cachedCtor = nodeSqlite.DatabaseSync;
     return cachedCtor;
   } catch (cause) {
     throw new Error(
-      'the SQLite index needs better-sqlite3, which is not installed here — rerun with --no-index, ' +
-        `or install it to get the index back (${cause instanceof Error ? cause.message : String(cause)})`,
+      'the SQLite index needs node:sqlite, which this Node build does not provide — rerun with ' +
+        '--no-index, or use a Node build with SQLite support to get the index back ' +
+        `(${cause instanceof Error ? cause.message : String(cause)})`,
     );
   }
 };
 
-export type IndexDatabase = BetterSqlite3.Database;
+export type IndexDatabase = DatabaseSync;
 
 /**
  * Bumped whenever the table shape changes. A mismatch is not an error: the
  * index is derived, so the old file is deleted and rebuilt (ADR-0003). Without
  * this, a user upgrading the CLI would silently read a table that no longer
  * means what the code thinks it means.
+ *
+ * v2 adds `trailers.block`: a message MAY now carry several record blocks
+ * (SPEC §2.4, bug-issue-60), and rows from different blocks on the same
+ * commit need a column of their own to stay apart — `seq` alone repeats
+ * across blocks.
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const NOTES_REF = 'refs/notes/commitlore';
 
@@ -158,6 +178,7 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS trailers (
   id           INTEGER PRIMARY KEY,
   commit_sha   TEXT    NOT NULL,
+  block        INTEGER NOT NULL DEFAULT 0,
   seq          INTEGER NOT NULL,
   key          TEXT    NOT NULL,
   value        TEXT    NOT NULL,
@@ -167,9 +188,9 @@ CREATE TABLE IF NOT EXISTS trailers (
   provenance   TEXT,
   source       TEXT    NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, seq);
+CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, block, seq);
 CREATE INDEX IF NOT EXISTS trailers_key ON trailers (key);
-CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, seq);
+CREATE INDEX IF NOT EXISTS trailers_order ON trailers (committed_ts DESC, commit_sha, source, block, seq);
 
 CREATE TABLE IF NOT EXISTS commit_paths (
   commit_sha TEXT NOT NULL,
@@ -191,7 +212,15 @@ export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */
 export interface IndexedTrailer extends Trailer {
   sha: string;
-  /** Position within its record, preserving repeated-key order (SPEC §2.1 B5). */
+  /**
+   * Which record block within `(sha, source)` this trailer belongs to
+   * (SPEC §2.4), 0-indexed in the order the blocks appear. Almost always `0`
+   * — a message carries more than one block only when it inherited several
+   * records across a squash (`core/squash.ts`) or was pasted together from
+   * several commits' messages (bug-issue-60).
+   */
+  block: number;
+  /** Position within its block, preserving repeated-key order (SPEC §2.1 B5). */
   seq: number;
   committedAt: string;
   committedTs: number;
@@ -261,9 +290,11 @@ export interface OpenIndexOptions {
   fts?: boolean;
 }
 
-/** One record as git reports it, before it reaches SQLite. */
+/** One record block as git reports it, before it reaches SQLite. */
 interface RawRecord {
   sha: string;
+  /** Which block within `(sha, source)` this is (SPEC §2.4). 0-indexed. */
+  block: number;
   committedAt: string;
   committedTs: number;
   source: RecordSource;
@@ -380,10 +411,74 @@ const readPaths = (cwd: string, shas: readonly string[]): Map<string, string[]> 
 };
 
 /**
+ * Full messages for exactly the commits named, batched the same way
+ * `readPaths` batches its own second pass.
+ */
+const readFullMessages = (cwd: string, shas: readonly string[]): Map<string, string> => {
+  const byCommit = new Map<string, string>();
+  if (shas.length === 0) return byCommit;
+
+  for (const batch of chunked(shas, LOG_BATCH)) {
+    const result = gitLogByShas(cwd, batch, `%x01%H%x00%B%x00`, []);
+    if (result.code !== 0) {
+      throw Object.assign(new Error(`git log --format=%B failed: ${result.stderr.trim()}`), {
+        code: result.code,
+        stderr: result.stderr,
+      });
+    }
+    for (const record of splitRecords(result.stdout)) {
+      const fields = record.split(FIELD_SEP);
+      const [sha, message] = fields;
+      if (sha === undefined || message === undefined) continue;
+      byCommit.set(sha, message);
+    }
+  }
+
+  return byCommit;
+};
+
+/**
+ * Splits every already-detected record-bearing commit into its record blocks
+ * (SPEC §2.4). The bulk atom pass above answers "does this commit carry a
+ * trailer at all" from `%(trailers:...)`, which — like `git interpret-trailers`
+ * itself — only ever sees the message's last paragraph (B1). Recovering the
+ * earlier blocks needs the full message text, so this is a second, narrower
+ * pass restricted to the commits the first pass already flagged as carrying
+ * something: the same shape as `readPaths`, for the same reason — the pass
+ * that would dominate output size on a large repository is the one kept to
+ * the sliver of commits that recorded anything.
+ *
+ * A commit whose atom-based trailers and full-message trailers disagree in
+ * count never happens: both are `git`'s own `trailer_info` over the same
+ * bytes. When `parseRecordBlocks` finds only the one block the atom pass
+ * already had, the original record is kept untouched rather than rebuilt, so
+ * this pass changes nothing for the overwhelming majority of commits that
+ * never carry more than one block.
+ */
+const explodeRecordBlocks = (cwd: string, records: readonly RawRecord[]): RawRecord[] => {
+  const messages = readFullMessages(
+    cwd,
+    records.map((record) => record.sha),
+  );
+
+  return records.flatMap((record) => {
+    const message = messages.get(record.sha);
+    if (message === undefined) return [record];
+
+    const blocks = parseRecordBlocks(message);
+    if (blocks.length <= 1) return [record];
+
+    return blocks.map((trailers, block) => ({ ...record, block, trailers }));
+  });
+};
+
+/**
  * Reads the given commits, in one `git log` per batch, keeping only those that
  * carry at least one trailer. A second pass resolves paths for exactly those
  * commits — the pass that would dominate output size on a large repository is
- * the one restricted to the ~1% of commits that recorded anything.
+ * the one restricted to the ~1% of commits that recorded anything. A third
+ * pass (`explodeRecordBlocks`) recovers additional record blocks for that same
+ * sliver of commits (SPEC §2.4).
  */
 const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] => {
   const records: RawRecord[] = [];
@@ -408,6 +503,7 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
 
       batchRecords.push({
         sha,
+        block: 0,
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: 'commit',
@@ -416,12 +512,13 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
       });
     }
 
+    const exploded = explodeRecordBlocks(cwd, batchRecords);
     const paths = readPaths(
       cwd,
       batchRecords.map((record) => record.sha),
     );
-    for (const record of batchRecords) record.paths = paths.get(record.sha) ?? [];
-    records.push(...batchRecords);
+    for (const record of exploded) record.paths = paths.get(record.sha) ?? [];
+    records.push(...exploded);
   }
 
   return records;
@@ -438,8 +535,9 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
  * T-301 lands a reader, the body of this function is the only thing that
  * changes — `indexNotes` and the `source = 'notes'` rows it produces stay.
  *
- * Note text goes through `parseCommitMessage` (T-201) under the synthetic
- * subject of `NOTE_SUBJECT`, which costs one process per note. Notes are
+ * Note text goes through `parseRecordBlocks` (T-201, SPEC §2.4) under the
+ * synthetic subject of `NOTE_SUBJECT`, which costs one process per note (or a
+ * handful more, for each earlier block a note happens to carry). Notes are
  * sparse by construction, and correctness here is worth more than the
  * batching: a note is a message, and only git decides where its trailer block
  * starts.
@@ -486,16 +584,20 @@ const readNoteRecords = (cwd: string): RawRecord[] => {
       if (sha === undefined || rawTs === undefined || committedAt === undefined) continue;
       if (noteText === undefined || noteText.trim() === '') continue;
 
-      const trailers = parseCommitMessage(`${NOTE_SUBJECT}\n\n${noteText}`);
-      if (trailers.length === 0) continue;
-
-      batchRecords.push({
-        sha,
-        committedAt,
-        committedTs: Number.parseInt(rawTs, 10),
-        source: 'notes',
-        trailers,
-        paths: [],
+      // A note may itself carry several record blocks (SPEC §2.4): squash
+      // inheritance writes one per source record (`core/squash.ts`).
+      const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`);
+      blocks.forEach((trailers, block) => {
+        if (trailers.length === 0) return;
+        batchRecords.push({
+          sha,
+          block,
+          committedAt,
+          committedTs: Number.parseInt(rawTs, 10),
+          source: 'notes',
+          trailers,
+          paths: [],
+        });
       });
     }
 
@@ -547,11 +649,13 @@ const revList = (cwd: string, range: string): string[] =>
 // ---------------------------------------------------------------------------
 
 const tableExists = (db: IndexDatabase, name: string): boolean =>
-  db
-    .prepare<[string], { n: number }>(
-      `SELECT count(*) AS n FROM sqlite_master WHERE type IN ('table','view') AND name = ?`,
-    )
-    .get(name)?.n === 1;
+  (
+    db
+      .prepare(
+        `SELECT count(*) AS n FROM sqlite_master WHERE type IN ('table','view') AND name = ?`,
+      )
+      .get(name) as { n: number } | undefined
+  )?.n === 1;
 
 /**
  * FTS5 is a compile-time option and the trigram tokenizer is version-gated, so
@@ -579,7 +683,8 @@ const enableFts = (db: IndexDatabase): boolean => {
 };
 
 const readMeta = (db: IndexDatabase, key: string): string | null =>
-  db.prepare<[string], { v: string | null }>('SELECT v FROM meta WHERE k = ?').get(key)?.v ?? null;
+  (db.prepare('SELECT v FROM meta WHERE k = ?').get(key) as { v: string | null } | undefined)?.v ??
+  null;
 
 const writeMeta = (db: IndexDatabase, key: string, value: string | null): void => {
   db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(
@@ -604,6 +709,44 @@ const createSchema = (db: IndexDatabase): void => {
 };
 
 /**
+ * `node:sqlite` has no `db.transaction()` (ADR-0012's API-surface table): the
+ * closest primitive is `BEGIN`/`COMMIT`/`ROLLBACK`, and those do not nest —
+ * SQLite refuses a second `BEGIN` inside an open transaction. `better-sqlite3`
+ * gave `.transaction()` savepoint semantics for nesting, and the ADR's
+ * call-graph check found real nesting: `rebuildIndex` opens a transaction and
+ * calls `insertRecords`, which opens its own; `indexNotes` opens a transaction
+ * and calls both `deleteNoteRows` and `insertRecords`, each of which opens its
+ * own. Flattening that silently would turn a partial failure into a partial
+ * write — the exact failure mode ADR-0003 built the index to avoid.
+ *
+ * This reproduces the savepoint behaviour: depth 0 opens a real transaction,
+ * depth 1+ opens a named `SAVEPOINT` and releases or rolls back to it on exit,
+ * leaving the outer transaction open either way. Depth is tracked per
+ * database in JS rather than read back from SQLite (`db.isTransaction` would
+ * also work, but only since Node 22.16 — this needs nothing past the 22.5
+ * floor `node:sqlite` itself sets).
+ */
+const transactionDepth = new WeakMap<IndexDatabase, number>();
+
+const runInTransaction = <T>(db: IndexDatabase, fn: () => T): T => {
+  const depth = transactionDepth.get(db) ?? 0;
+  const savepoint = `commitlore_sp_${depth}`;
+  db.exec(depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+  transactionDepth.set(db, depth + 1);
+  try {
+    const result = fn();
+    db.exec(depth === 0 ? 'COMMIT' : `RELEASE ${savepoint}`);
+    return result;
+  } catch (error) {
+    db.exec(depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}`);
+    if (depth !== 0) db.exec(`RELEASE ${savepoint}`);
+    throw error;
+  } finally {
+    transactionDepth.set(db, depth);
+  }
+};
+
+/**
  * Decides whether the FTS5 prefilter may be used, and keeps it truthful.
  *
  * `meta.fts` records whether the rows currently in `trailers` were mirrored
@@ -622,11 +765,11 @@ const syncFts = (db: IndexDatabase, requested: boolean, writable: boolean): bool
     return false;
   }
   if (readMeta(db, 'fts') !== '1') {
-    db.transaction(() => {
+    runInTransaction(db, () => {
       db.exec('DELETE FROM trailers_fts');
       db.exec('INSERT INTO trailers_fts (rowid, value_lc) SELECT id, value_lc FROM trailers');
       writeMeta(db, 'fts', '1');
-    })();
+    });
   }
   return true;
 };
@@ -647,8 +790,13 @@ const healthProblem = (db: IndexDatabase): string | null => {
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
     }
-    const check = db.pragma('quick_check(1)', { simple: true });
-    if (check !== 'ok') return `sqlite quick_check reported: ${String(check)}`;
+    // `node:sqlite` has no `.pragma()` shorthand (ADR-0012); a pragma is a
+    // normal query here rather than the `{ simple: true }` scalar
+    // better-sqlite3 gave.
+    const check = db.prepare('PRAGMA quick_check(1)').get() as { quick_check?: unknown } | undefined;
+    if (check?.quick_check !== 'ok') {
+      return `sqlite quick_check reported: ${String(check?.quick_check)}`;
+    }
     return null;
   } catch (error) {
     return `index is unreadable: ${errorMessage(error)}`;
@@ -656,10 +804,12 @@ const healthProblem = (db: IndexDatabase): string | null => {
 };
 
 const openDatabaseFile = (path: string, readonly: boolean): IndexDatabase => {
-  const db = new (loadDatabaseCtor())(path, { readonly });
+  const Ctor = loadDatabaseCtor();
+  const db = new Ctor(path, { readOnly: readonly });
   if (!readonly) {
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
+    // `node:sqlite` has no `.pragma()` helper (ADR-0012); a pragma is just SQL.
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = NORMAL');
   }
   return db;
 };
@@ -748,8 +898,8 @@ interface InsertCounts {
 const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): InsertCounts => {
   const insertTrailer = handle.db.prepare(
     `INSERT INTO trailers
-       (commit_sha, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertFts = handle.fts
     ? handle.db.prepare('INSERT INTO trailers_fts (rowid, value_lc) VALUES (?, ?)')
@@ -760,8 +910,8 @@ const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): Inse
 
   const counts: InsertCounts = { trailers: 0, paths: 0 };
 
-  const run = handle.db.transaction((batch: readonly RawRecord[]) => {
-    for (const record of batch) {
+  runInTransaction(handle.db, () => {
+    for (const record of records) {
       const provenance =
         record.trailers.find((trailer) => trailer.key === 'Provenance')?.value ?? null;
 
@@ -769,6 +919,7 @@ const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): Inse
         const valueLc = trailer.value.toLowerCase();
         const inserted = insertTrailer.run(
           record.sha,
+          record.block,
           seq,
           trailer.key,
           trailer.value,
@@ -783,24 +934,23 @@ const insertRecords = (handle: IndexHandle, records: readonly RawRecord[]): Inse
       });
 
       for (const path of record.paths) {
-        counts.paths += insertPath.run(record.sha, path).changes;
+        counts.paths += Number(insertPath.run(record.sha, path).changes);
       }
     }
   });
 
-  run(records);
   return counts;
 };
 
 const deleteNoteRows = (handle: IndexHandle): void => {
-  handle.db.transaction(() => {
+  runInTransaction(handle.db, () => {
     if (handle.fts) {
       handle.db.exec(
         `DELETE FROM trailers_fts WHERE rowid IN (SELECT id FROM trailers WHERE source = 'notes')`,
       );
     }
     handle.db.exec(`DELETE FROM trailers WHERE source = 'notes'`);
-  })();
+  });
 };
 
 /**
@@ -817,12 +967,12 @@ export const indexNotes = (handle: IndexHandle, opts: { force?: boolean } = {}):
   if (!(opts.force ?? false) && refSha === indexed) return 0;
 
   const records = refSha === null ? [] : readNoteRecords(handle.cwd);
-  return handle.db.transaction(() => {
+  return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
     writeMeta(handle.db, 'notes_ref_sha', refSha);
     return counts.trailers;
-  })();
+  });
 };
 
 const emptyStats = (handle: IndexHandle, started: number): IndexStats => ({
@@ -867,7 +1017,7 @@ export const rebuildIndex = (
     notesScanned: noteRecords.length,
   };
 
-  handle.db.transaction(() => {
+  runInTransaction(handle.db, () => {
     if (handle.fts) handle.db.exec('DELETE FROM trailers_fts');
     handle.db.exec('DELETE FROM trailers');
     handle.db.exec('DELETE FROM commit_paths');
@@ -882,7 +1032,7 @@ export const rebuildIndex = (
 
     writeMeta(handle.db, 'last_indexed_sha', head);
     writeMeta(handle.db, 'notes_ref_sha', notesRef);
-  })();
+  });
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -989,6 +1139,7 @@ const compareTrailers = (a: IndexedTrailer, b: IndexedTrailer): number => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  if (a.block !== b.block) return a.block - b.block;
   return a.seq - b.seq;
 };
 
@@ -1004,6 +1155,7 @@ const ftsEligible = (term: string): boolean =>
 interface TrailerRow {
   id: number;
   commit_sha: string;
+  block: number;
   seq: number;
   key: string;
   value: string;
@@ -1021,10 +1173,8 @@ const attachPaths = (handle: IndexHandle, rows: readonly TrailerRow[]): Map<stri
   for (const batch of chunked(shas, 500)) {
     const placeholders = batch.map(() => '?').join(', ');
     const found = handle.db
-      .prepare<unknown[], { commit_sha: string; path: string }>(
-        `SELECT commit_sha, path FROM commit_paths WHERE commit_sha IN (${placeholders})`,
-      )
-      .all(...batch);
+      .prepare(`SELECT commit_sha, path FROM commit_paths WHERE commit_sha IN (${placeholders})`)
+      .all(...batch) as { commit_sha: string; path: string }[];
     for (const row of found) {
       const existing = byCommit.get(row.commit_sha);
       if (existing === undefined) byCommit.set(row.commit_sha, [row.path]);
@@ -1086,19 +1236,20 @@ export const queryTrailers = (handle: IndexHandle, query: TrailerQuery = {}): In
   if (query.limit !== undefined) params.push(query.limit);
 
   const rows = handle.db
-    .prepare<unknown[], TrailerRow>(
-      `SELECT t.id, t.commit_sha, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
+    .prepare(
+      `SELECT t.id, t.commit_sha, t.block, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
               t.provenance, t.source
          FROM trailers t
          ${where}
-        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.seq ASC
+        ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.block ASC, t.seq ASC
         ${limit}`,
     )
-    .all(...params);
+    .all(...(params as (string | number)[])) as unknown as TrailerRow[];
 
   const paths = attachPaths(handle, rows);
   return rows.map((row) => ({
     sha: row.commit_sha,
+    block: row.block,
     seq: row.seq,
     key: row.key,
     value: row.value,
@@ -1136,6 +1287,7 @@ const toIndexedTrailers = (records: readonly RawRecord[]): IndexedTrailer[] =>
     const provenance = record.trailers.find((t) => t.key === 'Provenance')?.value ?? null;
     return record.trailers.map((trailer, seq) => ({
       sha: record.sha,
+      block: record.block,
       seq,
       key: trailer.key,
       value: trailer.value,
@@ -1191,11 +1343,16 @@ export const indexInfo = (
   schemaVersion: readMeta(handle.db, 'schema_version'),
   lastIndexedSha: readMeta(handle.db, 'last_indexed_sha'),
   notesRefSha: readMeta(handle.db, 'notes_ref_sha'),
-  trailers: handle.db.prepare<[], { n: number }>('SELECT count(*) AS n FROM trailers').get()?.n ?? 0,
+  trailers:
+    (handle.db.prepare('SELECT count(*) AS n FROM trailers').get() as { n: number } | undefined)
+      ?.n ?? 0,
   commits:
-    handle.db
-      .prepare<[], { n: number }>('SELECT count(DISTINCT commit_sha) AS n FROM trailers')
-      .get()?.n ?? 0,
+    (
+      handle.db
+        .prepare('SELECT count(DISTINCT commit_sha) AS n FROM trailers')
+        .get() as { n: number } | undefined
+    )?.n ?? 0,
   paths:
-    handle.db.prepare<[], { n: number }>('SELECT count(*) AS n FROM commit_paths').get()?.n ?? 0,
+    (handle.db.prepare('SELECT count(*) AS n FROM commit_paths').get() as { n: number } | undefined)
+      ?.n ?? 0,
 });

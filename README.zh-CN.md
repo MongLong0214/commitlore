@@ -18,6 +18,26 @@ CommitLore 是一套把决策背景保存在 Git 提交 trailer 和 `refs/notes/
 协议是第一位的；CLI 负责验证和路由这些记录，并把它们提供给 shell、hook 和 MCP 客户端。
 目前没有证据表明它能让编程智能体表现得更好。
 
+## 安装
+
+安装一次，每个仓库再各一次——不会压缩成一个命令,这是刻意的:下面的 hook 和索引是每个仓库自己的状态,面向机器全局的安装无法替一个它还没见过的仓库预先设置好这些（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+为这台机器下载一个经过 checksum 校验的 release 二进制文件——不需要 Node（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）,并把 `commitlore` 命令放上 `PATH`。接着检测这台机器上装了哪些编程智能体——Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。对检测到的每一个,都会把 CommitLore 的 MCP 服务器(Claude Code 则是插件)接进去。它不会在未告知的情况下覆盖已有配置,也不会为未安装的智能体写配置,并会原样打印出接了什么、跳过了什么。
+
+然后,在每个想启用 CommitLore 的仓库里:
+
+```bash
+commitlore init
+```
+
+为该仓库安装 commit-msg 校验 hook,构建本地记录索引。它会报告做了什么,并且可以放心重复运行——已经配置好的仓库只会如实报告,不会做任何改动。
+
+只是读取协议的话根本不需要安装:每条记录都是普通的 git trailer(见[下文](#一条记录))。不想把脚本 pipe 进 `sh`,而是想用 Node clone、从源码构建,或者手动校验下载?[从 clone 安装](#从-clone-安装)这三种都写了。
+
 ## 测量记录
 
 <!-- BENCH:WITHDRAWN -->
@@ -30,7 +50,7 @@ CommitLore 是一套把决策背景保存在 Git 提交 trailer 和 `refs/notes/
 
 - **记录能经受常见 Git 工作流。** 提交 trailer 和 notes mirror 在 [rebase 与 squash](test/squash.test.ts)、[历史重写与远程传递](test/notes.test.ts)，以及[单步和多步重命名](test/follow.test.ts)中都有测试。
 - **信任在每条路由上的含义一致。** 查询输出、CLI 注入、编辑 hook、MCP 工具和 guard 都使用同一套 `directive | claim | blocked` 分级。路由测试位于 [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts) 和 [`guard.test.ts`](test/guard.test.ts)。
-- **类似提示注入的记录不会作为正文送给模型。** 任一自由文本 trailer 命中注入模式时，整条记录都会被分为 `blocked`。模型可读路由只说明内容已被隐藏，不会引用其正文。CLI 与 hook 由 [`inject.test.ts`](test/inject.test.ts) 验证，MCP 的一致结果由 [`mcp.test.ts`](test/mcp.test.ts) 验证。
+- **命中内置注入扫描器的记录不会作为正文送给模型。** 任一自由文本 trailer 命中时，整条记录都会被分为 `blocked`；模型可读路由只说明内容已被隐藏，不会引用其正文。这个确定性词法过滤器的结果不代表真实环境中的检测率；[由模式作者编写、独立编写及正常文本三个语料集](spec/fixtures/injection/README.md)分别报告。CLI 与 hook 由 [`inject.test.ts`](test/inject.test.ts) 验证，MCP 的一致结果由 [`mcp.test.ts`](test/mcp.test.ts) 验证。
 - **未知不等于为空。** 对于可读但没有记录的仓库，guard 以 `0` 退出。Git 损坏时报告 `history: unavailable`；notes mirror 未拉取时报告 `notes: unfetched`。两种不完整检查都以 `3` 退出。该契约固定在 [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts) 和 [`RELEASE-GATE`](docs/RELEASE-GATE.md) 中。
 
 ## 一条记录
@@ -106,11 +126,65 @@ CommitLore 没有 registry package。发布渠道就是 Git 仓库本身（[ADR-
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs init
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-仓库中提交的 bundle 无需构建即可运行。但它没有携带原生 `better-sqlite3` 模块，因此仅靠 clone 无法打开 SQLite 索引。可以使用 `--no-index` 直接扫描 Git，或在 clone 中运行 `npm install` 来启用当前索引。移除原生模块的决定记录在 [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) 中。
+`init` 会把 `doctor --fix`、`hooks install`、`index --rebuild` 一起跑完,报告做了什么、没能做成什么,并且可以放心重复运行——自己解决不了的 `warn` 或 `fail` 会如实报告,不会被吞进一句"成功"里。这三个命令各自也都还在,想单独用哪个都行:`commitlore doctor`、`commitlore hooks install`、`commitlore index --rebuild`。
+
+仓库中提交的 bundle 无需构建、也无需 `node_modules` 即可运行。SQLite 索引使用 Node 自带的 `node:sqlite`（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)），因此仅靠 clone 就能构建并查询索引——不需要原生模块，不需要编译器，也不需要 `npm install`。想跳过索引、只用 Git 回答时，仍可以使用 `--no-index`。
+
+### 无需 Node，作为编译好的二进制运行
+
+`git clone` + Node 运行时仍是正式的安装方式。对于 PATH 中完全没有 Node 的机器，可以从同一个 clone 构建单个编译后的可执行文件（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）：
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` 在运行时不需要 Node、不需要解释器，也不需要 `node_modules`——`doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` 都能在 `PATH=/usr/bin:/bin` 下运行。它不会被提交（体积大、与平台/架构相关，且由 CI 在每次 push 时重新构建而不是 diff）；`commitlore hooks install` 和插件的 `PreToolUse` hook 一旦构建完成都会自动解析到它。
+
+### 安装预构建的发布二进制文件
+
+对于既没有 Node 也没有 clone 的机器：每个 `vX.Y.Z` 标签都会为每个平台构建一个二进制文件（`.github/workflows/release.yml`），附带覆盖全部文件的 `SHA256SUMS`，并通过 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) 为每个资产生成证明（基于 Sigstore，可公开验证，本项目无需管理任何密钥）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.1.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
+
+二进制文件装好之后，同一个脚本会检测这台机器上装了哪些编程智能体（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode），给检测到的每一个接上 CommitLore 的 MCP 服务器（Claude Code 则是插件），并打印出接了什么、跳过了什么。它不会在未告知的情况下覆盖已有配置，也不会为未安装的智能体写配置。
+
+传给 shell 执行不应是唯一有文档记录的方式。手动完成同样的安装：
+
+```bash
+version=0.1.0   # 或者: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # 或 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 解压前先验证。结果必须是 "OK"，否则到此为止——不要运行未通过校验的二进制文件。
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
+## GitHub Actions
+
+运行 query、guard 或 inject 命令的 job 必须获取完整 history。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 在 MCP 客户端中注册同一 clone 的入口：
 
@@ -124,6 +198,8 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
   }
 }
 ```
+
+`install.sh` 会为这台机器上已经装好的每个受支持客户端（Codex、Gemini CLI、Cursor、Windsurf、opencode）自动写入等价的这段配置——它没检测到的客户端，或者 CI 环境，就照抄这段。
 
 读取协议并不需要 CLI：
 
@@ -141,7 +217,6 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 - 把记录 anchor 到 symbol 而不是 path：[#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 交互式 commit builder 和自动 expiry 提醒：[#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 用有效 benchmark 证明 guard 对智能体行为的影响：[#37](https://github.com/MongLong0214/commitlore/issues/37)
-- 在没有 Node.js 的情况下作为单一 static binary 运行：[#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## 参与贡献
 

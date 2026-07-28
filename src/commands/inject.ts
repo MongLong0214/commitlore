@@ -14,7 +14,8 @@
  * non-zero exit would turn "nothing to know here" into a failed tool call on
  * most of a repository (SPEC §4: a commit that recorded nothing is not an
  * error). Exit 2 is reserved for the other thing an empty answer could mean —
- * a usage error, where the command never managed to ask the question at all.
+ * a usage error, where the command never managed to ask the question at all
+ * (SPEC §10).
  */
 
 import { readFileSync, realpathSync } from 'node:fs';
@@ -242,8 +243,10 @@ const injectOptions = (
 };
 
 const emitInjection = (injection: Injection, options: InjectCommandOptions): void => {
+  for (const diagnostic of injection.diagnostics) process.stderr.write(`commitlore: ${diagnostic}\n`);
   if (options.json === true) {
-    process.stdout.write(`${JSON.stringify(injection, null, 2)}\n`);
+    const { diagnostics: _diagnostics, ...report } = injection;
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return;
   }
   if (injection.text !== '') process.stdout.write(injection.text);
@@ -277,7 +280,7 @@ export const hookResult = (
     const injection = buildInjection({ ...base, cwd, path });
     return {
       stdout: injection.text === '' ? '' : hookOutput(injection.text),
-      stderr: '',
+      stderr: injection.diagnostics.map((diagnostic) => `commitlore: ${diagnostic}\n`).join(''),
       exitCode: 0,
     };
   } catch (error) {
@@ -367,6 +370,11 @@ export const register = (program: Command): void => {
     )
     .option('--no-index', 'answer from git alone, without the SQLite index')
     .option('--hook-input', `read a ${CLAUDE_HOOK_EVENT} payload on stdin and answer as hook JSON`)
+    .addHelpText(
+      'after',
+      '\nExit codes: 0 ran (empty output means the path has nothing to say, and --hook-input never fails), ' +
+        '2 a usage error -- --path is missing (SPEC §10).',
+    )
     .action((options: InjectCommandOptions) => {
       if (options.hookInput === true) {
         runHookMode(options);
@@ -387,6 +395,7 @@ export const register = (program: Command): void => {
     .description(`add the ${CLAUDE_HOOK_EVENT} injection hook to a Claude Code settings.json`)
     .option('--settings <path>', 'the settings file to edit (default: .claude/settings.json)')
     .option('--command <command>', `the command to install (default: ${CLAUDE_HOOK_COMMAND})`)
+    .addHelpText('after', '\nExit codes: 0 installed, 2 the settings file could not be read or written (SPEC §10).')
     .action((options: SettingsCommandOptions) => {
       emitResult(installClaudeHook(hookInput(options)));
     });
@@ -395,6 +404,7 @@ export const register = (program: Command): void => {
     .command('uninstall-claude-hook')
     .description('remove the injection hook, leaving every other setting untouched')
     .option('--settings <path>', 'the settings file to edit (default: .claude/settings.json)')
+    .addHelpText('after', '\nExit codes: 0 removed (or nothing to remove), 2 the settings file could not be read or written (SPEC §10).')
     .action((options: SettingsCommandOptions) => {
       emitResult(uninstallClaudeHook(hookInput(options)));
     });
@@ -403,6 +413,7 @@ export const register = (program: Command): void => {
     .command('claude-hook-status')
     .description('report whether the injection hook is installed')
     .option('--settings <path>', 'the settings file to read (default: .claude/settings.json)')
+    .addHelpText('after', '\nExit codes: 0 reported, 2 the settings file could not be read (SPEC §10).')
     .action((options: SettingsCommandOptions) => {
       emitResult(claudeHookStatus(hookInput(options)));
     });

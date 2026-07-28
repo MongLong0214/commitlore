@@ -10,7 +10,7 @@
  */
 import { execGit } from '../core/git.js';
 import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
-import { findDanglingRefs, foldLifecycle, isStale } from '../core/stale.js';
+import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
 /**
  * How many commits a scan reads when `--all-history` is not given. A bounded
@@ -36,7 +36,7 @@ const LOG_FORMAT = `%H${UNIT}%cI${UNIT}%B`;
  * a commit with no trailers). The wording has changed across git versions, so
  * both are matched.
  */
-const EMPTY_REPO_RE = /does not have any commits yet|bad default revision/;
+const EMPTY_REPO_RE = /does not have any commits yet|bad default revision|ambiguous argument 'HEAD'/;
 /**
  * A message with no line of the form `Key:` cannot contain a trailer under
  * git's grammar (SPEC §2.2), so parsing it would spawn a process to be told
@@ -71,6 +71,7 @@ export const collectRecords = (opts = {}) => {
     const args = ['log', '-z', `--format=${LOG_FORMAT}`];
     if (opts.allHistory !== true)
         args.push(`--max-count=${DEFAULT_SCAN_LIMIT}`);
+    args.push('--end-of-options', opts.revision ?? 'HEAD');
     const result = execGit(args, { cwd });
     if (result.code !== 0) {
         if (EMPTY_REPO_RE.test(result.stderr)) {
@@ -118,6 +119,7 @@ export const buildReport = (scan, at) => {
         totalRecords: states.length,
         records: stale,
         danglingRefs: findDanglingRefs(scan.records),
+        idCollisions: findIdCollisions(scan.records),
     };
 };
 const shortSha = (sha) => (sha.length > 8 ? sha.slice(0, 8) : sha);
@@ -134,6 +136,7 @@ export const formatReport = (report) => {
         ...section('expired', expired.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
         ...section('review', review.map((state) => `${location(state)}  ${state.expiresAt ?? ''}`)),
         ...section('dangling refs', report.danglingRefs.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
+        ...section('id collisions', report.idCollisions.map((violation) => `${violation.key}: ${violation.got}  want ${violation.want}`)),
     ];
     if (report.truncated) {
         lines.push('', `note: only the most recent ${DEFAULT_SCAN_LIMIT} commits were scanned; run with --all-history for the whole record.`);
@@ -161,6 +164,9 @@ const evaluationInstant = (raw) => {
  * Exit status stays 0 even with findings: `stale` reports, it does not gate.
  * The non-zero exit of SPEC §6 belongs to `commitlore validate`; a caller that
  * wants CI to fail on a dangling reference reads `danglingRefs` from `--json`.
+ * The only non-zero code `stale` uses is 2, for a usage error -- an
+ * unparseable `--at`, or git unable to answer at all (SPEC §10: neither is a
+ * finding).
  */
 export const register = (program) => {
     program
@@ -169,6 +175,8 @@ export const register = (program) => {
         .option('--json', 'emit the report as JSON')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option('--all-history', `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`)
+        .addHelpText('after', '\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), ' +
+        '2 a usage error -- an unparseable --at, or git could not answer (SPEC §10).')
         .action((options) => {
         try {
             const at = evaluationInstant(options.at);
@@ -178,7 +186,7 @@ export const register = (program) => {
         }
         catch (error) {
             process.stderr.write(`commitlore: ${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 1;
+            process.exitCode = 2;
         }
     });
 };

@@ -10,7 +10,5 @@
   "homepage": "https://github.com/MongLong0214/commitlore#readme",
   "repository": "https://github.com/MongLong0214/commitlore",
   "license": "MIT",
-  "keywords": ["git", "trailers", "decisions", "memory", "context", "guard"],
-  "hooks": "./hooks/hooks.json",
-  "mcpServers": "./.mcp.json"
+  "keywords": ["git", "trailers", "decisions", "memory", "context", "guard"]
 }

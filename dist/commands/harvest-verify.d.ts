@@ -7,12 +7,13 @@
  * printed in the same `{"records": [...]}` shape `harvest --draft` emits, so the
  * two commands compose.
  *
- * Exit codes carry the whole non-blocking policy. A draft where every single
- * record was fabricated exits 0 — the commit it sits next to is not this
- * command's to fail (ADR-0006: 전량 실패 시 비차단, PRD-F4 요구 4). Only a caller
- * mistake exits 2: a missing option, a path that cannot be read, a draft that is
- * not a draft. That distinction is the difference between a feature people
- * leave on and one they uninstall the first time it eats a commit.
+ * Exit codes carry the whole non-blocking policy (SPEC §10: 2 is a usage
+ * error, never a finding). A draft where every single record was fabricated
+ * exits 0 — the commit it sits next to is not this command's to fail
+ * (ADR-0006: 전량 실패 시 비차단, PRD-F4 요구 4). Only a caller mistake exits 2: a
+ * missing option, a path that cannot be read, a draft that is not a draft.
+ * That distinction is the difference between a feature people leave on and
+ * one they uninstall the first time it eats a commit.
  */
 import type { Command } from 'commander';
 export interface HarvestVerifyOptions {

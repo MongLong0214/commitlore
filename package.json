@@ -3,10 +3,8 @@
   "version": "0.1.0",
   "description": "Git commit trailers as institutional memory for AI coding agents",
   "license": "MIT",
+  "private": true,
   "type": "module",
-  "bin": {
-    "commitlore": "dist/cli.js"
-  },
   "files": [
     "dist",
     "spec"
@@ -16,10 +14,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
+    "build:binary": "npm run build && node scripts/build-binary.mjs",
+    "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --outfile=dist/commitlore.mjs"
+    "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs"
   },
   "keywords": [
     "git",
@@ -38,19 +38,16 @@
     "url": "https://github.com/MongLong0214/commitlore/issues"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
-    "esbuild": "^0.28.1",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "better-sqlite3": "^12.11.1",
     "commander": "^15.0.0",
-    "js-yaml": "^5.2.2"
+    "esbuild": "^0.28.1",
+    "js-yaml": "^5.2.2",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   }
 }

@@ -7,12 +7,13 @@
  * printed in the same `{"records": [...]}` shape `harvest --draft` emits, so the
  * two commands compose.
  *
- * Exit codes carry the whole non-blocking policy. A draft where every single
- * record was fabricated exits 0 — the commit it sits next to is not this
- * command's to fail (ADR-0006: 전량 실패 시 비차단, PRD-F4 요구 4). Only a caller
- * mistake exits 2: a missing option, a path that cannot be read, a draft that is
- * not a draft. That distinction is the difference between a feature people
- * leave on and one they uninstall the first time it eats a commit.
+ * Exit codes carry the whole non-blocking policy (SPEC §10: 2 is a usage
+ * error, never a finding). A draft where every single record was fabricated
+ * exits 0 — the commit it sits next to is not this command's to fail
+ * (ADR-0006: 전량 실패 시 비차단, PRD-F4 요구 4). Only a caller mistake exits 2: a
+ * missing option, a path that cannot be read, a draft that is not a draft.
+ * That distinction is the difference between a feature people leave on and
+ * one they uninstall the first time it eats a commit.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseDraft } from '../core/harvest.js';
@@ -128,6 +129,8 @@ export const register = (program) => {
         .option('--out <file>', 'write the output here instead of stdout')
         .option('--json', 'emit the full report, discarded records included')
         .option('--repair-prompt', 'emit the feedback prompt for another draft attempt')
+        .addHelpText('after', '\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, ' +
+        'an unreadable path, a draft that is not a draft (SPEC §10).')
         .action((options) => {
         const outcome = runHarvestVerify(options);
         if (outcome.stdout !== '')

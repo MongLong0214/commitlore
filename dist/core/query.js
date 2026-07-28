@@ -43,11 +43,11 @@
  * `Supersedes:` them (correct — they have no identity to name) while a
  * date-form `Expires:` still retires them through the same fold.
  */
-import { execGit, historyAvailability } from './git.js';
+import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
-import { foldLifecycle } from './stale.js';
+import { findIdCollisions, foldLifecycle, } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
@@ -195,6 +195,8 @@ const compareRows = (a, b) => {
         return a.sha < b.sha ? -1 : 1;
     if (a.source !== b.source)
         return a.source < b.source ? -1 : 1;
+    if (a.block !== b.block)
+        return a.block - b.block;
     return a.seq - b.seq;
 };
 /**
@@ -209,7 +211,14 @@ const collectRows = (source, aliases) => {
     const rows = [];
     for (const alias of aliases) {
         for (const row of source.fetch({ path: alias })) {
-            const identity = `${row.sha}\u0000${row.source}\u0000${row.seq}`;
+            // Must match the row's real identity, the `trailers` table's own unique
+            // index: `(commit_sha, source, block, seq)`. `seq` alone restarts at 0
+            // within every block (SPEC §2.4), so a commit with two blocks has a
+            // `seq: 1` row in *each* block. Without `block` here, a later alias
+            // pass reads block 1's row as a repeat of block 0's row and drops it —
+            // which is how two blocks sharing a `Record-Id` silently read as one
+            // record at a scoped path (bug-issue-92).
+            const identity = `${row.sha}\u0000${row.source}\u0000${row.block}\u0000${row.seq}`;
             if (seen.has(identity))
                 continue;
             seen.add(identity);
@@ -221,11 +230,12 @@ const collectRows = (source, aliases) => {
 const groupByCommit = (rows) => {
     const found = new Map();
     for (const row of rows) {
-        const key = `${row.sha}\u0000${row.source}`;
+        const key = `${row.sha}\u0000${row.source}\u0000${row.block}`;
         const existing = found.get(key);
         if (existing === undefined) {
             found.set(key, {
                 sha: row.sha,
+                block: row.block,
                 source: row.source,
                 mirrored: false,
                 committedAt: row.committedAt,
@@ -245,7 +255,7 @@ const trailerValue = (trailers, key) => {
 };
 /** `Record-Id:` when the record declared one, else a key nothing can reference. */
 const identityOf = (record) => trailerValue(record.trailers, RECORD_ID_KEY) ??
-    `${SYNTHETIC_PREFIX}${record.sha}:${record.source}`;
+    `${SYNTHETIC_PREFIX}${record.sha}:${record.source}:${record.block}`;
 /**
  * A commit's instant in epoch ms, or `undefined` when git gave an unusable one.
  * Parsing `committedAt` rather than scaling `committedTs` keeps this in exact
@@ -259,28 +269,42 @@ const instantOf = (record) => {
  * Folds an unidentified notes mirror into the same commit's record. Notes may
  * add transport metadata, which is preserved without turning the mirror into a
  * second record.
+ *
+ * A commit MAY now carry several blocks (SPEC §2.4), so a sha can map to
+ * several candidate commit-sourced records rather than one. A notes block
+ * folds into the first one whose own trailers are all present in the notes
+ * block's trailers -- content, not block position, decides the match, since
+ * nothing guarantees the two channels enumerate their blocks in the same
+ * order. A notes block that matches no unclaimed commit block (or that
+ * declares its own `Record-Id`, resolved separately by identity) survives as
+ * its own record.
  */
 const foldMirroredNotes = (records) => {
     const commits = new Map();
     for (const record of records) {
         if (record.source !== 'commit')
             continue;
-        commits.set(record.sha, record);
+        const list = commits.get(record.sha) ?? [];
+        list.push(record);
+        commits.set(record.sha, list);
     }
+    const claimed = new Set();
     return records.filter((record) => {
         if (record.source !== 'notes')
             return true;
         if (trailerValue(record.trailers, RECORD_ID_KEY) !== undefined)
             return true;
-        const commit = commits.get(record.sha);
-        if (commit === undefined)
+        const candidates = commits.get(record.sha);
+        if (candidates === undefined)
             return true;
         const contents = new Set(record.trailers.map((trailer) => `${trailer.key}\u0000${trailer.value}`));
-        if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\u0000${trailer.value}`))) {
+        const commit = candidates.find((candidate) => !claimed.has(candidate) &&
+            candidate.trailers.every((trailer) => contents.has(`${trailer.key}\u0000${trailer.value}`)));
+        if (commit === undefined)
             return true;
-        }
         mergeTrailers(commit.trailers, record.trailers);
         commit.mirrored = true;
+        claimed.add(commit);
         return false;
     });
 };
@@ -405,7 +429,9 @@ const oldestFirst = (a, b) => {
         return a.committedTs - b.committedTs;
     if (a.sha !== b.sha)
         return a.sha < b.sha ? -1 : 1;
-    return a.source < b.source ? -1 : a.source > b.source ? 1 : 0;
+    if (a.source !== b.source)
+        return a.source < b.source ? -1 : 1;
+    return a.block - b.block;
 };
 const mergeByIdentity = (records, states) => {
     const groups = new Map();
@@ -442,6 +468,7 @@ const mergeByIdentity = (records, states) => {
         const recordId = trailerValue(trailers, RECORD_ID_KEY);
         const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
         const provenance = parseProvenance(provenanceValue);
+        const identityCollision = findIdCollisions(ordered).length > 0;
         merged.push({
             trailers,
             sha: latest.sha,
@@ -459,6 +486,7 @@ const mergeByIdentity = (records, states) => {
             ...(recordId === undefined ? {} : { recordId }),
             ...(provenance === undefined ? {} : { provenance }),
             ...(provenanceValue === undefined ? {} : { provenanceValue }),
+            ...(identityCollision ? { identityCollision: true } : {}),
             ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
             ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
         });
@@ -513,6 +541,12 @@ export const runQuery = (opts = {}) => {
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
         gradeMerged(records, cwd, at, opts.trustedAuthors);
+        for (const record of records) {
+            if (record.identityCollision !== true)
+                continue;
+            record.trust = 'blocked';
+            record.matchedTrailerKeys = [RECORD_ID_KEY];
+        }
         // Config only — no network. Cheap enough to run on every answer, and the
         // answer it qualifies is the empty one, which is the answer nobody inspects.
         const history = historyAvailability(cwd);
@@ -520,6 +554,9 @@ export const runQuery = (opts = {}) => {
             diagnostics.push('git could not read this repository, so this is not an answer about its contents — ' +
                 'treat it as unknown, not as empty');
         }
+        const shallow = hasShallowHistory(cwd);
+        if (shallow)
+            diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
         const notes = notesAvailability({ cwd });
         if (notes === 'unfetched') {
             diagnostics.push('the notes mirror has not been fetched here, so this answer may be missing records ' +
@@ -535,6 +572,7 @@ export const runQuery = (opts = {}) => {
             aliases: scope.aliases,
             follow: scope.follow,
             history,
+            shallow,
             notes,
             diagnostics,
         };

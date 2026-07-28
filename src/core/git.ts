@@ -9,6 +9,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /** One `git` invocation's outcome. A non-zero `code` is a result, not a throw. */
 export interface GitResult {
@@ -128,4 +130,12 @@ export const historyAvailability = (cwd: string): HistoryAvailability => {
   // being unable to answer, which is not the same fact.
   if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === '') return 'empty';
   return 'unavailable';
+};
+
+export const SHALLOW_HISTORY_CAVEAT =
+  'this clone has shallow history, so this answer may be missing records that exist upstream';
+
+export const hasShallowHistory = (cwd: string): boolean => {
+  const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
+  return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };

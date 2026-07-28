@@ -18,6 +18,26 @@ CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/
 主役はプロトコルであり、CLI は記録を検証・ルーティングして shell、hook、MCP クライアントへ渡します。
 コーディングエージェントを改善することは実証されていません。
 
+## インストール
+
+インストールは一度、リポジトリごとにもう一度 — 一つのコマンドに収まらないのは意図的です。以下の hook と index はリポジトリごとの状態であり、まだ見たことのないリポジトリのためにマシン全体のインストールがあらかじめ用意しておけるものではありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+このマシン向けに checksum を検証済みのリリースバイナリをダウンロードします — Node は不要です（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）。そのうえで `commitlore` コマンドを `PATH` に通します。続けて、このマシンにインストールされているコーディングエージェントを検出します — Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。何を接続し、何をスキップしたかをそのまま出力します。
+
+続けて、CommitLore を使いたい各リポジトリの中で:
+
+```bash
+commitlore init
+```
+
+そのリポジトリに commit-msg 検証 hook をインストールし、ローカルの記録 index を構築します。何を行ったかを報告し、再実行しても安全です — すでに設定済みのリポジトリはその旨を報告するだけで、何も変更しません。
+
+プロトコルを読むだけならインストールは不要です。記録はどれも普通の git trailer だからです（[後述](#一つの記録)）。`sh` にスクリプトを流し込む代わりに、Node での clone、ソースからの build、手動で検証したダウンロードを使いたい場合は、[clone からインストール](#clone-からインストール)に三つとも書いてあります。
+
 ## 測定の記録
 
 <!-- BENCH:WITHDRAWN -->
@@ -30,7 +50,7 @@ CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/
 
 - **記録は通常の Git ワークフローを生き残ります。** コミット trailer と notes mirror は、[rebase と squash](test/squash.test.ts)、[履歴の書き換えと remote 間の転送](test/notes.test.ts)、[一段・多段の rename](test/follow.test.ts)でテストされています。
 - **信頼の意味は全ルートで共通です。** query 出力、CLI injection、編集 hook、MCP tool、guard は同じ `directive | claim | blocked` グレードを使います。ルート検証は [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts)、[`guard.test.ts`](test/guard.test.ts) にあります。
-- **インジェクション形式の記録は文章としてモデルへ届きません。** どれか一つの自由記述 trailer がインジェクションパターンに一致すると、その記録全体が `blocked` になります。モデルが読むルートは内容を引用せず、保留した事実だけを伝えます。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
+- **同梱のインジェクションスキャナーに一致した記録は、文章としてモデルへ届きません。** どれか一つの自由記述 trailer が一致すると、その記録全体が `blocked` になり、モデルが読むルートは内容を引用せず保留した事実だけを伝えます。この決定論的な語彙フィルターの結果は、実環境での検出率を示すものではありません。[パターン作成者による corpus、独立作成 corpus、無害 corpus](spec/fixtures/injection/README.md) は別々に報告します。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
 - **不明と空は別です。** 読み取り可能で記録がないリポジトリでは guard は `0` で終了します。壊れた Git は `history: unavailable`、未取得の notes mirror は `notes: unfetched` と報告します。どちらの不完全な検査も `3` で終了します。この契約は [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts)、[`RELEASE-GATE`](docs/RELEASE-GATE.md) に固定されています。
 
 ## 一つの記録
@@ -106,11 +126,65 @@ CommitLore の registry package はありません。配布チャネルは Git �
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
 node ~/.commitlore/dist/commitlore.mjs --version
-node ~/.commitlore/dist/commitlore.mjs doctor --fix
-node ~/.commitlore/dist/commitlore.mjs context src/auth --no-index
+node ~/.commitlore/dist/commitlore.mjs init
+node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-コミット済み bundle は build なしで動きます。ただし native module `better-sqlite3` は bundle に含まれないため、clone だけでは SQLite index を開けません。`--no-index` で Git を直接 scan するか、clone 内で `npm install` を実行して現在の index を有効にします。native module を外す決定は [ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md) に記録されています。
+`init` は `doctor --fix`・`hooks install`・`index --rebuild` をまとめて実行し、何を行い何ができなかったかを報告し、再実行しても安全です — 自分では解決できない `warn` や `fail` は成功メッセージに紛れ込ませず、そのまま報告します。三つを個別に使いたい場合は `commitlore doctor`・`commitlore hooks install`・`commitlore index --rebuild` もそれぞれ残っています。
+
+コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
+
+### Node なしでコンパイル済みバイナリとして実行
+
+`git clone` + Node runtime が引き続き正式なインストール方法です。Node が PATH に全くないマシン向けに、同じ clone から単一のコンパイル済み実行ファイルを build できます（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）:
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` は実行時に Node も interpreter も `node_modules` も不要です — `doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` はすべて `PATH=/usr/bin:/bin` で動作します。commit はされません（サイズが大きく、platform・architecture 固有で、diff ではなく CI が push のたびに再 build するため）。`commitlore hooks install` と plugin の `PreToolUse` hook はどちらも build 済みならこれを自動的に解決します。
+
+### 事前ビルド済みリリースバイナリをインストール
+
+Node も clone もないマシン向け: すべての `vX.Y.Z` タグは platform ごとに 1 つずつバイナリを build し（`.github/workflows/release.yml`）、それら全体をカバーする `SHA256SUMS` を添付し、各 asset を [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) で証明します（Sigstore ベース、公開検証可能、本プロジェクトが管理する鍵はありません）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.1.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
+
+バイナリが配置されると、同じスクリプトがこのマシンにインストールされているコーディングエージェントを検出し（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode）、見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続し、何を接続し何をスキップしたかを出力します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。
+
+シェルへのパイプが唯一の文書化された方法であってはいけません。同じインストールを手動で行う場合:
+
+```bash
+version=0.1.0   # または: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # または x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 展開する前に検証します。「OK」でなければここで止めてください — この検証に失敗したバイナリは実行しないでください。
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
+## GitHub Actions
+
+query、guard、inject を実行する job は全 history を取得する必要があります。
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+```
 
 MCP client には同じ clone の entry point を登録します。
 
@@ -124,6 +198,8 @@ MCP client には同じ clone の entry point を登録します。
   }
 }
 ```
+
+`install.sh` はマシンに既にインストールされている対応クライアント（Codex、Gemini CLI、Cursor、Windsurf、opencode）それぞれに、これと同等のブロックを自動で書き込みます — 検出できなかったクライアントや CI 向けには、これをそのまま使ってください。
 
 プロトコルを読むだけなら CLI は不要です。
 
@@ -141,7 +217,6 @@ text search ではなく Git の trailer parser を使ってください。文�
 - path ではなく symbol への anchor: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 対話型 commit builder と自動 expiry 通知: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 有効な benchmark による guard の行動効果の実証: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Node.js なしで動く単一 static binary: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## コントリビュート
 

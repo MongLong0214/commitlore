@@ -44,7 +44,13 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 
-import { execGit, historyAvailability, type HistoryAvailability } from './git.js';
+import {
+  execGit,
+  hasShallowHistory,
+  historyAvailability,
+  SHALLOW_HISTORY_CAVEAT,
+  type HistoryAvailability,
+} from './git.js';
 import {
   closeIndex,
   ensureIndex,
@@ -56,7 +62,12 @@ import {
 } from './index-db.js';
 import { authorsOf, gradeRecord, restrictGrade, type Grade } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
-import { foldLifecycle, type RecordState, type StaleRecord } from './stale.js';
+import {
+  findIdCollisions,
+  foldLifecycle,
+  type RecordState,
+  type StaleRecord,
+} from './stale.js';
 import {
   SINGLE_VALUED,
   type Lifecycle,
@@ -144,6 +155,7 @@ export interface GradedRecord extends Record {
   /** The `Provenance:` value verbatim, when the record carried one. */
   provenanceValue?: string;
   trust?: TrustGrade;
+  identityCollision?: boolean;
   matchedTrailerKeys?: string[];
   /** Payload key names retained only so a redacted record remains visible in its sections. */
   withheldTrailerKeys?: string[];
@@ -175,6 +187,7 @@ export interface QueryResult {
    * and return `[]`, so a broken git produced "no constraints" with exit 0.
    */
   history: HistoryAvailability;
+  shallow: boolean;
   /**
    * Whether the notes mirror could be read here, and if not, why.
    *
@@ -341,9 +354,16 @@ const resolveScope = (cwd: string, paths: readonly string[]): Scope => {
 // Rows -> commit records
 // ---------------------------------------------------------------------------
 
-/** One commit's record from one source, before identities are resolved. */
+/**
+ * One record block from one commit and one source, before identities are
+ * resolved. A commit contributes more than one of these only when its
+ * message or its mirrored note carries more than one record block
+ * (SPEC §2.4) — `block` is what keeps those apart; it is not part of a
+ * record's own identity and never reaches `GradedRecord`.
+ */
 interface CommitRecord {
   sha: string;
+  block: number;
   source: RecordSource;
   mirrored: boolean;
   committedAt: string;
@@ -357,6 +377,7 @@ const compareRows = (a: IndexedTrailer, b: IndexedTrailer): number => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
   if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  if (a.block !== b.block) return a.block - b.block;
   return a.seq - b.seq;
 };
 
@@ -372,7 +393,14 @@ const collectRows = (source: RowSource, aliases: readonly string[]): IndexedTrai
   const rows: IndexedTrailer[] = [];
   for (const alias of aliases) {
     for (const row of source.fetch({ path: alias })) {
-      const identity = `${row.sha}\u0000${row.source}\u0000${row.seq}`;
+      // Must match the row's real identity, the `trailers` table's own unique
+      // index: `(commit_sha, source, block, seq)`. `seq` alone restarts at 0
+      // within every block (SPEC §2.4), so a commit with two blocks has a
+      // `seq: 1` row in *each* block. Without `block` here, a later alias
+      // pass reads block 1's row as a repeat of block 0's row and drops it —
+      // which is how two blocks sharing a `Record-Id` silently read as one
+      // record at a scoped path (bug-issue-92).
+      const identity = `${row.sha}\u0000${row.source}\u0000${row.block}\u0000${row.seq}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
       rows.push(row);
@@ -384,11 +412,12 @@ const collectRows = (source: RowSource, aliases: readonly string[]): IndexedTrai
 const groupByCommit = (rows: readonly IndexedTrailer[]): CommitRecord[] => {
   const found = new Map<string, CommitRecord>();
   for (const row of rows) {
-    const key = `${row.sha}\u0000${row.source}`;
+    const key = `${row.sha}\u0000${row.source}\u0000${row.block}`;
     const existing = found.get(key);
     if (existing === undefined) {
       found.set(key, {
         sha: row.sha,
+        block: row.block,
         source: row.source,
         mirrored: false,
         committedAt: row.committedAt,
@@ -411,7 +440,7 @@ const trailerValue = (trailers: readonly Trailer[], key: string): string | undef
 /** `Record-Id:` when the record declared one, else a key nothing can reference. */
 const identityOf = (record: CommitRecord): string =>
   trailerValue(record.trailers, RECORD_ID_KEY) ??
-  `${SYNTHETIC_PREFIX}${record.sha}:${record.source}`;
+  `${SYNTHETIC_PREFIX}${record.sha}:${record.source}:${record.block}`;
 
 /**
  * A commit's instant in epoch ms, or `undefined` when git gave an unusable one.
@@ -427,27 +456,43 @@ const instantOf = (record: CommitRecord): number | undefined => {
  * Folds an unidentified notes mirror into the same commit's record. Notes may
  * add transport metadata, which is preserved without turning the mirror into a
  * second record.
+ *
+ * A commit MAY now carry several blocks (SPEC §2.4), so a sha can map to
+ * several candidate commit-sourced records rather than one. A notes block
+ * folds into the first one whose own trailers are all present in the notes
+ * block's trailers -- content, not block position, decides the match, since
+ * nothing guarantees the two channels enumerate their blocks in the same
+ * order. A notes block that matches no unclaimed commit block (or that
+ * declares its own `Record-Id`, resolved separately by identity) survives as
+ * its own record.
  */
 const foldMirroredNotes = (records: readonly CommitRecord[]): CommitRecord[] => {
-  const commits = new Map<string, CommitRecord>();
+  const commits = new Map<string, CommitRecord[]>();
   for (const record of records) {
     if (record.source !== 'commit') continue;
-    commits.set(record.sha, record);
+    const list = commits.get(record.sha) ?? [];
+    list.push(record);
+    commits.set(record.sha, list);
   }
+  const claimed = new Set<CommitRecord>();
 
   return records.filter((record) => {
     if (record.source !== 'notes') return true;
     if (trailerValue(record.trailers, RECORD_ID_KEY) !== undefined) return true;
-    const commit = commits.get(record.sha);
-    if (commit === undefined) return true;
+    const candidates = commits.get(record.sha);
+    if (candidates === undefined) return true;
     const contents = new Set(
       record.trailers.map((trailer) => `${trailer.key}\u0000${trailer.value}`),
     );
-    if (!commit.trailers.every((trailer) => contents.has(`${trailer.key}\u0000${trailer.value}`))) {
-      return true;
-    }
+    const commit = candidates.find(
+      (candidate) =>
+        !claimed.has(candidate) &&
+        candidate.trailers.every((trailer) => contents.has(`${trailer.key}\u0000${trailer.value}`)),
+    );
+    if (commit === undefined) return true;
     mergeTrailers(commit.trailers, record.trailers);
     commit.mirrored = true;
+    claimed.add(commit);
     return false;
   });
 };
@@ -585,7 +630,8 @@ const gradeMerged = (
 const oldestFirst = (a: CommitRecord, b: CommitRecord): number => {
   if (a.committedTs !== b.committedTs) return a.committedTs - b.committedTs;
   if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
-  return a.source < b.source ? -1 : a.source > b.source ? 1 : 0;
+  if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  return a.block - b.block;
 };
 
 const mergeByIdentity = (
@@ -622,6 +668,7 @@ const mergeByIdentity = (
     const recordId = trailerValue(trailers, RECORD_ID_KEY);
     const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
     const provenance = parseProvenance(provenanceValue);
+    const identityCollision = findIdCollisions(ordered).length > 0;
 
     merged.push({
       trailers,
@@ -640,6 +687,7 @@ const mergeByIdentity = (
       ...(recordId === undefined ? {} : { recordId }),
       ...(provenance === undefined ? {} : { provenance }),
       ...(provenanceValue === undefined ? {} : { provenanceValue }),
+      ...(identityCollision ? { identityCollision: true } : {}),
       ...(state?.supersededBy === undefined ? {} : { supersededBy: state.supersededBy }),
       ...(state?.expiresAt === undefined ? {} : { expiresAt: state.expiresAt }),
     });
@@ -700,6 +748,11 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       .sort(compareRecords);
     // After the filters, so the one `git show` prices only the records that survive.
     gradeMerged(records, cwd, at, opts.trustedAuthors);
+    for (const record of records) {
+      if (record.identityCollision !== true) continue;
+      record.trust = 'blocked';
+      record.matchedTrailerKeys = [RECORD_ID_KEY];
+    }
 
     // Config only — no network. Cheap enough to run on every answer, and the
     // answer it qualifies is the empty one, which is the answer nobody inspects.
@@ -710,6 +763,9 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
           'treat it as unknown, not as empty',
       );
     }
+
+    const shallow = hasShallowHistory(cwd);
+    if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
 
     const notes = notesAvailability({ cwd });
     if (notes === 'unfetched') {
@@ -730,6 +786,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       aliases: scope.aliases,
       follow: scope.follow,
       history,
+      shallow,
       notes,
       diagnostics,
     };

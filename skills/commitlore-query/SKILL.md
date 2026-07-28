@@ -51,7 +51,9 @@ commitlore limits src/core/types.ts
 ```
 
 All four take zero or more paths (`commitlore context a.ts b.ts` answers for
-both), follow renames, and share these flags:
+both). One path can follow a detected rename lineage; with multiple paths Git cannot
+follow renames, so query each path separately when historical names matter.
+They share these flags:
 
 - `--json` — the full structured answer instead of the printed summary: each
   record's `recordId`, `sha`, `committedAt`, `lifecycle`, `trust` grade

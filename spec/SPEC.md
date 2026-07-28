@@ -10,7 +10,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are to be interpreted 
 
 ## 1. Overview
 
-An CommitLore **record** is the set of trailers attached to a single commit. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
+An CommitLore **record** is a set of trailers forming one record block (§2.4). A commit message or a mirrored note MAY carry more than one — most carry at most one, but a message that inherited several decisions across a squash, or that concatenates more than one commit's message, carries one block per record. A record captures what the diff cannot show: the external conditions that shaped a decision, the alternatives that were ruled out, and the warnings that the next modifier needs.
 
 Records live in two places, both inside git:
 
@@ -62,6 +62,26 @@ A `trailer-block` qualifies only if **every** line in the final paragraph is a `
 
 When writing trailers, implementations MUST emit `Key: value`, one per line, folded continuations indented by two spaces, in the vocabulary order of §3. Parsing a canonically serialized block MUST yield an identical trailer list (round-trip identity).
 
+### 2.4 Multi-record grammar
+
+§2.1–2.3 describe one record block: the message's own trailer block, exactly as B1 defines it — the last paragraph, and only when every line in it is a trailer or a continuation (B3). A message MAY carry additional, **earlier** record blocks. This does not relax B1–B8 for the message's own last paragraph — that recognition is unconditional and unchanged — it only says how to recover records that arrived earlier in the same message, which the pre-2.4 grammar had no way to represent at all.
+
+A **record block** is a contiguous run of trailer lines terminated by `Record-Id:`. Concretely: for every paragraph other than the message's own last one, test the paragraph in isolation, exactly as B1 tests a message's last paragraph (a synthetic one-line subject in front of it is sufficient). It is an additional record block if and only if both hold:
+
+1. Every line in the paragraph is a trailer or a continuation (B3, applied to the paragraph alone).
+2. The paragraph declares a `Record-Id:`.
+
+Rule 2 is the reason this does not conflict with B2's own example (`Context:` / `Source:` — individually well-formed `Key: value` lines, declaring no identity, correctly read as body prose): a paragraph that is merely trailer-shaped is not promoted to a record. Only one that also names an identity is — the same principle that makes `Record-Id` "a stable identity for this record" (§3.2) rather than incidental payload.
+
+Two consequences follow directly from this rule, both load-bearing:
+
+- **A single-record message parses identically under §2.4 as under §2.1–2.3 alone.** With zero or one `Record-Id` anywhere in the message, there is nothing for rule 2 to promote — the message's own last paragraph is the only block, exactly as before. Backward compatibility is a property of the grammar, not a compatibility shim bolted onto it.
+- **A record MAY still omit `Record-Id:` (§4).** Only a *non-final* block needs one to be told apart from body prose; the message's own last paragraph needs none, the same as always.
+
+Implementations parsing record blocks MUST NOT identify a non-final block by scanning for `Record-Id:` as a line pattern across the whole message — that repeats B3's mistake at a larger grain. The isolation test above still delegates every trailer-or-prose judgement to git (or an equivalent parser), paragraph by paragraph; only the decision of *which paragraphs to test in isolation*, and *whether to accept the result*, is added.
+
+`Follows:` and `Supersedes:` resolve against `Record-Id`s regardless of which block declared them (§3.2); the grammar does not scope identity resolution to one block or one message.
+
 ---
 
 ## 3. Vocabulary
@@ -99,6 +119,12 @@ Sixteen keys. Every key exists because a route consumes it — see §5.
 Enum values name **what to do**, not an abstract grade. `Undo: permanent` tells an approval gate to stop; `Undo: level-3` would need a lookup every time. Any value outside the listed set is a violation (§6), including plausible synonyms — `Blast: wide`, `Undo: clean`, and `Certainty: high` MUST be rejected.
 
 `Record-Id` is a random-looking identifier, not a hash of anything: it must stay stable when the commit is rebased, amended, or squashed, which a content hash would not. `Follows:` and `Supersedes:` therefore reference `Record-Id`, never a commit SHA.
+
+A `Record-Id` MUST resolve to exactly one logical record. Re-declaring that
+record in later commits is a lifecycle update, and an exact notes mirror is a
+second transport channel for the same record. A note MUST NOT add or replace
+content under an id declared by a commit message; that is an identity collision,
+not an update, and consumer routes MUST withhold the colliding payload.
 
 `Evidence:` accepts a bare path. An earlier draft required an anchor, and the first records written against this spec — the ones in this repository's own history — hit that rule immediately: citing a whole file is a normal thing to do, and the harvest verifier can check a bare path exactly as well as an anchored one. Requiring an anchor only pressures authors to invent one.
 
@@ -147,6 +173,29 @@ No key exists without a consumer. If a proposed key has no route, it does not en
 
 ## 6. Validation
 
+### 6.1 Check classes
+
+Checks are classified by the information required to answer them, not by
+strictness:
+
+| Class | Question | Needs | Can run at |
+|---|---|---|---|
+| **Shape** | Is this trailer well-formed? | The message alone | Anywhere, including stdin |
+| **Reference** | Does this id resolve, and to exactly one record? | The repository | `--commit <sha>`, a repository-backed commit-msg hook, CI |
+| **Conservation** | Did records survive this transformation? | A before state and an after state | CI / pre-merge only |
+
+Every check MUST declare its class. A check that cannot state its information
+requirement has not been designed. A class that cannot run MUST be reported as
+not checked; it MUST NOT be presented as passing. That report does not by itself
+change exit status.
+
+Reference checks resolve `Follows:` and `Supersedes:` only against earlier
+history. A later declaration cannot repair a reference that was invalid when
+written. `validate` has no before state and therefore does not perform
+conservation checks.
+
+### 6.2 Violations
+
 `commitlore validate` MUST report violations as structured records — `{key, value, rule, got, want}` — not prose, because the repair loop consumes them programmatically.
 
 Violation classes:
@@ -158,6 +207,7 @@ Violation classes:
 | `format` | `Ruled-out: no pipe here`, `Record-Id: nope`, `Expires: 2026-13-45` |
 | `cardinality` | Two `Blast:` lines in one record |
 | `dangling-ref` | `Supersedes: r-abc123` where no such record exists in history |
+| `duplicate-id` | A note adds different content under a `Record-Id` already declared by a commit |
 
 A validation failure MUST exit non-zero. Implementations MUST NOT silently repair input.
 
@@ -190,5 +240,36 @@ An implementation conforms when it:
 2. Rejects every fixture in `spec/fixtures/invalid/` with the expected violation class.
 3. Round-trips: parse → canonical serialize → parse yields an identical list.
 4. Produces the expected outcome for every case in `spec/contract-cases/`.
+5. Follows the exit code contract of §10 in every command it exposes.
 
 The suite is the contract. This prose is explanation.
+
+---
+
+## 10. Process contract
+
+An implementation is invoked as a process, and its exit code is part of the
+protocol — not a detail one command is free to pick for itself. A caller that
+scripts against `commitlore` (a hook, a CI job, another tool shelling out)
+branches on the number, and it must mean the same thing regardless of which
+command produced it. Every command MUST draw from these four codes, and MUST
+NOT give a code a meaning another command does not also give it:
+
+| Code | Meaning |
+|---|---|
+| `0` | Ran, nothing to report |
+| `1` | Ran, found what the caller asked about — a violation, a match, a block |
+| `2` | Could not run — a usage error, an unresolvable reference, a missing dependency, a missing input file, or no repository |
+| `3` | Ran and answered, but could not see everything — an unfetched notes mirror, shallow history |
+
+A command need not use every code. `stale`, `inject`, and the query routes
+(`context`, `limits`, `ruled-out`, `warnings`) hand every finding back through
+their structured output and exit `0` regardless of what they found, on
+purpose: a route consumed by an agent must not turn "here is what I found"
+into a failed tool call (§4). That is a command choosing not to speak through
+its exit code, and it is documented at each command that makes the choice. It
+is not license to reuse a code: `1` MUST NOT mean anything but a finding, and
+`2` MUST NOT mean anything a finding could also mean, in any command that does
+use them.
+
+Every command MUST document its exit codes in `--help`.

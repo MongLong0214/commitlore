@@ -5,11 +5,22 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { parseCommitMessage, serializeTrailers } from '../src/core/trailers.js';
+import {
+  labelRecordBlocks,
+  parseCommitMessage,
+  parseRecordBlocks,
+  serializeTrailers,
+} from '../src/core/trailers.js';
 import { loadAllFixtures, loadCanonicalFixtures, loadFixtures } from './fixtures.js';
 
 const allFixtures = loadAllFixtures();
 const canonicalFixtures = loadCanonicalFixtures();
+const boundaryFixtures = loadFixtures('boundary');
+const boundaryByName = (name: string) => {
+  const fixture = boundaryFixtures.find((candidate) => candidate.name === name);
+  if (fixture === undefined) throw new Error(`missing boundary fixture: ${name}`);
+  return fixture;
+};
 
 describe('parseCommitMessage', () => {
   it('discovers every fixture on disk', () => {
@@ -137,5 +148,194 @@ describe('boundary regressions (SPEC §2.1)', () => {
 
   it('B7: a message with no trailer paragraph is not an error', () => {
     expect(parseCommitMessage(byName('b7-no-trailer-paragraph').message)).toEqual([]);
+  });
+});
+
+describe('parseRecordBlocks (SPEC §2.4, bug-issue-60)', () => {
+  it.each(allFixtures)(
+    '$id: a single-record message parses byte-identically to parseCommitMessage',
+    (fixture) => {
+      const blocks = parseRecordBlocks(fixture.message);
+      const flat = parseCommitMessage(fixture.message);
+      expect(blocks).toEqual(flat.length === 0 ? [] : [flat]);
+    },
+  );
+
+  it('B2 still holds: an earlier Key: value paragraph with no Record-Id stays prose', () => {
+    const fixture = boundaryByName('b2-two-trailer-paragraphs');
+    const blocks = parseRecordBlocks(fixture.message);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.map((trailer) => trailer.key)).toEqual(['Limit', 'Certainty']);
+  });
+
+  it('parses a GitHub-style squash message (subject, then concatenated commit messages)', () => {
+    // What GitHub's squash button writes when it pastes full commit messages
+    // rather than only subjects: each original commit's own subject line sits
+    // between the trailer blocks, so a contiguous walk from the tail would
+    // stop at the first one.
+    const message = [
+      'Add the worker pool (#7)',
+      '',
+      '* add the worker pool',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Certainty: firm',
+      'Record-Id: r-ghtest1',
+      '',
+      '* retry on 429',
+      '',
+      'Warn: do not raise the retry ceiling without re-reading the vendor quota',
+      'Record-Id: r-ghtest2',
+      '',
+    ].join('\n');
+
+    const blocks = parseRecordBlocks(message);
+    expect(blocks).toHaveLength(2);
+    expect(blocks.map((block) => block.find((t) => t.key === 'Record-Id')?.value)).toEqual([
+      'r-ghtest1',
+      'r-ghtest2',
+    ]);
+    expect(blocks[0]?.map((t) => t.key)).toEqual(['Limit', 'Certainty', 'Record-Id']);
+    // The message's own last paragraph is still what `parseCommitMessage`
+    // recognizes today — nothing about that changed.
+    expect(blocks[1]).toEqual(parseCommitMessage(message));
+  });
+
+  it('recognizes contiguous blocks with no prose between them (squash-preserve\'s own shape)', () => {
+    const message = [
+      'squash: bring in the branch',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Record-Id: r-block1',
+      '',
+      'Warn: do not raise the retry ceiling',
+      'Record-Id: r-block2',
+      '',
+    ].join('\n');
+
+    const blocks = parseRecordBlocks(message);
+    expect(blocks.map((block) => block.map((t) => `${t.key}=${t.value}`))).toEqual([
+      ['Limit=the vendor caps us at 3 concurrent workers', 'Record-Id=r-block1'],
+      ['Warn=do not raise the retry ceiling', 'Record-Id=r-block2'],
+    ]);
+  });
+
+  it('does not recover an earlier block that has no Record-Id', () => {
+    const message = [
+      'subject',
+      '',
+      'Verified: drained under SIGTERM in a local run',
+      '',
+      'Warn: needs a second look',
+      'Record-Id: r-onlyone',
+      '',
+    ].join('\n');
+
+    const blocks = parseRecordBlocks(message);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.map((t) => t.key)).toEqual(['Warn', 'Record-Id']);
+  });
+
+  it('returns [] for a message with no trailer paragraph at all', () => {
+    expect(parseRecordBlocks('just a subject\n\nand some body prose\n')).toEqual([]);
+  });
+
+  it('returns [] for an empty message', () => {
+    expect(parseRecordBlocks('')).toEqual([]);
+  });
+});
+
+describe('labelRecordBlocks (bug-issue-89)', () => {
+  it.each(allFixtures)(
+    '$id: a single-record message labels its one block own, with no collision',
+    (fixture) => {
+      const labeled = labelRecordBlocks(fixture.message);
+      const flat = parseCommitMessage(fixture.message);
+      if (flat.length === 0) {
+        expect(labeled).toEqual([]);
+      } else {
+        expect(labeled).toEqual([{ own: true, identityCollision: false, trailers: flat }]);
+      }
+    },
+  );
+
+  it('labels every earlier block false and only the message\'s own last paragraph true', () => {
+    const message = [
+      'Add the worker pool (#7)',
+      '',
+      '* add the worker pool',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Certainty: firm',
+      'Record-Id: r-ghtest1',
+      '',
+      '* retry on 429',
+      '',
+      'Warn: do not raise the retry ceiling without re-reading the vendor quota',
+      'Record-Id: r-ghtest2',
+      '',
+    ].join('\n');
+
+    const labeled = labelRecordBlocks(message);
+    expect(labeled.map((block) => block.own)).toEqual([false, true]);
+    expect(labeled.map((block) => block.identityCollision)).toEqual([false, false]);
+    expect(labeled.map((block) => block.trailers)).toEqual(parseRecordBlocks(message));
+  });
+
+  it('flags every block that shares a Record-Id with another block in the same message', () => {
+    const message = [
+      'squash: bring in the branch',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Record-Id: r-dupdup',
+      '',
+      'Warn: do not raise the retry ceiling',
+      'Record-Id: r-dupdup',
+      '',
+    ].join('\n');
+
+    const labeled = labelRecordBlocks(message);
+    expect(labeled).toHaveLength(2);
+    expect(labeled.every((block) => block.identityCollision)).toBe(true);
+    expect(labeled.map((block) => block.own)).toEqual([false, true]);
+  });
+
+  it('does not flag two distinct Record-Ids as colliding with each other', () => {
+    const message = [
+      'squash: bring in the branch',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Record-Id: r-block1',
+      '',
+      'Warn: do not raise the retry ceiling',
+      'Record-Id: r-block2',
+      '',
+    ].join('\n');
+
+    const labeled = labelRecordBlocks(message);
+    expect(labeled.map((block) => block.identityCollision)).toEqual([false, false]);
+  });
+
+  it('does not flag a collision when only one of three blocks repeats an id', () => {
+    const message = [
+      'squash: bring in the branch',
+      '',
+      'Limit: first decision',
+      'Record-Id: r-alone',
+      '',
+      'Warn: second decision, later updated',
+      'Record-Id: r-shared',
+      '',
+      'Undo: easy',
+      'Record-Id: r-shared',
+      '',
+    ].join('\n');
+
+    const labeled = labelRecordBlocks(message);
+    expect(labeled.map((block) => block.identityCollision)).toEqual([false, true, true]);
+  });
+
+  it('returns [] for a message with no trailer paragraph at all', () => {
+    expect(labelRecordBlocks('just a subject\n\nand some body prose\n')).toEqual([]);
   });
 });

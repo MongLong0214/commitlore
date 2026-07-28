@@ -30,11 +30,33 @@ export declare const HOOK_MODE = 493;
  *
  * `COMMITLORE_BIN` exists so a checkout can point the hook at a specific build
  * (a test harness, a monorepo's local bin) without the installer writing an
- * absolute path into the repository.
+ * absolute path into the repository. It carries the same `.js`/`.mjs`
+ * allowlist as the recorded path below: an env var is reachable from CI
+ * configuration, a sourced profile, or a compromised toolchain — places a
+ * reviewer does not read as executable config, so it gets no more trust than
+ * `commitlore.bin` does. A value that fails the check falls through to the
+ * remaining resolution steps rather than being executed.
+ *
+ * The recorded `commitlore.bin` gets one more check `COMMITLORE_BIN` deliberately
+ * does not: it must resolve inside `commitlore.root`, also recorded at install
+ * time (#71). Naming a file `.js` costs a `.git/config` editor nothing, so the
+ * extension check alone does not stop a post-install edit from pointing
+ * `commitlore.bin` at an attacker's own script — only its location, which the
+ * installer controls and a later config edit cannot rewrite without also
+ * rewriting `commitlore.root`. `COMMITLORE_BIN` is exempt on purpose: its whole
+ * reason to exist is aiming the hook at a build outside the install root.
  *
  * There is no `npx` fallback on purpose. `npx --no` still queries the registry
  * when the package is not installed locally, which would put a network call on
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
+ *
+ * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
+ * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
+ * plain executable named `commitlore`. It is recognized by that name rather
+ * than by "has no extension", which would allow-list every other executable
+ * on the machine, and its containment check is an exact match against
+ * `commitlore.root` rather than a directory prefix: a binary has no
+ * subdirectory for a foreign file to hide in, it *is* the whole install.
  */
 export declare const commitMsgStub: () => string;

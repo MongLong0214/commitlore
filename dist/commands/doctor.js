@@ -14,18 +14,27 @@
  *   command and lets a human run it.
  * - The commit-msg hook is *reported*, never installed. `commitlore hooks
  *   install` (T-202) owns that file; doctor only reads it.
+ *
+ * `checkSquashConservation` (ADR-0014, bug-issue-60 finding 1) is the same
+ * shape of problem one route over: nothing runs `squash-preserve`
+ * automatically, and a squash that happened without it silently drops
+ * records the same way an unfetched mirror silently drops them. It is a
+ * `doctor` check rather than a CI step because it runs at the moment the
+ * mistake is still local and cheap to fix — see the check's own doc comment
+ * for the full "Ruled-out" reasoning.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { execGit } from '../core/git.js';
-import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
-import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
+import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { PACKAGE_ROOT, installedPath, isSea, packageVersion } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
-import { parseCommitMessage } from '../core/trailers.js';
 import { runQuery } from '../core/query.js';
+import { collectRange } from '../core/squash.js';
+import { parseCommitMessage } from '../core/trailers.js';
 import { claudeSettingsPath, readClaudeHookStatus } from '../hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
 /** Probe message for the git capability check — one trailer of each shape. */
@@ -131,7 +140,14 @@ const checkHook = (opts, runtime) => {
     }
     const problems = [
         ...target.problems,
-        ...(override === undefined || override === '' ? [] : ['COMMITLORE_BIN override is active']),
+        ...(override === undefined || override === ''
+            ? []
+            : classifyBinTarget(override) !== null
+                ? ['COMMITLORE_BIN override is active']
+                : [
+                    'COMMITLORE_BIN override is active, but is not a .js, .mjs, or compiled commitlore ' +
+                        'binary — the hook ignores it and falls through to the remaining resolution steps',
+                ]),
     ];
     if (runtime.status !== 'ok') {
         return check(id, title, runtime.status, `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`, install);
@@ -175,6 +191,10 @@ const checkGit = (opts) => {
  * the documented distribution (ADR-0011) — ships `dist/commitlore.mjs`, a bundle
  * that needs no `node_modules`. A development checkout also has `dist/cli.js`,
  * the `tsc` output, which imports its dependencies and cannot run without them.
+ * A compiled single-executable build (#39) is neither — it has no `dist/`
+ * beside it at all, by design, and the question this check exists to answer
+ * ("does the CLI this installation uses actually run") already has its answer
+ * the moment this process is that binary and got far enough to ask.
  *
  * The first version of this check probed `dist/cli.js` unconditionally. On a
  * fresh clone that is a file that exists and cannot run, so the check invented a
@@ -188,6 +208,9 @@ const checkGit = (opts) => {
 const checkRuntime = (opts) => {
     const title = 'cli runtime';
     const id = 'cli-runtime';
+    if (isSea()) {
+        return check(id, title, 'ok', `running as a compiled binary at ${process.execPath} (commitlore ${packageVersion()})`);
+    }
     // The bundle first: it is what a clone has and what the plugin invokes. The
     // tsc output is the fallback for a checkout that has not been bundled.
     const candidates = ['dist/commitlore.mjs', 'dist/cli.js'].map((rel) => installedPath(rel));
@@ -351,6 +374,140 @@ const checkIndex = (opts) => {
         }
     }
 };
+const checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd())
+    ? check('history-depth', 'history depth', 'warn', 'this clone has shallow history, so queries may be missing records that exist upstream', 'git fetch --unshallow')
+    : check('history-depth', 'history depth', 'ok', 'full history is available');
+/** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
+const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
+/**
+ * Local branches that look like `git merge --squash` may have collapsed them
+ * into HEAD without a trace: not an ancestor of HEAD (a squash never carries
+ * the branch's own commits forward), but sharing a common ancestor with it
+ * (so it is a real candidate, not just unrelated history). A branch HEAD
+ * already contains — the ordinary merge or fast-forward case — is not one:
+ * nothing was collapsed, so there is nothing this check can lose track of.
+ */
+const squashCandidates = (opts, head) => {
+    const listed = execGit(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], gitOptions(opts));
+    if (listed.code !== 0)
+        return [];
+    const branches = listed.stdout
+        .split('\n')
+        .filter((line) => line !== '')
+        .slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+    const candidates = [];
+    for (const branch of branches) {
+        const resolved = execGit(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
+        const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
+        if (sha === '' || sha === head)
+            continue;
+        // Already an ancestor of HEAD (or identical to it): reached by an
+        // ordinary merge, rebase, or fast-forward, and nothing was lost.
+        if (execGit(['merge-base', '--is-ancestor', sha, head], gitOptions(opts)).code === 0) {
+            continue;
+        }
+        const merged = execGit(['merge-base', sha, head], gitOptions(opts));
+        if (merged.code !== 0)
+            continue; // no common ancestor — unrelated history
+        const base = merged.stdout.trim();
+        if (base === '' || base === sha)
+            continue;
+        candidates.push({ branch, sha, base });
+    }
+    return candidates;
+};
+/**
+ * Detects records a squash may have collapsed out of reach, and says so
+ * (SPEC §2.4, bug-issue-60 finding 1: nothing invokes `squash-preserve`, and
+ * for GitHub's server-side squash button nothing local can — the collapse
+ * happens on a server this checkout never runs code on). Detection is the
+ * honest answer where prevention is impossible.
+ *
+ * `Ruled-out: a CI step comparing a PR's commits against its post-merge
+ * squash commit`. That is the complementary check for the case this one
+ * cannot reach — a repository whose feature branch was deleted by the
+ * squash before the next local clone or fetch — but it needs the GitHub API
+ * to reconstruct a PR's original commits (this tool takes no HTTP dependency
+ * anywhere else) and it can only ever run *after* the squash has already
+ * happened and been pushed, which is too late to fix locally. `doctor` runs
+ * at the moment the mistake is still cheap to fix: right after a local
+ * `git merge --squash`, when the feature branch this check looks for is, in
+ * the overwhelmingly common case, still sitting right there in
+ * `refs/heads`. A CI step remains worth adding separately for the server-side
+ * case (documented, not built here — see the module doc comment above).
+ *
+ * A candidate branch (`squashCandidates`) that declared no `Record-Id` at all
+ * cannot be checked this way: without an identity there is nothing to search
+ * HEAD's history for by name, and guessing by content would be exactly the
+ * kind of heuristic this project has repeatedly found unsafe (SPEC §2.1 B3).
+ * That is a real, narrower gap than "detects every lost record" and is
+ * reported as such rather than silently passed over.
+ */
+const checkSquashConservation = (opts) => {
+    const title = 'squash conservation';
+    const id = 'squash-conservation';
+    const cwd = opts.cwd ?? process.cwd();
+    const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
+    if (head.code !== 0) {
+        return check(id, title, 'skipped', 'no HEAD yet — nothing to compare against');
+    }
+    const candidates = squashCandidates(opts, head.stdout.trim());
+    if (candidates.length === 0) {
+        return check(id, title, 'skipped', 'no local branch looks like the source of a squash — nothing to check');
+    }
+    let known = null;
+    const lost = [];
+    let uncheckable = 0;
+    let checked = 0;
+    for (const candidate of candidates) {
+        let records;
+        try {
+            records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd });
+        }
+        catch {
+            continue;
+        }
+        if (records.length === 0)
+            continue;
+        checked += 1;
+        const ids = new Set(records
+            .map((record) => record.recordId)
+            .filter((recordId) => recordId !== undefined));
+        if (ids.size === 0) {
+            uncheckable += 1;
+            continue;
+        }
+        // Computed once, lazily: every candidate needs the same answer for "what
+        // does HEAD's history already know", and building it is the expensive
+        // part of this check.
+        if (known === null) {
+            known = new Set(runQuery({ cwd, allHistory: true })
+                .records.map((record) => record.recordId)
+                .filter((recordId) => recordId !== undefined));
+        }
+        for (const recordId of ids) {
+            if (!known.has(recordId))
+                lost.push({ branch: candidate.branch, recordId });
+        }
+    }
+    if (checked === 0) {
+        return check(id, title, 'skipped', `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`);
+    }
+    if (lost.length > 0) {
+        const named = lost
+            .slice(0, 5)
+            .map((entry) => `${entry.recordId} (${entry.branch})`)
+            .join(', ');
+        const more = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
+        return check(id, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`, 'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
+            'then commit or attach the result');
+    }
+    const detail = uncheckable > 0
+        ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
+            `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)`
+        : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
+    return check(id, title, 'ok', detail);
+};
 export const runDoctor = (opts = {}) => {
     const hookRuntime = checkHookRuntime(opts);
     const checks = [
@@ -361,7 +518,9 @@ export const runDoctor = (opts = {}) => {
         hookRuntime,
         checkInjectRuntime(opts),
         checkGit(opts),
+        checkHistoryDepth(opts),
         checkIndex(opts),
+        checkSquashConservation(opts),
     ];
     return {
         checks,
@@ -386,6 +545,7 @@ export const register = (program) => {
         .description('check that this repository can carry and share CommitLore records')
         .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
         .option('--json', 'emit the report as JSON')
+        .addHelpText('after', '\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC §10).')
         .action((options) => {
         const report = runDoctor({ fix: options.fix === true });
         process.stdout.write(options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report));
