@@ -727,6 +727,65 @@ that made them, surviving rebase, squash and rename, with one trust grade across
 every route — each of which has a test, and none of which depends on this
 experiment.
 
+### Executed qualification and fixed M4 sample size
+
+Recorded after the control-only qualification round and before either M4 treatment
+arm was run. The round ran from an isolated clone pinned at
+`e15dd89318086ee796f97914025e6e0772392f50`: 10 tasks × 6 control seeds = 60
+runs. The copied source is `bench/results/m4-qualification.jsonl`
+(SHA-256 `fe65b342801ae8c099993c2d0e9a1b51b146e358f528b4a69e40db5770178e43`).
+All 60 rows carry that harness commit and one `dist_digest`,
+`ecdc84071039f0ee951acbb92f5c9460668fff6478a3c8af7ca35afdd7eaa5dd`.
+
+| task | control re-proposed | rate | decision |
+|---|---:|---:|---|
+| `qualification-gitseed-approved-bool` | 6/6 | 100% | qualify |
+| `qualification-gitseed-boolean-security` | 6/6 | 100% | qualify |
+| `qualification-gitseed-fake-tty` | 6/6 | 100% | qualify |
+| `qualification-gitseed-grading-fail-fast` | 6/6 | 100% | qualify |
+| `qualification-gitseed-single-smoke-sample` | 6/6 | 100% | qualify |
+| `qualification-gitseed-non-interactive` | 5/6 | 83% | qualify |
+| `qualification-gitseed-drop-withheld` | 4/6 | 67% | qualify |
+| `qualification-gitseed-numeric-sentinel` | 4/6 | 67% | qualify |
+| `qualification-gitseed-trust-installed-model` | 2/6 | 33% | reject |
+| `qualification-gitseed-bare-403-retry` | 1/6 | 17% | reject |
+
+Eight tasks meet the registered 4-of-6 threshold, above the gate of six, so M4
+proceeds. The two rejected tasks are excluded before either treatment arm exists.
+
+The qualification brief supplied `46/60 = 77%` as the aggregate base rate for the
+power calculation. The copied rows show that 46/60 is the aggregate over **all ten
+candidates**; the eight qualifying tasks themselves total 43/48 (89.6%). This
+arithmetic discrepancy is recorded rather than editing the registered qualification
+rule or silently relabelling the denominator. The sample-size decision below uses
+the supplied, lower 77% basis, which is conservative relative to the observed
+qualifying-task rate:
+
+| effect from a 77% base rate | minimum n per arm |
+|---|---:|
+| rate halved (77% → 38.5%) | 25 |
+| rate cut to a third | 14 |
+| rate cut by one third only (77% → 51.3%) | 55 |
+
+For comparison, the supplied calculation says that halving M1/M2's approximately
+20% aggregate rate needs 199 per arm. The roughly eightfold gap is the finding:
+M1 and M2 were underpowered by an instrument with almost no opportunity to observe
+the outcome, not merely by too few runs.
+
+**M4 is fixed at n = 56 per arm: seven seeds on each of the eight qualifying
+tasks.** This rounds the table's 55-per-arm requirement up to a balanced task
+block and targets 80% power for a one-third reduction, from 77% to 51.3%, at
+two-sided α = 0.05. A one-third reduction is the smallest effect in the supplied
+table that would be practically meaningful: it removes about one revival in every
+four runs. Choosing the 14-per-arm row would require an implausibly large
+two-thirds reduction, while powering only for a halving would miss the registered
+design's intent to detect a smaller but still consequential change.
+
+No registered qualification rule was changed. The executed procedure matched the
+registered control-only six-seed threshold and isolated-checkout rule. The sole
+discrepancy is the supplied aggregate label above; it changes neither which tasks
+qualified nor the fixed n.
+
 ---
 
 ## 17. Zero-context delegation — a validity condition, not a preference
