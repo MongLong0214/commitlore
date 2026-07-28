@@ -24,7 +24,7 @@
  * for the full "Ruled-out" reasoning.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -468,6 +468,83 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
   }
 };
 
+/**
+ * Turns a completed (or attempted) probe run into this check's verdict.
+ *
+ * Split out from `checkInjectRuntime` so the *decision* — not the race that
+ * can accompany it — is what a test exercises directly with a synthetic
+ * `spawnSync` result.
+ *
+ * `spawnSync`'s `input` option writes the probe payload to the child's stdin
+ * after the child is already running. A child that never reads stdin (every
+ * fixture here, and plenty of real hooks) routinely exits and closes that
+ * pipe before Node finishes the write, which fails with EPIPE — on a shared,
+ * contended runner far more often than on a quiet laptop, which is why this
+ * was invisible locally and ~15-25% flaky in CI (reproduced against the
+ * actual CI Node 22 and 24 images). Node still reports the real
+ * `status`/`stdout`/`stderr` of a process that ran to completion on the same
+ * result object that carries that `error` — the write failing is not the
+ * same thing as the hook failing to run. Treating `run.error !== undefined`
+ * as "could not run" discarded that real status and reported a working hook
+ * as broken (and, for the two doctor.test.ts fixtures that *are* meant to
+ * fail, reported the wrong reason).
+ *
+ * `run.status` is `null` only when no process was ever created (an ENOENT
+ * from an unresolvable executable, a permissions failure, ...), which is the
+ * one condition this function still treats as "could not run".
+ *
+ * Exported so a test can hand it a synthetic `SpawnSyncReturns` (a real
+ * status alongside a real EPIPE error) and assert on the decision
+ * deterministically, without depending on the race actually firing.
+ */
+export const evaluateInjectRun = (
+  run: SpawnSyncReturns<string>,
+  ctx: { id: string; title: string; executable: string; path: string; fix: string; unavailableFix: string },
+): DoctorCheck => {
+  const { id, title, executable, path, fix, unavailableFix } = ctx;
+
+  if (run.status === null || run.status === undefined) {
+    if (run.error !== undefined && 'code' in run.error && run.error.code === 'ENOENT') {
+      return check(
+        id,
+        title,
+        'fail',
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix,
+      );
+    }
+    return check(
+      id,
+      title,
+      'fail',
+      `could not run the PreToolUse hook: ${run.error?.message ?? 'no diagnosis'}`,
+      fix,
+    );
+  }
+
+  if (run.status !== 0) {
+    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+    return check(
+      id,
+      title,
+      'fail',
+      `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`,
+      fix,
+    );
+  }
+  if (`${run.stdout ?? ''}`.trim() === '') {
+    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+    return check(
+      id,
+      title,
+      'fail',
+      `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`,
+      fix,
+    );
+  }
+  return check(id, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+};
+
 const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'PreToolUse hook runtime';
   const id = 'inject-runtime';
@@ -527,39 +604,7 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
     },
   });
 
-  if (run.error !== undefined) {
-    if ('code' in run.error && run.error.code === 'ENOENT') {
-      return check(
-        id,
-        title,
-        'fail',
-        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
-        unavailableFix,
-      );
-    }
-    return check(id, title, 'fail', `could not run the PreToolUse hook: ${run.error.message}`, fix);
-  }
-  if (run.status !== 0) {
-    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
-    return check(
-      id,
-      title,
-      'fail',
-      `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`,
-      fix,
-    );
-  }
-  if (`${run.stdout ?? ''}`.trim() === '') {
-    const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
-    return check(
-      id,
-      title,
-      'fail',
-      `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`,
-      fix,
-    );
-  }
-  return check(id, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+  return evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
 };
 
 const checkIndex = (opts: DoctorOptions): DoctorCheck => {

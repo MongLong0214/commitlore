@@ -4,6 +4,7 @@
  * local config, and it never installs a hook or pushes to a remote.
  */
 
+import type { SpawnSyncReturns } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -23,6 +24,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   type CheckStatus,
   type DoctorReport,
+  evaluateInjectRun,
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
@@ -606,6 +608,96 @@ describe('doctor: PreToolUse hook runtime', () => {
       if (previousPath === undefined) delete process.env['PATH'];
       else process.env['PATH'] = previousPath;
     }
+  });
+});
+
+/**
+ * `spawnSync`'s `input` write races a child that exits before reading stdin —
+ * reproduced directly against the actual CI Node 22 and 24 images at a
+ * 15-25% hit rate per run, 0/several-thousand on macOS, which is why the two
+ * tests above only ever caught this in CI. When that write is what fails,
+ * Node still reports the process's real `status`/`stdout`/`stderr` on the
+ * same result object that carries the `error` — so these tests hand
+ * `evaluateInjectRun` a synthetic result with both, and assert on the
+ * decision without depending on the race actually firing.
+ */
+describe('doctor: PreToolUse hook runtime — deciding a completed run', () => {
+  const ctx = {
+    id: 'inject-runtime',
+    title: 'PreToolUse hook runtime',
+    executable: 'commitlore',
+    path: 'probe.ts',
+    fix: 'reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor',
+    unavailableFix:
+      'install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor',
+  };
+
+  const epipe = (): NodeJS.ErrnoException => {
+    const error = new Error('spawnSync commitlore EPIPE') as NodeJS.ErrnoException;
+    error.code = 'EPIPE';
+    return error;
+  };
+
+  const run = (overrides: Partial<SpawnSyncReturns<string>>): SpawnSyncReturns<string> => ({
+    pid: 1,
+    output: [null, '', ''],
+    stdout: '',
+    stderr: '',
+    status: 0,
+    signal: null,
+    ...overrides,
+  });
+
+  it('reports ok when a real success status arrives alongside an EPIPE from the input-write race', () => {
+    const result = evaluateInjectRun(
+      run({ status: 0, stdout: '{"hookSpecificOutput":{"additionalContext":"context"}}\n', error: epipe() }),
+      ctx,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.detail).toContain('returned context');
+  });
+
+  it('still fails a hook that resolves and genuinely exits non-zero, even racing the same EPIPE', () => {
+    const result = evaluateInjectRun(run({ status: 7, stderr: 'broken\n', error: epipe() }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('exits 7');
+    expect(result.detail).toContain('broken');
+  });
+
+  it('still fails empty output from a hook that ran, even racing the same EPIPE', () => {
+    const result = evaluateInjectRun(run({ status: 0, stdout: '', error: epipe() }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('returned no context');
+  });
+
+  it('fails a broken command with no EPIPE in the picture, the ordinary case', () => {
+    const result = evaluateInjectRun(run({ status: 7, stderr: 'broken\n' }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('exits 7');
+  });
+
+  it('treats a genuinely unresolvable executable as unresolvable, not as "could not run"', () => {
+    const error = new Error('spawnSync commitlore ENOENT') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    const result = evaluateInjectRun(run({ status: null, error }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('is not resolvable from PATH');
+    expect(result.fix).toBe(ctx.unavailableFix);
+  });
+
+  it('falls back to a generic message when spawning fails for a reason other than ENOENT', () => {
+    const error = new Error('spawnSync commitlore EACCES') as NodeJS.ErrnoException;
+    error.code = 'EACCES';
+    const result = evaluateInjectRun(run({ status: null, error }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toBe('could not run the PreToolUse hook: spawnSync commitlore EACCES');
+    expect(result.fix).toBe(ctx.fix);
   });
 });
 
