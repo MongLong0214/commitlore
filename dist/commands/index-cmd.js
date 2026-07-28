@@ -34,6 +34,16 @@ const reportRebuild = (stats) => {
         return;
     process.stderr.write(`commitlore: rebuilt the index — ${stats.rebuildReason}\n`);
 };
+/**
+ * The discoverability half of bug-issue-150: `Co-authored-by:` and its family
+ * are dropped rather than indexed, silently as far as `commitlore context` is
+ * concerned. This is where "silently" stops — a user who wonders why an
+ * attribution line never shows up can run `commitlore index --stats` (or read
+ * the default summary line below) and see what was excluded and how much.
+ */
+const excludedNote = (stats) => stats.trailersExcluded === 0
+    ? ''
+    : ` (excluded ${plural(stats.trailersExcluded, 'conventional trailer')}: ${stats.excludedKeys.join(', ')})`;
 const runIndex = (options) => {
     const rebuild = options.rebuild ?? false;
     const { handle, stats } = rebuild
@@ -59,14 +69,16 @@ const runIndex = (options) => {
                 `notes ref  ${info.notesRefSha ?? '(none)'}`,
                 `holds      ${plural(info.trailers, 'trailer')}, ${plural(info.commits, 'commit')}, ${plural(info.paths, 'path')}`,
                 `last run   ${stats.rebuilt ? 'rebuild' : 'incremental'} · scanned ${plural(stats.commitsScanned, 'commit')} · ` +
-                    `+${stats.trailersIndexed} trailers · +${stats.noteTrailersIndexed} from notes · ${stats.elapsedMs}ms`,
+                    `+${stats.trailersIndexed} trailers · +${stats.noteTrailersIndexed} from notes` +
+                    `${stats.trailersExcluded === 0 ? '' : ` · -${stats.trailersExcluded} conventional (${stats.excludedKeys.join(', ')})`}` +
+                    ` · ${stats.elapsedMs}ms`,
             ];
             process.stdout.write(`${lines.join('\n')}\n`);
             return;
         }
         process.stdout.write(`${stats.rebuilt ? 'rebuilt' : 'updated'}: scanned ${plural(stats.commitsScanned, 'commit')}, ` +
-            `indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, 'trailer')} ` +
-            `in ${stats.elapsedMs}ms\n`);
+            `indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, 'trailer')}` +
+            `${excludedNote(stats)} in ${stats.elapsedMs}ms\n`);
     }
     finally {
         closeIndex(handle);

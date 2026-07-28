@@ -58,7 +58,11 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseRecordBlocks } from './trailers.js';
-import type { Trailer } from './types.js';
+import {
+  canonicalConventionalTrailerKey,
+  isConventionalTrailerKey,
+  type Trailer,
+} from './types.js';
 
 /**
  * `node:sqlite` ships inside Node itself (ADR-0012), so unlike `better-sqlite3`
@@ -261,6 +265,18 @@ export interface IndexStats {
   /** Whether FTS5 backs this index. `false` means the LIKE path is in use. */
   fts: boolean;
   elapsedMs: number;
+  /**
+   * Trailer values dropped because they matched `CONVENTIONAL_TRAILER_KEYS`
+   * (bug-issue-150) — attribution and process trailers like `Co-authored-by:`
+   * that are never counted toward `trailersIndexed`/`noteTrailersIndexed`
+   * because they were never indexed at all. This is the discoverability half
+   * of the fix: `commitlore index --stats` reports it so a user who wonders
+   * why an attribution line does not appear in `commitlore context` has
+   * somewhere to look, rather than the exclusion being silent.
+   */
+  trailersExcluded: number;
+  /** Canonical spellings of the reserved keys actually seen, sorted. Empty when `trailersExcluded` is 0. */
+  excludedKeys: readonly string[];
 }
 
 export interface IndexHandle {
@@ -351,6 +367,39 @@ const parseTrailerField = (field: string): Trailer[] => {
     return { key: entry.slice(0, separator), value: entry.slice(separator + 1) };
   });
 };
+
+// ---------------------------------------------------------------------------
+// Reserved trailers (bug-issue-150) — never a record, no matter the source
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical key -> occurrences dropped during one read. Optional everywhere it
+ * is threaded: a caller that does not report stats (`scanTrailers`) passes
+ * nothing, and filtering still happens — the count is a reporting side
+ * channel, never a condition the filter itself depends on.
+ */
+type ExclusionCounts = Map<string, number>;
+
+const recordExclusion = (counts: ExclusionCounts | undefined, key: string): void => {
+  if (counts === undefined) return;
+  const canonical = canonicalConventionalTrailerKey(key);
+  counts.set(canonical, (counts.get(canonical) ?? 0) + 1);
+};
+
+/**
+ * Drops trailers whose meaning git or code-review tooling already fixed
+ * (`types.ts` `CONVENTIONAL_TRAILER_KEYS`), applied at every point raw git
+ * output turns into a candidate record. A commit whose only trailer is one of
+ * these therefore never counts as carrying a record at all — the filter runs
+ * before anything downstream asks "does this commit have a trailer block",
+ * not after (bug-issue-150).
+ */
+const stripConventional = (trailers: readonly Trailer[], counts?: ExclusionCounts): Trailer[] =>
+  trailers.filter((trailer) => {
+    if (!isConventionalTrailerKey(trailer.key)) return true;
+    recordExclusion(counts, trailer.key);
+    return false;
+  });
 
 /**
  * `--name-only -z` emits a newline between the format output and the path
@@ -454,8 +503,20 @@ const readFullMessages = (cwd: string, shas: readonly string[]): Map<string, str
  * already had, the original record is kept untouched rather than rebuilt, so
  * this pass changes nothing for the overwhelming majority of commits that
  * never carry more than one block.
+ *
+ * The last recovered block is never re-derived from `parseRecordBlocks` even
+ * when there are several: it is by construction the same bytes as
+ * `record.trailers`, which the caller already ran through `stripConventional`
+ * (bug-issue-150). Reusing it rather than re-stripping a fresh copy is what
+ * keeps a reserved trailer in that position from being counted twice against
+ * `excluded`. Only the *earlier* blocks are new here, so only they are
+ * stripped in this pass.
  */
-const explodeRecordBlocks = (cwd: string, records: readonly RawRecord[]): RawRecord[] => {
+const explodeRecordBlocks = (
+  cwd: string,
+  records: readonly RawRecord[],
+  excluded?: ExclusionCounts,
+): RawRecord[] => {
   const messages = readFullMessages(
     cwd,
     records.map((record) => record.sha),
@@ -468,19 +529,38 @@ const explodeRecordBlocks = (cwd: string, records: readonly RawRecord[]): RawRec
     const blocks = parseRecordBlocks(message);
     if (blocks.length <= 1) return [record];
 
-    return blocks.map((trailers, block) => ({ ...record, block, trailers }));
+    const earlierBlocks = blocks
+      .slice(0, -1)
+      .map((block) => stripConventional(block, excluded))
+      // A recovered earlier block always declares a Record-Id (the grammar's
+      // own gate, `trailers.ts` `parseRecordBlocks`), and that key is never
+      // reserved, so this can only ever drop nothing — kept for the same
+      // reason the last block's empty case is handled by the caller: a block
+      // is a record only once it survives the same filter every other
+      // trailer source does.
+      .filter((trailers) => trailers.length > 0);
+
+    return [
+      ...earlierBlocks.map((trailers, block) => ({ ...record, block, trailers })),
+      { ...record, block: earlierBlocks.length, trailers: record.trailers },
+    ];
   });
 };
 
 /**
  * Reads the given commits, in one `git log` per batch, keeping only those that
- * carry at least one trailer. A second pass resolves paths for exactly those
- * commits — the pass that would dominate output size on a large repository is
- * the one restricted to the ~1% of commits that recorded anything. A third
- * pass (`explodeRecordBlocks`) recovers additional record blocks for that same
- * sliver of commits (SPEC §2.4).
+ * carry at least one trailer that is not reserved for attribution or process
+ * bookkeeping (`stripConventional`, bug-issue-150). A second pass resolves
+ * paths for exactly those commits — the pass that would dominate output size
+ * on a large repository is the one restricted to the ~1% of commits that
+ * recorded anything. A third pass (`explodeRecordBlocks`) recovers additional
+ * record blocks for that same sliver of commits (SPEC §2.4).
  */
-const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] => {
+const readCommitRecords = (
+  cwd: string,
+  shas: readonly string[],
+  excluded?: ExclusionCounts,
+): RawRecord[] => {
   const records: RawRecord[] = [];
 
   for (const batch of chunked(shas, LOG_BATCH)) {
@@ -498,8 +578,13 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
       const [sha, rawTs, committedAt, trailerField] = fields;
       if (sha === undefined || rawTs === undefined || committedAt === undefined) continue;
 
-      const trailers = parseTrailerField(trailerField ?? '');
-      if (trailers.length === 0) continue;
+      // The raw count decides whether this commit is worth a full-message
+      // re-read below (it might still recover an earlier block); the
+      // *stripped* count decides whether this position is itself a record. A
+      // commit whose only trailer is `Co-authored-by:` still needs the
+      // re-read, because an earlier squashed block might carry a real one.
+      const rawTrailers = parseTrailerField(trailerField ?? '');
+      if (rawTrailers.length === 0) continue;
 
       batchRecords.push({
         sha,
@@ -507,12 +592,17 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: 'commit',
-        trailers,
+        trailers: stripConventional(rawTrailers, excluded),
         paths: [],
       });
     }
 
-    const exploded = explodeRecordBlocks(cwd, batchRecords);
+    // A block whose only trailers were reserved strips to empty here; that is
+    // "recorded nothing" (SPEC §4), not a record, so it is dropped rather
+    // than indexed as one (bug-issue-150).
+    const exploded = explodeRecordBlocks(cwd, batchRecords, excluded).filter(
+      (record) => record.trailers.length > 0,
+    );
     const paths = readPaths(
       cwd,
       batchRecords.map((record) => record.sha),
@@ -541,8 +631,15 @@ const readCommitRecords = (cwd: string, shas: readonly string[]): RawRecord[] =>
  * sparse by construction, and correctness here is worth more than the
  * batching: a note is a message, and only git decides where its trailer block
  * starts.
+ *
+ * Every block also goes through `stripConventional` (bug-issue-150) before
+ * the empty check below, the same as the commit-message path. CommitLore
+ * itself never writes a reserved trailer into a note, but a note is still
+ * text an external tool or a hand edit can put anything into, and a mirror
+ * that trusted its own source more than it trusts a commit message would be
+ * the one place this bug could survive its own fix.
  */
-const readNoteRecords = (cwd: string): RawRecord[] => {
+const readNoteRecords = (cwd: string, excluded?: ExclusionCounts): RawRecord[] => {
   const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
 
   const annotated = listed
@@ -587,7 +684,8 @@ const readNoteRecords = (cwd: string): RawRecord[] => {
       // A note may itself carry several record blocks (SPEC §2.4): squash
       // inheritance writes one per source record (`core/squash.ts`).
       const blocks = parseRecordBlocks(`${NOTE_SUBJECT}\n\n${noteText}`);
-      blocks.forEach((trailers, block) => {
+      blocks.forEach((rawTrailers, block) => {
+        const trailers = stripConventional(rawTrailers, excluded);
         if (trailers.length === 0) return;
         batchRecords.push({
           sha,
@@ -960,13 +1058,17 @@ const deleteNoteRows = (handle: IndexHandle): void => {
  * place, so there is no "new notes only" range the way there is for commits,
  * and notes are sparse enough that whole is cheap.
  */
-export const indexNotes = (handle: IndexHandle, opts: { force?: boolean } = {}): number => {
+export const indexNotes = (
+  handle: IndexHandle,
+  opts: { force?: boolean } = {},
+  excluded?: ExclusionCounts,
+): number => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, 'notes_ref_sha');
 
   if (!(opts.force ?? false) && refSha === indexed) return 0;
 
-  const records = refSha === null ? [] : readNoteRecords(handle.cwd);
+  const records = refSha === null ? [] : readNoteRecords(handle.cwd, excluded);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
@@ -986,7 +1088,15 @@ const emptyStats = (handle: IndexHandle, started: number): IndexStats => ({
   headSha: null,
   fts: handle.fts,
   elapsedMs: Date.now() - started,
+  trailersExcluded: 0,
+  excludedKeys: [],
 });
+
+/** Folds an `ExclusionCounts` accumulator into the two report fields it backs. */
+const applyExclusions = (stats: IndexStats, excluded: ExclusionCounts): void => {
+  stats.trailersExcluded = [...excluded.values()].reduce((sum, count) => sum + count, 0);
+  stats.excludedKeys = [...excluded.keys()].sort();
+};
 
 const requireWritable = (handle: IndexHandle): void => {
   if (handle.readonly) throw new Error('the index was opened read-only');
@@ -1005,9 +1115,10 @@ export const rebuildIndex = (
   const started = Date.now();
   const head = revParse(handle.cwd, 'HEAD');
   const shas = head === null ? [] : revList(handle.cwd, 'HEAD');
-  const records = readCommitRecords(handle.cwd, shas);
+  const excluded: ExclusionCounts = new Map();
+  const records = readCommitRecords(handle.cwd, shas, excluded);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, excluded);
   const stats: IndexStats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -1033,6 +1144,7 @@ export const rebuildIndex = (
     writeMeta(handle.db, 'last_indexed_sha', head);
     writeMeta(handle.db, 'notes_ref_sha', notesRef);
   });
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -1078,12 +1190,14 @@ export const updateIndex = (handle: IndexHandle, opts: { force?: boolean } = {})
   }
   if (opts.force ?? false) return rebuildIndex(handle, { reason: 'rebuild requested' });
 
+  const excluded: ExclusionCounts = new Map();
   const head = revParse(handle.cwd, 'HEAD');
   if (head === null) {
     /* An empty repository is not an error; it is a repository with no records. */
     const stats = emptyStats(handle, started);
     writeMeta(handle.db, 'last_indexed_sha', null);
-    stats.noteTrailersIndexed = indexNotes(handle);
+    stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+    applyExclusions(stats, excluded);
     stats.elapsedMs = Date.now() - started;
     return stats;
   }
@@ -1097,7 +1211,7 @@ export const updateIndex = (handle: IndexHandle, opts: { force?: boolean } = {})
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
     stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas);
+    const records = readCommitRecords(handle.cwd, shas, excluded);
     try {
       const counts = insertRecords(handle, records);
       stats.trailersIndexed = counts.trailers;
@@ -1110,7 +1224,8 @@ export const updateIndex = (handle: IndexHandle, opts: { force?: boolean } = {})
     writeMeta(handle.db, 'last_indexed_sha', head);
   }
 
-  stats.noteTrailersIndexed = indexNotes(handle);
+  stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };

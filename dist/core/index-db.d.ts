@@ -51,7 +51,7 @@
  * substring matching (printable ASCII, >= 3 characters, no LIKE wildcards).
  */
 import type { DatabaseSync } from 'node:sqlite';
-import type { Trailer } from './types.js';
+import { type Trailer } from './types.js';
 export type IndexDatabase = DatabaseSync;
 /**
  * Bumped whenever the table shape changes. A mismatch is not an error: the
@@ -117,6 +117,18 @@ export interface IndexStats {
     /** Whether FTS5 backs this index. `false` means the LIKE path is in use. */
     fts: boolean;
     elapsedMs: number;
+    /**
+     * Trailer values dropped because they matched `CONVENTIONAL_TRAILER_KEYS`
+     * (bug-issue-150) — attribution and process trailers like `Co-authored-by:`
+     * that are never counted toward `trailersIndexed`/`noteTrailersIndexed`
+     * because they were never indexed at all. This is the discoverability half
+     * of the fix: `commitlore index --stats` reports it so a user who wonders
+     * why an attribution line does not appear in `commitlore context` has
+     * somewhere to look, rather than the exclusion being silent.
+     */
+    trailersExcluded: number;
+    /** Canonical spellings of the reserved keys actually seen, sorted. Empty when `trailersExcluded` is 0. */
+    excludedKeys: readonly string[];
 }
 export interface IndexHandle {
     /** Replaced when a rebuild has to recreate the file, hence not readonly. */
@@ -150,6 +162,13 @@ export interface OpenIndexOptions {
  */
 export declare const indexDbPath: (cwd?: string) => string;
 /**
+ * Canonical key -> occurrences dropped during one read. Optional everywhere it
+ * is threaded: a caller that does not report stats (`scanTrailers`) passes
+ * nothing, and filtering still happens — the count is a reporting side
+ * channel, never a condition the filter itself depends on.
+ */
+type ExclusionCounts = Map<string, number>;
+/**
  * Opens the index, creating it if absent. A file that SQLite refuses to open
  * at all is deleted and recreated rather than reported: the bytes are a cache.
  */
@@ -164,7 +183,7 @@ export declare const closeIndex: (handle: IndexHandle) => void;
  */
 export declare const indexNotes: (handle: IndexHandle, opts?: {
     force?: boolean;
-}) => number;
+}, excluded?: ExclusionCounts) => number;
 /**
  * Rebuilds from scratch: every commit reachable from HEAD, plus every note.
  * This is always safe and always sufficient — it is what makes the index
@@ -215,3 +234,4 @@ export declare const indexInfo: (handle: IndexHandle) => {
     commits: number;
     paths: number;
 };
+export {};
