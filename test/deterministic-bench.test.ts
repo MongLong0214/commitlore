@@ -11,9 +11,17 @@ import {
   renderDeterministicReport,
   SCOPE_SENTENCE,
 } from '../bench/deterministic/report.ts';
+import {
+  activePathRecords,
+  createNoiseFixture,
+  destroyNoiseFixture,
+  generateNoiseCorpus,
+  NOISE_SIZES,
+} from '../bench/deterministic/noise.ts';
 import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
 import type { InjectionDetectionRow } from '../bench/deterministic/types.ts';
+import type { NoiseExposureRow } from '../bench/deterministic/types.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 
@@ -129,5 +137,66 @@ describe('deterministic benchmark reporting', () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+
+  it('generates the same distractor corpus for a fixed seed', () => {
+    expect(generateNoiseCorpus(100, 142)).toEqual(generateNoiseCorpus(100, 142));
+    expect(generateNoiseCorpus(100, 142)).not.toEqual(generateNoiseCorpus(100, 143));
+  });
+
+  it('exposes exactly the two active records at every distractor corpus size', () => {
+    for (const size of NOISE_SIZES) {
+      const fixture = createNoiseFixture(size);
+      try {
+        expect(activePathRecords(fixture)).toBe(2);
+      } finally {
+        destroyNoiseFixture(fixture);
+      }
+    }
+  });
+
+  it('withholds a superseded record from the active pair', () => {
+    const fixture = createNoiseFixture(10, 142, true);
+    try {
+      expect(activePathRecords(fixture)).toBe(1);
+    } finally {
+      destroyNoiseFixture(fixture);
+    }
+  });
+
+  it('states that the exposure section is not a cost or accuracy measurement', () => {
+    const exposure: NoiseExposureRow = {
+      ...row(),
+      metric: 'noise_exposure',
+      distractors: 10,
+      corpus_records: 12,
+      route: 'inject-everything',
+      visible_records: 12,
+      visible_tokens: 120,
+      relevant_records: 2,
+      relevant_total: 2,
+      timing: { runs: 20, warmups: 1, p50_ms: 1, p95_ms: 2, min_ms: 1, max_ms: 2 },
+    };
+
+    expect(renderDeterministicReport([exposure])).toContain(
+      'This section measures exposure only, not token cost, billed cost, or accuracy.',
+    );
+  });
+
+  it('renders absolute relevant counts alongside density percentages', () => {
+    const exposure: NoiseExposureRow = {
+      ...row(),
+      metric: 'noise_exposure',
+      distractors: 10_000,
+      corpus_records: 10_002,
+      route: 'inject-everything',
+      visible_records: 10_002,
+      visible_tokens: 100_020,
+      relevant_records: 2,
+      relevant_total: 2,
+      timing: { runs: 20, warmups: 1, p50_ms: 1, p95_ms: 2, min_ms: 1, max_ms: 2 },
+    };
+
+    expect(renderDeterministicReport([exposure])).toContain('2 of 10002 (0.0%)');
   });
 });

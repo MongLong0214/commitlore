@@ -126,13 +126,31 @@ export interface HookOverheadRow extends BaseRow {
   readonly delta_p95_ms: number;
 }
 
+export type NoiseRoute =
+  | 'inject-everything'
+  | 'top-k-lexical'
+  | 'commitlore-path-lifecycle';
+
+export interface NoiseExposureRow extends BaseRow {
+  readonly metric: 'noise_exposure';
+  readonly distractors: number;
+  readonly corpus_records: number;
+  readonly route: NoiseRoute;
+  readonly visible_records: number;
+  readonly visible_tokens: number;
+  readonly relevant_records: number;
+  readonly relevant_total: 2;
+  readonly timing: Timing;
+}
+
 export type DeterministicRow =
   | QueryLatencyRow
   | IndexCostRow
   | SurvivalRow
   | InjectionDetectionRow
   | GuardQualityRow
-  | HookOverheadRow;
+  | HookOverheadRow
+  | NoiseExposureRow;
 
 export type RowBase = Pick<
   BaseRow,

@@ -6,12 +6,16 @@ import type {
   HookOverheadRow,
   IndexCostRow,
   InjectionDetectionRow,
+  NoiseExposureRow,
   QueryLatencyRow,
   SurvivalRow,
 } from './types.ts';
 
 export const SCOPE_SENTENCE =
   'These numbers say what CommitLore costs and what it catches. They say nothing about whether recorded context helps an agent; M4 is registered for that question and may still come back null.';
+
+export const EXPOSURE_SCOPE_SENTENCE =
+  'This section measures exposure only, not token cost, billed cost, or accuracy.';
 
 export const percentile = (samples: readonly number[], proportion: number): number => {
   if (samples.length === 0) throw new Error('cannot take a percentile of zero samples');
@@ -197,6 +201,28 @@ const indexSection = (rows: readonly IndexCostRow[]): string[] => {
   ];
 };
 
+const exposureSection = (rows: readonly NoiseExposureRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 7. Irrelevant decision-context exposure',
+    '',
+    EXPOSURE_SCOPE_SENTENCE,
+    '',
+    'Fixture: exactly two active records apply to `src/core/decision-context.ts`; each corpus adds the stated fixed-seed distractors with the same trailer vocabulary, plausible repository paths, and overlapping decision-context language.',
+    'Routes: `inject everything`; `top-k lexical` (k=2, case-insensitive query-token frequency over path and record text); and the shipped CommitLore injection path scope plus lifecycle filter. The current CLI has neither a pointer nor pull delivery route, so neither is simulated here.',
+    '',
+    '| distractors | corpus records | route | model-visible records | model-visible tokens | relevant density | runs | p50 ms | p95 ms |',
+    '|---:|---:|---|---:|---:|---|---:|---:|---:|',
+    ...rows.map((row) => {
+      const density = row.visible_records === 0 ? 0 : row.relevant_records / row.visible_records;
+      return `| ${row.distractors} | ${row.corpus_records} | ${row.route} | ${row.visible_records} | ` +
+        `${row.visible_tokens} | ${row.relevant_records} of ${row.visible_records} (${percent(density)}) | ` +
+        `${row.timing.runs} | ${fixed(row.timing.p50_ms)} | ${fixed(row.timing.p95_ms)} |`;
+    }),
+    '',
+  ];
+};
+
 export const renderDeterministicReport = (rows: readonly DeterministicRow[]): string => {
   assertSingleProvenance(rows);
   const first = rows[0];
@@ -221,6 +247,7 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
     ...guardSection(rows.filter((row): row is GuardQualityRow => row.metric === 'guard_quality')),
     ...hookSection(rows.filter((row): row is HookOverheadRow => row.metric === 'hook_overhead')),
     ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
+    ...exposureSection(rows.filter((row): row is NoiseExposureRow => row.metric === 'noise_exposure')),
   ];
   return `${lines.join('\n').trim()}\n`;
 };
