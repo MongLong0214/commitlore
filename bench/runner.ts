@@ -6,7 +6,7 @@ import process from "node:process";
 import { Command } from "commander";
 
 import { assembleContext, collectRuledOutAlternatives } from "./context.ts";
-import { digestDistTree, HOOK_PLANS, writeArmSettings } from "./hooks-settings.ts";
+import { digestDistTree, HOOK_PLANS, noGuardExposure, readGuardExposure, writeArmSettings } from "./hooks-settings.ts";
 import { countViolations, evaluateGroup } from "./detect.ts";
 import { createDriver, DRIVER_NAMES } from "./drivers/registry.ts";
 import type { DriverResult } from "./drivers/types.ts";
@@ -180,10 +180,20 @@ const main = async (): Promise<number> => {
   const timeoutMs = parseIntOption("timeout-ms", options.timeoutMs);
   const turnsOverride = options.maxTurns === undefined ? null : parseIntOption("max-turns", options.maxTurns);
 
+  const model = options.model?.trim();
   const driver = createDriver(options.driver, {
-    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(model === undefined || model === "" ? {} : { model }),
     ...(options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode }),
   });
+  let recordedModel: string;
+  if (driver.simulated) {
+    recordedModel = "dry-run";
+  } else {
+    if (model === undefined || model === "") {
+      throw new Error("--model is required for a non-simulated run so the result records its producer");
+    }
+    recordedModel = model;
+  }
   const harnessCommit = resolveHarnessCommit();
   const distDigest = digestDistTree();
 
@@ -237,6 +247,7 @@ const main = async (): Promise<number> => {
             task: task.id,
             cond: condition.id,
             seed,
+            model: recordedModel,
             reproposed: false,
             violations: 0,
             turns: 0,
@@ -246,6 +257,7 @@ const main = async (): Promise<number> => {
             driver: driver.name,
             started_at: startedAt,
             simulated: driver.simulated,
+            guard_exposure: noGuardExposure(),
             error: `global token cap of ${maxTokens} exhausted before this run started`,
           };
           fs.appendFileSync(outPath, `${JSON.stringify(record)}\n`);
@@ -254,6 +266,7 @@ const main = async (): Promise<number> => {
         }
 
         let workspaceDir: string | null = null;
+        let guardExposurePath: string | null = null;
         let record: RunRecord;
         try {
           const workspace = createWorkspace(task, seed, REPO_ROOT, { seedRecords: condition.seed_records });
@@ -264,9 +277,10 @@ const main = async (): Promise<number> => {
           // without one the arm falls back to the harness's session-start
           // block. See bench/hooks-settings.ts (#36).
           const plan = HOOK_PLANS[condition.id] ?? {};
-          const settingsPath = writeArmSettings(plan, distDigest);
+          const settings = writeArmSettings(plan, distDigest);
+          guardExposurePath = settings.guardExposurePath;
           const injectedContext =
-            settingsPath === null ? assembleContext(workspace.dir, condition) : null;
+            settings.settingsPath === null ? assembleContext(workspace.dir, condition) : null;
           const result: DriverResult = await driver.run({
             taskId: task.id,
             condition: condition.id,
@@ -277,7 +291,7 @@ const main = async (): Promise<number> => {
             maxTurns: Math.min(task.budget.turns, turnsOverride ?? task.budget.turns),
             maxTokens: Math.min(task.budget.tokens, remaining),
             timeoutMs,
-            ...(settingsPath === null ? {} : { settingsPath }),
+            ...(settings.settingsPath === null ? {} : { settingsPath: settings.settingsPath }),
             simulation: {
               ruledOutAlternatives: collectRuledOutAlternatives(task, REPO_ROOT),
               violationTokens: literalViolationTokens(task),
@@ -316,6 +330,7 @@ const main = async (): Promise<number> => {
           tokensUsed += result.tokens;
           if (result.stoppedBy === "error") errors += 1;
 
+          const guardExposure = readGuardExposure(guardExposurePath);
           record = {
             run_id: runId,
             harness_commit: harnessCommit,
@@ -323,6 +338,7 @@ const main = async (): Promise<number> => {
             task: task.id,
             cond: condition.id,
             seed,
+            model: recordedModel,
             reproposed: reproposed.matched,
             violations: violations.labels.length,
             turns: result.turns,
@@ -332,12 +348,14 @@ const main = async (): Promise<number> => {
             driver: driver.name,
             started_at: startedAt,
             simulated: driver.simulated,
+            ...(guardExposure === undefined ? {} : { guard_exposure: guardExposure }),
             matched: [...reproposed.labels, ...violations.labels],
             accepted_records: acceptedRecords,
             ...(result.error === undefined ? {} : { error: result.error }),
           };
         } catch (error) {
           errors += 1;
+          const guardExposure = readGuardExposure(guardExposurePath);
           record = {
             run_id: runId,
             harness_commit: harnessCommit,
@@ -345,6 +363,7 @@ const main = async (): Promise<number> => {
             task: task.id,
             cond: condition.id,
             seed,
+            model: recordedModel,
             reproposed: false,
             violations: 0,
             turns: 0,
@@ -354,6 +373,7 @@ const main = async (): Promise<number> => {
             driver: driver.name,
             started_at: startedAt,
             simulated: driver.simulated,
+            ...(guardExposure === undefined ? {} : { guard_exposure: guardExposure }),
             error: (error as Error).message,
           };
         } finally {

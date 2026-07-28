@@ -976,13 +976,17 @@ a warning rather than averaging across unknown models — which is exactly what
 would happen once several JSONL files are aggregated and the invocation's command
 line is no longer around to say which rows came from where.
 
-One caveat on how that field gets populated today: `runner.ts` accepts `--model`
-and passes it to the driver, but does not write it onto the row, and `RunRecord`
-has no such field. Until that changes, a results file carries `model` only if
-something stamped it there; `bench/results/*.manifest.json` records the exact
-invocation for that purpose, and says so on the row's behalf. `model` is a
-declared property but is **not** in `required`, because making it required would
-reject every row the shipped runner writes.
+New runner rows write `model` themselves: `dry-run` records `dry-run`, and a
+non-simulated run requires `--model`. The property stays optional in the schema
+only so older rows remain readable as `(unrecorded)`, never as a guessed model.
+
+Guard delivery has the same provenance rule. New rows carry `guard_exposure`:
+whether the guard scan completed, whether the hook actually executed, how many
+edits it checked, how many times it fired, and the matched alternatives with
+their paths and record ids.
+`metrics.ts` reports those counts beside the outcome and refuses an effect
+estimate when any analysis row lacks exposure. Absence on an old row is
+**unknown**, not a clean non-fire.
 
 ## Drivers
 
@@ -1040,13 +1044,10 @@ exact-rational oracle, and the first measurement has been run and recorded in
 
 Still open:
 
-1. **`model` is not written by the runner.** `runner.ts` accepts `--model` and
-   passes it to the driver, but builds `RunRecord` without it, and `RunRecord`
-   has no such field. Two lines in files T-702 does not own. Until it lands, the
-   model of a results file lives in its manifest rather than in the row, and
-   `model` cannot be promoted to `required` in the schema. This stopped being
-   theoretical at M4: no manifest was written for that run either, so nothing
-   in the repository can say which model produced its 112 rows. Filed as
+1. **M4's model provenance is unavailable.** Before the runner wrote `model`,
+   it accepted `--model` and passed it to the driver without putting it on the
+   row; M4 also has no manifest. Nothing in the repository can say which model
+   produced its 112 rows. Filed as
    [#106](https://github.com/MongLong0214/commitlore/issues/106).
 2. **The detector calibration check is not a committed test.** It ran once,
    before the measurement, and caught a matcher that fired on a correct solution
