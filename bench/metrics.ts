@@ -4,23 +4,62 @@ import process from "node:process";
 
 import { fisherExactTwoTailed, rateDifference } from "./stats.ts";
 import type { Interval } from "./stats.ts";
-import type { RunRecord, StopReason } from "./types.ts";
+import type { GuardExposure, RunRecord, StopReason } from "./types.ts";
 
 /**
- * The runner passes `--model` to the driver but does not put it on the row
- * (runner.ts builds `RunRecord` without it, and `RunRecord` has no such field).
  * Re-proposal behaviour is model-dependent, so a rate whose model is unknown is
  * not a comparable number — and once several JSONL files are aggregated
  * together, the invocation's command line is no longer able to say which rows
  * came from which model. Rather than assume, missing models are surfaced under
- * this label everywhere a model is reported. T-702 reported the runner change
- * upstream; until it lands this is what keeps the gap visible instead of silent.
+ * this label everywhere a model is reported.
  */
 export const UNRECORDED_MODEL = "(unrecorded)";
 
 const modelOf = (row: RunRecord): string => {
-  const value = (row as { model?: unknown }).model;
+  const value = row.model;
   return typeof value === "string" && value.trim() !== "" ? value : UNRECORDED_MODEL;
+};
+
+export type GuardExposureState = "unknown" | "yes" | "no";
+
+const guardExposureOf = (row: RunRecord): GuardExposure | null => {
+  const exposure = row.guard_exposure;
+  if (
+    exposure === undefined ||
+    typeof exposure !== "object" ||
+    exposure === null ||
+    Object.keys(exposure).some((key) => !["complete", "executed", "checks", "fires", "matches"].includes(key)) ||
+    typeof exposure.complete !== "boolean" ||
+    !Array.isArray(exposure.matches) ||
+    !Number.isInteger(exposure.checks) ||
+    exposure.checks < 0 ||
+    !Number.isInteger(exposure.fires) ||
+    exposure.fires < 0 ||
+    exposure.fires > exposure.checks ||
+    exposure.fires > exposure.matches.length ||
+    (exposure.fires === 0) !== (exposure.matches.length === 0) ||
+    exposure.executed !== (exposure.checks > 0) ||
+    !exposure.matches.every(
+      (match) =>
+        typeof match === "object" &&
+        match !== null &&
+        Object.keys(match).every((key) => ["path", "alternative", "record_id"].includes(key)) &&
+        (match.path === null || typeof match.path === "string") &&
+        (match.alternative === null || typeof match.alternative === "string") &&
+        typeof match.record_id === "string",
+    )
+  ) {
+    return null;
+  }
+  return exposure;
+};
+
+export const guardExposureState = (row: RunRecord): GuardExposureState => {
+  const exposure = guardExposureOf(row);
+  if (exposure === null || !exposure.complete || (row.cond === "commitlore-guard" && !exposure.executed)) {
+    return "unknown";
+  }
+  return exposure.fires > 0 ? "yes" : "no";
 };
 
 /**
@@ -157,8 +196,17 @@ export interface ConditionSummary {
   readonly mean_turns: number | null;
   readonly mean_tokens: number | null;
   readonly stopped_by: Readonly<Record<StopReason, number>>;
+  readonly guard_exposure: GuardExposureSummary;
   /** Cost per accepted annal for this arm. Never NaN, never Infinity. */
   readonly cpaa: Cpaa;
+}
+
+export interface GuardExposureSummary {
+  readonly yes: number;
+  readonly no: number;
+  readonly unknown: number;
+  readonly checks: number;
+  readonly fires: number;
 }
 
 export interface Summary {
@@ -178,6 +226,7 @@ export interface Summary {
   /** The analysis set: rows that actually measured something. */
   readonly analysis: readonly ConditionSummary[];
   readonly comparison: Comparison | null;
+  readonly comparison_unavailable_because: string | null;
   /** CPAA over the analysis set as a whole, alongside the per-arm figures. */
   readonly cpaa: Cpaa;
 }
@@ -297,6 +346,23 @@ const summarizeCondition = (cond: string, rows: readonly RunRecord[]): Condition
   const reproposed = rows.filter((row) => row.reproposed === true).length;
   const withViolations = rows.filter((row) => row.violations > 0).length;
   const totalViolations = rows.reduce((sum, row) => sum + row.violations, 0);
+  let exposureYes = 0;
+  let exposureNo = 0;
+  let exposureUnknown = 0;
+  let exposureChecks = 0;
+  let exposureFires = 0;
+  for (const row of rows) {
+    const observed = guardExposureOf(row);
+    if (observed === null) {
+      exposureUnknown += 1;
+      continue;
+    }
+    exposureChecks += observed.checks;
+    exposureFires += observed.fires;
+    if (guardExposureState(row) === "unknown") exposureUnknown += 1;
+    else if (observed.fires > 0) exposureYes += 1;
+    else exposureNo += 1;
+  }
   return {
     cond,
     n: rows.length,
@@ -309,6 +375,13 @@ const summarizeCondition = (cond: string, rows: readonly RunRecord[]): Condition
     mean_turns: mean(rows.map((row) => row.turns)),
     mean_tokens: mean(rows.map((row) => row.tokens)),
     stopped_by: stopped,
+    guard_exposure: {
+      yes: exposureYes,
+      no: exposureNo,
+      unknown: exposureUnknown,
+      checks: exposureChecks,
+      fires: exposureFires,
+    },
     cpaa: computeCpaa(rows),
   };
 };
@@ -418,6 +491,10 @@ export const summarize = (rows: readonly RunRecord[], files: readonly string[]):
       ),
     );
 
+  const unknownExposureRows = usable.filter((row) => guardExposureState(row) === "unknown").length;
+  const comparisonUnavailableBecause =
+    unknownExposureRows === 0 ? null : `guard exposure is unknown for ${unknownExposureRows} analysis rows`;
+
   return {
     rows: rows.length,
     files: [...files],
@@ -431,7 +508,8 @@ export const summarize = (rows: readonly RunRecord[], files: readonly string[]):
     exclusions,
     conditions: byCondition(rows),
     analysis: byCondition(usable),
-    comparison: compare(usable, rows.length - usable.length),
+    comparison: comparisonUnavailableBecause === null ? compare(usable, rows.length - usable.length) : null,
+    comparison_unavailable_because: comparisonUnavailableBecause,
     cpaa: computeCpaa(usable),
   };
 };
@@ -460,6 +538,11 @@ const formatConditions = (heading: string, conditions: readonly ConditionSummary
       `   stopped_by       completed=${condition.stopped_by.completed} ` +
         `timeout=${condition.stopped_by.timeout} over-turns=${condition.stopped_by["over-turns"]} ` +
         `over-tokens=${condition.stopped_by["over-tokens"]} error=${condition.stopped_by.error}`,
+    );
+    lines.push(
+      `   guard exposure  yes=${condition.guard_exposure.yes} no=${condition.guard_exposure.no} ` +
+        `unknown=${condition.guard_exposure.unknown} checks=${condition.guard_exposure.checks} ` +
+        `fires=${condition.guard_exposure.fires}`,
     );
     lines.push(`   CPAA             ${explainCpaa(condition.cpaa)}`);
     lines.push("");
@@ -518,9 +601,11 @@ export const formatSummary = (summary: Summary): string => {
     lines.push("# Comparison");
     lines.push("");
     lines.push(
-      measured === 0
-        ? "   not computed — the analysis set is empty, so there is nothing to test"
-        : "   not computed — a comparison needs exactly two conditions",
+      summary.comparison_unavailable_because !== null
+        ? `   not computed — ${summary.comparison_unavailable_because}`
+        : measured === 0
+          ? "   not computed — the analysis set is empty, so there is nothing to test"
+          : "   not computed — a comparison needs exactly two conditions",
     );
     lines.push("");
     return lines.join("\n");

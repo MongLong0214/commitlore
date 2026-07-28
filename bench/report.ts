@@ -367,11 +367,9 @@ export interface ModelReport {
  * Where the model name comes from, and whether the rows themselves carry it.
  *
  * This matters more than it looks: re-proposal is a behaviour, so every rate
- * here is conditional on the model that produced it, and `runner.ts` does not
- * write `--model` onto the row (bench/README.md, *What the numbers are
- * conditional on*). The manifest is the stand-in, and the report says which of
- * the two it read rather than presenting a manifest value as if the run had
- * emitted it.
+ * here is conditional on the model that produced it. Legacy rows may have only
+ * a manifest, and the report says which source it read rather than presenting a
+ * manifest value as if the row had emitted it.
  */
 export const modelReport = (sources: Sources, summary: Summary): ModelReport => {
   const fromRows = summary.models.filter((model) => model !== UNRECORDED_MODEL);
@@ -389,8 +387,7 @@ export const modelReport = (sources: Sources, summary: Summary): ModelReport => 
 
   if (rowsMissingModel && fromManifests.length > 0) {
     notes.push(
-      "The model above is read from the run manifest: `runner.ts` passes `--model` to the driver but does not " +
-        "write it onto the row, so the rows in this dataset carry no model field of their own.",
+      "The model above is read from the run manifest because these legacy rows carry no model field of their own.",
     );
   }
   if (rowsMissingModel && fromManifests.length === 0) {
@@ -612,9 +609,10 @@ export const buildReport = (sources: Sources): string => {
     const measured = summary.analysis.reduce((total, condition) => total + condition.n, 0);
     lines.push(
       "**Significance:** not computed — " +
-        (measured === 0
+        (summary.comparison_unavailable_because ??
+          (measured === 0
           ? "the analysis set is empty, so there is nothing to test."
-          : "a comparison needs exactly two conditions."),
+          : "a comparison needs exactly two conditions.")),
       "",
     );
   } else {

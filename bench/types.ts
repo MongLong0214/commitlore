@@ -231,6 +231,7 @@ export interface RunRecord {
   readonly task: string;
   readonly cond: string;
   readonly seed: number;
+  readonly model?: string;
   readonly reproposed: boolean;
   readonly violations: number;
   readonly turns: number;
@@ -241,6 +242,7 @@ export interface RunRecord {
   readonly started_at: string;
   /** True when the driver fabricated the transcript. Simulated rows are never evidence. */
   readonly simulated: boolean;
+  readonly guard_exposure?: GuardExposure;
   readonly matched?: readonly string[];
   readonly error?: string;
 
@@ -281,4 +283,18 @@ export interface RunRecord {
    * repository whose team never wrote a record.
    */
   readonly accepted_records?: number;
+}
+
+export interface GuardExposureMatch {
+  readonly path: string | null;
+  readonly alternative: string | null;
+  readonly record_id: string;
+}
+
+export interface GuardExposure {
+  readonly complete: boolean;
+  readonly executed: boolean;
+  readonly checks: number;
+  readonly fires: number;
+  readonly matches: readonly GuardExposureMatch[];
 }

@@ -43,6 +43,7 @@ const PARTIAL = `${FIXTURES}/partial.jsonl`;
 const STAMPED = `${FIXTURES}/stamped.jsonl`;
 const SIMULATED = `${FIXTURES}/simulated.jsonl`;
 const EMPTY = `${FIXTURES}/empty.jsonl`;
+const M4_LEGACY = `${FIXTURES}/m4-legacy-row.jsonl`;
 const BOGUS_STATUS = `${FIXTURES}/bogus-status.jsonl`;
 const FIXTURE_README = `${FIXTURES}/readme-in-sync.md`;
 
@@ -203,6 +204,18 @@ describe('failed runs stay in the report', () => {
 
   it('states plainly when nothing was excluded', () => {
     expect(report(STAMPED)).toContain('**Analysis set — all 4 rows.** Nothing was excluded');
+  });
+});
+
+describe('unknown guard exposure', () => {
+  it('explains why an otherwise two-arm comparison was not computed', () => {
+    const source = tempCopy(M4_LEGACY);
+    const row = fs.readFileSync(source, 'utf8');
+    fs.writeFileSync(source, `${row}${row.replace('"cond": "commitlore-on"', '"cond": "commitlore-off"')}`);
+
+    const markdown = buildReport(readSources([source], { allowMissing: false }));
+    expect(markdown).toContain('**Significance:** not computed — guard exposure is unknown for 2 analysis rows');
+    expect(markdown).not.toContain('a comparison needs exactly two conditions');
   });
 });
 
