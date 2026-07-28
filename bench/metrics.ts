@@ -436,6 +436,26 @@ const assertUniformProvenance = (rows: readonly RunRecord[]): void => {
   );
 };
 
+const cellOf = (row: RunRecord): string => `${row.task}\u0000${row.seed}`;
+
+const assertDifferentialExposure = (rows: readonly RunRecord[]): void => {
+  const conditions = [...new Set(rows.map((row) => row.cond))];
+  if (conditions.length !== 2 || !conditions.includes("commitlore-guard")) return;
+  const comparator = conditions.find((condition) => condition !== "commitlore-guard");
+  if (comparator === undefined) return;
+  const treatment = new Map(
+    rows.filter((row) => row.cond === "commitlore-guard").map((row) => [cellOf(row), guardExposureState(row)]),
+  );
+  const baseline = rows.filter((row) => row.cond === comparator);
+  const paired = baseline.filter((row) => treatment.has(cellOf(row)));
+  if (paired.length > 0 && paired.every((row) => treatment.get(cellOf(row)) === guardExposureState(row))) {
+    throw new Error(
+      `refusing to summarize a void benchmark: treatment exposure does not differ from comparator exposure ` +
+        `in ${paired.length} paired (task, seed) cell(s)`,
+    );
+  }
+};
+
 export const compare = (rows: readonly RunRecord[], excluded: number): Comparison | null => {
   const arms = pickArms([...new Set(rows.map((row) => row.cond))].sort());
   if (arms === null) return null;
@@ -449,8 +469,7 @@ export const compare = (rows: readonly RunRecord[], excluded: number): Compariso
     d: baseline.filter((row) => row.reproposed !== true).length,
   };
 
-  const cellsOf = (arm: readonly RunRecord[]): Set<string> =>
-    new Set(arm.map((row) => `${row.task}\u0000${row.seed}`));
+  const cellsOf = (arm: readonly RunRecord[]): Set<string> => new Set(arm.map(cellOf));
   const treatmentCells = cellsOf(treatment);
   const pairedCells = [...cellsOf(baseline)].filter((cell) => treatmentCells.has(cell)).length;
 
@@ -494,6 +513,7 @@ export const summarize = (rows: readonly RunRecord[], files: readonly string[]):
   const unknownExposureRows = usable.filter((row) => guardExposureState(row) === "unknown").length;
   const comparisonUnavailableBecause =
     unknownExposureRows === 0 ? null : `guard exposure is unknown for ${unknownExposureRows} analysis rows`;
+  if (comparisonUnavailableBecause === null) assertDifferentialExposure(usable);
 
   return {
     rows: rows.length,
