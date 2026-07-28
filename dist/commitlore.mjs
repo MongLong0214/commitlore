@@ -15772,7 +15772,7 @@ var renderGuardMatch = (match) => {
 var JACCARD_WEIGHT = 0.5;
 var KEYWORD_WEIGHT = 0.5;
 var MIN_KEYWORD_HITS = 2;
-var STRONG_KEYWORD_MASS = 0.5;
+var STRONG_KEYWORD_STRENGTH = 0.5;
 var MIN_JACCARD = 0.4;
 var RECORD_ID_WEIGHT = 0.6;
 var DEFAULT_THRESHOLD = 0.35;
@@ -16105,7 +16105,7 @@ var buildCorpus = (alternatives) => {
 var keywordCoverage = (alternative, proposal, corpus) => {
   const distinctive = [...alternative.stems].filter((token) => !GENERIC_STEMS.has(token));
   const considered = distinctive.length === 0 ? [...alternative.stems] : distinctive;
-  if (considered.length === 0) return { mass: 0, hits: [] };
+  if (considered.length === 0) return { strength: 0, hits: [] };
   let total = 0;
   let named = 0;
   const hits = [];
@@ -16116,9 +16116,13 @@ var keywordCoverage = (alternative, proposal, corpus) => {
     named += weight;
     hits.push(alternative.surface.get(token) ?? token);
   }
-  return { mass: total === 0 ? 0 : named / total, hits: hits.sort() };
+  const weightedMass = total === 0 ? 0 : named / total;
+  return {
+    strength: weightedMass * (hits.length / considered.length),
+    hits: hits.sort()
+  };
 };
-var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.mass >= STRONG_KEYWORD_MASS || similarity >= MIN_JACCARD;
+var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.strength >= STRONG_KEYWORD_STRENGTH || similarity >= MIN_JACCARD;
 var collapse = (text) => text.replace(/\s+/g, " ").trim();
 var parseRuledOut = (value) => {
   const at = value.indexOf("|");
@@ -16143,16 +16147,13 @@ var matchOne = (candidate, proposal, corpus, requireContent = false) => {
   const score = round(
     Math.min(
       1,
-      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.mass + (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)
+      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.strength + (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)
     )
   );
   const signals = [
     ...idHit ? [`record-id:${record2.recordId ?? ""}`] : [],
     ...coverage.hits.map((hit) => `keyword:${hit}`),
-    // The share of the alternative's identity those keywords carry. Printed
-    // because two matches with the same keyword count are not equally strong,
-    // and the reader cannot see which is which from the score alone.
-    ...coverage.hits.length === 0 ? [] : [`identity:${round(coverage.mass).toFixed(2)}`],
+    ...coverage.hits.length === 0 ? [] : [`keyword-strength:${round(coverage.strength).toFixed(2)}`],
     ...similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : [],
     ...parsed.malformed ? ["malformed:no-separator"] : []
   ];
