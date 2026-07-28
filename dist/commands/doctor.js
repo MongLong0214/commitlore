@@ -42,12 +42,12 @@ const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 const gitOptions = (opts) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
-const check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
+const check = (id, title, status, detail, fix = null, fixed = false, needsAttention = status === 'warn' || status === 'fail') => ({ id, title, status, needsAttention, detail, fix, fixed });
 const checkRefspec = (opts) => {
     const title = 'notes fetch refspec';
     const remotes = listRemotes(opts);
     if (remotes.length === 0) {
-        return check('notes-refspec', title, 'warn', 'no remote is configured, so records cannot be shared with anyone', 'add a remote, then rerun: commitlore doctor --fix');
+        return check('notes-refspec', title, 'warn', 'no remote is configured, so records cannot be shared with anyone', 'add a remote, then rerun: commitlore doctor --fix', false, false);
     }
     let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
     let fixed = false;

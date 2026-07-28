@@ -30,8 +30,10 @@ import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md', import.meta.url));
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
+import { runQuery } from '../src/core/query.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
@@ -207,7 +209,27 @@ describe('doctor: notes fetch refspec', () => {
     );
 
     expect(check?.status).toBe('warn');
+    expect(check?.needsAttention).toBe(false);
     expect(check?.detail).toContain('no remote');
+  });
+});
+
+describe('commitlore-query skill', () => {
+  it('documents that multi-path queries answer literal paths and report skipped rename following', () => {
+    const repo = initRepo('query-skill-multiple-paths');
+    const result = runQuery({ cwd: repo, paths: ['a.ts', 'b.ts'] });
+    const skill = readFileSync(QUERY_SKILL, 'utf8');
+
+    expect(result.follow).toBe(false);
+    expect(result.diagnostics).toEqual([
+      'git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; ' +
+        'query one path at a time to follow its rename chain',
+    ]);
+    expect(skill).toContain(
+      'When several paths are supplied, the CLI answers each literal path and\n' +
+        'prints a diagnostic that renames were not followed; query one path at a time\n' +
+        'when historical names matter.',
+    );
   });
 });
 

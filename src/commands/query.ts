@@ -486,7 +486,7 @@ const define = (
   program
     .command(name)
     .description(description)
-    .argument('[paths...]', 'limit the answer to these paths (renames are followed)')
+    .argument('[paths...]', 'limit paths; renames follow only when one path is given')
     .option('--json', 'emit the answer as JSON')
     .option('--all-history', 'include superseded and expired records, each labelled')
     .option('--no-index', 'answer from git alone, without the SQLite index')

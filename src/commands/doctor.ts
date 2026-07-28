@@ -68,6 +68,7 @@ export interface DoctorCheck {
   id: string;
   title: string;
   status: CheckStatus;
+  needsAttention: boolean;
   detail: string;
   /** What makes this check `ok`, or `null` when nothing needs doing. */
   fix: string | null;
@@ -101,7 +102,8 @@ const check = (
   detail: string,
   fix: string | null = null,
   fixed = false,
-): DoctorCheck => ({ id, title, status, detail, fix, fixed });
+  needsAttention = status === 'warn' || status === 'fail',
+): DoctorCheck => ({ id, title, status, needsAttention, detail, fix, fixed });
 
 const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   const title = 'notes fetch refspec';
@@ -114,6 +116,8 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       'no remote is configured, so records cannot be shared with anyone',
       'add a remote, then rerun: commitlore doctor --fix',
+      false,
+      false,
     );
   }
 
