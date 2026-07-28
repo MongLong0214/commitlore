@@ -26,7 +26,7 @@ LOCK="$CLAUDE_PLUGIN_DATA/.install.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then exit 0; fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
-VERSION="${COMMITLORE_PLUGIN_VERSION:-0.1.0}"
+VERSION="${COMMITLORE_PLUGIN_VERSION:-0.2.0}"
 
 # --omit=optional keeps the native index dependency from failing the install on
 # a machine with no toolchain; the CLI falls back to --no-index and still works.

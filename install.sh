@@ -2,7 +2,7 @@
 # Installs a prebuilt commitlore release binary.
 #
 #   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh -s v0.1.0
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh -s v0.2.0
 #
 # This is a *second* install path, not the canonical one — `git clone` plus
 # either a Node runtime or `npm run build:binary` (see the README, ADR-0011,
