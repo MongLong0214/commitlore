@@ -47,7 +47,7 @@ describe('commitlore CLI', () => {
   // LANDED in the same change that wires it into src/cli.ts.
   const LANDED = [
     'parse', 'validate', 'hooks', 'index', 'context', 'limits',
-    'ruled-out', 'warnings', 'stale', 'doctor', 'harvest',
+    'ruled-out', 'warnings', 'stale', 'doctor', 'init', 'harvest',
     'harvest-verify', 'squash-preserve', 'guard', 'mcp', 'inject', 'backfill',
   ];
   const UNLANDED: string[] = [];
