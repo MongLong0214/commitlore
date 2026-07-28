@@ -27,12 +27,16 @@ name: Phase Gate
 # describes using the gate. Phase 6 (ship) is different: once its conditions
 # are met they stay met (the tag stays reachable from `main`/`dev`, CI at
 # that commit does not un-succeed), so it is safe — and useful — to also run
-# automatically on every release tag push.
+# automatically on every release tag push and on every PR into `dev` (a
+# cheap, non-brittle continuous check that the shipped release stays intact).
 
 on:
   push:
     tags:
       - "v*.*.*"
+  pull_request:
+    branches:
+      - dev
   workflow_dispatch:
     inputs:
       phase:
@@ -77,8 +81,8 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "phase=${{ inputs.phase }}" >> "$GITHUB_OUTPUT"
           else
-            # Tag push (v*.*.*): the natural, automatic trigger for the
-            # Phase 6 (ship) gate.
+            # Tag push (v*.*.*) or a PR into dev: both automatically run the
+            # Phase 6 (ship) gate — the only phase safe to run unconditionally.
             echo "phase=6" >> "$GITHUB_OUTPUT"
           fi
 
