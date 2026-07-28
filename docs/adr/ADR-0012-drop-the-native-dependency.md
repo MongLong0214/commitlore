@@ -12,10 +12,11 @@ Status: accepted, implemented ([#64](https://github.com/MongLong0214/commitlore/
 > `db.transaction()` with a savepoint-based helper (`runInTransaction`) rather
 > than assuming a flat depth. The performance figure this ADR's Consequences
 > section required to be "re-measured and republished, or withdrawn" was
-> already withdrawn (`<!-- BENCH:WITHDRAWN -->`, enforced by
-> `scripts/check-readme-numbers.mjs`) before this migration and stays that way
-> here — republishing it is a separate, provenance-checked benchmark run, not
-> part of this change.
+> withdrawn before this migration (enforced by `scripts/check-readme-numbers.mjs`)
+> and was never republished — the README's benchmark section now carries the
+> M4 CommitLoreBench measurement (`bench/VERDICT-M4.md`), a different figure
+> entirely. Republishing an index-performance number is a separate,
+> provenance-checked benchmark run, not part of this change.
 >
 > The rest of this document is preserved as decision history.
 

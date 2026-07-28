@@ -1,9 +1,13 @@
 # CommitLoreBench
 
-**No dataset currently in this repository can be summarized.** Existing rows do
-not record the harness commit or the `dist/` digest they executed, so
-`bench/report.ts` correctly refuses them. M3 was voided for that reason (§15)
-and is being re-run as M3-b.
+**M4 is the citable dataset.** `bench/results/t702-m4-final.jsonl` records the
+harness commit and the `dist/` digest for every row, `bench/report.ts` summarizes
+it, and the README's numbers block is generated from it. M3 was voided for
+lacking that provenance (§15); M4 was designed, registered and run to supply it,
+and its result is null — see `bench/VERDICT-M4.md`. Every earlier dataset
+(M1, M1-b, M2) still lacks the fields and is not pooled into the generated block
+for that reason, not because it was withdrawn as a record; each has its own
+verdict document.
 
 Measures the one thing that decides whether CommitLore is worth building: does an
 agent that can see recorded decisions stop re-proposing the approaches a team
@@ -11,9 +15,10 @@ already rejected?
 
 - Design: `docs/adr/ADR-0007-commitlorebench.md`
 - Requirements: `docs/prd/PRD-F7-commitlorebench.md`
-- **Pre-registration for the M1 measurement: `bench/PREREGISTRATION.md`** — the
+- **Pre-registration for M1 through M4: `bench/PREREGISTRATION.md`** — the
   task set, detection rules, run parameters, analysis set and verdict rules, all
-  fixed before the run. Read it before quoting any number from `bench/results/`.
+  fixed before each run (§16 for M4). Read it before quoting any number from
+  `bench/results/`.
 - This directory implements **T-701** (harness skeleton). T-702 adds the tasks
   and the significance test, T-703 the ablation arms, T-704 the report.
 
@@ -1039,7 +1044,10 @@ Still open:
    passes it to the driver, but builds `RunRecord` without it, and `RunRecord`
    has no such field. Two lines in files T-702 does not own. Until it lands, the
    model of a results file lives in its manifest rather than in the row, and
-   `model` cannot be promoted to `required` in the schema.
+   `model` cannot be promoted to `required` in the schema. This stopped being
+   theoretical at M4: no manifest was written for that run either, so nothing
+   in the repository can say which model produced its 112 rows. Filed as
+   [#106](https://github.com/MongLong0214/commitlore/issues/106).
 2. **The detector calibration check is not a committed test.** It ran once,
    before the measurement, and caught a matcher that fired on a correct solution
    — which is precisely the failure that would fabricate a re-proposal. Nothing
