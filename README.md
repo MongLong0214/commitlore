@@ -18,13 +18,25 @@
 
 **Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
 
-No hosted memory service. No vendor-specific chat history. Just reviewable decision context that travels with the repository.
+No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
+
+Install once, keep committing normally, and CommitLore preserves only the decisions worth carrying forward.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
 Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
+
+## What happens after init
+
+- Commit normally. Most commits carry no record.
+- If a record is present, the commit-msg hook validates it; it never creates one.
+- Agents query decision context through MCP or receive it from the `PreToolUse` hook.
+- Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
+
+<details>
+<summary>Prefer to inspect or pin the installation?</summary>
 
 The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, clone the repository, or manually download a release asset and verify its `SHA256SUMS`. The script checksum-verifies the binary it downloads; it does not authenticate the script already piped to `sh`.
 
@@ -40,22 +52,37 @@ curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$vers
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
+</details>
+
 ## See it work
 
-**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** From this checkout, send a real Claude `PreToolUse` payload for `install.sh` through the same hook path:
+**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
+
+```bash
+commitlore context install.sh
+```
+
+The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>Reproduce the exact PreToolUse hook path</summary>
 
 ```bash
 printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
   | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
-The response contains the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
-
-```console
-Ruled-out:
-  [claim] r-instci99a ... publishing a `-musl` release target |
-  a release.yml/build-matrix change, not an install.sh or CI-verification fix
-```
+</details>
 
 ## What makes it different
 
@@ -64,6 +91,14 @@ Ruled-out:
 - **Not another memory database. A decision protocol built into Git.**
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
+
+## How records get created
+
+You do not hand-write a trailer for every commit. Most commits should carry no record at all. Add one only for a decision the diff cannot recover: an external constraint, a rejected alternative, a warning, or a verification gap.
+
+Today, records reach a commit in two ways: an agent authors the trailer block when there is decision context worth keeping, following `skills/commitlore-commits/`; or a human writes ordinary Git trailers by hand. The commit-msg hook validates records that are already present. It never invents or silently adds one.
+
+`commitlore harvest` builds a prompt contract from a session transcript and staged diff; `commitlore harvest-verify` checks a draft against them. They support drafting, not automatic commits. Interactive record building is not implemented.
 
 ## A record
 
@@ -125,11 +160,12 @@ Use Git's trailer parser, not a text search: prose containing `Key:` is not nece
 
 These are product claims about Git-bound, human-verifiable decision history. They do not depend on a claim that CommitLore improves agent performance.
 
-## Evidence: 112 experiments, a null result
+## Evidence: a narrower product claim
 
-> **I built an AI tool, ran 112 experiments, and the result was null.**
+112 experiments were run, but the measured agent-behavior claim was not supported. CommitLore therefore makes the narrower product claim above. Read the [M4 verdict](bench/VERDICT-M4.md) for the full limits.
 
-That result stays here because it is part of the product's trust model, not a footnote. M4 found no supported effect on the measured agent behavior; its analysis was later corrected for the paired and clustered design, including a recorded arithmetic error. Read the [M4 verdict](bench/VERDICT-M4.md) for the full limits and the [roadmap](docs/ROADMAP-TO-DONE.md) for the resulting product claim.
+<details>
+<summary>Full benchmark record (112 experiments)</summary>
 
 <!-- BENCH:BEGIN -->
 <!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
@@ -170,6 +206,8 @@ That result stays here because it is part of the product's trust model, not a fo
 - Every rate here is conditional on the model that produced it. Re-proposal is a behaviour, and behaviours differ between models, so these figures are not evidence about any other model.
 - 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
 <!-- BENCH:END -->
+
+</details>
 
 ## Install from source
 
