@@ -575,6 +575,41 @@ describe('notes merge and dedupe', () => {
   });
 });
 
+describe('two blocks in one message sharing a Record-Id (bug-issue-92)', () => {
+  it('blocks both, the same way a divergent note collides with its commit', () => {
+    const dir = makeRepo();
+    const sha = commitAt(
+      dir,
+      '2026-05-01T00:00:00Z',
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-dupdup',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Record-Id: r-dupdup',
+      ].join('\n'),
+      { 'src/queue/squash.ts': 'squash' },
+    );
+
+    const result = runQuery({ cwd: dir, path: 'src/queue/squash.ts' });
+    expect(recordIds(result.records)).toEqual(['r-dupdup']);
+
+    const [entry] = result.records;
+    expect(entry?.sha).toBe(sha);
+    expect(entry?.sources).toEqual(['commit']);
+    expect(entry?.identityCollision).toBe(true);
+    expect(entry?.trust).toBe('blocked');
+
+    const context = formatContext(result);
+    expect(context).not.toContain('the vendor caps us at 3 concurrent workers');
+    expect(context).not.toContain('do not raise the retry ceiling');
+    expect(context).toContain('[blocked]');
+    expect(context).toContain('Record content was withheld because its Record-Id collides.');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Trust grading — the T-501 seam
 // ---------------------------------------------------------------------------

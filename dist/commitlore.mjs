@@ -13669,6 +13669,7 @@ var findIdCollisions = (records) => {
     else group.push(record2);
   }
   return [...groups].filter(([, group]) => {
+    if (sharesACommit(group)) return true;
     if (!group.some((record2) => record2.source === "notes")) return false;
     return new Set(group.map(payloadSignature)).size > 1;
   }).map(([recordId]) => ({
@@ -13678,6 +13679,15 @@ var findIdCollisions = (records) => {
     got: recordId,
     want: UNIQUE_ID_WANT
   }));
+};
+var sharesACommit = (group) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const record2 of group) {
+    if (record2.source !== "commit" || record2.sha === void 0) continue;
+    if (seen.has(record2.sha)) return true;
+    seen.add(record2.sha);
+  }
+  return false;
 };
 var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
@@ -14251,7 +14261,7 @@ var collectRows = (source, aliases) => {
   const rows = [];
   for (const alias of aliases) {
     for (const row of source.fetch({ path: alias })) {
-      const identity = `${row.sha}\0${row.source}\0${row.seq}`;
+      const identity = `${row.sha}\0${row.source}\0${row.block}\0${row.seq}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
       rows.push(row);
@@ -27089,6 +27099,16 @@ var checkReferences = (input, sources, cwd) => {
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
+      const ownRecords = [
+        ...blocks.map((trailers) => ({
+          trailers,
+          source: "commit",
+          ...source.sha === void 0 ? {} : { sha: source.sha }
+        })),
+        ...repositoryRecords.filter(
+          (record2) => record2.sha === source.sha && record2.source === "notes"
+        )
+      ];
       for (const trailers of blocks) {
         const candidate = {
           trailers,
@@ -27097,7 +27117,7 @@ var checkReferences = (input, sources, cwd) => {
         };
         const dangling = findDanglingRefs(prior, [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...repositoryRecords, candidate]).filter(
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter(
           (violation) => violation.value === recordId
         );
         violations.push(

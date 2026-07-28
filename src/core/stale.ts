@@ -316,7 +316,14 @@ const payloadSignature = (record: StaleRecord): string =>
 /**
  * A note may mirror a commit byte-for-byte, but it may not add or replace
  * content under an identity already declared elsewhere. Commit-only
- * re-declarations remain lifecycle updates (SPEC §5).
+ * re-declarations remain lifecycle updates (SPEC §5) *only when they are
+ * declared by different commits* — two commit-sourced blocks that share a
+ * `sha` never got there by a later commit re-declaring the id over time, they
+ * got there because the multi-record grammar (SPEC §2.4) recovered more than
+ * one block from a single message, and an id must resolve to exactly one
+ * record *within* a message exactly as much as it must across notes and
+ * commits (bug-issue-92; `commitlore parse`'s `labelRecordBlocks` already
+ * enforces this locally to one message, in `core/trailers.ts`).
  */
 export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
   const groups = new Map<string, StaleRecord[]>();
@@ -330,6 +337,7 @@ export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
 
   return [...groups]
     .filter(([, group]) => {
+      if (sharesACommit(group)) return true;
       if (!group.some((record) => record.source === 'notes')) return false;
       return new Set(group.map(payloadSignature)).size > 1;
     })
@@ -340,6 +348,24 @@ export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
       got: recordId,
       want: UNIQUE_ID_WANT,
     }));
+};
+
+/**
+ * Whether two or more *commit*-sourced records in the group share a `sha` —
+ * the same message declaring the same `Record-Id` more than once. A note
+ * always shares its commit's `sha` too (that is what mirroring means), so
+ * this only counts `commit`-sourced entries: a clean note mirroring its one
+ * commit must not trip it, and stays gated on payload drift exactly as
+ * before.
+ */
+const sharesACommit = (group: StaleRecord[]): boolean => {
+  const seen = new Set<string>();
+  for (const record of group) {
+    if (record.source !== 'commit' || record.sha === undefined) continue;
+    if (seen.has(record.sha)) return true;
+    seen.add(record.sha);
+  }
+  return false;
 };
 
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */

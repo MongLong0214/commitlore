@@ -55,6 +55,41 @@ branch '…'`, `Merge remote-tracking branch '…'`, `Merge tag '…'`) — text
 available identically in every input mode, so both paths now compute the
 same excuse the same way. `readCommitSource` no longer fetches `%P` at all.
 
+### `context` and `validate` now refuse two blocks in one message sharing a `Record-Id`, the same way `parse` already does — bug-issue-92
+
+Continuing bug-issue-89's finding: `core/stale.ts`'s `findIdCollisions` only
+fired when a *notes*-sourced record disagreed with a commit's own content —
+a group with no `notes` record in it, which is what two same-message commit
+blocks are, never reached it. `parse` already detected the same-message case
+itself (bug-issue-89); `context` and `validate` disagreed with it about the
+very same message.
+
+`findIdCollisions` now also flags a `Record-Id` claimed by two *commit*-sourced
+records that share a `sha` — declared by the same message, not a later
+commit re-declaring the id over time (which stays a legitimate SPEC §5
+lifecycle update, unflagged). A clean note mirroring its own commit is
+unaffected: that always shares a `sha` too, and stays gated on payload drift
+exactly as before.
+
+`validate`'s reference check (`checkReferences`) built its collision-check
+array by pairing `repositoryRecords` — which already carries the single
+last-paragraph record `collectRecords` derives for the commit being
+checked — with a per-block `candidate`, so checking the message's own last
+block duplicated that same block instead of ever placing two *different*
+blocks side by side. Rebuilt to pass the message's own blocks once each
+(`ownRecords`, plus any notes record already found for that `sha`, so
+bug-issue-74's divergent-note case stays covered) alongside `prior`.
+
+Also fixed in the same investigation, without which the fix above could not
+be observed through `commitlore context <path>` — the shape a user actually
+runs: `core/query.ts`'s `collectRows` deduplicated rows fetched across
+aliases by `sha`+`source`+`seq` alone. `seq` restarts at 0 within every
+record block (SPEC §2.4), so a commit with two blocks has a `seq: 1` row in
+*each* — `collectRows` was silently dropping the second block's rows as
+"already seen," which is what made `context --json` show one clean record
+instead of a blocked collision at a scoped path. Fixed by keying on `block`
+too, matching the `trailers` table's own unique index.
+
 ### Compiled single-executable binary — feat-issue-39
 
 `npm run build:binary` (`scripts/build-binary.mjs`) builds `dist/commitlore`,

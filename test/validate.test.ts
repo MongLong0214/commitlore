@@ -400,6 +400,36 @@ describe('validate — check classes and reference integrity', () => {
       }),
     );
   });
+
+  it('rejects two blocks in one message that share a Record-Id (bug-issue-92)', () => {
+    const repo = makeRepo();
+    const sha = commit(
+      repo,
+      'squash.txt',
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-dupdup',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Record-Id: r-dupdup',
+      ].join('\n'),
+    );
+
+    const result = runValidate({ commit: sha, cwd: repo });
+
+    expect(result.code).toBe(1);
+    expect(result.checks[1]).toEqual({ class: 'reference', status: 'failed' });
+    // Reported once per block, so the repair loop sees which line of *each*
+    // block is implicated, the same way `commitlore parse` already does.
+    expect(
+      result.violations.filter((violation) => violation.rule === 'duplicate-id'),
+    ).toHaveLength(2);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ sha, key: 'Record-Id', got: 'r-dupdup', rule: 'duplicate-id' }),
+    );
+  });
 });
 
 describe('validate — usage errors exit 2', () => {

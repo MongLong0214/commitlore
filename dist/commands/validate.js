@@ -400,6 +400,24 @@ const checkReferences = (input, sources, cwd) => {
             const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
             const repositoryRecords = scan.records.filter((record) => record.sha !== undefined && reachable.has(record.sha));
             const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
+            // This message's own blocks, exactly once each — not `repositoryRecords`,
+            // which already carries the single last-paragraph record `collectRecords`
+            // derives for `source.sha`. Two blocks sharing a `Record-Id` inside one
+            // message must collide with *each other* (bug-issue-92); pairing
+            // `repositoryRecords` with a per-block `candidate` below would instead
+            // pair the message's last block with a second copy of itself and never
+            // see an earlier block at all. A notes mirror on this same commit is
+            // carried over from `repositoryRecords` rather than rebuilt, so a
+            // divergent note still collides with the message's own block exactly as
+            // it did before this message could carry more than one (bug-issue-74).
+            const ownRecords = [
+                ...blocks.map((trailers) => ({
+                    trailers,
+                    source: 'commit',
+                    ...(source.sha === undefined ? {} : { sha: source.sha }),
+                })),
+                ...repositoryRecords.filter((record) => record.sha === source.sha && record.source === 'notes'),
+            ];
             for (const trailers of blocks) {
                 const candidate = {
                     trailers,
@@ -410,7 +428,7 @@ const checkReferences = (input, sources, cwd) => {
                 const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
                 const collisions = recordId === undefined
                     ? []
-                    : findIdCollisions([...repositoryRecords, candidate]).filter((violation) => violation.value === recordId);
+                    : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId);
                 violations.push(...locateReferenceViolations(source, trailers, [...dangling, ...collisions]));
             }
         }
