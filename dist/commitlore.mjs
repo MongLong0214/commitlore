@@ -11100,6 +11100,16 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 var GIT_SPAWN_FAILED = -1;
 var DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
+var gitResultFromSpawn = (result) => {
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  if (result.status !== null) return { stdout, stderr, code: result.status };
+  if (result.error !== void 0) {
+    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+  }
+  const signal = result.signal ?? "unknown";
+  return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
+};
 var execGit = (args, opts = {}) => {
   const result = spawnSync("git", args, {
     shell: false,
@@ -11108,16 +11118,7 @@ var execGit = (args, opts = {}) => {
     input: opts.stdin ?? "",
     maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER
   });
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-  if (result.error) {
-    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
-  }
-  if (result.status === null) {
-    const signal = result.signal ?? "unknown";
-    return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
-  }
-  return { stdout, stderr, code: result.status };
+  return gitResultFromSpawn(result);
 };
 var execGitOrThrow = (args, opts = {}) => {
   const result = execGit(args, opts);

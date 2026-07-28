@@ -3,9 +3,14 @@
  * child never sees a shell.
  */
 
+import type { SpawnSyncReturns } from 'node:child_process';
+
 import { describe, expect, it } from 'vitest';
 
-import { GIT_SPAWN_FAILED, execGit, execGitOrThrow } from '../src/core/git.js';
+import { GIT_SPAWN_FAILED, execGit, execGitOrThrow, gitResultFromSpawn } from '../src/core/git.js';
+
+const spawnResult = (result: Partial<SpawnSyncReturns<string>>): SpawnSyncReturns<string> =>
+  result as SpawnSyncReturns<string>;
 
 describe('execGit', () => {
   it('returns stdout and exit 0 for a successful run', () => {
@@ -17,9 +22,34 @@ describe('execGit', () => {
 
   it('returns the exit code and stderr for a failing run instead of throwing', () => {
     const result = execGit(['no-such-subcommand-here']);
-    expect(result.code).not.toBe(0);
-    expect(result.code).not.toBe(GIT_SPAWN_FAILED);
+    expect(result.code).toBe(1);
     expect(result.stderr).not.toBe('');
+  });
+
+  it('uses a completed status even when writing stdin reported EPIPE', () => {
+    const error = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+
+    expect(
+      gitResultFromSpawn(spawnResult({ status: 1, signal: null, error, stdout: 'output\n', stderr: 'failed\n' })),
+    ).toEqual({ code: 1, stdout: 'output\n', stderr: 'failed\n' });
+  });
+
+  it('keeps an absent executable as a spawn failure', () => {
+    const error = Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT' });
+
+    expect(gitResultFromSpawn(spawnResult({ status: null, signal: null, error }))).toEqual({
+      code: GIT_SPAWN_FAILED,
+      stdout: '',
+      stderr: 'spawn git ENOENT',
+    });
+  });
+
+  it('keeps a signal kill as a spawn failure', () => {
+    expect(gitResultFromSpawn(spawnResult({ status: null, signal: 'SIGTERM' }))).toEqual({
+      code: GIT_SPAWN_FAILED,
+      stdout: '',
+      stderr: 'git terminated by signal SIGTERM',
+    });
   });
 
   it('writes stdin to the child', () => {
