@@ -112,6 +112,20 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 
 The committed bundle runs without a build and without `node_modules`. The SQLite index uses `node:sqlite`, which ships inside Node itself ([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)), so a clone alone can build and query it — no native module, no compiler, no `npm install`. `--no-index` is still there to answer from Git alone when you want to skip the index.
 
+### Run as a compiled binary, without Node installed
+
+`git clone` plus a Node runtime is still the canonical install above. For a machine with no Node on `PATH` at all, build a single compiled executable from the same clone ([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)):
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` needs no Node, no interpreter and no `node_modules` at runtime — `doctor`, `validate`, `context`, `guard`, `inject`, and `index --rebuild` all run against `PATH=/usr/bin:/bin`. It is not committed (it is large, platform- and architecture-specific, and rebuilt by CI on every push rather than diffed); `commitlore hooks install` and the plugin's `PreToolUse` hook both resolve it automatically once built.
+
 ## GitHub Actions
 
 Jobs that run a query, guard, or inject command must fetch the complete history:
@@ -151,7 +165,6 @@ Use Git's trailer parser, not a text search; prose containing `Key:` is not nece
 - Anchor records to symbols rather than paths: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - Provide an interactive commit builder or automatic expiry reminders: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - Demonstrate guard's effect on agent behavior with a valid benchmark: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Run as a static binary without Node.js: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## Contributing
 

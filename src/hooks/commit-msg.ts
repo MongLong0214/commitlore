@@ -56,6 +56,14 @@ export const HOOK_MODE = 0o755;
  * when the package is not installed locally, which would put a network call on
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
+ *
+ * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
+ * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
+ * plain executable named `commitlore`. It is recognized by that name rather
+ * than by "has no extension", which would allow-list every other executable
+ * on the machine, and its containment check is an exact match against
+ * `commitlore.root` rather than a directory prefix: a binary has no
+ * subdirectory for a foreign file to hide in, it *is* the whole install.
  */
 export const commitMsgStub = (): string =>
   [
@@ -84,8 +92,10 @@ export const commitMsgStub = (): string =>
     'if [ -n "${COMMITLORE_BIN:-}" ]; then',
     '  # Same allowlist as the recorded commitlore.bin case below: any executable',
     '  # here used to run unchecked, which is exactly the gap an env var is for.',
+    '  # A compiled binary (#39) needs no interpreter to reach here either, so it',
+    '  # execs the same way a properly shebanged script does.',
     '  case "$COMMITLORE_BIN" in',
-    '    *.mjs|*.js)',
+    '    *.mjs|*.js|*/commitlore|commitlore)',
     '      exec "$COMMITLORE_BIN" validate --message-file "$1"',
     '      ;;',
     '  esac',
@@ -107,13 +117,16 @@ export const commitMsgStub = (): string =>
     '# also validates commits with a different version than the one installed here.',
     'recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)',
     'if [ -n "$recorded" ]; then',
+    "  # Shared by every recognized branch below: what `hooks install` recorded",
+    "  # as this install's trusted location, whether that is a directory a script",
+    '  # sits under or, for a binary, the one trusted file itself.',
+    '  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)',
     '  case "$recorded" in',
     '    *.mjs|*.js)',
     '      # The interpreter is recorded as an absolute path too. A bare `node`',
     "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
     '      # same environment this whole branch exists to survive.',
     '      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)',
-    '      recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)',
     '      # An extension match alone lets a config edit after install point this',
     '      # at any .js file, anywhere. `doctor` has warned about a recorded path',
     '      # outside the install root since the extension check was added; this is',
@@ -127,6 +140,21 @@ export const commitMsgStub = (): string =>
     '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
     '            ;;',
     '        esac',
+    '      fi',
+    '      ;;',
+    '    */commitlore|commitlore)',
+    '      # A compiled single-executable build (#39): no extension, no separate',
+    '      # interpreter to check — the binary reads and validates the message',
+    '      # itself. Its "install root" is the one file recorded at the same key,',
+    '      # so containment is an exact match rather than a directory prefix.',
+    '      # `-L` still rejects a symlink planted at the recorded location, and',
+    '      # `pwd -P` still resolves a symlinked ancestor directory before the',
+    '      # comparison, exactly as the script branch above.',
+    '      if [ -n "$recorded_root" ] && [ -x "$recorded" ] && [ ! -L "$recorded" ]; then',
+    '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
+    '        if [ "$recorded_dir/${recorded##*/}" = "$recorded_root" ]; then',
+    '          exec "$recorded" validate --message-file "$1"',
+    '        fi',
     '      fi',
     '      ;;',
     '  esac',

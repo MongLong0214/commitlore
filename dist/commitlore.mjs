@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync14 } from "node:fs";
+import { readFileSync as readFileSync12 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -11092,7 +11092,7 @@ var program = new Command();
 
 // src/core/backfill.ts
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { readFileSync as readFileSync4 } from "node:fs";
+import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/core/git.ts
 import { spawnSync } from "node:child_process";
@@ -11144,17 +11144,15 @@ var hasShallowHistory = (cwd) => {
   return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
 
-// src/core/harvest.ts
-import { readFileSync as readFileSync3 } from "node:fs";
-
 // src/core/schema.ts
 var import__ = __toESM(require__(), 1);
-import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/core/paths.ts
 import { existsSync as existsSync2, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
+var { isSea, getAsset } = createRequire(process.execPath)("node:sea");
 var findPackageRoot = (startDir) => {
   const { root } = parse(startDir);
   let dir = startDir;
@@ -11168,12 +11166,13 @@ var findPackageRoot = (startDir) => {
     dir = dirname(dir);
   }
 };
-var PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+var PACKAGE_ROOT = isSea() ? dirname(process.execPath) : findPackageRoot(dirname(fileURLToPath(import.meta.url)));
 var installedPath = (...segments) => join(PACKAGE_ROOT, ...segments);
+var readInstalledFile = (...segments) => isSea() ? getAsset(segments.join("/"), "utf8") : readFileSync(installedPath(...segments), "utf8");
 var cachedVersion = null;
 var packageVersion = () => {
   if (cachedVersion !== null) return cachedVersion;
-  const raw = readFileSync(installedPath("package.json"), "utf8");
+  const raw = readInstalledFile("package.json");
   const parsed = JSON.parse(raw);
   cachedVersion = typeof parsed.version === "string" ? parsed.version : "0.0.0-unknown";
   return cachedVersion;
@@ -11235,7 +11234,7 @@ var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
 // src/core/schema.ts
 var import_ajv_formats = __toESM(require_dist(), 1);
 var addFormats = import_ajv_formats.default.default;
-var SCHEMA_PATH = installedPath("spec", "schema", "record.schema.json");
+var SCHEMA_ASSET = ["spec", "schema", "record.schema.json"];
 var ENUM_WANT = {
   Blast: BLAST_VALUES.join("|"),
   Undo: UNDO_VALUES.join("|"),
@@ -11255,7 +11254,7 @@ var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
 var compiled = null;
 var getValidator = () => {
   if (compiled === null) {
-    const schema = JSON.parse(readFileSync2(SCHEMA_PATH, "utf8"));
+    const schema = JSON.parse(readInstalledFile(...SCHEMA_ASSET));
     const ajv = new import__.Ajv2020({ allErrors: true, strict: true });
     addFormats(ajv);
     compiled = ajv.compile(schema);
@@ -11343,7 +11342,7 @@ var cardinalityViolations = (trailers) => {
 var validateRecord = (trailers) => [...schemaViolations(trailers), ...cardinalityViolations(trailers)].sort((a, b) => a.index - b.index).map((entry) => entry.violation);
 
 // src/core/harvest.ts
-var SPEC_PATH = installedPath("spec", "SPEC.md");
+var SPEC_ASSET = ["spec", "SPEC.md"];
 var CLAIM_SECTION = "3.1 Decision context";
 var BOOKKEEPING_SECTION = "3.2 Identity, lifecycle, provenance";
 var VOCABULARY_SECTIONS = [CLAIM_SECTION, BOOKKEEPING_SECTION];
@@ -11429,7 +11428,7 @@ var assertMatchesTypes = (entries, sections) => {
 };
 var vocabulary = null;
 var loadVocabulary = () => {
-  if (vocabulary === null) vocabulary = parseVocabulary(readFileSync3(SPEC_PATH, "utf8"));
+  if (vocabulary === null) vocabulary = parseVocabulary(readInstalledFile(...SPEC_ASSET));
   return vocabulary;
 };
 var EXAMPLE_DRAFT = {
@@ -11940,7 +11939,7 @@ var buildRepairFeedback = (rejected) => {
 
 // src/core/index-db.ts
 import { mkdirSync, rmSync } from "node:fs";
-import { createRequire } from "node:module";
+import { createRequire as createRequire2 } from "node:module";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
 
 // src/core/trailers.ts
@@ -12035,7 +12034,7 @@ var cachedCtor = null;
 var loadDatabaseCtor = () => {
   if (cachedCtor !== null) return cachedCtor;
   try {
-    const nodeSqlite = createRequire(import.meta.url)("node:sqlite");
+    const nodeSqlite = createRequire2(process.execPath)("node:sqlite");
     cachedCtor = nodeSqlite.DatabaseSync;
     return cachedCtor;
   } catch (cause) {
@@ -13092,7 +13091,7 @@ var formatRejection = (rejection) => `record ${rejection.index} (${rejection.rul
 var readDraft = (path2) => {
   if (path2 === void 0) throw new Error("--draft needs a path");
   try {
-    return readFileSync4(path2, "utf8");
+    return readFileSync2(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read --draft ${JSON.stringify(path2)}: ${errorMessage2(error2)}`);
   }
@@ -13464,13 +13463,13 @@ var register = (program3) => {
 
 // src/commands/doctor.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync4, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync4, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { dirname as dirname4, join as join3, resolve as resolve4 } from "node:path";
 
 // src/core/hook-target.ts
 import { realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve as resolve3, sep } from "node:path";
+import { basename, isAbsolute, relative, resolve as resolve3, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
   try {
@@ -13491,7 +13490,17 @@ var isInsidePackage = (path2) => {
   const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path2));
   return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
 };
-var hasAllowedBinExtension = (path2) => path2.endsWith(".js") || path2.endsWith(".mjs");
+var matchesRunningBinary = (path2) => {
+  try {
+    return realpathSync(path2) === realpathSync(process.execPath);
+  } catch {
+    return false;
+  }
+};
+var classifyBinTarget = (path2) => {
+  if (path2.endsWith(".js") || path2.endsWith(".mjs")) return "script";
+  return basename(path2) === "commitlore" ? "binary" : null;
+};
 var readRecordedHookTarget = (cwd) => {
   const bin = configValue(cwd, "commitlore.bin");
   const node = configValue(cwd, "commitlore.node");
@@ -13499,11 +13508,18 @@ var readRecordedHookTarget = (cwd) => {
   if (bin === "") problems.push("commitlore.bin is not recorded");
   else {
     const binPath = resolve3(cwd, bin);
-    if (!hasAllowedBinExtension(bin)) {
-      problems.push("commitlore.bin is not a .js or .mjs file");
+    const kind = classifyBinTarget(bin);
+    if (kind === null) {
+      problems.push("commitlore.bin is not a .js, .mjs, or compiled commitlore binary");
     }
     if (!isFile(binPath)) problems.push("commitlore.bin does not exist");
-    else if (!isInsidePackage(binPath)) problems.push("commitlore.bin is outside this package root");
+    else if (kind === "script" && !isInsidePackage(binPath)) {
+      problems.push("commitlore.bin is outside this package root");
+    } else if (kind === "binary" && !isExecutableFile(binPath)) {
+      problems.push("commitlore.bin is not an executable file");
+    } else if (kind === "binary" && !matchesRunningBinary(binPath)) {
+      problems.push("commitlore.bin is outside this package root");
+    }
   }
   if (node === "") problems.push("commitlore.node is not recorded");
   else {
@@ -14759,7 +14775,7 @@ var attachToNotes = (targetSha, plan, opts = {}) => {
 
 // src/hooks/claude-settings.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync5, renameSync, statSync as statSync2, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync, statSync as statSync2, unlinkSync, writeFileSync } from "node:fs";
 import { dirname as dirname3, join as join2 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -14788,7 +14804,7 @@ var load = (settingsPath) => {
   if (!existsSync3(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
-    raw = readFileSync5(settingsPath, "utf8");
+    raw = readFileSync3(settingsPath, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
   }
@@ -15031,8 +15047,10 @@ var commitMsgStub = () => [
   'if [ -n "${COMMITLORE_BIN:-}" ]; then',
   "  # Same allowlist as the recorded commitlore.bin case below: any executable",
   "  # here used to run unchecked, which is exactly the gap an env var is for.",
+  "  # A compiled binary (#39) needs no interpreter to reach here either, so it",
+  "  # execs the same way a properly shebanged script does.",
   '  case "$COMMITLORE_BIN" in',
-  "    *.mjs|*.js)",
+  "    *.mjs|*.js|*/commitlore|commitlore)",
   '      exec "$COMMITLORE_BIN" validate --message-file "$1"',
   "      ;;",
   "  esac",
@@ -15054,13 +15072,16 @@ var commitMsgStub = () => [
   "# also validates commits with a different version than the one installed here.",
   "recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)",
   'if [ -n "$recorded" ]; then',
+  "  # Shared by every recognized branch below: what `hooks install` recorded",
+  "  # as this install's trusted location, whether that is a directory a script",
+  "  # sits under or, for a binary, the one trusted file itself.",
+  "  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)",
   '  case "$recorded" in',
   "    *.mjs|*.js)",
   "      # The interpreter is recorded as an absolute path too. A bare `node`",
   "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
   "      # same environment this whole branch exists to survive.",
   "      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)",
-  "      recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)",
   "      # An extension match alone lets a config edit after install point this",
   "      # at any .js file, anywhere. `doctor` has warned about a recorded path",
   "      # outside the install root since the extension check was added; this is",
@@ -15074,6 +15095,21 @@ var commitMsgStub = () => [
   '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
   "            ;;",
   "        esac",
+  "      fi",
+  "      ;;",
+  "    */commitlore|commitlore)",
+  "      # A compiled single-executable build (#39): no extension, no separate",
+  "      # interpreter to check \u2014 the binary reads and validates the message",
+  '      # itself. Its "install root" is the one file recorded at the same key,',
+  "      # so containment is an exact match rather than a directory prefix.",
+  "      # `-L` still rejects a symlink planted at the recorded location, and",
+  "      # `pwd -P` still resolves a symlinked ancestor directory before the",
+  "      # comparison, exactly as the script branch above.",
+  '      if [ -n "$recorded_root" ] && [ -x "$recorded" ] && [ ! -L "$recorded" ]; then',
+  '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
+  '        if [ "$recorded_dir/${recorded##*/}" = "$recorded_root" ]; then',
+  '          exec "$recorded" validate --message-file "$1"',
+  "        fi",
   "      fi",
   "      ;;",
   "  esac",
@@ -15220,7 +15256,7 @@ var checkHook = (opts, runtime) => {
   if (!existsSync4(path2)) {
     return check(id, title, "warn", `no commit-msg hook at ${path2}; ${targetDetail}`, install);
   }
-  const contents = readFileSync6(path2, "utf8");
+  const contents = readFileSync4(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
     return check(
       id,
@@ -15241,8 +15277,8 @@ var checkHook = (opts, runtime) => {
   }
   const problems = [
     ...target.problems,
-    ...override === void 0 || override === "" ? [] : hasAllowedBinExtension(override) ? ["COMMITLORE_BIN override is active"] : [
-      "COMMITLORE_BIN override is active, but is not a .js or .mjs file \u2014 the hook ignores it and falls through to the remaining resolution steps"
+    ...override === void 0 || override === "" ? [] : classifyBinTarget(override) !== null ? ["COMMITLORE_BIN override is active"] : [
+      "COMMITLORE_BIN override is active, but is not a .js, .mjs, or compiled commitlore binary \u2014 the hook ignores it and falls through to the remaining resolution steps"
     ]
   ];
   if (runtime.status !== "ok") {
@@ -15277,6 +15313,14 @@ var checkGit = (opts) => {
 var checkRuntime = (opts) => {
   const title = "cli runtime";
   const id = "cli-runtime";
+  if (isSea()) {
+    return check(
+      id,
+      title,
+      "ok",
+      `running as a compiled binary at ${process.execPath} (commitlore ${packageVersion()})`
+    );
+  }
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
   const entry = candidates.find((path2) => existsSync4(path2));
   if (entry === void 0) {
@@ -15598,7 +15642,7 @@ var register2 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync7, writeFileSync as writeFileSync3 } from "node:fs";
+import { readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -15609,7 +15653,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync7(path2, "utf8");
+    return readFileSync5(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -15692,7 +15736,7 @@ var register3 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync8 } from "node:fs";
+import { readFileSync as readFileSync6 } from "node:fs";
 
 // src/core/guard.ts
 var renderGuardMatch = (match) => {
@@ -16159,8 +16203,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync8(STDIN_FD, "utf8");
-  return readFileSync8(path2, "utf8");
+  if (path2 === "-") return readFileSync6(STDIN_FD, "utf8");
+  return readFileSync6(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -16348,12 +16392,12 @@ var register4 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync9, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync9(path2, "utf8");
+    return readFileSync7(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -16449,7 +16493,7 @@ import {
   chmodSync,
   existsSync as existsSync5,
   mkdirSync as mkdirSync3,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync8,
   realpathSync as realpathSync2,
   renameSync as renameSync2,
   statSync as statSync3,
@@ -16490,7 +16534,7 @@ var readHookState = (hookPath) => {
   if (!existsSync5(hookPath)) return "absent";
   let contents;
   try {
-    contents = readFileSync10(hookPath, "utf8");
+    contents = readFileSync8(hookPath, "utf8");
   } catch {
     return "foreign";
   }
@@ -16520,10 +16564,12 @@ var writeStub = (hookPath) => {
 var recordBinPath = (cwd) => {
   const entry = process.argv[1];
   if (entry === void 0 || entry === "") return;
-  execGit(["config", "--local", "commitlore.bin", resolve5(entry)], { cwd });
+  const resolvedEntry = resolve5(entry);
+  execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
   try {
-    execGit(["config", "--local", "commitlore.root", realpathSync2(PACKAGE_ROOT)], { cwd });
+    const root = classifyBinTarget(resolvedEntry) === "binary" ? realpathSync2(resolvedEntry) : realpathSync2(PACKAGE_ROOT);
+    execGit(["config", "--local", "commitlore.root", root], { cwd });
   } catch {
   }
 };
@@ -16717,8 +16763,8 @@ var register7 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync11, realpathSync as realpathSync3 } from "node:fs";
-import { basename, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync9, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -17068,7 +17114,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync11(0, "utf8");
+    return readFileSync9(0, "utf8");
   } catch {
     return "";
   }
@@ -17101,7 +17147,7 @@ var canonical = (target) => {
     } catch {
       const parent = dirname5(current);
       if (parent === current) return absolute;
-      tail.unshift(basename(current));
+      tail.unshift(basename2(current));
       current = parent;
     }
   }
@@ -26476,7 +26522,7 @@ var register11 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync12, writeFileSync as writeFileSync6 } from "node:fs";
+import { readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -26517,7 +26563,7 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync12(path2, "utf8");
+    return readFileSync10(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf4(error2)}`);
   }
@@ -26621,7 +26667,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync13 } from "node:fs";
+import { readFileSync as readFileSync11 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -26951,14 +26997,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync13(path2, "utf8");
+    return readFileSync11(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync13(0, "utf8");
+    return readFileSync11(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf5(error2)}`);
   }
@@ -27185,11 +27231,11 @@ var register13 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync14(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync12(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync14(STDIN_FD2, "utf8");
+  return readFileSync12(STDIN_FD2, "utf8");
 };
 var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {

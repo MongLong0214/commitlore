@@ -35,6 +35,7 @@ import type { Command } from 'commander';
 import { execGit } from '../core/git.js';
 import {
   type RecordedHookTarget,
+  classifyBinTarget,
   describeRecordedHookTarget,
   readRecordedHookTarget,
 } from '../core/hook-target.js';
@@ -174,23 +175,38 @@ const writeStub = (hookPath: string): void => {
  * worse than installing something slightly less able to find itself.
  */
 const recordBinPath = (cwd: string): void => {
+  // Under a Node SEA binary (#39), `process.argv[1]` is already the
+  // executable's own path: Node's SEA docs describe `process.argv` as keeping
+  // its traditional two-element head, and with no separate script to name
+  // both elements are the executable. No branch is needed here — this already
+  // records the binary itself the same way it records a script's path.
   const entry = process.argv[1];
   if (entry === undefined || entry === '') return;
-  execGit(['config', '--local', 'commitlore.bin', resolve(entry)], { cwd });
+  const resolvedEntry = resolve(entry);
+  execGit(['config', '--local', 'commitlore.bin', resolvedEntry], { cwd });
   // The interpreter as well: the branch that reads these back runs in a hook
-  // whose PATH may not carry node, which is the whole reason it exists.
+  // whose PATH may not carry node, which is the whole reason it exists. For a
+  // compiled binary this is the same value as commitlore.bin — it is its own
+  // interpreter — which is exactly what the shell stub's binary branch and
+  // `readRecordedHookTarget`'s node-comparison both expect.
   execGit(['config', '--local', 'commitlore.node', process.execPath], { cwd });
-  // And the install root the stub trusts `commitlore.bin` to sit under. A
-  // `.git/config` edit made after this install (ADR-0011's threat model: the
-  // same permission that can write this key can write `.git/hooks` directly)
-  // can still repoint `commitlore.bin` at another `.js` file, but not at one
-  // outside here — the stub checks the recorded path against this root, not
-  // just its extension. `realpathSync` so the recorded value is comparable to
-  // the physical path the stub resolves with `cd ... && pwd -P`; best-effort
-  // like the rest of this function, so a failure here is swallowed rather than
-  // failing the install.
+  // And the install root the stub trusts `commitlore.bin` to sit under (a
+  // script) or to equal exactly (a binary — it has no directory tree of its
+  // own for a foreign file to hide in, so its "root" is the one recorded
+  // file). A `.git/config` edit made after this install (ADR-0011's threat
+  // model: the same permission that can write this key can write
+  // `.git/hooks` directly) can still repoint `commitlore.bin` at another
+  // recognized file, but not at one outside here — the stub checks the
+  // recorded path against this root, not just its name. `realpathSync` so the
+  // recorded value is comparable to the physical path the stub resolves with
+  // `cd ... && pwd -P`; best-effort like the rest of this function, so a
+  // failure here is swallowed rather than failing the install.
   try {
-    execGit(['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)], { cwd });
+    const root =
+      classifyBinTarget(resolvedEntry) === 'binary'
+        ? realpathSync(resolvedEntry)
+        : realpathSync(PACKAGE_ROOT);
+    execGit(['config', '--local', 'commitlore.root', root], { cwd });
   } catch {
     // No root recorded means the stub's containment check cannot pass, which
     // only narrows resolution to the remaining, still-safe fallback steps.
