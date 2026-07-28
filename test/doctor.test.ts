@@ -36,6 +36,7 @@ import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
 import {
+  CLAUDE_HOOK_MARKER,
   claudeSettingsPath,
   installClaudeHook,
 } from '../src/hooks/claude-settings.js';
@@ -484,22 +485,77 @@ describe('doctor: PreToolUse hook runtime', () => {
     expect(check?.fix).toContain('install-claude-hook');
   });
 
-  it('runs a known-good payload and reports non-empty context', () => {
+  it('runs the configured binary command without node on PATH', () => {
     const repo = recordedRepo('doctor-inject-ok');
     installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const bin = tempDir('doctor-inject-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+
+    try {
+      const check = runtimeCheck(repo);
+
+      expect(check?.status).toBe('ok');
+      expect(check?.detail).toContain('returned context');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('does not run an unrecognised configured command', () => {
+    const repo = recordedRepo('doctor-inject-unrecognised');
+    installClaudeHook({
+      settingsPath: claudeSettingsPath(repo),
+      command: `printf unsafe ${CLAUDE_HOOK_MARKER}`,
+    });
 
     const check = runtimeCheck(repo);
 
-    expect(check?.status).toBe('ok');
-    expect(check?.detail).toContain('returned context');
+    expect(check?.status).toBe('skipped');
+    expect(check?.detail).toContain('not checked');
+    expect(check?.detail).toContain('might have side effects');
+    expect(check?.fix).toBeNull();
+  });
+
+  it('fails for a broken configured command until its executable is repaired', () => {
+    const repo = recordedRepo('doctor-inject-broken');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const bin = tempDir('doctor-inject-broken-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\necho broken >&2\nexit 7\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+
+    try {
+      const failed = runtimeCheck(repo);
+
+      expect(failed?.status).toBe('fail');
+      expect(failed?.detail).toContain('exits 7');
+      expect(failed?.fix).toContain('reinstall the commitlore executable');
+
+      writeScript(command, '#!/bin/sh\nprintf context\\n\n');
+      chmodSync(command, 0o755);
+      expect(runtimeCheck(repo)?.status).toBe('ok');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
   });
 
   it('fails when the hook returns empty for a known-good payload', () => {
     const repo = recordedRepo('doctor-inject-empty');
     installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
-    const emptyRoot = tempDir('doctor-inject-empty-root');
-    const previous = process.env['CLAUDE_PLUGIN_ROOT'];
-    process.env['CLAUDE_PLUGIN_ROOT'] = emptyRoot;
+    const bin = tempDir('doctor-inject-empty-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\nexit 0\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
     try {
       const report = runDoctor({ cwd: repo });
       const check = report.checks.find((entry) => entry.id === 'inject-runtime');
@@ -507,8 +563,8 @@ describe('doctor: PreToolUse hook runtime', () => {
       expect(check?.detail).toContain('returned no context');
       expect(report.exitCode).toBe(1);
     } finally {
-      if (previous === undefined) delete process.env['CLAUDE_PLUGIN_ROOT'];
-      else process.env['CLAUDE_PLUGIN_ROOT'] = previous;
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
     }
   });
 });
