@@ -82,7 +82,11 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # macos-15-intel: GitHub's replacement for the retired macos-13 label
+          # (GitHub retired macos-13 on 2025-12-04; see
+          # https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/).
+          # x86_64 macOS support ends when macos-15 retires in Fall 2027.
+          - os: macos-15-intel
             target: x86_64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
