@@ -41,17 +41,18 @@
  *   proposal and the alternative, over normalized, stopworded, lightly stemmed
  *   token sets. Symmetric, so it rewards a short focused proposal and decays on
  *   a long one.
- * - **Distinctive-keyword mass** (`KEYWORD_WEIGHT`) — how much of the
+ * - **Distinctive-keyword strength** (`KEYWORD_WEIGHT`) — how much of the
  *   alternative's *identity* the proposal names: its distinctive tokens (see
  *   `GENERIC_TERMS`), weighted by how rare each one is across the rejection
- *   corpus (see `Corpus`). Containment rather than similarity, which is what
- *   survives a proposal the size of a diff: "redis" is still in there.
+ *   corpus (see `Corpus`) and corroborated by their unweighted coverage.
+ *   Containment rather than similarity is what survives a proposal the size
+ *   of a diff: "redis" is still in there.
  * - **`Record-Id:` hit** (`RECORD_ID_WEIGHT`) — the proposal names the record
  *   itself. Not similarity at all; an explicit reference.
  *
- * Jaccard alone answers "is this the same sentence"; mass alone answers "is the
- * rejected thing named in here". Either question answered wrongly on its own is
- * a bad guard, which is why both are weighted.
+ * Jaccard alone answers "is this the same sentence"; keyword strength answers
+ * "is the rejected thing named in here". Either question answered wrongly on
+ * its own is a bad guard, which is why both are weighted.
  *
  * ## Why the score is not the whole decision
  *
@@ -157,18 +158,21 @@ export declare const KEYWORD_WEIGHT = 0.5;
  */
 export declare const MIN_KEYWORD_HITS = 2;
 /**
- * The share of an alternative's IDF-weighted identity that corroborates a flag
- * on its own, so that a *single* word can still be enough when the alternative
+ * The strength of the alternative's covered keywords that corroborates a flag
+ * on its own. IDF-weighted mass is multiplied by ordinary token coverage so a
+ * rare filename cannot erase unmatched subject words merely because those words
+ * are common in the corpus. A *single* word is still enough when the alternative
  * is essentially that word.
  *
- * The line sits at half because the two populations separate there, measured:
- * across the ten unrelated proposals in `spec/fixtures/guard/proposals.json`,
- * the highest mass any of them reaches against any rejection in this
- * repository's history is **0.37** (`regex` against "regex trailer parsing");
- * `fixture` reaches 0.25 and `documents` 0.27. Across the re-proposals that
- * must fire, one word carries **1.00** — `redis` is the whole of "shared Redis
- * cache". `rabbitmq` at 0.50 of "a RabbitMQ broker" is the intended boundary
- * case: naming half of a two-word alternative is a re-proposal.
+ * The line stays at half because a one-token alternative such as `redis` still
+ * reaches **1.00**, while multiplication cannot increase the measured unrelated
+ * keyword masses (the old maximum was **0.37**). A partial hit now preserves the
+ * absent tokens' vote even when corpus frequency drives their IDF weight down.
+ */
+export declare const STRONG_KEYWORD_STRENGTH = 0.5;
+/**
+ * @deprecated Use `STRONG_KEYWORD_STRENGTH`. Kept because the generated
+ * `dist/core/guard.js` is a supported clone-first import surface.
  */
 export declare const STRONG_KEYWORD_MASS = 0.5;
 /**
@@ -203,19 +207,16 @@ export declare const RECORD_ID_WEIGHT = 0.6;
  *
  * - **0.58** — `shared Redis cache` against "use a redis instance to store
  *   sessions". One word shared out of six, but that word is the whole identity
- *   of the alternative (`STRONG_KEYWORD_MASS`), so it fires and must.
+ *   of the alternative (`STRONG_KEYWORD_STRENGTH`), so it fires and must.
  * - **0.60** — a `Record-Id:` reference alone.
  * - **0.83, 1.00** — the two re-proposals measured against this repository's
  *   own history (`hardcode the adoption commit sha`, `print the matched
  *   credential…`), which are what the ceiling looks like.
  *
- * Measured against the thirteen unrelated proposals in
- * `spec/fixtures/guard/proposals.json` — ten against this repository's real
- * rejection corpus, three against the seeded fixtures — none is corroborated
- * at all, so the noise floor is not a low score but no match (`test/guard.test.ts`
- * prints the table). The threshold was not tuned down to that measurement:
- * room above the noise is what keeps a hook that runs on every Edit from being
- * switched off.
+ * Against the unrelated proposal corpus in `spec/fixtures/guard/proposals.json`,
+ * both the seeded records and this repository's real history are quiet. The
+ * threshold was not tuned down to that measurement: room above the noise is
+ * what keeps a hook that runs on every Edit from being switched off.
  */
 export declare const DEFAULT_THRESHOLD = 0.35;
 /**

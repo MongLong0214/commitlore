@@ -7,7 +7,7 @@
  *   1. A re-proposal is flagged — including one worded differently from the
  *      record, which is the only interesting case. An agent that repeats a
  *      rejected idea does not repeat the sentence.
- *   2. Ten unrelated proposals produce fewer than one false positive. This
+ *   2. The unrelated-proposal corpus produces zero false positives. This
  *      suite measures the margin rather than asserting a boolean, because a
  *      hook that fires on every edit is uninstalled the day it cries wolf, and
  *      "passes today" is not the same as "has room".
@@ -240,6 +240,7 @@ describe('guard flags a re-proposal', () => {
   it('names the signal that fired, so the flag can be argued with', () => {
     const [match] = check(fixture('redis-named').text);
     expect(match?.signals).toContain('keyword:redis');
+    expect(match?.signals.some((signal) => signal.startsWith('keyword-strength:'))).toBe(true);
     expect(match?.signals.some((signal) => signal.startsWith('jaccard:'))).toBe(true);
   });
 
@@ -279,7 +280,7 @@ describe('guard flags a re-proposal', () => {
 // ---------------------------------------------------------------------------
 
 describe('guard stays quiet on unrelated proposals', () => {
-  it('produces fewer than one false positive across ten unrelated proposals', () => {
+  it('produces no false positives across the unrelated proposal corpus', () => {
     const measured = unrelated.map((entry) => ({ id: entry.id, score: topScore(entry.text) }));
     const flagged = measured.filter((entry) => entry.score >= DEFAULT_THRESHOLD);
 
@@ -299,6 +300,13 @@ describe('guard stays quiet on unrelated proposals', () => {
     );
 
     expect(flagged).toEqual([]);
+  });
+
+  it('does not let a shared filename override different subject words', () => {
+    const incident = unrelated.find((entry) => entry.id === 'package-json-selection');
+    if (incident === undefined) throw new Error('missing issue #61 regression fixture');
+
+    expect(check(incident.text)).toEqual([]);
   });
 
   it('leaves the noise floor well below the cheapest true positive', () => {
