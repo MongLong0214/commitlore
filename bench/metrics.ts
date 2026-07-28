@@ -359,9 +359,12 @@ export const parseRows = (file: string, contents: string): readonly RunRecord[] 
     for (const field of REQUIRED_FIELDS) {
       if (row[field] === undefined) throw new Error(`${file}:${index + 1}: missing field \`${field}\``);
     }
+    const reproposalMatches = row.reproposal_matches;
     if (
-      row.reproposal_matches !== undefined &&
-      (!Number.isInteger(row.reproposal_matches) || row.reproposal_matches < 0)
+      reproposalMatches !== undefined &&
+      (typeof reproposalMatches !== "number" ||
+        !Number.isInteger(reproposalMatches) ||
+        reproposalMatches < 0)
     ) {
       throw new Error(`${file}:${index + 1}: \`reproposal_matches\` must be a non-negative integer`);
     }
