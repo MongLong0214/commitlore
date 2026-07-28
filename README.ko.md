@@ -203,9 +203,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 hook 오버헤드다. commit-msg는 p50 185.85 ms, injection hook은 p50 102.40 ms다([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
 
-측정한 sensitivity range의 중간에서는 re-proposal 방지가 500-token 주입의 손익분기에는 7.7%, 3,000-token에는 46.2%, 12,000-token에는 184.6%의 빈도로 일어나야 한다. 마지막 크기에서는 비용을 회수할 수 없다.
-
-guard가 이 비율 중 어느 것에 도달하는지는 확립되지 않았다. 이는 측정된 비용에 대한 산술일 뿐이며, 효과의 증거가 아니다.
+손익분기 수치를 다시 제시하려면 제공업체가 보고한 턴별 토큰 사용량 원장과 저장소가 이미 배제한 대안에 쓴 작업의 관측된 비용이 필요하다.
 
 <details>
 <summary>전체 benchmark 기록 (112회 실험)</summary>

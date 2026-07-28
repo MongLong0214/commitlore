@@ -203,9 +203,7 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 
 guard が一回実行されるコストは、注入される context と測定した hook overhead です。commit-msg は p50 185.85 ms、injection hook は p50 102.40 ms です（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
 
-測定した sensitivity range の中ほどでは、re-proposal の防止が 500-token の注入では 7.7%、3,000-token では 46.2%、12,000-token では 184.6% の頻度で起きて初めて損益分岐になります。この大きさでは費用を回収できません。
-
-guard がこれらの率のいずれかに達するかは確立されていません。これは測定済みコストに対する算術であり、効果の証拠ではありません。
+損益分岐の数値を再び示すには、プロバイダー報告のターンごとのトークン使用量台帳と、リポジトリがすでに却下した代案に費やした作業の観測済みコストが必要です。
 
 <details>
 <summary>完全な benchmark record（112 回の実験）</summary>

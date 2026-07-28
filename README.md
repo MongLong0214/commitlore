@@ -203,9 +203,7 @@ These are product claims about Git-bound, human-verifiable decision history. The
 
 The guard costs injected context plus measured hook overhead: 185.85 ms p50 for commit-msg and 102.40 ms p50 for the injection hook ([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
 
-At the middle of the measured sensitivity range, preventing a re-proposal must occur in 7.7% of cases for a 500-token injection to break even, 46.2% for 3,000 tokens, and 184.6% for 12,000 tokens. At that size it cannot pay for itself.
-
-Whether the guard reaches any of those rates is not established. This is arithmetic on measured costs, not evidence of an effect.
+A break-even figure would require a per-turn ledger of provider-reported token usage and an observed cost for work spent on an alternative the repository had already rejected.
 
 <details>
 <summary>Full benchmark record (112 experiments)</summary>

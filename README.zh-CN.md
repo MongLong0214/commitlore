@@ -203,9 +203,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 guard 每次运行的成本是注入的 context 加上测得的 hook overhead：commit-msg 的 p50 为 185.85 ms，injection hook 的 p50 为 102.40 ms（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
 
-在测得的 sensitivity range 中间，防止 re-proposal 必须以 7.7% 的频率发生，500-token 注入才能盈亏平衡；3,000-token 为 46.2%，12,000-token 为 184.6%。在这一大小下，它无法收回成本。
-
-guard 是否能达到其中任何一个比率尚未确立。这是基于测得成本的算术，而不是效果的证据。
+要重新给出盈亏平衡数值，需要一份逐轮记录、由提供商报告的令牌用量账本，以及为仓库已经否决的替代方案所花工作的观测成本。
 
 <details>
 <summary>完整 benchmark 记录（112 次实验）</summary>
