@@ -27238,6 +27238,27 @@ var violationsForBlock = (source, trailers) => {
     };
   });
 };
+var identityCollisionViolations = (source) => {
+  if (source.sha !== void 0) return [];
+  return labelRecordBlocks(source.message).flatMap((block) => {
+    if (!block.identityCollision) return [];
+    const id = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id === void 0) return [];
+    const lines = locateTrailerLines(source.message, block.trailers);
+    const index = block.trailers.findIndex((trailer) => trailer.key === "Record-Id");
+    const line = lines[index];
+    return [
+      {
+        ...line === void 0 ? {} : { line },
+        key: "Record-Id",
+        value: id,
+        rule: "duplicate-id",
+        got: id,
+        want: UNIQUE_ID_WANT
+      }
+    ];
+  });
+};
 var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
   const blocks = parseRecordBlocks(source.message);
@@ -27257,7 +27278,11 @@ var inspectSource = (source) => {
     }
   );
   const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
-  const violations = [...earlierViolations, ...lastViolations];
+  const violations = [
+    ...identityCollisionViolations(source),
+    ...earlierViolations,
+    ...lastViolations
+  ];
   const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map(
     (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
   );

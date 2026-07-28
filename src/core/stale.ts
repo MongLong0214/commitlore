@@ -35,7 +35,13 @@ export const REVIEW_FLAG = 'review';
 
 /** `want` text for a dangling reference, fixed by spec/fixtures/invalid/05. */
 const DANGLING_WANT = 'an existing Record-Id in history';
-const UNIQUE_ID_WANT = 'exactly one record per Record-Id';
+/**
+ * Exported so `commands/validate.ts` can report the exact same wording for
+ * the same `duplicate-id` rule when it detects a same-message collision
+ * directly from `core/trailers.ts`'s `labelRecordBlocks` (bug-issue-145) — one
+ * rule should read the same regardless of which check found it.
+ */
+export const UNIQUE_ID_WANT = 'exactly one record per Record-Id';
 
 const DAY_MS = 86_400_000;
 

@@ -430,6 +430,78 @@ describe('validate — check classes and reference integrity', () => {
       expect.objectContaining({ sha, key: 'Record-Id', got: 'r-dupdup', rule: 'duplicate-id' }),
     );
   });
+
+  // bug-issue-145: `--message-file`/stdin sources never resolve an `sha`, so
+  // the `sharesACommit` branch exercised above (bug-issue-92) can never fire
+  // for them — this is the gap the commit-msg hook actually runs into, since
+  // it always calls `validate --message-file` on a message that is not a
+  // commit yet.
+  it('rejects two blocks in a message file that share a Record-Id, naming it (bug-issue-145)', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'Two blocks same id\n\nLimit: first\nRecord-Id: r-dupxx1\n\nLimit: second\nRecord-Id: r-dupxx1\n',
+    });
+
+    expect(result.code).toBe(1);
+    expect(result.checks[0]).toEqual({ class: 'shape', status: 'failed' });
+    expect(
+      result.violations.filter((violation) => violation.rule === 'duplicate-id'),
+    ).toHaveLength(2);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({
+        key: 'Record-Id',
+        value: 'r-dupxx1',
+        got: 'r-dupxx1',
+        rule: 'duplicate-id',
+      }),
+    );
+    expect(result.stdout).toContain('r-dupxx1');
+  });
+
+  it('accepts two blocks in one message that declare different Record-Ids', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'Two blocks different ids\n\nLimit: first\nRecord-Id: r-diffid1\n\nLimit: second\nRecord-Id: r-diffid2\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+  });
+
+  it('accepts a single record block, unaffected by the collision check', () => {
+    const result = runValidate({
+      readStdin: () => 'One block\n\nLimit: fine\nRecord-Id: r-single01\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+  });
+
+  it('rejects only the two colliding blocks out of three, naming the shared id', () => {
+    const result = runValidate({
+      readStdin: () =>
+        [
+          'Three blocks, two collide',
+          '',
+          'Limit: alpha',
+          'Record-Id: r-dupxx1',
+          '',
+          'Limit: beta',
+          'Record-Id: r-uniqueb',
+          '',
+          'Limit: gamma',
+          'Record-Id: r-dupxx1',
+        ].join('\n'),
+    });
+
+    expect(result.code).toBe(1);
+    const duplicateIdViolations = result.violations.filter(
+      (violation) => violation.rule === 'duplicate-id',
+    );
+    expect(duplicateIdViolations).toHaveLength(2);
+    expect(duplicateIdViolations.every((violation) => violation.value === 'r-dupxx1')).toBe(true);
+    expect(result.violations.some((violation) => violation.value === 'r-uniqueb')).toBe(false);
+  });
 });
 
 describe('validate — usage errors exit 2', () => {
