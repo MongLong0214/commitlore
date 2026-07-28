@@ -52,7 +52,7 @@ case "$os_raw" in
   Darwin) os=apple-darwin ;;
   Linux) os=unknown-linux-gnu ;;
   *)
-    die "unsupported OS \"$os_raw\" — only macOS and Linux release binaries are published (no Windows asset yet: the SEA build and the commit-msg hook shim are not verified there, see ADR-0015). Install from source instead: https://github.com/$REPO#install-from-the-clone" 1
+    die "unsupported OS \"$os_raw\" — only macOS and Linux release binaries are published (no Windows asset yet: the SEA build and the commit-msg hook shim are not verified there, see ADR-0015). Install from source instead: https://github.com/$REPO#install-from-source" 1
     ;;
 esac
 
@@ -60,7 +60,7 @@ case "$arch_raw" in
   arm64 | aarch64) arch=aarch64 ;;
   x86_64 | amd64) arch=x86_64 ;;
   *)
-    die "unsupported architecture \"$arch_raw\" — published binaries are aarch64 and x86_64 only. Install from source instead: https://github.com/$REPO#install-from-the-clone" 1
+    die "unsupported architecture \"$arch_raw\" — published binaries are aarch64 and x86_64 only. Install from source instead: https://github.com/$REPO#install-from-source" 1
     ;;
 esac
 
@@ -157,7 +157,7 @@ chmod +x "$work/commitlore"
 # into the same clear, attributed failure every other unsupported-platform
 # case in this script already gives.
 if ! "$work/commitlore" --version >/dev/null 2>&1; then
-  die "the downloaded binary for $target does not run on this machine (nothing was installed). This usually means a musl-libc host such as Alpine — only glibc (\"-gnu\") Linux binaries are published, and Alpine's dynamic linker cannot load them. Install from source instead: https://github.com/$REPO#install-from-the-clone" 1
+  die "the downloaded binary for $target does not run on this machine (nothing was installed). This usually means a musl-libc host such as Alpine — only glibc (\"-gnu\") Linux binaries are published, and Alpine's dynamic linker cannot load them. Install from source instead: https://github.com/$REPO#install-from-source" 1
 fi
 
 if [ -n "${COMMITLORE_INSTALL_DIR:-}" ]; then
