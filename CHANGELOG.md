@@ -32,6 +32,29 @@ Not touched: `npm run build`/`npm test`/`devDependencies`' existing entries
 (the dev toolchain), and the npm text in ADR-0002 and ADR-0011 (the decision
 history explaining why npm was rejected).
 
+### Shape's verdict no longer depends on whether a repository is attached — bug-issue-90
+
+SPEC §6.1 defines Shape as needing "the message alone" and running
+"anywhere, including stdin." It did not: the same merge commit message got
+`shape ok` through `--commit` and `shape failed` (an `unknown-key` on the
+GitHub PR-title paragraph) through `--message-file`, reproduced against
+gitseed's own history before changing anything.
+
+The two paths had diverged, not the check class: bug-issue-76's merge-title
+exclusion (`validate.ts`'s `nonTrailerParagraph`) gated on `source.merge`,
+computed from `git log --format=%P` parent-counting — repository
+information a `--message-file`/stdin caller never has. `--commit` and
+`--range` populated it; `--message-file` and stdin silently left it
+`undefined`, so the exact same excuse applied to one path and not the other
+for the identical text.
+
+Reconciled by making the signal message-only: `looksLikeMergeTitle` matches
+the message's own first line against the subject `git merge` and GitHub's
+PR-merge button write on their own (`Merge pull request #N from …`, `Merge
+branch '…'`, `Merge remote-tracking branch '…'`, `Merge tag '…'`) — text
+available identically in every input mode, so both paths now compute the
+same excuse the same way. `readCommitSource` no longer fetches `%P` at all.
+
 ### Compiled single-executable binary — feat-issue-39
 
 `npm run build:binary` (`scripts/build-binary.mjs`) builds `dist/commitlore`,

@@ -167,6 +167,53 @@ describe('validate — prose/trailer boundary', () => {
       `commitlore: ${merge.slice(0, 10)}:3: final paragraph does not look like a CommitLore trailer block; saw "inject: diagnose silent hook failures on stderr (#67)"\n`,
     );
   });
+
+  it('gives the same merge-title message the same shape verdict via --message-file as via --commit (bug-issue-90)', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n');
+    execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'feature.txt', 'Feature\n');
+    execFileSync('git', ['checkout', '-q', 'main'], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'main.txt', 'Main\n');
+    execFileSync(
+      'git',
+      [
+        'merge',
+        '--no-ff',
+        '-q',
+        'feature',
+        '-m',
+        'Merge pull request #72 from owner/feature\n\ninject: diagnose silent hook failures on stderr (#67)',
+      ],
+      { cwd: repo, env: GIT_ENV },
+    );
+    const merge = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+
+    // The exact reproduction from the issue: extract the already-made merge
+    // commit's message to a file (as a commit-msg hook, or a human, would
+    // hand it to `--message-file`) rather than pointing validate at the repo.
+    const extracted = execFileSync('git', ['log', '-1', '--format=%B', merge], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    });
+    const messageFile = join(repo, 'extracted-message.txt');
+    writeFileSync(messageFile, extracted);
+
+    const viaCommit = runValidate({ commit: merge, cwd: repo });
+    const viaMessageFile = runValidate({ messageFile, cwd: tmpdir() });
+
+    expect(viaMessageFile.checks[0]).toEqual(viaCommit.checks[0]);
+    expect(viaMessageFile.checks[0]).toEqual({ class: 'shape', status: 'ok' });
+    expect(viaMessageFile.violations).toEqual([]);
+    expect(viaMessageFile.stderr).toBe(
+      'commitlore: commit:3: final paragraph does not look like a CommitLore trailer block; saw "inject: diagnose silent hook failures on stderr (#67)"\n',
+    );
+  });
 });
 
 describe('validate — input modes', () => {

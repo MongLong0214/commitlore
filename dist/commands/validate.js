@@ -61,6 +61,20 @@ const LEADING_WHITESPACE = /^[ \t]+/;
  */
 const isComment = (line) => line.startsWith('#');
 /**
+ * Matches the subject line `git merge` and GitHub's PR-merge button write on
+ * their own, never something a person typed as a trailer.
+ *
+ * This is text, not `git log --format=%P` parent-counting (bug-issue-90): SPEC
+ * §6.1 defines Shape as needing "the message alone" and running "anywhere,
+ * including stdin," so whether a paragraph is platform-generated prose cannot
+ * depend on repository state a `--message-file`/stdin caller never has —
+ * otherwise the same message gets a different Shape verdict depending on how
+ * it arrived, which is the defect this pattern replaces. The subject line
+ * itself is exactly the signal available in every input mode alike.
+ */
+const MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
+const looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine(message));
+/**
  * Tries to read `trailers` off `lines` starting at `start`, reproducing git's
  * unfold (value, then each continuation appended after a single space) and
  * comparing the result to what git actually returned.
@@ -189,7 +203,9 @@ const violationsForBlock = (source, trailers) => {
  * key" from "GitHub wrote a PR title here and it happens to contain a colon"
  * (bug-issue-76) — a merge commit's platform-generated last paragraph is not
  * additionally re-checked as if it declared a `Record-Id`, because it never
- * claims to be a record at all.
+ * claims to be a record at all. The merge subject is recognized from
+ * `source.message` itself (`looksLikeMergeTitle`), not from the repository,
+ * so this excuse applies the same way to every input mode (bug-issue-90).
  *
  * Earlier blocks the multi-record grammar recovers do not get that special
  * case: `parseRecordBlocks` only accepts one when it is entirely
@@ -204,7 +220,7 @@ const inspectSource = (source) => {
     const lines = locateTrailerLines(source.message, trailers);
     const rawViolations = validateRecord(trailers);
     const firstTrailerLine = lines[0];
-    const nonTrailerParagraph = source.merge === true &&
+    const nonTrailerParagraph = looksLikeMergeTitle(source.message) &&
         firstTrailerLine !== undefined &&
         rawViolations.length > 0 &&
         rawViolations.length === trailers.length &&
@@ -257,16 +273,11 @@ const resolveCommit = (ref, cwd) => {
     return result.stdout.trim();
 };
 const readCommitSource = (sha, cwd) => {
-    const result = execGit(['log', '-1', '--format=%P%x00%B', sha, '--'], { cwd });
+    const result = execGit(['log', '-1', '--format=%B', sha, '--'], { cwd });
     if (result.code !== 0) {
         throw new Error(`cannot read commit ${sha}: ${firstLine(result.stderr)}`);
     }
-    const [parents = '', message = ''] = result.stdout.split('\0');
-    return {
-        sha,
-        message,
-        merge: parents.split(' ').filter(Boolean).length > 1,
-    };
+    return { sha, message: result.stdout };
 };
 const readRange = (range, cwd) => {
     const result = execGit(['rev-list', '--reverse', '--end-of-options', range, '--'], { cwd });

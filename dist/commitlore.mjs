@@ -26855,6 +26855,8 @@ var stripCr = (line) => line.endsWith("\r") ? line.slice(0, -1) : line;
 var CONTINUATION = /^[ \t]/;
 var LEADING_WHITESPACE = /^[ \t]+/;
 var isComment = (line) => line.startsWith("#");
+var MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
+var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine4(message));
 var matchTrailersAt = (lines, start, trailers) => {
   const found = [];
   let cursor = start;
@@ -26935,7 +26937,7 @@ var inspectSource = (source) => {
   const lines = locateTrailerLines(source.message, trailers);
   const rawViolations = validateRecord(trailers);
   const firstTrailerLine = lines[0];
-  const nonTrailerParagraph = source.merge === true && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
+  const nonTrailerParagraph = looksLikeMergeTitle(source.message) && firstTrailerLine !== void 0 && rawViolations.length > 0 && rawViolations.length === trailers.length && rawViolations.every((violation) => violation.rule === "unknown-key") ? source.message.split("\n").map(stripCr).slice(firstTrailerLine - 1).filter((line) => line !== "").join("\n") : void 0;
   const lastViolations = (nonTrailerParagraph === void 0 ? rawViolations : []).map(
     (violation) => {
       const line = lineForViolation(violation, trailers, lines);
@@ -26977,16 +26979,11 @@ var resolveCommit2 = (ref, cwd) => {
   return result.stdout.trim();
 };
 var readCommitSource = (sha, cwd) => {
-  const result = execGit(["log", "-1", "--format=%P%x00%B", sha, "--"], { cwd });
+  const result = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
   if (result.code !== 0) {
     throw new Error(`cannot read commit ${sha}: ${firstLine4(result.stderr)}`);
   }
-  const [parents = "", message = ""] = result.stdout.split("\0");
-  return {
-    sha,
-    message,
-    merge: parents.split(" ").filter(Boolean).length > 1
-  };
+  return { sha, message: result.stdout };
 };
 var readRange = (range, cwd) => {
   const result = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
