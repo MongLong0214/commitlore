@@ -20,7 +20,7 @@
 
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 
-Install once, keep committing normally, and CommitLore preserves only the decisions worth carrying forward.
+Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
@@ -34,6 +34,16 @@ Then run `commitlore init` in each repository where you want validation hooks an
 - If a record is present, the commit-msg hook validates it; it never creates one.
 - Agents query decision context through MCP or receive it from the `PreToolUse` hook.
 - Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
+
+## Try it in a repository
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+Then keep working through your coding agent. When a change contains decision context the diff cannot preserve, ask the agent to include a CommitLore record in the commit.
 
 <details>
 <summary>Prefer to inspect or pin the installation?</summary>
@@ -96,11 +106,36 @@ The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes a
 
 You do not hand-write a trailer for every commit. Most commits should carry no record at all. Add one only for a decision the diff cannot recover: an external constraint, a rejected alternative, a warning, or a verification gap.
 
-Today, records reach a commit in two ways: an agent authors the trailer block when there is decision context worth keeping, following `skills/commitlore-commits/`; or a human writes ordinary Git trailers by hand. The commit-msg hook validates records that are already present. It never invents or silently adds one.
+### Through a coding agent
+
+Ask the agent to commit normally and preserve only the decision context the diff cannot explain:
+
+> Commit this change. Add a CommitLore record only if the diff cannot recover an important constraint, rejected alternative, warning, or verification gap.
+
+Most commits should still carry no record. The agent instructions live in `skills/commitlore-commits/`, and the commit hook validates any record the agent adds.
+
+### Advanced: harvest
 
 `commitlore harvest` builds a prompt contract from a session transcript and staged diff; `commitlore harvest-verify` checks a draft against them. They support drafting, not automatic commits. Interactive record building is not implemented.
 
-## A record
+### By hand
+
+As an escape hatch, a human can write ordinary Git trailers by hand. The commit-msg hook validates records that are already present; it never invents or silently adds one.
+
+## A minimal record
+
+A record can be small. Include only the context that would otherwise be lost:
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+Most records do not need every protocol field. Identity, lifecycle, risk, provenance, and verification fields are available when the decision needs them.
+
+## A complete record
 
 This example is also a conformance fixture. Git's trailer parser reads the code block identically in every translated README.
 
@@ -163,6 +198,14 @@ These are product claims about Git-bound, human-verifiable decision history. The
 ## Evidence: a narrower product claim
 
 112 experiments were recorded, but M4 recorded no per-run guard exposure. Whether the treatment was present is unverifiable, so it does not test, support, or refute the agent-behavior claim. The narrower product claim above rests on independently testable behavior; read the [M4 verdict](bench/VERDICT-M4.md) for the clean dataset and withdrawal.
+
+### Cost and break-even
+
+The guard costs injected context plus measured hook overhead: 185.85 ms p50 for commit-msg and 102.40 ms p50 for the injection hook ([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
+
+At the middle of the measured sensitivity range, preventing a re-proposal must occur in 7.7% of cases for a 500-token injection to break even, 46.2% for 3,000 tokens, and 184.6% for 12,000 tokens. At that size it cannot pay for itself.
+
+Whether the guard reaches any of those rates is not established. This is arithmetic on measured costs, not evidence of an effect.
 
 <details>
 <summary>Full benchmark record (112 experiments)</summary>

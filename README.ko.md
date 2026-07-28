@@ -20,7 +20,7 @@
 
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
-한 번 설치한 뒤 평소처럼 커밋하면 된다. CommitLore는 계속 가져갈 가치가 있는 결정만 보존한다.
+한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
@@ -34,6 +34,16 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 - record가 있으면 commit-msg hook이 검증한다. record를 만들지는 않는다.
 - 에이전트는 MCP로 결정 맥락을 조회하거나 `PreToolUse` hook으로 받는다.
 - path를 바꾸기 전에 active limit, ruled-out alternative, warning, verification gap을 본다.
+
+## 저장소에서 사용해 보기
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+그다음에도 코딩 에이전트와 계속 작업한다. 변경에 diff가 보존할 수 없는 결정 맥락이 있으면, 에이전트에게 커밋에 CommitLore record를 넣어 달라고 요청한다.
 
 <details>
 <summary>설치 내용을 살펴보거나 버전을 고정하고 싶나요?</summary>
@@ -96,11 +106,36 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 
 모든 커밋에 trailer를 손으로 쓸 필요는 없다. 대부분의 커밋에는 record가 없어야 한다. 외부 제약, 제외한 대안, 경고, 검증 공백처럼 diff만으로 복구할 수 없는 결정에만 record를 추가한다.
 
-오늘 record가 커밋에 들어가는 방법은 두 가지다. 에이전트가 보존할 결정 맥락이 있을 때 `skills/commitlore-commits/` 지침에 따라 trailer block을 작성하거나, 사람이 평범한 Git trailer를 직접 쓴다. commit-msg hook은 이미 있는 record를 검증할 뿐이다. record를 발명하거나 조용히 추가하지 않는다.
+### 코딩 에이전트를 통해
+
+에이전트에게 평소대로 커밋하고 diff로 설명할 수 없는 결정 맥락만 보존하도록 요청한다.
+
+> 이 변경을 커밋해. diff로 중요한 제약, 제외한 대안, 경고 또는 검증 공백을 복구할 수 없을 때만 CommitLore record를 추가해.
+
+대부분의 커밋에는 여전히 record가 없어야 한다. 에이전트 지침은 `skills/commitlore-commits/`에 있고, commit hook은 에이전트가 추가한 record를 검증한다.
+
+### 고급 경로: harvest
 
 `commitlore harvest`는 session transcript와 staged diff에서 prompt contract를 만들고, `commitlore harvest-verify`는 그에 맞는 draft를 검증한다. 둘은 draft를 돕지만 자동 커밋하지 않는다. interactive record builder는 구현되지 않았다.
 
-## 기록 하나
+### 직접 작성
+
+탈출구로 사람이 평범한 Git trailer를 직접 쓸 수 있다. commit-msg hook은 이미 있는 record를 검증할 뿐이며, record를 발명하거나 조용히 추가하지 않는다.
+
+## 최소 record
+
+record는 작을 수 있다. 그렇지 않으면 잃게 될 맥락만 넣는다.
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+대부분의 record에는 모든 protocol field가 필요하지 않다. 결정에 필요할 때 identity, lifecycle, risk, provenance, verification field를 사용할 수 있다.
+
+## 완전한 record
 
 이 예시는 conformance fixture이기도 하다. Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
 
@@ -163,6 +198,14 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ## 근거: 더 좁은 제품 주장
 
 112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
+
+### 비용과 손익분기점
+
+guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 hook 오버헤드다. commit-msg는 p50 185.85 ms, injection hook은 p50 102.40 ms다([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
+
+측정한 sensitivity range의 중간에서는 re-proposal 방지가 500-token 주입의 손익분기에는 7.7%, 3,000-token에는 46.2%, 12,000-token에는 184.6%의 빈도로 일어나야 한다. 마지막 크기에서는 비용을 회수할 수 없다.
+
+guard가 이 비율 중 어느 것에 도달하는지는 확립되지 않았다. 이는 측정된 비용에 대한 산술일 뿐이며, 효과의 증거가 아니다.
 
 <details>
 <summary>전체 benchmark 기록 (112회 실험)</summary>

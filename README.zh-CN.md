@@ -20,7 +20,7 @@
 
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
-安装一次后，照常提交即可。CommitLore 只保留值得延续的决策。
+安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
@@ -34,6 +34,16 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install
 - 如果已有 record，commit-msg hook 会验证它；不会创建 record。
 - 代理通过 MCP 查询决策上下文，或从 `PreToolUse` hook 接收它。
 - 更改 path 前，它们会看到 active limit、ruled-out alternative、warning 和 verification gap。
+
+## 在仓库中试用
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+然后继续通过编程代理工作。若某项更改包含 diff 无法保存的决策上下文，请让代理在提交中加入 CommitLore record。
 
 <details>
 <summary>想检查或固定安装版本？</summary>
@@ -96,11 +106,36 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 
 不必为每次提交手写 trailer。绝大多数提交都不应带 record。只在 diff 无法还原的决策中添加 record：外部限制、排除的方案、warning 或 verification gap。
 
-当前 record 有两种进入提交的方式：当有值得保留的决策上下文时，代理按照 `skills/commitlore-commits/` 的指引编写 trailer block；或由人手写普通 Git trailer。commit-msg hook 只验证已经存在的 record；它不会凭空创建或静默添加 record。
+### 通过编程代理
+
+让代理照常提交，只保留 diff 无法解释的决策上下文：
+
+> 提交这项更改。只有当 diff 无法还原重要限制、排除的方案、warning 或 verification gap 时，才添加 CommitLore record。
+
+绝大多数提交仍不应带 record。代理说明位于 `skills/commitlore-commits/`，commit hook 会验证代理添加的任何 record。
+
+### 高级路径：harvest
 
 `commitlore harvest` 从 session transcript 和 staged diff 构建 prompt contract；`commitlore harvest-verify` 据此检查 draft。它们支持起草，而不会自动提交。interactive record builder 尚未实现。
 
-## 一条记录
+### 手写
+
+作为逃生出口，人可以手写普通 Git trailer。commit-msg hook 只验证已经存在的 record；它不会凭空创建或静默添加 record。
+
+## 最小 record
+
+record 可以很小。只包含否则会丢失的上下文：
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+绝大多数 record 不需要所有 protocol field。决策需要时，可以使用 identity、lifecycle、risk、provenance 和 verification field。
+
+## 完整 record
 
 这个示例也是 conformance fixture。Git trailer parser 会在所有翻译版 README 中以相同方式读取下面的 code block。
 
@@ -163,6 +198,14 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ## Evidence：更窄的产品主张
 
 已记录 112 次实验，但 M4 没有逐次运行的 `guard_exposure` 记录。无法验证 treatment 是否存在，因此它没有检验、支持或反驳 agent behavior 的主张。上面更窄的产品主张基于可独立验证的行为。关于干净的数据集和撤回，请见 [M4 verdict](bench/VERDICT-M4.md)。
+
+### 成本与盈亏平衡
+
+guard 每次运行的成本是注入的 context 加上测得的 hook overhead：commit-msg 的 p50 为 185.85 ms，injection hook 的 p50 为 102.40 ms（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
+
+在测得的 sensitivity range 中间，防止 re-proposal 必须以 7.7% 的频率发生，500-token 注入才能盈亏平衡；3,000-token 为 46.2%，12,000-token 为 184.6%。在这一大小下，它无法收回成本。
+
+guard 是否能达到其中任何一个比率尚未确立。这是基于测得成本的算术，而不是效果的证据。
 
 <details>
 <summary>完整 benchmark 记录（112 次实验）</summary>
