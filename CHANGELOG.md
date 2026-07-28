@@ -4,12 +4,20 @@
 
 ## 0.2.0 — 2026-07-28
 
-Second release. 21 defects found and closed by dogfooding this tool on its own
-history (2026-07-26 to 2026-07-28) — several of them in CommitLore's own
-install and check paths, listed below. Ships a single static binary (no Node
+Second release. 25 defects found and 22 closed by dogfooding this tool on its
+own history (2026-07-26 to 2026-07-28) — several of them in CommitLore's own
+install and check paths, listed below. 3 remain open, two of them
+([#61](https://github.com/MongLong0214/commitlore/issues/61),
+[#69](https://github.com/MongLong0214/commitlore/issues/69)) reopened on
+2026-07-28 after dogfooding disproved the reasoning their original close
+relied on — a reproducible guard false positive for #61, a `--help` string
+that still promised a dropped property for #69. That is the loop working,
+not a gap this release is hiding. Ships a single static binary (no Node
 required), `commitlore init`, agent auto-detection, a `node:sqlite` index
-(19x on 100k commits), the multi-record grammar for squashed history,
-reference-integrity checking, and unified exit codes across every command.
+(roughly 17x faster indexed vs. unindexed at 100k commits — see
+`bench/results/deterministic-20260727T174801Z.md`), the multi-record grammar
+for squashed history, reference-integrity checking, and unified exit codes
+across every command.
 
 Windows is not shipped, and won't be until [#95](https://github.com/MongLong0214/commitlore/issues/95)
 is done: the SEA build crashes on Windows path handling, and shipping the
@@ -20,7 +28,11 @@ release does ship.
 Alpine/musl is not a supported target either — the published Linux binaries
 are glibc (`*-unknown-linux-gnu`). [#99](https://github.com/MongLong0214/commitlore/issues/99)
 does not add musl support; it makes the failure on Alpine attributed (a
-named, exit-coded message) instead of a bare `not found`.
+named, exit-coded message) instead of a bare `not found`. The same work
+verified `install.sh`'s dependency check directly: on a container with
+neither `curl` nor `wget`, it prints `error: neither curl nor wget is
+available to download the release` and exits, naming what is missing
+instead of failing obscurely.
 
 CommitLoreBench's fourth measurement (M4) is registered and running as of
 this release. It may come back null — that question is open and this
