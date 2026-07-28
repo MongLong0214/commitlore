@@ -10,7 +10,9 @@ import {
   tokensForCharacters,
 } from '../bench/deterministic/capture.ts';
 import {
+  ADDRESSABILITY_STATEMENT,
   assertSingleProvenance,
+  DENSITY_CITATIONS,
   percentile,
   renderDeterministicReport,
   SCOPE_SENTENCE,
@@ -23,6 +25,7 @@ import {
   NOISE_SIZES,
   TARGET_PATH,
 } from '../bench/deterministic/noise.ts';
+import { measureDensity } from '../bench/deterministic/density.ts';
 import {
   sweepGuardThresholds,
   wilsonPrecisionInterval,
@@ -32,6 +35,7 @@ import { measureSurvival } from '../bench/deterministic/survival.ts';
 import { CHARS_PER_TOKEN } from '../dist/core/inject.js';
 import type {
   CaptureCostRow,
+  DensityRow,
   GuardQualityRow,
   InjectionDetectionRow,
   NoiseExposureRow,
@@ -117,6 +121,24 @@ const captureRow = (overrides: Partial<CaptureCostRow> = {}): CaptureCostRow => 
   cache_read: { input_bytes: 40, input_tokens: 10 },
   marginal_tokens_per_accepted_record: 20,
   tokens_including_cache_reads_per_accepted_record: 30,
+  ...overrides,
+});
+
+const densityRow = (overrides: Partial<DensityRow> = {}): DensityRow => ({
+  schema_version: 1,
+  harness_commit: '1111111111111111111111111111111111111111',
+  dist_digest: '2222222222222222222222222222222222222222222222222222222222222222',
+  measured_at: '2026-07-27T00:00:00.000Z',
+  machine: row().machine,
+  metric: 'rationale_density',
+  history_ref: 'HEAD',
+  commits_examined: 2,
+  record_bearing_commits: 1,
+  structured_trailers: 4,
+  non_empty_body_lines: 5,
+  record_bearing_rate: 0.5,
+  trailers_per_commit: 2,
+  structured_trailer_line_share: 0.8,
   ...overrides,
 });
 
@@ -253,6 +275,41 @@ describe('deterministic benchmark reporting', () => {
 
     expect(report).toContain('4 labelled decisions');
     expect(report).toContain('| threshold | precision | recall | F1 | firings | correct silences |');
+  });
+
+  it('counts records and structured trailers from a hand-checked Git history', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'commitlore-density-test-'));
+
+    try {
+      git(scratch, ['init', '--quiet']);
+      git(scratch, ['config', 'user.name', 'CommitLore Bench']);
+      git(scratch, ['config', 'user.email', 'bench@commitlore.local']);
+      git(scratch, ['commit', '--allow-empty', '--quiet', '-m', 'subject only']);
+      git(scratch, [
+        'commit', '--allow-empty', '--quiet', '-m',
+        'carry two records\n\nLimit: first constraint\nRecord-Id: r-density01\n\nbody prose\n\nWarn: second warning\nRecord-Id: r-density02',
+      ]);
+
+      const measured = measureDensity(row(), scratch);
+
+      expect(measured).toMatchObject({
+        commits_examined: 2,
+        record_bearing_commits: 1,
+        structured_trailers: 4,
+        non_empty_body_lines: 5,
+        trailers_per_commit: 2,
+        structured_trailer_line_share: 0.8,
+      });
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('renders the addressability statement and literature citations', () => {
+    const markdown = renderDeterministicReport([row(), densityRow()]);
+
+    expect(markdown).toContain(ADDRESSABILITY_STATEMENT);
+    for (const citation of DENSITY_CITATIONS) expect(markdown).toContain(citation);
   });
 
   it('refuses uncommitted benchmark inputs', () => {

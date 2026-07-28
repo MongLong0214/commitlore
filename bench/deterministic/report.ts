@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 
 import type {
   CaptureCostRow,
+  DensityRow,
   DeterministicRow,
   GuardQualityRow,
   HookOverheadRow,
@@ -12,11 +13,24 @@ import type {
   SurvivalRow,
 } from './types.ts';
 
+export const ADDRESSABILITY_STATEMENT =
+  'This measures addressability, not abundance: prose rationale is not machine-addressable while structured trailers are.';
+
+export const DENSITY_CITATIONS = [
+  '[CoMRAT (MSR 2025)](https://arxiv.org/abs/2506.10986)',
+  '[Commit Message Matters (ICSE 2023)](https://dl.acm.org/doi/abs/10.1109/ICSE48619.2023)',
+  '[What Makes a Good Commit Message? (ICSE 2022)](https://arxiv.org/abs/2202.02974)',
+  '[Linux OOM-Killer rationale dataset (ICPC 2024)](https://arxiv.org/abs/2403.18832)',
+] as const;
+
 export const SCOPE_SENTENCE =
   'These numbers say what CommitLore costs and what it catches. They say nothing about whether recorded context helps an agent; M4 is registered for that question and may still come back null.';
 
 export const EXPOSURE_SCOPE_SENTENCE =
   'This section measures exposure only, not token cost, billed cost, or accuracy.';
+
+export const DENSITY_SCOPE_SENTENCE =
+  'These numbers measure structured addressability. They say nothing about semantic rationale abundance or agent benefit.';
 
 export const percentile = (samples: readonly number[], proportion: number): number => {
   if (samples.length === 0) throw new Error('cannot take a percentile of zero samples');
@@ -277,6 +291,28 @@ const exposureSection = (rows: readonly NoiseExposureRow[]): string[] => {
   ];
 };
 
+const densitySection = (rows: readonly DensityRow[]): string[] => {
+  const row = rows[0];
+  if (row === undefined) return [];
+  return [
+    '## 9. Addressable rationale density',
+    '',
+    `Method: \`git log ${row.history_ref}\` supplies commit messages at run time. Git parses each record block; the denominator is non-empty body lines, excluding the subject.`,
+    '',
+    `CoMRAT defines rationale density and decision density with rationale and decision sentences per commit message (${DENSITY_CITATIONS[0]}). This benchmark does not infer those semantic sentences: it reports structured trailer lines and record-bearing messages instead.`,
+    '',
+    '| commits examined | commits carrying a record | structured trailers | trailers / commit | structured trailer share of non-empty body lines |',
+    '|---:|---:|---:|---:|---:|',
+    `| ${row.commits_examined} | ${row.record_bearing_commits} (${percent(row.record_bearing_rate)}) | ${row.structured_trailers} | ${fixed(row.trailers_per_commit)} | ${percent(row.structured_trailer_line_share)} |`,
+    '',
+    ADDRESSABILITY_STATEMENT,
+    `The Linux OOM-Killer dataset reports 98.9% of commits containing a rationale sentence (${DENSITY_CITATIONS[3]}), above this repository's ${percent(row.record_bearing_rate)} record-bearing rate; CommitLore does not claim more rationale than that disciplined project.`,
+    '',
+    `Published context: roughly 44% of commit messages omit either the what or the why (${DENSITY_CITATIONS[1]}; ${DENSITY_CITATIONS[2]}).`,
+    '',
+  ];
+};
+
 export const renderDeterministicReport = (rows: readonly DeterministicRow[]): string => {
   assertSingleProvenance(rows);
   const first = rows[0];
@@ -291,7 +327,9 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
       `${fixed(machine.memory_bytes / 1024 ** 3, 1)} GiB RAM, ${machine.platform} ${machine.release} ` +
       `(${machine.arch}), Node ${machine.node}, ${machine.git}.`,
     '',
-    SCOPE_SENTENCE,
+    rows.every((row) => row.metric === 'rationale_density')
+      ? DENSITY_SCOPE_SENTENCE
+      : SCOPE_SENTENCE,
     '',
     ...latencySection(rows.filter((row): row is QueryLatencyRow => row.metric === 'query_latency')),
     ...survivalSection(rows.filter((row): row is SurvivalRow => row.metric === 'record_survival')),
@@ -303,6 +341,7 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
     ...captureSection(rows.filter((row): row is CaptureCostRow => row.metric === 'capture_cost')),
     ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
     ...exposureSection(rows.filter((row): row is NoiseExposureRow => row.metric === 'noise_exposure')),
+    ...densitySection(rows.filter((row): row is DensityRow => row.metric === 'rationale_density')),
   ];
   return `${lines.join('\n').trim()}\n`;
 };
