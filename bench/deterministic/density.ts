@@ -47,21 +47,23 @@ export const measureDensity = (
   ref = 'HEAD',
 ): DensityRow => {
   const messages = command('git', ['log', COMMIT_MESSAGES_FORMAT, ref], { cwd: repoRoot })
-    .stdout.split('\0')
-    .map((message) => (message.startsWith('\n') ? message.slice(1) : message))
-    .filter((message) => message.trim() !== '');
+    .stdout.split('\0');
+  messages.pop();
+  const commitMessages = messages.map((message) =>
+    message.startsWith('\n') ? message.slice(1) : message,
+  );
   let recordBearingCommits = 0;
   let structuredTrailers = 0;
   let nonEmptyBodyLines = 0;
 
-  for (const message of messages) {
+  for (const message of commitMessages) {
     const blocks = recordBlockTrailerCounts(repoRoot, message);
     if (blocks.length > 0) recordBearingCommits += 1;
     structuredTrailers += blocks.reduce((count, trailers) => count + trailers, 0);
     nonEmptyBodyLines += bodyLineCount(message);
   }
 
-  const commitsExamined = messages.length;
+  const commitsExamined = commitMessages.length;
   return {
     ...base,
     metric: 'rationale_density',

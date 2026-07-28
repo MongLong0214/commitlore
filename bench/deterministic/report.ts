@@ -28,7 +28,6 @@ export const SCOPE_SENTENCE =
 
 export const EXPOSURE_SCOPE_SENTENCE =
   'This section measures exposure only, not token cost, billed cost, or accuracy.';
-
 export const DENSITY_SCOPE_SENTENCE =
   'These numbers measure structured addressability. They say nothing about semantic rationale abundance or agent benefit.';
 
