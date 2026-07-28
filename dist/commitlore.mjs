@@ -15152,7 +15152,7 @@ var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
-var check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
+var check = (id, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail") => ({ id, title, status, needsAttention, detail, fix, fixed });
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
@@ -15162,7 +15162,9 @@ var checkRefspec = (opts) => {
       title,
       "warn",
       "no remote is configured, so records cannot be shared with anyone",
-      "add a remote, then rerun: commitlore doctor --fix"
+      "add a remote, then rerun: commitlore doctor --fix",
+      false,
+      false
     );
   }
   let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
@@ -16889,7 +16891,7 @@ var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(e
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
-  const code = report.checks.some((entry) => entry.status === "warn" || entry.status === "fail") ? 1 : 0;
+  const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
   return {
     step: "doctor",
     title: "doctor --fix",
@@ -16998,7 +17000,7 @@ ${body}`;
 var register9 = (program3) => {
   program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
     "after",
-    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
+    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
   ).action((options) => {
     const report = runInit(options.force === void 0 ? {} : { force: options.force });
     process.stdout.write(
@@ -26330,7 +26332,7 @@ var emit4 = (name, result, options, render2) => {
   else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
 };
 var define = (program3, name, description, keys, render2) => {
-  program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
+  program3.command(name).description(description).argument("[paths...]", "limit paths; renames follow only when one path is given").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
     collect2,

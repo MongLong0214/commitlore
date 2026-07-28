@@ -68,6 +68,13 @@ describe('commitlore CLI', () => {
     }
   });
 
+  it('says that query commands follow renames only for one path', () => {
+    const result = runCli(['context', '--help']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/renames follow only when\s+one path is\s+given/);
+  });
+
   // 0 clean, 1 the check found something, 2 the invocation was wrong. Hooks and
   // CI branch on these, and commander's own parse failures default to 1 --
   // which would make a typo'd flag indistinguishable from a real finding.

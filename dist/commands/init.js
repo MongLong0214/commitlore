@@ -41,17 +41,16 @@ const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
  * Stricter than `doctor`'s own exit code on purpose. `doctor` exits 0 for a
  * `warn` check by design — it reports, it never blocks a command on its own
  * (`commitlore-setup` skill). `init` is not just reporting: it is the command
- * that is supposed to have taken care of everything at once, so a `warn` it
- * cannot fix itself (no remote configured, shallow history, ...) has to move
- * the needle here even though it would not move `doctor`'s. Folding that back
- * into "3/3 steps completed cleanly" is exactly the silent-success shape #63
- * and #67 were.
+ * that is supposed to have taken care of everything at once, so a warning it
+ * cannot fix itself has to move the needle even though it would not move
+ * `doctor`'s. A missing remote remains visible but is non-actionable: a fresh
+ * repository has not reached sharing yet, rather than being misconfigured.
+ * Folding actionable warnings back into "3/3 steps completed cleanly" is the
+ * silent-success shape #63 and #67 were.
  */
 const runDoctorStep = (opts) => {
     const report = runDoctor({ ...cwdOption(opts), fix: true });
-    const code = report.checks.some((entry) => entry.status === 'warn' || entry.status === 'fail')
-        ? 1
-        : 0;
+    const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
     return {
         step: 'doctor',
         title: 'doctor --fix',
@@ -201,7 +200,7 @@ export const register = (program) => {
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
         'still exist on their own for anyone who wants one piece rather than all four.' +
         '\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not ' +
-        'fix itself (a warn or fail check — read the detail above), 2 hooks install, index rebuild, or claude ' +
+        'fix itself (an actionable warning or failure — read the detail above), 2 hooks install, index rebuild, or claude ' +
         'hook install could not run at all (SPEC §10).')
         .action((options) => {
         const report = runInit(options.force === undefined ? {} : { force: options.force });

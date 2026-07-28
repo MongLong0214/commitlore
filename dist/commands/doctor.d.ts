@@ -34,6 +34,7 @@ export interface DoctorCheck {
     id: string;
     title: string;
     status: CheckStatus;
+    needsAttention: boolean;
     detail: string;
     /** What makes this check `ok`, or `null` when nothing needs doing. */
     fix: string | null;
