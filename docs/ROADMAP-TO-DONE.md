@@ -39,18 +39,20 @@ Current: `dev` default branch, CI green, 1171 tests/33 files, 10/10 review block
 | Phase | Work | Gate |
 |---|---|---|
 | **3** | Plugin manifest redeclares conventional-location `hooks` — double registration likely. No manifest tests | Manifest suite green + clone contains every declared file |
-| **4** | ~~Design and run M4~~ **Executed; withdrawn as guard evidence.** Repair and verify context delivery before a new guard experiment | A treatment arm demonstrably receives records, then all 6 gate sections pass and CI is green at that commit |
+| **4** | ~~Design and run M4~~ **Executed; withdrawn as guard evidence.** Run a new instrumented guard experiment | Per-run guard exposure is recorded, then all 6 gate sections pass and CI is green at that commit |
 
-### M4 — valid data, no delivered treatment
+### M4 — valid data, unrecorded guard exposure
 
 **Executed, with clean provenance.** `bench/PREREGISTRATION.md` §16 ran 8 qualifying
 tasks × 7 seeds × 2 labels = 112 rows, all with one `harness_commit` and one
-`dist_digest`. But both labels were defined by receiving records and none of the
-112 transcripts has injected context. The recorded 62.5% and 73.2% rates, and
+`dist_digest`. M4 recorded no `guard_exposure` on any of its 112 rows, while its
+transcript field is only a final assistant message and hook-path
+`injected_context: null` is by design. The recorded 62.5% and 73.2% rates, and
 their corrected paired/clustered analysis, remain true about the data and say
-nothing about the guard. M4 is neither retracted nor invalidated: the failure
-is upstream of provenance, because the harness faithfully recorded two arms
-without records. See `bench/VERDICT-M4.md` and [#122](https://github.com/MongLong0214/commitlore/issues/122).
+nothing about the guard. M4 is neither retracted nor invalidated: the gap is
+instrumentation, not provenance. The harness faithfully recorded what it was
+built to record, but exposure was not among those things. See
+`bench/VERDICT-M4.md` and [#122](https://github.com/MongLong0214/commitlore/issues/122).
 
 **Diagnosis (measured)**: of 10 tasks, **7 have a control base rate of 0**. Even without CommitLore,
 the agent does not propose the rejected approach. Tasks with nothing to block made up 70% of the
@@ -85,8 +87,8 @@ Power is governed more by the base rate than the sample. For an effect that cuts
 Every section of `RELEASE-GATE.md` has been executed and passed, CI is green **at that commit**,
 and every remaining issue is a feature on a defensible axis rather than a defect.
 
-**A positive benchmark is not required.** M4 did not apply its treatment, so it
-establishes nothing about agent behavior. The product claim is not "makes agents
+**A positive benchmark is not required.** M4 did not record whether its treatment
+was applied, so it establishes nothing about agent behavior. The product claim is not "makes agents
 better," but **"binds decision history to git and preserves it in a
 human-verifiable form."** The latter is already proven by tests and remains
 true independent of the benchmark.

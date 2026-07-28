@@ -162,7 +162,7 @@ These are product claims about Git-bound, human-verifiable decision history. The
 
 ## Evidence: a narrower product claim
 
-112 experiments were recorded, but M4 delivered records in neither arm. It did not test, support, or refute the agent-behavior claim. The narrower product claim above rests on independently testable behavior; read the [M4 verdict](bench/VERDICT-M4.md) for the clean dataset and withdrawal.
+112 experiments were recorded, but M4 recorded no per-run guard exposure. Whether the treatment was present is unverifiable, so it does not test, support, or refute the agent-behavior claim. The narrower product claim above rests on independently testable behavior; read the [M4 verdict](bench/VERDICT-M4.md) for the clean dataset and withdrawal.
 
 <details>
 <summary>Full benchmark record (112 experiments)</summary>
@@ -224,7 +224,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows is unsupported: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Alpine and other musl Linux hosts are unsupported: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
-- M4 did not test a guard effect: neither arm received injected records ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
+- M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
 
 ## Contributing
 
