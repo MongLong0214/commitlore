@@ -233,6 +233,7 @@ export interface RunRecord {
   readonly seed: number;
   readonly model?: string;
   readonly reproposed: boolean;
+  readonly reproposal_matches?: number;
   readonly violations: number;
   readonly turns: number;
   readonly tokens: number;
