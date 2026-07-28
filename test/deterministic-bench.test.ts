@@ -17,6 +17,7 @@ import {
   destroyNoiseFixture,
   generateNoiseCorpus,
   NOISE_SIZES,
+  TARGET_PATH,
 } from '../bench/deterministic/noise.ts';
 import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
@@ -152,6 +153,18 @@ describe('deterministic benchmark reporting', () => {
       } finally {
         destroyNoiseFixture(fixture);
       }
+    }
+  });
+
+  it('keeps each active record commit in the target path history', () => {
+    const fixture = createNoiseFixture(0);
+    try {
+      const messages = git(fixture.dir, ['log', '--format=%B', '--', TARGET_PATH]).stdout;
+
+      expect(messages).toContain('Record-Id: r-expose001');
+      expect(messages).toContain('Record-Id: r-expose002');
+    } finally {
+      destroyNoiseFixture(fixture);
     }
   });
 

@@ -150,7 +150,7 @@ const fastImport = (records: readonly NoiseRecord[], supersede: boolean): string
       message,
       ...(parent === undefined ? [] : [`from :${parent}`]),
       ...changedPaths.flatMap((path) => {
-        const content = `${path}\n`;
+        const content = `${path} fixture commit ${mark}\n`;
         return [`M 100644 inline ${path}`, `data ${Buffer.byteLength(content)}`, content];
       }),
     ].join('\n');
