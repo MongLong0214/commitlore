@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### `package.json` no longer describes a package this project can publish — bug-issue-93
+
+`npm publish` would have succeeded: nothing in `package.json` enforced
+ADR-0011's decision that there is no registry package. `"private": true`
+makes that structural instead of a convention nobody checks.
+
+`bin` pointed `dist/cli.js` at a package-manager install (`npm install -g` /
+`npx`) that ADR-0011 already replaced with a git clone — and that entry
+never worked: a fresh clone with no `node_modules` (exactly what a `bin`
+install produces without a compatible registry flow) crashes
+`ERR_MODULE_NOT_FOUND: commander`, because `dist/cli.js` is the unbundled
+`tsc` output, not the esbuild bundle. Removed rather than repointed, per the
+owner's instruction — it exists only to serve an install that will never
+happen. `dist/cli.js` itself stays: CI and `scripts/commitlore-run.sh` both
+still run it directly as the "`node_modules` is already sitting next to it"
+fallback, which is unrelated to what `bin` does.
+
+The five `dependencies` moved to `devDependencies`: rebuilt and ran the
+bundle with `node_modules` deleted (`--version`, `validate`) to confirm
+esbuild inlines all five — they are build-time inputs, and listing them as
+runtime dependencies advertised a runtime that does not exist. `files`
+(`dist`, `spec`) is untouched even though #39's single-executable binary has
+since landed: it was not part of this audit's own "not clean" findings, and
+folding it in here would be scope creep past what #93 asked for rather than
+the "single cleanup" the issue anticipated.
+
+Not touched: `npm run build`/`npm test`/`devDependencies`' existing entries
+(the dev toolchain), and the npm text in ADR-0002 and ADR-0011 (the decision
+history explaining why npm was rejected).
+
 ### Compiled single-executable binary — feat-issue-39
 
 `npm run build:binary` (`scripts/build-binary.mjs`) builds `dist/commitlore`,
