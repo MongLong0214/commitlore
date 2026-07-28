@@ -143,6 +143,36 @@ export interface HookOverheadRow extends BaseRow {
   readonly delta_p95_ms: number;
 }
 
+export interface HarvestCapture {
+  readonly output_bytes: number;
+  readonly output_tokens: number;
+  readonly timing: Timing;
+}
+
+export interface VerificationCapture {
+  readonly input_bytes: number;
+  readonly input_tokens: number;
+  readonly timing: Timing;
+}
+
+export interface CacheReadCapture {
+  readonly input_bytes: number;
+  readonly input_tokens: number;
+}
+
+export interface CaptureCostRow extends BaseRow {
+  readonly metric: 'capture_cost';
+  readonly fixture: string;
+  readonly accepted_records: number;
+  readonly rejected_records: number;
+  readonly harvest: HarvestCapture;
+  readonly verify: VerificationCapture;
+  /** Transcript + diff re-read by verification after harvest already supplied them. */
+  readonly cache_read: CacheReadCapture;
+  readonly marginal_tokens_per_accepted_record: number;
+  readonly tokens_including_cache_reads_per_accepted_record: number;
+}
+
 export type NoiseRoute =
   | 'inject-everything'
   | 'top-k-lexical'
@@ -167,6 +197,7 @@ export type DeterministicRow =
   | InjectionDetectionRow
   | GuardQualityRow
   | HookOverheadRow
+  | CaptureCostRow
   | NoiseExposureRow;
 
 export type RowBase = Pick<
