@@ -40,5 +40,12 @@ Using npm as the channel brings three consequences.
 - **Release = tag push.** There is no publish account or token. The plugin version resolves from `version` in `plugin.json`, or from the git commit SHA when omitted.
 - **`dist/` drift is a new risk.** If committed build output diverges from `src/`, stale code gets distributed. The build was confirmed deterministic (same input → same hash), and CI rebuilds it and fails on any byte difference. `.gitattributes` marks `dist/**` as generated so it does not pollute review diffs.
 - **The Node runtime dependency remains.** This ADR removes the registry, not the runtime. The index, guard, grades, and MCP are TypeScript. ADR-0002 rejected a single static binary because of the schedule; #39 reevaluates it.
+
+  > ✅ **Addressed** (2026-07-28, #39, [ADR-0015](ADR-0015-single-executable-binary.md)). A compiled
+  > Node SEA binary (`npm run build:binary`) now covers the no-Node-runtime case for a machine that
+  > wants one. It changes nothing here: `git clone` remains the canonical, zero-build distribution,
+  > `dist/commitlore.mjs` stays committed and byte-diffed by CI exactly as this ADR describes, and the
+  > binary is an additional, uncommitted, reproducible build artifact rather than a second registry or
+  > a replacement channel.
 - **`package.json` remains.** It is a development artifact required for builds, dependencies, and type checking, not a distribution channel. The `files`/`bin` fields have no effect without a registry.
 - The path for implementations in other languages gets stronger — `spec/fixtures/` and `spec/contract-cases/` are the conformance suite, and obtaining them now requires no package manager.

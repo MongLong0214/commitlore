@@ -112,6 +112,46 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 
 커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
 
+### Node 없이 컴파일된 바이너리로 실행하기
+
+`git clone` + Node 런타임이 여전히 정식 설치 방법이다. Node가 PATH에 전혀 없는 머신을 위해, 같은 clone에서 단일 컴파일 실행 파일을 빌드할 수 있다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)):
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore`는 런타임에 Node도, 인터프리터도, `node_modules`도 필요 없다 — `doctor`, `validate`, `context`, `guard`, `inject`, `index --rebuild` 모두 `PATH=/usr/bin:/bin`에서 동작한다. 커밋되지 않으며(용량이 크고 플랫폼·아키텍처별로 다르며, diff 대신 CI가 매 push마다 다시 빌드한다), `commitlore hooks install`과 플러그인의 `PreToolUse` hook 모두 빌드되면 자동으로 이를 찾아 사용한다.
+
+### 미리 빌드된 릴리스 바이너리 설치하기
+
+Node도 clone도 없는 머신을 위해: 모든 `vX.Y.Z` 태그는 플랫폼별 바이너리 하나씩을 빌드하고(`.github/workflows/release.yml`), 전체를 커버하는 `SHA256SUMS`를 첨부하며, 각 asset을 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations)로 증명한다(Sigstore 기반, 공개 검증 가능, 이 프로젝트가 관리하는 키 없음).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.1.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
+
+쉘로 파이프하는 것이 유일한 문서화된 경로여서는 안 된다. 같은 설치를 수동으로:
+
+```bash
+version=0.1.0   # 또는: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # 또는 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 추출 전에 검증한다. "OK"가 아니면 여기서 멈춘다 — 이 검증에 실패한 바이너리는 실행하지 말 것.
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
 ## GitHub Actions
 
 query, guard 또는 inject 명령을 실행하는 job은 전체 history를 받아야 한다.
@@ -151,7 +191,6 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 - 경로가 아닌 심볼에 기록 고정: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 대화형 commit builder와 자동 만료 알림: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 유효한 벤치마크로 guard의 에이전트 행동 효과 입증: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Node.js 없는 단일 정적 바이너리: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## 기여하기
 

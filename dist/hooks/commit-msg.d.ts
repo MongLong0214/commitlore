@@ -50,5 +50,13 @@ export declare const HOOK_MODE = 493;
  * when the package is not installed locally, which would put a network call on
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
+ *
+ * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
+ * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
+ * plain executable named `commitlore`. It is recognized by that name rather
+ * than by "has no extension", which would allow-list every other executable
+ * on the machine, and its containment check is an exact match against
+ * `commitlore.root` rather than a directory prefix: a binary has no
+ * subdirectory for a foreign file to hide in, it *is* the whole install.
  */
 export declare const commitMsgStub: () => string;

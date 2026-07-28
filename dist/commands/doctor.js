@@ -28,8 +28,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execGit, hasShallowHistory } from '../core/git.js';
-import { describeRecordedHookTarget, hasAllowedBinExtension, readRecordedHookTarget, } from '../core/hook-target.js';
-import { PACKAGE_ROOT, installedPath } from '../core/paths.js';
+import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { PACKAGE_ROOT, installedPath, isSea, packageVersion } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { runQuery } from '../core/query.js';
@@ -142,11 +142,11 @@ const checkHook = (opts, runtime) => {
         ...target.problems,
         ...(override === undefined || override === ''
             ? []
-            : hasAllowedBinExtension(override)
+            : classifyBinTarget(override) !== null
                 ? ['COMMITLORE_BIN override is active']
                 : [
-                    'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
-                        'ignores it and falls through to the remaining resolution steps',
+                    'COMMITLORE_BIN override is active, but is not a .js, .mjs, or compiled commitlore ' +
+                        'binary — the hook ignores it and falls through to the remaining resolution steps',
                 ]),
     ];
     if (runtime.status !== 'ok') {
@@ -191,6 +191,10 @@ const checkGit = (opts) => {
  * the documented distribution (ADR-0011) — ships `dist/commitlore.mjs`, a bundle
  * that needs no `node_modules`. A development checkout also has `dist/cli.js`,
  * the `tsc` output, which imports its dependencies and cannot run without them.
+ * A compiled single-executable build (#39) is neither — it has no `dist/`
+ * beside it at all, by design, and the question this check exists to answer
+ * ("does the CLI this installation uses actually run") already has its answer
+ * the moment this process is that binary and got far enough to ask.
  *
  * The first version of this check probed `dist/cli.js` unconditionally. On a
  * fresh clone that is a file that exists and cannot run, so the check invented a
@@ -204,6 +208,9 @@ const checkGit = (opts) => {
 const checkRuntime = (opts) => {
     const title = 'cli runtime';
     const id = 'cli-runtime';
+    if (isSea()) {
+        return check(id, title, 'ok', `running as a compiled binary at ${process.execPath} (commitlore ${packageVersion()})`);
+    }
     // The bundle first: it is what a clone has and what the plugin invokes. The
     // tsc output is the fallback for a checkout that has not been bundled.
     const candidates = ['dist/commitlore.mjs', 'dist/cli.js'].map((rel) => installedPath(rel));

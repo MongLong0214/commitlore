@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Compiled single-executable binary — feat-issue-39
+
+`npm run build:binary` (`scripts/build-binary.mjs`) builds `dist/commitlore`,
+a Node SEA binary that needs no Node runtime, no interpreter and no
+`node_modules` at all — `doctor`, `validate`, `context`, `guard`, `inject` and
+`index --rebuild` all run against `PATH=/usr/bin:/bin`. It uses Node's own
+`--experimental-sea-config` and `postject` (a devDependency, not a runtime
+one); `core/paths.ts` embeds `package.json`, `spec/SPEC.md` and
+`spec/schema/record.schema.json` as SEA assets, since a compiled binary has no
+directory tree of its own to read them from.
+
+`dist/commitlore.mjs` (ADR-0011's committed, registry-free distribution) is
+unchanged — the binary is a second, uncommitted, reproducible build artifact,
+not a replacement channel. `commitlore hooks install` and the Claude Code
+plugin's `PreToolUse` hook (`scripts/commitlore-run.sh`) both resolve and
+prefer it automatically once built. `core/hook-target.ts#classifyBinTarget`
+extends the commit-msg hook's `.js`/`.mjs` resolution with a `binary` branch
+recognized by name (`commitlore`, not merely "no extension"); its containment
+check is an exact match against the recorded install rather than a directory
+prefix, since a binary has no subdirectory for a foreign file to hide in. Both
+of #71's attacks — a `commitlore.bin` pointed outside the install root, and a
+symlink planted inside it pointing back out — are refused for the binary
+branch the same way they already were for scripts.
+
+See `docs/adr/ADR-0015-single-executable-binary.md`.
+
 ### `parse` recognizes every record block, not only the message's own — bug-issue-89
 
 `commitlore parse` still answered from `parseCommitMessage` alone after

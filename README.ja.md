@@ -112,6 +112,46 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 
 コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
 
+### Node なしでコンパイル済みバイナリとして実行
+
+`git clone` + Node runtime が引き続き正式なインストール方法です。Node が PATH に全くないマシン向けに、同じ clone から単一のコンパイル済み実行ファイルを build できます（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）:
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` は実行時に Node も interpreter も `node_modules` も不要です — `doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` はすべて `PATH=/usr/bin:/bin` で動作します。commit はされません（サイズが大きく、platform・architecture 固有で、diff ではなく CI が push のたびに再 build するため）。`commitlore hooks install` と plugin の `PreToolUse` hook はどちらも build 済みならこれを自動的に解決します。
+
+### 事前ビルド済みリリースバイナリをインストール
+
+Node も clone もないマシン向け: すべての `vX.Y.Z` タグは platform ごとに 1 つずつバイナリを build し（`.github/workflows/release.yml`）、それら全体をカバーする `SHA256SUMS` を添付し、各 asset を [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) で証明します（Sigstore ベース、公開検証可能、本プロジェクトが管理する鍵はありません）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.1.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
+
+シェルへのパイプが唯一の文書化された方法であってはいけません。同じインストールを手動で行う場合:
+
+```bash
+version=0.1.0   # または: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # または x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 展開する前に検証します。「OK」でなければここで止めてください — この検証に失敗したバイナリは実行しないでください。
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
 ## GitHub Actions
 
 query、guard、inject を実行する job は全 history を取得する必要があります。
@@ -151,7 +191,6 @@ text search ではなく Git の trailer parser を使ってください。文�
 - path ではなく symbol への anchor: [#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 対話型 commit builder と自動 expiry 通知: [#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 有効な benchmark による guard の行動効果の実証: [#37](https://github.com/MongLong0214/commitlore/issues/37)
-- Node.js なしで動く単一 static binary: [#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## コントリビュート
 

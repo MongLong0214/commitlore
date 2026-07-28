@@ -375,6 +375,31 @@ describe('doctor: a stale stub', () => {
       else process.env['COMMITLORE_BIN'] = previous;
     }
   });
+
+  /**
+   * #39: a compiled binary is a recognized COMMITLORE_BIN shape too — it gets
+   * the same active-override notice a valid `.mjs` override already gets
+   * (`warn`, not `fail`: an override is a deliberate bypass of the recorded
+   * install, worth surfacing, not a broken one), rather than the "is not a
+   * .js, .mjs, or compiled commitlore binary" rejection wording.
+   */
+  it('accepts a COMMITLORE_BIN override named the way a compiled binary is named', () => {
+    const { repo } = repoWithRemote('doctor-hook-env-override-binary');
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo);
+    const override = join(repo, 'commitlore');
+    const previous = process.env['COMMITLORE_BIN'];
+    process.env['COMMITLORE_BIN'] = override;
+    try {
+      const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
+      expect(check?.status).toBe('warn');
+      expect(check?.detail).toContain('COMMITLORE_BIN override is active');
+      expect(check?.detail).not.toContain('is not a .js, .mjs, or compiled commitlore binary');
+    } finally {
+      if (previous === undefined) delete process.env['COMMITLORE_BIN'];
+      else process.env['COMMITLORE_BIN'] = previous;
+    }
+  });
 });
 
 describe('doctor: hook runtime', () => {

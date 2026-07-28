@@ -188,3 +188,111 @@ jobs:
         run: git --version
       - name: Conformance suite
         run: bash spec/verify.sh
+
+  # #39 / ADR-0015: the compiled single-executable build is the one artifact
+  # this repository ships that needs no Node runtime at all, and the only way
+  # to prove that is to actually take Node off PATH and run it — `check`'s
+  # fresh-clone step above always runs through `node`, so it cannot. Building
+  # it is platform-specific (postject injects into a real, local copy of
+  # `node`, never a cross-compiled one), so this runs on the same two OSes
+  # `git-matrix` already does. One build per platform proves the recipe still
+  # works; it is not a release matrix and does not attach anything anywhere.
+  binary:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Build the compiled binary
+        run: npm run build:binary
+
+      # Same shape as `check`'s fresh-clone step: prove what a user actually
+      # gets works, by using it the way a user with no Node installed would —
+      # `env -i` strips the runner's own Node off PATH entirely, leaving only
+      # what `doctor`'s own `hook-runtime`/`PreToolUse hook runtime` checks
+      # already assume a git hook gets (`/usr/bin:/bin`, `HOME`).
+      - name: The binary runs every required command with no Node on PATH
+        run: |
+          set -euo pipefail
+          bin="$PWD/dist/commitlore"
+          test -x "$bin" || { echo "::error::binary was not produced at $bin"; exit 1; }
+
+          repo="$(mktemp -d)/repo"
+          mkdir -p "$repo"
+          cd "$repo"
+          run() { env -i PATH=/usr/bin:/bin HOME="$HOME" "$@"; }
+
+          run git init -q -b main
+          run git config user.email t@example.com
+          run git config user.name "CommitLore CI"
+          run git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          run git add file.ts
+          run git commit -q -m "$(printf 'Seed\n\nRecord-Id: r-ci-binary01\nBlast: local\nUndo: easy\nCertainty: firm\n')"
+
+          run "$bin" doctor
+          printf 'Subject\n\nBlast: wide\n' | run "$bin" validate && {
+            echo "::error::expected a violation to exit non-zero"; exit 1;
+          } || test $? -eq 1
+          run "$bin" index --rebuild
+          run "$bin" context file.ts
+          payload="$(printf '{"session_id":"s1","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"%s/file.ts"}}' "$repo" "$repo")"
+          printf '%s' "$payload" | run "$bin" guard --hook-input
+          printf '%s' "$payload" | run "$bin" inject --hook-input
+
+      # #71's containment guarantee, restated for the binary branch
+      # (`core/hook-target.ts#classifyBinTarget`, `hooks/commit-msg.ts`):
+      # `hooks install` records the binary itself, and both a `.git/config`
+      # edit pointing outside that record and a symlink planted inside it are
+      # still refused, with no Node on PATH to fall back to.
+      - name: The commit-msg hook installs and validates through the binary, and #71's containment holds
+        run: |
+          set -euo pipefail
+          bin="$PWD/dist/commitlore"
+          repo="$(mktemp -d)/hookrepo"
+          mkdir -p "$repo"
+          cd "$repo"
+          run() { env -i PATH=/usr/bin:/bin HOME="$HOME" "$@"; }
+
+          run git init -q -b main
+          run git config user.email t@example.com
+          run git config user.name "CommitLore CI"
+          run git config commit.gpgsign false
+          run "$bin" hooks install
+
+          printf 'x\n' > a.txt
+          run git add a.txt
+          run git commit -q -m "$(printf 'Bad\n\nBlast: nonsense\n')" && {
+            echo "::error::expected the bad commit to be rejected"; exit 1;
+          } || test $? -eq 1
+          run git commit -q -m "$(printf 'Good\n\nBlast: local\nUndo: easy\nCertainty: firm\n')"
+
+          outside="$(mktemp -d)"
+          cp "$bin" "$outside/commitlore"
+          chmod +x "$outside/commitlore"
+          run git config --local commitlore.bin "$outside/commitlore"
+          printf 'y\n' > b.txt
+          run git add b.txt
+          run git commit -q -m "$(printf 'Attack1\n\nBlast: local\nUndo: easy\nCertainty: firm\n')" && {
+            echo "::error::expected the outside-root commitlore.bin to be refused"; exit 1;
+          } || test $? -eq 1
+
+          run "$bin" hooks install
+          root="$(run git config --local --get commitlore.root)"
+          symlink_dir="$(dirname "$root")"
+          symlink_path="$symlink_dir/commitlore-ci-symlink-$$"
+          ln -s "$outside/commitlore" "$symlink_path"
+          run git config --local commitlore.bin "$symlink_path"
+          run git commit -q -m "$(printf 'Attack2\n\nBlast: local\nUndo: easy\nCertainty: firm\n')" && {
+            rm -f "$symlink_path"
+            echo "::error::expected the symlinked commitlore.bin to be refused"; exit 1;
+          } || { status=$?; rm -f "$symlink_path"; test $status -eq 1; }

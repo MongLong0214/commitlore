@@ -1,5 +1,5 @@
 import { realpathSync, statSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { execGit } from './git.js';
 import { PACKAGE_ROOT } from './paths.js';
 const configValue = (cwd, key) => execGit(['config', '--local', '--get', key], { cwd }).stdout.trim();
@@ -24,13 +24,27 @@ const isInsidePackage = (path) => {
     const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path));
     return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
 };
+const matchesRunningBinary = (path) => {
+    try {
+        return realpathSync(path) === realpathSync(process.execPath);
+    }
+    catch {
+        return false;
+    }
+};
+export const classifyBinTarget = (path) => {
+    if (path.endsWith('.js') || path.endsWith('.mjs'))
+        return 'script';
+    return basename(path) === 'commitlore' ? 'binary' : null;
+};
 /**
- * The shell stub's `case "$recorded" in *.mjs|*.js)` pattern, restated so
+ * The shell stub's `case "$recorded" in` patterns — `*.mjs`/`*.js` for a
+ * script, a basename of `commitlore` for a compiled binary — restated so
  * TypeScript callers — `readRecordedHookTarget` below and `doctor`'s
- * COMMITLORE_BIN report — agree with the stub about what it will run instead
- * of guessing at it independently.
+ * `COMMITLORE_BIN` report — agree with the stub about what it will run
+ * instead of guessing at it independently.
  */
-export const hasAllowedBinExtension = (path) => path.endsWith('.js') || path.endsWith('.mjs');
+export const hasAllowedBinExtension = (path) => classifyBinTarget(path) !== null;
 export const readRecordedHookTarget = (cwd) => {
     const bin = configValue(cwd, 'commitlore.bin');
     const node = configValue(cwd, 'commitlore.node');
@@ -39,13 +53,26 @@ export const readRecordedHookTarget = (cwd) => {
         problems.push('commitlore.bin is not recorded');
     else {
         const binPath = resolve(cwd, bin);
-        if (!hasAllowedBinExtension(bin)) {
-            problems.push('commitlore.bin is not a .js or .mjs file');
+        const kind = classifyBinTarget(bin);
+        if (kind === null) {
+            problems.push('commitlore.bin is not a .js, .mjs, or compiled commitlore binary');
         }
         if (!isFile(binPath))
             problems.push('commitlore.bin does not exist');
-        else if (!isInsidePackage(binPath))
+        else if (kind === 'script' && !isInsidePackage(binPath)) {
             problems.push('commitlore.bin is outside this package root');
+        }
+        else if (kind === 'binary' && !isExecutableFile(binPath)) {
+            problems.push('commitlore.bin is not an executable file');
+        }
+        else if (kind === 'binary' && !matchesRunningBinary(binPath)) {
+            // A binary has no install root to be contained by — it *is* the trusted
+            // artifact, so containment collapses to "is this the one currently
+            // running", the same question `commitlore.node` asks below for the
+            // script case. Same message as the script branch: both report the same
+            // fact, that the recorded path is not the trusted install.
+            problems.push('commitlore.bin is outside this package root');
+        }
     }
     if (node === '')
         problems.push('commitlore.node is not recorded');

@@ -112,6 +112,46 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 
 仓库中提交的 bundle 无需构建、也无需 `node_modules` 即可运行。SQLite 索引使用 Node 自带的 `node:sqlite`（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)），因此仅靠 clone 就能构建并查询索引——不需要原生模块，不需要编译器，也不需要 `npm install`。想跳过索引、只用 Git 回答时，仍可以使用 `--no-index`。
 
+### 无需 Node，作为编译好的二进制运行
+
+`git clone` + Node 运行时仍是正式的安装方式。对于 PATH 中完全没有 Node 的机器，可以从同一个 clone 构建单个编译后的可执行文件（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）：
+
+```bash
+cd ~/.commitlore
+npm ci
+npm run build:binary
+./dist/commitlore --version
+./dist/commitlore doctor
+```
+
+`dist/commitlore` 在运行时不需要 Node、不需要解释器，也不需要 `node_modules`——`doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` 都能在 `PATH=/usr/bin:/bin` 下运行。它不会被提交（体积大、与平台/架构相关，且由 CI 在每次 push 时重新构建而不是 diff）；`commitlore hooks install` 和插件的 `PreToolUse` hook 一旦构建完成都会自动解析到它。
+
+### 安装预构建的发布二进制文件
+
+对于既没有 Node 也没有 clone 的机器：每个 `vX.Y.Z` 标签都会为每个平台构建一个二进制文件（`.github/workflows/release.yml`），附带覆盖全部文件的 `SHA256SUMS`，并通过 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) 为每个资产生成证明（基于 Sigstore，可公开验证，本项目无需管理任何密钥）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+```
+
+`install.sh` 会检测你的 OS 和架构，从同一个 release 下载匹配的资产和 `SHA256SUMS`，并在安装前验证校验和——像对待任何安装脚本一样，在把它传给 `sh` 之前先读一读。要固定版本：`sh install.sh v0.1.0`。已发布的 target：`aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。目前还没有 Windows 二进制文件——SEA 构建和 commit-msg hook shim 在该平台上尚未验证，见 [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)。
+
+传给 shell 执行不应是唯一有文档记录的方式。手动完成同样的安装：
+
+```bash
+version=0.1.0   # 或者: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
+target=aarch64-apple-darwin   # 或 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
+
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+
+# 解压前先验证。结果必须是 "OK"，否则到此为止——不要运行未通过校验的二进制文件。
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
+
+tar -xzf "commitlore-$version-$target.tar.gz"
+./commitlore --version
+```
+
 ## GitHub Actions
 
 运行 query、guard 或 inject 命令的 job 必须获取完整 history。
@@ -151,7 +191,6 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 - 把记录 anchor 到 symbol 而不是 path：[#33](https://github.com/MongLong0214/commitlore/issues/33)
 - 交互式 commit builder 和自动 expiry 提醒：[#34](https://github.com/MongLong0214/commitlore/issues/34)
 - 用有效 benchmark 证明 guard 对智能体行为的影响：[#37](https://github.com/MongLong0214/commitlore/issues/37)
-- 在没有 Node.js 的情况下作为单一 static binary 运行：[#39](https://github.com/MongLong0214/commitlore/issues/39)
 
 ## 参与贡献
 

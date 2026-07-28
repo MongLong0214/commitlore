@@ -4,6 +4,7 @@
   "description": "Git commit trailers as institutional memory for AI coding agents",
   "license": "MIT",
   "type": "module",
+  "private": true,
   "bin": {
     "commitlore": "dist/cli.js"
   },
@@ -16,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
+    "build:binary": "npm run build && node scripts/build-binary.mjs",
     "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -42,6 +44,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.1",
+    "postject": "^1.0.0-alpha.6",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   },
