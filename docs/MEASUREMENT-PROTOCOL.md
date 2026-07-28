@@ -129,20 +129,26 @@ model-based small-cluster intervals can miss their nominal coverage
 
 ## 4. Task-pool gate and sample size
 
-There is no per-task 4/6 floor or 5/6 ceiling. A comparator-only calibration
-round estimates the count distribution, dispersion, task ICC, and zero share
-for the **prespecified pool as a whole**. It does not select individual tasks.
-The pool either passes the registered power simulation intact or collection
-stops and a new pool is registered before any treatment run.
+Before either analysis arm runs, every candidate receives six runs on the
+registered primary comparator. A task with structural maximum `M` qualifies
+only when its six-run count rate is in the inclusive **4/6–5/6** band:
 
-The 5/6 ceiling solved saturation created by a binary measure. With a count,
-high comparator counts are information rather than a ceiling. Retaining 5/6
-would discard the tasks with the most observable events; retaining 4/6 would
-dichotomize the count during selection and repeat the information loss the new
-outcome fixes
-([Geroldinger et al.,
-2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10729462/)). The rejected
-alternative is any task-wise outcome cutoff, including 4/6–5/6.
+`Σ(reproposal_matches) / (6 × M)`.
+
+The numerator is the count of distinct matched `reproposed_if` labels across
+the six runs; the denominator is all labels the task could have matched across
+those runs. This is a count rate, not the old binary proportion of runs with
+any re-proposal. Thus a task with `M = 7` qualifies at 28 through 35 matched
+labels out of 42, and one with `M = 8` at 32 through 40 out of 48. Both bounds
+are inclusive.
+
+Every task outside the band is refused from the analysis set. Its task id,
+matched-label count, opportunity count, rate, and exclusion are retained in
+the qualification record; it is never silently dropped or retained. If fewer
+than the preregistered minimum number of tasks survive, collection stops and
+the result states how many survived. The band is not widened after seeing the
+qualification data; a new pool requires a new registration before either
+treatment arm runs.
 
 The old `n = 56` per arm is withdrawn. It assumed 56 independent binary
 observations. At M4's `ICC = 0.581`, eight tasks and seven seeds give
