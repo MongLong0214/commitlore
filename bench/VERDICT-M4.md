@@ -1,9 +1,15 @@
 # M4 verdict — the qualified matrix, and it is still null
 
+> **Historical executed report.** This file preserves the analysis M4 originally
+> reported. Fisher exact is not valid for its paired design, and `over-turns`
+> did not stop or truncate the recorded run. The canonical correction is
+> [`docs/VERDICT-M4.md`](../docs/VERDICT-M4.md); the result remains null and no
+> observation is retracted.
+
 **n = 56 per arm, 7 of 7 seeds complete on all 8 qualifying tasks, 112 of 112
-runs.** No truncation-driven shortfall in the matrix itself — one run stopped
-by `over-turns` rather than `completed`, counted, not excluded (see *Limits*
-below).
+runs.** No truncation-driven shortfall in the matrix itself — one run finished
+naturally after the unenforced turn budget and is labelled `over-turns`,
+counted, not excluded (see *Limits* below).
 
 Registered as `PREREGISTRATION.md` §16, after the control-only qualification
 round recorded there. M1 (p = 0.7480), M1-b (p = 0.0522) and M2 (p = 0.2247)
@@ -60,9 +66,9 @@ Recorded here because a null result computed on an invalid test is not a
 settled null; it is an open question with a number attached. Both problems
 below are properties of the design, not of what the numbers came back as —
 they would be exactly as true if p had come back significant. Independently
-computed against `bench/results/t702-m4-final.jsonl`; a parallel branch,
-`feat-measurement-protocol`, is registering the corrected statistical
-protocol formally and will supersede the analysis in this section.
+computed against `bench/results/t702-m4-final.jsonl`; the registered protocol
+and canonical correction in `docs/` supersede the analysis in this section
+without retracting the observations.
 
 ### 1. The 112 runs are not 112 independent observations — they are 56 pairs
 
@@ -232,20 +238,16 @@ folded into this document, because a gap in the harness is not a property of
 the M4 result — it is a property of every dataset this harness produces until
 the two lines `bench/README.md` names are written.
 
-### 2. One run was truncated, and it is recorded, not excluded
+### 2. One run exceeded the turn budget, and it is recorded, not excluded
 
-`qualification-gitseed-grading-fail-fast`, `commitlore-on`, seed 5, stopped by
-`over-turns` at 31 turns rather than `completed`. `PREREGISTRATION.md` §14
-names truncation as something that flatters whichever arm it happens to land
-in — fewer turns is fewer chances to re-propose, so a truncated run is biased
-toward under-counting, not over-counting, the very outcome this experiment
-measures. §4 governs what happens to it: **it is not excluded.** `stopped_by:
-"error"`, `simulated: true` and never-started rows leave the analysis set;
-`over-turns` is not one of those three, and this row carries a real
-measurement (`reproposed: true`) like every other row in the table above. It
-is recorded here because the row exists and the mechanism that could bias it
-is named in the pre-registration, not because inspection turned up a reason to
-doubt this particular result.
+`qualification-gitseed-grading-fail-fast`, `commitlore-on`, seed 5, is labelled
+`over-turns` at 31 turns rather than `completed`. In this harness the label
+means that the process finished on its own after an observed, unenforced turn
+budget; the harness did not stop or truncate it. §4 still governs the analysis
+set: **it is not excluded.** `stopped_by: "error"`, `simulated: true` and
+never-started rows leave the analysis set; `over-turns` is not one of those
+three, and this row carries a real measurement (`reproposed: true`) like every
+other row in the table above.
 
 ---
 
