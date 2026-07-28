@@ -15404,6 +15404,48 @@ var checkHookRuntime = (opts) => {
     rmSync2(probe, { force: true });
   }
 };
+var evaluateInjectRun = (run, ctx) => {
+  const { id, title, executable, path: path2, fix, unavailableFix } = ctx;
+  if (run.status === null || run.status === void 0) {
+    if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
+      return check(
+        id,
+        title,
+        "fail",
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix
+      );
+    }
+    return check(
+      id,
+      title,
+      "fail",
+      `could not run the PreToolUse hook: ${run.error?.message ?? "no diagnosis"}`,
+      fix
+    );
+  }
+  if (run.status !== 0) {
+    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+    return check(
+      id,
+      title,
+      "fail",
+      `the PreToolUse hook exits ${String(run.status)}: ${said || "no diagnosis"}`,
+      fix
+    );
+  }
+  if (`${run.stdout ?? ""}`.trim() === "") {
+    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+    return check(
+      id,
+      title,
+      "fail",
+      `the PreToolUse hook returned no context for a known-good payload${said === "" ? "" : `: ${said}`}`,
+      fix
+    );
+  }
+  return check(id, title, "ok", `the PreToolUse hook returned context for ${path2}`);
+};
 var checkInjectRuntime = (opts) => {
   const title = "PreToolUse hook runtime";
   const id = "inject-runtime";
@@ -15452,39 +15494,7 @@ var checkInjectRuntime = (opts) => {
       HOME: process.env["HOME"] ?? ""
     }
   });
-  if (run.error !== void 0) {
-    if ("code" in run.error && run.error.code === "ENOENT") {
-      return check(
-        id,
-        title,
-        "fail",
-        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
-        unavailableFix
-      );
-    }
-    return check(id, title, "fail", `could not run the PreToolUse hook: ${run.error.message}`, fix);
-  }
-  if (run.status !== 0) {
-    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
-    return check(
-      id,
-      title,
-      "fail",
-      `the PreToolUse hook exits ${String(run.status)}: ${said || "no diagnosis"}`,
-      fix
-    );
-  }
-  if (`${run.stdout ?? ""}`.trim() === "") {
-    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
-    return check(
-      id,
-      title,
-      "fail",
-      `the PreToolUse hook returned no context for a known-good payload${said === "" ? "" : `: ${said}`}`,
-      fix
-    );
-  }
-  return check(id, title, "ok", `the PreToolUse hook returned context for ${path2}`);
+  return evaluateInjectRun(run, { id, title, executable, path: path2, fix, unavailableFix });
 };
 var checkIndex = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
