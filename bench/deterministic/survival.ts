@@ -106,6 +106,8 @@ const applyOperation = (repo: string, operation: SurvivalOperation): 'history' |
       return 'history';
     case 'squash-merge':
       git(repo, ['checkout', '-q', 'main']);
+      git(repo, ['config', '--unset', 'core.hooksPath']);
+      command(process.execPath, [CLI_ENTRY, 'init'], { cwd: repo, allowed: [0, 1] });
       git(repo, ['merge', '--squash', 'feature']);
       git(repo, ['commit', '-q', '-m', 'Squash feature']);
       return 'history';
@@ -153,7 +155,9 @@ export const measureSurvival = (
   return operations.map((operation) => {
     const repo = cloneFor(source, scratch, operation);
     const method = applyOperation(repo, operation);
-    const survived = method === 'history' ? historyCount(repo) : pathCount(repo);
-    return { ...base, metric: 'record_survival', operation, survived, total, rate: survived / total, method };
+    const measurement = method === 'history' ? 'historyCount' : 'pathCount';
+    const survived = measurement === 'historyCount' ? historyCount(repo) : pathCount(repo);
+    const outcome = measurement === 'historyCount' ? 'history-retention' : 'path-reachability';
+    return { ...base, metric: 'record_survival', operation, outcome, measurement, survived, total, rate: survived / total };
   });
 };
