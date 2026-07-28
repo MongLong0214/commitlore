@@ -64,10 +64,27 @@ export const guardExposureState = (row: RunRecord): GuardExposureState => {
   return exposure.fires > 0 ? "yes" : "no";
 };
 
-export const assertPrimaryOutcomeCanBeRegistered = (
-  outcome: PrimaryOutcome,
+/**
+ * The refusal gate behind `assertPrimaryOutcomeCanBeRegistered`, generalized
+ * over an accessor instead of reading `reproposal_matches` directly.
+ *
+ * Bug #141 replaced the single re-proposal outcome with six rejected-path
+ * counts rather than one composite (a weighted figure invites argument about
+ * the weights; six plain counts do not), and every one of them has to be
+ * refused the same way `reproposal_matches` already was — a pilot whose guard
+ * exposure cannot be read, or an outcome with no variance to test, answers
+ * nothing regardless of which field is being registered. Duplicating the four
+ * checks per new count would let one of them drift from the others; reading
+ * the count through an accessor keeps them identical by construction.
+ * `assertPrimaryOutcomeCanBeRegistered` is this function with
+ * `reproposal_matches` as the accessor, and keeps its own name and signature
+ * so nothing that already calls it has to change.
+ */
+export const assertOutcomeCanBeRegistered = (
+  outcome: string,
   rows: readonly RunRecord[],
   structuralMaximums: ReadonlyMap<string, number>,
+  accessor: (row: RunRecord) => unknown,
 ): void => {
   if (rows.length === 0) throw new Error(`refusing to register primary outcome \`${outcome}\`: no pilot rows`);
   const unexposed = rows.filter((row) => guardExposureState(row) === "unknown");
@@ -80,7 +97,7 @@ export const assertPrimaryOutcomeCanBeRegistered = (
   const counts: number[] = [];
   const taskMaxima: number[] = [];
   for (const row of rows) {
-    const count = row.reproposal_matches;
+    const count = accessor(row);
     if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
       throw new Error(`refusing to register primary outcome \`${outcome}\`: it is not a non-negative integer on every pilot row`);
     }
@@ -101,6 +118,12 @@ export const assertPrimaryOutcomeCanBeRegistered = (
     throw new Error(`refusing to register primary outcome \`${outcome}\`: ${failures.join("; ")}`);
   }
 };
+
+export const assertPrimaryOutcomeCanBeRegistered = (
+  outcome: PrimaryOutcome,
+  rows: readonly RunRecord[],
+  structuralMaximums: ReadonlyMap<string, number>,
+): void => assertOutcomeCanBeRegistered(outcome, rows, structuralMaximums, (row) => row.reproposal_matches);
 
 /**
  * A row that failed carries no measurement — the runner writes `reproposed:
@@ -344,6 +367,18 @@ const REQUIRED_FIELDS = [
   "simulated",
 ] as const;
 
+/**
+ * Optional fields validated as a non-negative integer when present, the same
+ * treatment `reproposal_matches` already got. `rejected_path_first_edit` is
+ * checked separately below — it is a 0/1 flag, not an unbounded count.
+ */
+const NON_NEGATIVE_INTEGER_FIELDS = [
+  "reproposal_matches",
+  "rejected_path_edit_hunks",
+  "rejected_path_lines_changed",
+  "rejected_path_dependency_additions",
+] as const;
+
 export const parseRows = (file: string, contents: string): readonly RunRecord[] => {
   const rows: RunRecord[] = [];
   contents.split("\n").forEach((line, index) => {
@@ -359,14 +394,15 @@ export const parseRows = (file: string, contents: string): readonly RunRecord[] 
     for (const field of REQUIRED_FIELDS) {
       if (row[field] === undefined) throw new Error(`${file}:${index + 1}: missing field \`${field}\``);
     }
-    const reproposalMatches = row.reproposal_matches;
-    if (
-      reproposalMatches !== undefined &&
-      (typeof reproposalMatches !== "number" ||
-        !Number.isInteger(reproposalMatches) ||
-        reproposalMatches < 0)
-    ) {
-      throw new Error(`${file}:${index + 1}: \`reproposal_matches\` must be a non-negative integer`);
+    for (const field of NON_NEGATIVE_INTEGER_FIELDS) {
+      const value = row[field];
+      if (value !== undefined && (typeof value !== "number" || !Number.isInteger(value) || value < 0)) {
+        throw new Error(`${file}:${index + 1}: \`${field}\` must be a non-negative integer`);
+      }
+    }
+    const firstEdit = row.rejected_path_first_edit;
+    if (firstEdit !== undefined && firstEdit !== 0 && firstEdit !== 1) {
+      throw new Error(`${file}:${index + 1}: \`rejected_path_first_edit\` must be 0 or 1`);
     }
     rows.push(parsed as RunRecord);
   });

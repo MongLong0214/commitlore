@@ -232,6 +232,19 @@ export interface RunRecord {
   readonly cond: string;
   readonly seed: number;
   readonly model?: string;
+  /**
+   * Whether the run matched `detect.reproposed_if` on any surface.
+   *
+   * Instrumented-only (bug #141), the way `violations` already was: a boolean
+   * that fires on a diff, a commit message or a code comment alike cannot tell
+   * "implemented the rejected alternative" from "explained, correctly, that it
+   * declined the rejected alternative" — the second is the guard working as
+   * designed, not a failure, and this field records both as the same `true`.
+   * `reproposal_matches` narrows the same signal to a count and inherits the
+   * same conflation. Kept for diagnosis, not read as the outcome; see the
+   * rejected-path fields below for what replaced it as the thing worth
+   * measuring.
+   */
   readonly reproposed: boolean;
   readonly reproposal_matches?: number;
   readonly violations: number;
@@ -284,6 +297,64 @@ export interface RunRecord {
    * repository whose team never wrote a record.
    */
   readonly accepted_records?: number;
+
+  // --- Rejected-path work (bug #141) ---
+  //
+  // `reproposed`/`reproposal_matches` answer "did the output match a rejected
+  // alternative's signature", and a correct refusal can match that signature
+  // too, on a surface that includes the agent's own explanation of why it
+  // declined. Neither can say whether the agent spent anything *pursuing* the
+  // rejected path before it stopped, which is the number a reader actually
+  // wants: a run that writes "I considered Redis, but the record rules it out"
+  // costs nothing, and a run that edits three files toward Redis and then
+  // reverts cost three files' worth of wasted work, even though both score
+  // `reproposed: false`.
+  //
+  // The issue asked for six counts, reported separately rather than combined
+  // into one weighted figure so a reader can weight them for their own
+  // situation. Four are derivable from what this harness already records —
+  // the diff and the task's own `reproposed_if` clauses — and are below. Two
+  // are not, and are not approximated in their place:
+  //
+  //   - rejected-path tool actions: `DriverResult.transcript` is the `claude`
+  //     CLI's final `result` text (`--output-format json`), not a transcript
+  //     of tool calls, so there is no tool-call log to count actions from.
+  //     `drivers/claude-headless.ts` would need `--output-format stream-json`
+  //     (or an equivalent capture) recording each tool_use block to make this
+  //     observable.
+  //   - turns spent before abandoning the rejected path: `turns` below is the
+  //     run's total turn count (`num_turns` from that same final JSON), with
+  //     no attribution of which turn did what. Seeing "abandoned after N
+  //     turns" needs the same per-turn capture as the item above, keyed by
+  //     turn index.
+  //
+  // Every field below is optional for the reason `reproposal_matches` is: a
+  // row written before this harness computed it carries none of them, and a
+  // row that carries none of them is "not instrumented", not zero.
+
+  /**
+   * Diff hunks whose added code matches `detect.reproposed_if` — editing
+   * toward the rejected alternative, not mentioning it.
+   */
+  readonly rejected_path_edit_hunks?: number;
+  /** Added and removed lines inside the hunks counted above. */
+  readonly rejected_path_lines_changed?: number;
+  /**
+   * Added lines in a recognized dependency manifest (e.g. `package.json`)
+   * that match `detect.reproposed_if` — installing the rejected package, not
+   * discussing it.
+   */
+  readonly rejected_path_dependency_additions?: number;
+  /**
+   * 1 if any rejected-path edit survived to the final diff, 0 if none did.
+   *
+   * Scoped to what persisted: a hunk written toward the rejected alternative
+   * and then reverted before the run ended leaves no trace in the diff this
+   * harness reads, the same blind spot `reproposed` itself has always had
+   * against an end-state comparison. See the "turns spent abandoning" note
+   * above for what would be needed to see a reverted attempt at all.
+   */
+  readonly rejected_path_first_edit?: 0 | 1;
 }
 
 export interface GuardExposureMatch {
