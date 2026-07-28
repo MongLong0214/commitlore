@@ -125,9 +125,22 @@ describe('runner: ablation conditions', () => {
     for (const row of rows) {
       expect(row.task).toBe('reproposal-redis-cache');
       expect(row.seed).toBe(1);
+      expect(row.model).toBe('dry-run');
+      expect(row.guard_exposure).toEqual({ complete: true, executed: false, checks: 0, fires: 0, matches: [] });
       expect(row.simulated).toBe(true);
       expect(row.stopped_by).not.toBe('error');
     }
+  });
+
+  it('labels a simulated row dry-run even when the command supplies a model', () => {
+    expect(runRunner([...ONE_TASK, '--cond', 'commitlore-guard', '--model', 'claude-x'])[0]?.model).toBe('dry-run');
+  });
+
+  it('records known non-execution when the token budget skips a run', () => {
+    const rows = runRunner([...ONE_TASK, '--cond', 'commitlore-guard', '--seed', '1,2', '--max-tokens', '1']);
+    expect(rows[1]?.guard_exposure).toEqual(
+      { complete: true, executed: false, checks: 0, fires: 0, matches: [] },
+    );
   });
 
   /**
@@ -341,6 +354,38 @@ describe('result.schema.json', () => {
     expect(validate(row({ harvest_tokens: 1200, verify_tokens: 0, accepted_records: 3 }))).toBe(true);
     expect(validate(row({ accepted_records: 0 }))).toBe(true);
     expect(validate(row())).toBe(true);
+  });
+
+  it('accepts complete current provenance while preserving legacy rows without it', () => {
+    expect(
+      validate(
+        row({
+          model: 'fixture-model',
+          guard_exposure: {
+            complete: true,
+            executed: true,
+            checks: 1,
+            fires: 1,
+            matches: [{ path: 'src/cache.ts', alternative: 'Redis cache', record_id: 'r-redis' }],
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      validate(
+        row({
+          guard_exposure: {
+            complete: true,
+            executed: true,
+            checks: 1,
+            fires: 1,
+            matches: [{ path: "src/queue.ts", alternative: null, record_id: "r-blocked" }],
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(validate(row())).toBe(true);
+    expect(validate({ ...row(), guard_exposure: { executed: true, checks: 1, fires: 1 } })).toBe(false);
   });
 
   it('rejects a negative cost or a negative record count', () => {

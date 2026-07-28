@@ -41,17 +41,18 @@
  *   proposal and the alternative, over normalized, stopworded, lightly stemmed
  *   token sets. Symmetric, so it rewards a short focused proposal and decays on
  *   a long one.
- * - **Distinctive-keyword mass** (`KEYWORD_WEIGHT`) — how much of the
+ * - **Distinctive-keyword strength** (`KEYWORD_WEIGHT`) — how much of the
  *   alternative's *identity* the proposal names: its distinctive tokens (see
  *   `GENERIC_TERMS`), weighted by how rare each one is across the rejection
- *   corpus (see `Corpus`). Containment rather than similarity, which is what
- *   survives a proposal the size of a diff: "redis" is still in there.
+ *   corpus (see `Corpus`) and corroborated by their unweighted coverage.
+ *   Containment rather than similarity is what survives a proposal the size
+ *   of a diff: "redis" is still in there.
  * - **`Record-Id:` hit** (`RECORD_ID_WEIGHT`) — the proposal names the record
  *   itself. Not similarity at all; an explicit reference.
  *
- * Jaccard alone answers "is this the same sentence"; mass alone answers "is the
- * rejected thing named in here". Either question answered wrongly on its own is
- * a bad guard, which is why both are weighted.
+ * Jaccard alone answers "is this the same sentence"; keyword strength answers
+ * "is the rejected thing named in here". Either question answered wrongly on
+ * its own is a bad guard, which is why both are weighted.
  *
  * ## Why the score is not the whole decision
  *
@@ -123,20 +124,23 @@ export const KEYWORD_WEIGHT = 0.5;
  */
 export const MIN_KEYWORD_HITS = 2;
 /**
- * The share of an alternative's IDF-weighted identity that corroborates a flag
- * on its own, so that a *single* word can still be enough when the alternative
+ * The strength of the alternative's covered keywords that corroborates a flag
+ * on its own. IDF-weighted mass is multiplied by ordinary token coverage so a
+ * rare filename cannot erase unmatched subject words merely because those words
+ * are common in the corpus. A *single* word is still enough when the alternative
  * is essentially that word.
  *
- * The line sits at half because the two populations separate there, measured:
- * across the ten unrelated proposals in `spec/fixtures/guard/proposals.json`,
- * the highest mass any of them reaches against any rejection in this
- * repository's history is **0.37** (`regex` against "regex trailer parsing");
- * `fixture` reaches 0.25 and `documents` 0.27. Across the re-proposals that
- * must fire, one word carries **1.00** — `redis` is the whole of "shared Redis
- * cache". `rabbitmq` at 0.50 of "a RabbitMQ broker" is the intended boundary
- * case: naming half of a two-word alternative is a re-proposal.
+ * The line stays at half because a one-token alternative such as `redis` still
+ * reaches **1.00**, while multiplication cannot increase the measured unrelated
+ * keyword masses (the old maximum was **0.37**). A partial hit now preserves the
+ * absent tokens' vote even when corpus frequency drives their IDF weight down.
  */
-export const STRONG_KEYWORD_MASS = 0.5;
+export const STRONG_KEYWORD_STRENGTH = 0.5;
+/**
+ * @deprecated Use `STRONG_KEYWORD_STRENGTH`. Kept because the generated
+ * `dist/core/guard.js` is a supported clone-first import surface.
+ */
+export const STRONG_KEYWORD_MASS = STRONG_KEYWORD_STRENGTH;
 /**
  * The token overlap that corroborates a flag with no keyword evidence at all —
  * the two texts are restatements of each other. Measured, the highest Jaccard
@@ -169,19 +173,16 @@ export const RECORD_ID_WEIGHT = 0.6;
  *
  * - **0.58** — `shared Redis cache` against "use a redis instance to store
  *   sessions". One word shared out of six, but that word is the whole identity
- *   of the alternative (`STRONG_KEYWORD_MASS`), so it fires and must.
+ *   of the alternative (`STRONG_KEYWORD_STRENGTH`), so it fires and must.
  * - **0.60** — a `Record-Id:` reference alone.
  * - **0.83, 1.00** — the two re-proposals measured against this repository's
  *   own history (`hardcode the adoption commit sha`, `print the matched
  *   credential…`), which are what the ceiling looks like.
  *
- * Measured against the thirteen unrelated proposals in
- * `spec/fixtures/guard/proposals.json` — ten against this repository's real
- * rejection corpus, three against the seeded fixtures — none is corroborated
- * at all, so the noise floor is not a low score but no match (`test/guard.test.ts`
- * prints the table). The threshold was not tuned down to that measurement:
- * room above the noise is what keeps a hook that runs on every Edit from being
- * switched off.
+ * Against the unrelated proposal corpus in `spec/fixtures/guard/proposals.json`,
+ * both the seeded records and this repository's real history are quiet. The
+ * threshold was not tuned down to that measurement: room above the noise is
+ * what keeps a hook that runs on every Edit from being switched off.
  */
 export const DEFAULT_THRESHOLD = 0.35;
 // ---------------------------------------------------------------------------
@@ -352,12 +353,9 @@ const buildCorpus = (alternatives) => {
 /**
  * How much of what makes this alternative *this* alternative the proposal named.
  *
- * Weighted by `Corpus`, not counted: "hardcode the adoption commit sha" is
- * carried by `hardcode` and `adoption`, and a proposal that says only `commit`
- * — a word half the rejections in this repository contain — has named almost
- * none of it. The plain hit fraction cannot tell those apart, and that is
- * exactly how `rename`, `document`, `readme` and `regex` produced four false
- * positives on this repository's own history.
+ * Corpus weights separate rare words from common ones; multiplying by the
+ * plain hit fraction keeps a common unmatched word from disappearing from the
+ * denominator. Either factor alone produced a measured false-positive class.
  *
  * Falling back to every content token when nothing survives `GENERIC_STEMS` is
  * not a formality: `shared cache` and `in-process map` are real rejected
@@ -368,7 +366,7 @@ const keywordCoverage = (alternative, proposal, corpus) => {
     const distinctive = [...alternative.stems].filter((token) => !GENERIC_STEMS.has(token));
     const considered = distinctive.length === 0 ? [...alternative.stems] : distinctive;
     if (considered.length === 0)
-        return { mass: 0, hits: [] };
+        return { strength: 0, hits: [] };
     let total = 0;
     let named = 0;
     const hits = [];
@@ -380,7 +378,11 @@ const keywordCoverage = (alternative, proposal, corpus) => {
         named += weight;
         hits.push(alternative.surface.get(token) ?? token);
     }
-    return { mass: total === 0 ? 0 : named / total, hits: hits.sort() };
+    const weightedMass = total === 0 ? 0 : named / total;
+    return {
+        strength: weightedMass * (hits.length / considered.length),
+        hits: hits.sort(),
+    };
 };
 /**
  * Whether anything corroborates the score, and the reason a high score is not
@@ -393,9 +395,9 @@ const keywordCoverage = (alternative, proposal, corpus) => {
  *
  * - the proposal named the record itself;
  * - it named two distinct distinctive tokens (`MIN_KEYWORD_HITS`);
- * - the tokens it named carry most of the alternative's identity
- *   (`STRONG_KEYWORD_MASS`) — one word is enough when the alternative *is* that
- *   word, which is why `shared Redis cache` still fires on "redis";
+ * - the tokens it named carry most of the alternative's keyword strength
+ *   (`STRONG_KEYWORD_STRENGTH`) — one word is enough when the alternative *is*
+ *   that word, which is why `shared Redis cache` still fires on "redis";
  * - or the two texts overlap enough to be restatements (`MIN_JACCARD`).
  *
  * None of the four can be reached by a single common word in a long
@@ -403,7 +405,7 @@ const keywordCoverage = (alternative, proposal, corpus) => {
  */
 const corroborated = (idHit, coverage, similarity, requireContent = false) => (idHit && !requireContent) ||
     coverage.hits.length >= MIN_KEYWORD_HITS ||
-    coverage.mass >= STRONG_KEYWORD_MASS ||
+    coverage.strength >= STRONG_KEYWORD_STRENGTH ||
     similarity >= MIN_JACCARD;
 /** Folded continuations arrive as one line already; this only tidies runs of spaces. */
 const collapse = (text) => text.replace(/\s+/g, ' ').trim();
@@ -445,15 +447,14 @@ const matchOne = (candidate, proposal, corpus, requireContent = false) => {
     // r-2d55a9)`, the other used the id as a documentation example. Both scored
     // 1.00 on the id alone with a token overlap of 0.01.
     const score = round(Math.min(1, JACCARD_WEIGHT * similarity +
-        KEYWORD_WEIGHT * coverage.mass +
+        KEYWORD_WEIGHT * coverage.strength +
         (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)));
     const signals = [
         ...(idHit ? [`record-id:${record.recordId ?? ''}`] : []),
         ...coverage.hits.map((hit) => `keyword:${hit}`),
-        // The share of the alternative's identity those keywords carry. Printed
-        // because two matches with the same keyword count are not equally strong,
-        // and the reader cannot see which is which from the score alone.
-        ...(coverage.hits.length === 0 ? [] : [`identity:${round(coverage.mass).toFixed(2)}`]),
+        ...(coverage.hits.length === 0
+            ? []
+            : [`keyword-strength:${round(coverage.strength).toFixed(2)}`]),
         ...(similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : []),
         ...(parsed.malformed ? ['malformed:no-separator'] : []),
     ];

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+`guard` no longer lets one rare filename outweigh the unmatched subject words
+in a rejected alternative. Its former `identity:*` trace signal was
+IDF-weighted keyword coverage, not semantic or record identity; the corrected
+signal is named `keyword-strength:*`. Consumers that parse signal text should
+migrate to that name. The exported `STRONG_KEYWORD_MASS` constant remains as a
+deprecated compatibility alias for `STRONG_KEYWORD_STRENGTH`.
+
 ## 0.2.0 — 2026-07-28
 
 Second release. 25 defects found and 22 closed by dogfooding this tool on its

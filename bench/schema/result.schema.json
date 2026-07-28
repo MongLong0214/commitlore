@@ -97,7 +97,33 @@
     "model": {
       "type": "string",
       "minLength": 1,
-      "description": "The agent model that produced the run, e.g. claude-haiku-4-5-20251001. Re-proposal behaviour is model-dependent, so every rate derived from these rows is conditional on this value, and a set of rows that does not carry it cannot be compared across models once several JSONL files are aggregated. NOT YET REQUIRED: runner.ts passes --model to the driver but does not put it on the row, so making it required would reject every row the shipped runner writes. T-702 reported that change upstream; this property is here so the rows validate the moment the runner emits it, and metrics.ts reports a missing model as \"(unrecorded)\" rather than silently averaging across unknown models."
+      "description": "The agent model that produced the run, e.g. claude-haiku-4-5-20251001. Re-proposal behaviour is model-dependent, so every rate derived from these rows is conditional on this value. New runner rows always emit it (dry-run uses \"dry-run\"; a non-simulated run requires --model). It remains optional in the schema only so older JSONL artifacts validate and metrics can report their model as \"(unrecorded)\" rather than silently averaging across unknown models."
+    },
+    "guard_exposure": {
+      "type": "object",
+      "description": "Guard-hook observations from this run. Optional only for legacy rows created before exposure instrumentation; missing means unknown, never no exposure.",
+      "additionalProperties": false,
+      "required": ["complete", "executed", "checks", "fires", "matches"],
+      "properties": {
+        "complete": { "type": "boolean", "description": "Whether the guard could complete its history and notes scan. False is unknown exposure, never a no-fire result." },
+        "executed": { "type": "boolean", "description": "Whether the guard hook actually ran at least once." },
+        "checks": { "type": "integer", "minimum": 0, "description": "Edit proposals checked by the guard." },
+        "fires": { "type": "integer", "minimum": 0, "description": "Checks that matched a ruled-out alternative." },
+        "matches": {
+          "type": "array",
+          "description": "Matched alternatives and the edit path, retained for audit without re-running the agent. A null alternative identifies a blocked record whose content was withheld.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "alternative", "record_id"],
+            "properties": {
+              "path": { "type": ["string", "null"] },
+              "alternative": { "type": ["string", "null"] },
+              "record_id": { "type": "string" }
+            }
+          }
+        }
+      }
     },
     "started_at": {
       "type": "string",

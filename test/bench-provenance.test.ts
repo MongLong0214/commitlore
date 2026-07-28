@@ -121,7 +121,7 @@ describe('benchmark provenance', () => {
 
     try {
       expect(() => {
-        settingsPath = writeArmSettings(HOOK_PLANS['commitlore-on'] ?? {}, startup);
+        settingsPath = writeArmSettings(HOOK_PLANS['commitlore-on'] ?? {}, startup).settingsPath;
       }).toThrow(/dist.*changed/i);
     } finally {
       if (settingsPath !== null) rmSync(dirname(settingsPath), { recursive: true, force: true });

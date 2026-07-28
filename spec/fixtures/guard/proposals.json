@@ -1,5 +1,5 @@
 {
-  "description": "Proposal texts for the `commitlore guard` suite, against spec/fixtures/guard/records.json. `reproposals` must be flagged; `unrelated` must not. The unrelated set is the false-positive measurement the ticket AC names: ten proposals a competent engineer could make in this same repository on the same afternoon, none of which revives anything that was ruled out. They are deliberately adjacent to the records — caches, sessions, expiry, queues — because ten proposals about unrelated subject matter would measure nothing.",
+  "description": "Proposal texts for the `commitlore guard` suite, against spec/fixtures/guard/records.json. `reproposals` must be flagged; `unrelated` must not. The unrelated set is the false-positive measurement the ticket AC names: proposals a competent engineer could make in this same repository, none of which revives anything that was ruled out. They are deliberately adjacent to the records — caches, sessions, expiry, queues, and issue #61's shared filename — because proposals about unrelated subject matter would measure nothing.",
   "reproposals": [
     {
       "id": "redis-named",
@@ -84,6 +84,10 @@
     {
       "id": "document-eviction-rule",
       "text": "Document the eviction rule in the README and link it from the module header."
+    },
+    {
+      "id": "package-json-selection",
+      "text": "select package.json before the count cap"
     }
   ],
   "dogfood": {

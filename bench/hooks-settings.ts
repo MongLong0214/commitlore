@@ -15,9 +15,11 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+
+import type { GuardExposure } from "./types.ts";
 
 const BENCH_DIR = import.meta.dirname;
 const REPO_ROOT = resolve(BENCH_DIR, "..");
@@ -77,6 +79,13 @@ export interface HookPlan {
   readonly ablation?: Readonly<Record<string, boolean>>;
 }
 
+export interface ArmSettings {
+  readonly settingsPath: string | null;
+  readonly guardExposurePath: string | null;
+}
+
+export const noGuardExposure = (): GuardExposure => ({ complete: true, executed: false, checks: 0, fires: 0, matches: [] });
+
 /**
  * A PreToolUse hook that calls the real `buildInjection` with ablation flags.
  *
@@ -110,6 +119,46 @@ const ablationShim = (ablation: Readonly<Record<string, boolean>>): string =>
     "",
   ].join("\n");
 
+/**
+ * The guard path needs a side channel because Claude only returns its final
+ * response: hook output is otherwise gone by the time the runner writes a row.
+ * This is deliberately a thin hook adapter, not a second matcher: it calls the
+ * shipped guard implementation with the exact hook options and records its
+ * structured match result before returning the normal hook JSON to Claude.
+ */
+const guardShim = (exposurePath: string): string =>
+  [
+    `import { appendFileSync } from "node:fs";`,
+    `import { guard, DEFAULT_THRESHOLD, renderGuardMatch } from ${JSON.stringify(join(DIST_DIR, "core", "guard.js"))};`,
+    `import { formatHookContext } from ${JSON.stringify(join(DIST_DIR, "commands", "guard.js"))};`,
+    "let raw = '';",
+    "for await (const chunk of process.stdin) raw += chunk;",
+    "let payload;",
+    "try { payload = JSON.parse(raw || '{}'); } catch { process.exit(0); }",
+    "const proposal = payload?.tool_input?.new_string;",
+    "const filePath = payload?.tool_input?.file_path;",
+    "if (typeof proposal !== 'string' || proposal.trim() === '') process.exit(0);",
+    "const result = guard({",
+    "  proposal,",
+    "  ...(typeof filePath === 'string' && filePath !== '' ? { paths: [filePath] } : {}),",
+    "  threshold: DEFAULT_THRESHOLD, at: new Date(), requireContent: true,",
+    "});",
+    "const matches = result.matches.map((match) => {",
+    "  const rendered = renderGuardMatch(match);",
+    "  return {",
+    "    path: typeof filePath === 'string' && filePath !== '' ? filePath : null,",
+    "    alternative: rendered.trust === 'blocked' ? null : rendered.alternative,",
+    "    record_id: rendered.recordId ?? rendered.sha,",
+    "  };",
+    "});",
+    `appendFileSync(${JSON.stringify(exposurePath)}, JSON.stringify({ complete: !result.incomplete, fired: matches.length > 0, matches }) + '\\n');`,
+    "const context = formatHookContext(result);",
+    "if (context !== '') process.stdout.write(JSON.stringify({",
+    "  hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: context },",
+    "}) + '\\n');",
+    "",
+  ].join("\n");
+
 const matcher = "Edit|Write|MultiEdit|NotebookEdit";
 
 /**
@@ -118,19 +167,28 @@ const matcher = "Edit|Write|MultiEdit|NotebookEdit";
  * rather than "a hook that does nothing", because a hook that runs and returns
  * nothing still changes the agent's turn structure.
  */
-export const writeArmSettings = (plan: HookPlan, expectedDistDigest: string): string | null => {
+export const writeArmSettings = (plan: HookPlan, expectedDistDigest: string): ArmSettings => {
   const currentDistDigest = digestDistTree();
   if (currentDistDigest !== expectedDistDigest) {
     throw new Error(
       `dist/ changed after the benchmark matrix started: expected sha256 ${expectedDistDigest}, found ${currentDistDigest}`,
     );
   }
-  if (plan.preToolUse === undefined && plan.ablation === undefined) return null;
+  if (plan.preToolUse === undefined && plan.ablation === undefined) {
+    return { settingsPath: null, guardExposurePath: null };
+  }
 
   const dir = mkdtempSync(join(tmpdir(), "commitlore-bench-settings-"));
 
   let command: string;
-  if (plan.ablation !== undefined) {
+  let guardExposurePath: string | null = null;
+  if (plan.preToolUse === "guard") {
+    guardExposurePath = join(dir, "guard-exposure.jsonl");
+    writeFileSync(guardExposurePath, '{"version":1}\n');
+    const shimPath = join(dir, "guard-hook.mjs");
+    writeFileSync(shimPath, guardShim(guardExposurePath));
+    command = `${JSON.stringify(process.execPath)} ${JSON.stringify(shimPath)}`;
+  } else if (plan.ablation !== undefined) {
     const shimPath = join(dir, "ablate-inject.mjs");
     writeFileSync(shimPath, ablationShim(plan.ablation));
     command = `${JSON.stringify(process.execPath)} ${JSON.stringify(shimPath)}`;
@@ -151,7 +209,67 @@ export const writeArmSettings = (plan: HookPlan, expectedDistDigest: string): st
 
   const path = join(dir, "settings.json");
   writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
-  return path;
+  return { settingsPath: path, guardExposurePath };
+};
+
+export const readGuardExposure = (exposurePath: string | null): GuardExposure | undefined => {
+  if (exposurePath === null) return noGuardExposure();
+  if (!existsSync(exposurePath)) return undefined;
+  let checks = 0;
+  let fires = 0;
+  let complete = true;
+  const matches: GuardExposure["matches"][number][] = [];
+  const lines = readFileSync(exposurePath, "utf8").split("\n").filter((line) => line.trim() !== "");
+  if (lines.length === 0) return undefined;
+  let header: unknown;
+  try {
+    header = JSON.parse(lines[0] ?? "");
+  } catch {
+    return undefined;
+  }
+  if (typeof header !== "object" || header === null || !("version" in header) || header.version !== 1) return undefined;
+  for (const line of lines.slice(1)) {
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return undefined;
+    }
+    if (
+      typeof event !== "object" ||
+      event === null ||
+      !("complete" in event) ||
+      typeof event.complete !== "boolean" ||
+      !("fired" in event) ||
+      typeof event.fired !== "boolean" ||
+      !("matches" in event) ||
+      !Array.isArray(event.matches)
+    ) {
+      return undefined;
+    }
+    checks += 1;
+    for (const match of event.matches) {
+      if (
+        typeof match !== "object" ||
+        match === null ||
+        !("alternative" in match) ||
+        !("record_id" in match) ||
+        !("path" in match) ||
+        (match.alternative !== null && typeof match.alternative !== "string") ||
+        typeof match.record_id !== "string" ||
+        (match.path !== null && typeof match.path !== "string")
+      ) {
+        return undefined;
+      }
+      matches.push({ path: match.path, alternative: match.alternative, record_id: match.record_id });
+    }
+    if (event.fired !== (event.matches.length > 0)) {
+      return undefined;
+    }
+    if (!event.complete) complete = false;
+    if (event.fired) fires += 1;
+  }
+  return { complete, executed: checks > 0, checks, fires, matches };
 };
 
 /**

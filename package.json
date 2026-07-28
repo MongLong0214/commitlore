@@ -1,6 +1,6 @@
 {
   "name": "commitlore",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Git commit trailers as institutional memory for AI coding agents",
   "license": "MIT",
   "private": true,

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: コミット 4842356 の記録 r-2b58d4 は [claim] と評価され、guard は MATCH を返す">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git は何が変わったかを記憶し、CommitLore はなぜ変わったかを記憶する。新しいエージェントも除外された代案と理由を読む。">
 </p>
 
 <p align="center">
@@ -14,48 +14,60 @@
 
 # CommitLore
 
-CommitLore は、判断の背景を Git のコミット trailer と `refs/notes/commitlore` に保存するプロトコルです。
-主役はプロトコルであり、CLI は記録を検証・ルーティングして shell、hook、MCP クライアントへ渡します。
-コーディングエージェントを改善することは実証されていません。
+## Git は何が変わったかを記憶する。CommitLore はなぜ変わったかを記憶する。
 
-## インストール
+**AI 支援コードベースのための Git-native decision memory。** CommitLore は、コード変更の背後にある制約、除外した代案、警告、検証の空白を Git に直接記録します。開発者やコーディングエージェントは、何を変える前にもなぜこうなっているかを理解できます。
 
-インストールは一度、リポジトリごとにもう一度 — 一つのコマンドに収まらないのは意図的です。以下の hook と index はリポジトリごとの状態であり、まだ見たことのないリポジトリのためにマシン全体のインストールがあらかじめ用意しておけるものではありません（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。
+ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリと共に移動する、レビュー可能な意思決定コンテキストだけです。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-このマシン向けに checksum を検証済みのリリースバイナリをダウンロードします — Node は不要です（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）。そのうえで `commitlore` コマンドを `PATH` に通します。続けて、このマシンにインストールされているコーディングエージェントを検出します — Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode。見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。何を接続し、何をスキップしたかをそのまま出力します。
+検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
 
-続けて、CommitLore を使いたい各リポジトリの中で:
+この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone するか、リリース資産を手動でダウンロードして `SHA256SUMS` を検証してください。スクリプトはダウンロードするバイナリのチェックサムを検証しますが、すでに `sh` に渡したスクリプト自体を認証するものではありません。
 
 ```bash
-commitlore init
+# installer を固定してダウンロードし、確認してから実行します。
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
+sh install.sh v0.2.0
+
+# または release binary を自分で検証してから展開します。
+version=0.2.0; target=aarch64-apple-darwin
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
-そのリポジトリに commit-msg 検証 hook をインストールし、ローカルの記録 index を構築します。何を行ったかを報告し、再実行しても安全です — すでに設定済みのリポジトリはその旨を報告するだけで、何も変更しません。
+## 実際に動かす
 
-プロトコルを読むだけならインストールは不要です。記録はどれも普通の git trailer だからです（[後述](#一つの記録)）。`sh` にスクリプトを流し込む代わりに、Node での clone、ソースからの build、手動で検証したダウンロードを使いたい場合は、[clone からインストール](#clone-からインストール)に三つとも書いてあります。
+**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** この checkout で、`install.sh` に対する実際の Claude `PreToolUse` payload を同じ hook path に送ります。
 
-## 測定の記録
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
 
-<!-- BENCH:WITHDRAWN -->
+応答には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
 
-登録済みの行動測定では、CommitLore がエージェントの行動を変える証拠は得られませんでした。その後の実行は、実行中にバイナリが変わったため無効になりました。さらに根本的な問題として、既存データセットには各行を生成したビルドを証明できる provenance がありません。そのため [`bench/report.ts`](bench/report.ts) は集計を拒否します。
+```console
+Ruled-out:
+  [claim] r-instci99a ... publishing a `-musl` release target |
+  a release.yml/build-matrix change, not an install.sh or CI-verification fix
+```
 
-以前公開したベンチマーク数値はすべて撤回しました。日付付きの判定文書は効果の主張ではなく、当時の記録として残します: [`VERDICT-M1.md`](bench/VERDICT-M1.md)、[`VERDICT-M1b.md`](bench/VERDICT-M1b.md)、[`VERDICT-M2.md`](bench/VERDICT-M2.md)、[無効実行の記録](bench/PREREGISTRATION.md#15-m3-is-void-the-binary-under-test-changed-while-it-ran)。ハーネスのコミットと実行したバンドルを特定できるデータセットができるまで数値は戻しません。詳細は [`bench/README.md`](bench/README.md) にあります。
+## 違い
 
-## リポジトリが実際に証明していること
+- **CLAUDE.md はエージェントに作業方法を伝える。CommitLore はこのコードがなぜ存在するかを伝える。**
+- **ADR はアーキテクチャを文書化する。CommitLore は diff の中に隠れた意思決定を文書化する。**
+- **もう一つの memory database ではない。Git に組み込まれた decision protocol です。**
 
-- **記録は通常の Git ワークフローを生き残ります。** コミット trailer と notes mirror は、[rebase と squash](test/squash.test.ts)、[履歴の書き換えと remote 間の転送](test/notes.test.ts)、[一段・多段の rename](test/follow.test.ts)でテストされています。
-- **信頼の意味は全ルートで共通です。** query 出力、CLI injection、編集 hook、MCP tool、guard は同じ `directive | claim | blocked` グレードを使います。ルート検証は [`query.test.ts`](test/query.test.ts)、[`inject.test.ts`](test/inject.test.ts)、[`mcp.test.ts`](test/mcp.test.ts)、[`guard.test.ts`](test/guard.test.ts) にあります。
-- **同梱のインジェクションスキャナーに一致した記録は、文章としてモデルへ届きません。** どれか一つの自由記述 trailer が一致すると、その記録全体が `blocked` になり、モデルが読むルートは内容を引用せず保留した事実だけを伝えます。この決定論的な語彙フィルターの結果は、実環境での検出率を示すものではありません。[パターン作成者による corpus、独立作成 corpus、無害 corpus](spec/fixtures/injection/README.md) は別々に報告します。CLI と hook は [`inject.test.ts`](test/inject.test.ts)、MCP の同一回答は [`mcp.test.ts`](test/mcp.test.ts) が検証します。
-- **不明と空は別です。** 読み取り可能で記録がないリポジトリでは guard は `0` で終了します。壊れた Git は `history: unavailable`、未取得の notes mirror は `notes: unfetched` と報告します。どちらの不完全な検査も `3` で終了します。この契約は [`notes-availability.test.ts`](test/notes-availability.test.ts)、[`guard.test.ts`](test/guard.test.ts)、[`RELEASE-GATE`](docs/RELEASE-GATE.md) に固定されています。
+権威ある原本は通常の commit trailer と `refs/notes/commitlore` です。index と report はこれらの Git record から派生し、再構築できます。
 
 ## 一つの記録
 
-この例は conformance fixture でもあります。Git の trailer parser は、全言語の README でこのブロックをバイト単位で同じように読む必要があります。
+この例は conformance fixture でもあります。Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
 
 ```text
 Prevent silent session drops during long-running operations
@@ -78,150 +90,104 @@ Unverified: Auth service cold-start > 500ms behavior
 CommitLore-Version: 2.0.0
 ```
 
-### プロトコル語彙
+### Protocol vocabulary
 
-| Trailer | 意味 |
+| Trailer | Meaning |
 |---|---|
-| `Limit:` | 判断を制約した外部条件 |
-| `Record-Id:` | コミット hash が書き換わっても維持される識別子 |
-| `Ruled-out:` | `代案 \| 採用しなかった理由` |
+| `Limit:` | External condition that constrained the decision |
+| `Record-Id:` | Stable identity across rewritten commit hashes |
+| `Ruled-out:` | `alternative \| reason` |
 | `Certainty:` | `firm` \| `tentative` \| `guess` |
 | `Blast:` | `local` \| `module` \| `system` |
 | `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | 将来の変更者への警告。配信前に信頼グレードを適用 |
-| `Verified:` / `Unverified:` | 確認したこと・していないこと |
-| `Follows:` / `Supersedes:` | 判断チェーンと lifecycle の link |
-| `Expires:` | 制約が終わる日付または条件 |
-| `Evidence:` | claim を裏付ける path、anchor、URL |
+| `Warn:` | Warning for a future modifier; trust-graded before delivery |
+| `Verified:` / `Unverified:` | What was and was not checked |
+| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
+| `Expires:` | Date or condition that ends a limit |
+| `Evidence:` | Path, anchor, or URL supporting a claim |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
-| `CommitLore-Version:` / `X-*:` | プロトコル識別子と拡張 |
+| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
-完全な契約は [`spec/SPEC.md`](spec/SPEC.md) にあります。
+path の履歴は `commitlore context <path>` で読み、Git を直接使うこともできます。
 
-## 信頼は badge ではなく routing
-
-コミット `4842356` には次の active record があります。
-
-```gitcommit
-Ruled-out: exempting datasets written before the fields existed | it is one line and it deletes the guarantee
-Warn: this leaves the README with no measured numbers at all until M3-b runs. That is the honest state and it is also a worse first impression. The alternative was publishing numbers produced by a binary nobody recorded
-Record-Id: r-2b58d4
-Provenance: authored
+```bash
+git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
-同じ `Warn:` がグレードにより次のようにルーティングされます。
+text search ではなく Git trailer parser を使います。本文の `Key:` は trailer とは限りません。
 
-| グレード | 条件 | モデルが読むルートの出力 |
-|---|---|---|
-| `[directive]` | `Provenance: authored`、active record、このリポジトリで明示的に信頼された author | 警告を指示として渡す |
-| `[claim]` | trusted author なし、外部 author、または reconstructed/unknown provenance | 「指示ではない」と明記した情報として渡す |
-| `blocked` | 自由記述 trailer がインジェクションパターンに一致 | 保留通知だけを渡し、一致した内容は描画しない |
+## リポジトリが証明すること
 
-既定では誰も trusted author ではありません。暗号学的な author 検証は未実装で、[issue #28](https://github.com/MongLong0214/commitlore/issues/28) で追跡しています。
+- テスト済みの Git workflow では、意思決定の履歴は rebase、squash、remote transfer、path rename を経ても残る。
+- すべての route は同じ trust grading を使い、信頼されない text は instruction ではなく information として渡す。
+- free-form trailer 内の injection に似た text は model-readable route から保留される。
+- 読める repository に record がない状態は、不完全な history や fetch されていない notes mirror と区別される。
 
-## clone からインストール
+これは Git に結び付けられ、人間が検証できる意思決定履歴についての製品上の主張です。CommitLore が agent performance を改善するという主張には依存しません。
 
-CommitLore の registry package はありません。配布チャネルは Git リポジトリそのものです（[ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)）。CLI には Node.js 22 以上が必要です。
+## Evidence: 112 回の実験、null の結果
+
+> **AI tool を作り、112 回実験した。結果は null だった。**
+
+これは製品の信頼モデルの一部なので脚注に隠しません。M4 は測定した agent behavior で裏付けられる効果を見つけませんでした。その後、paired・clustered design を反映して分析を修正し、記録された算術エラーも訂正しました。全ての限界は [M4 verdict](bench/VERDICT-M4.md)、その結果から導いた製品上の主張は [roadmap](docs/ROADMAP-TO-DONE.md) で読めます。
+
+<!-- BENCH:BEGIN -->
+<!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
+     CI regenerates this block and fails if a single byte differs (scripts/check-readme-numbers.mjs). -->
+
+**112 runs recorded.** No manifest declares how many runs the matrix was meant to produce, so completeness cannot be checked from the logs alone.
+
+| Where it comes from | |
+|---|---|
+| Results | `bench/results/t702-m4-final.jsonl` (112 rows) |
+| Run id | `20260727T120103Z-aa5eab`, `20260728T025523Z-db4659`, `20260728T025635Z-e3d669`, `20260728T025817Z-d8d0dc` |
+| Driver | `claude-headless` |
+| Model | not recorded |
+| Matrix | 8 tasks, seeds 1, 2, 3, 4, 5, 6, 7 |
+| Status | final (declared in `bench/report.ts`, pending a manifest field) |
+
+**Re-proposal and violation rates, every recorded run:**
+
+| Condition | n | Re-proposed | Re-proposal rate | Runs with violations | Violation rate | Mean turns | Mean tokens |
+|---|---|---|---|---|---|---|---|
+| `commitlore-guard` | 56 | 41 | 0.732 | 0 | 0.000 | 14.8 | 18965 |
+| `commitlore-on` | 56 | 35 | 0.625 | 0 | 0.000 | 14.2 | 18091 |
+
+**Analysis set — all 112 rows.** Nothing was excluded: no simulated rows, no failed runs, no run that never started.
+
+**Significance:** not computed — guard exposure is unknown for 112 analysis rows
+
+**How the runs ended** — failures are reported, not filtered:
+
+| Condition | completed | timeout | over-turns | over-tokens | error |
+|---|---|---|---|---|---|
+| `commitlore-guard` | 56 | 0 | 0 | 0 | 0 |
+| `commitlore-on` | 55 | 0 | 1 | 0 | 0 |
+
+**Read these numbers with their limits:**
+
+- No model is recorded — neither on the rows nor in a manifest. A re-proposal rate whose model is unknown is not a comparable number, and these figures must not be quoted against another model's.
+- Every rate here is conditional on the model that produced it. Re-proposal is a behaviour, and behaviours differ between models, so these figures are not evidence about any other model.
+- 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
+<!-- BENCH:END -->
+
+## source からインストール
+
+source distribution を確認または実行するには次を使います。
 
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
-node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-`init` は `doctor --fix`・`hooks install`・`index --rebuild` をまとめて実行し、何を行い何ができなかったかを報告し、再実行しても安全です — 自分では解決できない `warn` や `fail` は成功メッセージに紛れ込ませず、そのまま報告します。三つを個別に使いたい場合は `commitlore doctor`・`commitlore hooks install`・`commitlore index --rebuild` もそれぞれ残っています。
+## 既知の制限事項
 
-コミット済み bundle は build なしで、`node_modules` なしで動きます。SQLite index は Node 本体に同梱された `node:sqlite` を使うため（[ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)）、clone だけで index の構築も query もできます — native module も compiler も `npm install` も不要です。`--no-index` は index を使わず Git だけで答えたいときのために残っています。
-
-### Node なしでコンパイル済みバイナリとして実行
-
-`git clone` + Node runtime が引き続き正式なインストール方法です。Node が PATH に全くないマシン向けに、同じ clone から単一のコンパイル済み実行ファイルを build できます（[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)）:
-
-```bash
-cd ~/.commitlore
-npm ci
-npm run build:binary
-./dist/commitlore --version
-./dist/commitlore doctor
-```
-
-`dist/commitlore` は実行時に Node も interpreter も `node_modules` も不要です — `doctor`、`validate`、`context`、`guard`、`inject`、`index --rebuild` はすべて `PATH=/usr/bin:/bin` で動作します。commit はされません（サイズが大きく、platform・architecture 固有で、diff ではなく CI が push のたびに再 build するため）。`commitlore hooks install` と plugin の `PreToolUse` hook はどちらも build 済みならこれを自動的に解決します。
-
-### 事前ビルド済みリリースバイナリをインストール
-
-Node も clone もないマシン向け: すべての `vX.Y.Z` タグは platform ごとに 1 つずつバイナリを build し（`.github/workflows/release.yml`）、それら全体をカバーする `SHA256SUMS` を添付し、各 asset を [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations) で証明します（Sigstore ベース、公開検証可能、本プロジェクトが管理する鍵はありません）。
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
-```
-
-`install.sh` は OS と architecture を検出し、同じ release から対応する asset と `SHA256SUMS` をダウンロードし、インストール前に checksum を検証します — 他のインストールスクリプトと同様、`sh` にパイプする前に中身を読んでください。バージョンを固定するには: `sh install.sh v0.2.0`。公開されている target: `aarch64-apple-darwin`、`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、`aarch64-unknown-linux-gnu`。Windows バイナリはまだありません — SEA build と commit-msg hook shim がそちらで未検証のためです。[ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 参照。
-
-バイナリが配置されると、同じスクリプトがこのマシンにインストールされているコーディングエージェントを検出し（Claude Code、Codex、Gemini CLI、Cursor、Windsurf、opencode）、見つかったエージェントそれぞれに CommitLore の MCP サーバー（Claude Code の場合はプラグイン）を接続し、何を接続し何をスキップしたかを出力します。既存の設定ファイルはその旨を伝えずに上書きすることはなく、インストールされていないエージェント向けの設定を作ることもありません。
-
-シェルへのパイプが唯一の文書化された方法であってはいけません。同じインストールを手動で行う場合:
-
-```bash
-version=0.2.0   # または: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
-target=aarch64-apple-darwin   # または x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
-
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-
-# 展開する前に検証します。「OK」でなければここで止めてください — この検証に失敗したバイナリは実行しないでください。
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
-
-tar -xzf "commitlore-$version-$target.tar.gz"
-./commitlore --version
-```
-
-## GitHub Actions
-
-query、guard、inject を実行する job は全 history を取得する必要があります。
-
-```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0
-```
-
-MCP client には同じ clone の entry point を登録します。
-
-```json
-{
-  "mcpServers": {
-    "commitlore": {
-      "command": "node",
-      "args": ["/absolute/path/to/commitlore/dist/commitlore.mjs", "mcp"]
-    }
-  }
-}
-```
-
-`install.sh` はマシンに既にインストールされている対応クライアント（Codex、Gemini CLI、Cursor、Windsurf、opencode）それぞれに、これと同等のブロックを自動で書き込みます — 検出できなかったクライアントや CI 向けには、これをそのまま使ってください。
-
-プロトコルを読むだけなら CLI は不要です。
-
-```bash
-git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
-git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
-```
-
-text search ではなく Git の trailer parser を使ってください。文章中の `Key:` は trailer block とは限りません。
-
-## まだ行わないこと
-
-- author の暗号学的検証: [#28](https://github.com/MongLong0214/commitlore/issues/28)
-- リポジトリ全体の record coverage 集計: [#32](https://github.com/MongLong0214/commitlore/issues/32)
-- path ではなく symbol への anchor: [#33](https://github.com/MongLong0214/commitlore/issues/33)
-- 対話型 commit builder と自動 expiry 通知: [#34](https://github.com/MongLong0214/commitlore/issues/34)
-- 有効な benchmark による guard の行動効果の実証: [#37](https://github.com/MongLong0214/commitlore/issues/37)
+- Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
+- Alpine および他の musl Linux host は未対応です: [#99](https://github.com/MongLong0214/commitlore/issues/99)。
+- cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
+- benchmark は agent behavior に対する guard の効果を実証していません: [#37](https://github.com/MongLong0214/commitlore/issues/37)。
 
 ## コントリビュート
 
-[spec](spec/SPEC.md)、[ADR](docs/adr/)、[`CONTRIBUTING.md`](CONTRIBUTING.md) を先に読んでください。このリポジトリは自身の判断を記録しているため、ファイルを変更する前に `commitlore context <path>` を実行します。
-
-## ライセンス
-
-[MIT](LICENSE)
+[spec](spec/SPEC.md)、[ADR](docs/adr/)、[`CONTRIBUTING.md`](CONTRIBUTING.md) を読んでください。CommitLore は [MIT License](LICENSE) の下で永久に無料のオープンソースです。

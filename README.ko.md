@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: 커밋 4842356의 기록 r-2b58d4는 [claim] 등급이며 guard는 MATCH를 반환한다">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git은 무엇이 바뀌었는지 기억하고, CommitLore는 왜 바뀌었는지 기억한다. 새 에이전트도 제외한 대안과 그 이유를 본다.">
 </p>
 
 <p align="center">
@@ -14,48 +14,60 @@
 
 # CommitLore
 
-CommitLore는 결정 맥락을 Git 커밋 trailer와 `refs/notes/commitlore`에 보관하는 프로토콜이다.
-프로토콜이 먼저이고, CLI는 기록을 검증하고 라우팅해 셸·훅·MCP 클라이언트에 제공한다.
-코딩 에이전트를 더 낫게 만든다는 것은 입증되지 않았다.
+## Git은 무엇이 바뀌었는지 기억합니다. CommitLore는 왜 바뀌었는지 기억합니다.
 
-## 설치
+**AI 보조 코드베이스를 위한 Git-native decision memory.** CommitLore는 코드 변경 뒤의 한계, 제외한 대안, 경고, 검증 공백을 Git에 직접 기록한다. 그래서 개발자와 코딩 에이전트는 무엇을 바꾸기 전에 왜 이렇게 되었는지 이해할 수 있다.
 
-설치는 한 번, 저장소마다 한 번 — 딱 한 명령으로 끝나지 않는 이유가 있다: 아래의 훅과 인덱스는 저장소별 상태이고, 아직 본 적 없는 저장소를 위해 머신 전역 설치가 미리 만들어 둘 수 있는 것이 아니다([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)).
+호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소와 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-이 머신에 맞는, checksum까지 검증된 release 바이너리를 내려받는다 — Node가 필요 없다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)). 그리고 `commitlore` 명령을 `PATH`에 등록한다. 이어서 이 머신에 설치된 코딩 에이전트를 감지한다 — Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode. 감지된 각 에이전트에는 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다. 무엇을 연결했고 무엇을 건너뛰었는지 그대로 출력한다.
+검증 훅과 로컬 인덱스를 쓸 각 저장소에서 이어서 `commitlore init`을 실행한다. 설치기는 지원되는 코딩 에이전트를 감지하고, 안전하게 가능한 곳에 로컬 MCP 서버를 등록한다.
 
-그다음, CommitLore를 쓸 각 저장소 안에서:
+한 줄 명령은 편의를 위한 것이다. 검토하거나 고정한 설치가 필요하면 먼저 `install.sh`를 내려받아 살펴보거나, 저장소를 clone하거나, 릴리스 자산을 직접 내려받아 `SHA256SUMS`를 검증한다. 스크립트는 내려받는 바이너리의 체크섬을 검증하지만, 이미 `sh`로 전달한 스크립트를 인증하지는 않는다.
 
 ```bash
-commitlore init
+# 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
+sh install.sh v0.2.0
+
+# 또는 릴리스 바이너리를 직접 검증한 뒤 압축을 푼다.
+version=0.2.0; target=aarch64-apple-darwin
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
+curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
+grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
-해당 저장소에 commit-msg 검증 훅을 설치하고 로컬 기록 인덱스를 만든다. 무엇을 했는지 보고하며, 다시 실행해도 안전하다 — 이미 설정된 저장소는 그렇다고 보고할 뿐 아무것도 바꾸지 않는다.
+## 실제로 보기
 
-프로토콜을 읽기만 한다면 설치 자체가 필요 없다: 모든 기록은 평범한 git trailer이다([아래](#기록-하나) 참고). `sh`로 스크립트를 파이프하는 대신 Node로 clone하거나, 소스에서 빌드하거나, 직접 검증하며 내려받고 싶다면 [clone으로 설치](#clone으로-설치)에 세 방법이 모두 있다.
+**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 이 checkout에서 `install.sh`에 대한 실제 Claude `PreToolUse` payload를 같은 훅 경로로 보낸다.
 
-## 측정 기록
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
 
-<!-- BENCH:WITHDRAWN -->
+응답에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 기록과 그 이유가 들어 있다. 훅은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
 
-등록된 행동 측정은 CommitLore가 에이전트 행동을 바꾼다는 증거를 보여 주지 못했다. 이후 실행 하나는 실행 중 바이너리가 바뀌어 무효 처리됐다. 더 근본적으로 기존 데이터셋에는 각 행을 어느 빌드가 만들었는지 증명할 provenance가 없으므로 [`bench/report.ts`](bench/report.ts)는 요약을 거부한다.
+```console
+Ruled-out:
+  [claim] r-instci99a ... publishing a `-musl` release target |
+  a release.yml/build-matrix change, not an install.sh or CI-verification fix
+```
 
-이전에 공개한 모든 벤치마크 수치는 철회했다. 날짜가 있는 판정문은 효과를 주장하는 자료가 아니라 당시의 기록으로 남긴다: [`VERDICT-M1.md`](bench/VERDICT-M1.md), [`VERDICT-M1b.md`](bench/VERDICT-M1b.md), [`VERDICT-M2.md`](bench/VERDICT-M2.md), [무효 실행 기록](bench/PREREGISTRATION.md#15-m3-is-void-the-binary-under-test-changed-while-it-ran). 하니스 커밋과 실행한 번들 바이너리를 식별하는 데이터셋이 생길 때만 수치를 다시 싣는다. 자세한 내용은 [`bench/README.md`](bench/README.md)에 있다.
+## 무엇이 다른가
 
-## 저장소가 실제로 증명하는 것
+- **CLAUDE.md는 에이전트에게 어떻게 일할지 알려준다. CommitLore는 이 코드가 왜 존재하는지 알려준다.**
+- **ADR은 아키텍처를 문서화한다. CommitLore는 diff 안에 숨은 결정을 문서화한다.**
+- **또 하나의 메모리 데이터베이스가 아니다. Git에 들어가는 결정 프로토콜이다.**
 
-- **기록은 일반적인 Git 워크플로우를 견딘다.** 커밋 trailer와 notes 미러는 [rebase와 squash](test/squash.test.ts), [히스토리 재작성과 원격 전달](test/notes.test.ts), [한 단계·여러 단계 rename](test/follow.test.ts)에서 검증된다.
-- **신뢰는 모든 라우트에서 같은 뜻이다.** 쿼리 출력, CLI 주입, 편집 훅, MCP 도구, guard는 모두 `directive | claim | blocked` 등급을 공유한다. 라우트 검사는 [`query.test.ts`](test/query.test.ts), [`inject.test.ts`](test/inject.test.ts), [`mcp.test.ts`](test/mcp.test.ts), [`guard.test.ts`](test/guard.test.ts)에 있다.
-- **내장 인젝션 스캐너와 일치한 기록은 산문으로 모델에 전달되지 않는다.** 자유 서술 trailer 하나라도 일치하면 기록 전체가 `blocked` 등급을 받으며, 모델이 읽는 라우트는 내용을 인용하지 않고 보류 사실만 알린다. 이 결정적 어휘 필터의 결과는 실제 탐지율 주장이 아니다. [패턴 작성자가 만든 corpus, 독립 작성 corpus, 무해한 corpus](spec/fixtures/injection/README.md)는 따로 보고한다. CLI·훅은 [`inject.test.ts`](test/inject.test.ts), MCP의 동일한 응답은 [`mcp.test.ts`](test/mcp.test.ts)가 검증한다.
-- **알 수 없음과 비어 있음은 다르다.** 읽을 수 있는 빈 저장소에서 guard는 `0`으로 종료한다. 고장 난 Git은 `history: unavailable`, 가져오지 않은 notes 미러는 `notes: unfetched`로 보고한다. 두 불완전한 검사는 모두 `3`으로 종료한다. 계약은 [`notes-availability.test.ts`](test/notes-availability.test.ts), [`guard.test.ts`](test/guard.test.ts), [`RELEASE-GATE`](docs/RELEASE-GATE.md)에 고정돼 있다.
+권위 있는 원본은 평범한 commit trailer와 `refs/notes/commitlore`다. 인덱스와 보고서는 이 Git 기록에서 파생되며 다시 만들 수 있다.
 
 ## 기록 하나
 
-이 예제는 conformance fixture이기도 하다. Git의 trailer 파서는 네 언어 README에서 이 블록을 바이트 단위로 똑같이 읽어야 한다.
+이 예시는 conformance fixture이기도 하다. Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
 
 ```text
 Prevent silent session drops during long-running operations
@@ -80,148 +92,102 @@ CommitLore-Version: 2.0.0
 
 ### 프로토콜 어휘
 
-| Trailer | 의미 |
+| Trailer | Meaning |
 |---|---|
-| `Limit:` | 결정을 제약한 외부 조건 |
-| `Record-Id:` | 커밋 해시가 재작성돼도 유지되는 식별자 |
-| `Ruled-out:` | `대안 \| 탈락 이유` |
+| `Limit:` | External condition that constrained the decision |
+| `Record-Id:` | Stable identity across rewritten commit hashes |
+| `Ruled-out:` | `alternative \| reason` |
 | `Certainty:` | `firm` \| `tentative` \| `guess` |
 | `Blast:` | `local` \| `module` \| `system` |
 | `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | 다음 수정자를 위한 경고; 전달 전 신뢰 등급 적용 |
-| `Verified:` / `Unverified:` | 확인한 것과 확인하지 않은 것 |
-| `Follows:` / `Supersedes:` | 결정 사슬과 lifecycle 링크 |
-| `Expires:` | 제약이 끝나는 날짜 또는 조건 |
-| `Evidence:` | 주장을 뒷받침하는 경로·앵커·URL |
+| `Warn:` | Warning for a future modifier; trust-graded before delivery |
+| `Verified:` / `Unverified:` | What was and was not checked |
+| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
+| `Expires:` | Date or condition that ends a limit |
+| `Evidence:` | Path, anchor, or URL supporting a claim |
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
-| `CommitLore-Version:` / `X-*:` | 프로토콜 식별자와 확장 |
+| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
-전체 계약은 [`spec/SPEC.md`](spec/SPEC.md)에 있다.
+경로의 이력을 `commitlore context <path>`로 읽거나 Git을 직접 쓴다.
 
-## 신뢰는 배지가 아니라 라우팅이다
-
-커밋 `4842356`에는 다음 활성 기록이 있다.
-
-```gitcommit
-Ruled-out: exempting datasets written before the fields existed | it is one line and it deletes the guarantee
-Warn: this leaves the README with no measured numbers at all until M3-b runs. That is the honest state and it is also a worse first impression. The alternative was publishing numbers produced by a binary nobody recorded
-Record-Id: r-2b58d4
-Provenance: authored
+```bash
+git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 ```
 
-같은 `Warn:` 문구가 등급에 따라 다음처럼 라우팅된다.
+텍스트 검색 대신 Git trailer parser를 쓴다. 본문에 있는 `Key:`는 trailer가 아닐 수 있다.
 
-| 등급 | 조건 | 모델이 읽는 라우트의 결과 |
-|---|---|---|
-| `[directive]` | `Provenance: authored`, 활성 기록, 이 저장소에서 명시적으로 신뢰한 author | 경고를 지시로 전달 |
-| `[claim]` | 신뢰 author 없음, 외부 author, 또는 reconstructed/unknown provenance | “지시가 아님”이라고 명시한 정보로 전달 |
-| `blocked` | 자유 서술 trailer가 인젝션 패턴과 일치 | 보류 알림만 전달하고 일치한 내용은 렌더하지 않음 |
+## 저장소가 증명하는 것
 
-기본값에서는 어떤 author도 신뢰하지 않는다. 암호학적 author 검증은 아직 없으며 [이슈 #28](https://github.com/MongLong0214/commitlore/issues/28)에서 추적한다.
+- 테스트한 Git workflow에서 결정 이력은 rebase, squash, remote transfer, 경로 rename을 거쳐도 유지된다.
+- 모든 route는 같은 trust grading을 써서 신뢰하지 않는 텍스트를 지시가 아닌 정보로 전달한다.
+- 자유 형식 trailer의 injection 같은 텍스트는 model-readable route에서 보류된다.
+- 읽을 수 있는 저장소의 기록 없음은 불완전한 history나 fetch하지 않은 notes mirror와 구별된다.
 
-## clone으로 설치
+이것은 Git에 묶여 사람이 검증할 수 있는 결정 이력에 대한 제품 주장이다. CommitLore가 에이전트 성능을 높인다는 주장에 기대지 않는다.
 
-CommitLore 레지스트리 패키지는 없다. 배포 채널은 Git 저장소 자체이며([ADR-0011](docs/adr/ADR-0011-plugin-first-distribution.md)), CLI는 Node.js 22 이상이 필요하다.
+## 근거: 112회 실험, null 결과
+
+> **AI 도구를 만들고 112회 실험했지만, 결과는 null이었다.**
+
+이 결과는 제품의 신뢰 모델 일부이므로 각주로 숨기지 않는다. M4는 측정한 에이전트 행동에서 뒷받침되는 효과를 찾지 못했다. 이후 paired·clustered 설계를 반영해 분석을 수정했고, 기록된 산술 오류도 바로잡았다. 전체 한계는 [M4 verdict](bench/VERDICT-M4.md), 그 결과의 제품 주장은 [roadmap](docs/ROADMAP-TO-DONE.md)에서 읽을 수 있다.
+
+<!-- BENCH:BEGIN -->
+<!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
+     CI regenerates this block and fails if a single byte differs (scripts/check-readme-numbers.mjs). -->
+
+**112 runs recorded.** No manifest declares how many runs the matrix was meant to produce, so completeness cannot be checked from the logs alone.
+
+| Where it comes from | |
+|---|---|
+| Results | `bench/results/t702-m4-final.jsonl` (112 rows) |
+| Run id | `20260727T120103Z-aa5eab`, `20260728T025523Z-db4659`, `20260728T025635Z-e3d669`, `20260728T025817Z-d8d0dc` |
+| Driver | `claude-headless` |
+| Model | not recorded |
+| Matrix | 8 tasks, seeds 1, 2, 3, 4, 5, 6, 7 |
+| Status | final (declared in `bench/report.ts`, pending a manifest field) |
+
+**Re-proposal and violation rates, every recorded run:**
+
+| Condition | n | Re-proposed | Re-proposal rate | Runs with violations | Violation rate | Mean turns | Mean tokens |
+|---|---|---|---|---|---|---|---|
+| `commitlore-guard` | 56 | 41 | 0.732 | 0 | 0.000 | 14.8 | 18965 |
+| `commitlore-on` | 56 | 35 | 0.625 | 0 | 0.000 | 14.2 | 18091 |
+
+**Analysis set — all 112 rows.** Nothing was excluded: no simulated rows, no failed runs, no run that never started.
+
+**Significance:** not computed — guard exposure is unknown for 112 analysis rows
+
+**How the runs ended** — failures are reported, not filtered:
+
+| Condition | completed | timeout | over-turns | over-tokens | error |
+|---|---|---|---|---|---|
+| `commitlore-guard` | 56 | 0 | 0 | 0 | 0 |
+| `commitlore-on` | 55 | 0 | 1 | 0 | 0 |
+
+**Read these numbers with their limits:**
+
+- No model is recorded — neither on the rows nor in a manifest. A re-proposal rate whose model is unknown is not a comparable number, and these figures must not be quoted against another model's.
+- Every rate here is conditional on the model that produced it. Re-proposal is a behaviour, and behaviours differ between models, so these figures are not evidence about any other model.
+- 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
+<!-- BENCH:END -->
+
+## 소스에서 설치
+
+소스 배포를 살펴보거나 실행하려면 다음을 쓴다.
 
 ```bash
 git clone https://github.com/MongLong0214/commitlore ~/.commitlore
-node ~/.commitlore/dist/commitlore.mjs --version
 node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
-`init`은 `doctor --fix`, `hooks install`, `index --rebuild`를 한 번에 실행하고, 무엇을 했고 무엇을 하지 못했는지 보고하며, 다시 실행해도 안전하다 — 스스로 해결할 수 없는 `warn`이나 `fail`은 성공 메시지에 묻히지 않고 그대로 보고된다. 세 개씩 따로 쓰고 싶다면 `commitlore doctor`, `commitlore hooks install`, `commitlore index --rebuild` 각각도 그대로 남아 있다.
+## 알려진 제한 사항
 
-커밋된 번들은 빌드 없이, `node_modules` 없이 실행된다. SQLite 인덱스는 Node에 내장된 `node:sqlite`를 사용하므로([ADR-0012](docs/adr/ADR-0012-drop-the-native-dependency.md)) clone만으로도 인덱스를 만들고 조회할 수 있다 — 네이티브 모듈도, 컴파일러도, `npm install`도 필요 없다. `--no-index`는 인덱스를 건너뛰고 Git만으로 답하고 싶을 때 여전히 사용할 수 있다.
-
-### Node 없이 컴파일된 바이너리로 실행하기
-
-`git clone` + Node 런타임이 여전히 정식 설치 방법이다. Node가 PATH에 전혀 없는 머신을 위해, 같은 clone에서 단일 컴파일 실행 파일을 빌드할 수 있다([ADR-0015](docs/adr/ADR-0015-single-executable-binary.md)):
-
-```bash
-cd ~/.commitlore
-npm ci
-npm run build:binary
-./dist/commitlore --version
-./dist/commitlore doctor
-```
-
-`dist/commitlore`는 런타임에 Node도, 인터프리터도, `node_modules`도 필요 없다 — `doctor`, `validate`, `context`, `guard`, `inject`, `index --rebuild` 모두 `PATH=/usr/bin:/bin`에서 동작한다. 커밋되지 않으며(용량이 크고 플랫폼·아키텍처별로 다르며, diff 대신 CI가 매 push마다 다시 빌드한다), `commitlore hooks install`과 플러그인의 `PreToolUse` hook 모두 빌드되면 자동으로 이를 찾아 사용한다.
-
-### 미리 빌드된 릴리스 바이너리 설치하기
-
-Node도 clone도 없는 머신을 위해: 모든 `vX.Y.Z` 태그는 플랫폼별 바이너리 하나씩을 빌드하고(`.github/workflows/release.yml`), 전체를 커버하는 `SHA256SUMS`를 첨부하며, 각 asset을 [`actions/attest-build-provenance`](https://github.com/MongLong0214/commitlore/attestations)로 증명한다(Sigstore 기반, 공개 검증 가능, 이 프로젝트가 관리하는 키 없음).
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
-```
-
-`install.sh`는 OS와 아키텍처를 감지하고, 같은 릴리스에서 맞는 asset과 `SHA256SUMS`를 내려받아, 설치 전에 체크섬을 검증한다 — `sh`에 파이프하기 전에 다른 설치 스크립트와 마찬가지로 먼저 읽어볼 것. 버전을 고정하려면: `sh install.sh v0.2.0`. 배포되는 target: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`. Windows 바이너리는 아직 없다 — SEA 빌드와 commit-msg hook shim이 그쪽에서 검증되지 않았다. [ADR-0015](docs/adr/ADR-0015-single-executable-binary.md) 참고.
-
-바이너리가 준비되면 같은 스크립트가 이 머신에 설치된 코딩 에이전트를 감지해(Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode) 찾아낸 각각에 CommitLore의 MCP 서버(Claude Code는 플러그인)를 연결하고, 무엇을 연결했고 무엇을 건너뛰었는지 출력한다. 기존 설정 파일은 알리지 않고 덮어쓰지 않으며, 설치되지 않은 에이전트를 위한 설정은 만들지 않는다.
-
-쉘로 파이프하는 것이 유일한 문서화된 경로여서는 안 된다. 같은 설치를 수동으로:
-
-```bash
-version=0.2.0   # 또는: curl -fsSL https://github.com/MongLong0214/commitlore/releases/latest/download/SHA256SUMS | head -1
-target=aarch64-apple-darwin   # 또는 x86_64-apple-darwin | x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu
-
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-
-# 추출 전에 검증한다. "OK"가 아니면 여기서 멈춘다 — 이 검증에 실패한 바이너리는 실행하지 말 것.
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c -   # Linux: sha256sum -c -
-
-tar -xzf "commitlore-$version-$target.tar.gz"
-./commitlore --version
-```
-
-## GitHub Actions
-
-query, guard 또는 inject 명령을 실행하는 job은 전체 history를 받아야 한다.
-
-```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0
-```
-
-MCP 클라이언트에는 같은 clone의 진입점을 등록한다.
-
-```json
-{
-  "mcpServers": {
-    "commitlore": {
-      "command": "node",
-      "args": ["/absolute/path/to/commitlore/dist/commitlore.mjs", "mcp"]
-    }
-  }
-}
-```
-
-`install.sh`는 머신에 이미 설치돼 있는 지원 클라이언트(Codex, Gemini CLI, Cursor, Windsurf, opencode)마다 이와 동등한 블록을 자동으로 써 준다 — 감지하지 못한 클라이언트나 CI에서는 이걸 그대로 옮겨 쓰면 된다.
-
-프로토콜을 읽는 데 CLI는 필요 없다.
-
-```bash
-git log --format='%(trailers:key=Ruled-out,valueonly,separator=%x3B)'
-git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
-```
-
-텍스트 검색이 아니라 Git의 trailer 파서를 사용해야 한다. 산문 속 `Key:`는 trailer 블록이 아닐 수 있다.
-
-## 아직 하지 않는 것
-
-- 암호학적 author 검증: [#28](https://github.com/MongLong0214/commitlore/issues/28)
-- 저장소 전체 기록 coverage 보고: [#32](https://github.com/MongLong0214/commitlore/issues/32)
-- 경로가 아닌 심볼에 기록 고정: [#33](https://github.com/MongLong0214/commitlore/issues/33)
-- 대화형 commit builder와 자동 만료 알림: [#34](https://github.com/MongLong0214/commitlore/issues/34)
-- 유효한 벤치마크로 guard의 에이전트 행동 효과 입증: [#37](https://github.com/MongLong0214/commitlore/issues/37)
+- Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
+- Alpine 및 다른 musl Linux host는 지원하지 않는다: [#99](https://github.com/MongLong0214/commitlore/issues/99).
+- 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
+- benchmark는 에이전트 행동에 대한 guard 효과를 입증하지 못한다: [#37](https://github.com/MongLong0214/commitlore/issues/37).
 
 ## 기여하기
 
-[spec](spec/SPEC.md), [ADR](docs/adr/), [`CONTRIBUTING.md`](CONTRIBUTING.md)를 먼저 읽는다. 이 저장소는 자기 결정을 직접 기록하므로 파일을 바꾸기 전에 `commitlore context <path>`를 실행한다.
-
-## 라이선스
-
-[MIT](LICENSE)
+[spec](spec/SPEC.md), [ADR](docs/adr/), [`CONTRIBUTING.md`](CONTRIBUTING.md)를 읽어보라. CommitLore는 [MIT License](LICENSE) 아래에서 영원히 무료인 오픈소스다.

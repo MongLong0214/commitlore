@@ -1,5 +1,5 @@
 {
-  "description": "Seed commits for the `commitlore guard` suite. The `redis-cache` record is the commit message from bench/tasks/reproposal-redis-cache.yaml verbatim, so the unit suite and the AnnalsBench re-encounter task (T-701/T-702) measure the same rejection. The other three exist to pin the properties bench cannot exercise from a single arm: path scope, the lifecycle fold, and the `--at` replay. `precisionRecords` is seeded into its own repository — it is the `direct-pool` record from bench/tasks/reproposal-prisma-orm.yaml, whose rejected alternative is mostly generic vocabulary, and it exists to measure the *near* miss rather than the far one. File bodies are stubs — guard reads trailers and the commit's touched paths, never file contents; the bench tasks own the real sources.",
+  "description": "Seed commits for the `commitlore guard` suite. The `redis-cache` record is the commit message from bench/tasks/reproposal-redis-cache.yaml verbatim, so the unit suite and the AnnalsBench re-encounter task (T-701/T-702) measure the same rejection. The other records pin properties bench cannot exercise from a single arm: path scope, the lifecycle fold, the `--at` replay, and issue #61's real filename-only false positive. `precisionRecords` is seeded into its own repository — it is the `direct-pool` record from bench/tasks/reproposal-prisma-orm.yaml, whose rejected alternative is mostly generic vocabulary, and it exists to measure the *near* miss rather than the far one. File bodies are stubs — guard reads trailers and the commit's touched paths, never file contents; the bench tasks own the real sources.",
   "records": [
     {
       "id": "redis-cache",
@@ -25,6 +25,14 @@
         "src/queue.ts": "export const enqueue = (job: string): void => {};"
       },
       "message": "Run jobs off a Postgres queue table\n\nRuled-out: a RabbitMQ broker | one more stateful service to operate for a queue\n  that never exceeds ten jobs a minute\nBlast: module\nUndo: easy\nCertainty: tentative\nRecord-Id: r-aa1122\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
+    },
+    {
+      "id": "package-json-file-list",
+      "committedAt": "2026-01-08T09:00:00Z",
+      "files": {
+        "package.json": "{}"
+      },
+      "message": "Keep package selection outside the manifest\n\nRuled-out: assert a file list in package.json | it goes stale silently, and\n  installing is the actual question\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-0c5d38\nProvenance: authored\nCommitLore-Version: 2.0.0\n"
     },
     {
       "id": "queue-outgrew",

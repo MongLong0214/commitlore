@@ -77,12 +77,19 @@ export interface DeclaredSource {
  */
 export const README_SOURCES: readonly DeclaredSource[] = [
   {
-    file: "bench/results/t702-m1-final.jsonl",
+    file: "bench/results/t702-m4-final.jsonl",
     status: "final",
     status_note:
-      "The registered M1 measurement, run against frozen code `a376808` under the environment controls of " +
-      "PREREGISTRATION.md §5-b. The verdict is bench/VERDICT-M1.md. Each file's own manifest is the authority " +
-      "on its status; these declarations are the fallback.",
+      "The registered M4 measurement (PREREGISTRATION.md §16), the qualification-gated matrix whose primary " +
+      "comparison is `commitlore-guard` against `commitlore-on`. Run from an isolated checkout against frozen " +
+      "code `081d858c1`, under the environment controls of §5-b; every row carries a uniform `harness_commit` " +
+      "and `dist_digest`. The verdict is bench/VERDICT-M4.md. M1 (bench/VERDICT-M1.md), M1-b " +
+      "(bench/VERDICT-M1b.md) and M2 (bench/VERDICT-M2.md) are not revised and are not pooled here — a " +
+      "different task set and a third arm make them a different matrix, the same reason the ablation log below " +
+      "stays out of this list. M3 is void (§15). No manifest exists for this file: `runner.ts` does not write " +
+      "`model` onto a row, and none was written for this run either, so the model behind these 112 rows is " +
+      "unrecorded rather than declared (bench/README.md, \"Open after T-702\", item 1). Each file's own " +
+      "manifest is the authority on its status; this declaration is the fallback.",
   },
 ];
 
@@ -367,11 +374,9 @@ export interface ModelReport {
  * Where the model name comes from, and whether the rows themselves carry it.
  *
  * This matters more than it looks: re-proposal is a behaviour, so every rate
- * here is conditional on the model that produced it, and `runner.ts` does not
- * write `--model` onto the row (bench/README.md, *What the numbers are
- * conditional on*). The manifest is the stand-in, and the report says which of
- * the two it read rather than presenting a manifest value as if the run had
- * emitted it.
+ * here is conditional on the model that produced it. Legacy rows may have only
+ * a manifest, and the report says which source it read rather than presenting a
+ * manifest value as if the row had emitted it.
  */
 export const modelReport = (sources: Sources, summary: Summary): ModelReport => {
   const fromRows = summary.models.filter((model) => model !== UNRECORDED_MODEL);
@@ -389,8 +394,7 @@ export const modelReport = (sources: Sources, summary: Summary): ModelReport => 
 
   if (rowsMissingModel && fromManifests.length > 0) {
     notes.push(
-      "The model above is read from the run manifest: `runner.ts` passes `--model` to the driver but does not " +
-        "write it onto the row, so the rows in this dataset carry no model field of their own.",
+      "The model above is read from the run manifest because these legacy rows carry no model field of their own.",
     );
   }
   if (rowsMissingModel && fromManifests.length === 0) {
@@ -612,9 +616,10 @@ export const buildReport = (sources: Sources): string => {
     const measured = summary.analysis.reduce((total, condition) => total + condition.n, 0);
     lines.push(
       "**Significance:** not computed — " +
-        (measured === 0
+        (summary.comparison_unavailable_because ??
+          (measured === 0
           ? "the analysis set is empty, so there is nothing to test."
-          : "a comparison needs exactly two conditions."),
+          : "a comparison needs exactly two conditions.")),
       "",
     );
   } else {

@@ -43,6 +43,7 @@ const PARTIAL = `${FIXTURES}/partial.jsonl`;
 const STAMPED = `${FIXTURES}/stamped.jsonl`;
 const SIMULATED = `${FIXTURES}/simulated.jsonl`;
 const EMPTY = `${FIXTURES}/empty.jsonl`;
+const M4_LEGACY = `${FIXTURES}/m4-legacy-row.jsonl`;
 const BOGUS_STATUS = `${FIXTURES}/bogus-status.jsonl`;
 const FIXTURE_README = `${FIXTURES}/readme-in-sync.md`;
 
@@ -206,6 +207,18 @@ describe('failed runs stay in the report', () => {
   });
 });
 
+describe('unknown guard exposure', () => {
+  it('explains why an otherwise two-arm comparison was not computed', () => {
+    const source = tempCopy(M4_LEGACY);
+    const row = fs.readFileSync(source, 'utf8');
+    fs.writeFileSync(source, `${row}${row.replace('"cond": "commitlore-on"', '"cond": "commitlore-off"')}`);
+
+    const markdown = buildReport(readSources([source], { allowMissing: false }));
+    expect(markdown).toContain('**Significance:** not computed — guard exposure is unknown for 2 analysis rows');
+    expect(markdown).not.toContain('a comparison needs exactly two conditions');
+  });
+});
+
 describe('an empty result set says so', () => {
   it('reports no measurement rather than a rate of 0 or NaN', () => {
     const markdown = report(EMPTY);
@@ -361,19 +374,24 @@ describe('a declared status follows the file, not the invocation', () => {
     expect(declarationFor(CLEAN)).toBeNull();
   });
 
-  it('refuses pre-provenance declared sources identically through both entry points', () => {
+  it('accepts the provenanced declared source identically through both entry points', () => {
+    // The declared M4 source (`t702-m4-final.jsonl`) carries a uniform `harness_commit`
+    // and `dist_digest` on every row, unlike the earlier M1/M1-b/M2 datasets. Whether the
+    // report is built from `README_SOURCES` (what CI regenerates) or from the same paths
+    // typed explicitly, the two must agree byte for byte — a source-of-truth divergence
+    // between the two entry points is exactly what let a stale block through before.
     const files = README_SOURCES.map((source) => source.file).filter((file) =>
       fs.existsSync(path.join(REPO_ROOT, file)),
     );
     if (files.length === 0) return;
     const viaDefaults = runReport('--section');
     const viaPaths = runReport(...files, '--section');
-    expect(viaDefaults.status).toBe(1);
-    expect(viaPaths.status).toBe(1);
-    expect(viaDefaults.stdout).toBe('');
-    expect(viaPaths.stdout).toBe('');
-    expect(viaPaths.stderr).toBe(viaDefaults.stderr);
-    expect(viaDefaults.stderr).toMatch(/unrecorded/);
+    expect(viaDefaults.status).toBe(0);
+    expect(viaPaths.status).toBe(0);
+    expect(viaDefaults.stderr).toBe('');
+    expect(viaPaths.stderr).toBe('');
+    expect(viaPaths.stdout).toBe(viaDefaults.stdout);
+    expect(viaDefaults.stdout).toContain(MARKER_BEGIN);
   });
 });
 
