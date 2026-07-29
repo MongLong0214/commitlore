@@ -9,6 +9,60 @@ signal is named `keyword-strength:*`. Consumers that parse signal text should
 migrate to that name. The exported `STRONG_KEYWORD_MASS` constant remains as a
 deprecated compatibility alias for `STRONG_KEYWORD_STRENGTH`.
 
+## 0.3.0 — 2026-07-29
+
+### Upgrade reasons
+
+- `doctor` now probes the PreToolUse command actually configured in
+  `.claude/settings.json`. Binary-only installs no longer report a working hook
+  as broken because `doctor` invented a missing shell-script path (#128), and a
+  completed hook is no longer failed because its probe's stdin write raced an
+  `EPIPE` (#149).
+- `init` now exits 0 for a healthy new repository with no remote. It still
+  reports the sharing warning; configured problems that need attention still
+  exit 1 (#107).
+
+### Correctness
+
+- `context` no longer turns conventional attribution trailers such as
+  `Co-authored-by` into decision records, and `validate` now rejects duplicate
+  `Record-Id` values declared by two blocks in one message.
+- Git and hook probes preserve a completed child process's exit status when an
+  stdin `EPIPE` races after it exits. Local squash preservation and benchmark
+  reporting now distinguish history loss from path-lookup loss.
+
+### Measurements and benchmarks
+
+- Record capture is measured: the truthful one-record fixture used 1,524
+  harvest tokens and 923 verification tokens (2,117 marginal / 2,447 including
+  cache reads per accepted record).
+- Addressable rationale density is measured: 203 of 263 commits (77.2%) carry
+  records, with 2,243 structured trailers (37.5% of non-empty body lines).
+- Retrieval routes are compared at a two-record budget: embedding top-k,
+  embedding plus a path filter, and CommitLore path plus lifecycle each return
+  2/2 relevant records at every reported corpus size; this is a tie, not an
+  embedding-retrieval advantage.
+- Irrelevant-context exposure is measured: with 10,000 distractors,
+  inject-everything exposes 10,002 records / 1,004,554 tokens, top-k lexical
+  returns 1/2 relevant records in 190 tokens, and path plus lifecycle exposes
+  2 relevant records in 335 tokens.
+
+The 17x indexed-versus-unindexed figure in the 0.2.0 notes is retired: it used
+a parser that read only a message's final record block. The current 100k
+measurement is 496.15 ms p50 indexed versus 86,672.97 ms p50 for
+`--no-index`; it compares CommitLore modes, not alternative products. Modelled
+break-even and token-saving claims are also removed: avoided rejected-path work
+and provider token usage have not been measured.
+
+### Compatibility
+
+There is no end-user CLI or installation migration. The deterministic benchmark
+now stops at 100k commits; this changes its internal measurement protocol, not
+the product. Consumers of deterministic JSONL must accept the new
+`capture_cost`, `noise_exposure`, and `rationale_density` rows, use
+`outcome`/`measurement` instead of a survival row's former `method`, and accept
+the added guard-threshold fields.
+
 ## 0.2.0 — 2026-07-28
 
 Second release. 25 defects found and 22 closed by dogfooding this tool on its
