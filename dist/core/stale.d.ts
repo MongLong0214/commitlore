@@ -96,6 +96,8 @@ export declare const foldLifecycle: (records: StaleRecord[], opts: FoldOptions) 
  * line with two fixes.
  */
 export declare const findDanglingRefs: (records: StaleRecord[], referencedBy?: StaleRecord[]) => Violation[];
+/** Whether a record cannot be safely merged because its identity is ambiguous. */
+export declare const hasAmbiguousIdCollision: (records: StaleRecord[]) => boolean;
 /**
  * A Record-Id belongs to exactly one record unless a later commit declares
  * `Supersedes:` for it. Same-message duplicates and divergent notes are still

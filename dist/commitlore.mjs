@@ -13652,8 +13652,10 @@ var declarations = (ordered) => {
 var supersessions = (ordered) => {
   const found = /* @__PURE__ */ new Map();
   for (const { record: record2 } of ordered) {
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
     for (const trailer of record2.trailers) {
       if (trailer.key !== SUPERSEDES_KEY) continue;
+      if (trailer.value === recordId) continue;
       if (found.has(trailer.value)) continue;
       found.set(trailer.value, record2.sha ?? "");
     }
@@ -13707,6 +13709,19 @@ var findDanglingRefs = (records, referencedBy = records) => {
   return violations;
 };
 var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var groupsByRecordId = (records) => {
+  const groups = /* @__PURE__ */ new Map();
+  for (const record2 of records) {
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
+    if (recordId === void 0) continue;
+    const group = groups.get(recordId);
+    if (group === void 0) groups.set(recordId, [record2]);
+    else group.push(record2);
+  }
+  return groups;
+};
+var hasAmbiguousGroup = (group) => sharesACommit(group) || group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1;
+var hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
 var hasDeclaredSuccession = (recordId, ordered) => {
   let declarations2 = 0;
   for (const { record: record2 } of ordered) {
@@ -13720,20 +13735,10 @@ var hasDeclaredSuccession = (recordId, ordered) => {
   return false;
 };
 var findIdCollisions = (records) => {
-  const groups = /* @__PURE__ */ new Map();
-  for (const record2 of records) {
-    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
-    if (recordId === void 0) continue;
-    const group = groups.get(recordId);
-    if (group === void 0) groups.set(recordId, [record2]);
-    else group.push(record2);
-  }
+  const groups = groupsByRecordId(records);
   const ordered = chronological(records);
   return [...groups].filter(([recordId, group]) => {
-    if (sharesACommit(group)) return true;
-    if (group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1) {
-      return true;
-    }
+    if (hasAmbiguousGroup(group)) return true;
     return group.filter((record2) => record2.source !== "notes").length > 1 && !hasDeclaredSuccession(recordId, ordered);
   }).map(([recordId]) => ({
     key: RECORD_ID_KEY2,
@@ -14495,7 +14500,7 @@ var mergeByIdentity = (records, states) => {
     const recordId = trailerValue2(trailers, RECORD_ID_KEY3);
     const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY2);
     const provenance = parseProvenance(provenanceValue);
-    const identityCollision = findIdCollisions(ordered).length > 0;
+    const identityCollision = hasAmbiguousIdCollision(ordered);
     merged.push({
       trailers,
       sha: latest2.sha,

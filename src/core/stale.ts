@@ -205,8 +205,12 @@ const supersessions = (ordered: TimedRecord[]): Map<string, string> => {
   const found = new Map<string, string>();
 
   for (const { record } of ordered) {
+    const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
     for (const trailer of record.trailers) {
       if (trailer.key !== SUPERSEDES_KEY) continue;
+      // A duplicate declaration can name its own id to resolve that duplicate;
+      // it updates the record and does not retire the resolved identity.
+      if (trailer.value === recordId) continue;
       if (found.has(trailer.value)) continue;
       found.set(trailer.value, record.sha ?? '');
     }
@@ -319,6 +323,27 @@ const payloadSignature = (record: StaleRecord): string =>
     .sort()
     .join('\u0001');
 
+const groupsByRecordId = (records: StaleRecord[]): Map<string, StaleRecord[]> => {
+  const groups = new Map<string, StaleRecord[]>();
+  for (const record of records) {
+    const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
+    if (recordId === undefined) continue;
+    const group = groups.get(recordId);
+    if (group === undefined) groups.set(recordId, [record]);
+    else group.push(record);
+  }
+  return groups;
+};
+
+const hasAmbiguousGroup = (group: StaleRecord[]): boolean =>
+  sharesACommit(group) ||
+  (group.some((record) => record.source === 'notes') &&
+    new Set(group.map(payloadSignature)).size > 1);
+
+/** Whether a record cannot be safely merged because its identity is ambiguous. */
+export const hasAmbiguousIdCollision = (records: StaleRecord[]): boolean =>
+  [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
+
 /** A later commit may explicitly replace a duplicated identity with Supersedes. */
 const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolean => {
   let declarations = 0;
@@ -343,25 +368,11 @@ const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolea
  * collisions: neither is a later authored succession.
  */
 export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
-  const groups = new Map<string, StaleRecord[]>();
-  for (const record of records) {
-    const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
-    if (recordId === undefined) continue;
-    const group = groups.get(recordId);
-    if (group === undefined) groups.set(recordId, [record]);
-    else group.push(record);
-  }
-
+  const groups = groupsByRecordId(records);
   const ordered = chronological(records);
   return [...groups]
     .filter(([recordId, group]) => {
-      if (sharesACommit(group)) return true;
-      if (
-        group.some((record) => record.source === 'notes') &&
-        new Set(group.map(payloadSignature)).size > 1
-      ) {
-        return true;
-      }
+      if (hasAmbiguousGroup(group)) return true;
       return (
         group.filter((record) => record.source !== 'notes').length > 1 &&
         !hasDeclaredSuccession(recordId, ordered)

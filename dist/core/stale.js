@@ -136,8 +136,13 @@ const declarations = (ordered) => {
 const supersessions = (ordered) => {
     const found = new Map();
     for (const { record } of ordered) {
+        const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
         for (const trailer of record.trailers) {
             if (trailer.key !== SUPERSEDES_KEY)
+                continue;
+            // A duplicate declaration can name its own id to resolve that duplicate;
+            // it updates the record and does not retire the resolved identity.
+            if (trailer.value === recordId)
                 continue;
             if (found.has(trailer.value))
                 continue;
@@ -240,6 +245,25 @@ const payloadSignature = (record) => record.trailers
     .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
     .sort()
     .join('\u0001');
+const groupsByRecordId = (records) => {
+    const groups = new Map();
+    for (const record of records) {
+        const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
+        if (recordId === undefined)
+            continue;
+        const group = groups.get(recordId);
+        if (group === undefined)
+            groups.set(recordId, [record]);
+        else
+            group.push(record);
+    }
+    return groups;
+};
+const hasAmbiguousGroup = (group) => sharesACommit(group) ||
+    (group.some((record) => record.source === 'notes') &&
+        new Set(group.map(payloadSignature)).size > 1);
+/** Whether a record cannot be safely merged because its identity is ambiguous. */
+export const hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
 /** A later commit may explicitly replace a duplicated identity with Supersedes. */
 const hasDeclaredSuccession = (recordId, ordered) => {
     let declarations = 0;
@@ -260,26 +284,12 @@ const hasDeclaredSuccession = (recordId, ordered) => {
  * collisions: neither is a later authored succession.
  */
 export const findIdCollisions = (records) => {
-    const groups = new Map();
-    for (const record of records) {
-        const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
-        if (recordId === undefined)
-            continue;
-        const group = groups.get(recordId);
-        if (group === undefined)
-            groups.set(recordId, [record]);
-        else
-            group.push(record);
-    }
+    const groups = groupsByRecordId(records);
     const ordered = chronological(records);
     return [...groups]
         .filter(([recordId, group]) => {
-        if (sharesACommit(group))
+        if (hasAmbiguousGroup(group))
             return true;
-        if (group.some((record) => record.source === 'notes') &&
-            new Set(group.map(payloadSignature)).size > 1) {
-            return true;
-        }
         return (group.filter((record) => record.source !== 'notes').length > 1 &&
             !hasDeclaredSuccession(recordId, ordered));
     })
