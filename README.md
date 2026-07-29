@@ -18,16 +18,6 @@
 
 **Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
 
-At 10,002 records, CommitLore's path scope exposes both active records for a queried path, while top-k lexical retrieval exposes only one.
-
-| route | model-visible records | relevant records | model-visible tokens |
-|---|---:|---:|---:|
-| inject everything | 10,002 | 2/2 | 1,004,554 |
-| top-k lexical | 2 | 1/2 | 190 |
-| CommitLore path scope | 2 | 2/2 | 335 |
-
-This [measurement](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md) is exposure—irrelevant decision context reaching the model—not token or billed cost, accuracy, or agent behaviour; it is the project's only comparison with a practical alternative, where similarity retrieval (top-k, embeddings, or RAG) loses half the relevant records as the corpus grows, and because long context degrades retrieval accuracy ([Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/)), a compact path-scoped set is a quality property, not merely a smaller payload.
-
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
@@ -35,6 +25,22 @@ Install once. Your coding agent can record the decisions worth carrying forward,
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
+
+## 10,002 records in the repository. Two belonged in the prompt. CommitLore returned both.
+
+This [measurement](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md) measures context exposure—not billed token savings, accuracy, or agent behaviour.
+
+Both routes had the same two-record output budget, and exactly two records in the corpus were active for the queried path.
+
+| distractors | measured top-k lexical baseline | CommitLore path scope |
+|---:|---:|---:|
+| 0 | 2/2 | 2/2 |
+| 10 | 1/2 | 2/2 |
+| 100 | 1/2 | 2/2 |
+| 1,000 | 1/2 | 2/2 |
+| 10,000 | 1/2 | 2/2 |
+
+At 10,000 distractors, inject-everything shows 10,002 records and 1,004,554 tokens; the measured top-k lexical baseline shows 2 records and 190 tokens, returning 1 of 2 relevant records; CommitLore shows 2 records and 335 tokens, returning both. The lexical baseline drops a record at 10 distractors, not gradually as the corpus grows. [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) is one reason compact context is a quality property, not only a smaller payload.
 
 Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
 
