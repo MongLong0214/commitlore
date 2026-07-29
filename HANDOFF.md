@@ -80,54 +80,38 @@ measurement and record it with the result.
 
 ## Open issues
 
-Five, and none is a defect. All five are things nobody knows yet.
-
-**#140** — the one that matters. M1, M2 and M4 all measured final coding
-behaviour, four layers downstream of anything this product controls, and each
-failed differently. The replacement claim is *fresh-agent decision recovery*: does
-a fresh agent recover a code path's active decision context before its first edit?
-The rule that makes it credible is that **gold answers must not be derived from
-CommitLore records** — two annotators extract decision atoms from PR discussion and
-commit bodies, the gold is frozen, and only then is the same information encoded
-as trailers. Otherwise it measures whether CommitLore can read its own format. A
-protocol registration is in flight on `protocol-issue-140`; it writes the
-registration and deliberately builds no harness.
-
-**#172** — the README hero does not survive #166 and must be revised. See the
-numbers section below; this is the most urgent thing on the list because the claim
-is live on the front page.
-
-**#173** — the experiment that might restore a differentiator. Path scope withholds
-superseded and expired records; a similarity retriever has no notion of a record
-being stale and will return a decision that was already reversed. Missing a record
-costs the model context; being handed a reversed decision costs it correctness, and
-those are not the same failure. In flight on `feat-issue-173`. The corpus must be
-built so the *opposite* outcome is reachable — if embedding retrieval also returns
-zero stale records, that finding is as valuable as the expected one.
+One, and it is not a defect. It is a thing nobody knows yet.
 
 **#176** — guard scoring. Against the 417-decision corpus: precision 44.8%
 (95% Wilson 32.7%–57.5%), recall **22.0%**, 92 false negatives against 26 true
-positives. Do not change the corpus in the same commit as the scorer — the corpus
-is the instrument now. Report both figures on every change, because a scorer that
-suppresses firings lifts precision while making recall worse and looks like an
-improvement. The interval is the acceptance criterion, not the point estimate.
+positives. A ready-to-run closed packet sits at `.github/PACKET-176.md`.
 
-**#161** — a committed benchmark result names the commit that produced it, and
-every rebase of its own branch orphans that commit. It happened twice in one
-sitting. In flight on `feat-issue-161`. Recording a commit id *and* a content
-digest, with the fallback stating loudly which it used, is the shape I proposed.
+Its first instruction is the one that matters: **read the 92 false negatives and
+report the recurring shapes, with counts, before proposing any code.** Four
+attempts on this guard have failed by tuning a threshold against a number instead
+of looking at what was missed, and #157 closed on the finding that no
+precision-safe cutoff exists.
+
+Two rules for whoever picks it up. Do not change the corpus in the same commit as
+the scorer — the corpus is the instrument now. And report both figures on every
+change, because a scorer that suppresses firings lifts precision while making
+recall worse and looks like an improvement. **The interval is the acceptance
+criterion, not the point estimate**; at n=417 the interval is ±12 points, so a
+2-point precision gain is not a result.
 
 ## What the numbers currently say
 
 Measured on a quiet machine, single complete run, re-derivable:
 
 ```
-retrieval recall at a two-record budget, 10,002 records
-  BM25                       0 of 2
-  hybrid RRF                 1 of 2
-  embedding top-k            2 of 2      <- matches us
-  embedding + path filter    2 of 2
-  CommitLore path scope      2 of 2
+retrieval at a two-record budget, corpus with superseded records (#173)
+                            recall   stale returned
+  BM25                       0/2         1
+  embedding top-k            1/2         1
+  hybrid RRF                 1/2         1
+  embedding + path filter    1/2         1
+  CommitLore path+lifecycle  2/2         0
+  identical at 0, 10, 100, 1,000 and 10,000 distractors
 
 query latency at 100k commits   496ms p50 / 503ms p95 indexed
   no-index, same fixture        86,673ms — ratio 4.8x at 1k, 36x at 10k, 175x at 100k
@@ -137,11 +121,24 @@ guard, 417-decision corpus      precision 44.8% (CI 32.7–57.5%), recall 22.0%
 record-bearing commits, here    73.9%
 ```
 
-**Read the retrieval table before writing any marketing.** The README currently
-leads with CommitLore keeping both relevant records while a lexical baseline loses
-one. That is true and it is misleading by omission: an embedding retriever matches
-us at every corpus size with no path filter at all. #172 tracks the revision and
-#173 tracks the lifecycle experiment that might restore a real differentiator.
+**Read the retrieval table before writing any marketing, and read both columns.**
+The claim this product may make is narrow and it took three corrections to reach:
+
+1. The README first said CommitLore beat "similarity retrieval (top-k, embeddings,
+   RAG)" on the strength of a single lexical baseline. Overreach; retracted within
+   the hour (#167) and #166 was filed to earn it.
+2. #166 measured the four routes properly and **embedding top-k matched path scope
+   at 2/2 with no path filter at all**. The differentiator did not exist.
+3. #173 changed the question. On a corpus that contains superseded records, every
+   similarity route returned one reversed decision and path scope returned none.
+
+So the sentence is: *retrieval can find records; path scope keeps reversed
+decisions out.* Not "better retrieval". The README says the #166 tie out loud, and
+it must keep saying it — implying a general win would be contradicted by this
+repository's own table, and a reader who catches that trusts nothing else.
+
+The recall column is the weaker half. 2/2 against 1/2 is two records against one
+at k=2; do not build a claim on it.
 
 Never say "99.98% token saving". The exposure figure measures how much irrelevant
 decision context reaches the model — not cost, not accuracy, not agent behaviour.
@@ -160,7 +157,8 @@ Not established, and the README says so:
 token saving                  cost measured, benefit assumed (#127 closed on that boundary)
 agent behaviour improvement   M1/M2/M4 all instrument failures
 guard effectiveness           precision 44.8%, recall 22.0% — measured, and poor
-retrieval advantage           none over embedding retrieval (#166)
+retrieval recall advantage    none over embedding retrieval (#166)
+stale-record advantage        measured, one corpus, one query, one embedding model (#173)
 ```
 
 On rationale density: this repository's 73.9% record-bearing rate is *lower* than
@@ -216,38 +214,52 @@ and `stderr` hold real values from a process that ran to completion. Checking
 appears in CI. If you add a `spawnSync` with `input:`, prefer `status` whenever it
 is non-null.
 
-## In flight when this was written
+## State at handoff
 
-Three sol jobs were queued on a single slot and run in sequence. Check each
-worktree before assuming it is unstarted:
+Nothing is in flight. Every worktree was removed after checking it for
+uncommitted files and unmerged commits; `git worktree list` shows the main
+checkout only. `dev` is green.
 
 ```
-~/projects/wt/p161      feat-issue-161      provenance
-~/projects/wt/p173      feat-issue-173      lifecycle experiment
-~/projects/wt/proto140  protocol-issue-140  measurement protocol
+1,494 tests passing, 1 skipped
+1 open issue (#176)
+0 worktrees
 ```
 
-`git log --oneline origin/dev..HEAD` and `git status --porcelain` in each. A
-worktree with uncommitted files and no commit was mid-run; one with neither may
-never have started, because the broker refuses a second concurrent sol worker.
+Establish those yourself — `npx vitest run`, `gh issue list --state open`,
+`gh run list --branch dev --limit 1`. Do not cite this block.
 
-The release is prepared but **not tagged**. `dev` is at 0.3.0 with a written
-CHANGELOG; tagging triggers a four-platform binary build and is a deliberate act.
-Two users reported bugs against v0.2.1 that are fixed on `dev` and unreleased —
-#128, #149 and #107 — so tagging is worth doing soon.
+**The release is prepared but not tagged, and this is the first thing to decide.**
+`dev` is at 0.3.0 with a written CHANGELOG. Tagging triggers a four-platform
+binary build, so it is a deliberate act and was deliberately not taken. Three
+bugs reported by real users against v0.2.1 are fixed on `dev` and unreleased —
+**#128, #149, #107** — which means every day untagged is a day those users still
+have the broken binary. #128 in particular is a `doctor` false failure on
+binary-only installs, so an affected user's diagnostic tool tells them the wrong
+thing. Tag it, or write down why not.
 
 ## Delegation
 
-The owner's standing instruction is `gpt-worker.sh` with `terra` for general work
-and `sol` for architecture, security and final gates. Claude subagents are not to
-be used. Worktrees under `~/projects/wt/` need `danger-full-access` because their
-git metadata lives in the parent repository, outside a `workspace-write` sandbox.
+**The owner's current instruction is Claude subagents — `sonnet` or `opus`,
+chosen by difficulty.** This replaced the `gpt-worker.sh` terra/sol routing on
+2026-07-29; the routing hook was deleted. Earlier sections of the git history
+assume the old broker, so do not restore it from a commit message.
 
-Write closed packets: goal, task class, exact files, acceptance criteria,
-verification, forbidden scope. State the test baseline and require the agent to
-establish it themselves rather than trusting the number. Require every new test to
-be seen failing before it passes — a test never observed to fail is not a test, and
-two cases this week turned out to test nothing.
+Whichever executor is used, the packet shape is what made delegation work: goal,
+task class, exact files, acceptance criteria, verification, forbidden scope. State
+the test baseline and **require the agent to establish it themselves** rather than
+trusting your number. Require every new test to be seen failing before it passes —
+a test never observed to fail is not a test, and two cases this week turned out to
+test nothing.
+
+Verify submitted work by breaking the production code yourself. Reading a test
+count catches nothing; three of this week's rejections passed their own tests.
+
+Worktrees under `~/projects/wt/` hold git metadata in the parent repository, so
+any sandboxed executor needs access above the worktree root. Remove a worktree as
+soon as its branch merges — they reached 38 before I noticed, and two of the three
+dual-dispatch incidents traced back to not knowing what was already checked out
+where.
 
 ## Records
 
