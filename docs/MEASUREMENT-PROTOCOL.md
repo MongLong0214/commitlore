@@ -1,278 +1,350 @@
-# Measurement protocol
+# Fresh-agent decision-recovery protocol
 
-- Status: **registered 2026-07-28**
-- Scope: every benchmark whose collection begins after this registration
-- Principle: the unit of analysis must match the unit that was paired, clustered,
-  assigned, and exposed
+- Status: **registered 2026-07-29; pilot not yet run**
+- Issue: [#140](https://github.com/MongLong0214/commitlore/issues/140)
+- Scope: the pilot and any later confirmatory study of decision recovery
+- Replaces: the prospective coding-behaviour measurement registered after M4
+- Does not change: the historical analyses or verdicts for M1, M2, or M4
 
-This protocol does not rewrite an earlier registration after its outcome is
-known. A benchmark-specific preregistration cites this file, fixes its estimand,
-test statistic, confidence level, pairing key, clustering key, count rule,
-power simulation, multiplicity family, and exposure gate. Any later divergence
-is recorded without editing the registered rule.
+This document is a registration, not a harness or a result. It fixes the claim,
+gold construction, arms, scoring, qualification, and refusal rules before any
+run covered by it exists. Any change after collection starts is recorded as a
+deviation; it does not silently edit this protocol.
 
-## 1. Primary outcome: re-proposal label count
+## 1. Claim and observation boundary
 
-The primary outcome is `RunRecord.reproposal_matches`, the non-negative count
-of distinct, mechanically detected `reproposed_if` labels matched in one run.
-A label matched more than once still counts once. The runner records this field
-directly from `reproposed_if`; it does not derive it from `matched`, because
-`matched` combines re-proposal and `violation_if` evidence.
+The primary claim is:
 
-The previous registration named `RunRecord.violations` and described it as a
-re-proposal count. That field does not measure what that description claimed:
-it counts task-specific `violation_if` clause matches. It remains recorded as
-instrumentation only. This corrects the registration's measurement label; it
-does not change the hypothesis mid-study.
+> Does a fresh agent recover a code path's active decision context before its
+> first edit?
 
-Before this outcome can be registered, the current-harness pilot is checked for
-non-zero variance, for not being zero on every row, and for not being at each
-task's structural maximum on every row. Refusal names the outcome and every
-failed condition. A task's structural maximum is its number of distinct
-`reproposed_if` labels, not the length of `matched`.
+An episode consists of an immutable repository snapshot, a named code path, a
+change request that makes that path relevant, a documentary source packet, and
+a frozen gold set of decision atoms. A run starts a new agent session with no
+memory of any other run. Model, driver, system prompt, tool set, repository
+snapshot, and task prompt are fixed across arms except for the registered
+information route.
 
-M5 cannot be registered from M4's data. M4 recorded no per-run
-`guard_exposure`, so its rows cannot establish that a treatment was applied
-(issue #122 and `bench/VERDICT-M4.md`). A pilot on the current harness, whose
-rows carry `guard_exposure`, is required first; the registration guard runs on
-that pilot.
+The agent must submit one structured decision brief before any attempted file
+mutation. The brief has these fields:
 
-This is a count rather than the old `reproposed: boolean`. Dichotomizing a count
-loses granularity and reduced power in small cross-over studies, while
-ceiling/floor compression makes a measure insensitive to real differences
-([Geroldinger et al., 2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10729462/);
-[Šimkovic and Träuble,
-2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6699673/)). That loss occurred in
-M4: a run with one re-proposal and a run with five both scored `true`.
+- active constraints;
+- ruled-out alternatives, each paired with its reason;
+- warnings;
+- the evidence status of every item: `verified`, `unverified`, or
+  `not-documented`;
+- superseded or expired prior decisions and, for supersession, the replacing
+  decision;
+- abstentions, each naming the question and the evidence that is missing; and
+- a grounded plan.
 
-This choice uses the integer `reproposal_matches` count and optional `matched`
-evidence. The type also carries
-numeric effort measures (`turns`, `tokens`, and `duration_ms`), but not the turn
-or time of the first re-proposal or an ordered severity judgment.
+Each list entry asserts one atom. A compound entry is one compound prediction;
+scorers do not split it after seeing the answer.
 
-- **Rejected: binary outcome.** It recreates the observed ceiling and discards
-  event intensity.
-- **Rejected: time to first re-proposal.** It requires event-time
-  instrumentation and a censoring rule that `bench/types.ts` does not carry,
-  and it discards events after the first.
-- **Rejected: ordinal severity.** Ordinal methods can handle clustered
-  ceiling/floor data without dichotomizing it, but this harness has no
-  registered severity scale or calibrated thresholds; inventing them would add
-  judgment and still discard the available count
-  ([Hedeker, 2015](https://pmc.ncbi.nlm.nih.gov/articles/PMC4270960/)).
+An attempted edit before the brief invalidates the run. No code is scored, and
+the episode ends when the brief is submitted. This moves the observation from
+coding behaviour to the retrieval layer CommitLore can control:
 
-## 2. Primary test: paired permutation
+`record -> preserve -> retrieve | apply -> code well`
 
-The same `(task, seed)` is run in both arms, so it is one pair. Tasks are
-clusters, and every task receives equal weight in the estimand. For task `k`,
-seed `s`, and count `Y`, define
-`D_ks = Y_treatment,ks - Y_comparator,ks`. The registered statistic is
+The bar marks the end of this measurement.
 
-`T = (1 / K) × Σ_k [(1 / m_k) × Σ_s D_ks]`.
+## 2. Gold construction
 
-Thus `T` is the mean of the task-specific mean paired differences. It is
-negative when treatment prevents re-proposals and remains task-equal if a task
-has fewer complete pairs.
+Gold is never derived from CommitLore trailers, notes, CLI output, or any
+document created from them.
 
-The primary test is two-sided at `α = 0.05`. Under the null, swap the arm label
-independently within every complete `(task, seed)` pair, retain its task
-membership, and recompute `T`. Fully enumerate all `2^P` assignments when
-`P ≤ 20`; otherwise draw **99,999** random assignments with a fixed recorded RNG
-seed and include the observed assignment as the 100,000th. The Monte Carlo
-p-value is `(1 + number of random assignments with |T*| ≥ |T_observed|) /
-100,000`, so it is never zero. Under full enumeration, the p-value is the
-proportion of all assignments with `|T*| ≥ |T_observed|`.
+### 2.1 Source packet and cutoff
 
-Permutation inference is registered because the assignment, pairing, and
-cluster membership determine its null distribution without a small-cluster
-model approximation. Eight task clusters and M4's `ICC = 0.581` put this design
-in the few-cluster, high-correlation regime. Permutation procedures maintained
-nominal type I error under model misspecification in cluster trials, and final
-analyses commonly use 10,000 or 100,000 draws
-([Maleyeff et al.,
-2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12365356/);
-[Watson, Akinyemi and Hemming,
-2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+Before annotation, a coordinator fixes a documentary cutoff and prepares the
+same packet for both annotators:
 
-- **Rejected: uncorrected GEE or GLMM.** With four to eight clusters,
-  uncorrected GEE exceeded 30% type I error in some simulations and mixed-model
-  corrections were either inflated or conservative; no valid method reached
-  nominal 80% power
-  ([Leyrat et al.,
-  2018](https://academic.oup.com/ije/article/47/1/321/4091562)).
-- **Rejected: small-sample-corrected GEE or GLMM as primary.** Corrections can
-  control type I error, but at eight clusters their power is low and sensitive
-  to the chosen correction. They may be reported only as sensitivity analyses.
-- **Rejected: McNemar or Fisher as primary.** Both require a binary outcome;
-  Fisher additionally breaks the pairing. The two-sided permutation test also
-  detects harm, unlike a one-sided benefit-only test.
+- merged pull-request discussion and reviews;
+- linked issue threads;
+- ordinary commit subjects and bodies;
+- maintainer explanations written before the cutoff; and
+- the code and tests at the snapshot.
 
-## 3. Estimate and confidence interval
+CommitLore records and record-rendered views are removed from the packet. Every
+scorable atom must have a direct anchor in ordinary commit prose so the
+ordinary-Git arm contains the same rationale. PRs, issues, and maintainer
+explanations may disambiguate scope, status, or meaning, but they cannot make an
+atom scorable when the commit prose does not contain it.
 
-Report the observed task-equal mean count difference `T` and the two arm means.
-The primary 95% randomization interval is obtained by inversion: for each
-candidate additive effect `δ`, subtract `δ` from every treatment count, repeat
-the registered paired permutation test, and retain values not rejected at
-`α = 0.05`. Search to 0.01 event and report the full retained set; if it is
-disconnected, report every component rather than filling a gap.
+### 2.2 Independent annotation
 
-This inversion uses the same assignment mechanism and statistic as the test.
-Permutation-based interval searches provide finite-sample coverage where
-model-based small-cluster intervals can miss their nominal coverage
-([Watson, Akinyemi and Hemming,
-2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+Two annotators work independently. They do not see the other annotation and do
+not encode trailers. Each extracts the smallest proposition that can be true or
+false on its own, cites the supporting source span, and records one of:
 
-- **Rejected: model-based Wald interval.** Its coverage inherits the
-  small-cluster approximation that disqualified GEE/GLMM as primary.
-- **Rejected: independent-proportions interval.** It discards both the count
-  scale and the pairing.
+| Atom kind | Required fields |
+|---|---|
+| active constraint | constraint, scope, evidence status |
+| ruled-out alternative | alternative, reason, scope, evidence status |
+| warning | hazard, trigger or condition, scope, evidence status |
+| supersession | prior decision, replacement, scope, evidence status |
+| expiry | prior decision, expiry condition or date, scope, evidence status |
 
-## 4. Task-pool gate and sample size
+For every atom the annotator also records lifecycle status at the snapshot:
+`active`, `superseded`, or `expired`. Absence of a verification statement is
+`not-documented`, not `unverified`; `unverified` requires a source that says the
+claim or check was not verified.
 
-Before either analysis arm runs, every candidate receives six runs on the
-registered primary comparator. A task with structural maximum `M` qualifies
-only when its six-run count rate is in the inclusive **4/6–5/6** band:
+### 2.3 Disagreement resolution and freeze
 
-`Σ(reproposal_matches) / (6 × M)`.
+After both independent passes:
 
-The numerator is the count of distinct matched `reproposed_if` labels across
-the six runs; the denominator is all labels the task could have matched across
-those runs. This is a count rate, not the old binary proportion of runs with
-any re-proposal. Thus a task with `M = 7` qualifies at 28 through 35 matched
-labels out of 42, and one with `M = 8` at 32 through 40 out of 48. Both bounds
-are inclusive.
+1. Candidates agree only when kind, proposition, reason where required, scope,
+   lifecycle, and evidence status agree.
+2. Every disagreement—existence, atom boundary, field value, or status—is
+   logged with both source citations.
+3. The annotators attempt reconciliation using only the frozen source packet.
+4. If they still disagree, a maintainer who accepted or reviewed the original
+   decision adjudicates from that packet without seeing CommitLore records.
+5. If no such maintainer is available, or the packet cannot decide the point,
+   the disputed atom is excluded. An episode with no remaining gold atoms is
+   excluded.
 
-Every task outside the band is refused from the analysis set. Its task id,
-matched-label count, opportunity count, rate, and exclusion are retained in
-the qualification record; it is never silently dropped or retained. If fewer
-than the preregistered minimum number of tasks survive, collection stops and
-the result states how many survived. The band is not widened after seeing the
-qualification data; a new pool requires a new registration before either
-treatment arm runs.
+The reconciled atom set, source packet, cutoff, annotation log, and file hashes
+are then frozen. Only after that freeze is the same information encoded as
+CommitLore records, preferably on `refs/notes/commitlore` so the original commit
+prose remains byte-identical. A person who was not either annotator checks every
+encoded record against the frozen atom and records semantic equivalence. A
+mismatch is corrected before any run or the episode is excluded. The gold never
+changes to match the trailers.
 
-The old `n = 56` per arm is withdrawn. It assumed 56 independent binary
-observations. At M4's `ICC = 0.581`, eight tasks and seven seeds give
-`DEFF = 1 + 6 × 0.581 = 4.486` and only `56 / 4.486 = 12.48` effective paired
-observations. At two-sided `α = 0.05` and 80% power, that design detects only a
-standardized paired count difference of approximately `d = 0.87`. Adding seeds
-cannot repair eight clusters: as seeds increase, effective information tends to
-only `8 / 0.581 = 13.77`.
+## 3. Primary outcome
 
-The minimum effect worth shipping for is **0.5 fewer re-proposal violations per
-run**, planned conservatively as `d = 0.5` when the paired-difference SD is one
-violation. Preventing one revival every two task runs is material rework avoided;
-smaller effects are not a confirmatory shipping target. A two-sided 5%,
-80%-power planning calculation needs 34 effective pairs. Holding seven seeds
-and `ICC = 0.581` gives
-`ceil(34 × 4.486 / 7) = 22` task clusters, or **154 pairs and 154
-runs per arm**.
+The primary outcome is decision-recovery F1 for one episode-run.
 
-That is a planning minimum, not permission to use a model-based test. Before
-collection, run at least 10,000 simulated experiments from the registered
-calibration count distribution and ICC, analyze each with the exact registered
-permutation procedure, and choose the first whole-task design at or above
-22 tasks × 7 seeds whose simulated power is at least 80%. If none passes, add
-tasks; do not add seeds to eight tasks and call the nominal rows independent.
-Leyrat et al. found that valid few-cluster analyses lose substantial power and
-that this loss must enter the sample-size calculation; Watson et al. recommend
-design-stage simulation with the permutation procedure
-([Leyrat et al.,
-2018](https://academic.oup.com/ije/article/47/1/321/4091562);
-[Watson, Akinyemi and Hemming,
-2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+### 3.1 Exact match rule
 
-- **Rejected: 56 per arm.** Its detectable effect was misstated because it
-  ignored task clustering and used a binary outcome.
-- **Rejected: more seeds in the same eight tasks.** High ICC makes information
-  asymptote; additional task clusters are the scarce unit.
-- **Rejected: a smaller shipping threshold chosen only to reduce n.** The
-  practical threshold is fixed before the power simulation.
+A predicted atom receives either one match or none; there is no partial credit.
+It matches a gold atom only when all of the following hold:
 
-## 5. Multiplicity across tasks
+1. the atom kind is the same;
+2. the proposition is semantically equivalent and does not broaden its scope;
+3. lifecycle and evidence status are correct;
+4. a ruled-out atom gives both the correct alternative and the documented
+   reason;
+5. a warning gives both the hazard and its documented trigger or condition;
+   and
+6. a supersession gives both the prior and replacing decisions, or an expiry
+   gives both the prior decision and expiry condition.
 
-There is one confirmatory pooled test in §2, so it receives the full
-`α = 0.05`. If the eight task-specific effects are tested, they are one
-secondary family of eight hypotheses. Apply the two-sided **Romano–Wolf
-stepdown** procedure using the same 99,999 joint within-pair permutations, and
-report family-wise-error-adjusted p-values and simultaneous 95% randomization
-intervals. A task-specific result never overrides the pooled verdict or changes
-the registered analysis set. If the future power design expands the pool, all
-registered task effects form one family rather than splitting it; at the
-planning minimum in §4, that family has 22 hypotheses.
+Lexical overlap alone is not a match. A missing required field, correct
+alternative with an invented reason, stale decision asserted as active, or
+correct decision assigned to a broader path receives no credit.
 
-Romano–Wolf is registered because its permutation implementation maintained
-nominal family-wise error and simultaneous coverage under correlated outcomes
-while producing narrower intervals than the alternatives
-([Watson, Akinyemi and Hemming,
-2023](https://pmc.ncbi.nlm.nih.gov/articles/PMC10962558/)).
+Matching is one-to-one. The score uses the maximum one-to-one assignment between
+predicted and gold atoms. Duplicate predictions beyond the first are unmatched
+and therefore false positives. A plausible atom absent from the frozen gold is
+also a false positive; the source packet, not post-run judgment, defines the
+answer space.
 
-- **Rejected: no correction.** Eight unadjusted tests inflate the probability of
-  at least one false task claim.
-- **Rejected: Bonferroni.** It was conservative under high correlation.
-- **Rejected: Holm.** It controlled error, but Romano–Wolf used the dependence
-  structure more efficiently.
+Two outcome scorers, blinded to arm and exposure metadata, independently mark
+the prediction-by-gold match matrix. A third blinded scorer adjudicates only
+disagreements using the rule above. If the third scorer cannot decide, the
+prediction is unmatched. Arm labels are revealed only after all match matrices
+are frozen.
 
-## 6. Cluster reporting
+### 3.2 Formula and estimand
 
-Every report states the nominal runs, complete pairs, task clusters and their
-sizes, the named count-outcome ICC estimator and estimate, design effect,
-effective n, calibration assumptions, simulated power, and Monte Carlo seed.
-For equal cluster size `m`, the descriptive calculations are
-`DEFF = 1 + (m - 1) × ICC` and `effective n = nominal n / DEFF`; unequal
-clusters use the formula fixed in the benchmark-specific registration. These
-quantities expose information loss and do not replace the permutation test.
+For a run, let:
 
-## 7. Treatment exposure
+- `TP` be matched predicted atoms;
+- `FP` be unmatched predicted atoms; and
+- `FN` be unmatched gold atoms.
 
-Assignment is not exposure, and outcome detection is not exposure evidence.
-Every `RunRecord` must separately record:
+Gold is non-empty, and the registered score is:
 
-- assigned arm and treatment route;
-- eligible treatment opportunities;
-- actual treatment exposures, including the count and route; and
-- outcome and outcome-matcher evidence.
+`F1 = 2 × TP / (2 × TP + FP + FN)`.
 
-For injection, exposure means the relevant treatment payload was delivered.
-For guard, exposure means the instrumented guard route produced its registered
-treatment action. A `matched` value from the outcome detector cannot establish
-either event.
+Thus an empty brief scores zero, and a brief that lists every guess is penalised
+through `FP`. Precision or recall may be shown as components, but neither
+replaces F1.
 
-The exposure gate is evaluated before outcomes are analysed. If expected
-treatment exposure cannot be verified from the artifact, the experiment is
-reported as an instrumentation failure and receives no confirmatory outcome
-analysis. Missing exposure is never filled in retroactively.
+The primary contrast is **CommitLore minus ordinary Git**. The confirmatory
+estimand, if a confirmatory study is later authorised, is the episode-equal mean
+paired difference in F1. Code-only and full-history contrasts are secondary.
+The pilot reports no p-value.
 
-The same pre-analysis gate applies to model and executable provenance. Model
-identity, harness commit and executable digest must be immutable fields in each
-row or in a content-addressed manifest bound to those rows. The gate verifies
-that each expected identity is present and uniform, unless multiple registered
-strata were fixed in advance. Missing or unexpected mixing receives no
-confirmatory outcome analysis. This rule limits attribution; it does not
-retroactively erase otherwise valid observations.
+## 4. Arms and what each isolates
 
-## 8. Corrections after results exist
+All arms receive identical code, task wording, and documentary cutoff.
 
-If a registered analysis is found to be invalid after results are visible:
+| Arm | Information available before the brief | What it isolates |
+|---|---|---|
+| code only | current source snapshot and code-reading/search tools; no Git, PR, issue, or record history | rationale inferable from code |
+| ordinary Git | code plus the original Git history and ordinary `log`, `show`, and `blame`; record notes are unavailable | whether rationale that exists in prose is addressable |
+| full-history memory | ordinary Git plus every post-freeze encoded record injected at session start, including off-path, superseded, and expired records | structured memory without path or lifecycle filtering |
+| CommitLore | ordinary Git plus CommitLore output for the named path, path-scoped and lifecycle-filtered at the snapshot | structure, path addressability, and lifecycle filtering |
 
-1. preserve and report the original analysis;
-2. name the error and the time of the correction;
-3. report the corrected analysis beside it, without changing the analysis set;
-4. state whether the two analyses agree on the registered conclusion; and
-5. if they disagree, do not let the corrected result replace the registered
-   result: register and run an independent confirmation.
+The ordinary-Git arm is the primary comparator. A study of Linux OOM-Killer
+commit messages found rationale sentences in 98.9% of its commits
+([Dhaouadi, Oakes, and Famelis, ICPC 2024](https://arxiv.org/abs/2403.18832)).
+The useful question is therefore not merely whether rationale is present, but
+whether a fresh agent can address the relevant, active part of it.
 
-This rule distinguishes correction from choosing a favourable analysis after
-seeing the data.
+Code-only versus CommitLore is expected to mix presence with addressability and
+cannot support the primary claim. Full-history memory versus CommitLore
+isolates the value of path scope and lifecycle filtering when the record format
+and underlying information are held constant.
 
-## 9. Economic benefit evidence
+Every record must fit in the full-history arm's context window. An episode that
+requires truncating "every record" is ineligible rather than silently receiving
+a different treatment.
 
-The deterministic report measures record capture, hook, and query costs. It
-does not measure the work avoided when a rejected alternative is not pursued,
-so it publishes no computed break-even value.
+## 5. Episode qualification
 
-Before any economic benefit claim, run #141's rejected-path counters against a
-task pool that passes #109's registered inclusive 4/6–5/6 qualification band
-on the primary comparator. Report the counters as their separate observed
-components, not a weighted composite. This is registered before such evidence
-exists: the current pool has **0 of 8** qualifying tasks, so no run can close
-the gap today.
+Qualification uses the registered primary comparator, ordinary Git. For each
+candidate episode, two fresh ordinary-Git agents produce briefs before any
+other arm runs. Define the comparator decision-recovery rate:
+
+`Q = (F1_ordinary-git,1 + F1_ordinary-git,2) / 2`.
+
+An episode qualifies only when `Q` is in the inclusive **0.20–0.80** band. The
+lower bound refuses an instrument with almost nothing to recover; the upper
+bound preserves headroom for improvement. Both bounds are fixed before
+qualification. Qualification runs are never reused in the confirmatory
+analysis, the treatment arms are not run or inspected before the pool freezes,
+and the band is not widened after seeing the counts.
+
+The earlier prospective M5 record ruled out per-task comparator qualification.
+That rule preceded #109's finding that a floor-only gate selected an unusable
+pool. This registration supersedes it for the new outcome: the F1 band is
+two-sided, fixed before collection, measured on disjoint comparator runs, and
+applied before any treatment arm exists.
+
+The current eight-task M4 pool supplies **0 qualifying episodes**. Those tasks
+were built and scored for a re-proposal outcome, have no independently frozen
+decision-atom gold, and have no ordinary-Git decision briefs. They are
+unqualified—not measured failures of the new 0.20–0.80 band. Issue
+[#109](https://github.com/MongLong0214/commitlore/issues/109) separately found
+that 0 of those 8 tasks passed the old re-proposal band; that result is not
+relabelled as decision-recovery evidence.
+
+For a confirmatory pool, no more than 30 candidate episodes may be annotated.
+At least 24 must qualify. If fewer do, the study stops and reports the
+qualification count without running a treatment arm.
+
+## 6. Exposure recording and refusal
+
+Assignment is not exposure. Every run must record, before outcome scoring:
+
+- assigned arm and route;
+- IDs and hashes of rationale-bearing artifacts available to that route;
+- IDs, exact bytes, SHA-256 hashes, and model-token counts actually surfaced to
+  the agent before the brief;
+- delivery or retrieval tool, timestamp, and success status; and
+- the first attempted edit timestamp, if any.
+
+Availability in Git is recorded separately from prose actually returned by a
+history command. Outcome text, matched atoms, or an arm label cannot be used as
+evidence that treatment was delivered.
+
+The dataset is refused before outcomes are analysed when:
+
+1. expected exposure is missing or unknown in any primary-arm run;
+2. any CommitLore run cannot show a successful path-scoped,
+   lifecycle-filtered delivery before the brief;
+3. ordinary-Git runs cannot show whether and what prose was actually surfaced;
+   or
+4. no primary pair differs in artifact IDs, exact payload hash, or token count.
+   A different arm label or route name alone does not satisfy this gate.
+
+No row is imputed or reclassified from transcript inference. A refused dataset
+is reported as an instrumentation failure and receives no primary effect
+estimate or p-value. This rule applies even when the output files otherwise
+look complete.
+
+## 7. Variance refusal
+
+Before a confirmatory study is authorised, its pilot must show for both
+CommitLore and ordinary Git that:
+
+- F1 is not all zero;
+- F1 is not all one;
+- at least two distinct F1 values occur; and
+- sample variance is greater than zero.
+
+The paired F1 differences must also contain at least two distinct values and
+must not all be zero. These checks are rerun before any confirmatory outcome
+analysis. Failure is reported as a floor, ceiling, or zero-variance instrument;
+no hypothesis test is run. More rows do not repair an outcome that cannot vary.
+
+## 8. Secondary outcomes
+
+Secondary outcomes never replace or redefine primary F1.
+
+| Outcome | Operational definition | Why it is worth its cost |
+|---|---|---|
+| time to a grounded plan | elapsed monotonic time from task delivery to the earliest submitted plan containing at least one matched active gold atom and a source citation; if none, record `not reached`, never the timeout value | retrieval that is accurate but too slow may still be unusable; timestamps are already required |
+| tool calls to reach it | count of externally recorded tool invocations before that same plan; one batched invocation counts once; `not reached` stays missing, not zero | distinguishes addressability from long history-search chains using the existing event log |
+| stale-decision error rate | assertions that a superseded or expired gold decision is active, divided by all assertions of active decisions; report numerator and denominator, and `not measurable` when the denominator is zero | directly tests the lifecycle guarantee rather than folding it invisibly into F1 |
+| correctly recovered atoms per 1,000 tokens delivered | `1,000 × TP / rationale-bearing tokens actually surfaced before the brief`; task prompt and code tokens are excluded; zero delivered rationale tokens yields `not applicable` | compares path-scoped delivery with full-memory volume without treating more context as free |
+| abstention quality | F1 over gold atoms labelled `unverified`: a predicted abstention matches only when it identifies the same atom or question and does not assert it as verified; abstaining on a verified, `not-documented`, or absent atom is a false positive; a missed gold-unverified atom is a false negative; if the frozen gold contains none, report `not measurable` | tests calibrated uncertainty with labels already created for the primary brief |
+
+Times among reached runs are always accompanied by the grounded-plan reach
+count. Token efficiency is not reported for code-only because its denominator
+is intentionally zero.
+
+## 9. Affordable first step and confirmatory gate
+
+The project registers an **eight-episode feasibility pilot**, not a
+confirmatory study. Each episode receives two independent gold annotators, two
+ordinary-Git qualification runs, and one fresh run in each of the other three
+arms: 40 agent runs in total. All pilot arms are run regardless of the pilot
+qualification result so the band itself can be assessed without turning the
+pilot into a claim. The first ordinary-Git run is the predesignated pilot
+comparator for descriptive pairing and power planning; the second contributes
+only to `Q`.
+
+The pilot may report protocol completion counts, arm distributions, annotation
+disagreements, exposure, variance, and secondary-outcome availability. It
+reports **no p-value, no confirmatory confidence interval, and no product
+claim**.
+
+A confirmatory study is worth registering only if all of these hold:
+
+1. at least 6 of 8 pilot episodes land in the 0.20–0.80 ordinary-Git band,
+   making a 24-of-30 qualification yield plausible;
+2. every retained episode has frozen independent gold, an ordinary-prose anchor
+   for every atom, and verified trailer equivalence;
+3. the exposure and variance gates in §§6–7 pass without imputation;
+4. the structured brief and all five secondary outcomes can be scored exactly
+   as registered; and
+5. a design-stage power analysis using the pilot's episode-level paired F1
+   distribution shows that some fixed size from 24 through 30 episodes can
+   reach 80% power for an absolute F1 improvement of 0.10 under a two-sided
+   paired randomization test at `alpha = 0.05`.
+
+The first whole-episode size in that range meeting the power rule is fixed in a
+new registration before confirmatory qualification begins. If none meets it,
+or the project cannot fund two annotators for that many episodes, the
+confirmatory study is not run. No gate depends on the pilot effect's direction
+or significance.
+
+Twenty-four to thirty episodes with two annotators is a real labelling project.
+This protocol does not pretend the current pool already pays that cost.
+
+## 10. Freeze and reporting order
+
+Before the first run, freeze the repository snapshots, source packets, gold
+hashes, record encodings, prompts, model identity, driver, tool policy,
+randomised arm order, time limit, and token-counting method. A fresh agent and
+fresh workspace are required for every run; caches, sessions, and external
+memory may not cross runs.
+
+Reporting order is fixed:
+
+1. annotation and freeze integrity;
+2. early-edit invalidations;
+3. exposure refusal;
+4. qualification count;
+5. variance refusal;
+6. primary F1 components and, for a confirmatory study only, the registered
+   paired analysis; and
+7. secondary outcomes.
+
+Stopping at an earlier refusal does not permit reporting a later result.

@@ -1056,3 +1056,135 @@ the canonical corrected analysis. The complete corrected verdict is
 links to it explicitly. M4's observations remain valid and its result remains
 null. What failed is the measurement design's ability to discriminate.
 Recorded harness/dist provenance is uniform; model provenance is missing.
+
+---
+
+## 19. M5 replacement — fresh-agent decision-recovery pilot
+
+Registered on **2026-07-29**, before any episode is annotated, encoded, or run.
+This supersedes §18's prospective coding-behaviour protocol. It does not alter
+M1, M2, or M4, and it authorises no benchmark harness or confirmatory study.
+The complete registration is
+[`docs/MEASUREMENT-PROTOCOL.md`](../docs/MEASUREMENT-PROTOCOL.md), fixed by
+ADR-0017.
+
+### Claim and output
+
+The question is whether a fresh agent recovers a code path's active decision
+context before its first edit. The run ends with a structured decision brief:
+active constraints, ruled-out alternatives with reasons, warnings, evidence
+status (`verified`, `unverified`, or `not-documented`), superseded or expired
+decisions, abstentions, and a grounded plan. An attempted edit before the brief
+invalidates the run. Code is not an outcome.
+
+### Gold, fixed before records exist
+
+Two annotators independently extract atomic decisions from a frozen packet of
+PR discussion, issue threads, ordinary commit bodies, maintainer explanations,
+and the snapshot. They cannot see CommitLore trailers, notes, or rendered
+output. Every scorable atom needs an ordinary-commit-prose anchor.
+
+They separately label kind, proposition, reason where required, scope,
+lifecycle, evidence status, and source span. All disagreements are logged and
+reconciled from the packet. A maintainer who accepted or reviewed the original
+decision adjudicates unresolved items; without an available adjudicator or
+decisive source, the atom is excluded. An episode with no atoms is excluded.
+
+The reconciled gold and its hashes are frozen. Only then is the same information
+encoded as CommitLore records. A non-annotator checks semantic equivalence
+before any run. Trailer content never changes gold.
+
+### Registered primary outcome
+
+A prediction matches one gold atom only when kind and proposition are
+semantically equivalent without broader scope; lifecycle and evidence status
+are correct; and every kind-specific field is present. Ruled-out atoms require
+both alternative and reason, warnings require hazard and condition, and
+supersessions require prior and replacement. There is **no partial credit**.
+Matching is maximum one-to-one; duplicates and every unmatched or stale claim
+are false positives.
+
+For each episode-run:
+
+`F1 = 2 × TP / (2 × TP + FP + FN)`.
+
+Gold is non-empty, so an empty brief scores zero. Two arm-blinded scorers mark
+matches independently; a third blinded scorer adjudicates disagreements, with
+an undecidable prediction left unmatched. The primary contrast for any later
+confirmatory study is episode-equal mean F1 for **CommitLore minus ordinary
+Git**. This pilot reports no p-value.
+
+### Registered arms
+
+| Arm | What the fresh agent receives | Isolation |
+|---|---|---|
+| code only | current code and code tools, without history | rationale inferable from code |
+| ordinary Git | the same code plus rationale in ordinary commit prose | addressability when rationale is present |
+| full-history memory | ordinary Git plus every encoded record injected, including off-path and stale records | unfiltered structured memory |
+| CommitLore | ordinary Git plus path-scoped, lifecycle-filtered CommitLore context | structure, scope, and lifecycle |
+
+Ordinary Git is the primary comparator. Code-only versus CommitLore confounds
+presence with addressability; full-history memory versus CommitLore isolates
+filtering.
+
+### Qualification, exposure, and variance refusals
+
+Two fresh ordinary-Git qualification runs define
+
+`Q = (F1_1 + F1_2) / 2`.
+
+An episode qualifies only inside the inclusive **0.20–0.80** band. Treatment
+arms are not run before a confirmatory pool freezes, qualification rows are not
+reused, and the band is never widened after inspection. The current M4 pool
+supplies **0 of 8**: it has neither independent decision-atom gold nor
+ordinary-Git briefs, so it is unqualified rather than assumed usable. This
+supersedes the prospective M5 rejection of per-task qualification: #109 showed
+that the floor-only alternative selected a pool with no usable middle, while
+this band is fixed, two-sided, disjoint from analysis, and applied before any
+treatment arm exists.
+
+Every run records actual pre-brief exposure: route, artifact IDs, exact bytes,
+payload hash, token count, timestamp, and success. Assignment or outcome text is
+not exposure. Analysis refuses the entire dataset if primary-arm exposure is
+missing or unknown, if CommitLore delivery is not verified, or if no primary
+pair differs in artifact IDs, exact payload hash, or token count. Arm or route
+names alone do not establish a difference.
+
+Before a confirmatory run, both primary arms must have F1 values that are not
+all zero, not all one, contain at least two distinct values, and have non-zero
+sample variance. Paired differences must also vary and not all be zero. The
+same gate runs before confirmatory analysis. Failure receives no effect test.
+
+### Secondary outcomes
+
+The registered secondary outcomes are:
+
+- elapsed time to the earliest plan containing a matched active atom and source
+  citation;
+- tool invocations before that plan;
+- stale-as-active assertions divided by all active-decision assertions;
+- `1,000 × TP` divided by rationale-bearing tokens actually surfaced; and
+- F1 for correctly abstaining on gold atoms labelled `unverified`.
+
+`Not reached`, zero-denominator, and no-unverified-gold cases remain explicitly
+not measurable; they are never changed to zero. These outcomes reuse
+timestamps, events, exposure tokens, and gold required by the primary outcome.
+
+### Pilot and the boundary of this registration
+
+The affordable first step is eight annotated episodes: two annotators, two
+ordinary-Git qualification runs per episode, and one run in each other arm,
+for 40 agent runs. Every pilot arm runs regardless of the band. The pilot may
+report completion, distributions, annotation disagreement, exposure, variance,
+and metric availability, but **no p-value, confirmatory interval, or product
+claim**. The first ordinary-Git run is predesignated for descriptive pairing
+and power planning; the second contributes only to `Q`.
+
+A confirmatory study requires at least 6 of 8 pilot episodes in band, clean gold
+and record-equivalence freezes, differential exposure, non-zero/non-boundary
+variance, operational secondary outcomes, and design-stage evidence that a
+fixed 24-to-30-episode paired study can reach 80% power for an absolute F1
+improvement of 0.10 at two-sided `alpha = 0.05`. No more than 30 candidate
+episodes may be annotated and at least 24 must qualify. A new registration fixes
+the exact sample before confirmatory qualification. Failure of any gate stops
+the study; it does not authorise another coding-behaviour outcome.
