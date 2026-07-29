@@ -263,3 +263,16 @@ If a registered analysis is found to be invalid after results are visible:
 
 This rule distinguishes correction from choosing a favourable analysis after
 seeing the data.
+
+## 9. Economic benefit evidence
+
+The deterministic report measures record capture, hook, and query costs. It
+does not measure the work avoided when a rejected alternative is not pursued,
+so it publishes no computed break-even value.
+
+Before any economic benefit claim, run #141's rejected-path counters against a
+task pool that passes #109's registered inclusive 4/6–5/6 qualification band
+on the primary comparator. Report the counters as their separate observed
+components, not a weighted composite. This is registered before such evidence
+exists: the current pool has **0 of 8** qualifying tasks, so no run can close
+the gap today.
