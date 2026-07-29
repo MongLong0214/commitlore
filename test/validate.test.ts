@@ -477,6 +477,91 @@ describe('validate — check classes and reference integrity', () => {
     expect(result.violations).toEqual([]);
   });
 
+  // bug-issue-187: --range must honour a Supersedes: declaration that comes
+  // later in the range than the colliding commits, the same way stale does.
+  it('accepts a cross-commit duplicate when a later commit in the range declares Supersedes (bug-issue-187)', () => {
+    const repo = makeRepo();
+    commit(repo, 'a.txt', 'First claim\n\nLimit: original\nRecord-Id: r-dup187a\n');
+    const tag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187', tag], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'b.txt', 'Second claim same id\n\nLimit: revised\nRecord-Id: r-dup187a\n');
+    commit(
+      repo,
+      'c.txt',
+      'Retire the duplicate\n\nSupersedes: r-dup187a\nRecord-Id: r-succ187\n',
+    );
+
+    const result = runValidate({ range: 'base187..HEAD', cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.violations.filter((v) => v.rule === 'duplicate-id')).toHaveLength(0);
+  });
+
+  it('still rejects a cross-commit duplicate when no Supersedes is declared (bug-issue-187)', () => {
+    const repo = makeRepo();
+    commit(repo, 'a.txt', 'First claim\n\nLimit: original\nRecord-Id: r-dup187b\n');
+    const tag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187b', tag], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'b.txt', 'Second claim same id\n\nLimit: revised\nRecord-Id: r-dup187b\n');
+
+    const result = runValidate({ range: 'base187b..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    expect(result.violations.filter((v) => v.rule === 'duplicate-id').length).toBeGreaterThan(0);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ key: 'Record-Id', value: 'r-dup187b', rule: 'duplicate-id' }),
+    );
+  });
+
+  it('still rejects a same-message duplicate as unresolvable even with Supersedes in range (bug-issue-187)', () => {
+    const repo = makeRepo();
+    // Need a base commit so the range has a proper starting point.
+    commit(repo, 'base.txt', 'Base commit\n\nRecord-Id: r-base187c\n');
+    const baseTag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187c', baseTag], { cwd: repo, env: GIT_ENV });
+    const sha = commit(
+      repo,
+      'ambiguous.txt',
+      [
+        'Two blocks same id in one message',
+        '',
+        'Limit: first meaning',
+        'Record-Id: r-ambig187',
+        '',
+        'Limit: second meaning',
+        'Record-Id: r-ambig187',
+      ].join('\n'),
+    );
+    // Even a later Supersedes cannot disambiguate a same-message collision.
+    commit(
+      repo,
+      'd.txt',
+      'Try to resolve same-message\n\nSupersedes: r-ambig187\nRecord-Id: r-resolve187\n',
+    );
+
+    const result = runValidate({ range: 'base187c..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    const collisions = result.violations.filter(
+      (v) => v.rule === 'duplicate-id' && v.value === 'r-ambig187',
+    );
+    expect(collisions.length).toBeGreaterThan(0);
+    // The sha is attached since --range resolves commits.
+    expect(collisions[0]?.sha).toBe(sha);
+  });
+
   it('rejects only the two colliding blocks out of three, naming the shared id', () => {
     const result = runValidate({
       readStdin: () =>

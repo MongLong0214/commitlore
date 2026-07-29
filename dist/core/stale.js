@@ -279,6 +279,16 @@ const hasDeclaredSuccession = (recordId, ordered) => {
     return false;
 };
 /**
+ * Whether a `Record-Id` that appears more than once in `records` has a later
+ * commit declaring `Supersedes:` for it, making the duplication an intentional
+ * succession rather than an error.
+ *
+ * Exported so `commands/validate.ts` can apply the same predicate
+ * `findIdCollisions` uses internally, against a record stream that includes
+ * commits beyond what the individual source commit can see (bug-issue-187).
+ */
+export const isSuccessionDeclared = (recordId, records) => hasDeclaredSuccession(recordId, chronological(records));
+/**
  * A Record-Id belongs to exactly one record unless a later commit declares
  * `Supersedes:` for it. Same-message duplicates and divergent notes are still
  * collisions: neither is a later authored succession.
