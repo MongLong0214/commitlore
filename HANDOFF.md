@@ -78,9 +78,43 @@ happens silently.
 running at load 40–70 on 12 cores. Check `uptime` before any wall-clock
 measurement and record it with the result.
 
+## The release is mid-flight and blocked
+
+**PR #184 promotes `dev` to `main` for the v0.3.0 tag. It is failing lint, and
+the failure is real.** Do not merge it and do not tag until #187 is fixed.
+
+CommitLore's own lint found one trailer violation: `r-readme729` is declared by
+two commits thirteen minutes apart (`051fee9` claimed a retrieval result from a
+single lexical baseline, `a2c657a` retracted it). Both are published; neither can
+be rewritten.
+
+Three things came out of chasing it, and they are separate:
+
+- **#187 — the blocker.** Two code paths emit `duplicate-id`. `stale.ts` honours a
+  later `Supersedes:` declaration; `validate.ts` has no succession logic at all,
+  and the lint action runs `validate`. I declared the succession (`cf0a94e`,
+  merged) and it changed nothing, because it went to the path that was never
+  taught. The issue records what I verified, what I ruled out, and what I did not
+  read — the empty-commit hypothesis is dead, do not re-run it.
+- **#186** — the range that surfaces this is only ever linted on a promotion PR.
+  A feature-branch PR lints its own commits, so the two duplicates never appeared
+  together for a day. 98 commits of green CI while a known collision sat unresolved.
+- **#183** — the density figure names no denominator.
+
+The pattern in all three is the house defect class, in this project's own tools:
+a check answered without saying what it could not see.
+
+**gitseed released cleanly.** Its `dev` carries a written CHANGELOG, both version
+declarations at 0.3.0, and a README whose limitations section was rebuilt by
+checking each closed issue against current source rather than trusting closure —
+four were genuinely fixed and removed, and #49 is still true and stayed. Nothing
+enforces agreement between `pyproject.toml` and `gitseed/__init__.py`; they are
+two hand-maintained strings and that is how they drifted.
+
 ## Open issues
 
-One, and it is not a defect. It is a thing nobody knows yet.
+Four. #176 is the only one that is not a defect — it is a thing nobody knows yet.
+#183, #186 and #187 all came out of the release attempt.
 
 **#176** — guard scoring. Against the 417-decision corpus: precision 44.8%
 (95% Wilson 32.7%–57.5%), recall **22.0%**, 92 false negatives against 26 true
@@ -229,14 +263,19 @@ checkout only. `dev` is green.
 Establish those yourself — `npx vitest run`, `gh issue list --state open`,
 `gh run list --branch dev --limit 1`. Do not cite this block.
 
-**The release is prepared but not tagged, and this is the first thing to decide.**
-`dev` is at 0.3.0 with a written CHANGELOG. Tagging triggers a four-platform
-binary build, so it is a deliberate act and was deliberately not taken. Three
-bugs reported by real users against v0.2.1 are fixed on `dev` and unreleased —
-**#128, #149, #107** — which means every day untagged is a day those users still
-have the broken binary. #128 in particular is a `doctor` false failure on
+**The release is in flight and blocked on #187 — see the section at the top.**
+`dev` is at 0.3.0 with a written CHANGELOG; PR #184 promotes it. Tagging triggers
+a four-platform binary build.
+
+Three bugs reported by real users against v0.2.1 are fixed on `dev` and
+unreleased — **#128, #149, #107** — so every day untagged is a day those users
+still have the broken binary. #128 in particular is a `doctor` false failure on
 binary-only installs, so an affected user's diagnostic tool tells them the wrong
-thing. Tag it, or write down why not.
+thing.
+
+That pressure is exactly why the lint failure must not be waved through. The rule
+found a real duplicate; the fault is in a check that ignores a declaration, not in
+the declaration. Fix #187, then merge #184 and tag.
 
 ## Delegation
 
