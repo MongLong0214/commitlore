@@ -13707,6 +13707,18 @@ var findDanglingRefs = (records, referencedBy = records) => {
   return violations;
 };
 var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
+var hasDeclaredSuccession = (recordId, ordered) => {
+  let declared = false;
+  for (const { record: record2 } of ordered) {
+    if (declared && record2.source !== "notes" && record2.trailers.some(
+      (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId
+    )) {
+      return true;
+    }
+    if (trailerValue(record2.trailers, RECORD_ID_KEY2) === recordId) declared = true;
+  }
+  return false;
+};
 var findIdCollisions = (records) => {
   const groups = /* @__PURE__ */ new Map();
   for (const record2 of records) {
@@ -13716,10 +13728,13 @@ var findIdCollisions = (records) => {
     if (group === void 0) groups.set(recordId, [record2]);
     else group.push(record2);
   }
-  return [...groups].filter(([, group]) => {
+  const ordered = chronological(records);
+  return [...groups].filter(([recordId, group]) => {
     if (sharesACommit(group)) return true;
-    if (!group.some((record2) => record2.source === "notes")) return false;
-    return new Set(group.map(payloadSignature)).size > 1;
+    if (group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1) {
+      return true;
+    }
+    return group.filter((record2) => record2.source !== "notes").length > 1 && !hasDeclaredSuccession(recordId, ordered);
   }).map(([recordId]) => ({
     key: RECORD_ID_KEY2,
     value: recordId,

@@ -319,17 +319,28 @@ const payloadSignature = (record: StaleRecord): string =>
     .sort()
     .join('\u0001');
 
+/** A later commit may explicitly replace a duplicated identity with Supersedes. */
+const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolean => {
+  let declared = false;
+  for (const { record } of ordered) {
+    if (
+      declared &&
+      record.source !== 'notes' &&
+      record.trailers.some(
+        (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId,
+      )
+    ) {
+      return true;
+    }
+    if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId) declared = true;
+  }
+  return false;
+};
+
 /**
- * A note may mirror a commit byte-for-byte, but it may not add or replace
- * content under an identity already declared elsewhere. Commit-only
- * re-declarations remain lifecycle updates (SPEC §5) *only when they are
- * declared by different commits* — two commit-sourced blocks that share a
- * `sha` never got there by a later commit re-declaring the id over time, they
- * got there because the multi-record grammar (SPEC §2.4) recovered more than
- * one block from a single message, and an id must resolve to exactly one
- * record *within* a message exactly as much as it must across notes and
- * commits (bug-issue-92; `commitlore parse`'s `labelRecordBlocks` already
- * enforces this locally to one message, in `core/trailers.ts`).
+ * A Record-Id belongs to exactly one record unless a later commit declares
+ * `Supersedes:` for it. Same-message duplicates and divergent notes are still
+ * collisions: neither is a later authored succession.
  */
 export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
   const groups = new Map<string, StaleRecord[]>();
@@ -341,11 +352,20 @@ export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
     else group.push(record);
   }
 
+  const ordered = chronological(records);
   return [...groups]
-    .filter(([, group]) => {
+    .filter(([recordId, group]) => {
       if (sharesACommit(group)) return true;
-      if (!group.some((record) => record.source === 'notes')) return false;
-      return new Set(group.map(payloadSignature)).size > 1;
+      if (
+        group.some((record) => record.source === 'notes') &&
+        new Set(group.map(payloadSignature)).size > 1
+      ) {
+        return true;
+      }
+      return (
+        group.filter((record) => record.source !== 'notes').length > 1 &&
+        !hasDeclaredSuccession(recordId, ordered)
+      );
     })
     .map(([recordId]) => ({
       key: RECORD_ID_KEY,

@@ -20,12 +20,18 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { runValidate } from '../src/commands/validate.js';
+import { findDanglingRefs, findIdCollisions } from '../src/core/stale.js';
 import { parseCommitMessage } from '../src/core/trailers.js';
 import { validateRecord } from '../src/core/schema.js';
 import { RECORD_ID_RE, type Trailer } from '../src/core/types.js';
+import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = new URL('..', import.meta.url).pathname;
 
@@ -87,6 +93,27 @@ const inScope =
     : history.slice(adoptionIndex).filter((entry) => entry.parents.length <= 1);
 const withRecords = inScope.filter((entry) => entry.trailers.length > 0);
 
+const validateHistory = (messages: string[]) => {
+  const repo = createTestRepo({ path: mkdtempSync(join(tmpdir(), 'commitlore-dogfood-')) });
+  try {
+    const records = messages.map((message, index) => {
+      const file = `record-${index}.txt`;
+      writeFileSync(join(repo, file), `${file}\n`);
+      execFileSync('git', ['add', file], { cwd: repo });
+      execFileSync('git', ['commit', '-q', '--no-verify', '-F', '-'], { cwd: repo, input: message });
+      const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+      return { sha, source: 'commit' as const, trailers: parseCommitMessage(message) };
+    });
+    return {
+      records,
+      result: runValidate({ commit: 'HEAD', cwd: repo }),
+    };
+  } finally {
+    // The result has already read the repository; keep temporary histories out of the workspace.
+    rmSync(repo, { recursive: true, force: true });
+  }
+};
+
 describe('dogfooding: this repository obeys its own protocol', () => {
   it('has a full clone to check against', () => {
     // A shallow clone silently reduces this suite to nothing, which would look
@@ -134,20 +161,39 @@ describe('dogfooding: this repository obeys its own protocol', () => {
   });
 
   it('Record-Ids are unique across the history', () => {
-    const seen = new Map<string, string>();
-    const collisions: string[] = [];
-    for (const entry of withRecords) {
-      for (const t of entry.trailers) {
-        if (t.key !== 'Record-Id') continue;
-        const prior = seen.get(t.value);
-        if (prior !== undefined) {
-          collisions.push(`${t.value}: ${prior.slice(0, 7)} and ${entry.sha.slice(0, 7)}`);
-        } else {
-          seen.set(t.value, entry.sha);
-        }
-      }
-    }
+    const collisions = findIdCollisions(
+      withRecords.map((entry) => ({ ...entry, source: 'commit' as const })),
+    ).map((violation) => violation.value);
     expect(collisions, `\n${collisions.join('\n')}\n`).toEqual([]);
+  });
+
+  it('keeps duplicate detection and validate aligned across succession histories', () => {
+    const undeclared = validateHistory([
+      'first\n\nRecord-Id: r-dupid1\n',
+      'second\n\nRecord-Id: r-dupid1\n',
+    ]);
+    expect(findIdCollisions(undeclared.records).map((violation) => violation.value)).toEqual(['r-dupid1']);
+    expect(undeclared.result.code).toBe(1);
+    expect(undeclared.result.violations).toContainEqual(
+      expect.objectContaining({ rule: 'duplicate-id', value: 'r-dupid1' }),
+    );
+
+    const succeeded = validateHistory([
+      'first\n\nRecord-Id: r-success1\n',
+      'second\n\nRecord-Id: r-success1\n',
+      'replacement\n\nSupersedes: r-success1\nRecord-Id: r-success2\n',
+    ]);
+    expect(findIdCollisions(succeeded.records)).toEqual([]);
+    expect(findDanglingRefs(succeeded.records)).toEqual([]);
+    expect(succeeded.result.code).toBe(0);
+    expect(succeeded.result.violations).toEqual([]);
+
+    const dangling = validateHistory(['replacement\n\nSupersedes: r-missing1\nRecord-Id: r-success3\n']);
+    expect(findDanglingRefs(dangling.records).map((violation) => violation.value)).toEqual(['r-missing1']);
+    expect(dangling.result.code).toBe(1);
+    expect(dangling.result.violations).toContainEqual(
+      expect.objectContaining({ rule: 'dangling-ref', value: 'r-missing1' }),
+    );
   });
 
   it('Follows: and Supersedes: resolve to a Record-Id that exists', () => {
