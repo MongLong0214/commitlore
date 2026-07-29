@@ -136,8 +136,13 @@ const declarations = (ordered) => {
 const supersessions = (ordered) => {
     const found = new Map();
     for (const { record } of ordered) {
+        const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
         for (const trailer of record.trailers) {
             if (trailer.key !== SUPERSEDES_KEY)
+                continue;
+            // A duplicate declaration can name its own id to resolve that duplicate;
+            // it updates the record and does not retire the resolved identity.
+            if (trailer.value === recordId)
                 continue;
             if (found.has(trailer.value))
                 continue;
@@ -240,19 +245,7 @@ const payloadSignature = (record) => record.trailers
     .map((trailer) => `${trailer.key}\u0000${trailer.value}`)
     .sort()
     .join('\u0001');
-/**
- * A note may mirror a commit byte-for-byte, but it may not add or replace
- * content under an identity already declared elsewhere. Commit-only
- * re-declarations remain lifecycle updates (SPEC §5) *only when they are
- * declared by different commits* — two commit-sourced blocks that share a
- * `sha` never got there by a later commit re-declaring the id over time, they
- * got there because the multi-record grammar (SPEC §2.4) recovered more than
- * one block from a single message, and an id must resolve to exactly one
- * record *within* a message exactly as much as it must across notes and
- * commits (bug-issue-92; `commitlore parse`'s `labelRecordBlocks` already
- * enforces this locally to one message, in `core/trailers.ts`).
- */
-export const findIdCollisions = (records) => {
+const groupsByRecordId = (records) => {
     const groups = new Map();
     for (const record of records) {
         const recordId = trailerValue(record.trailers, RECORD_ID_KEY);
@@ -264,13 +257,41 @@ export const findIdCollisions = (records) => {
         else
             group.push(record);
     }
-    return [...groups]
-        .filter(([, group]) => {
-        if (sharesACommit(group))
+    return groups;
+};
+const hasAmbiguousGroup = (group) => sharesACommit(group) ||
+    (group.some((record) => record.source === 'notes') &&
+        new Set(group.map(payloadSignature)).size > 1);
+/** Whether a record cannot be safely merged because its identity is ambiguous. */
+export const hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
+/** A later commit may explicitly replace a duplicated identity with Supersedes. */
+const hasDeclaredSuccession = (recordId, ordered) => {
+    let declarations = 0;
+    for (const { record } of ordered) {
+        if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId)
+            declarations += 1;
+        if (declarations >= 2 &&
+            record.source !== 'notes' &&
+            record.trailers.some((trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId)) {
             return true;
-        if (!group.some((record) => record.source === 'notes'))
-            return false;
-        return new Set(group.map(payloadSignature)).size > 1;
+        }
+    }
+    return false;
+};
+/**
+ * A Record-Id belongs to exactly one record unless a later commit declares
+ * `Supersedes:` for it. Same-message duplicates and divergent notes are still
+ * collisions: neither is a later authored succession.
+ */
+export const findIdCollisions = (records) => {
+    const groups = groupsByRecordId(records);
+    const ordered = chronological(records);
+    return [...groups]
+        .filter(([recordId, group]) => {
+        if (hasAmbiguousGroup(group))
+            return true;
+        return (group.filter((record) => record.source !== 'notes').length > 1 &&
+            !hasDeclaredSuccession(recordId, ordered));
     })
         .map(([recordId]) => ({
         key: RECORD_ID_KEY,

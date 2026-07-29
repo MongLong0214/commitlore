@@ -47,7 +47,7 @@ import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
-import { findIdCollisions, foldLifecycle, } from './stale.js';
+import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
@@ -468,7 +468,7 @@ const mergeByIdentity = (records, states) => {
         const recordId = trailerValue(trailers, RECORD_ID_KEY);
         const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
         const provenance = parseProvenance(provenanceValue);
-        const identityCollision = findIdCollisions(ordered).length > 0;
+        const identityCollision = hasAmbiguousIdCollision(ordered);
         merged.push({
             trailers,
             sha: latest.sha,

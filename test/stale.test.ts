@@ -376,7 +376,7 @@ describe('findIdCollisions', () => {
     ).toEqual([]);
   });
 
-  it('does not flag the same Record-Id re-declared by a later, different commit (SPEC §5 lifecycle update)', () => {
+  it('flags an undeclared Record-Id duplicate across commits', () => {
     expect(
       findIdCollisions([
         {
@@ -390,7 +390,42 @@ describe('findIdCollisions', () => {
           trailers: [trailer('Limit', 'second'), trailer('Record-Id', 'r-x')],
         },
       ]),
+    ).toEqual([
+      {
+        key: 'Record-Id',
+        value: 'r-x',
+        rule: 'duplicate-id',
+        got: 'r-x',
+        want: 'exactly one record per Record-Id',
+      },
+    ]);
+  });
+
+  it('accepts a duplicate once a later commit declares its Supersedes succession', () => {
+    expect(
+      findIdCollisions([
+        { sha: 'c1', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
+        {
+          sha: 'c2',
+          source: 'commit',
+          trailers: [trailer('Supersedes', 'r-x'), trailer('Record-Id', 'r-x')],
+        },
+      ]),
     ).toEqual([]);
+  });
+
+  it('does not let an earlier succession forgive a later duplicate', () => {
+    expect(
+      findIdCollisions([
+        { sha: 'c1', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
+        {
+          sha: 'c2',
+          source: 'commit',
+          trailers: [trailer('Supersedes', 'r-x'), trailer('Record-Id', 'r-success')],
+        },
+        { sha: 'c3', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
+      ]),
+    ).toHaveLength(1);
   });
 
   it('flags two commit-sourced blocks under the same sha sharing a Record-Id (bug-issue-92)', () => {

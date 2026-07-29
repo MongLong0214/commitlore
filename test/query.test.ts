@@ -806,7 +806,10 @@ type Declaration = {
   readonly warning: string;
 };
 
-const dualDeclarationRepo = (declarations: readonly Declaration[]): string => {
+const dualDeclarationRepo = (
+  declarations: readonly Declaration[],
+  declaresSuccession = false,
+): string => {
   const dir = makeRepo();
   for (const [index, declaration] of declarations.entries()) {
     commitAt(
@@ -815,6 +818,7 @@ const dualDeclarationRepo = (declarations: readonly Declaration[]): string => {
       record(`Declare r-dual01 (${declaration.provenance})`, [
         `Warn: ${declaration.warning}`,
         `Provenance: ${declaration.provenance}`,
+        ...(declaresSuccession && index > 0 ? ['Supersedes: r-dual01'] : []),
         'Record-Id: r-dual01',
       ]),
       { 'src/dual.ts': String(index) },
@@ -863,6 +867,23 @@ describe('merged-record trust', () => {
     expect(query.records[0]?.trust).toBe('claim');
     expect(injection.text).toMatch(/\[claim\]\s+r-dual01/);
   });
+
+  it.each(orders)(
+    'keeps a duplicated-and-declared record a claim regardless of declaration order',
+    (...declarations) => {
+      const dir = dualDeclarationRepo(declarations, true);
+      const query = runQuery({ cwd: dir, trustedAuthors: [TRUSTED_AUTHOR] });
+      const injection = buildInjection({
+        cwd: dir,
+        path: 'src/dual.ts',
+        trustedAuthors: [TRUSTED_AUTHOR],
+        noIndex: true,
+      });
+
+      expect(query.records[0]?.trust).toBe('claim');
+      expect(injection.text).toMatch(/\[claim\]\s+r-dual01/);
+    },
+  );
 
   it('leaves a singly declared record directive', () => {
     const dir = dualDeclarationRepo([authored(ordinaryWarning)]);

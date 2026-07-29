@@ -63,8 +63,8 @@ import {
 import { authorsOf, gradeRecord, restrictGrade, type Grade } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
 import {
-  findIdCollisions,
   foldLifecycle,
+  hasAmbiguousIdCollision,
   type RecordState,
   type StaleRecord,
 } from './stale.js';
@@ -668,7 +668,7 @@ const mergeByIdentity = (
     const recordId = trailerValue(trailers, RECORD_ID_KEY);
     const provenanceValue = trailerValue(trailers, PROVENANCE_KEY);
     const provenance = parseProvenance(provenanceValue);
-    const identityCollision = findIdCollisions(ordered).length > 0;
+    const identityCollision = hasAmbiguousIdCollision(ordered);
 
     merged.push({
       trailers,
