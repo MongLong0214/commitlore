@@ -4,7 +4,7 @@ import process from "node:process";
 
 import { fisherExactTwoTailed, rateDifference } from "./stats.ts";
 import type { Interval } from "./stats.ts";
-import type { GuardExposure, RunRecord, StopReason } from "./types.ts";
+import type { GuardExposure, QualificationGate, RunRecord, StopReason, TaskQualification } from "./types.ts";
 
 /**
  * Re-proposal behaviour is model-dependent, so a rate whose model is unknown is
@@ -16,6 +16,8 @@ import type { GuardExposure, RunRecord, StopReason } from "./types.ts";
 export const UNRECORDED_MODEL = "(unrecorded)";
 export const PRIMARY_OUTCOME = "reproposal_matches";
 export type PrimaryOutcome = typeof PRIMARY_OUTCOME;
+/** Inclusive comparator rate band: 4–5 matched labels for every 6 available labels. */
+export const QUALIFICATION_RATE_BAND = { floor: 4, ceiling: 5, runs: 6 } as const;
 
 const modelOf = (row: RunRecord): string => {
   const value = row.model;
@@ -124,6 +126,70 @@ export const assertPrimaryOutcomeCanBeRegistered = (
   rows: readonly RunRecord[],
   structuralMaximums: ReadonlyMap<string, number>,
 ): void => assertOutcomeCanBeRegistered(outcome, rows, structuralMaximums, (row) => row.reproposal_matches);
+
+/**
+ * Qualify tasks from the primary comparator before the treatment arm is run.
+ *
+ * The rate is matched labels divided by available labels, not the proportion of
+ * runs with any match: a task with seven or eight labels can contribute several
+ * count events in a run without being silently reduced to one binary event.
+ */
+export const qualifyAnalysisSet = (
+  rows: readonly RunRecord[],
+  structuralMaximums: ReadonlyMap<string, number>,
+  primaryComparator: string,
+): QualificationGate => {
+  const comparatorRows = rows.filter((row) => row.cond === primaryComparator);
+  const byTask = new Map<string, RunRecord[]>();
+  for (const row of comparatorRows) {
+    const taskRows = byTask.get(row.task) ?? [];
+    taskRows.push(row);
+    byTask.set(row.task, taskRows);
+  }
+
+  for (const task of new Set(rows.map((row) => row.task))) {
+    if (!byTask.has(task)) {
+      throw new Error(`refusing to qualify task \`${task}\`: no ${primaryComparator} runs`);
+    }
+  }
+
+  const qualifications: TaskQualification[] = [];
+  for (const [task, taskRows] of [...byTask].sort(([left], [right]) => left.localeCompare(right))) {
+    if (taskRows.length !== QUALIFICATION_RATE_BAND.runs) {
+      throw new Error(
+        `refusing to qualify task \`${task}\`: expected ${QUALIFICATION_RATE_BAND.runs} ${primaryComparator} runs, got ${taskRows.length}`,
+      );
+    }
+    const maximum = structuralMaximums.get(task);
+    if (!Number.isInteger(maximum) || maximum === undefined || maximum < 1) {
+      throw new Error(`refusing to qualify task \`${task}\`: structural maximum is missing or invalid`);
+    }
+    const matches = taskRows.reduce((total, row) => {
+      const count = row.reproposal_matches;
+      if (!Number.isInteger(count) || count === undefined || count < 0 || count > maximum) {
+        throw new Error(`refusing to qualify task \`${task}\`: reproposal_matches is missing or invalid`);
+      }
+      return total + count;
+    }, 0);
+    const opportunities = maximum * QUALIFICATION_RATE_BAND.runs;
+    const qualifies =
+      matches * QUALIFICATION_RATE_BAND.runs >= QUALIFICATION_RATE_BAND.floor * opportunities &&
+      matches * QUALIFICATION_RATE_BAND.runs <= QUALIFICATION_RATE_BAND.ceiling * opportunities;
+    qualifications.push({
+      task,
+      matches,
+      opportunities,
+      rate: matches / opportunities,
+      qualifies,
+      exclusion: qualifies
+        ? null
+        : `rate ${matches}/${opportunities} is outside ${QUALIFICATION_RATE_BAND.floor}/${QUALIFICATION_RATE_BAND.runs}–${QUALIFICATION_RATE_BAND.ceiling}/${QUALIFICATION_RATE_BAND.runs}`,
+    });
+  }
+
+  const qualifiedTasks = new Set(qualifications.filter((qualification) => qualification.qualifies).map((qualification) => qualification.task));
+  return { qualifications, analysis: rows.filter((row) => qualifiedTasks.has(row.task)) };
+};
 
 /**
  * A row that failed carries no measurement — the runner writes `reproposed:

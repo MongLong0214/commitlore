@@ -357,6 +357,25 @@ export interface RunRecord {
   readonly rejected_path_first_edit?: 0 | 1;
 }
 
+/** A task's comparator-only qualification result before either analysis arm runs. */
+export interface TaskQualification {
+  readonly task: string;
+  /** Sum of `reproposal_matches` across the six comparator runs. */
+  readonly matches: number;
+  /** Sum of the task's structural maximum across those six runs. */
+  readonly opportunities: number;
+  readonly rate: number;
+  readonly qualifies: boolean;
+  /** Null for a qualifying task; otherwise the recorded reason it was dropped. */
+  readonly exclusion: string | null;
+}
+
+/** Qualification records and the rows that remain eligible for analysis. */
+export interface QualificationGate {
+  readonly qualifications: readonly TaskQualification[];
+  readonly analysis: readonly RunRecord[];
+}
+
 export interface GuardExposureMatch {
   readonly path: string | null;
   readonly alternative: string | null;
