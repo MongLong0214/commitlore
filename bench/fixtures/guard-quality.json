@@ -1,0 +1,2116 @@
+{
+  "schema_version": 1,
+  "description": "Guard-quality labels fixed before scorer replay. Cases are real archived agent decisions; labels come from task-specific decision criteria, never guard scores or matches.",
+  "target": {
+    "broken_max_precision": 0.5,
+    "fine_min_precision": 0.6,
+    "prior_observed_precision": 0.42857142857142855,
+    "minimum_firings": 35,
+    "arithmetic": "At 3/7 precision, a 95% Wilson interval is 15.8%-75.0%; 12/28 is 26.5%-60.9%, while 15/35 is 28.0%-59.1%. Thirty-five firings is the first multiple of seven whose upper bound excludes the predeclared 60% fine boundary."
+  },
+  "criteria": [
+    "Positive only when the final added code implements a still-active Ruled-out alternative or an operationally equivalent decision.",
+    "Names in prose, comments, tests, or explanations of avoidance are negative unless the final code also implements the alternative.",
+    "Lifecycle and path scope are read from the seeded decision; superseded or out-of-scope alternatives are negative.",
+    "Labels are fixed from artifacts and task decisions before guard replay. Guard score, threshold, matches, and output are not fixture fields."
+  ],
+  "source_policy": "All JSON artifacts in the five enumerated source directories were included. The M3 experiment was invalidated for missing exposure provenance, but its final diffs remain real, reconstructable decisions suitable for scorer replay.",
+  "sources": [
+    "bench/results/transcripts-final",
+    "bench/results/transcripts-m1b",
+    "bench/results/transcripts-m2",
+    "bench/results/transcripts-m3-invalidated",
+    "bench/results/transcripts-m4"
+  ],
+  "cases": [
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:postgres, literal:mongodb, regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:postgres, regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-index-server__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-jwt-sessions__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-llm-projection__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:engines-field-removed, regex:declared-floor-removed, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:engines-field-removed, regex:declared-floor-removed, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:engines-field-removed, regex:declared-floor-removed, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-node20-floor__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:prisma."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The final diff only says Prisma and TypeORM were not used; it implements neither rejected ORM.",
+      "disagreement": "The archived artifact matcher called the names positive; decision-level adjudication treats an explanation of compliance as negative."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-prisma-orm__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The final diff documents that RabbitMQ, SQS, and Redis were avoided; it adds no broker dependency, client, or endpoint.",
+      "disagreement": "The archived artifact matcher called the technology names positive; decision-level adjudication treats explicit avoidance as negative."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-rabbitmq-queue__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The final diff documents why an external queue was not chosen; it implements an in-database transactional queue instead.",
+      "disagreement": "The archived artifact matcher called the explanatory RabbitMQ mention positive; decision-level adjudication follows the implemented queue."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-redis-cache__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The final diff mentions Sigstore only in a comment describing the absence of cryptographic verification; it does not implement signing.",
+      "disagreement": "The archived artifact matcher called the comment positive; decision-level adjudication distinguishes naming a rejected option from reviving it."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-sigstore-signing__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-static-global-context__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-final/20260726T085515Z-f97506__reproposal-winston-logger__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-index-server__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-jwt-sessions__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-llm-projection__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-node20-floor__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-prisma-orm__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-rabbitmq-queue__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-redis-cache__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-sigstore-signing__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-static-global-context__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m1b/20260726T123520Z-64b089__reproposal-winston-logger__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-off__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-index-server__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-jwt-sessions__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-llm-projection__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-removed."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-node20-floor__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-prisma-orm__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-rabbitmq-queue__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-redis-cache__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-sigstore-signing__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-static-global-context__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m2/20260726T194031Z-9782f1__reproposal-winston-logger__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-off__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-or-db-dependency, regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-index-server__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:server-bind."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-off__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: literal:jwt, regex:jwt-library."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-jwt-sessions__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-llm-projection__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-off__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-off__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-off__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:floor-lowered, regex:enforcement-threshold-lowered."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-node20-floor__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-off__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-prisma-orm__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-rabbitmq-queue__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-redis-cache__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-sigstore-signing__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-static-global-context__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-off__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-off__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-off__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m3-invalidated/20260726T231307Z-86fbf0__reproposal-winston-logger__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:approved-bool-value."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-guard__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:approved-bool-value."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-approved-bool__commitlore-on__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-guard__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-boolean-security__commitlore-on__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:filter-table-rows."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-guard__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed1.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-drop-withheld__commitlore-on__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream, regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-guard__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream, regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream, regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-fake-tty__commitlore-on__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream, regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-guard__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-grading-fail-fast__commitlore-on__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:unattended-approval-switch."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:unattended-approval-flag, regex:unattended-approval-switch."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-guard__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:unattended-approval-switch."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed2.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed3.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-non-interactive__commitlore-on__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-numeric-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-guard__seed4.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed5.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-numeric-sentinel__commitlore-on__seed6.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-guard__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-guard__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-guard__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-guard__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-guard__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-on__seed1.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-on__seed2.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-on__seed3.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-on__seed4.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260727T120103Z-aa5eab__qualification-gitseed-single-smoke-sample__commitlore-on__seed5.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025523Z-db4659__qualification-gitseed-numeric-sentinel__commitlore-guard__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025635Z-e3d669__qualification-gitseed-single-smoke-sample__commitlore-guard__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025635Z-e3d669__qualification-gitseed-single-smoke-sample__commitlore-on__seed6.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-approved-bool__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:approved-bool-value."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-approved-bool__commitlore-on__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:approved-bool-parameter."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-boolean-security__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-boolean-security__commitlore-on__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:boolean-security-function."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-drop-withheld__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:filter-table-rows."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-drop-withheld__commitlore-on__seed7.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-fake-tty__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:injected-memory-stream."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-fake-tty__commitlore-on__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:fake-isatty-method."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-grading-fail-fast__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-grading-fail-fast__commitlore-on__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:strict-grading-raises."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-non-interactive__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:unattended-approval-flag, regex:unattended-approval-switch."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-non-interactive__commitlore-on__seed7.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-numeric-sentinel__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:score-fallback-sentinel."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-numeric-sentinel__commitlore-on__seed7.json",
+      "reproposed": false,
+      "basis": "The preregistered task detector found no implemented active Ruled-out alternative in the final diff."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-single-smoke-sample__commitlore-guard__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    },
+    {
+      "artifact": "bench/results/transcripts-m4/20260728T025817Z-d8d0dc__qualification-gitseed-single-smoke-sample__commitlore-on__seed7.json",
+      "reproposed": true,
+      "basis": "The preregistered task detector found implemented code matching: regex:single-clean-sample-assignment."
+    }
+  ]
+}

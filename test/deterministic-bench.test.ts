@@ -28,6 +28,7 @@ import {
 } from '../bench/deterministic/noise.ts';
 import { measureDensity } from '../bench/deterministic/density.ts';
 import {
+  loadGuardCorpus,
   sweepGuardThresholds,
   wilsonPrecisionInterval,
 } from '../bench/deterministic/quality.ts';
@@ -317,6 +318,52 @@ describe('deterministic benchmark reporting', () => {
     expect(interval.level).toBe(0.95);
     expect(interval.lower).toBeCloseTo(0.1368, 4);
     expect(interval.upper).toBeCloseTo(0.6943, 4);
+  });
+
+  it('computes hand-checked Wilson edge intervals', () => {
+    expect(wilsonPrecisionInterval(0, 10)).toMatchObject({
+      level: 0.95,
+      lower: 0,
+      upper: expect.closeTo(0.2775, 4),
+    });
+    expect(wilsonPrecisionInterval(10, 10)).toMatchObject({
+      level: 0.95,
+      lower: expect.closeTo(0.7225, 4),
+      upper: expect.closeTo(1, 10),
+    });
+  });
+
+  it('loads all 417 decisions in the enlarged guard corpus', () => {
+    const corpus = loadGuardCorpus(REPO_ROOT);
+
+    expect(corpus).toHaveLength(417);
+    expect(new Set(corpus.map((decision) => decision.artifact))).toHaveLength(417);
+    expect(corpus.filter((decision) => decision.disagreement !== undefined)).toHaveLength(4);
+  });
+
+  it('takes guard labels from fixture data rather than scorer or archived detector output', () => {
+    const corpus = loadGuardCorpus(REPO_ROOT);
+    const relabelled = corpus.find((decision) =>
+      decision.artifact.endsWith(
+        '__reproposal-prisma-orm__commitlore-on__seed2.json',
+      ),
+    );
+    if (relabelled === undefined) throw new Error('missing relabelled Prisma decision');
+    const archived: unknown = JSON.parse(
+      readFileSync(join(REPO_ROOT, relabelled.artifact), 'utf8'),
+    );
+    const fixture: unknown = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'bench', 'fixtures', 'guard-quality.json'), 'utf8'),
+    );
+
+    expect(Reflect.get(archived as object, 'reproposed')).toBe(true);
+    expect(relabelled.reproposed).toBe(false);
+    expect(relabelled.disagreement).toMatch(/decision-level adjudication/i);
+    expect(
+      (Reflect.get(fixture as object, 'cases') as object[]).every(
+        (candidate) => !Reflect.has(candidate, 'score') && !Reflect.has(candidate, 'matches'),
+      ),
+    ).toBe(true);
   });
 
   it('renders the guard corpus-size limit with the threshold curve', () => {

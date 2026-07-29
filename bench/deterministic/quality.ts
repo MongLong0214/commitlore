@@ -29,8 +29,14 @@ interface GuardArtifact {
   readonly task: string;
   readonly cond: string;
   readonly seed: number;
-  readonly reproposed: boolean;
   readonly diff: string;
+}
+
+export interface GuardCorpusDecision extends GuardArtifact {
+  readonly artifact: string;
+  readonly reproposed: boolean;
+  readonly basis: string;
+  readonly disagreement?: string;
 }
 
 export interface GuardScoredDecision {
@@ -122,6 +128,12 @@ const numberField = (value: unknown, name: string): number => {
   return field;
 };
 
+const arrayField = (value: unknown, name: string): readonly unknown[] => {
+  const field = objectField(value, name);
+  if (!Array.isArray(field)) throw new Error(`${name} must be an array`);
+  return field;
+};
+
 const loadExpected = (path: string): InjectionExpected => {
   const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
   return { blocked: booleanField(parsed, 'blocked') };
@@ -194,9 +206,39 @@ const loadGuardArtifact = (path: string): GuardArtifact => {
     task: stringField(parsed, 'task'),
     cond: stringField(parsed, 'cond'),
     seed: numberField(parsed, 'seed'),
-    reproposed: booleanField(parsed, 'reproposed'),
     diff: stringField(parsed, 'diff'),
   };
+};
+
+export const loadGuardCorpus = (repoRoot: string): readonly GuardCorpusDecision[] => {
+  const fixture = JSON.parse(
+    readFileSync(join(repoRoot, 'bench', 'fixtures', 'guard-quality.json'), 'utf8'),
+  ) as unknown;
+  const seen = new Set<string>();
+  return arrayField(fixture, 'cases').map((candidate) => {
+    const artifact = stringField(candidate, 'artifact');
+    if (
+      !artifact.startsWith('bench/results/transcripts') ||
+      !artifact.endsWith('.json') ||
+      artifact.includes('..') ||
+      seen.has(artifact)
+    ) {
+      throw new Error(`invalid or duplicate guard corpus artifact: ${artifact}`);
+    }
+    seen.add(artifact);
+    const loaded = loadGuardArtifact(join(repoRoot, artifact));
+    const disagreement = objectField(candidate, 'disagreement');
+    if (disagreement !== undefined && typeof disagreement !== 'string') {
+      throw new Error('disagreement must be a string');
+    }
+    return {
+      ...loaded,
+      artifact,
+      reproposed: booleanField(candidate, 'reproposed'),
+      basis: stringField(candidate, 'basis'),
+      ...(disagreement === undefined ? {} : { disagreement }),
+    };
+  });
 };
 
 /**
@@ -224,13 +266,8 @@ export const measureGuardQuality = (
   base: RowBase,
   repoRoot: string,
 ): GuardQualityRow => {
-  const corpus = 'bench/results/transcripts-final';
-  const artifactRoot = join(repoRoot, corpus);
-  const artifacts = readdirSync(artifactRoot)
-    .filter((name) => name.endsWith('.json'))
-    .sort()
-    .map((name) => loadGuardArtifact(join(artifactRoot, name)))
-    .filter((artifact) => artifact.cond === 'commitlore-on');
+  const corpus = 'bench/fixtures/guard-quality.json';
+  const artifacts = loadGuardCorpus(repoRoot);
   const tasks = new Map(
     loadTasks(join(repoRoot, 'bench', 'tasks')).map((task) => [task.id, task]),
   );
