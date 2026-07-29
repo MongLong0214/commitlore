@@ -19,6 +19,13 @@ import { type Lifecycle, type Record, type Trailer, type Violation } from './typ
 /** The only flag the core raises today. `flags` stays open for later routes. */
 export declare const REVIEW_FLAG = "review";
 /**
+ * Exported so `commands/validate.ts` can report the exact same wording for
+ * the same `duplicate-id` rule when it detects a same-message collision
+ * directly from `core/trailers.ts`'s `labelRecordBlocks` (bug-issue-145) — one
+ * rule should read the same regardless of which check found it.
+ */
+export declare const UNIQUE_ID_WANT = "exactly one record per Record-Id";
+/**
  * A record plus the instant its commit was made — the axis the fold orders by.
  *
  * `committedAt` is optional so a plain `Record[]` (SPEC's knowledge unit, which

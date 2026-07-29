@@ -24,8 +24,8 @@ import { execGit } from '../core/git.js';
 import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
 import { validateRecord } from '../core/schema.js';
-import { findDanglingRefs, findIdCollisions, } from '../core/stale.js';
-import { parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
+import { findDanglingRefs, findIdCollisions, UNIQUE_ID_WANT, } from '../core/stale.js';
+import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 export const CHECK_CLASS_NEEDS = {
@@ -195,6 +195,50 @@ const violationsForBlock = (source, trailers) => {
     });
 };
 /**
+ * A `Record-Id` declared by more than one block of the *same* message (SPEC
+ * §2.4) is shape-only information: `commitlore parse`'s `labelRecordBlocks`
+ * (`core/trailers.ts`) already computes it from the message alone, on every
+ * block, via its `identityCollision` flag. This calls that computation
+ * directly rather than re-deriving "do two blocks in this message declare the
+ * same id" a second way — a second detector for the same rule is how the two
+ * commands read the same message differently (bug-issue-145).
+ *
+ * Scoped to sources with no resolved `sha`: once a commit is known,
+ * `checkReferences` below already reports the identical collision through
+ * `findIdCollisions`'s same-commit branch, complete with its own line
+ * attribution (bug-issue-92) — running this too would report the same
+ * collision twice for the same commit. A `--message-file`/stdin source — what
+ * a commit-msg hook always hands `validate`, and the shape SPEC §6.1 requires
+ * working from "the message alone" — never resolves an `sha`, so
+ * `findIdCollisions` structurally cannot see it there (it keys same-message
+ * collisions off two records sharing one `sha`); this is exactly, and only,
+ * that blind spot.
+ */
+const identityCollisionViolations = (source) => {
+    if (source.sha !== undefined)
+        return [];
+    return labelRecordBlocks(source.message).flatMap((block) => {
+        if (!block.identityCollision)
+            return [];
+        const id = block.trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+        if (id === undefined)
+            return [];
+        const lines = locateTrailerLines(source.message, block.trailers);
+        const index = block.trailers.findIndex((trailer) => trailer.key === 'Record-Id');
+        const line = lines[index];
+        return [
+            {
+                ...(line === undefined ? {} : { line }),
+                key: 'Record-Id',
+                value: id,
+                rule: 'duplicate-id',
+                got: id,
+                want: UNIQUE_ID_WANT,
+            },
+        ];
+    });
+};
+/**
  * Validates every record block a message carries (SPEC §2.4), not only the
  * one git recognizes as the message's own last paragraph.
  *
@@ -241,10 +285,14 @@ const inspectSource = (source) => {
         };
     });
     const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
-    // Document order: the blocks the grammar recovers from earlier in the
-    // message are reported before whatever the message's own last paragraph
-    // has to say.
-    const violations = [...earlierViolations, ...lastViolations];
+    // A same-message Record-Id collision is reported before any other shape
+    // finding, the same way `commitlore parse` surfaces it on stderr ahead of
+    // the parsed blocks — it is the fact most likely to explain the others.
+    const violations = [
+        ...identityCollisionViolations(source),
+        ...earlierViolations,
+        ...lastViolations,
+    ];
     const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map((warning) => warning.tabIndented
         ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab`
         : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`);
