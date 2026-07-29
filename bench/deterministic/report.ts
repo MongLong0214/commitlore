@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
 
+import { renderEconomicCase } from './economics.ts';
 import type {
   CaptureCostRow,
   DensityRow,
@@ -341,6 +342,7 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
     ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
     ...exposureSection(rows.filter((row): row is NoiseExposureRow => row.metric === 'noise_exposure')),
     ...densitySection(rows.filter((row): row is DensityRow => row.metric === 'rationale_density')),
+    ...renderEconomicCase(),
   ];
   return `${lines.join('\n').trim()}\n`;
 };
