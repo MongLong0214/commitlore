@@ -80,13 +80,21 @@ measurement and record it with the result.
 
 ## Open issues
 
-**#127 · #131 · #134** — three deterministic measurements whose code is written,
-tested and merged, waiting only for a quiet machine. `#131` is the index scale
-ratio, `#134` the write-side cost (CPAA), `#127` the economic case. When idle, run
-`node --experimental-strip-types bench/deterministic.ts` and commit the generated
-result pair. `SCALE_SIZES` was lowered to `[1k, 10k, 100k]` because 300k never
-produced a row in two attempts; nothing rules 300k out, it just cannot hold the
-other eight sections hostage.
+**#127** — the economic case. Its inputs now exist: capture cost is measured
+(6,110 bytes / 1,524 tokens / 105ms for the harvest prompt contract, 36ms to
+verify) and so is hook overhead. What is missing is the benefit side — this
+project has still never observed a prevented re-proposal, so any break-even
+remains a ratio with a modelled denominator. #141's rejected-path counters make
+that observable; nothing has run against them yet.
+
+**#166** — the retrieval comparison. The README's exposure claim rests on one
+baseline and it is lexical. BM25, embedding top-k, hybrid, and embedding with a
+path metadata filter are untested, and a good embedding retriever with a path
+filter might well reach 2 of 2 — in which case the finding is that the
+*structural signal* is what works, which is more useful than a win over a weak
+baseline. Do not fold this into the deterministic bench: that suite's value is
+that it makes no model call and therefore cannot fail the way M1, M2 and M4
+failed.
 
 **#140** — the important one. M1, M2 and M4 all measured final coding behaviour,
 four layers downstream of anything this product controls. The proposed primary
@@ -115,18 +123,36 @@ decision rather than a default.
 Established, re-derivable, safe to cite:
 
 ```
-irrelevant decision context withheld    99.98%   (2 of 10,002, recall 2/2)
-p95 query latency at 100k commits       29.4x    (13,282ms → 451ms)
-hook overhead                           +186ms commit-msg, +102ms injection
+irrelevant decision context withheld    2 of 10,002 exposed, recall 2/2
+  lexical top-k at the same budget      2 exposed, recall 1/2 — from 10 distractors on
+query latency at 100k commits           496ms p50 / 503ms p95 indexed
+  no-index, same fixture                86,673ms — ratio 4.8x at 1k, 36x at 10k, 175x at 100k
+record capture cost                     6,110 bytes / 1,524 tokens / 105ms, verify 36ms
+hook overhead                           +228ms commit-msg, +120ms injection
 guard precision, best threshold         42.9%    (95% CI 13.7–69.4%)
 record-bearing commits, this repo       73.9%
 ```
 
-The exposure figure is the strongest thing here. A lexical top-k baseline drops
-half the relevant records once distractors exceed 100; path scope does not,
-because it selects by structure rather than similarity. Say **"99.98% less
-irrelevant decision context reached the model"** — never "99.98% token saving". It
-measures exposure, not cost and not accuracy.
+The **29.4x** figure that appeared in earlier notes is retired. It divided by a
+no-index time that measured a parser stopping at a message's final record block —
+77 µs per commit, which was never plausible for opening, scanning and extracting
+from a message. The current parser reads every block at 900 µs (#163).
+
+The exposure figure is the strongest thing here, and it is also the easiest to
+overstate. What was measured is **one lexical baseline** at the same two-record
+output budget, dropping a relevant record from ten distractors onward. Say "the
+measured top-k lexical baseline" and nothing broader — I wrote "similarity
+retrieval, embeddings, RAG" in a PR body and had to retract it within the hour,
+because none of those was tested and a good embedding retriever with a path
+filter might well match us. That is what #166 exists to find out.
+
+Never say "99.98% token saving". It measures exposure — how much irrelevant
+decision context reaches the model — not cost, not accuracy, and not agent
+behaviour.
+
+The latency ratio is not a selling point either: no-index is CommitLore's own
+fallback mode, so it compares the product to itself. Lead with the absolute
+figure and let the curve show that the index matters more as a repository grows.
 
 Not established, and the README says so:
 
