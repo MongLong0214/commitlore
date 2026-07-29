@@ -80,93 +80,93 @@ measurement and record it with the result.
 
 ## Open issues
 
-**#127** — the economic case. Its inputs now exist: capture cost is measured
-(6,110 bytes / 1,524 tokens / 105ms for the harvest prompt contract, 36ms to
-verify) and so is hook overhead. What is missing is the benefit side — this
-project has still never observed a prevented re-proposal, so any break-even
-remains a ratio with a modelled denominator. #141's rejected-path counters make
-that observable; nothing has run against them yet.
+Five, and none is a defect. All five are things nobody knows yet.
 
-**#166** — the retrieval comparison. The README's exposure claim rests on one
-baseline and it is lexical. BM25, embedding top-k, hybrid, and embedding with a
-path metadata filter are untested, and a good embedding retriever with a path
-filter might well reach 2 of 2 — in which case the finding is that the
-*structural signal* is what works, which is more useful than a win over a weak
-baseline. Do not fold this into the deterministic bench: that suite's value is
-that it makes no model call and therefore cannot fail the way M1, M2 and M4
-failed.
+**#140** — the one that matters. M1, M2 and M4 all measured final coding
+behaviour, four layers downstream of anything this product controls, and each
+failed differently. The replacement claim is *fresh-agent decision recovery*: does
+a fresh agent recover a code path's active decision context before its first edit?
+The rule that makes it credible is that **gold answers must not be derived from
+CommitLore records** — two annotators extract decision atoms from PR discussion and
+commit bodies, the gold is frozen, and only then is the same information encoded
+as trailers. Otherwise it measures whether CommitLore can read its own format. A
+protocol registration is in flight on `protocol-issue-140`; it writes the
+registration and deliberately builds no harness.
 
-**#140** — the important one. M1, M2 and M4 all measured final coding behaviour,
-four layers downstream of anything this product controls. The proposed primary
-claim is *fresh-agent decision recovery*: does a fresh agent recover a code path's
-active decision context before its first edit? The rule that makes it credible is
-that gold answers must not be derived from CommitLore records — two annotators
-extract decision atoms from PR discussion and commit bodies, the gold is frozen,
-and only then is the same information encoded as trailers. Otherwise it measures
-whether CommitLore can read its own format.
+**#172** — the README hero does not survive #166 and must be revised. See the
+numbers section below; this is the most urgent thing on the list because the claim
+is live on the front page.
 
-**#157** — guard precision peaks at 42.9% and collapses to zero at threshold 0.55.
-Tuning is ruled out by the measured curve. The remaining causes are the scoring
-composition or the corpus size, and the corpus gates the other: 30 labelled
-decisions give the 3/8 precision a 95% Wilson interval of 13.7%–69.4%, which
-contains both "unusable" and "fine". Expand the corpus first. Do not change the
-corpus and the scorer in one commit — that is how M4 became unanswerable.
+**#173** — the experiment that might restore a differentiator. Path scope withholds
+superseded and expired records; a similarity retriever has no notion of a record
+being stale and will return a decision that was already reversed. Missing a record
+costs the model context; being handed a reversed decision costs it correctness, and
+those are not the same failure. In flight on `feat-issue-173`. The corpus must be
+built so the *opposite* outcome is reachable — if embedding retrieval also returns
+zero stale records, that finding is as valuable as the expected one.
+
+**#176** — guard scoring. Against the 417-decision corpus: precision 44.8%
+(95% Wilson 32.7%–57.5%), recall **22.0%**, 92 false negatives against 26 true
+positives. Do not change the corpus in the same commit as the scorer — the corpus
+is the instrument now. Report both figures on every change, because a scorer that
+suppresses firings lifts precision while making recall worse and looks like an
+improvement. The interval is the acceptance criterion, not the point estimate.
 
 **#161** — a committed benchmark result names the commit that produced it, and
 every rebase of its own branch orphans that commit. It happened twice in one
-sitting. Four options are on the issue; I lean toward recording a commit id *and*
-a content digest with the fallback stating which it used, but it deserves a
-decision rather than a default.
+sitting. In flight on `feat-issue-161`. Recording a commit id *and* a content
+digest, with the fallback stating loudly which it used, is the shape I proposed.
 
 ## What the numbers currently say
 
-Established, re-derivable, safe to cite:
+Measured on a quiet machine, single complete run, re-derivable:
 
 ```
-irrelevant decision context withheld    2 of 10,002 exposed, recall 2/2
-  lexical top-k at the same budget      2 exposed, recall 1/2 — from 10 distractors on
-query latency at 100k commits           496ms p50 / 503ms p95 indexed
-  no-index, same fixture                86,673ms — ratio 4.8x at 1k, 36x at 10k, 175x at 100k
-record capture cost                     6,110 bytes / 1,524 tokens / 105ms, verify 36ms
-hook overhead                           +228ms commit-msg, +120ms injection
-guard precision, best threshold         42.9%    (95% CI 13.7–69.4%)
-record-bearing commits, this repo       73.9%
+retrieval recall at a two-record budget, 10,002 records
+  BM25                       0 of 2
+  hybrid RRF                 1 of 2
+  embedding top-k            2 of 2      <- matches us
+  embedding + path filter    2 of 2
+  CommitLore path scope      2 of 2
+
+query latency at 100k commits   496ms p50 / 503ms p95 indexed
+  no-index, same fixture        86,673ms — ratio 4.8x at 1k, 36x at 10k, 175x at 100k
+record capture cost             6,110 bytes / 1,524 tokens / 105ms, verify 36ms
+hook overhead                   +228ms commit-msg, +120ms injection
+guard, 417-decision corpus      precision 44.8% (CI 32.7–57.5%), recall 22.0%
+record-bearing commits, here    73.9%
 ```
 
-The **29.4x** figure that appeared in earlier notes is retired. It divided by a
-no-index time that measured a parser stopping at a message's final record block —
-77 µs per commit, which was never plausible for opening, scanning and extracting
-from a message. The current parser reads every block at 900 µs (#163).
+**Read the retrieval table before writing any marketing.** The README currently
+leads with CommitLore keeping both relevant records while a lexical baseline loses
+one. That is true and it is misleading by omission: an embedding retriever matches
+us at every corpus size with no path filter at all. #172 tracks the revision and
+#173 tracks the lifecycle experiment that might restore a real differentiator.
 
-The exposure figure is the strongest thing here, and it is also the easiest to
-overstate. What was measured is **one lexical baseline** at the same two-record
-output budget, dropping a relevant record from ten distractors onward. Say "the
-measured top-k lexical baseline" and nothing broader — I wrote "similarity
-retrieval, embeddings, RAG" in a PR body and had to retract it within the hour,
-because none of those was tested and a good embedding retriever with a path
-filter might well match us. That is what #166 exists to find out.
+Never say "99.98% token saving". The exposure figure measures how much irrelevant
+decision context reaches the model — not cost, not accuracy, not agent behaviour.
 
-Never say "99.98% token saving". It measures exposure — how much irrelevant
-decision context reaches the model — not cost, not accuracy, and not agent
-behaviour.
+The latency ratio is not a selling point: no-index is CommitLore's own fallback
+mode, so it compares the product to itself. Lead with the absolute figure.
 
-The latency ratio is not a selling point either: no-index is CommitLore's own
-fallback mode, so it compares the product to itself. Lead with the absolute
-figure and let the curve show that the index matters more as a repository grows.
+The **29.4x** figure from earlier notes is retired. It divided by a no-index time
+that measured a parser stopping at a message's final record block — 77 µs per
+commit, never plausible for opening and scanning a message. The current parser
+reads every block at 900 µs (#163).
 
 Not established, and the README says so:
 
 ```
-token saving                  cost measured, benefit assumed
+token saving                  cost measured, benefit assumed (#127 closed on that boundary)
 agent behaviour improvement   M1/M2/M4 all instrument failures
-guard effectiveness           precision too low, corpus too small to tell
+guard effectiveness           precision 44.8%, recall 22.0% — measured, and poor
+retrieval advantage           none over embedding retrieval (#166)
 ```
 
 On rationale density: this repository's 73.9% record-bearing rate is *lower* than
 the Linux kernel's 98.9% rationale-sentence rate (ICPC 2024). The claim is
-addressability, not abundance — prose rationale exists widely and no machine can
-query it. Never imply CommitLore produces more rationale than a disciplined
-project.
+addressability, not abundance. Never imply CommitLore produces more rationale than
+a disciplined project.
 
 ## Why M4 could not answer its question
 
@@ -215,6 +215,26 @@ and `stderr` hold real values from a process that ran to completion. Checking
 `src/commands/doctor.ts`; 15–25% hit rate on Linux, 0% on macOS, so it only ever
 appears in CI. If you add a `spawnSync` with `input:`, prefer `status` whenever it
 is non-null.
+
+## In flight when this was written
+
+Three sol jobs were queued on a single slot and run in sequence. Check each
+worktree before assuming it is unstarted:
+
+```
+~/projects/wt/p161      feat-issue-161      provenance
+~/projects/wt/p173      feat-issue-173      lifecycle experiment
+~/projects/wt/proto140  protocol-issue-140  measurement protocol
+```
+
+`git log --oneline origin/dev..HEAD` and `git status --porcelain` in each. A
+worktree with uncommitted files and no commit was mid-run; one with neither may
+never have started, because the broker refuses a second concurrent sol worker.
+
+The release is prepared but **not tagged**. `dev` is at 0.3.0 with a written
+CHANGELOG; tagging triggers a four-platform binary build and is a deliberate act.
+Two users reported bugs against v0.2.1 that are fixed on `dev` and unreleased —
+#128, #149 and #107 — so tagging is worth doing soon.
 
 ## Delegation
 
