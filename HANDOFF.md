@@ -1,199 +1,211 @@
-# Handoff — CommitLore · gitseed · repo-factory
+# Handoff — CommitLore
 
-> Nothing checks that this document stays current. The previous version was false for 25 commits,
-> and nothing caught it. **Run the commands in §1 yourself before trusting any number written here.**
-> The canonical source is `docs/ROADMAP-TO-DONE.md`; this document is its entrance.
+Written 2026-07-29 by the outgoing session. Read this before touching anything.
 
----
+> Nothing checks that this document stays current. A previous version was false
+> for 25 commits and nothing caught it. **Verify any number here before citing it.**
 
-## 0. Delegation failures — miss this and lose an hour
+## What this project is
 
-**The delegation mechanism changed.** It is not a subagent (Task/TeamCreate), but
-`codex exec -m gpt-5.6-sol|terra`. The owner directive from 2026-07-27 supersedes the previous Codex
-ban. The skill document (§Phase 5-D) still says Claude-only; that part is
-stale.
+CommitLore stores decision rationale as structured git commit trailers — the
+limits, ruled-out alternatives, warnings and verification gaps behind a change —
+so a developer or coding agent can recover *why* code looks the way it does
+before changing it. Local-first: no hosted service, no vendor chat history, and
+records travel with the repository.
 
-**Check liveness only through file changes.** A delegated process appears as `codex exec` in `ps`,
-but that does not show whether it completed. Only two signals are valid:
+The product's credibility is its measurement discipline. Every published number
+must be re-derivable, and a number that cannot be is removed rather than
+annotated. That rule cost several real figures this week and is the reason the
+remaining ones can be trusted.
 
-```bash
-ps -eo pid,etime,command | grep "[c]odex exec"    # is it alive?
-git -C <repo> status --porcelain                   # is it actually writing?
+## Branch and merge conventions
+
+`main` is protected. `dev` is the default and takes pull requests only. Branches
+are `feat-issue-<n>` or `bug-issue-<n>`, merged with `--no-ff`.
+
+Before opening or updating any PR, in this order:
+
+```
+git rebase origin/dev
+npm run build                          # dist/ is committed and CI compares it
+npx tsc -p tsconfig.json --noEmit
+npx tsc -p bench/tsconfig.json --noEmit
+npx vitest run
 ```
 
-The output file remains **empty** until completion (buffering). 0 bytes is not a failure signal.
+**Do not skip the bench typecheck.** The test suite does not cover it, CI does,
+and it broke CI four times this week — every one a change that passed the full
+suite. It also caught a conflict resolution that had silently deleted type
+definitions while looking correct.
 
-**4 delegation failures that actually happened**
+**`dist/` must be committed and match `src/`.** A rebase that discards it fails
+CI with `Committed dist/ matches src/`.
 
-| Symptom | Cause | Check |
-|---|---|---|
-| Test count below baseline (1108→943) | Partial collection while another delegation writes to the same worktree | Require `Test Files N passed` too |
-| No files changed | `--cd` points to an unwritable directory | Confirm the spec target matches `--cd` |
-| Every number is wrong | Sandbox has no `gh` authentication or network | Use `--sandbox danger-full-access` or accept "cannot measure" |
-| Cut off at 10 minutes | Bash tool limit | `run_in_background: true` |
+Check CI against the *latest* SHA before merging. `gh pr checks` mixes results
+across a branch's history, so a passing line may belong to an older commit:
 
-**Never run three or more concurrently.** 1 per repository; parallelize only across different repositories.
-
----
-
-## 0-b. Other traps — every one happened
-
-**Passing local tests does not mean CI passed.** While CI was red for 8 consecutive commits,
-it was incorrectly reported "green" five times. The local suite passed on all 8 commits.
-
-```bash
-gh run list --repo MongLong0214/commitlore --limit 1 --json headSha,headBranch,conclusion
+```
+gh run list --branch <branch> --limit 1 --json headSha,conclusion
 ```
 
-**The branch model changed.** The default is `dev`; `main` is protected and accepts merges only from
-`release-*` and `hotfix-*`. Cut work branches named `feat-issue-<id>` from `dev`. `--no-ff` is required.
+I merged a PR whose checks were failing because I read a stale line.
 
-**No `git add -A`.** Two documents were swept into unrelated commits. Specify paths.
+## The measurement rules, and why each exists
 
-**No `git reset --hard`.** Three uncommitted files disappeared. Especially while delegation is running.
+Not style preferences. Each was learned by publishing something wrong.
 
-**`$?` after a pipe belongs to the pipe.** The exit code was misread twice after `cmd | sed`.
+**A check must state what it could not see.** `validate` reports
+`shape ok · references not checked (no repository)` rather than just `shape ok`.
+This is the defect class found nine times in other people's code and four times
+in this project's own.
 
-**Delegation reports are claims.** One report said 943 passed against a 1108 baseline (partial
-collection during concurrent execution). Get `Test Files N passed` too, and **verify a fix against
-the original incident, not its own test.**
+**Never publish an extrapolation as a measurement.** The 261× index ratio at 1M
+commits is a log-log projection from three measured points and is labelled so
+everywhere it appears.
 
-**1 delegation per repository.** Different repositories may run in parallel; the same worktree is sequential.
+**A ratio inherits its weakest input.** The break-even figures (7.7% / 46.2% /
+184.6%) were removed from the README because the numerator was measured and the
+denominator assumed — this project has never observed a prevented re-proposal, so
+the cost of preventing one was estimated from unrelated runs.
 
-Full list: `~/.claude/skills/repo-factory/references/self-improvement-loop.md`
+**Benchmarks refuse a dirty checkout and a concurrent run.** Both guards exist
+because both failures happened. The concurrency guard caught two stale processes
+I had missed; its first version's false positive was fixed rather than deleted — a
+guard that fires on correct usage gets removed, and then the thing it prevented
+happens silently.
 
----
+**Machine load contaminates timing.** A five-hour scale run was discarded after
+running at load 40–70 on 12 cores. Check `uptime` before any wall-clock
+measurement and record it with the result.
 
-## 1. Commands to verify current state yourself
+## Open issues
 
-```bash
-# Phase 4 gates for both repositories — must exit 0
-python3 ~/.claude/skills/repo-factory/scripts/phase-gate.py 4 \
-  --repo MongLong0214/commitlore --path ~/projects/annals
-python3 ~/.claude/skills/repo-factory/scripts/phase-gate.py 4 \
-  --repo MongLong0214/gitseed --path ~/projects/gitseed
+**#127 · #131 · #134** — three deterministic measurements whose code is written,
+tested and merged, waiting only for a quiet machine. `#131` is the index scale
+ratio, `#134` the write-side cost (CPAA), `#127` the economic case. When idle, run
+`node --experimental-strip-types bench/deterministic.ts` and commit the generated
+result pair. `SCALE_SIZES` was lowered to `[1k, 10k, 100k]` because 300k never
+produced a row in two attempts; nothing rules 300k out, it just cannot hold the
+other eight sections hostage.
 
-# CI — this is what counts, not a local run
-gh run list --repo MongLong0214/commitlore --limit 1
-gh run list --repo MongLong0214/gitseed --limit 1
+**#140** — the important one. M1, M2 and M4 all measured final coding behaviour,
+four layers downstream of anything this product controls. The proposed primary
+claim is *fresh-agent decision recovery*: does a fresh agent recover a code path's
+active decision context before its first edit? The rule that makes it credible is
+that gold answers must not be derived from CommitLore records — two annotators
+extract decision atoms from PR discussion and commit bodies, the gold is frozen,
+and only then is the same information encoded as trailers. Otherwise it measures
+whether CommitLore can read its own format.
 
-# Tests
-cd ~/projects/annals && npx vitest run
-cd ~/projects/gitseed && python3 -m pytest tests/ -q
+**#157** — guard precision peaks at 42.9% and collapses to zero at threshold 0.55.
+Tuning is ruled out by the measured curve. The remaining causes are the scoring
+composition or the corpus size, and the corpus gates the other: 30 labelled
+decisions give the 3/8 precision a 95% Wilson interval of 13.7%–69.4%, which
+contains both "unusable" and "fine". Expand the corpus first. Do not change the
+corpus and the scorer in one commit — that is how M4 became unanswerable.
+
+**#161** — a committed benchmark result names the commit that produced it, and
+every rebase of its own branch orphans that commit. It happened twice in one
+sitting. Four options are on the issue; I lean toward recording a commit id *and*
+a content digest with the fallback stating which it used, but it deserves a
+decision rather than a default.
+
+## What the numbers currently say
+
+Established, re-derivable, safe to cite:
+
+```
+irrelevant decision context withheld    99.98%   (2 of 10,002, recall 2/2)
+p95 query latency at 100k commits       29.4x    (13,282ms → 451ms)
+hook overhead                           +186ms commit-msg, +102ms injection
+guard precision, best threshold         42.9%    (95% CI 13.7–69.4%)
+record-bearing commits, this repo       73.9%
 ```
 
----
+The exposure figure is the strongest thing here. A lexical top-k baseline drops
+half the relevant records once distractors exceed 100; path scope does not,
+because it selects by structure rather than similarity. Say **"99.98% less
+irrelevant decision context reached the model"** — never "99.98% token saving". It
+measures exposure, not cost and not accuracy.
 
-## 2. Owner-set decisions — not negotiable
+Not established, and the README says so:
 
-| Item | Decision |
-|---|---|
-| Cost | **Free forever.** No paid tier, SaaS, or charges |
-| Originality | Do not revive retired vocabulary — Constraint / Rejected / Directive / Scope-risk / Reversibility / Confidence / Tested / Not-tested / Related |
-| Delegation | Code changes use `codex exec -m gpt-5.6-sol` or `-m gpt-5.6-terra`. The 2026-07-27 directive supersedes the previous decision banning Codex |
-| Role | The operator is CTO — final judgment, deep inspection, and review. Does not edit code directly |
-| External action | Do not perform real star/follow actions. Keep the approval contract and dry-run default |
+```
+token saving                  cost measured, benefit assumed
+agent behaviour improvement   M1/M2/M4 all instrument failures
+guard effectiveness           precision too low, corpus too small to tell
+```
 
-### CTO review gate — every ticket, no exceptions
+On rationale density: this repository's 73.9% record-bearing rate is *lower* than
+the Linux kernel's 98.9% rationale-sentence rate (ICPC 2024). The claim is
+addressability, not abundance — prose rationale exists widely and no machine can
+query it. Never imply CommitLore produces more rationale than a disciplined
+project.
 
-A delegation's "completed" is not approval. Pass all six items **yourself** before committing.
+## Why M4 could not answer its question
 
-| # | Item | What to do |
-|---|---|---|
-| 1 | Compare evidence for every AC item | For each checkbox, ask "what proves this?" Without evidence, it is incomplete |
-| 2 | Run build and tests yourself | Do not trust "passed" in a report |
-| 3 | Adversarial review | How can it break? Especially whether it violates the project's own principles |
-| 4 | Scope inspection | Changes beyond the directive, unnecessary abstractions, speculative design for the future |
-| 5 | Consistency | Whether it conflicts with public documents or ADR decisions |
-| 6 | Was the decision recorded? | Are rejections and constraints in trailers? Does `validate --commit HEAD` return 0? Was `guard --proposal` run **before starting**? |
+Three independent confirmations, each from a different direction:
 
-On failure, do not say "try again." Give a rework instruction that states **what is wrong, why,
-and what state will pass**. Do not repeat the same instruction 3 times.
+- **#122** — guard exposure was never recorded, so no row can show the treatment
+  was applied. `injected_context: null` is the *designed* signature of the hook
+  delivery path, not evidence of failure; I got that wrong first and corrected it.
+- **#121** — the registered outcome had zero variance. It counted `violation_if`
+  matches, was 0 on all 112 rows, and `PREREGISTRATION.md` already called that
+  clause instrumented-only.
+- **#109** — applying the registered 4–5 of 6 qualification band to M4's own task
+  pool leaves **0 of 8** qualifying. Four sat at the ceiling, four at or below the
+  floor. The one-sided gate could not see this because four tasks cleared the floor
+  *by being pinned at the maximum*.
 
-**Item 2 paid off most in this session.** It caught a delegated fix reported as passing that did not
-catch the original incident, a case that recorded sandbox conditions as project state, and a case that
-reported YAML parsing as workflow verification.
+Before registering M5: the pool needs tasks whose comparator rate lands inside the
+band, and none exist. #137 raised each task's opportunity count from 1 to 7 and 8,
+which was necessary and not sufficient — an agent that revives every alternative is
+still at the ceiling, just a higher one.
 
----
+## Traps that cost real time
 
-## 3. Three goals and what remains
+**Judging whether a long process is alive.** I killed three healthy benchmark
+runs. Instantaneous CPU is 0 while a parent waits on a child; accumulated CPU
+(`ps -o time=`) barely moves for the same reason; the log only prints between
+sections; and on macOS `tmpdir()` is `/var/folders/.../T/`, not `/tmp` — I watched
+an empty directory. The reliable signal is growth of the scratch directory under
+the *real* tmpdir, and even that pauses during query measurement, which uses CPU
+and no disk. When in doubt, wait.
 
-Canonical source: `docs/ROADMAP-TO-DONE.md`
+**Do not dispatch two workers to one worktree.** I did it three times — twice on
+the same directory, once on the same files from different directories. Check other
+worktrees' uncommitted files before assigning work.
 
-**Goal 1 — CommitLore production-ready.** All 7 production re-review blockers are closed.
-2 phases remain: the plugin manifest redeclares conventional-location `hooks` (double registration likely,
-no manifest tests) · **design and run M4** + every release-gate item.
+**Conflicts in `bench/deterministic/*`** are almost always additive: each side
+registers a new section in the same four files. Keep both. Do not resolve by
+stripping conflict markers and keeping what remains — that silently drops the other
+side's definitions and only the bench typecheck notices. Check rendered section
+numbers afterwards; two merges in a row produced duplicate `## 7` and `## 8`
+headings that git could not see.
 
-**Goal 2 — gitseed v0.2.** PRD received; 11 ADRs, tickets, and issues organized.
-**ADR-0005 reverses the PRD order** — the M0 backtest comes before scoring machinery.
+**EPIPE.** `spawnSync` with `input:` can fail with EPIPE while `status`, `stdout`
+and `stderr` hold real values from a process that ran to completion. Checking
+`error` before `status` discards them. Fixed in `src/core/git.ts` and
+`src/commands/doctor.ts`; 15–25% hit rate on Linux, 0% on macOS, so it only ever
+appears in CI. If you add a `spawnSync` with `input:`, prefer `status` whenever it
+is non-null.
 
-**Goal 3 — repo-factory.** `phase-gate.py` was demonstrated in both directions (caught 6 real gaps,
-exposed and then fixed 1 false failure). Remaining: raw tracebacks in 2 scripts, the gate covers
-only Phase 4, and the gate is absent from the CI runner.
+## Delegation
 
----
+The owner's standing instruction is `gpt-worker.sh` with `terra` for general work
+and `sol` for architecture, security and final gates. Claude subagents are not to
+be used. Worktrees under `~/projects/wt/` need `danger-full-access` because their
+git metadata lives in the parent repository, outside a `workspace-write` sandbox.
 
-## 4. What you must know about the benchmark
+Write closed packets: goal, task class, exact files, acceptance criteria,
+verification, forbidden scope. State the test baseline and require the agent to
+establish it themselves rather than trusting the number. Require every new test to
+be seen failing before it passes — a test never observed to fail is not a test, and
+two cases this week turned out to test nothing.
 
-**M3 is void.** While the hook read `dist/` from the working copy, the operator rebuilt it 8 times
-in 12 hours. The treatment changed during the run (`bench/PREREGISTRATION.md` §15).
-Preserve the data in `bench/results/*-invalidated*`. **Do not cite it as a result.**
+## Records
 
-**All published numbers were withdrawn.** No dataset can prove which binary created it.
-The README in 4 languages carries the withdrawal text, enforced by `scripts/check-readme-numbers.mjs`
-— **it fails if a provenanced dataset exists while the README still shows the withdrawal state.**
-
-**The reason M1 and M2 were null was measured.** Of 10 tasks, **7 have a control base rate of 0**.
-Even without CommitLore, the agent does not propose the rejected approach, so there is nothing to block.
-Power is governed by the base rate, not sample size (at 20%, n≈98 per arm; at 80%, 11).
-
-M4 runs a **task qualification round** first — run only the control arm to measure base rates,
-and reject low-rate tasks without running the treatment arm at all. Because the treatment arm is unseen,
-this is not p-hacking.
-
----
-
-## 5. Dogfooding state
-
-The depth at which gitseed uses CommitLore is the scope of CommitLore's real-use verification.
-
-| Path | Status |
-|---|---|
-| `validate` (commit-msg hook) | Active for a long time — 3 defects came from here |
-| `inject` (PreToolUse) | Connected (`.claude/settings.json`) |
-| `guard` | **Real-use trigger confirmed** — 3 rejected approaches were caught in actual proposals |
-| MCP | **Confirmed** — `serverInfo: commitlore 0.1.0`, 3 tools respond |
-| notes mirror | Fetch refspec configured; remote ref exists, but the mirror contains 0 notes |
-| CI | Job added; does not pass silently when the tool is absent |
-
-**CommitLore #53 emerged during connection** — mirrored notes disappear from `sources` and are
-misread as "not reflected." This is the design of `dropMirroredNotes`, not a defect, but an experienced
-operator actually misread it. This is the sixth case this week where one expression covers two facts.
-
----
-
-## 6. Canonical vocabulary (SPEC §3)
-
-`Limit` · `Ruled-out`(`alternative | reason`) · `Warn` · `Blast`(local|module|system) ·
-`Undo`(easy|costly|permanent) · `Certainty`(firm|tentative|guess) · `Verified` ·
-`Unverified` · `Record-Id`(`r-[a-z0-9]{6,}`) · `Follows` · `Supersedes` ·
-`Expires` · `Evidence` · `Provenance`(authored|inherited &lt;sha&gt;|reconstructed|unknown) ·
-`CommitLore-Version` · `X-<Name>` extensions.
-
-### Rejection fixtures — values the validator must block
-
-These are actual values from `spec/fixtures/invalid/`. If you touch the parser, first check that
-they are still rejected.
-
-| Fixture | Value | Violation |
-|---|---|---|
-| `01-enum-blast` | `Blast: wide` | enum — only `local\|module\|system` |
-| `02-format-ruled-out-no-pipe` | `Ruled-out: pointless without a pipe separator` | format — missing `\|` from `alternative \| reason` |
-| `03-unknown-key` | `Constraint: must ship by friday…` | unknown-key — **retired old vocabulary. Do not revive** |
-
-The third is especially important. `Constraint:` was retired by the originality decision,
-and the fixture ensures it is not revived.
-
-**Every free-text key is an injection surface.** The scanner operates from an exclusion list —
-exclude only enum, id-shaped, and semver fields; scan everything else. An allowlist created this bug,
-and failing so that a new key goes unscanned is the dangerous direction.
+Every commit carries a CommitLore record; the dogfooding test fails a commit
+without a `Record-Id`. Run `git log -3 --format=%B` to see the vocabulary before
+writing one, and do not invent trailer names. Record what was ruled out and why —
+the `Ruled-out` line is the most valuable part and the one a future reader needs.
