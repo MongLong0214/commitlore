@@ -48,6 +48,74 @@ export const git = (
   options: Omit<CommandOptions, 'cwd'> = {},
 ): CommandResult => command('git', args, { cwd, ...options });
 
+const HARNESS_PATHS = ['bench/deterministic.ts', 'bench/deterministic'] as const;
+const GIT_OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+export const harnessTreeDigest = (repoRoot: string, ref = 'HEAD'): string => {
+  const manifest = git(repoRoot, [
+    'ls-tree', '-r', '--full-tree', ref, '--', ...HARNESS_PATHS,
+  ]).stdout;
+  if (manifest === '') throw new Error(`no deterministic harness found at ${ref}`);
+  return git(repoRoot, ['hash-object', '--stdin'], { input: manifest }).stdout.trim();
+};
+
+export interface HarnessProvenance {
+  readonly harness_commit: string;
+  readonly harness_digest?: string;
+}
+
+export interface HarnessVerification {
+  readonly historyRef: string;
+  readonly verifiedBy: 'commit' | 'digest';
+  readonly message: string;
+}
+
+export const verifyHarnessProvenance = (
+  repoRoot: string,
+  provenance: HarnessProvenance,
+): HarnessVerification => {
+  if (!GIT_OBJECT_ID.test(provenance.harness_commit)) {
+    throw new Error(`invalid harness commit ${JSON.stringify(provenance.harness_commit)}`);
+  }
+  const resolved = git(
+    repoRoot,
+    ['rev-parse', '--verify', '--quiet', `${provenance.harness_commit}^{commit}`],
+    { allowed: [0, 1] },
+  );
+  if (resolved.status === 0) {
+    const message =
+      `benchmark provenance: verified by harness commit ${provenance.harness_commit}; ` +
+      `re-deriving from that commit's history`;
+    process.stdout.write(`${message}\n`);
+    return { historyRef: provenance.harness_commit, verifiedBy: 'commit', message };
+  }
+
+  if (provenance.harness_digest === undefined) {
+    throw new Error(
+      `benchmark provenance failed: harness commit ${provenance.harness_commit} is unresolvable ` +
+        'and no harness digest was recorded; this result cannot be re-derived',
+    );
+  }
+  if (!GIT_OBJECT_ID.test(provenance.harness_digest)) {
+    throw new Error(`invalid harness digest ${JSON.stringify(provenance.harness_digest)}`);
+  }
+  const currentDigest = harnessTreeDigest(repoRoot);
+  if (currentDigest !== provenance.harness_digest) {
+    throw new Error(
+      `benchmark provenance failed: harness commit ${provenance.harness_commit} is unresolvable ` +
+        `and harness digest does not match HEAD (recorded ${provenance.harness_digest}, ` +
+        `${currentDigest}); this result cannot be re-derived`,
+    );
+  }
+
+  const message =
+    `benchmark provenance: WARNING: harness commit ${provenance.harness_commit} is unresolvable; ` +
+    `verified by harness digest ${provenance.harness_digest} at HEAD. ` +
+    'The digest proves the harness code is identical, not that the recorded commit existed';
+  process.stdout.write(`${message}\n`);
+  return { historyRef: 'HEAD', verifiedBy: 'digest', message };
+};
+
 export const assertCleanCheckout = (repoRoot: string): void => {
   const status = git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']).stdout.trim();
   if (status !== '') {
@@ -100,6 +168,7 @@ export const rowBase = (
 ): RowBase => ({
   schema_version: 1,
   harness_commit: harnessCommit,
+  harness_digest: harnessTreeDigest(repoRoot, harnessCommit),
   dist_digest: distDigest,
   measured_at: measuredAt,
   machine: machine(repoRoot),

@@ -12,6 +12,7 @@ export interface Machine {
 export interface BaseRow {
   readonly schema_version: 1;
   readonly harness_commit: string;
+  readonly harness_digest: string;
   readonly dist_digest: string;
   readonly measured_at: string;
   readonly machine: Machine;
@@ -215,5 +216,5 @@ export type DeterministicRow =
 
 export type RowBase = Pick<
   BaseRow,
-  'schema_version' | 'harness_commit' | 'dist_digest' | 'measured_at' | 'machine'
+  'schema_version' | 'harness_commit' | 'harness_digest' | 'dist_digest' | 'measured_at' | 'machine'
 >;
