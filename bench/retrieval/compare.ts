@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { buildInjection } from '../../dist/core/inject.js';
+import { foldLifecycle } from '../../dist/core/stale.js';
 import {
   createNoiseFixture,
   destroyNoiseFixture,
@@ -13,10 +14,14 @@ import {
   TOP_K,
   TOP_K_QUERY,
 } from '../deterministic/noise.ts';
-import type { NoiseCorpus, NoiseFixture, NoiseRecord } from '../deterministic/noise.ts';
+import type { NoiseRecord } from '../deterministic/noise.ts';
+import { git } from '../deterministic/shared.ts';
 import {
   RETRIEVAL_ROUTES,
   type OllamaModel,
+  type RetrievalCorpus,
+  type RetrievalFixture,
+  type RetrievalRecord,
   type RetrievalRoute,
   type RetrievalRow,
   type RouteSelections,
@@ -27,12 +32,172 @@ const OLLAMA_URL = 'http://localhost:11434';
 const RESULT_PATH = new URL('./result.md', import.meta.url);
 const BATCH_SIZE = 128;
 const RRF_K = 60;
+const LIFECYCLE_AT = new Date('2026-01-01T00:00:00Z');
+const SAME_PATH_STALE_ID = 'r-stale01';
+const EXPIRED_ID = 'r-expire1';
+const ADVERSARIAL_STALE_ID = 'r-adverse';
 
 const terms = (text: string): readonly string[] => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 const document = (record: NoiseRecord): string => `${record.path}\n${record.message}`;
 
-export const retrievalCorpus = (distractors: number, seed = NOISE_SEED): NoiseCorpus =>
-  generateNoiseCorpus(distractors, seed);
+const staleRecords = (): readonly RetrievalRecord[] => [
+  {
+    recordId: SAME_PATH_STALE_ID,
+    path: TARGET_PATH,
+    relevant: false,
+    message: [
+      'Send every repository decision to the path-scoped context.',
+      '',
+      'Limit: Keep decision context repository-wide even when a path is known.',
+      'Ruled-out: path-only delivery | global context was assumed safer.',
+      'Warn: This decision was later replaced on the same path.',
+      'Blast: module',
+      'Undo: easy',
+      'Certainty: firm',
+      `Record-Id: ${SAME_PATH_STALE_ID}`,
+    ].join('\n'),
+  },
+  {
+    recordId: EXPIRED_ID,
+    path: TARGET_PATH,
+    relevant: false,
+    expiresAt: '2025-06-30',
+    message: [
+      'Keep a temporary decision-context compatibility branch.',
+      '',
+      'Limit: Preserve the compatibility branch until the June migration completes.',
+      'Warn: Remove this temporary path after its fixed expiry.',
+      'Expires: 2025-06-30',
+      'Blast: module',
+      'Undo: easy',
+      'Certainty: firm',
+      `Record-Id: ${EXPIRED_ID}`,
+    ].join('\n'),
+  },
+  {
+    recordId: ADVERSARIAL_STALE_ID,
+    path: TARGET_PATH,
+    relevant: false,
+    adversarial: true,
+    message: [
+      `${TARGET_PATH} active lifecycle decision context path scope`,
+      '',
+      `Limit: ${TARGET_PATH} active lifecycle decision context path scope.`,
+      'Ruled-out: semantic successor wording | active lifecycle decision context path scope must repeat the query vocabulary.',
+      `Warn: Retrieve ${TARGET_PATH} active lifecycle decision context path scope.`,
+      'Blast: module',
+      'Undo: easy',
+      'Certainty: firm',
+      `Record-Id: ${ADVERSARIAL_STALE_ID}`,
+    ].join('\n'),
+  },
+];
+
+const successor = (record: NoiseRecord, supersedes: string): RetrievalRecord => ({
+  ...record,
+  supersedes: [supersedes],
+  message: record.message.replace(
+    `Record-Id: ${record.recordId}`,
+    `Supersedes: ${supersedes}\nRecord-Id: ${record.recordId}`,
+  ),
+});
+
+export const retrievalCorpus = (
+  distractors: number,
+  seed = NOISE_SEED,
+): RetrievalCorpus => {
+  const base = generateNoiseCorpus(distractors, seed);
+  const [first, second, ...distractorRecords] = base.records;
+  if (first === undefined || second === undefined) {
+    throw new Error('retrieval corpus needs two active records');
+  }
+  return {
+    ...base,
+    records: [
+      successor(first, SAME_PATH_STALE_ID),
+      successor(second, ADVERSARIAL_STALE_ID),
+      ...staleRecords(),
+      ...distractorRecords,
+    ],
+  };
+};
+
+const commitFixtureRecord = (
+  fixture: RetrievalFixture,
+  record: RetrievalRecord,
+  stamp: number,
+): void => {
+  const parent = git(fixture.dir, ['rev-parse', 'HEAD']).stdout.trim();
+  const content = `${record.path} retrieval fixture ${record.recordId}\n`;
+  const stream = [
+    'commit refs/heads/main',
+    'author CommitLore Bench <bench@commitlore.local> ' + stamp + ' +0000',
+    'committer CommitLore Bench <bench@commitlore.local> ' + stamp + ' +0000',
+    `data ${Buffer.byteLength(record.message)}`,
+    record.message,
+    `from ${parent}`,
+    `M 100644 inline ${record.path}`,
+    `data ${Buffer.byteLength(content)}`,
+    content,
+    'done',
+    '',
+  ].join('\n');
+  git(fixture.dir, ['fast-import', '--quiet'], { input: stream });
+};
+
+export const createRetrievalFixture = (
+  distractors: number,
+  seed = NOISE_SEED,
+): RetrievalFixture => {
+  const base = createNoiseFixture(distractors, seed);
+  const fixture: RetrievalFixture = { ...base, corpus: retrievalCorpus(distractors, seed) };
+  try {
+    for (const record of fixture.corpus.records.filter((candidate) =>
+      candidate.recordId === SAME_PATH_STALE_ID ||
+      candidate.recordId === EXPIRED_ID ||
+      candidate.recordId === ADVERSARIAL_STALE_ID
+    )) {
+      commitFixtureRecord(fixture, record, 1_746_057_600);
+    }
+    for (const record of fixture.corpus.records.filter((candidate) =>
+      candidate.supersedes !== undefined
+    )) {
+      commitFixtureRecord(fixture, record, 1_760_100_000);
+    }
+    return fixture;
+  } catch (error) {
+    destroyNoiseFixture(fixture);
+    throw error;
+  }
+};
+
+export const staleRecordIds = (
+  records: readonly RetrievalRecord[],
+  at = LIFECYCLE_AT,
+): ReadonlySet<string> =>
+  new Set(
+    foldLifecycle(
+      records.map((record) => ({
+        sha: record.recordId,
+        trailers: [
+          { key: 'Record-Id', value: record.recordId },
+          ...(record.supersedes ?? []).map((value) => ({ key: 'Supersedes', value })),
+          ...(record.expiresAt === undefined
+            ? []
+            : [{ key: 'Expires', value: record.expiresAt }]),
+        ],
+      })),
+      { at },
+    ).filter(({ lifecycle }) => lifecycle !== 'active').map(({ recordId }) => recordId),
+  );
+
+export const countStaleRecords = (
+  selected: readonly RetrievalRecord[],
+  corpus: readonly RetrievalRecord[],
+): number => {
+  const stale = staleRecordIds(corpus);
+  return selected.filter(({ recordId }) => stale.has(recordId)).length;
+};
 
 export const bm25Scores = (
   query: string,
@@ -66,10 +231,10 @@ export const bm25Scores = (
 };
 
 const rank = (
-  records: readonly NoiseRecord[],
+  records: readonly RetrievalRecord[],
   scores: readonly number[],
   budget: number,
-): readonly NoiseRecord[] => {
+): readonly RetrievalRecord[] => {
   if (scores.length !== records.length) throw new Error('record and score counts differ');
   return records.map((record, index) => ({ record, score: scores[index] ?? Number.NEGATIVE_INFINITY }))
     .sort((left, right) =>
@@ -80,9 +245,9 @@ const rank = (
 };
 
 export const rankBm25 = (
-  records: readonly NoiseRecord[],
+  records: readonly RetrievalRecord[],
   budget: number,
-): readonly NoiseRecord[] =>
+): readonly RetrievalRecord[] =>
   rank(records, bm25Scores(TOP_K_QUERY, records.map(document)), budget);
 
 const cosine = (left: readonly number[], right: readonly number[]): number => {
@@ -103,12 +268,12 @@ const cosine = (left: readonly number[], right: readonly number[]): number => {
 };
 
 export const rankEmbedding = (
-  records: readonly NoiseRecord[],
+  records: readonly RetrievalRecord[],
   embeddings: readonly (readonly number[])[],
   queryEmbedding: readonly number[],
   budget: number,
   filterPath: string | null = null,
-): readonly NoiseRecord[] => {
+): readonly RetrievalRecord[] => {
   if (embeddings.length !== records.length) throw new Error('record and embedding counts differ');
   const candidates = records.map((record, index) => ({
     record,
@@ -122,10 +287,10 @@ export const rankEmbedding = (
 };
 
 const reciprocalRankFuse = (
-  rankings: readonly (readonly NoiseRecord[])[],
+  rankings: readonly (readonly RetrievalRecord[])[],
   budget: number,
-): readonly NoiseRecord[] => {
-  const records = new Map<string, NoiseRecord>();
+): readonly RetrievalRecord[] => {
+  const records = new Map<string, RetrievalRecord>();
   const scores = new Map<string, number>();
   for (const ranking of rankings) {
     ranking.forEach((record, index) => {
@@ -140,9 +305,9 @@ const reciprocalRankFuse = (
 };
 
 export const retrieveCommitLore = (
-  fixture: NoiseFixture,
+  fixture: RetrievalFixture,
   budget = TOP_K,
-): readonly NoiseRecord[] => {
+): readonly RetrievalRecord[] => {
   const text = buildInjection({ cwd: fixture.dir, path: TARGET_PATH }).text;
   return fixture.corpus.records
     .filter((record) => text.includes(record.recordId))
@@ -150,7 +315,7 @@ export const retrieveCommitLore = (
 };
 
 export const retrieveRoutes = (
-  records: readonly NoiseRecord[],
+  records: readonly RetrievalRecord[],
   embeddings: readonly (readonly number[])[],
   queryEmbedding: readonly number[],
   commitLoreRecords: readonly NoiseRecord[],
@@ -281,6 +446,8 @@ const renderReport = (
   model: OllamaModel,
   dimension: number,
   ollamaVersion: string,
+  adversarialBm25: readonly [number, number],
+  adversarialCosine: readonly [number, number],
 ): string => {
   const routeLabels: Readonly<Record<RetrievalRoute, string>> = {
     bm25: 'BM25',
@@ -293,8 +460,25 @@ const renderReport = (
     route !== 'commitlore-path-lifecycle' &&
     NOISE_SIZES.every((size) =>
       resultFor(rows, size, route).relevantRecords >=
+      resultFor(rows, size, 'commitlore-path-lifecycle').relevantRecords
+    )
+  );
+  const recallWinners = RETRIEVAL_ROUTES.filter((route) =>
+    route !== 'commitlore-path-lifecycle' &&
+    NOISE_SIZES.some((size) =>
+      resultFor(rows, size, route).relevantRecords >
         resultFor(rows, size, 'commitlore-path-lifecycle').relevantRecords
     )
+  );
+  const staleWinners = RETRIEVAL_ROUTES.filter((route) =>
+    route !== 'commitlore-path-lifecycle' &&
+    NOISE_SIZES.some((size) =>
+      resultFor(rows, size, route).staleRecords <
+        resultFor(rows, size, 'commitlore-path-lifecycle').staleRecords
+    )
+  );
+  const staleRoutes = RETRIEVAL_ROUTES.filter((route) =>
+    NOISE_SIZES.some((size) => resultFor(rows, size, route).staleRecords > 0)
   );
   return [
     '# Retrieval route comparison',
@@ -303,7 +487,7 @@ const renderReport = (
     '',
     'This measures exposure and recall at a fixed two-record output budget. It does not measure token cost, billed cost, accuracy, or agent behaviour. Timing was not taken.',
     '',
-    `Corpus: \`generateNoiseCorpus\`, seed ${NOISE_SEED}, distractor sizes ${NOISE_SIZES.join(', ')}.`,
+    `Corpus: \`generateNoiseCorpus\` extended with two superseded predecessors and one expired record, seed ${NOISE_SEED}, distractor sizes ${NOISE_SIZES.join(', ')}.`,
     `Query: \`${TOP_K_QUERY}\``,
     `Harness source SHA-256: \`${sourceDigest()}\``,
     '',
@@ -322,23 +506,52 @@ const renderReport = (
     'The deterministic benchmark’s current `top-k lexical` scorer is a case-insensitive, unweighted count of every query-token occurrence in `path + record message`, with `recordId` as the tie-break. BM25 is a fairer baseline from the same lexical-retrieval family, but it is a different scorer: it adds inverse document frequency, term-frequency saturation, and document-length normalization.',
     'This BM25 uses lowercase ASCII-alphanumeric tokens, unique query terms, k1=1.2, and b=0.75. Embedding routes rank cosine similarity over `path + record message`; hybrid applies reciprocal-rank fusion with k=60 to the complete BM25 and embedding rankings before the two-record budget; the path filter keeps exact-path candidates before embedding ranking.',
     '',
+    '## Adversarial lifecycle case',
+    '',
+    `The superseded record \`${ADVERSARIAL_STALE_ID}\` deliberately repeats the query’s subject and vocabulary more closely than its successor \`r-expose002\`; both records are on \`${TARGET_PATH}\`, so path-filtered similarity retrieval can select the reversed decision.`,
+    `Construction check: BM25 ${adversarialBm25[0].toFixed(6)} > ${adversarialBm25[1].toFixed(6)} and pinned-model cosine ${adversarialCosine[0].toFixed(6)} > ${adversarialCosine[1].toFixed(6)} for stale record versus successor.`,
+    'Zero-stale embedding retrieval was still a possible outcome: yes. The harness does not force either record into an embedding result or alter its score; both compete normally for the fixed budget.',
+    '',
     '## Results',
     '',
     `Routes matching or beating CommitLore path scope at every reported size: ${
       comparable.length === 0 ? 'none' : comparable.map((route) => `\`${routeLabels[route]}\``).join(', ')
     }. This statement compares only the recall counts in the table.`,
+    `Routes with strictly higher recall than CommitLore path + lifecycle at any reported size: ${
+      recallWinners.length === 0
+        ? 'none'
+        : recallWinners.map((route) => `\`${routeLabels[route]}\``).join(', ')
+    }.`,
+    `Routes with fewer stale records than CommitLore path + lifecycle at any reported size: ${
+      staleWinners.length === 0
+        ? 'none'
+        : staleWinners.map((route) => `\`${routeLabels[route]}\``).join(', ')
+    }.`,
     '',
-    `| distractors | corpus records | ${RETRIEVAL_ROUTES.map((route) => routeLabels[route]).join(' | ')} |`,
-    `|---:|---:|${RETRIEVAL_ROUTES.map(() => '---:').join('|')}|`,
+    `| distractors | corpus records | ${
+      RETRIEVAL_ROUTES.flatMap((route) => [
+        `${routeLabels[route]} recall`,
+        `${routeLabels[route]} stale`,
+      ]).join(' | ')
+    } |`,
+    `|---:|---:|${RETRIEVAL_ROUTES.flatMap(() => ['---:', '---:']).join('|')}|`,
     ...NOISE_SIZES.map((size) => {
       const first = resultFor(rows, size, 'bm25');
       return `| ${size} | ${first.corpusRecords} | ${
-        RETRIEVAL_ROUTES.map((route) => {
+        RETRIEVAL_ROUTES.flatMap((route) => {
           const row = resultFor(rows, size, route);
-          return `${row.relevantRecords}/${row.relevantTotal}`;
+          return [`${row.relevantRecords}/${row.relevantTotal}`, row.staleRecords];
         }).join(' | ')
       } |`;
     }),
+    '',
+    '## Conclusion',
+    '',
+    staleRoutes.length === 0
+      ? 'No route returned a stale record in this corpus; the separate recall columns show the context each route omitted.'
+      : `${
+        staleRoutes.map((route) => routeLabels[route]).join(', ')
+      } returned at least one stale record in this corpus; the separate recall columns show the context each route omitted.`,
     '',
   ].join('\n');
 };
@@ -355,10 +568,38 @@ export const runComparison = async (): Promise<string> => {
   if (corpusEmbeddings.some((embedding) => embedding.length !== dimension)) {
     throw new Error('Ollama returned inconsistent embedding dimensions');
   }
+  const adversarial = largestCorpus.records.find(({ adversarial }) => adversarial === true);
+  const adversarialSuccessor = largestCorpus.records.find(({ supersedes }) =>
+    supersedes?.includes(ADVERSARIAL_STALE_ID)
+  );
+  if (adversarial === undefined || adversarialSuccessor === undefined) {
+    throw new Error('adversarial stale record and successor are missing');
+  }
+  const adversarialIndex = largestCorpus.records.indexOf(adversarial);
+  const successorIndex = largestCorpus.records.indexOf(adversarialSuccessor);
+  const adversarialEmbedding = corpusEmbeddings[adversarialIndex];
+  const successorEmbedding = corpusEmbeddings[successorIndex];
+  if (adversarialEmbedding === undefined || successorEmbedding === undefined) {
+    throw new Error('adversarial embeddings are missing');
+  }
+  const [adversarialBm25Score, successorBm25Score] = bm25Scores(
+    TOP_K_QUERY,
+    [document(adversarial), document(adversarialSuccessor)],
+  );
+  const adversarialCosineScore = cosine(queryEmbedding, adversarialEmbedding);
+  const successorCosineScore = cosine(queryEmbedding, successorEmbedding);
+  if (
+    adversarialBm25Score === undefined ||
+    successorBm25Score === undefined ||
+    adversarialBm25Score <= successorBm25Score ||
+    adversarialCosineScore <= successorCosineScore
+  ) {
+    throw new Error('adversarial stale record does not outrank its successor');
+  }
 
   const rows: RetrievalRow[] = [];
   for (const distractors of NOISE_SIZES) {
-    const fixture = createNoiseFixture(distractors, NOISE_SEED);
+    const fixture = createRetrievalFixture(distractors, NOISE_SEED);
     try {
       const expectedCorpus = retrievalCorpus(distractors, NOISE_SEED);
       if (JSON.stringify(fixture.corpus) !== JSON.stringify(expectedCorpus)) {
@@ -382,13 +623,21 @@ export const runComparison = async (): Promise<string> => {
           visibleRecords: selected.length,
           relevantRecords: selected.filter((record) => record.relevant).length,
           relevantTotal: 2,
+          staleRecords: countStaleRecords(selected, fixture.corpus.records),
         });
       }
     } finally {
       destroyNoiseFixture(fixture);
     }
   }
-  return renderReport(rows, model, dimension, ollamaVersion);
+  return renderReport(
+    rows,
+    model,
+    dimension,
+    ollamaVersion,
+    [adversarialBm25Score, successorBm25Score],
+    [adversarialCosineScore, successorCosineScore],
+  );
 };
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {

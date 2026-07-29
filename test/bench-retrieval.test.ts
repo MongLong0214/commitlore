@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest';
 import {
   assertPinnedModel,
   bm25Scores,
+  countStaleRecords,
+  createRetrievalFixture,
   PINNED_MODEL,
   rankEmbedding,
   retrievalCorpus,
   retrieveCommitLore,
   retrieveRoutes,
+  staleRecordIds,
 } from '../bench/retrieval/compare.ts';
 import { RETRIEVAL_ROUTES } from '../bench/retrieval/types.ts';
 import {
-  createNoiseFixture,
   destroyNoiseFixture,
   generateNoiseCorpus,
   TARGET_PATH,
@@ -20,7 +22,7 @@ import {
 
 describe('retrieval route comparison', () => {
   it('returns exactly the shared output budget from every route', () => {
-    const fixture = createNoiseFixture(10, 142);
+    const fixture = createRetrievalFixture(10, 142);
     try {
       const embeddings = fixture.corpus.records.map((_, index) => [index + 1, 1]);
       const routes = retrieveRoutes(
@@ -68,6 +70,51 @@ describe('retrieval route comparison', () => {
   });
 
   it('uses the identical fixed-seed corpus in both harnesses', () => {
-    expect(retrievalCorpus(1, 142)).toEqual(generateNoiseCorpus(1, 142));
+    const generated = generateNoiseCorpus(1, 142);
+    const retrieval = retrievalCorpus(1, 142);
+
+    expect(retrieval.records.filter(({ recordId }) => recordId.startsWith('r-noise')))
+      .toEqual(generated.records.filter(({ recordId }) => recordId.startsWith('r-noise')));
+  });
+
+  it('identifies a superseded record as stale', () => {
+    const corpus = retrievalCorpus(0, 142);
+    const stale = corpus.records.find(({ recordId }) => recordId === 'r-stale01');
+
+    expect(stale).toBeDefined();
+    expect(staleRecordIds(corpus.records)).toContain(stale?.recordId);
+  });
+
+  it('identifies an expired record as stale', () => {
+    const corpus = retrievalCorpus(0, 142);
+    const expired = corpus.records.find(({ expiresAt }) => expiresAt !== undefined);
+
+    expect(expired).toBeDefined();
+    expect(staleRecordIds(corpus.records)).toContain(expired?.recordId);
+  });
+
+  it('contains a deliberately more similar superseded predecessor', () => {
+    const corpus = retrievalCorpus(0, 142);
+    const stale = corpus.records.find(({ adversarial }) => adversarial === true);
+    const successor = corpus.records.find(({ supersedes }) =>
+      stale !== undefined && supersedes?.includes(stale.recordId)
+    );
+
+    expect(stale).toMatchObject({ path: TARGET_PATH, relevant: false });
+    expect(successor).toBeDefined();
+    const scores = bm25Scores(
+      `${TARGET_PATH} active lifecycle decision context path scope`,
+      [stale, successor].map((record) => `${record?.path}\n${record?.message}`),
+    );
+    expect(scores[0]).toBeGreaterThan(scores[1] ?? Number.POSITIVE_INFINITY);
+  });
+
+  it('computes stale count from corpus lifecycle, not a route label', () => {
+    const corpus = retrievalCorpus(0, 142);
+    const stale = corpus.records.filter(({ recordId, expiresAt }) =>
+      recordId === 'r-stale01' || expiresAt !== undefined
+    );
+
+    expect(countStaleRecords(stale, corpus.records)).toBe(2);
   });
 });
