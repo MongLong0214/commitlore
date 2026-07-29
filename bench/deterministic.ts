@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { digestDistTree } from './hooks-settings.ts';
+import { measureCaptureCost } from './deterministic/capture.ts';
 import { measureHookOverhead } from './deterministic/hooks.ts';
 import { measureNoiseExposure } from './deterministic/noise.ts';
 import { measureGuardQuality, measureInjectionDetection } from './deterministic/quality.ts';
@@ -29,6 +30,7 @@ const REQUIRED_METRICS: ReadonlySet<DeterministicRow['metric']> = new Set([
   'injection_detection',
   'guard_quality',
   'hook_overhead',
+  'capture_cost',
   'index_cost',
   'noise_exposure',
 ]);
@@ -109,6 +111,8 @@ const main = (): void => {
     const guard = measureGuardQuality(base, REPO_ROOT);
     process.stdout.write(`deterministic bench: hook overhead (${runs} runs per arm)\n`);
     const hooks = measureHookOverhead(base, scratch, runs);
+    process.stdout.write(`deterministic bench: record capture cost (${runs} runs per command)\n`);
+    const capture = measureCaptureCost(base, REPO_ROOT, runs);
     process.stdout.write('deterministic bench: irrelevant decision-context exposure\n');
     const exposure = measureNoiseExposure(base);
     const rows: readonly DeterministicRow[] = [
@@ -117,6 +121,7 @@ const main = (): void => {
       injection,
       guard,
       ...hooks,
+      capture,
       ...scale.index,
       ...exposure,
     ];

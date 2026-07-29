@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 
 import type {
+  CaptureCostRow,
   DeterministicRow,
   GuardQualityRow,
   HookOverheadRow,
@@ -70,6 +71,8 @@ export const assertSingleProvenance = (rows: readonly DeterministicRow[]): void 
 const fixed = (value: number, digits = 2): string => value.toFixed(digits);
 const percent = (value: number): string => `${fixed(value * 100, 1)}%`;
 const optionalPercent = (value: number | null): string => (value === null ? 'n/a' : percent(value));
+const COMMIT_MSG_P50_MS = 185.85;
+const PRE_TOOL_USE_P50_MS = 102.4;
 
 const latencySection = (rows: readonly QueryLatencyRow[]): string[] => {
   if (rows.length === 0) return [];
@@ -192,10 +195,52 @@ const hookSection = (rows: readonly HookOverheadRow[]): string[] => {
   ];
 };
 
+const captureSection = (rows: readonly CaptureCostRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 6. Record capture cost',
+    '',
+    'Method: run the shipped local `harvest --prompt-only` and `harvest-verify --json` commands against the truthful harvest-verifier fixture after one discarded warmup; the harvest contract is what the session receives and verification input is the draft, transcript, and diff it re-reads.',
+    '',
+    '| fixture | accepted / rejected records | harvest bytes / tokens | harvest p50 / p95 ms | verify bytes / tokens | verify p50 / p95 ms | cache-read bytes / tokens | marginal / including-cache tokens per accepted record |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|',
+    ...rows.map(
+      (row) =>
+        `| ${row.fixture} | ${row.accepted_records} / ${row.rejected_records} | ` +
+        `${row.harvest.output_bytes} / ${row.harvest.output_tokens} | ` +
+        `${fixed(row.harvest.timing.p50_ms)} / ${fixed(row.harvest.timing.p95_ms)} | ` +
+        `${row.verify.input_bytes} / ${row.verify.input_tokens} | ` +
+        `${fixed(row.verify.timing.p50_ms)} / ${fixed(row.verify.timing.p95_ms)} | ` +
+        `${row.cache_read.input_bytes} / ${row.cache_read.input_tokens} | ` +
+        `${fixed(row.marginal_tokens_per_accepted_record)} / ` +
+        `${fixed(row.tokens_including_cache_reads_per_accepted_record)} |`,
+    ),
+    '',
+    'The two floors bracket the same deterministic work. Marginal tokens exclude the transcript and diff that verification re-reads after harvest already supplied them; including-cache tokens count that prefix again. A cache-aware bill charges such reads at a fraction of the full input rate, so the figures do not contradict each other.',
+    '',
+    'Model generation tokens are not measured: this benchmark makes no model call, so the model\'s cost to compose a draft sits on top of both floors.',
+    '',
+    ...rows.map(
+      (row) =>
+        `The denominator is ${row.accepted_records} accepted record(s); this fixture had ${row.rejected_records} rejected record(s). A rejected draft that is rewritten raises verification input tokens while the accepted-record denominator stays fixed.`,
+    ),
+    '',
+    ...rows.map(
+      (row) =>
+        `Common commit cost: a commit with no record pays the existing \`commit-msg\` p50 overhead of **${fixed(COMMIT_MSG_P50_MS)} ms**. ` +
+        `A record-bearing commit has a **${fixed(COMMIT_MSG_P50_MS + row.harvest.timing.p50_ms + row.verify.timing.p50_ms)} ms** serial p50 component sum ` +
+        '(commit-msg + harvest + verify); it is not a jointly sampled percentile. ' +
+        `The separate PreToolUse injection p50 is **${fixed(PRE_TOOL_USE_P50_MS)} ms**. ` +
+        'Both existing hook figures are cited from `bench/results/deterministic-20260727T174801Z.md`, not remeasured here.',
+    ),
+    '',
+  ];
+};
+
 const indexSection = (rows: readonly IndexCostRow[]): string[] => {
   if (rows.length === 0) return [];
   return [
-    '## 6. Index cost',
+    '## 7. Index cost',
     '',
     'Method: rebuild the derived index once in each fresh synthetic history, time the rebuild, then measure the on-disk database size after the process exits.',
     '',
@@ -213,7 +258,7 @@ const indexSection = (rows: readonly IndexCostRow[]): string[] => {
 const exposureSection = (rows: readonly NoiseExposureRow[]): string[] => {
   if (rows.length === 0) return [];
   return [
-    '## 7. Irrelevant decision-context exposure',
+    '## 8. Irrelevant decision-context exposure',
     '',
     EXPOSURE_SCOPE_SENTENCE,
     '',
@@ -255,6 +300,7 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
     ),
     ...guardSection(rows.filter((row): row is GuardQualityRow => row.metric === 'guard_quality')),
     ...hookSection(rows.filter((row): row is HookOverheadRow => row.metric === 'hook_overhead')),
+    ...captureSection(rows.filter((row): row is CaptureCostRow => row.metric === 'capture_cost')),
     ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
     ...exposureSection(rows.filter((row): row is NoiseExposureRow => row.metric === 'noise_exposure')),
   ];

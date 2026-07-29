@@ -6,6 +6,10 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  floorTokensPerAcceptedRecord,
+  tokensForCharacters,
+} from '../bench/deterministic/capture.ts';
+import {
   assertSingleProvenance,
   percentile,
   renderDeterministicReport,
@@ -25,7 +29,9 @@ import {
 } from '../bench/deterministic/quality.ts';
 import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
+import { CHARS_PER_TOKEN } from '../dist/core/inject.js';
 import type {
+  CaptureCostRow,
   GuardQualityRow,
   InjectionDetectionRow,
   NoiseExposureRow,
@@ -92,7 +98,60 @@ const guardRow = (): GuardQualityRow => {
   };
 };
 
+const captureRow = (overrides: Partial<CaptureCostRow> = {}): CaptureCostRow => ({
+  ...row(),
+  metric: 'capture_cost',
+  fixture: 'test/fixtures/harvest-verify/draft-truthful.json',
+  accepted_records: 1,
+  rejected_records: 0,
+  harvest: {
+    output_bytes: 40,
+    output_tokens: 10,
+    timing: { runs: 20, warmups: 1, p50_ms: 2, p95_ms: 3, min_ms: 1, max_ms: 4 },
+  },
+  verify: {
+    input_bytes: 80,
+    input_tokens: 20,
+    timing: { runs: 20, warmups: 1, p50_ms: 5, p95_ms: 6, min_ms: 4, max_ms: 7 },
+  },
+  cache_read: { input_bytes: 40, input_tokens: 10 },
+  marginal_tokens_per_accepted_record: 20,
+  tokens_including_cache_reads_per_accepted_record: 30,
+  ...overrides,
+});
+
 describe('deterministic benchmark reporting', () => {
+  it('uses the product token constant for capture measurements', () => {
+    expect(tokensForCharacters(CHARS_PER_TOKEN + 1)).toBe(2);
+  });
+
+  it('divides the deterministic floor by the stated accepted-record denominator', () => {
+    expect(
+      floorTokensPerAcceptedRecord({ harvest_tokens: 20, verify_tokens: 10, accepted_records: 2 }),
+    ).toBe(15);
+  });
+
+  it('charges a rejected draft to the record that was eventually accepted', () => {
+    const firstPass = floorTokensPerAcceptedRecord({
+      harvest_tokens: 20,
+      verify_tokens: 10,
+      accepted_records: 1,
+    });
+    const rewritten = floorTokensPerAcceptedRecord({
+      harvest_tokens: 20,
+      verify_tokens: 20,
+      accepted_records: 1,
+    });
+
+    expect(rewritten).toBeGreaterThan(firstPass);
+  });
+
+  it('states that model generation is not measured in the capture report', () => {
+    expect(renderDeterministicReport([captureRow()])).toContain(
+      'Model generation tokens are not measured',
+    );
+  });
+
   it('computes nearest-rank p50 and p95 when samples are unsorted', () => {
     const samples = [20, 1, 15, 9, 3, 11, 8, 19, 7, 12, 6, 13, 18, 17, 16, 14, 10, 5, 4, 2];
 
