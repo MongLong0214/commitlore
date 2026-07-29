@@ -235,7 +235,12 @@ const isRecordKey = (key) => knownKeys.has(key) || EXTENSION_KEY_RE.test(key);
  *
  * A commit whose only trailer is something like `Signed-off-by:` has no
  * CommitLore record and is a legitimate target — the question is whether this
- * protocol has anything on the commit, not whether git found a trailer.
+ * protocol has anything on the commit, not whether git found a trailer. Since
+ * bug-issue-150, `scanTrailers` itself never returns a `Signed-off-by:` /
+ * `Co-authored-by:` row at all (`types.ts` `CONVENTIONAL_TRAILER_KEYS`, a
+ * denylist for a different question than `isRecordKey`'s allowlist answers
+ * here); this check stays as the belt to that suspenders for any key this
+ * protocol simply has not claimed yet.
  */
 export const recordedShas = (cwd) => {
     const recorded = new Set();

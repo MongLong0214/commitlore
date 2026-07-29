@@ -11225,6 +11225,25 @@ var INJECT_OMITTED_KEYS = /* @__PURE__ */ new Set([
   "Evidence",
   "CommitLore-Version"
 ]);
+var CONVENTIONAL_TRAILER_LIST = [
+  "Co-authored-by",
+  "Signed-off-by",
+  "Reviewed-by",
+  "Acked-by",
+  "Tested-by",
+  "Reported-by",
+  "Suggested-by",
+  "Cc",
+  "Change-Id"
+];
+var CONVENTIONAL_TRAILER_KEYS = new Set(
+  CONVENTIONAL_TRAILER_LIST.map((key) => key.toLowerCase())
+);
+var CONVENTIONAL_TRAILER_CANONICAL = new Map(
+  CONVENTIONAL_TRAILER_LIST.map((key) => [key.toLowerCase(), key])
+);
+var isConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_KEYS.has(key.toLowerCase());
+var canonicalConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_CANONICAL.get(key.toLowerCase()) ?? key;
 var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
@@ -12117,6 +12136,16 @@ var parseTrailerField = (field) => {
     return { key: entry.slice(0, separator), value: entry.slice(separator + 1) };
   });
 };
+var recordExclusion = (counts, key) => {
+  if (counts === void 0) return;
+  const canonical2 = canonicalConventionalTrailerKey(key);
+  counts.set(canonical2, (counts.get(canonical2) ?? 0) + 1);
+};
+var stripConventional = (trailers, counts) => trailers.filter((trailer) => {
+  if (!isConventionalTrailerKey(trailer.key)) return true;
+  recordExclusion(counts, trailer.key);
+  return false;
+});
 var parsePathFields = (fields) => {
   const paths = [];
   for (const field of fields) {
@@ -12183,7 +12212,7 @@ var readFullMessages = (cwd, shas) => {
   }
   return byCommit;
 };
-var explodeRecordBlocks = (cwd, records) => {
+var explodeRecordBlocks = (cwd, records, excluded) => {
   const messages = readFullMessages(
     cwd,
     records.map((record2) => record2.sha)
@@ -12193,10 +12222,14 @@ var explodeRecordBlocks = (cwd, records) => {
     if (message === void 0) return [record2];
     const blocks = parseRecordBlocks(message);
     if (blocks.length <= 1) return [record2];
-    return blocks.map((trailers, block) => ({ ...record2, block, trailers }));
+    const earlierBlocks = blocks.slice(0, -1).map((block) => stripConventional(block, excluded)).filter((trailers) => trailers.length > 0);
+    return [
+      ...earlierBlocks.map((trailers, block) => ({ ...record2, block, trailers })),
+      { ...record2, block: earlierBlocks.length, trailers: record2.trailers }
+    ];
   });
 };
-var readCommitRecords = (cwd, shas) => {
+var readCommitRecords = (cwd, shas, excluded) => {
   const records = [];
   for (const batch of chunked(shas, LOG_BATCH)) {
     const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00${TRAILERS_ATOM}%x00`, []);
@@ -12211,19 +12244,21 @@ var readCommitRecords = (cwd, shas) => {
       const fields = record2.split(FIELD_SEP);
       const [sha, rawTs, committedAt, trailerField] = fields;
       if (sha === void 0 || rawTs === void 0 || committedAt === void 0) continue;
-      const trailers = parseTrailerField(trailerField ?? "");
-      if (trailers.length === 0) continue;
+      const rawTrailers = parseTrailerField(trailerField ?? "");
+      if (rawTrailers.length === 0) continue;
       batchRecords.push({
         sha,
         block: 0,
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: "commit",
-        trailers,
+        trailers: stripConventional(rawTrailers, excluded),
         paths: []
       });
     }
-    const exploded = explodeRecordBlocks(cwd, batchRecords);
+    const exploded = explodeRecordBlocks(cwd, batchRecords, excluded).filter(
+      (record2) => record2.trailers.length > 0
+    );
     const paths = readPaths(
       cwd,
       batchRecords.map((record2) => record2.sha)
@@ -12233,7 +12268,7 @@ var readCommitRecords = (cwd, shas) => {
   }
   return records;
 };
-var readNoteRecords = (cwd) => {
+var readNoteRecords = (cwd, excluded) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "");
   if (annotated.length === 0) return [];
@@ -12264,7 +12299,8 @@ var readNoteRecords = (cwd) => {
       const blocks = parseRecordBlocks(`${NOTE_SUBJECT}
 
 ${noteText}`);
-      blocks.forEach((trailers, block) => {
+      blocks.forEach((rawTrailers, block) => {
+        const trailers = stripConventional(rawTrailers, excluded);
         if (trailers.length === 0) return;
         batchRecords.push({
           sha,
@@ -12503,11 +12539,11 @@ var deleteNoteRows = (handle) => {
     handle.db.exec(`DELETE FROM trailers WHERE source = 'notes'`);
   });
 };
-var indexNotes = (handle, opts = {}) => {
+var indexNotes = (handle, opts = {}, excluded) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
-  const records = refSha === null ? [] : readNoteRecords(handle.cwd);
+  const records = refSha === null ? [] : readNoteRecords(handle.cwd, excluded);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
@@ -12525,8 +12561,14 @@ var emptyStats = (handle, started) => ({
   noteTrailersIndexed: 0,
   headSha: null,
   fts: handle.fts,
-  elapsedMs: Date.now() - started
+  elapsedMs: Date.now() - started,
+  trailersExcluded: 0,
+  excludedKeys: []
 });
+var applyExclusions = (stats, excluded) => {
+  stats.trailersExcluded = [...excluded.values()].reduce((sum, count2) => sum + count2, 0);
+  stats.excludedKeys = [...excluded.keys()].sort();
+};
 var requireWritable = (handle) => {
   if (handle.readonly) throw new Error("the index was opened read-only");
 };
@@ -12535,9 +12577,10 @@ var rebuildIndex = (handle, opts = {}) => {
   const started = Date.now();
   const head = revParse(handle.cwd, "HEAD");
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
-  const records = readCommitRecords(handle.cwd, shas);
+  const excluded = /* @__PURE__ */ new Map();
+  const records = readCommitRecords(handle.cwd, shas, excluded);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, excluded);
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -12560,6 +12603,7 @@ var rebuildIndex = (handle, opts = {}) => {
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
   });
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -12589,11 +12633,13 @@ var updateIndex = (handle, opts = {}) => {
     return rebuildIndex(handle, { reason: problem });
   }
   if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested" });
+  const excluded = /* @__PURE__ */ new Map();
   const head = revParse(handle.cwd, "HEAD");
   if (head === null) {
     const stats2 = emptyStats(handle, started);
     writeMeta(handle.db, "last_indexed_sha", null);
-    stats2.noteTrailersIndexed = indexNotes(handle);
+    stats2.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+    applyExclusions(stats2, excluded);
     stats2.elapsedMs = Date.now() - started;
     return stats2;
   }
@@ -12604,7 +12650,7 @@ var updateIndex = (handle, opts = {}) => {
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
     stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas);
+    const records = readCommitRecords(handle.cwd, shas, excluded);
     try {
       const counts = insertRecords(handle, records);
       stats.trailersIndexed = counts.trailers;
@@ -12616,7 +12662,8 @@ var updateIndex = (handle, opts = {}) => {
     }
     writeMeta(handle.db, "last_indexed_sha", head);
   }
-  stats.noteTrailersIndexed = indexNotes(handle);
+  stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -16748,6 +16795,7 @@ var reportRebuild = (stats) => {
   process.stderr.write(`commitlore: rebuilt the index \u2014 ${stats.rebuildReason}
 `);
 };
+var excludedNote = (stats) => stats.trailersExcluded === 0 ? "" : ` (excluded ${plural(stats.trailersExcluded, "conventional trailer")}: ${stats.excludedKeys.join(", ")})`;
 var runIndex = (options) => {
   const rebuild = options.rebuild ?? false;
   const { handle, stats } = rebuild ? (() => {
@@ -16770,14 +16818,14 @@ var runIndex = (options) => {
         `head       ${info.lastIndexedSha ?? "(none)"}`,
         `notes ref  ${info.notesRefSha ?? "(none)"}`,
         `holds      ${plural(info.trailers, "trailer")}, ${plural(info.commits, "commit")}, ${plural(info.paths, "path")}`,
-        `last run   ${stats.rebuilt ? "rebuild" : "incremental"} \xB7 scanned ${plural(stats.commitsScanned, "commit")} \xB7 +${stats.trailersIndexed} trailers \xB7 +${stats.noteTrailersIndexed} from notes \xB7 ${stats.elapsedMs}ms`
+        `last run   ${stats.rebuilt ? "rebuild" : "incremental"} \xB7 scanned ${plural(stats.commitsScanned, "commit")} \xB7 +${stats.trailersIndexed} trailers \xB7 +${stats.noteTrailersIndexed} from notes${stats.trailersExcluded === 0 ? "" : ` \xB7 -${stats.trailersExcluded} conventional (${stats.excludedKeys.join(", ")})`} \xB7 ${stats.elapsedMs}ms`
       ];
       process.stdout.write(`${lines.join("\n")}
 `);
       return;
     }
     process.stdout.write(
-      `${stats.rebuilt ? "rebuilt" : "updated"}: scanned ${plural(stats.commitsScanned, "commit")}, indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, "trailer")} in ${stats.elapsedMs}ms
+      `${stats.rebuilt ? "rebuilt" : "updated"}: scanned ${plural(stats.commitsScanned, "commit")}, indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, "trailer")}${excludedNote(stats)} in ${stats.elapsedMs}ms
 `
     );
   } finally {

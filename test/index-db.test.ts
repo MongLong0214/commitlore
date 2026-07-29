@@ -619,6 +619,148 @@ describe('index-db: B3 false positives', () => {
   });
 });
 
+describe('index-db: conventional trailers are not records (bug-issue-150)', () => {
+  it('drops Co-authored-by in every casing seen in the wild, case-insensitively', () => {
+    const dir = makeRepo();
+    const sha = commit(
+      dir,
+      'Add package manifest\n\n' +
+        'Co-authored-by: Claude <noreply@anthropic.com>\n' +
+        'Co-Authored-By: Codex <noreply@openai.com>\n' +
+        'Co-authored-By: Gemini <noreply@google.com>\n',
+      { 'Package.swift': 'manifest' },
+    );
+
+    expect(scanTrailers({ sha }, { cwd: dir })).toEqual([]);
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      const stats = updateIndex(handle);
+      expect(queryTrailers(handle, { sha })).toEqual([]);
+      expect(stats.trailersExcluded).toBe(3);
+      expect(stats.excludedKeys).toEqual(['Co-authored-by']);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('drops Signed-off-by the same way', () => {
+    const dir = makeRepo();
+    const sha = commit(dir, 'Tidy a comment\n\nSigned-off-by: Dev <dev@example.com>\n', {
+      'src/a.ts': 'a',
+    });
+
+    expect(scanTrailers({ sha }, { cwd: dir })).toEqual([]);
+  });
+
+  it('keeps a genuine record trailer that shares a message with a conventional one', () => {
+    const dir = makeRepo();
+    const sha = commit(
+      dir,
+      record('Guard the session TTL', [
+        'Limit: the vendor SSO ships no refresh token',
+        'Co-authored-by: Claude <noreply@anthropic.com>',
+        'Record-Id: r-mixed01',
+      ]),
+      { 'src/auth/session.ts': 'session' },
+    );
+
+    const indexed = scanTrailers({ sha }, { cwd: dir });
+    expect(indexed.map((trailer) => trailer.key).sort()).toEqual(['Limit', 'Record-Id']);
+  });
+
+  it('produces no record — not an empty one — for a message of only standard trailers', () => {
+    const dir = makeRepo();
+    const sha = commit(
+      dir,
+      'Bump a dependency\n\nSigned-off-by: Dev <dev@example.com>\nCc: reviewer@example.com\n',
+      { 'package.json': '{}' },
+    );
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      expect(queryTrailers(handle, { sha })).toEqual([]);
+      // Not merely "zero trailers for this sha" — the commit contributes no
+      // row at all, the same shape SPEC §4's "recorded nothing" has everywhere
+      // else in this index.
+      expect(dumpIndex(handle).some((row) => row.sha === sha)).toBe(false);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('leaves Fixes: and Closes: alone — deliberately not in the exclusion set', () => {
+    const dir = makeRepo();
+    const sha = commit(
+      dir,
+      'Patch the retry loop\n\nFixes: #42\nCloses: #7\nRecord-Id: r-fixes01\n',
+      { 'src/retry.ts': 'retry' },
+    );
+
+    const indexed = scanTrailers({ sha }, { cwd: dir });
+    expect(indexed.map((trailer) => trailer.key).sort()).toEqual(['Closes', 'Fixes', 'Record-Id']);
+  });
+
+  it('still recovers an earlier record block when the message\'s own last paragraph is only Co-authored-by', () => {
+    // Mirrors the GitHub-squash shape `trailers.test.ts` already covers: a
+    // real, Record-Id-bearing block recovered from earlier in the message,
+    // with the message's own trailing paragraph being pure attribution. The
+    // earlier block must not be lost just because the atom-based pass alone
+    // would have seen only the (now-empty) last one (bug-issue-150).
+    const dir = makeRepo();
+    const message = [
+      'Squash-merge PR #9',
+      '',
+      '* add the worker pool',
+      '',
+      'Limit: the vendor caps us at 3 concurrent workers',
+      'Record-Id: r-recovered150',
+      '',
+      '* attribution fixup',
+      '',
+      'Co-authored-by: Claude <noreply@anthropic.com>',
+      '',
+    ].join('\n');
+    const sha = commit(dir, message, { 'src/worker.ts': 'worker' });
+
+    const indexed = scanTrailers({ sha }, { cwd: dir });
+    expect(indexed.map((trailer) => trailer.key)).toEqual(['Limit', 'Record-Id']);
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      expect(queryTrailers(handle, { sha })).toEqual(scanTrailers({ sha }, { cwd: dir }));
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it('index and no-index agree once conventional trailers are stripped', () => {
+    const dir = makeRepo();
+    commit(dir, 'Add package manifest\n\nCo-authored-by: Claude <noreply@anthropic.com>\n', {
+      'Package.swift': 'manifest',
+    });
+    commit(
+      dir,
+      record('Guard the session TTL', [
+        'Limit: the vendor SSO ships no refresh token',
+        'Co-authored-by: Claude <noreply@anthropic.com>',
+        'Record-Id: r-mixed02',
+      ]),
+      { 'src/auth/session.ts': 'session' },
+    );
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+    } finally {
+      closeIndex(handle);
+    }
+  });
+});
+
 describe('index-db: notes as a second source', () => {
   it('indexes refs/notes/commitlore as source=notes and the fallback agrees', () => {
     const dir = makeRepo();
