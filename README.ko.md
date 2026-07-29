@@ -18,6 +18,16 @@
 
 **AI 보조 코드베이스를 위한 Git-native decision memory.** CommitLore는 코드 변경 뒤의 한계, 제외한 대안, 경고, 검증 공백을 Git에 직접 기록한다. 그래서 개발자와 코딩 에이전트는 무엇을 바꾸기 전에 왜 이렇게 되었는지 이해할 수 있다.
 
+10,002개의 레코드에서도 CommitLore의 경로 범위 지정은 조회한 경로에 적용되는 활성 레코드 두 개를 모두 모델에 노출하지만, 상위 k개 어휘 검색은 하나만 노출한다.
+
+| 경로 | 모델에 보이는 레코드 | 관련 레코드 | 모델에 보이는 토큰 |
+|---|---:|---:|---:|
+| 모두 주입 | 10,002 | 2/2 | 1,004,554 |
+| 상위 k개 어휘 검색 | 2 | 1/2 | 190 |
+| CommitLore 경로 범위 | 2 | 2/2 | 335 |
+
+이 [측정](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)은 모델에 닿는 무관한 결정 맥락의 노출을 재는 것이며, 토큰 또는 청구 비용, 정확도, 에이전트 행동을 재는 것은 아니다. 프로젝트에서 실용적인 대안과 비교한 유일한 측정으로, 코퍼스가 커지면 유사도 검색(상위 k개, 임베딩, RAG)은 관련 레코드의 절반을 놓치고 긴 맥락은 검색 정확도를 떨어뜨리므로([Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/)), 간결한 경로 범위 집합은 단지 더 작은 페이로드가 아니라 품질 특성이기도 하다.
+
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
@@ -199,7 +209,9 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
 
-### 비용과 손익분기점
+### 지연 시간, 비용과 손익분기점
+
+100,000개 커밋에서 색인된 `context`의 p50은 496 ms이고 CommitLore 자체의 `--no-index` 대체 경로는 86,673 ms다. 이 내부 대체 경로 간격은 1k에서 4.8×, 10k에서 36×, 100k에서 175×로 커진다([전체 결정론적 실행](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)). 이는 확장 양상이며 제품과 대안을 비교한 결과가 아니다.
 
 guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 hook 오버헤드다. commit-msg는 p50 185.85 ms, injection hook은 p50 102.40 ms다([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
 
