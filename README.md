@@ -18,6 +18,16 @@
 
 **Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
 
+At 10,002 records, CommitLore's path scope exposes both active records for a queried path, while top-k lexical retrieval exposes only one.
+
+| route | model-visible records | relevant records | model-visible tokens |
+|---|---:|---:|---:|
+| inject everything | 10,002 | 2/2 | 1,004,554 |
+| top-k lexical | 2 | 1/2 | 190 |
+| CommitLore path scope | 2 | 2/2 | 335 |
+
+This [measurement](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md) is exposure—irrelevant decision context reaching the model—not token or billed cost, accuracy, or agent behaviour; it is the project's only comparison with a practical alternative, where similarity retrieval (top-k, embeddings, or RAG) loses half the relevant records as the corpus grows, and because long context degrades retrieval accuracy ([Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/)), a compact path-scoped set is a quality property, not merely a smaller payload.
+
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
@@ -199,7 +209,9 @@ These are product claims about Git-bound, human-verifiable decision history. The
 
 112 experiments were recorded, but M4 recorded no per-run guard exposure. Whether the treatment was present is unverifiable, so it does not test, support, or refute the agent-behavior claim. The narrower product claim above rests on independently testable behavior; read the [M4 verdict](bench/VERDICT-M4.md) for the clean dataset and withdrawal.
 
-### Cost and break-even
+### Latency, cost, and break-even
+
+At 100,000 commits, indexed `context` p50 is 496 ms; CommitLore's own `--no-index` fallback is 86,673 ms. That internal fallback gap grows 4.8× at 1k, 36× at 10k, and 175× at 100k ([complete deterministic run](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)); it is a scaling shape, not a product-versus-alternative result.
 
 The guard costs injected context plus measured hook overhead: 185.85 ms p50 for commit-msg and 102.40 ms p50 for the injection hook ([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
 

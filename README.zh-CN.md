@@ -18,6 +18,16 @@
 
 **面向 AI 辅助代码库的 Git-native decision memory。** CommitLore 将代码改动背后的限制、排除的方案、警告和验证空白直接记录在 Git 中。因此开发者或编程代理在改动之前，可以先理解为什么代码会是这样。
 
+在 10,002 条记录中，CommitLore 的路径范围会将适用于所查询路径的两条有效记录都暴露给模型，而 top-k 词法检索只暴露一条。
+
+| 路径 | 模型可见记录 | 相关记录 | 模型可见令牌 |
+|---|---:|---:|---:|
+| 注入全部内容 | 10,002 | 2/2 | 1,004,554 |
+| top-k 词法检索 | 2 | 1/2 | 190 |
+| CommitLore 路径范围 | 2 | 2/2 | 335 |
+
+这项[测量](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)测量的是到达模型的无关决策上下文暴露，而不是令牌或账单成本、准确率或代理行为。它是项目中唯一与实际替代方案比较的测量：语料库增大时，语义相似检索（top-k、嵌入、RAG）会丢掉一半相关记录，而长上下文会降低检索准确率（[Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/)），因此紧凑的路径范围集合不只是更小的载荷，也是一项质量属性。
+
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
@@ -199,7 +209,9 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 已记录 112 次实验，但 M4 没有逐次运行的 `guard_exposure` 记录。无法验证 treatment 是否存在，因此它没有检验、支持或反驳 agent behavior 的主张。上面更窄的产品主张基于可独立验证的行为。关于干净的数据集和撤回，请见 [M4 verdict](bench/VERDICT-M4.md)。
 
-### 成本与盈亏平衡
+### 延迟、成本与盈亏平衡
+
+在 100,000 次提交时，已建立索引的 `context` 的 p50 为 496 ms；CommitLore 自身的 `--no-index` 后备路径为 86,673 ms。这一内部后备路径差距在 1k 时为 4.8×、10k 时为 36×、100k 时为 175×（[完整的确定性运行](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)）。这是扩展形态，不是产品与替代方案的比较结果。
 
 guard 每次运行的成本是注入的 context 加上测得的 hook overhead：commit-msg 的 p50 为 185.85 ms，injection hook 的 p50 为 102.40 ms（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
 
