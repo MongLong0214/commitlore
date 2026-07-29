@@ -13734,7 +13734,11 @@ var hasDeclaredSuccession = (recordId, ordered) => {
   }
   return false;
 };
-var isSuccessionDeclared = (recordId, records) => hasDeclaredSuccession(recordId, chronological(records));
+var isSuccessionDeclared = (recordId, records) => {
+  const group = groupsByRecordId(records).get(recordId);
+  if (group !== void 0 && hasAmbiguousGroup(group)) return false;
+  return hasDeclaredSuccession(recordId, chronological(records));
+};
 var findIdCollisions = (records) => {
   const groups = groupsByRecordId(records);
   const ordered = chronological(records);

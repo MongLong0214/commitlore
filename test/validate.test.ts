@@ -562,6 +562,51 @@ describe('validate — check classes and reference integrity', () => {
     expect(collisions[0]?.sha).toBe(sha);
   });
 
+  it('still rejects a divergent-notes collision as unresolvable even with Supersedes in range (bug-issue-187)', () => {
+    // A Record-Id mirrored to refs/notes/commitlore with a divergent payload
+    // is the shape that actually reaches the suppression path in checkReferences
+    // (the same-message shape does not, due to an incidental property of
+    // collectRecords). This must remain reported even when a later Supersedes:
+    // targeting the id exists in the range.
+    const repo = makeRepo();
+    commit(repo, 'base-note.txt', 'Base for notes test\n\nRecord-Id: r-notebase191\n');
+    const baseTag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base191n', baseTag], { cwd: repo, env: GIT_ENV });
+    const sha = commit(
+      repo,
+      'noted.txt',
+      'Commit with divergent note\n\nLimit: alpha\nRecord-Id: r-notediv191\n',
+    );
+    // Mirror the same Record-Id to the notes ref with a different payload.
+    writeRecord(
+      sha,
+      [
+        { key: 'Limit', value: 'beta' },
+        { key: 'Record-Id', value: 'r-notediv191' },
+      ],
+      { cwd: repo },
+    );
+    // A later commit declares Supersedes: for the colliding id.
+    commit(
+      repo,
+      'succ-note.txt',
+      'Attempt to resolve divergent note\n\nSupersedes: r-notediv191\nRecord-Id: r-nsucc191\n',
+    );
+
+    const result = runValidate({ range: 'base191n..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    const collisions = result.violations.filter(
+      (v) => v.rule === 'duplicate-id' && v.value === 'r-notediv191',
+    );
+    expect(collisions.length).toBeGreaterThan(0);
+    expect(collisions[0]?.sha).toBe(sha);
+  });
+
   it('rejects only the two colliding blocks out of three, naming the shared id', () => {
     const result = runValidate({
       readStdin: () =>

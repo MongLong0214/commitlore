@@ -367,6 +367,14 @@ const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolea
  * commit declaring `Supersedes:` for it, making the duplication an intentional
  * succession rather than an error.
  *
+ * Ambiguity takes unconditional precedence: a same-message duplicate or a
+ * divergent notes mirror cannot be resolved by a later succession (the group
+ * is inherently unresolvable), so this predicate returns `false` for them
+ * exactly as `findIdCollisions` does. Placing the check here rather than in
+ * the caller ensures every call site — `stale`, `validate`, and any future
+ * third — shares the same rule and cannot diverge (bug-issue-187, packet
+ * item 2).
+ *
  * Exported so `commands/validate.ts` can apply the same predicate
  * `findIdCollisions` uses internally, against a record stream that includes
  * commits beyond what the individual source commit can see (bug-issue-187).
@@ -374,7 +382,11 @@ const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolea
 export const isSuccessionDeclared = (
   recordId: string,
   records: StaleRecord[],
-): boolean => hasDeclaredSuccession(recordId, chronological(records));
+): boolean => {
+  const group = groupsByRecordId(records).get(recordId);
+  if (group !== undefined && hasAmbiguousGroup(group)) return false;
+  return hasDeclaredSuccession(recordId, chronological(records));
+};
 
 /**
  * A Record-Id belongs to exactly one record unless a later commit declares
