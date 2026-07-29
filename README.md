@@ -26,21 +26,21 @@ Install once. Your coding agent can record the decisions worth carrying forward,
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
-## 10,002 records in the repository. Two belonged in the prompt. CommitLore returned both.
+## Retrieval can find records. Path scope keeps reversed decisions out.
 
-This [measurement](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md) measures context exposure—not billed token savings, accuracy, or agent behaviour.
+Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
 
-Both routes had the same two-record output budget, and exactly two records in the corpus were active for the queried path.
+Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. On #166's corpus with no superseded records, embedding retrieval matched path scope at 2/2. The advantage appears when decisions have been reversed—the case this product exists for.
 
-| distractors | measured top-k lexical baseline | CommitLore path scope |
-|---:|---:|---:|
-| 0 | 2/2 | 2/2 |
-| 10 | 1/2 | 2/2 |
-| 100 | 1/2 | 2/2 |
-| 1,000 | 1/2 | 2/2 |
-| 10,000 | 1/2 | 2/2 |
+The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
 
-At 10,000 distractors, inject-everything shows 10,002 records and 1,004,554 tokens; the measured top-k lexical baseline shows 2 records and 190 tokens, returning 1 of 2 relevant records; CommitLore shows 2 records and 335 tokens, returning both. The lexical baseline drops a record at 10 distractors, not gradually as the corpus grows. [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) is one reason compact context is a quality property, not only a smaller payload.
+| route | model-visible records | relevant records | model-visible tokens |
+|---|---:|---:|---:|
+| inject everything | 10,002 | 2/2 | 1,004,554 |
+| top-k lexical | 2 | 1/2 | 190 |
+| CommitLore path scope | 2 | 2/2 | 335 |
+
+This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model.
 
 Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
 
