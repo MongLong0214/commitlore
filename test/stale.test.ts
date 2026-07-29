@@ -405,14 +405,27 @@ describe('findIdCollisions', () => {
     expect(
       findIdCollisions([
         { sha: 'c1', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
-        { sha: 'c2', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
         {
-          sha: 'c3',
+          sha: 'c2',
           source: 'commit',
-          trailers: [trailer('Supersedes', 'r-x'), trailer('Record-Id', 'r-success')],
+          trailers: [trailer('Supersedes', 'r-x'), trailer('Record-Id', 'r-x')],
         },
       ]),
     ).toEqual([]);
+  });
+
+  it('does not let an earlier succession forgive a later duplicate', () => {
+    expect(
+      findIdCollisions([
+        { sha: 'c1', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
+        {
+          sha: 'c2',
+          source: 'commit',
+          trailers: [trailer('Supersedes', 'r-x'), trailer('Record-Id', 'r-success')],
+        },
+        { sha: 'c3', source: 'commit', trailers: [trailer('Record-Id', 'r-x')] },
+      ]),
+    ).toHaveLength(1);
   });
 
   it('flags two commit-sourced blocks under the same sha sharing a Record-Id (bug-issue-92)', () => {

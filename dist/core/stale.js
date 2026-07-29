@@ -242,15 +242,15 @@ const payloadSignature = (record) => record.trailers
     .join('\u0001');
 /** A later commit may explicitly replace a duplicated identity with Supersedes. */
 const hasDeclaredSuccession = (recordId, ordered) => {
-    let declared = false;
+    let declarations = 0;
     for (const { record } of ordered) {
-        if (declared &&
+        if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId)
+            declarations += 1;
+        if (declarations >= 2 &&
             record.source !== 'notes' &&
             record.trailers.some((trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId)) {
             return true;
         }
-        if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId)
-            declared = true;
     }
     return false;
 };

@@ -321,10 +321,11 @@ const payloadSignature = (record: StaleRecord): string =>
 
 /** A later commit may explicitly replace a duplicated identity with Supersedes. */
 const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolean => {
-  let declared = false;
+  let declarations = 0;
   for (const { record } of ordered) {
+    if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId) declarations += 1;
     if (
-      declared &&
+      declarations >= 2 &&
       record.source !== 'notes' &&
       record.trailers.some(
         (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId,
@@ -332,7 +333,6 @@ const hasDeclaredSuccession = (recordId: string, ordered: TimedRecord[]): boolea
     ) {
       return true;
     }
-    if (trailerValue(record.trailers, RECORD_ID_KEY) === recordId) declared = true;
   }
   return false;
 };

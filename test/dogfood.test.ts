@@ -180,8 +180,7 @@ describe('dogfooding: this repository obeys its own protocol', () => {
 
     const succeeded = validateHistory([
       'first\n\nRecord-Id: r-success1\n',
-      'second\n\nRecord-Id: r-success1\n',
-      'replacement\n\nSupersedes: r-success1\nRecord-Id: r-success2\n',
+      'replacement\n\nSupersedes: r-success1\nRecord-Id: r-success1\n',
     ]);
     expect(findIdCollisions(succeeded.records)).toEqual([]);
     expect(findDanglingRefs(succeeded.records)).toEqual([]);

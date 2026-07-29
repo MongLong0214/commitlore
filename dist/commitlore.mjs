@@ -13708,14 +13708,14 @@ var findDanglingRefs = (records, referencedBy = records) => {
 };
 var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
 var hasDeclaredSuccession = (recordId, ordered) => {
-  let declared = false;
+  let declarations2 = 0;
   for (const { record: record2 } of ordered) {
-    if (declared && record2.source !== "notes" && record2.trailers.some(
+    if (trailerValue(record2.trailers, RECORD_ID_KEY2) === recordId) declarations2 += 1;
+    if (declarations2 >= 2 && record2.source !== "notes" && record2.trailers.some(
       (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId
     )) {
       return true;
     }
-    if (trailerValue(record2.trailers, RECORD_ID_KEY2) === recordId) declared = true;
   }
   return false;
 };
