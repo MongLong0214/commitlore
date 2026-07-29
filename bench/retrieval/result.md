@@ -1,12 +1,12 @@
 # Retrieval route comparison
 
-Measured at: 2026-07-29T09:17:25.181Z
+Measured at: 2026-07-29T12:05:31.164Z
 
 This measures exposure and recall at a fixed two-record output budget. It does not measure token cost, billed cost, accuracy, or agent behaviour. Timing was not taken.
 
-Corpus: `generateNoiseCorpus`, seed 1422026, distractor sizes 0, 10, 100, 1000, 10000.
+Corpus: `generateNoiseCorpus` extended with two superseded predecessors and one expired record, seed 1422026, distractor sizes 0, 10, 100, 1000, 10000.
 Query: `src/core/decision-context.ts active lifecycle decision context path scope`
-Harness source SHA-256: `206b3527cb7cfc7bba09bc437f83a13db28dfc68532abbee487e60330115801a`
+Harness source SHA-256: `f8ddea11f0250056606da8338135adf1a1fcb78b7e423e62eab2090b137c0fcd`
 
 ## Embedding provenance
 
@@ -23,14 +23,26 @@ A rerun is reproducible only with the same model artifact, query, corpus seed, a
 The deterministic benchmark’s current `top-k lexical` scorer is a case-insensitive, unweighted count of every query-token occurrence in `path + record message`, with `recordId` as the tie-break. BM25 is a fairer baseline from the same lexical-retrieval family, but it is a different scorer: it adds inverse document frequency, term-frequency saturation, and document-length normalization.
 This BM25 uses lowercase ASCII-alphanumeric tokens, unique query terms, k1=1.2, and b=0.75. Embedding routes rank cosine similarity over `path + record message`; hybrid applies reciprocal-rank fusion with k=60 to the complete BM25 and embedding rankings before the two-record budget; the path filter keeps exact-path candidates before embedding ranking.
 
+## Adversarial lifecycle case
+
+The superseded record `r-adverse` deliberately repeats the query’s subject and vocabulary more closely than its successor `r-expose002`; both records are on `src/core/decision-context.ts`, so path-filtered similarity retrieval can select the reversed decision.
+Construction check: BM25 4.569424 > 1.586191 and pinned-model cosine 0.931950 > 0.815043 for stale record versus successor.
+Zero-stale embedding retrieval was still a possible outcome: yes. The harness does not force either record into an embedding result or alter its score; both compete normally for the fixed budget.
+
 ## Results
 
-Routes matching or beating CommitLore path scope at every reported size: `Embedding top-k`, `Embedding + path filter`. This statement compares only the recall counts in the table.
+Routes matching or beating CommitLore path scope at every reported size: none. This statement compares only the recall counts in the table.
+Routes with strictly higher recall than CommitLore path + lifecycle at any reported size: none.
+Routes with fewer stale records than CommitLore path + lifecycle at any reported size: none.
 
-| distractors | corpus records | BM25 | Embedding top-k | Hybrid RRF | Embedding + path filter | CommitLore path + lifecycle |
-|---:|---:|---:|---:|---:|---:|---:|
-| 0 | 2 | 2/2 | 2/2 | 2/2 | 2/2 | 2/2 |
-| 10 | 12 | 0/2 | 2/2 | 1/2 | 2/2 | 2/2 |
-| 100 | 102 | 0/2 | 2/2 | 0/2 | 2/2 | 2/2 |
-| 1000 | 1002 | 0/2 | 2/2 | 2/2 | 2/2 | 2/2 |
-| 10000 | 10002 | 0/2 | 2/2 | 1/2 | 2/2 | 2/2 |
+| distractors | corpus records | BM25 recall | BM25 stale | Embedding top-k recall | Embedding top-k stale | Hybrid RRF recall | Hybrid RRF stale | Embedding + path filter recall | Embedding + path filter stale | CommitLore path + lifecycle recall | CommitLore path + lifecycle stale |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 5 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 2/2 | 0 |
+| 10 | 15 | 0/2 | 1 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 2/2 | 0 |
+| 100 | 105 | 0/2 | 1 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 2/2 | 0 |
+| 1000 | 1005 | 0/2 | 1 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 2/2 | 0 |
+| 10000 | 10005 | 0/2 | 1 | 1/2 | 1 | 1/2 | 1 | 1/2 | 1 | 2/2 | 0 |
+
+## Conclusion
+
+BM25, Embedding top-k, Hybrid RRF, Embedding + path filter returned at least one stale record in this corpus; the separate recall columns show the context each route omitted.
