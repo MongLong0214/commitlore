@@ -10,10 +10,10 @@ export const NOISE_SIZES = [0, 10, 100, 1_000, 10_000] as const;
 export const NOISE_SEED = 142_2026;
 export const NOISE_RUNS = 20;
 export const TARGET_PATH = 'src/core/decision-context.ts';
-const TOP_K = 2;
-const TOP_K_QUERY = `${TARGET_PATH} active lifecycle decision context path scope`;
+export const TOP_K = 2;
+export const TOP_K_QUERY = `${TARGET_PATH} active lifecycle decision context path scope`;
 
-interface NoiseRecord {
+export interface NoiseRecord {
   readonly recordId: string;
   readonly path: string;
   readonly message: string;
