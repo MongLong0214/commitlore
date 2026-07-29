@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -32,7 +39,12 @@ import {
   sweepGuardThresholds,
   wilsonPrecisionInterval,
 } from '../bench/deterministic/quality.ts';
-import { assertCleanCheckout, git } from '../bench/deterministic/shared.ts';
+import {
+  assertCleanCheckout,
+  git,
+  harnessTreeDigest,
+  verifyHarnessProvenance,
+} from '../bench/deterministic/shared.ts';
 import { measureSurvival } from '../bench/deterministic/survival.ts';
 import { CHARS_PER_TOKEN } from '../dist/core/inject.js';
 import type {
@@ -49,6 +61,7 @@ const DENSITY_RESULTS_DIR = join(REPO_ROOT, 'bench', 'results');
 const row = (overrides: Partial<InjectionDetectionRow> = {}): InjectionDetectionRow => ({
   schema_version: 1,
   harness_commit: '1111111111111111111111111111111111111111',
+  harness_digest: '3333333333333333333333333333333333333333',
   dist_digest: '2222222222222222222222222222222222222222222222222222222222222222',
   measured_at: '2026-07-27T00:00:00.000Z',
   machine: {
@@ -130,6 +143,7 @@ const captureRow = (overrides: Partial<CaptureCostRow> = {}): CaptureCostRow => 
 const densityRow = (overrides: Partial<DensityRow> = {}): DensityRow => ({
   schema_version: 1,
   harness_commit: '1111111111111111111111111111111111111111',
+  harness_digest: '3333333333333333333333333333333333333333',
   dist_digest: '2222222222222222222222222222222222222222222222222222222222222222',
   measured_at: '2026-07-27T00:00:00.000Z',
   machine: row().machine,
@@ -147,6 +161,7 @@ const densityRow = (overrides: Partial<DensityRow> = {}): DensityRow => ({
 
 interface RecordedDensity {
   readonly harness_commit: string;
+  readonly harness_digest?: string;
   readonly commits_examined: number;
   readonly record_bearing_commits: number;
   readonly structured_trailers: number;
@@ -175,6 +190,10 @@ const recordedDensity = (path: string): RecordedDensity => {
   if (typeof parsed !== 'object' || parsed === null) throw new Error('density result is not an object');
   const text = Reflect.get(parsed, 'harness_commit');
   if (typeof text !== 'string') throw new Error('density result has an invalid harness commit');
+  const digest = Reflect.get(parsed, 'harness_digest');
+  if (digest !== undefined && typeof digest !== 'string') {
+    throw new Error('density result has an invalid harness digest');
+  }
   const number = (field: string): number => {
     const value = Reflect.get(parsed, field);
     if (typeof value !== 'number') throw new Error(`density result has invalid ${field}`);
@@ -182,6 +201,7 @@ const recordedDensity = (path: string): RecordedDensity => {
   };
   return {
     harness_commit: text,
+    ...(digest === undefined ? {} : { harness_digest: digest }),
     commits_examined: number('commits_examined'),
     record_bearing_commits: number('record_bearing_commits'),
     structured_trailers: number('structured_trailers'),
@@ -190,6 +210,55 @@ const recordedDensity = (path: string): RecordedDensity => {
     trailers_per_commit: number('trailers_per_commit'),
     structured_trailer_line_share: number('structured_trailer_line_share'),
   };
+};
+
+interface RebasedHarnessRepo {
+  readonly dir: string;
+  readonly originalCommit: string;
+  readonly rebasedCommit: string;
+  readonly harnessDigest: string;
+}
+
+const createRebasedHarnessRepo = (): RebasedHarnessRepo => {
+  const dir = mkdtempSync(join(tmpdir(), 'commitlore-harness-rebase-test-'));
+  git(dir, ['init', '--quiet', '--initial-branch=main']);
+  git(dir, ['config', 'user.name', 'CommitLore Bench']);
+  git(dir, ['config', 'user.email', 'bench@commitlore.local']);
+  mkdirSync(join(dir, 'bench', 'deterministic'), { recursive: true });
+  writeFileSync(join(dir, 'bench', 'deterministic.ts'), 'export {};\n');
+  writeFileSync(join(dir, 'bench', 'deterministic', 'measure.ts'), 'export const measure = 1;\n');
+  writeFileSync(join(dir, 'base.txt'), 'base\n');
+  git(dir, ['add', '.']);
+  git(dir, ['commit', '--quiet', '-m', 'base']);
+
+  git(dir, ['checkout', '--quiet', '-b', 'feature']);
+  writeFileSync(join(dir, 'feature.txt'), 'feature\n');
+  git(dir, ['add', 'feature.txt']);
+  git(dir, ['commit', '--quiet', '-m', 'feature']);
+  const originalCommit = git(dir, ['rev-parse', 'HEAD']).stdout.trim();
+  const harnessDigest = harnessTreeDigest(dir, originalCommit);
+
+  git(dir, ['checkout', '--quiet', 'main']);
+  writeFileSync(join(dir, 'base.txt'), 'rebased base\n');
+  git(dir, ['add', 'base.txt']);
+  git(dir, ['commit', '--quiet', '-m', 'move base']);
+  git(dir, ['checkout', '--quiet', 'feature']);
+  git(dir, ['rebase', 'main']);
+  const rebasedCommit = git(dir, ['rev-parse', 'HEAD']).stdout.trim();
+
+  return { dir, originalCommit, rebasedCommit, harnessDigest };
+};
+
+const pruneRebaseSource = (fixture: RebasedHarnessRepo): void => {
+  git(fixture.dir, ['reflog', 'expire', '--expire=now', '--all']);
+  git(fixture.dir, ['gc', '--prune=now']);
+  expect(
+    git(
+      fixture.dir,
+      ['rev-parse', '--verify', '--quiet', `${fixture.originalCommit}^{commit}`],
+      { allowed: [0, 1] },
+    ).status,
+  ).toBe(1);
 };
 
 describe('deterministic benchmark reporting', () => {
@@ -410,9 +479,13 @@ describe('deterministic benchmark reporting', () => {
     for (const citation of DENSITY_CITATIONS) expect(markdown).toContain(citation);
   });
 
-  it('recomputes the committed density result from its recorded history', () => {
+  it('verifies a resolvable result by commit and recomputes its recorded history', () => {
     const recorded = recordedDensity(densityResultPath());
-    const measured = measureDensity(row(), REPO_ROOT, recorded.harness_commit);
+    const verification = verifyHarnessProvenance(REPO_ROOT, recorded);
+    const measured = measureDensity(row(), REPO_ROOT, verification.historyRef);
+
+    expect(verification.verifiedBy).toBe('commit');
+    expect(verification.message).toContain(recorded.harness_commit);
 
     expect({
       commits_examined: measured.commits_examined,
@@ -431,6 +504,62 @@ describe('deterministic benchmark reporting', () => {
       trailers_per_commit: recorded.trailers_per_commit,
       structured_trailer_line_share: recorded.structured_trailer_line_share,
     });
+  });
+
+  it('verifies an orphaned result by digest and states the narrower guarantee', () => {
+    const fixture = createRebasedHarnessRepo();
+
+    try {
+      pruneRebaseSource(fixture);
+      const verification = verifyHarnessProvenance(fixture.dir, {
+        harness_commit: fixture.originalCommit,
+        harness_digest: fixture.harnessDigest,
+      });
+
+      expect(verification).toMatchObject({
+        historyRef: 'HEAD',
+        verifiedBy: 'digest',
+      });
+      expect(verification.message).toMatch(
+        /verified by harness digest.*proves the harness code is identical, not that the recorded commit existed/i,
+      );
+    } finally {
+      rmSync(fixture.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when the result commit is orphaned and the harness digest changed', () => {
+    const fixture = createRebasedHarnessRepo();
+
+    try {
+      writeFileSync(
+        join(fixture.dir, 'bench', 'deterministic', 'measure.ts'),
+        'export const measure = 2;\n',
+      );
+      git(fixture.dir, ['add', 'bench/deterministic/measure.ts']);
+      git(fixture.dir, ['commit', '--quiet', '-m', 'change harness']);
+      pruneRebaseSource(fixture);
+
+      expect(() =>
+        verifyHarnessProvenance(fixture.dir, {
+          harness_commit: fixture.originalCommit,
+          harness_digest: fixture.harnessDigest,
+        }),
+      ).toThrow(/commit .* unresolvable.*digest does not match HEAD.*cannot be re-derived/i);
+    } finally {
+      rmSync(fixture.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the harness digest across a rebase that changes no harness file', () => {
+    const fixture = createRebasedHarnessRepo();
+
+    try {
+      expect(fixture.rebasedCommit).not.toBe(fixture.originalCommit);
+      expect(harnessTreeDigest(fixture.dir, fixture.rebasedCommit)).toBe(fixture.harnessDigest);
+    } finally {
+      rmSync(fixture.dir, { recursive: true, force: true });
+    }
   });
 
   it('refuses uncommitted benchmark inputs', () => {
