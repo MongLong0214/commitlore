@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -10,7 +10,10 @@ import {
   tokensForCharacters,
 } from '../bench/deterministic/capture.ts';
 import {
+  ADDRESSABILITY_STATEMENT,
   assertSingleProvenance,
+  DENSITY_CITATIONS,
+  DENSITY_SCOPE_SENTENCE,
   percentile,
   renderDeterministicReport,
   SCOPE_SENTENCE,
@@ -23,6 +26,7 @@ import {
   NOISE_SIZES,
   TARGET_PATH,
 } from '../bench/deterministic/noise.ts';
+import { measureDensity } from '../bench/deterministic/density.ts';
 import {
   sweepGuardThresholds,
   wilsonPrecisionInterval,
@@ -32,12 +36,14 @@ import { measureSurvival } from '../bench/deterministic/survival.ts';
 import { CHARS_PER_TOKEN } from '../dist/core/inject.js';
 import type {
   CaptureCostRow,
+  DensityRow,
   GuardQualityRow,
   InjectionDetectionRow,
   NoiseExposureRow,
 } from '../bench/deterministic/types.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
+const DENSITY_RESULTS_DIR = join(REPO_ROOT, 'bench', 'results');
 
 const row = (overrides: Partial<InjectionDetectionRow> = {}): InjectionDetectionRow => ({
   schema_version: 1,
@@ -119,6 +125,71 @@ const captureRow = (overrides: Partial<CaptureCostRow> = {}): CaptureCostRow => 
   tokens_including_cache_reads_per_accepted_record: 30,
   ...overrides,
 });
+
+const densityRow = (overrides: Partial<DensityRow> = {}): DensityRow => ({
+  schema_version: 1,
+  harness_commit: '1111111111111111111111111111111111111111',
+  dist_digest: '2222222222222222222222222222222222222222222222222222222222222222',
+  measured_at: '2026-07-27T00:00:00.000Z',
+  machine: row().machine,
+  metric: 'rationale_density',
+  history_ref: 'HEAD',
+  commits_examined: 2,
+  record_bearing_commits: 1,
+  structured_trailers: 4,
+  non_empty_body_lines: 5,
+  record_bearing_rate: 0.5,
+  trailers_per_commit: 2,
+  structured_trailer_line_share: 0.8,
+  ...overrides,
+});
+
+interface RecordedDensity {
+  readonly harness_commit: string;
+  readonly commits_examined: number;
+  readonly record_bearing_commits: number;
+  readonly structured_trailers: number;
+  readonly non_empty_body_lines: number;
+  readonly record_bearing_rate: number;
+  readonly trailers_per_commit: number;
+  readonly structured_trailer_line_share: number;
+}
+
+const densityResultPath = (): string => {
+  const densityResults = readdirSync(DENSITY_RESULTS_DIR)
+    .filter((name) => /^deterministic-.*\.jsonl$/.test(name))
+    .filter((name) => {
+      const contents = readFileSync(join(DENSITY_RESULTS_DIR, name), 'utf8').trim();
+      if (contents.includes('\n')) return false;
+      const parsed: unknown = JSON.parse(contents);
+      return typeof parsed === 'object' && parsed !== null && Reflect.get(parsed, 'metric') === 'rationale_density';
+    });
+  const latest = densityResults.sort().at(-1);
+  if (latest === undefined) throw new Error('no density result found');
+  return join(DENSITY_RESULTS_DIR, latest);
+};
+
+const recordedDensity = (path: string): RecordedDensity => {
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  if (typeof parsed !== 'object' || parsed === null) throw new Error('density result is not an object');
+  const text = Reflect.get(parsed, 'harness_commit');
+  if (typeof text !== 'string') throw new Error('density result has an invalid harness commit');
+  const number = (field: string): number => {
+    const value = Reflect.get(parsed, field);
+    if (typeof value !== 'number') throw new Error(`density result has invalid ${field}`);
+    return value;
+  };
+  return {
+    harness_commit: text,
+    commits_examined: number('commits_examined'),
+    record_bearing_commits: number('record_bearing_commits'),
+    structured_trailers: number('structured_trailers'),
+    non_empty_body_lines: number('non_empty_body_lines'),
+    record_bearing_rate: number('record_bearing_rate'),
+    trailers_per_commit: number('trailers_per_commit'),
+    structured_trailer_line_share: number('structured_trailer_line_share'),
+  };
+};
 
 describe('deterministic benchmark reporting', () => {
   it('uses the product token constant for capture measurements', () => {
@@ -253,6 +324,66 @@ describe('deterministic benchmark reporting', () => {
 
     expect(report).toContain('4 labelled decisions');
     expect(report).toContain('| threshold | precision | recall | F1 | firings | correct silences |');
+  });
+
+  it('counts records and structured trailers from a hand-checked Git history', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'commitlore-density-test-'));
+
+    try {
+      git(scratch, ['init', '--quiet']);
+      git(scratch, ['config', 'user.name', 'CommitLore Bench']);
+      git(scratch, ['config', 'user.email', 'bench@commitlore.local']);
+      git(scratch, ['commit', '--allow-empty', '--quiet', '-m', 'subject only']);
+      git(scratch, ['commit', '--allow-empty', '--allow-empty-message', '--quiet', '-m', '']);
+      git(scratch, [
+        'commit', '--allow-empty', '--quiet', '-m',
+        'carry two records\n\nLimit: first constraint\nRecord-Id: r-density01\n\nbody prose\n\nWarn: second warning\nRecord-Id: r-density02',
+      ]);
+
+      const measured = measureDensity(row(), scratch);
+
+      expect(measured).toMatchObject({
+        commits_examined: 3,
+        record_bearing_commits: 1,
+        structured_trailers: 4,
+        non_empty_body_lines: 5,
+        trailers_per_commit: 4 / 3,
+        structured_trailer_line_share: 0.8,
+      });
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('renders the addressability statement and literature citations', () => {
+    const markdown = renderDeterministicReport([row(), densityRow()]);
+
+    expect(markdown).toContain(ADDRESSABILITY_STATEMENT);
+    expect(renderDeterministicReport([densityRow()])).toContain(DENSITY_SCOPE_SENTENCE);
+    for (const citation of DENSITY_CITATIONS) expect(markdown).toContain(citation);
+  });
+
+  it('recomputes the committed density result from its recorded history', () => {
+    const recorded = recordedDensity(densityResultPath());
+    const measured = measureDensity(row(), REPO_ROOT, recorded.harness_commit);
+
+    expect({
+      commits_examined: measured.commits_examined,
+      record_bearing_commits: measured.record_bearing_commits,
+      structured_trailers: measured.structured_trailers,
+      non_empty_body_lines: measured.non_empty_body_lines,
+      record_bearing_rate: measured.record_bearing_rate,
+      trailers_per_commit: measured.trailers_per_commit,
+      structured_trailer_line_share: measured.structured_trailer_line_share,
+    }).toEqual({
+      commits_examined: recorded.commits_examined,
+      record_bearing_commits: recorded.record_bearing_commits,
+      structured_trailers: recorded.structured_trailers,
+      non_empty_body_lines: recorded.non_empty_body_lines,
+      record_bearing_rate: recorded.record_bearing_rate,
+      trailers_per_commit: recorded.trailers_per_commit,
+      structured_trailer_line_share: recorded.structured_trailer_line_share,
+    });
   });
 
   it('refuses uncommitted benchmark inputs', () => {

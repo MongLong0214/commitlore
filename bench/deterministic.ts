@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 
 import { digestDistTree } from './hooks-settings.ts';
 import { measureCaptureCost } from './deterministic/capture.ts';
+import { measureDensity } from './deterministic/density.ts';
 import { measureHookOverhead } from './deterministic/hooks.ts';
 import { measureNoiseExposure } from './deterministic/noise.ts';
 import { measureGuardQuality, measureInjectionDetection } from './deterministic/quality.ts';
@@ -33,6 +34,7 @@ const REQUIRED_METRICS: ReadonlySet<DeterministicRow['metric']> = new Set([
   'capture_cost',
   'index_cost',
   'noise_exposure',
+  'rationale_density',
 ]);
 
 const stamp = (instant: string): string =>
@@ -67,6 +69,7 @@ const assertNoConcurrentDeterministicBench = (): void => {
 
 const main = (): void => {
   const testMode = process.env['NODE_ENV'] === 'test';
+  const densityOnly = process.env['COMMITLORE_DETERMINISTIC_DENSITY_ONLY'] === '1';
   const testOnlyOverride = [
     'COMMITLORE_DETERMINISTIC_SIZES',
     'COMMITLORE_DETERMINISTIC_RUNS',
@@ -94,7 +97,7 @@ const main = (): void => {
     process.env['COMMITLORE_DETERMINISTIC_OUTPUT_DIR'] ?? join('bench', 'results'),
   );
   assertCleanCheckout(REPO_ROOT);
-  assertNoConcurrentDeterministicBench();
+  if (!densityOnly) assertNoConcurrentDeterministicBench();
   const measuredAt = new Date().toISOString();
   const harnessCommit = git(REPO_ROOT, ['rev-parse', 'HEAD']).stdout.trim();
   const distDigest = digestDistTree();
@@ -102,32 +105,39 @@ const main = (): void => {
   const scratch = mkdtempSync(join(tmpdir(), 'commitlore-deterministic-'));
 
   try {
-    process.stdout.write(`deterministic bench: query latency and index cost (${sizes.join(', ')} commits)\n`);
-    const scale = measureScale(base, REPO_ROOT, scratch, sizes, runs);
-    process.stdout.write(`deterministic bench: survival (${survivalRecords} records per operation)\n`);
-    const survival = measureSurvival(base, scratch, survivalRecords);
-    process.stdout.write('deterministic bench: injection detection and guard quality\n');
-    const injection = measureInjectionDetection(base, REPO_ROOT);
-    const guard = measureGuardQuality(base, REPO_ROOT);
-    process.stdout.write(`deterministic bench: hook overhead (${runs} runs per arm)\n`);
-    const hooks = measureHookOverhead(base, scratch, runs);
-    process.stdout.write(`deterministic bench: record capture cost (${runs} runs per command)\n`);
-    const capture = measureCaptureCost(base, REPO_ROOT, runs);
-    process.stdout.write('deterministic bench: irrelevant decision-context exposure\n');
-    const exposure = measureNoiseExposure(base);
-    const rows: readonly DeterministicRow[] = [
-      ...scale.latency,
-      ...survival,
-      injection,
-      guard,
-      ...hooks,
-      capture,
-      ...scale.index,
-      ...exposure,
-    ];
+    const rows: readonly DeterministicRow[] = densityOnly
+      ? [measureDensity(base, REPO_ROOT)]
+      : (() => {
+          process.stdout.write(`deterministic bench: query latency and index cost (${sizes.join(', ')} commits)\n`);
+          const scale = measureScale(base, REPO_ROOT, scratch, sizes, runs);
+          process.stdout.write(`deterministic bench: survival (${survivalRecords} records per operation)\n`);
+          const survival = measureSurvival(base, scratch, survivalRecords);
+          process.stdout.write('deterministic bench: injection detection and guard quality\n');
+          const injection = measureInjectionDetection(base, REPO_ROOT);
+          const guard = measureGuardQuality(base, REPO_ROOT);
+          process.stdout.write(`deterministic bench: hook overhead (${runs} runs per arm)\n`);
+          const hooks = measureHookOverhead(base, scratch, runs);
+          process.stdout.write(`deterministic bench: record capture cost (${runs} runs per command)\n`);
+          const capture = measureCaptureCost(base, REPO_ROOT, runs);
+          process.stdout.write('deterministic bench: irrelevant decision-context exposure\n');
+          const exposure = measureNoiseExposure(base);
+          process.stdout.write('deterministic bench: rationale density\n');
+          const density = measureDensity(base, REPO_ROOT);
+          return [
+            ...scale.latency,
+            ...survival,
+            injection,
+            guard,
+            ...hooks,
+            capture,
+            ...scale.index,
+            ...exposure,
+            density,
+          ];
+        })();
 
     assertSingleProvenance(rows);
-    assertComplete(rows);
+    if (!densityOnly) assertComplete(rows);
     const currentCommit = git(REPO_ROOT, ['rev-parse', 'HEAD']).stdout.trim();
     const currentDigest = digestDistTree();
     if (currentCommit !== harnessCommit || currentDigest !== distDigest) {

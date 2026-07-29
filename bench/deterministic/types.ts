@@ -190,6 +190,18 @@ export interface NoiseExposureRow extends BaseRow {
   readonly timing: Timing;
 }
 
+export interface DensityRow extends BaseRow {
+  readonly metric: 'rationale_density';
+  readonly history_ref: string;
+  readonly commits_examined: number;
+  readonly record_bearing_commits: number;
+  readonly structured_trailers: number;
+  readonly non_empty_body_lines: number;
+  readonly record_bearing_rate: number;
+  readonly trailers_per_commit: number;
+  readonly structured_trailer_line_share: number;
+}
+
 export type DeterministicRow =
   | QueryLatencyRow
   | IndexCostRow
@@ -198,7 +210,8 @@ export type DeterministicRow =
   | GuardQualityRow
   | HookOverheadRow
   | CaptureCostRow
-  | NoiseExposureRow;
+  | NoiseExposureRow
+  | DensityRow;
 
 export type RowBase = Pick<
   BaseRow,
