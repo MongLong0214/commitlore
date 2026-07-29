@@ -13734,6 +13734,11 @@ var hasDeclaredSuccession = (recordId, ordered) => {
   }
   return false;
 };
+var isSuccessionDeclared = (recordId, records) => {
+  const group = groupsByRecordId(records).get(recordId);
+  if (group !== void 0 && hasAmbiguousGroup(group)) return false;
+  return hasDeclaredSuccession(recordId, chronological(records));
+};
 var findIdCollisions = (records) => {
   const groups = groupsByRecordId(records);
   const ordered = chronological(records);
@@ -27424,6 +27429,25 @@ var checkReferences = (input, sources, cwd) => {
   }
   try {
     const violations = [];
+    const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
+    let tipAllRecords;
+    if (tipSha !== void 0) {
+      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd);
+      if (tipScan.notes === "unfetched") {
+        return {
+          check: {
+            class: "reference",
+            status: "not-checked",
+            reason: "notes mirror not fetched"
+          },
+          violations: []
+        };
+      }
+      const tipReachable = reachableShas(tipSha, cwd);
+      tipAllRecords = tipScan.records.filter(
+        (record2) => record2.sha !== void 0 && tipReachable.has(record2.sha)
+      ).reverse();
+    }
     for (const source of sources) {
       const blocks = parseRecordBlocks(source.message);
       const scan2 = recordsFor(source, cwd);
@@ -27460,8 +27484,8 @@ var checkReferences = (input, sources, cwd) => {
         };
         const dangling = findDanglingRefs(prior, [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter(
-          (violation) => violation.value === recordId
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
+          (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
         );
         violations.push(
           ...locateReferenceViolations(source, trailers, [...dangling, ...collisions])
