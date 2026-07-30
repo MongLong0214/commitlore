@@ -23,7 +23,7 @@
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
 ```
 
 
@@ -103,11 +103,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh
-sh install.sh v0.3.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
+sh install.sh v0.4.0
 
 # 또는 릴리스 바이너리를 직접 검증한 뒤 압축을 푼다.
-version=0.3.0; target=aarch64-apple-darwin
+version=0.4.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
