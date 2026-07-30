@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git은 무엇이 바뀌었는지 기억하고, CommitLore는 왜 바뀌었는지 기억한다. 새 에이전트도 제외한 대안과 그 이유를 본다.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.">
 </p>
 
 <p align="center">
@@ -14,9 +14,9 @@
 
 # CommitLore
 
-## Git은 무엇이 바뀌었는지 기억합니다. CommitLore는 왜 바뀌었는지 기억합니다.
+## 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.
 
-**AI 보조 코드베이스를 위한 Git-native decision memory.** CommitLore는 코드 변경 뒤의 한계, 제외한 대안, 경고, 검증 공백을 Git에 직접 기록한다. 그래서 개발자와 코딩 에이전트는 무엇을 바꾸기 전에 왜 이렇게 되었는지 이해할 수 있다.
+**AI 보조 코드베이스를 위한 Git-native 결정 권위.** CommitLore는 어떤 결정이 아직 유효하고 어떤 결정이 뒤집혔는지를 Git에서 직접 추적한다. 코딩 에이전트가 경로를 조회하면 현재 유효한 결정만 보인다.
 
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 

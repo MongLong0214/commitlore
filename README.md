@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git remembers what changed. CommitLore remembers why. A fresh agent sees a rejected alternative and its reason.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: a coding agent must not revive a decision the repository already reversed.">
 </p>
 
 <p align="center">
@@ -14,9 +14,9 @@
 
 # CommitLore
 
-## Git remembers what changed. CommitLore remembers why.
+## A coding agent must not revive a decision the repository already reversed.
 
-**Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
+**Git-native decision authority for AI-assisted codebases.** CommitLore tracks which decisions are still in force and which have been reversed—directly in Git—so a coding agent sees only current decisions when it queries a path.
 
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 

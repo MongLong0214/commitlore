@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：Git 记住改了什么，CommitLore 记住为什么改。新代理也能看到被排除的方案及其理由。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：编程代理不得复活仓库已经推翻的决策。">
 </p>
 
 <p align="center">
@@ -14,9 +14,9 @@
 
 # CommitLore
 
-## Git 记住改了什么。CommitLore 记住为什么改。
+## 编程代理不得复活仓库已经推翻的决策。
 
-**面向 AI 辅助代码库的 Git-native decision memory。** CommitLore 将代码改动背后的限制、排除的方案、警告和验证空白直接记录在 Git 中。因此开发者或编程代理在改动之前，可以先理解为什么代码会是这样。
+**面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
 
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
