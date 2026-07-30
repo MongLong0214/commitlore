@@ -22,6 +22,17 @@ No hosted memory service. No vendor-specific chat history. Just reviewable decis
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
+**Claude Code** — one plugin registers the MCP server, the pre-edit context hook and the skills:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+Prerequisites for the plugin path: Node.js 22+ and Git.
+
+**Any other coding agent** — install the CLI:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```

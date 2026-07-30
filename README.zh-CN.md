@@ -22,6 +22,17 @@
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
 
+**Claude Code** — 一个插件即可注册 MCP 服务器、编辑前上下文钩子与技能:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+插件路径的前置条件: Node.js 22+ 与 Git。
+
+**其他编程代理** — 安装 CLI:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
