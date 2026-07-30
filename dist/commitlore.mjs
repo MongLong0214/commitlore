@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve10.call(this, root, ref);
+      let _sch = resolve11.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve10(root, ref) {
+    function resolve11(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve10(baseURI, relativeURI, options) {
+    function resolve11(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve10,
+      resolve: resolve11,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync13 } from "node:fs";
+import { readFileSync as readFileSync14 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -17837,7 +17837,7 @@ var register11 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve9, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve10, sep as sep3 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -25157,7 +25157,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve10) => setTimeout(resolve10, pollInterval));
+        await new Promise((resolve11) => setTimeout(resolve11, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -25174,7 +25174,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve10, reject2) => {
+    return new Promise((resolve11, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -25252,7 +25252,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve10(parseResult.data);
+            resolve11(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -25513,12 +25513,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve10, reject2) => {
+    return new Promise((resolve11, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve10, interval);
+      const timeoutId = setTimeout(resolve11, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -26388,12 +26388,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve10) => {
+    return new Promise((resolve11) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve10();
+        resolve11();
       } else {
-        this._stdout.once("drain", resolve10);
+        this._stdout.once("drain", resolve11);
       }
     });
   }
@@ -26896,6 +26896,119 @@ var beforeChange = (opts) => {
   };
 };
 
+// src/core/capture-prepare.ts
+import { createHash as createHash3 } from "node:crypto";
+
+// src/core/pending.ts
+import { randomBytes as randomBytes4 } from "node:crypto";
+import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync11, renameSync as renameSync4, unlinkSync as unlinkSync3, writeFileSync as writeFileSync8 } from "node:fs";
+import { resolve as resolve9 } from "node:path";
+var NONCE_RE = /^[0-9a-f]{32}$/;
+var validateNonce = (nonce) => {
+  if (!NONCE_RE.test(nonce)) {
+    throw new Error(`Invalid nonce: must be exactly 32 lowercase hex characters, got "${nonce}"`);
+  }
+};
+var pendingDir = (cwd) => {
+  const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/pending"], { cwd }).trim();
+  return resolve9(cwd, reported);
+};
+var pendingFilePath = (nonce, cwd) => {
+  validateNonce(nonce);
+  const dir = pendingDir(cwd);
+  return resolve9(dir, `${nonce}.json`);
+};
+var atomicWriteJson = (filePath, data) => {
+  const dir = resolve9(filePath, "..");
+  mkdirSync6(dir, { recursive: true });
+  const temporary = `${filePath}.tmp-${process.pid}-${randomBytes4(4).toString("hex")}`;
+  const body = JSON.stringify(data, null, 2) + "\n";
+  try {
+    writeFileSync8(temporary, body);
+    renameSync4(temporary, filePath);
+  } catch (error2) {
+    try {
+      unlinkSync3(temporary);
+    } catch {
+    }
+    throw error2;
+  }
+};
+var createPending = (opts) => {
+  const nonce = randomBytes4(16).toString("hex");
+  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
+  if (!baseHead || !/^[0-9a-f]{40}$/.test(baseHead)) {
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const record2 = {
+    version: 1,
+    nonce,
+    created_at: now,
+    // CEO amendment 1: expires_at is null while phase is prepared or verified
+    expires_at: null,
+    phase: "prepared",
+    consumed: false,
+    verified_at: null,
+    staged_at: null,
+    applied_at: null,
+    applied_record_hash: null,
+    consumed_at: null,
+    consumed_by: null,
+    base_head: baseHead,
+    staged_diff_hash: opts.staged_diff_hash,
+    staged_tree_oid: opts.staged_tree_oid,
+    policy_identity_hash: opts.policy_identity_hash,
+    source_hashes: opts.source_hashes,
+    evidence_hash: null,
+    records: [],
+    validation_result: null,
+    overlap_check: null,
+    incomplete: false
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, record2);
+  return nonce;
+};
+
+// src/core/capture-prepare.ts
+var HARDCODED_DEFAULTS = {
+  mode: "suggest",
+  max_records_per_commit: 1,
+  require_verified_evidence: true
+};
+var computePolicyIdentityHash = () => createHash3("sha256").update(JSON.stringify(HARDCODED_DEFAULTS)).digest("hex");
+var prepareCaptureContext = (opts) => {
+  const { cwd, transcript } = opts;
+  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
+  if (!/^[0-9a-f]{40}$/.test(baseHead)) {
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
+  }
+  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
+  const stagedDiffHash = createHash3("sha256").update(diff).digest("hex");
+  const stagedTreeOid = execGitOrThrow(["write-tree"], { cwd }).trim();
+  const transcriptHash = createHash3("sha256").update(transcript).digest("hex");
+  const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
+  const policyIdentityHash = computePolicyIdentityHash();
+  const prompt = buildHarvestPrompt({ transcript, diff });
+  const nonce = createPending({
+    cwd,
+    source_hashes: sourceHashes,
+    staged_diff_hash: stagedDiffHash,
+    staged_tree_oid: stagedTreeOid,
+    policy_identity_hash: policyIdentityHash
+  });
+  return {
+    nonce,
+    base_head: baseHead,
+    staged_diff_hash: stagedDiffHash,
+    staged_tree_oid: stagedTreeOid,
+    policy_identity_hash: policyIdentityHash,
+    source_hashes: sourceHashes,
+    prompt
+  };
+};
+
 // src/mcp/server.ts
 var SERVER_NAME = "commitlore";
 var FALLBACK_VERSION = "0.0.0";
@@ -26911,6 +27024,7 @@ var QUERY_TOOL = "commitlore_query";
 var STALE_TOOL = "commitlore_stale";
 var GUARD_TOOL = "commitlore_guard";
 var BEFORE_CHANGE_TOOL = "commitlore_before_change";
+var PREPARE_CAPTURE_TOOL = "commitlore_prepare_capture";
 var CONTEXT_URI_PREFIX = "commitlore://context/";
 var CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
 var errorMessage4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
@@ -26932,7 +27046,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve9(root, raw);
+  const resolved = resolve10(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep3}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -27033,6 +27147,27 @@ var TOOLS = [
       additionalProperties: false
     },
     annotations: { ...READS_ONLY, title: "Context and guard for a path before editing it" }
+  },
+  {
+    name: PREPARE_CAPTURE_TOOL,
+    description: 'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, policy hash), generates the prompt contract for the agent to use, and persists a phase:"prepared" pending transaction. Returns the nonce needed for verify and stage.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        transcript: {
+          type: "string",
+          description: "the session transcript to compute source hashes from"
+        }
+      },
+      required: ["transcript"],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: "Prepare a capture transaction"
+    }
   }
 ];
 var stringArg = (args, name) => {
@@ -27058,7 +27193,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve9(opts.cwd ?? process.cwd());
+  const root = resolve10(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -27099,6 +27234,19 @@ var createServer = (opts = {}) => {
           cwd: root
         })
       );
+    },
+    [PREPARE_CAPTURE_TOOL]: (args) => {
+      const transcript = requiredString(args, "transcript");
+      const result = prepareCaptureContext({ cwd: root, transcript });
+      return asText({
+        nonce: result.nonce,
+        base_head: result.base_head,
+        staged_diff_hash: result.staged_diff_hash,
+        staged_tree_oid: result.staged_tree_oid,
+        policy_identity_hash: result.policy_identity_hash,
+        source_hashes: result.source_hashes,
+        prompt: result.prompt
+      });
     }
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
@@ -27180,7 +27328,7 @@ var register14 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync11, writeFileSync as writeFileSync8 } from "node:fs";
+import { readFileSync as readFileSync12, writeFileSync as writeFileSync9 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -27221,14 +27369,14 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync11(path2, "utf8");
+    return readFileSync12(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync8(path2, text);
+    writeFileSync9(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -27325,7 +27473,7 @@ var register15 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -27677,14 +27825,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync12(path2, "utf8");
+    return readFileSync13(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync12(0, "utf8");
+    return readFileSync13(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -27940,11 +28088,11 @@ var register16 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync13(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync14(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync13(STDIN_FD2, "utf8");
+  return readFileSync14(STDIN_FD2, "utf8");
 };
 var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
