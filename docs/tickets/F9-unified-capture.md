@@ -17,6 +17,8 @@
 
 **Minimum GREEN**: Export `createPending(opts): string` (returns nonce), `readPending(nonce): PendingRecord | null`, `storeVerification(nonce, result): boolean`, `stagePending(nonce): boolean`, `markApplied(nonce, recordHash): boolean`, and `consumePending(nonce, commitSha): boolean` from `src/core/pending.ts`. Every mutation is an atomic rename and enforces the monotonic phase transition from ADR-0021. `createPending` writes `phase:"prepared"` and source/state hashes. `readPending` returns `null` only when the file is absent; corrupt or unknown-version content raises a typed `PendingFormatError`. `storeVerification` is the only API that may write accepted records/evidence. `stagePending` accepts a nonce only. `markApplied` records `applied_at` and `applied_record_hash` for the canonical trailer block, not the editable subject/body. `consumePending` may set `consumed:true` and `consumed_by` only for an applied record.
 
+**Path resolution — resolve `.git/commitlore/pending/` via `git rev-parse --git-path commitlore/pending`, never via `path.join(cwd, '.git', ...)`.** This codebase already has the precedent: `src/core/index-db.ts:325` ("`--git-path` is what makes this correct") and `src/hooks/prepare-commit-msg.ts:27,75` both resolve git-internal paths this way. A linked worktree's `.git` is a *file* containing a pointer, not a directory — naive string-joining breaks there, and it is the exact case ADR-0021 claims this format handles ("It is per-worktree and per-clone"). Writing the path the same way the rest of the codebase already does is not optional.
+
 **AC <-> test**:
 
 | AC | Test | PRD-F9 requirement |
