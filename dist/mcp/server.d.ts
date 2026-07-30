@@ -48,6 +48,7 @@ export type QueryKind = (typeof QUERY_KINDS)[number];
 export declare const QUERY_TOOL = "commitlore_query";
 export declare const STALE_TOOL = "commitlore_stale";
 export declare const GUARD_TOOL = "commitlore_guard";
+export declare const BEFORE_CHANGE_TOOL = "commitlore_before_change";
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
  * expansion (`{+path}`) so a client fills it with a real path rather than one

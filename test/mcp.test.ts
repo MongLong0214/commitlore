@@ -472,6 +472,7 @@ describe('handshake and declarations', () => {
       annotations?: unknown;
     }[];
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'commitlore_before_change',
       'commitlore_guard',
       'commitlore_query',
       'commitlore_stale',

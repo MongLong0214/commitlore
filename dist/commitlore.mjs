@@ -26631,6 +26631,93 @@ var register12 = (program3) => {
   });
 };
 
+// src/core/before-change.ts
+import { createHash as createHash2 } from "node:crypto";
+var deriveVerificationGaps = (cwd) => {
+  const gaps = [];
+  const history = historyAvailability(cwd);
+  if (history === "unavailable") {
+    gaps.push("history-unavailable");
+  }
+  const shallow = hasShallowHistory(cwd);
+  if (shallow) {
+    gaps.push("shallow-history");
+  }
+  const notes = notesAvailability({ cwd });
+  if (notes === "unfetched") {
+    gaps.push("notes-unfetched");
+  }
+  return gaps;
+};
+var extractActiveDecisions = (result) => result.records.map((record2) => ({
+  recordId: record2.recordId ?? null,
+  sha: record2.sha,
+  trust: record2.trust ?? null,
+  paths: record2.paths,
+  trailers: record2.trailers.map((t) => ({ key: t.key, value: t.value }))
+}));
+var resolveHead = (cwd) => {
+  const result = execGit(["rev-parse", "HEAD"], { cwd });
+  if (result.code !== 0) {
+    throw new Error(
+      `commitlore_before_change: cannot read repository at ${cwd} \u2014 this is a failure, not an empty answer`
+    );
+  }
+  return result.stdout.trim();
+};
+var buildCacheKey = (head, path2, proposal) => {
+  const pathHash = createHash2("sha256").update(path2).digest("hex").slice(0, 16);
+  if (proposal === void 0) {
+    return `ctx:${head}:${pathHash}`;
+  }
+  const normalised = proposal.trim().replace(/\s+/g, " ");
+  const proposalHash = createHash2("sha256").update(normalised).digest("hex").slice(0, 16);
+  return `full:${head}:${pathHash}:${proposalHash}`;
+};
+var beforeChange = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const path2 = opts.path;
+  const gaps = deriveVerificationGaps(cwd);
+  const historyUnavailable = gaps.includes("history-unavailable");
+  let head;
+  if (historyUnavailable) {
+    head = "unavailable";
+  } else {
+    head = resolveHead(cwd);
+  }
+  let activeDecisions = [];
+  if (!historyUnavailable) {
+    const queryResult = runQuery({
+      cwd,
+      ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+    });
+    activeDecisions = extractActiveDecisions(queryResult);
+  }
+  let matches = [];
+  let confidence = "not-run";
+  if (opts.proposal !== void 0 && opts.proposal.trim() !== "") {
+    if (!historyUnavailable) {
+      const guardResult = guard({
+        proposal: opts.proposal,
+        cwd,
+        ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+      });
+      matches = guardResult.matches.map(renderGuardMatch);
+      confidence = "experimental";
+    } else {
+      confidence = "timed-out";
+    }
+  }
+  const cacheKey = buildCacheKey(head, path2, opts.proposal);
+  return {
+    active_decisions: activeDecisions,
+    verification_gaps: gaps,
+    possible_revival_matches: matches,
+    guard_confidence: confidence,
+    cache_key: cacheKey
+  };
+};
+
 // src/mcp/server.ts
 var SERVER_NAME = "commitlore";
 var FALLBACK_VERSION = "0.0.0";
@@ -26645,6 +26732,7 @@ var KEYS_BY_KIND = {
 var QUERY_TOOL = "commitlore_query";
 var STALE_TOOL = "commitlore_stale";
 var GUARD_TOOL = "commitlore_guard";
+var BEFORE_CHANGE_TOOL = "commitlore_before_change";
 var CONTEXT_URI_PREFIX = "commitlore://context/";
 var CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
 var errorMessage4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
@@ -26747,6 +26835,26 @@ var TOOLS = [
       additionalProperties: false
     },
     annotations: { ...READS_ONLY, title: "Guard a proposal against ruled-out alternatives" }
+  },
+  {
+    name: BEFORE_CHANGE_TOOL,
+    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. An empty `matched` array means the check ran and found nothing \u2014 it is a verdict, not an absence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "repository-relative path whose Ruled-out records to check against"
+        },
+        proposal: {
+          type: "string",
+          description: "the proposed approach, in the words it would be carried out in; omit for context only (no guard run)"
+        }
+      },
+      required: ["path"],
+      additionalProperties: false
+    },
+    annotations: { ...READS_ONLY, title: "Context and guard for a path before editing it" }
   }
 ];
 var stringArg = (args, name) => {
@@ -26802,6 +26910,17 @@ var createServer = (opts = {}) => {
         incomplete: result.incomplete,
         matched: result.matches.map(renderGuardMatch)
       });
+    },
+    [BEFORE_CHANGE_TOOL]: (args) => {
+      const path2 = pathArg(root, args);
+      const proposal = stringArg(args, "proposal");
+      return asText(
+        beforeChange({
+          path: path2 === "" ? "." : path2,
+          ...proposal === void 0 ? {} : { proposal },
+          cwd: root
+        })
+      );
     }
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));

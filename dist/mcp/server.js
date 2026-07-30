@@ -48,6 +48,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { toJson, withholdBlocked } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
+import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 export const SERVER_NAME = 'commitlore';
@@ -66,6 +67,7 @@ const KEYS_BY_KIND = {
 export const QUERY_TOOL = 'commitlore_query';
 export const STALE_TOOL = 'commitlore_stale';
 export const GUARD_TOOL = 'commitlore_guard';
+export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
  * expansion (`{+path}`) so a client fills it with a real path rather than one
@@ -228,6 +230,29 @@ const TOOLS = [
         },
         annotations: { ...READS_ONLY, title: 'Guard a proposal against ruled-out alternatives' },
     },
+    {
+        name: BEFORE_CHANGE_TOOL,
+        description: 'Check a proposal against the Ruled-out records for a path before acting on it. ' +
+            'Returns every record whose alternative matches, with the reason it was rejected. ' +
+            'An empty `matched` array means the check ran and found nothing — it is a verdict, not an absence.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                path: {
+                    type: 'string',
+                    description: 'repository-relative path whose Ruled-out records to check against',
+                },
+                proposal: {
+                    type: 'string',
+                    description: 'the proposed approach, in the words it would be carried out in; ' +
+                        'omit for context only (no guard run)',
+                },
+            },
+            required: ['path'],
+            additionalProperties: false,
+        },
+        annotations: { ...READS_ONLY, title: 'Context and guard for a path before editing it' },
+    },
 ];
 const stringArg = (args, name) => {
     const value = args[name];
@@ -299,6 +324,15 @@ export const createServer = (opts = {}) => {
                 incomplete: result.incomplete,
                 matched: result.matches.map(renderGuardMatch),
             });
+        },
+        [BEFORE_CHANGE_TOOL]: (args) => {
+            const path = pathArg(root, args);
+            const proposal = stringArg(args, 'proposal');
+            return asText(beforeChange({
+                path: path === '' ? '.' : path,
+                ...(proposal === undefined ? {} : { proposal }),
+                cwd: root,
+            }));
         },
     };
     server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
