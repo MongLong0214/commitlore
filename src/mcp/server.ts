@@ -60,7 +60,11 @@ import {
 
 import { toJson, withholdBlocked, type JsonOutput } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
+import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
+import { prepareCaptureContext } from '../core/capture-prepare.js';
+import { verifyCaptureRecords } from '../core/capture-verify.js';
+import { stageCaptureRecord } from '../core/capture-stage.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 
 export const SERVER_NAME = 'commitlore';
@@ -86,6 +90,10 @@ const KEYS_BY_KIND: Record<QueryKind, readonly string[] | undefined> = {
 export const QUERY_TOOL = 'commitlore_query';
 export const STALE_TOOL = 'commitlore_stale';
 export const GUARD_TOOL = 'commitlore_guard';
+export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
+export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
+export const VERIFY_CAPTURE_TOOL = 'commitlore_verify_capture';
+export const STAGE_CAPTURE_TOOL = 'commitlore_stage_capture';
 
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
@@ -252,8 +260,8 @@ const TOOLS: readonly Tool[] = [
     description:
       'Check a proposal against the Ruled-out records for a path before acting on it. ' +
       'Returns every record whose alternative matches, with the reason it was rejected. ' +
-      'An empty `matched` array means the check ran and found nothing — it is a verdict, ' +
-      'not an absence.',
+      'Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. ' +
+      'An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -270,6 +278,116 @@ const TOOLS: readonly Tool[] = [
       additionalProperties: false,
     },
     annotations: { ...READS_ONLY, title: 'Guard a proposal against ruled-out alternatives' },
+  },
+  {
+    name: BEFORE_CHANGE_TOOL,
+    description:
+      'Check a proposal against the Ruled-out records for a path before acting on it. ' +
+      'Returns every record whose alternative matches, with the reason it was rejected. ' +
+      'An empty `matched` array means the check ran and found nothing — it is a verdict, not an absence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description:
+            'repository-relative path whose Ruled-out records to check against',
+        },
+        proposal: {
+          type: 'string',
+          description:
+            'the proposed approach, in the words it would be carried out in; ' +
+            'omit for context only (no guard run)',
+        },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+    annotations: { ...READS_ONLY, title: 'Context and guard for a path before editing it' },
+  },
+  {
+    name: PREPARE_CAPTURE_TOOL,
+    description:
+      'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, ' +
+      'policy hash), generates the prompt contract for the agent to use, and persists a ' +
+      'phase:"prepared" pending transaction. Returns the nonce needed for verify and stage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transcript: {
+          type: 'string',
+          description: 'the session transcript to compute source hashes from',
+        },
+      },
+      required: ['transcript'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: 'Prepare a capture transaction',
+    },
+  },
+  {
+    name: VERIFY_CAPTURE_TOOL,
+    description:
+      'Verify a capture draft against the transcript and diff that were hashed at prepare time. ' +
+      'Evidence citations are checked mechanically (verbatim match); fabricated quotes are discarded. ' +
+      'Stores the verified result in the pending transaction for stage to consume.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nonce: {
+          type: 'string',
+          description: 'the 32-character lowercase hex nonce returned by prepare_capture',
+        },
+        draft: {
+          type: 'string',
+          description: 'JSON-serialised array of DraftRecord objects produced by the agent',
+        },
+        transcript: {
+          type: 'string',
+          description: 'the session transcript (same content hashed at prepare time)',
+        },
+        diff: {
+          type: 'string',
+          description: 'the staged diff (same content hashed at prepare time)',
+        },
+      },
+      required: ['nonce', 'draft', 'transcript', 'diff'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: 'Verify a capture draft',
+    },
+  },
+  {
+    name: STAGE_CAPTURE_TOOL,
+    description:
+      'Stage a verified capture transaction: advances the pending record from verified to staged, ' +
+      'stamps expires_at (staged_at + 5 minutes), and makes it eligible for the prepare-commit-msg hook. ' +
+      'Accepts only a nonce; all bindings are server-owned and computed from stored state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nonce: {
+          type: 'string',
+          description: 'the 32-character lowercase hex nonce returned by prepare_capture',
+        },
+      },
+      required: ['nonce'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: 'Stage a verified capture transaction',
+    },
   },
 ];
 
@@ -359,6 +477,77 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         incomplete: result.incomplete,
         matched: result.matches.map(renderGuardMatch),
       });
+    },
+    [BEFORE_CHANGE_TOOL]: (args) => {
+      const path = pathArg(root, args);
+      const proposal = stringArg(args, 'proposal');
+      return asText(
+        beforeChange({
+          path: path === '' ? '.' : path,
+          ...(proposal === undefined ? {} : { proposal }),
+          cwd: root,
+        }),
+      );
+    },
+    [PREPARE_CAPTURE_TOOL]: (args) => {
+      const transcript = requiredString(args, 'transcript');
+      const result = prepareCaptureContext({ cwd: root, transcript });
+      return asText({
+        nonce: result.nonce,
+        base_head: result.base_head,
+        staged_diff_hash: result.staged_diff_hash,
+        staged_tree_oid: result.staged_tree_oid,
+        policy_identity_hash: result.policy_identity_hash,
+        source_hashes: result.source_hashes,
+        prompt: result.prompt,
+      });
+    },
+    [VERIFY_CAPTURE_TOOL]: (args) => {
+      const nonce = requiredString(args, 'nonce');
+      // Nonce validation at the boundary: lowercase hex, exactly 32 chars
+      if (!/^[0-9a-f]{32}$/.test(nonce)) {
+        throw new Error('nonce must be exactly 32 lowercase hex characters');
+      }
+      const draftRaw = requiredString(args, 'draft');
+      const transcript = requiredString(args, 'transcript');
+      const diff = stringArg(args, 'diff') ?? '';
+
+      // Parse draft JSON — malformed input is a caller error
+      let draft: unknown[];
+      try {
+        const parsed = JSON.parse(draftRaw);
+        if (!Array.isArray(parsed)) throw new Error('draft must be a JSON array');
+        draft = parsed;
+      } catch (e) {
+        throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      const result = verifyCaptureRecords({
+        nonce,
+        draft: draft as import('../core/harvest.js').DraftRecord[],
+        transcript,
+        diff,
+        cwd: root,
+      });
+      return asText({
+        validation_result: result.validation_result,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        incomplete: result.incomplete,
+        overlap_check: result.overlap_check,
+      });
+    },
+    [STAGE_CAPTURE_TOOL]: (args) => {
+      const nonce = requiredString(args, 'nonce');
+      // Nonce validation at the boundary: lowercase hex, exactly 32 chars
+      if (!/^[0-9a-f]{32}$/.test(nonce)) {
+        throw new Error('nonce must be exactly 32 lowercase hex characters');
+      }
+      const result = stageCaptureRecord({ nonce, cwd: root });
+      if (result === null) {
+        return asText({ staged: false, reason: 'nothing to stage (empty/incomplete verification or wrong phase)' });
+      }
+      return asText({ staged: true, nonce: result });
     },
   };
 

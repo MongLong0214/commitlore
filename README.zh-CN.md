@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：Git 记住改了什么，CommitLore 记住为什么改。新代理也能看到被排除的方案及其理由。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：编程代理不得复活仓库已经推翻的决策。">
 </p>
 
 <p align="center">
@@ -14,17 +14,52 @@
 
 # CommitLore
 
-## Git 记住改了什么。CommitLore 记住为什么改。
+## 编程代理不得复活仓库已经推翻的决策。
 
-**面向 AI 辅助代码库的 Git-native decision memory。** CommitLore 将代码改动背后的限制、排除的方案、警告和验证空白直接记录在 Git 中。因此开发者或编程代理在改动之前，可以先理解为什么代码会是这样。
+**面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
 
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
 ```
+
+
+## 看它实际运行
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
+
+```bash
+commitlore context install.sh
+```
+
+输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>复现完全相同的 PreToolUse hook path</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
 
 ## 检索能找到记录。路径范围会排除已经推翻的决策。
 
@@ -68,44 +103,14 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
-sh install.sh v0.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
+sh install.sh v0.4.0
 
 # 或自行验证 release binary 后再解压。
-version=0.2.0; target=aarch64-apple-darwin
+version=0.4.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## 看它实际运行
-
-**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
-
-```bash
-commitlore context install.sh
-```
-
-输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>复现完全相同的 PreToolUse hook path</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
@@ -284,6 +289,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - 不支持 Alpine 与其他 musl Linux host：[#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
+- Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。
 
 ## 贡献
 

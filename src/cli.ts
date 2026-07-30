@@ -15,6 +15,8 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 
 import { register as registerBackfill } from './commands/backfill.js';
+import { register as registerCapture } from './commands/capture.js';
+import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
 import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
@@ -29,6 +31,7 @@ import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
 import { register as registerValidate } from './commands/validate.js';
+import { register as registerPostCommit } from './hooks/post-commit.js';
 import { register as registerPrepareCommitMsg } from './hooks/prepare-commit-msg.js';
 import { labelRecordBlocks, serializeTrailers, type LabeledBlock } from './core/trailers.js';
 
@@ -145,9 +148,12 @@ registerHarvest(program);
 registerHarvestVerify(program);
 registerSquashPreserve(program);
 registerPrepareCommitMsg(program);
+registerPostCommit(program);
 registerGuard(program);
 registerInject(program);
 registerBackfill(program);
+registerCapture(program);
+registerDemo(program);
 registerMcp(program);
 
 /**

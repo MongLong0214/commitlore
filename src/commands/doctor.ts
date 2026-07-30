@@ -446,13 +446,20 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
     }
     if (run.status !== 0) {
       const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
-      return check(
-        id,
-        title,
-        'fail',
-        `the hook fails when git's PATH carries no node: ${said || `exit ${String(run.status)}`}`,
-        fix,
-      );
+      const nodeMissing =
+        run.status === 127 ||
+        /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
+      const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+
+      let detail: string;
+      if (nodeMissing) {
+        detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
+      } else if (nodeThrew) {
+        detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
+      } else {
+        detail = `the hook exited ${String(run.status)} under the restricted PATH — cause unclear: ${said || 'no output'}`;
+      }
+      return check(id, title, 'fail', detail, fix);
     }
     return check(id, title, 'ok', 'the hook runs and validates without node on PATH');
   } catch (error) {
@@ -604,7 +611,23 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
     },
   });
 
-  return evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
+  const result = evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
+
+  // An unresolvable executable is an incomplete environment — the hook will
+  // not fire until the user installs it — but it does not make records
+  // incorrect or prevent the tool from working. Analogous to "no remote" in
+  // checkRefspec: a setup that has not reached that integration yet, not a
+  // misconfiguration. `evaluateInjectRun` reports `fail` (which standalone
+  // `doctor` surfaces for actionability), but `needsAttention` is cleared so
+  // `init`'s final doctor step does not treat a missing system binary as a
+  // blocking finding that the user must fix before the repository is usable
+  // (#192, #221).
+  if (result.status === 'fail' && run.status === null && run.error !== undefined &&
+      'code' in run.error && run.error.code === 'ENOENT') {
+    return { ...result, needsAttention: false };
+  }
+
+  return result;
 };
 
 const checkIndex = (opts: DoctorOptions): DoctorCheck => {

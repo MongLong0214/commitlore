@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git は何が変わったかを記憶し、CommitLore はなぜ変わったかを記憶する。新しいエージェントも除外された代案と理由を読む。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: コーディングエージェントはリポジトリがすでに覆した決定を復活させてはならない。">
 </p>
 
 <p align="center">
@@ -14,17 +14,52 @@
 
 # CommitLore
 
-## Git は何が変わったかを記憶する。CommitLore はなぜ変わったかを記憶する。
+## コーディングエージェントはリポジトリがすでに覆した決定を復活させてはならない。
 
-**AI 支援コードベースのための Git-native decision memory。** CommitLore は、コード変更の背後にある制約、除外した代案、警告、検証の空白を Git に直接記録します。開発者やコーディングエージェントは、何を変える前にもなぜこうなっているかを理解できます。
+**AI 支援コードベースのための Git-native 意思決定権威。** CommitLore は、どの決定がまだ有効でどの決定が覆されたかを Git 内で直接追跡します。コーディングエージェントがパスを問い合わせると、現在有効な決定だけが返されます。
 
 ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
 
 一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
 ```
+
+
+## 実際に動かす
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
+
+```bash
+commitlore context install.sh
+```
+
+出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>正確な PreToolUse hook path を再現する</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
 
 ## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
 
@@ -68,44 +103,14 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
-sh install.sh v0.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
+sh install.sh v0.4.0
 
 # または release binary を自分で検証してから展開します。
-version=0.2.0; target=aarch64-apple-darwin
+version=0.4.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## 実際に動かす
-
-**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
-
-```bash
-commitlore context install.sh
-```
-
-出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>正確な PreToolUse hook path を再現する</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
@@ -284,6 +289,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Alpine および他の musl Linux host は未対応です: [#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
+- Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。
 
 ## コントリビュート
 

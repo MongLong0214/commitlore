@@ -86,13 +86,13 @@ const NO_REASON = 'no reason recorded — this Ruled-out: is missing the require
 export const formatMatches = (matches) => {
     if (matches.length === 0)
         return '';
-    const header = `commitlore guard: ${matches.length} ruled-out ` +
-        `${matches.length === 1 ? 'alternative matches' : 'alternatives match'} this proposal`;
+    const header = `commitlore guard: ${matches.length} possible ` +
+        `${matches.length === 1 ? 'match' : 'matches'} against ruled-out alternatives ` +
+        `(experimental — precision 44.8%, recall 22.0%)`;
     const blocks = matches.map((match) => {
         const rendered = renderGuardMatch(match);
         const recorded = `  recorded:  ${rendered.recordId ?? '-'} in ` +
-            `${rendered.trust === 'blocked' ? rendered.sha : shortSha(rendered.sha)} ` +
-            `(score ${rendered.score.toFixed(2)}; ${rendered.signals.join(', ')})`;
+            `${rendered.trust === 'blocked' ? rendered.sha : shortSha(rendered.sha)}`;
         switch (rendered.trust) {
             case 'blocked':
                 return [`  withheld: ${rendered.withheld}`, recorded].join('\n');
@@ -214,7 +214,7 @@ const runAsHook = async (options) => {
 export const register = (program) => {
     program
         .command('guard')
-        .description('flag a proposal that revives an alternative already ruled out')
+        .description('[experimental advisory] flag a proposal that may revive a ruled-out alternative — a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)')
         .argument('[paths...]', 'limit the check to records touching these paths')
         // Not `requiredOption`: under `--hook-input` the proposal arrives on stdin
         // as part of the payload, and commander rejects the invocation before the

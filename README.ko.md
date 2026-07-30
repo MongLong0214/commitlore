@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git은 무엇이 바뀌었는지 기억하고, CommitLore는 왜 바뀌었는지 기억한다. 새 에이전트도 제외한 대안과 그 이유를 본다.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.">
 </p>
 
 <p align="center">
@@ -14,17 +14,52 @@
 
 # CommitLore
 
-## Git은 무엇이 바뀌었는지 기억합니다. CommitLore는 왜 바뀌었는지 기억합니다.
+## 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.
 
-**AI 보조 코드베이스를 위한 Git-native decision memory.** CommitLore는 코드 변경 뒤의 한계, 제외한 대안, 경고, 검증 공백을 Git에 직접 기록한다. 그래서 개발자와 코딩 에이전트는 무엇을 바꾸기 전에 왜 이렇게 되었는지 이해할 수 있다.
+**AI 보조 코드베이스를 위한 Git-native 결정 권위.** CommitLore는 어떤 결정이 아직 유효하고 어떤 결정이 뒤집혔는지를 Git에서 직접 추적한다. 코딩 에이전트가 경로를 조회하면 현재 유효한 결정만 보인다.
 
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
 ```
+
+
+## 실제로 보기
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 바꾸기 전에 path를 조회한다.
+
+```bash
+commitlore context install.sh
+```
+
+출력에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 record와 그 이유가 들어 있다. hook은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>정확한 PreToolUse hook path 재현하기</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
 
 ## 검색은 레코드를 찾을 수 있습니다. 경로 범위는 뒤집힌 결정을 걸러냅니다.
 
@@ -68,44 +103,14 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
-sh install.sh v0.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
+sh install.sh v0.4.0
 
 # 또는 릴리스 바이너리를 직접 검증한 뒤 압축을 푼다.
-version=0.2.0; target=aarch64-apple-darwin
+version=0.4.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## 실제로 보기
-
-**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 바꾸기 전에 path를 조회한다.
-
-```bash
-commitlore context install.sh
-```
-
-출력에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 record와 그 이유가 들어 있다. hook은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>정확한 PreToolUse hook path 재현하기</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
@@ -284,6 +289,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Alpine 및 다른 musl Linux host는 지원하지 않는다: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
+- Guard(ruled-out alternative matching)는 실험적 참고 자료이다: precision 44.8%(95% Wilson CI 32.7%–57.5%), recall 22.0%, 417-decision corpus 기준([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). 빈 guard 결과는 제안이 모든 ruled-out alternative를 피했다는 보장이 아니다 — recall 22%에서 누락이 일반적이다.
 
 ## 기여하기
 

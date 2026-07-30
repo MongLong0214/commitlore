@@ -89,6 +89,17 @@ export declare const EXAMPLE_DRAFT: {
     records: DraftRecord[];
 };
 /**
+ * Builds the static prompt contract — everything an agent session needs to know
+ * about CommitLore's rules, vocabulary, and expected output format, without any
+ * session-specific transcript or diff content.
+ *
+ * This is what `--prompt-only` prints when invoked with no other flags: the
+ * contract a session reads *before* it has produced a transcript or diff.
+ * The TRANSCRIPT and DIFF sections state explicitly that they will be appended
+ * separately at harvest time — no empty holes, no template variables.
+ */
+export declare const buildHarvestContract: () => string;
+/**
  * Builds the prompt contract handed to the user's agent session. Deterministic
  * by construction — no clock, no randomness, no model — so the same transcript
  * and diff always produce the same bytes.

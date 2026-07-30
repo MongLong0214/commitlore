@@ -20,7 +20,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execGit } from '../core/git.js';
-import { buildHarvestPrompt, parseDraft } from '../core/harvest.js';
+import { buildHarvestContract, buildHarvestPrompt, parseDraft } from '../core/harvest.js';
 const PREFIX = 'commitlore:';
 /** The only failure mode: a usage error, never a finding (SPEC §10). */
 const USAGE_EXIT_CODE = 2;
@@ -75,7 +75,9 @@ const runDraftMode = (draft, out) => {
 };
 const runPromptMode = (options) => {
     if (options.transcript === undefined) {
-        return skip('no --transcript, and there is no session to read one from');
+        // No transcript: emit the static contract (rules + vocabulary + output format).
+        // The contract is what a session needs *before* it has produced a transcript.
+        return emit(buildHarvestContract(), options.out);
     }
     const transcript = readTextFile(options.transcript, `--transcript ${JSON.stringify(options.transcript)}`);
     if (transcript.trim() === '')

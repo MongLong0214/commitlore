@@ -465,14 +465,47 @@ describe('action.yml', () => {
     const demo = load(text) as {
       on: unknown;
       permissions: Record<string, string>;
-      jobs: Record<string, { steps: ActionStep[] }>;
+      jobs: Record<string, { steps: ActionStep[]; if?: string }>;
     };
 
     expect(demo.permissions).toEqual({ contents: 'read', 'pull-requests': 'write' });
-    expect(Object.keys(demo.jobs)).toHaveLength(1);
-    const steps = Object.values(demo.jobs)[0]?.steps ?? [];
-    expect(steps.some((step) => step.uses === './action/lint')).toBe(true);
+    expect(Object.keys(demo.jobs)).toHaveLength(2);
+
+    // The PR lint job still uses the action and only runs for pull requests.
+    const lintJob = demo.jobs['lint'];
+    expect(lintJob).toBeDefined();
+    expect(lintJob!.if).toContain('pull_request');
+    const lintSteps = lintJob!.steps ?? [];
+    expect(lintSteps.some((step) => step.uses === './action/lint')).toBe(true);
+
     expect(text).toContain('fetch-depth: 0');
+  });
+
+  // #186: a push to dev must lint the full promotion range (origin/main..HEAD),
+  // not only the PR's own commits. This is what catches duplicate Record-Ids
+  // that span two PRs — the narrow PR range hides them.
+  it('lints the full promotion range on push to dev (#186)', () => {
+    const text = readFileSync(DEMO_WORKFLOW, 'utf8');
+    const demo = load(text) as {
+      on: { pull_request: unknown; push?: { branches?: string[] } };
+      jobs: Record<string, { steps: ActionStep[]; if?: string }>;
+    };
+
+    // The push trigger must include dev.
+    expect(demo.on.push).toBeDefined();
+    expect(demo.on.push!.branches).toContain('dev');
+
+    // The promotion-range-lint job runs only on push.
+    const rangeJob = demo.jobs['promotion-range-lint'];
+    expect(rangeJob).toBeDefined();
+    expect(rangeJob!.if).toContain('push');
+
+    // It validates origin/main..HEAD — the full range a promotion PR would see.
+    const validateStep = rangeJob!.steps.find(
+      (step) => step.run && step.run.includes('origin/main..HEAD'),
+    );
+    expect(validateStep, 'must have a step that validates origin/main..HEAD').toBeDefined();
+    expect(validateStep!.run).toContain('validate');
   });
 });
 

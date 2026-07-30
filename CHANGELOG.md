@@ -4,6 +4,100 @@
 
 Nothing yet.
 
+## 0.4.0 — 2026-07-31
+
+The release that makes recording a decision something the tool does, rather than
+something you have to remember to ask for.
+
+### Upgrade reasons
+
+- **`commitlore capture` records a decision without you typing trailer syntax.**
+  It runs prepare, verify and stage as one command: it snapshots the HEAD, the
+  staged diff and the evidence sources, checks a draft's quotes against those
+  sources mechanically, and stages at most one record for the commit being
+  written. A verification failure produces no record and does not fail the
+  command, because most commits should carry nothing (#198, #193–#197).
+- **A record can no longer attach to the wrong commit.** The `prepare-commit-msg`
+  hook applies a staged record only when the HEAD it was prepared against is
+  unchanged, the staged diff still hashes the same, the record is staged,
+  unexpired, unconsumed, and the policy identity is unchanged. If any of those
+  fails it applies nothing and lets the commit through (#197). A `post-commit`
+  finaliser then consumes the record exactly once, bound to the commit that
+  actually resulted (#213).
+- **`commitlore demo` shows the product in a temporary repository.** No network,
+  no model, nothing written to your repository, and it removes what it created
+  even when it fails (#202, #203).
+- **`commitlore init` reports readiness instead of internal step names.** A clean
+  run is short; a step it could not complete is still named rather than absorbed
+  into a success message. The previous step-by-step output moved to
+  `--verbose`, and `--json` is unchanged (#204, #205).
+- **`harvest --prompt-only` prints the contract with no other input.** It
+  previously refused unless a transcript and a diff were supplied, which
+  inverted the order of use: the contract is what a session needs *before* it
+  has produced a transcript (#229).
+
+### Agents
+
+- Three write-side MCP tools — `commitlore_prepare_capture`,
+  `commitlore_verify_capture`, `commitlore_stage_capture` — give an agent the
+  same capture contract the CLI uses. They write only inside
+  `.git/commitlore/pending/`, never Git history; every binding a staged record
+  commits to is computed server-side and never accepted from the caller; and a
+  caller-supplied nonce is validated before it reaches any path resolution
+  (#199, #200, #201).
+- There is deliberately no `commitlore_write_record` tool. A draft cannot reach
+  Git without passing verification and the pending transaction.
+- `commitlore_before_change` answers with path-scoped context and, when given a
+  proposal, an experimental guard result in the same response. The two are kept
+  separate structurally: `guard_confidence` describes
+  `possible_revival_matches` and nothing else (#219).
+
+### Honesty about guard
+
+- **Guard is classified as an experimental advisory.** Its measured position is
+  precision 44.8% (95% Wilson 32.7%–57.5%) and recall 22.0% against a
+  417-decision corpus, and that now appears wherever guard is exposed: the CLI
+  help and output, the MCP tool description, and the README's known limitations
+  (#208, #209, #210).
+- The MCP description no longer tells a caller that an empty result "is a
+  verdict, not an absence". At 22% recall an empty result is a miss in the
+  common case, and saying otherwise was the most misleading sentence on the
+  product surface.
+- Guard output calls a hit a **possible match** and no longer prints a score in
+  default text output. `--json` still carries the score and the signal
+  breakdown for anything that parses it.
+
+### Fixed
+
+- `doctor` no longer asserts that a hook failed "when git's PATH carries no
+  node" when the hook actually ran and threw. It reports what the probe can
+  determine, including that it cannot determine the cause (#192).
+- `init` no longer exits 1 in a repository where the configured PreToolUse
+  executable is not resolvable from `PATH`. `doctor` still reports it; an
+  incomplete environment is not a misconfiguration (#192, #221).
+- The record lint now checks the full `origin/main..HEAD` range on pushes to
+  `dev`, not only a pull request's own commits. A known duplicate identity had
+  sat unresolved for a day because the two colliding commits never appeared in
+  one narrow range (#186).
+- `rationale_density` names its denominator. It now reports both populations,
+  labelled: all commits, and authored non-merge commits. At the time of writing
+  the gap is 26.3 points (71.8% against 98.1%), which is merge volume rather
+  than a change in discipline (#183).
+- `commitlore capture gc` is reachable. The parent command's required
+  `--transcript` option was being enforced on the subcommand, so it could not
+  run at all, and `--json` on it was silently ignored.
+
+### Known limitations, unchanged by this release
+
+- Windows and musl Linux hosts remain unsupported.
+- Guard's measured precision and recall are what they are; nothing in this
+  release improves them, and ADR-0019 records that the current signals cannot
+  separate a genuine revival from a coincidental textual match.
+- Nothing here measures whether an agent behaves differently for having received
+  a decision. The fresh-agent recovery protocol is registered and unrun.
+- Capture's write-side cost is still reported as `not instrumented` rather than
+  as a number.
+
 ## 0.3.0 — 2026-07-29
 
 ### Upgrade reasons

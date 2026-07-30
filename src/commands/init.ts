@@ -37,6 +37,7 @@ import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
+import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -53,7 +54,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult];
 }
 
 interface IndexStepDetail {
@@ -100,7 +101,8 @@ const runDoctorStep = (opts: InitOptions): InitStep => {
 const runHooksStep = (opts: InitOptions): InitStep => {
   const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
   const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
-  const lines = [commitMsg, prepareCommitMsg].flatMap((result) =>
+  const postCommit = installPostCommitHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) =>
     result.code === 0
       ? result.stdout.trimEnd().split('\n')
       : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'],
@@ -108,9 +110,9 @@ const runHooksStep = (opts: InitOptions): InitStep => {
   return {
     step: 'hooks',
     title: 'hooks install',
-    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
+    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
     lines,
-    detail: [commitMsg, prepareCommitMsg],
+    detail: [commitMsg, prepareCommitMsg, postCommit],
   };
 };
 
@@ -212,32 +214,88 @@ export const runInit = (opts: InitOptions = {}): InitReport => {
   return { steps, exitCode: exitCode as 0 | 1 | 2 };
 };
 
-const STEP_HEADING: Record<StepName, string> = {
+/** User-facing step labels — no internal command names. */
+const STEP_LABEL: Record<StepName, string> = {
+  hooks: 'Hooks',
+  index: 'Index',
+  'claude-hook': 'Agent integration',
+  doctor: 'Final check',
+};
+
+/** Verbose format headings (preserved for --verbose, T-1013). */
+export const STEP_HEADING: Record<StepName, string> = {
   hooks: '[1/4] hooks install',
   index: '[2/4] index --rebuild',
   'claude-hook': '[3/4] claude hook install',
   doctor: '[4/4] doctor --fix (final check)',
 };
 
-const INDENT = '        ';
+export const VERBOSE_INDENT = '        ';
 
+/**
+ * Result-oriented default output: a concise summary telling the user what is
+ * ready and what is not. Internal command names are absent. Failures and
+ * warnings are always named — never folded into a cheerful summary (#63, #67).
+ */
 export const formatInitReport = (report: InitReport): string => {
-  const blocks = report.steps.map((step) => {
-    const body = step.lines.map((line) => `${INDENT}${line}`).join('\n');
-    return `${STEP_HEADING[step.step]}\n${body}`;
-  });
+  const failed = report.steps.filter((step) => step.code === 2);
+  const needsAttention = report.steps.filter((step) => step.code === 1);
 
-  const failed = report.steps.filter((step) => step.code === 2).map((step) => step.title);
-  const needsAttention = report.steps.filter((step) => step.code === 1).map((step) => step.title);
+  const lines: string[] = [];
 
-  const summary =
-    failed.length > 0
-      ? `init: ${failed.length}/4 step(s) could not run — ${failed.join(', ')}`
-      : needsAttention.length > 0
-        ? `init: 4/4 steps ran, ${needsAttention.length} need(s) attention — ${needsAttention.join(', ')} (see detail above)`
-        : 'init: 4/4 steps completed cleanly';
+  if (failed.length === 0 && needsAttention.length === 0) {
+    // All clean — one summary line per step + a final ready line.
+    for (const step of report.steps) {
+      lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+    }
+    lines.push('');
+    lines.push('init: ready');
+  } else {
+    // At least one step needs attention or could not run.
+    for (const step of report.steps) {
+      if (step.code === 0) {
+        lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+      } else if (step.code === 2) {
+        lines.push(`  ✗ ${STEP_LABEL[step.step]} — ${step.title} could not run`);
+        for (const detail of step.lines) {
+          lines.push(`    ${detail}`);
+        }
+      } else {
+        lines.push(`  ! ${STEP_LABEL[step.step]} — needs attention`);
+        for (const detail of step.lines) {
+          lines.push(`    ${detail}`);
+        }
+      }
+    }
+    lines.push('');
+    if (failed.length > 0) {
+      lines.push(`init: ${failed.length}/4 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
+    } else {
+      lines.push(
+        `init: ${needsAttention.length} step(s) need(s) attention — ${needsAttention.map((s) => s.title).join(', ')}`,
+      );
+    }
+  }
 
-  return `${[...blocks, summary].join('\n\n')}\n`;
+  return lines.join('\n') + '\n';
+};
+
+/**
+ * Verbose output: step-by-step `[1/4]`…`[4/4]` format with indented detail
+ * lines. Preserves the pre-T-1012 output style for users who want the full
+ * view. Failures and warnings are always visible — never folded (#63, #67).
+ */
+export const formatInitReportVerbose = (report: InitReport): string => {
+  const lines: string[] = [];
+
+  for (const step of report.steps) {
+    lines.push(STEP_HEADING[step.step]);
+    for (const detail of step.lines) {
+      lines.push(`${VERBOSE_INDENT}${detail}`);
+    }
+  }
+
+  return lines.join('\n') + '\n';
 };
 
 export const register = (program: Command): void => {
@@ -245,6 +303,7 @@ export const register = (program: Command): void => {
     .command('init')
     .description('one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix')
     .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
+    .option('--verbose', 'show step-by-step detail output instead of the result summary')
     .option('--json', 'emit the report as JSON')
     .addHelpText(
       'after',
@@ -259,11 +318,17 @@ export const register = (program: Command): void => {
         'fix itself (an actionable warning or failure — read the detail above), 2 hooks install, index rebuild, or claude ' +
         'hook install could not run at all (SPEC §10).',
     )
-    .action((options: { force?: boolean; json?: boolean }) => {
+    .action((options: { force?: boolean; json?: boolean; verbose?: boolean }) => {
       const report = runInit(options.force === undefined ? {} : { force: options.force });
-      process.stdout.write(
-        options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatInitReport(report),
-      );
+      let output: string;
+      if (options.json === true) {
+        output = `${JSON.stringify(report, null, 2)}\n`;
+      } else if (options.verbose === true) {
+        output = formatInitReportVerbose(report);
+      } else {
+        output = formatInitReport(report);
+      }
+      process.stdout.write(output);
       process.exitCode = report.exitCode;
     });
 };

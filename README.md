@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: Git remembers what changed. CommitLore remembers why. A fresh agent sees a rejected alternative and its reason.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: a coding agent must not revive a decision the repository already reversed.">
 </p>
 
 <p align="center">
@@ -14,17 +14,52 @@
 
 # CommitLore
 
-## Git remembers what changed. CommitLore remembers why.
+## A coding agent must not revive a decision the repository already reversed.
 
-**Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
+**Git-native decision authority for AI-assisted codebases.** CommitLore tracks which decisions are still in force and which have been reversed—directly in Git—so a coding agent sees only current decisions when it queries a path.
 
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
 ```
+
+
+## See it work
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
+
+```bash
+commitlore context install.sh
+```
+
+The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>Reproduce the exact PreToolUse hook path</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
 
 ## Retrieval can find records. Path scope keeps reversed decisions out.
 
@@ -68,44 +103,14 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
-sh install.sh v0.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
+sh install.sh v0.4.0
 
 # Or verify the release binary yourself before extracting it.
-version=0.2.0; target=aarch64-apple-darwin
+version=0.4.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## See it work
-
-**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
-
-```bash
-commitlore context install.sh
-```
-
-The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>Reproduce the exact PreToolUse hook path</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
@@ -284,6 +289,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Alpine and other musl Linux hosts are unsupported: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
+- Guard (ruled-out alternative matching) is an experimental advisory: precision 44.8% (95% Wilson CI 32.7%–57.5%), recall 22.0% on the 417-decision corpus ([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). An empty guard result does not guarantee a proposal avoids all ruled-out alternatives — at 22% recall, a miss is the common case.
 
 ## Contributing
 
