@@ -34,6 +34,7 @@ import { installHook } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex } from '../core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
+import { installPostCommitHook } from '../hooks/post-commit.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -62,15 +63,16 @@ const runDoctorStep = (opts) => {
 const runHooksStep = (opts) => {
     const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
     const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
-    const lines = [commitMsg, prepareCommitMsg].flatMap((result) => result.code === 0
+    const postCommit = installPostCommitHook(opts.cwd);
+    const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) => result.code === 0
         ? result.stdout.trimEnd().split('\n')
         : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic']);
     return {
         step: 'hooks',
         title: 'hooks install',
-        code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
+        code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
         lines,
-        detail: [commitMsg, prepareCommitMsg],
+        detail: [commitMsg, prepareCommitMsg, postCommit],
     };
 };
 const runIndexStep = (opts) => {
