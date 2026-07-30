@@ -13,6 +13,11 @@
 
 **Forbidden scope**: Release gate, `bench/fixtures/`, `README*`, any version string, `src/mcp/server.ts`, `src/hooks/prepare-commit-msg.ts`, `src/commands/`.
 
+**Trust boundary (CEO amendment)**: a nonce arriving from any caller is untrusted input. The
+store validates it against `^[0-9a-f]{32}$` — lowercase hex, exactly 32 characters — **before**
+it is used in any path resolution. A nonce failing that pattern is rejected without touching
+the filesystem, so no caller-supplied string can reach a path join.
+
 **RED test**: `test/pending.test.ts` — "createPending creates a phase-prepared JSON file under .git/commitlore/pending/ with all required fields". Must fail before the change because `src/core/pending.ts` does not exist and no `createPending` function is exported.
 
 **Minimum GREEN**: Export `createPending(opts): string` (returns nonce), `readPending(nonce): PendingRecord | null`, `storeVerification(nonce, result): boolean`, `stagePending(nonce): boolean`, `markApplied(nonce, recordHash): boolean`, and `consumePending(nonce, commitSha): boolean` from `src/core/pending.ts`. Every mutation is an atomic rename and enforces the monotonic phase transition from ADR-0021. `createPending` writes `phase:"prepared"` and source/state hashes. `readPending` returns `null` only when the file is absent; corrupt or unknown-version content raises a typed `PendingFormatError`. `storeVerification` is the only API that may write accepted records/evidence. `stagePending` accepts a nonce only. `markApplied` records `applied_at` and `applied_record_hash` for the canonical trailer block, not the editable subject/body. `consumePending` may set `consumed:true` and `consumed_by` only for an applied record.
@@ -184,7 +189,12 @@
 
 **RED test**: `test/capture-stage.test.ts` — "stageCaptureRecord writes a pending file with expiry and records". Must fail before the change because `src/core/capture-stage.ts` does not exist.
 
-**Minimum GREEN**: Export `stageCaptureRecord(opts: { nonce: string, cwd: string, expiryMinutes?: number }): string | null` that:
+**Minimum GREEN (CEO amendment)**: on success, stage stamps **both** `staged_at` and
+`expires_at = staged_at + 5 minutes`. `expires_at` is `null` for every record in `prepared` or
+`verified` phase, so a capture being verified slowly can never expire. `expiryMinutes?` overrides
+the 5-minute window only; it never changes the anchor, which is always stage success.
+
+Export `stageCaptureRecord(opts: { nonce: string, cwd: string, expiryMinutes?: number }): string | null` that:
 1. Re-reads the transaction by nonce and requires `phase:"verified"`.
 2. If stored `validation_result === "empty"` or `incomplete === true`, returns `null` (nothing to stage).
 3. If the stored accepted-record count exceeds `max_records_per_commit`, throws.
@@ -292,7 +302,11 @@ Default expiry: 5 minutes.
 
 **RED test**: `test/capture.test.ts` — "commitlore capture --transcript <f> --diff <f> --draft <f> produces a pending file". Must fail before the change because no `capture` command is registered in the CLI.
 
-**Minimum GREEN**: Register `commitlore capture` with options `--transcript <f>`, `--diff <f>`, `--draft <f>`, `--out <f>` (optional), `--json` (optional). The command:
+**Minimum GREEN (CEO amendment)**: the CLI passes **the nonce and nothing else** to stage. It
+never forwards a caller-supplied `base_head`, diff hash, policy hash or timestamp — every binding
+is recomputed server-side by the store, so the CLI cannot widen the trust boundary.
+
+Register `commitlore capture` with options `--transcript <f>`, `--diff <f>`, `--draft <f>`, `--out <f>` (optional), `--json` (optional). The command:
 1. Calls `prepareCaptureContext({ cwd })` (T-1002).
 2. If `--draft` is provided, calls `parseDraft` then `verifyCaptureRecords` (T-1003) with the transcript and diff.
 3. If `--draft` is not provided, prints the prompt contract to stdout (same as `harvest --prompt-only`) and exits 0.
@@ -446,7 +460,7 @@ constraint".
 **RED test**: `test/mcp-capture.test.ts` — "calling commitlore_stage_capture with a valid prepare result and verify result writes a pending file". Must fail before the change because the tool is not registered.
 
 **Minimum GREEN**: Add to `src/mcp/server.ts`:
-1. A tool declaration `commitlore_stage_capture` with `inputSchema` accepting only `{ nonce: string }` and annotations `{ readOnlyHint: false, destructiveHint: false, openWorldHint: false }`.
+1. A tool declaration `commitlore_stage_capture` with `inputSchema` accepting only `{ nonce: string }`, the nonce validated against `^[0-9a-f]{32}$` before any path resolution, and every binding it writes (`base_head`, `staged_diff_hash`, `policy_identity_hash`, `staged_at`, `expires_at`) computed **server-side** — never accepted from the caller and annotations `{ readOnlyHint: false, destructiveHint: false, openWorldHint: false }`.
 2. A handler that calls `stageCaptureRecord({ nonce, cwd: root })`, trusting only the verified result already stored in that transaction, and returns `{ staged: true, nonce }` or `{ staged: false, reason }`.
 
 The tool writes only to the nonce transaction under `.git/commitlore/pending/`. It never touches Git history.

@@ -6,7 +6,11 @@
 
 ---
 
-## T-1020 MCP guard tool description: disclose measured limits (S) — #208 · depends on ADR-0020, and merges after T-1009
+## T-1020 MCP guard tool description: disclose measured limits (S) — #208 · depends on ADR-0020
+
+> Merge ordering on `src/mcp/server.ts` is a file-contention constraint, not a prerequisite:
+> see the shared-file section in `docs/GATE-A-ACCEPTANCE.md`. This ticket is startable as soon
+> as ADR-0020 is accepted.
 
 **Merge sequencing**: this ticket also edits `src/mcp/server.ts`. It merges
 last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
@@ -89,7 +93,10 @@ last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
 
 ---
 
-## T-1021 README Known limitations: disclose guard precision and recall (S) — #209 · depends on ADR-0020, ordering with T-1014/T-1015
+## T-1021 README Known limitations: disclose guard precision and recall (S) — #209 · depends on ADR-0020
+
+> Ordering against T-1014 and T-1015 is file contention on the four README files, not a
+> prerequisite. This ticket is startable as soon as ADR-0020 is accepted.
 
 **Owns**
 
@@ -260,7 +267,11 @@ last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
 
 ---
 
-## T-1024 Unified `commitlore_before_change` MCP tool (M) — #219 · depends on T-1007, T-1008, T-1009, T-1020
+## T-1024 Unified `commitlore_before_change` MCP tool (M) — #219 · depends on T-1020
+
+> T-1007, T-1008 and T-1009 are `src/mcp/server.ts` merge-order constraints, not
+> prerequisites: this tool composes the existing context projection and guard, not the capture
+> pipeline.
 
 Ticketed to close acceptance row `P0-8`, which stays OPEN work until this ticket's acceptance
 criteria are met. The source review asks for one tool an agent has to remember
@@ -281,13 +292,18 @@ them.
 
 **Owns**: `src/core/before-change.ts` (new — composes the existing context projection and guard match; contains no new scoring logic of its own), `src/mcp/server.ts` (register one additional tool), `test/before-change.test.ts` (new).
 
-**Depends on**: T-1020 (#208) — guard's measured limits must already be stated on the MCP surface before a second tool exposes the same signal, or this ticket ships the overclaim ADR-0020 removes. Also T-1007 (#199), T-1008 (#200), T-1009 (#201) for `src/mcp/server.ts` merge ordering only: this ticket is last in that queue and adds nothing to the capture pipeline.
+**Depends on**: T-1020 (#208) only — guard's measured limits must already be stated on the MCP surface before a second tool exposes the same signal, or this ticket ships the overclaim ADR-0020 removes. T-1007 (#199), T-1008 (#200) and T-1009 (#201) are merge-order constraints on `src/mcp/server.ts`, not prerequisites.
 
 **Forbidden scope**: No new scoring, weighting or threshold logic — ADR-0019 closed re-weighting, and this ticket must not reopen it by the back door. Do not change `src/core/guard.ts`, the context projection's own output, `src/commands/guard.ts`, the release gate, `bench/fixtures/`, `README*`, or any version string. Do not make the tool blocking, and do not give it a write side.
 
 **RED test**: `test/before-change.test.ts` — "the response carries exactly `active_decisions`, `verification_gaps`, `possible_revival_matches`, `guard_confidence`, `cache_key`; `guard_confidence` is `\"experimental\"` when a proposal is supplied and `\"not-run\"` when none is; and the two context fields are byte-identical across both calls at one HEAD". It must fail before the change because `commitlore_before_change` is not registered and `src/core/before-change.ts` does not exist.
 
 **Minimum GREEN**: Export `beforeChange({ path, proposal? })` from `src/core/before-change.ts` returning `{ active_decisions, verification_gaps, possible_revival_matches, guard_confidence, cache_key }`. The five fields are exactly those named above; adding a sixth is out of scope.
+
+`verification_gaps` is a closed, ordered set derived from the checks this codebase already
+performs — not a new concept: **`history-unavailable`, `shallow-history`, `notes-unfetched`**,
+always emitted in that order. An empty array means all three were checked and none applied; it
+never means the checks were skipped.
 
 `guard_confidence` is an enum over that one field: `"not-run"` when no `proposal` was supplied, `"experimental"` when the guard ran, `"timed-out"` when it was cut short. `"not-run"` does not violate the context-only contract — it is the honest value of a field describing a list that is empty because nothing was asked, and it exists so that an empty `possible_revival_matches` is never readable as "checked and clear". The context fields are populated identically whether or not a proposal was supplied.
 
