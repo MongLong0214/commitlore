@@ -26,6 +26,37 @@
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh | sh
 ```
 
+
+## 看它实际运行
+
+**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
+
+```bash
+commitlore context install.sh
+```
+
+输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>复现完全相同的 PreToolUse hook path</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
+
 ## 检索能找到记录。路径范围会排除已经推翻的决策。
 
 漏掉一条记录，模型损失的是上下文；交给它一项已经推翻的决策，损失的是正确性。在这项[检索测量](bench/retrieval/result.md)中，从 0 到 10,000 条干扰记录的每个规模，BM25、embedding top-k、hybrid RRF 与带路径过滤的 embedding 都各返回了一条已被替代的记录。带生命周期的 CommitLore 路径范围返回零条过时记录，并返回两条当前记录 (2/2)。
@@ -76,36 +107,6 @@ version=0.3.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## 看它实际运行
-
-**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
-
-```bash
-commitlore context install.sh
-```
-
-输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>复现完全相同的 PreToolUse hook path</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
