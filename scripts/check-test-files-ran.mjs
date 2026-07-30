@@ -17,8 +17,9 @@
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
+const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const TEST_DIR = resolve(REPO_ROOT, 'test');
 
 const reportPath = process.argv[2];

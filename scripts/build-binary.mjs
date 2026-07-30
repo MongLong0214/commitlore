@@ -58,8 +58,9 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
+const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST_DIR = join(REPO_ROOT, 'dist');
 const BUNDLE = join(DIST_DIR, 'commitlore.mjs');
 const OUTPUT = join(DIST_DIR, process.platform === 'win32' ? 'commitlore.exe' : 'commitlore');

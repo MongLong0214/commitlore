@@ -17,8 +17,9 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
+const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const NODE_MODULES = join(REPO_ROOT, 'node_modules');
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));

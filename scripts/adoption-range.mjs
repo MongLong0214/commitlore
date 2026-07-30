@@ -17,8 +17,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
+const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 const git = (args) =>
   execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
