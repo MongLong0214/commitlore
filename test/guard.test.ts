@@ -610,7 +610,6 @@ describe('commitlore guard', () => {
     expect(run.stderr).toContain('ruled out: shared Redis cache');
     expect(run.stderr).toContain('because:   ops refuses another stateful dependency');
     expect(run.stderr).toContain('recorded:  r-7c1a45 in ');
-    expect(run.stderr).toContain('keyword:redis');
   });
 
   it('exits 0 and says nothing at all when nothing matches', () => {
@@ -888,6 +887,47 @@ describe('hook trust wording', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Experimental advisory wording (T-1022, ADR-0020)
+// ---------------------------------------------------------------------------
+
+describe('experimental advisory classification (T-1022)', () => {
+  it('help text says experimental advisory', () => {
+    const program = new Command();
+    program.exitOverride();
+    register(program);
+    const guardCmd = program.commands.find((cmd) => cmd.name() === 'guard')!;
+    expect(guardCmd.description()).toContain('experimental advisory');
+  });
+
+  it('help text contains precision 44.8%', () => {
+    const program = new Command();
+    program.exitOverride();
+    register(program);
+    const guardCmd = program.commands.find((cmd) => cmd.name() === 'guard')!;
+    expect(guardCmd.description()).toContain('precision 44.8%');
+  });
+
+  it('text output says "possible match"', () => {
+    const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT]);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/possible match/);
+  });
+
+  it('text output does not contain a numeric score', () => {
+    const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT]);
+    expect(run.code).toBe(1);
+    expect(run.stderr).not.toMatch(/score \d+\.\d+/);
+  });
+
+  it('JSON output retains score as a number', () => {
+    const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT, '--json']);
+    expect(run.code).toBe(1);
+    const parsed = JSON.parse(run.stdout) as { matches: { score: unknown }[] };
+    expect(parsed.matches[0]?.score).toBeTypeOf('number');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // A last look at the whole match, as a reader would see it
 // ---------------------------------------------------------------------------
 
@@ -896,9 +936,9 @@ describe('the flag a user actually reads', () => {
     const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT]);
     const lines = run.stderr.trimEnd().split('\n');
 
-    expect(lines[0]).toBe('commitlore guard: 1 ruled-out alternative matches this proposal');
+    expect(lines[0]).toBe('commitlore guard: 1 possible match against ruled-out alternatives (experimental — precision 44.8%, recall 22.0%)');
     expect(lines[2]).toBe('  ruled out: shared Redis cache');
     expect(lines[3]).toMatch(/^ {2}because: {3}ops refuses another stateful dependency/);
-    expect(lines[4]).toMatch(/^ {2}recorded: {2}r-7c1a45 in [0-9a-f]{8} \(score 0\.\d\d; /);
+    expect(lines[4]).toMatch(/^ {2}recorded: {2}r-7c1a45 in [0-9a-f]{8}$/);
   });
 });
