@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 
 import { register as registerBackfill } from './commands/backfill.js';
+import { register as registerCapture } from './commands/capture.js';
 import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
 import { register as registerDoctor } from './commands/doctor.js';
@@ -149,6 +150,7 @@ registerPrepareCommitMsg(program);
 registerGuard(program);
 registerInject(program);
 registerBackfill(program);
+registerCapture(program);
 registerDemo(program);
 registerMcp(program);
 
