@@ -165,26 +165,66 @@ export const runInit = (opts = {}) => {
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
     return { steps, exitCode: exitCode };
 };
-const STEP_HEADING = {
+/** User-facing step labels — no internal command names. */
+const STEP_LABEL = {
+    hooks: 'Hooks',
+    index: 'Index',
+    'claude-hook': 'Agent integration',
+    doctor: 'Final check',
+};
+/** Verbose format headings (preserved for --verbose, T-1013). */
+export const STEP_HEADING = {
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
     'claude-hook': '[3/4] claude hook install',
     doctor: '[4/4] doctor --fix (final check)',
 };
-const INDENT = '        ';
+export const VERBOSE_INDENT = '        ';
+/**
+ * Result-oriented default output: a concise summary telling the user what is
+ * ready and what is not. Internal command names are absent. Failures and
+ * warnings are always named — never folded into a cheerful summary (#63, #67).
+ */
 export const formatInitReport = (report) => {
-    const blocks = report.steps.map((step) => {
-        const body = step.lines.map((line) => `${INDENT}${line}`).join('\n');
-        return `${STEP_HEADING[step.step]}\n${body}`;
-    });
-    const failed = report.steps.filter((step) => step.code === 2).map((step) => step.title);
-    const needsAttention = report.steps.filter((step) => step.code === 1).map((step) => step.title);
-    const summary = failed.length > 0
-        ? `init: ${failed.length}/4 step(s) could not run — ${failed.join(', ')}`
-        : needsAttention.length > 0
-            ? `init: 4/4 steps ran, ${needsAttention.length} need(s) attention — ${needsAttention.join(', ')} (see detail above)`
-            : 'init: 4/4 steps completed cleanly';
-    return `${[...blocks, summary].join('\n\n')}\n`;
+    const failed = report.steps.filter((step) => step.code === 2);
+    const needsAttention = report.steps.filter((step) => step.code === 1);
+    const lines = [];
+    if (failed.length === 0 && needsAttention.length === 0) {
+        // All clean — one summary line per step + a final ready line.
+        for (const step of report.steps) {
+            lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+        }
+        lines.push('');
+        lines.push('init: ready');
+    }
+    else {
+        // At least one step needs attention or could not run.
+        for (const step of report.steps) {
+            if (step.code === 0) {
+                lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+            }
+            else if (step.code === 2) {
+                lines.push(`  ✗ ${STEP_LABEL[step.step]} — ${step.title} could not run`);
+                for (const detail of step.lines) {
+                    lines.push(`    ${detail}`);
+                }
+            }
+            else {
+                lines.push(`  ! ${STEP_LABEL[step.step]} — needs attention`);
+                for (const detail of step.lines) {
+                    lines.push(`    ${detail}`);
+                }
+            }
+        }
+        lines.push('');
+        if (failed.length > 0) {
+            lines.push(`init: ${failed.length}/4 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
+        }
+        else {
+            lines.push(`init: ${needsAttention.length} step(s) need(s) attention — ${needsAttention.map((s) => s.title).join(', ')}`);
+        }
+    }
+    return lines.join('\n') + '\n';
 };
 export const register = (program) => {
     program
