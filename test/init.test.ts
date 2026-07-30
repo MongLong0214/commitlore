@@ -178,11 +178,12 @@ describe('commitlore init — the happy path', () => {
     const repo = repoWithRemote('format-clean');
     const text = formatInitReport(runInitAsCli({ cwd: repo }));
 
-    expect(text).toContain('[1/4] hooks install');
-    expect(text).toContain('[2/4] index --rebuild');
-    expect(text).toContain('[3/4] claude hook install');
-    expect(text).toContain('[4/4] doctor --fix');
-    expect(text).toContain('init: 4/4 steps completed cleanly');
+    // Result-oriented output: each step has a success indicator, no internal command names.
+    expect(text).toContain('✓ Hooks');
+    expect(text).toContain('✓ Index');
+    expect(text).toContain('✓ Agent integration');
+    expect(text).toContain('✓ Final check');
+    expect(text).toContain('init: ready');
   });
 });
 
@@ -202,8 +203,8 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     expect(readHookStatus(repo).state).toBe('installed');
 
     const text = formatInitReport(report);
-    expect(text).toContain('completed cleanly');
-    expect(text).not.toContain('need(s) attention');
+    expect(text).toContain('init: ready');
+    expect(text).not.toContain('attention');
   });
 
   it('a configured but unreachable remote remains an actionable doctor warning', () => {

@@ -78,6 +78,14 @@ export interface InitReport {
  * leaves behind, not the state it started from.
  */
 export declare const runInit: (opts?: InitOptions) => InitReport;
+/** Verbose format headings (preserved for --verbose, T-1013). */
+export declare const STEP_HEADING: Record<StepName, string>;
+export declare const VERBOSE_INDENT = "        ";
+/**
+ * Result-oriented default output: a concise summary telling the user what is
+ * ready and what is not. Internal command names are absent. Failures and
+ * warnings are always named — never folded into a cheerful summary (#63, #67).
+ */
 export declare const formatInitReport: (report: InitReport) => string;
 export declare const register: (program: Command) => void;
 export {};
