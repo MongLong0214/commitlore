@@ -268,9 +268,11 @@ is non-null.
 
 ## State at handoff
 
-Nothing is in flight: no open pull request, no open issue. Worktrees under
-`~/projects/wt/` were **not** cleaned up this session and there are many —
-check them before assigning work, and remove the ones whose branches merged.
+Nothing is in flight: no open pull request, no open issue, and `git worktree list`
+shows the main checkout only. Thirty-six worktrees accumulated during the session
+and were removed after checking each for uncommitted files and confirming its
+branch had merged; the 42 stale `/private/tmp` records from earlier sessions are
+gone too.
 
 ```
 dev 0.4.1, green            main carries v0.4.1
