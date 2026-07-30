@@ -19,7 +19,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1101 Converge the four `.pathname` path resolutions onto `fileURLToPath` (S) — B-1 step 1
+## T-1101 Converge the four `.pathname` path resolutions onto `fileURLToPath` (S) — #265 · B-1 step 1
 
 **Owns**
 
@@ -109,7 +109,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1102 Recognise `commitlore.exe`, and bind the two allowlists together (M) — B-1 step 2
+## T-1102 Recognise `commitlore.exe`, and bind the two allowlists together (M) — #266 · B-1 step 2
 
 **Owns**
 
@@ -205,7 +205,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1103 Execute #71's containment attacks on `windows-latest` in CI (M) — B-1 step 3
+## T-1103 Execute #71's containment attacks on `windows-latest` in CI (M) — #267 · B-1 step 3
 
 **Owns**
 
@@ -296,7 +296,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1104 Add `windows-latest` to the release build matrix (S) — B-1 step 4
+## T-1104 Add `windows-latest` to the release build matrix (S) — #268 · B-1 step 4
 
 **Owns**
 
@@ -388,7 +388,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1105 musl feasibility spike: answer the question, record the answer (M) — B-2
+## T-1105 musl feasibility spike: answer the question, record the answer (M) — #269 · B-2
 
 **Owns**
 
@@ -477,7 +477,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1106 Generate a Homebrew formula from the published release, with a drift check (M) — B-3
+## T-1106 Generate a Homebrew formula from the published release, with a drift check (M) — #270 · B-3
 
 **Owns**
 
@@ -569,7 +569,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1107 One compatibility matrix, kept honest by a test (M) — B-4
+## T-1107 One compatibility matrix, kept honest by a test (M) — #271 · B-4
 
 **Owns**
 
@@ -658,7 +658,7 @@ ADR-0023. `T-1105`, `T-1106`, `T-1107` are independent of the chain and of each 
 
 ---
 
-## T-1108 `commitlore uninstall`: remove what `install.sh` wrote, and nothing else (L) — B-5
+## T-1108 `commitlore uninstall`: remove what `install.sh` wrote, and nothing else (L) — #272 · B-5
 
 **Owns**
 

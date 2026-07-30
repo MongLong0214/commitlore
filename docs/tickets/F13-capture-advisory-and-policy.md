@@ -18,7 +18,7 @@ forward. Both touch the capture pipeline (`GATE-B-ACCEPTANCE.md` "Execution cons
 
 ---
 
-## T-1109 Guard as a capture advisory that cannot block (M) — B-6
+## T-1109 Guard as a capture advisory that cannot block (M) — #273 · B-6
 
 **Owns**
 
@@ -137,7 +137,7 @@ forward. Both touch the capture pipeline (`GATE-B-ACCEPTANCE.md` "Execution cons
 
 ---
 
-## T-1110 User-editable policy file, after consolidating the triplicated policy identity (L) — B-7, row `P1-5`
+## T-1110 User-editable policy file, after consolidating the triplicated policy identity (L) — #274 · B-7, row `P1-5`
 
 **Owns**
 
