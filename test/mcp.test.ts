@@ -497,6 +497,27 @@ describe('handshake and declarations', () => {
       });
     }
   });
+
+  it('discloses measured precision and recall in the guard tool description (T-1020)', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      description: string;
+      annotations?: unknown;
+    }[];
+    const guard = tools.find((tool) => tool.name === 'commitlore_guard');
+    const description = guard?.description ?? '';
+
+    // ADR-0020 §Decision item 2: every surface that exposes guard states its measured limits
+    expect(description).toContain('precision 44.8%');
+    expect(description).toContain('recall 22.0%');
+
+    // ADR-0020 §Decision item 3: the overclaiming sentence is removed
+    expect(description).not.toContain('it is a verdict, not an absence');
+
+    // The annotation is preserved (ADR-0020 §Consequences)
+    expect(guard?.annotations).toMatchObject({ readOnlyHint: true });
+  });
 });
 
 describe('the context resource', () => {
