@@ -188,11 +188,36 @@ if [ -e "$dest" ]; then
 fi
 
 mkdir -p "$dest_dir"
-cp "$work/commitlore" "$dest"
-chmod +x "$dest"
+# Write beside the destination and rename, rather than `cp` over it. An
+# in-place overwrite leaves the destination inode holding new bytes, and this
+# file already uses write-temp-then-rename for config merges below. Rename is
+# atomic, so a reader either sees the old binary or the new one and never a
+# half-written 100 MB executable.
+dest_tmp="$dest.commitlore-install.$$"
+cleanup_dest_tmp() { rm -f "$dest_tmp"; }
+trap cleanup_dest_tmp EXIT
+cp "$work/commitlore" "$dest_tmp"
+chmod +x "$dest_tmp"
+mv "$dest_tmp" "$dest"
+trap - EXIT
 
 log "installed to $dest"
-"$dest" --version
+
+# The install is already complete. A verification that cannot run says so; it
+# does not retroactively fail an install that succeeded. On macOS the first
+# exec of a freshly written large binary has been observed being killed by a
+# signal (see #256) while the second succeeds, so a single failure is retried
+# before it is reported.
+if ! installed_version=$("$dest" --version 2>/dev/null); then
+  sleep 1
+  installed_version=$("$dest" --version 2>/dev/null) || installed_version=""
+fi
+if [ -n "$installed_version" ]; then
+  printf '%s\n' "$installed_version"
+else
+  log "installed, but could not run \"$dest --version\" in this shell to confirm it."
+  log "the binary is in place; verify it yourself with: $dest --version"
+fi
 
 path_file="$HOME/.profile"
 case "${SHELL:-}" in

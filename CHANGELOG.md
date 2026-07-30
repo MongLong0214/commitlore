@@ -4,6 +4,26 @@
 
 Nothing yet.
 
+## 0.4.1 — 2026-07-31
+
+### Upgrade reasons
+
+- **The documented install no longer reports a failure after succeeding.**
+  Running the one-liner over an existing install exited 137 because the
+  installer's own post-install `commitlore --version` was killed by a signal,
+  after the binary had already been installed correctly. The verification now
+  retries once and, if it still cannot run, says the binary is installed but
+  unverified in this shell rather than failing the install (#256).
+- The binary is written beside its destination and renamed into place instead of
+  overwritten. Rename is atomic, so a reader sees either the old binary or the
+  new one and never a partially written executable.
+
+The root cause of the signal kill is not established, and #256 records what was
+ruled out: overwriting an already-executed ad-hoc-signed copy of the same binary
+in place and re-executing it exits 0, so cached-signature invalidation alone does
+not explain it. This release makes the installer honest about a verification it
+cannot complete; it does not claim to have fixed the kill.
+
 ## 0.4.0 — 2026-07-31
 
 The release that makes recording a decision something the tool does, rather than
