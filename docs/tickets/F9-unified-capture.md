@@ -590,12 +590,13 @@ The tool writes only to the nonce transaction under `.git/commitlore/pending/`. 
 
 ---
 
-## T-1019 Pending-transaction recovery and garbage collection (M) — new · depends on T-1001, T-1018
+## T-1019 Pending-transaction garbage collection (S) — #215 · P1 · depends on T-1001, T-1006, T-1018
 
-## T-1023 Gate A integrated E2E acceptance (M) — new · depends on all of T-1001–T-1022
+## T-1023 Capture pipeline E2E integration (M) — #216 · depends on T-1001–T-1009, T-1018
 
 Full specifications for both live in `docs/GATE-A-ACCEPTANCE.md`, not here —
-they close acceptance-matrix rows P0-7 and P0-4 respectively, and that document
-is the authority for which ticket closes which row. This entry exists so the
+neither closes an acceptance-matrix row — P0-4 is ticketed to close by
+T-1007/T-1008/T-1009 (#199-#201) and P0-7 by T-1012/T-1013 (#204-#205), all OPEN — and that document is the authority for which ticket
+closes which row. This entry exists so the
 F9 ticket count and dependency graph in `TICKETS.md` stay accurate; do not
 duplicate the ticket body in both places.

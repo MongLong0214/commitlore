@@ -2,7 +2,7 @@
 
 > ADR: 0020 (guard is an experimental advisory)
 > Extends: ADR-0019 (guard signal insufficiency)
-> Modules: `src/mcp/server.ts`, `src/commands/guard.ts`, `README.md`, `README.ko.md`, `README.ja.md`, `README.zh-CN.md`
+> Modules: `src/mcp/server.ts`, `src/core/before-change.ts`, `src/commands/guard.ts`, `README.md`, `README.ko.md`, `README.ja.md`, `README.zh-CN.md`
 
 ---
 
@@ -257,3 +257,66 @@ last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
 - `node dist/commitlore.mjs guard --help` shows experimental advisory wording
 - Full test suite: 45 files, 1500+ passed, 1 skipped
 - `npx tsc --noEmit` exits 0
+
+---
+
+## T-1024 Unified `commitlore_before_change` MCP tool (M) — #219 · depends on T-1007, T-1008, T-1009, T-1020
+
+Closes acceptance row `P0-8`. The source review asks for one tool an agent has to remember
+instead of a separate context call and guard call. The reason this ticket is here rather than in
+F9 is that its hard problem is not composition, it is **confidence separation**: it returns
+path-scoped context, whose measured behaviour is trustworthy, in the same payload as a guard
+result measured at 44.8% precision and 22.0% recall. ADR-0020 demoted that signal to an
+experimental advisory in the same milestone.
+
+The separation is **structural, not a second label**. The response carries exactly the five
+fields the source review specifies — `active_decisions`, `verification_gaps`,
+`possible_revival_matches`, `guard_confidence`, `cache_key` — and no others. `guard_confidence`
+qualifies `possible_revival_matches` and nothing else. `active_decisions` and
+`verification_gaps` are path-scoped context and never inherit it. No `context_confidence` field
+is invented to make the asymmetry visible: the schema is the asymmetry, and a caller that reads
+`guard_confidence` as applying to the context fields is reading a field that does not describe
+them.
+
+**Owns**: `src/core/before-change.ts` (new — composes the existing context projection and guard match; contains no new scoring logic of its own), `src/mcp/server.ts` (register one additional tool), `test/before-change.test.ts` (new).
+
+**Depends on**: T-1020 (#208) — guard's measured limits must already be stated on the MCP surface before a second tool exposes the same signal, or this ticket ships the overclaim ADR-0020 removes. Also T-1007 (#199), T-1008 (#200), T-1009 (#201) for `src/mcp/server.ts` merge ordering only: this ticket is last in that queue and adds nothing to the capture pipeline.
+
+**Forbidden scope**: No new scoring, weighting or threshold logic — ADR-0019 closed re-weighting, and this ticket must not reopen it by the back door. Do not change `src/core/guard.ts`, the context projection's own output, `src/commands/guard.ts`, the release gate, `bench/fixtures/`, `README*`, or any version string. Do not make the tool blocking, and do not give it a write side.
+
+**RED test**: `test/before-change.test.ts` — "the response carries exactly `active_decisions`, `verification_gaps`, `possible_revival_matches`, `guard_confidence`, `cache_key`; `guard_confidence` is `\"experimental\"` when a proposal is supplied and `\"not-run\"` when none is; and the two context fields are byte-identical across both calls at one HEAD". It must fail before the change because `commitlore_before_change` is not registered and `src/core/before-change.ts` does not exist.
+
+**Minimum GREEN**: Export `beforeChange({ path, proposal? })` from `src/core/before-change.ts` returning `{ active_decisions, verification_gaps, possible_revival_matches, guard_confidence, cache_key }`. The five fields are exactly those named above; adding a sixth is out of scope.
+
+`guard_confidence` is an enum over that one field: `"not-run"` when no `proposal` was supplied, `"experimental"` when the guard ran, `"timed-out"` when it was cut short. `"not-run"` does not violate the context-only contract — it is the honest value of a field describing a list that is empty because nothing was asked, and it exists so that an empty `possible_revival_matches` is never readable as "checked and clear". The context fields are populated identically whether or not a proposal was supplied.
+
+`cache_key` is a **full-response** key: when a `proposal` is supplied it is derived from HEAD, the resolved path **and the normalised proposal text**, so two different proposals at one HEAD cannot collide. When no proposal is supplied the same field is a context-snapshot key over HEAD and path only, and it must never be used to serve a proposal-bearing response — the key's two forms are distinguishable and a proposal-dependent result may only be served from a key that included a proposal. Register the tool in `src/mcp/server.ts` with `readOnlyHint: true`.
+
+**AC ↔ test**:
+
+| AC | Test | Source |
+|---|---|---|
+| Context-only call returns context and runs no guard | `no proposal returns empty matches and guard_confidence "not-run"` | Source review §8 P0-8 |
+| Proposal call adds matches labelled experimental | `proposal returns matches with guard_confidence "experimental"` | Source review §8 P0-8; ADR-0020 |
+| The response carries exactly the five source-specified fields | `response keys equal the five specified fields, no more` | Source review §8 P0-8 |
+| `guard_confidence` qualifies only `possible_revival_matches` | `context fields are identical with and without a proposal at one HEAD` | ADR-0020 — context must not inherit the advisory grade |
+| A proposal-bearing result is never served from a context-only cache key | `context-snapshot key does not serve a proposal response` | Determinism plus the cache-scope rule above |
+| The resolved path selects that path's context and no other | `call for path A returns A's records, never B's` | Wrong-target check below — proven by selection, not by echoing the path |
+| An unreadable repository or an out-of-tree path fails explicitly | `path outside the repository fails rather than returning empty context` | Fail-closed check below — an empty context must never read as "no constraints" |
+| An empty match list is never presented as a verdict | `empty matches do not assert the proposal is safe` | ADR-0020, the sentence it removes from the guard tool |
+| Identical input is byte-identical output | `two calls at one HEAD produce identical payloads` | The determinism guarantee the inject path already holds |
+| The tool is annotated read-only | `tool annotation readOnlyHint is true` | It has no write side by design |
+
+**Commands**:
+- Focused: `npx vitest run test/before-change.test.ts`
+- Full: `npx vitest run` — no regression against the baseline established at the branch head
+- Release: `npx tsc -p tsconfig.json --noEmit` exit 0; `npx tsc -p bench/tsconfig.json --noEmit` exit 0
+- Manual: one MCP round trip over stdio calling the tool with and without a proposal, both payloads pasted as completion evidence
+
+**Evidence invalidation**: Bound to the exact head SHA. Void if T-1020 changes guard's disclosure wording after this lands, since the two surfaces must agree.
+
+**Stop / escalate**: Stop if the confidence-separation rule cannot be expressed in the payload without a caller being able to read the guard result as authoritative — that is the failure this ticket exists to prevent, and shipping it anyway would contradict ADR-0020. Stop if T-1020 has not merged.
+
+**Safety checks**: *Fail-closed* — when the repository cannot be read, or notes are unfetched, the tool reports the gap rather than returning an empty context that reads as "no constraints"; this is the project's oldest defect class. *Wrong-target* — no echo field is added; the schema stays at five. Instead the resolved input path is proven to select the right context: a call for one path must not return another path's records, and a path outside the repository, or a repository the process cannot read, must fail explicitly rather than return an empty context that reads as "no constraints". *Ambiguity* — `guard_confidence: "not-run"` exists precisely so an empty `possible_revival_matches` is never confused with a clean one, and the field is never omitted. *Timeout* — the guard leg is bounded, and on expiry the response returns context with `guard_confidence: "timed-out"` rather than dropping the field or emptying the context. *Partial state* — read-only; there is no state to leave partial. *Security and privacy* — no write side, no network, no model call, and free-text trailer content stays subject to the existing injection withholding rules.
+
+**Completion evidence**: `npx vitest run test/before-change.test.ts`, both typecheck exits, the full-suite summary line at one exact head SHA, and the two manual MCP payloads.
