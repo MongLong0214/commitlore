@@ -13659,6 +13659,22 @@ var stagePending = (nonce, opts) => {
   atomicWriteJson(filePath, updated);
   return true;
 };
+var markApplied = (nonce, recordHash, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "staged") return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "applied",
+    applied_at: now,
+    applied_record_hash: recordHash
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
 
 // src/core/capture-prepare.ts
 var HARDCODED_DEFAULTS = {
@@ -16472,8 +16488,8 @@ var register4 = (program3) => {
 };
 
 // src/hooks/prepare-commit-msg.ts
-import { randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync8, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { createHash as createHash4, randomBytes as randomBytes5 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync8, readdirSync, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -16557,9 +16573,111 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
   }
 };
+var CAPTURE_POLICY_DEFAULTS = {
+  mode: "suggest",
+  max_records_per_commit: 1,
+  require_verified_evidence: true
+};
+var computePolicyIdentityHash3 = () => createHash4("sha256").update(JSON.stringify(CAPTURE_POLICY_DEFAULTS)).digest("hex");
+var resolvePendingDir = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
+  if (result.code !== 0) return null;
+  return resolve7(cwd, result.stdout.trim());
+};
+var readPendingFile = (filePath) => {
+  try {
+    const content = readFileSync8(filePath, "utf8");
+    const parsed = JSON.parse(content);
+    if (parsed["version"] !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+var buildTrailerBlock = (records) => {
+  const blocks = [];
+  for (const rec of records) {
+    if (typeof rec !== "object" || rec === null) continue;
+    const r = rec;
+    if (!Array.isArray(r.trailers)) continue;
+    const trailers = r.trailers;
+    const serialized = serializeTrailers(trailers);
+    if (serialized) blocks.push(serialized);
+  }
+  return blocks.join("\n");
+};
+var messageContainsRecordId = (message, records) => {
+  for (const rec of records) {
+    if (typeof rec !== "object" || rec === null) continue;
+    const r = rec;
+    if (!Array.isArray(r.trailers)) continue;
+    for (const t of r.trailers) {
+      if (t.key === "Record-Id" && message.includes(`Record-Id: ${t.value}`)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+var applyCaptureRecord = (messageFile, cwd) => {
+  const pendingDirPath = resolvePendingDir(cwd);
+  if (!pendingDirPath || !existsSync7(pendingDirPath)) return;
+  let files;
+  try {
+    files = readdirSync(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+  } catch {
+    return;
+  }
+  if (files.length === 0) return;
+  const headResult = execGit(["rev-parse", "HEAD"], { cwd });
+  if (headResult.code !== 0) return;
+  const currentHead = headResult.stdout.trim();
+  const diffResult = execGit(["diff", "--cached"], { cwd });
+  if (diffResult.code !== 0) return;
+  const currentDiffHash = createHash4("sha256").update(diffResult.stdout).digest("hex");
+  const currentPolicyHash = computePolicyIdentityHash3();
+  const now = Date.now();
+  let currentMessage;
+  try {
+    currentMessage = readFileSync8(messageFile, "utf8");
+  } catch {
+    return;
+  }
+  for (const file of files) {
+    const filePath = resolve7(pendingDirPath, file);
+    const pending = readPendingFile(filePath);
+    if (!pending) continue;
+    if (pending.phase !== "staged" && pending.phase !== "applied") continue;
+    if (pending.consumed) continue;
+    if (pending.base_head !== currentHead) continue;
+    if (pending.staged_diff_hash !== currentDiffHash) continue;
+    if (!pending.expires_at) continue;
+    if (now >= new Date(pending.expires_at).getTime()) continue;
+    if (pending.policy_identity_hash !== currentPolicyHash) continue;
+    if (messageContainsRecordId(currentMessage, pending.records)) return;
+    const trailerBlock = buildTrailerBlock(pending.records);
+    if (!trailerBlock) return;
+    const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
+    writeFileSync6(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+    const recordHash = createHash4("sha256").update(trailerBlock).digest("hex");
+    try {
+      markApplied(pending.nonce, recordHash, { cwd });
+    } catch {
+    }
+    return;
+  }
+};
 var register5 = (program3) => {
   program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
     preserveSquashRecords(messageFile);
+    try {
+      applyCaptureRecord(messageFile, process.cwd());
+    } catch (error2) {
+      process.stderr.write(
+        `commitlore: capture application error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
+    }
   });
 };
 
@@ -17789,7 +17907,7 @@ import { readFileSync as readFileSync12, realpathSync as realpathSync3 } from "n
 import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join6, relative as relative2, resolve as resolve9, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 var NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 var resolveAblation = (flags) => flags === void 0 ? NO_ABLATION : {
   noScope: flags.noScope === true,
@@ -18006,7 +18124,7 @@ var cacheKeyOf = (parts) => {
     // onto one key rather than two.
     ...parts.ablation.length === 0 ? [] : [parts.ablation]
   ]);
-  return createHash4("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
+  return createHash5("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
 };
 var resolveBudget = (budget) => {
   if (budget === void 0) return DEFAULT_BUDGET_TOKENS;
@@ -27293,7 +27411,7 @@ var register14 = (program3) => {
 };
 
 // src/core/before-change.ts
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 var deriveVerificationGaps = (cwd) => {
   const gaps = [];
   const history = historyAvailability(cwd);
@@ -27327,12 +27445,12 @@ var resolveHead = (cwd) => {
   return result.stdout.trim();
 };
 var buildCacheKey = (head, path2, proposal) => {
-  const pathHash = createHash5("sha256").update(path2).digest("hex").slice(0, 16);
+  const pathHash = createHash6("sha256").update(path2).digest("hex").slice(0, 16);
   if (proposal === void 0) {
     return `ctx:${head}:${pathHash}`;
   }
   const normalised = proposal.trim().replace(/\s+/g, " ");
-  const proposalHash = createHash5("sha256").update(normalised).digest("hex").slice(0, 16);
+  const proposalHash = createHash6("sha256").update(normalised).digest("hex").slice(0, 16);
   return `full:${head}:${pathHash}:${proposalHash}`;
 };
 var beforeChange = (opts) => {

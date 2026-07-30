@@ -1,7 +1,8 @@
-import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execGit } from '../core/git.js';
+import { markApplied } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
 import { KNOWN_KEYS } from '../core/types.js';
 import { CHAINED_SUFFIX, HOOK_MODE, commitMsgStub } from './commit-msg.js';
@@ -95,6 +96,167 @@ export const installPrepareCommitMsgHook = (cwd = process.cwd()) => {
         return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
+// ---------------------------------------------------------------------------
+// Capture application guard — ADR-0021 §3, five-gate check (T-1005)
+// ---------------------------------------------------------------------------
+const CAPTURE_POLICY_DEFAULTS = {
+    mode: 'suggest',
+    max_records_per_commit: 1,
+    require_verified_evidence: true,
+};
+const computePolicyIdentityHash = () => createHash('sha256').update(JSON.stringify(CAPTURE_POLICY_DEFAULTS)).digest('hex');
+/**
+ * Resolve the pending directory via `git rev-parse --git-path`.
+ * Returns null if not in a git repo or the path cannot be resolved.
+ */
+const resolvePendingDir = (cwd) => {
+    const result = execGit(['rev-parse', '--git-path', 'commitlore/pending'], { cwd });
+    if (result.code !== 0)
+        return null;
+    return resolve(cwd, result.stdout.trim());
+};
+/**
+ * Read a pending file safely. Returns null on any error.
+ */
+const readPendingFile = (filePath) => {
+    try {
+        const content = readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(content);
+        if (parsed['version'] !== 1)
+            return null;
+        return parsed;
+    }
+    catch {
+        return null;
+    }
+};
+/**
+ * Serialize the records array's trailers into a canonical trailer block string.
+ */
+const buildTrailerBlock = (records) => {
+    const blocks = [];
+    for (const rec of records) {
+        if (typeof rec !== 'object' || rec === null)
+            continue;
+        const r = rec;
+        if (!Array.isArray(r.trailers))
+            continue;
+        const trailers = r.trailers;
+        const serialized = serializeTrailers(trailers);
+        if (serialized)
+            blocks.push(serialized);
+    }
+    return blocks.join('\n');
+};
+/**
+ * Check if the message already contains a Record-Id from the pending file.
+ */
+const messageContainsRecordId = (message, records) => {
+    for (const rec of records) {
+        if (typeof rec !== 'object' || rec === null)
+            continue;
+        const r = rec;
+        if (!Array.isArray(r.trailers))
+            continue;
+        for (const t of r.trailers) {
+            if (t.key === 'Record-Id' && message.includes(`Record-Id: ${t.value}`)) {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+/**
+ * The five-gate application check. Scans pending directory for a staged or
+ * applied-but-unconsumed record that passes all five gates. On first match,
+ * appends the trailer block and marks applied. On no match or any error, does
+ * nothing (never blocks the commit).
+ */
+const applyCaptureRecord = (messageFile, cwd) => {
+    // Fast path: resolve pending directory
+    const pendingDirPath = resolvePendingDir(cwd);
+    if (!pendingDirPath || !existsSync(pendingDirPath))
+        return;
+    // List pending files
+    let files;
+    try {
+        files = readdirSync(pendingDirPath).filter((f) => f.endsWith('.json')).sort();
+    }
+    catch {
+        return;
+    }
+    if (files.length === 0)
+        return;
+    // Resolve current state for gate checks
+    const headResult = execGit(['rev-parse', 'HEAD'], { cwd });
+    if (headResult.code !== 0)
+        return;
+    const currentHead = headResult.stdout.trim();
+    const diffResult = execGit(['diff', '--cached'], { cwd });
+    if (diffResult.code !== 0)
+        return;
+    const currentDiffHash = createHash('sha256').update(diffResult.stdout).digest('hex');
+    const currentPolicyHash = computePolicyIdentityHash();
+    const now = Date.now();
+    // Read current message to check for existing Record-Id
+    let currentMessage;
+    try {
+        currentMessage = readFileSync(messageFile, 'utf8');
+    }
+    catch {
+        return;
+    }
+    // Check each candidate (first-match wins, ordered by filename = created_at approx)
+    for (const file of files) {
+        const filePath = resolve(pendingDirPath, file);
+        const pending = readPendingFile(filePath);
+        if (!pending)
+            continue;
+        // Only staged or applied-but-unconsumed records are eligible
+        if (pending.phase !== 'staged' && pending.phase !== 'applied')
+            continue;
+        // Gate 4: Unconsumed
+        if (pending.consumed)
+            continue;
+        // Gate 1: HEAD unchanged
+        if (pending.base_head !== currentHead)
+            continue;
+        // Gate 2: Staged diff unchanged
+        if (pending.staged_diff_hash !== currentDiffHash)
+            continue;
+        // Gate 3: Unexpired (expires_at must be non-null and in the future)
+        if (!pending.expires_at)
+            continue;
+        if (now >= new Date(pending.expires_at).getTime())
+            continue;
+        // Gate 5: Policy identity unchanged
+        if (pending.policy_identity_hash !== currentPolicyHash)
+            continue;
+        // All five gates pass. Check if already present (dedup).
+        if (messageContainsRecordId(currentMessage, pending.records))
+            return;
+        // Build and append the trailer block
+        const trailerBlock = buildTrailerBlock(pending.records);
+        if (!trailerBlock)
+            return;
+        const separator = currentMessage.endsWith('\n\n')
+            ? ''
+            : currentMessage.endsWith('\n')
+                ? '\n'
+                : '\n\n';
+        writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+        // Mark applied — hash the canonical trailer block, not the full message
+        const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
+        try {
+            markApplied(pending.nonce, recordHash, { cwd });
+        }
+        catch {
+            // Best-effort: message already written, crash here is recoverable by post-commit
+        }
+        // First-match wins — stop
+        return;
+    }
+};
 export const register = (program) => {
     program
         .command('prepare-commit-msg')
@@ -104,6 +266,13 @@ export const register = (program) => {
         .description('internal hook command: append records from a local squash draft')
         .action((messageFile) => {
         preserveSquashRecords(messageFile);
+        try {
+            applyCaptureRecord(messageFile, process.cwd());
+        }
+        catch (error) {
+            // Fail-closed: never block the commit
+            process.stderr.write(`commitlore: capture application error: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
     });
 };
 //# sourceMappingURL=prepare-commit-msg.js.map
