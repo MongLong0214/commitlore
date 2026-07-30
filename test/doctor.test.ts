@@ -482,6 +482,51 @@ describe('doctor: hook runtime', () => {
 
     expect(runtimeCheck(repo)?.status).toBe('ok');
   });
+
+  it('does not claim "carries no node" when stderr shows a runtime error', () => {
+    const repo = initRepo('doctor-runtime-threw');
+    installedHook(repo);
+    // Override the hook to simulate node running and throwing a stack trace:
+    writeScript(
+      hookPath(repo),
+      '#!/bin/sh\necho "at Object.<anonymous> (/path/dist/mcp/server.js:49:1)" >&2\nexit 1\n',
+    );
+    chmodSync(hookPath(repo), 0o755);
+
+    const runtime = runtimeCheck(repo);
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).not.toContain('carries no node');
+  });
+
+  it('mentions missing node when stderr says "node: not found"', () => {
+    const repo = initRepo('doctor-runtime-no-node-msg');
+    installedHook(repo);
+    writeScript(
+      hookPath(repo),
+      '#!/bin/sh\necho "sh: node: not found" >&2\nexit 127\n',
+    );
+    chmodSync(hookPath(repo), 0o755);
+
+    const runtime = runtimeCheck(repo);
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).toContain('node');
+    expect(runtime?.detail).toMatch(/cannot find|not found|missing/i);
+  });
+
+  it('reports cause unclear when stderr has unexpected content', () => {
+    const repo = initRepo('doctor-runtime-unknown');
+    installedHook(repo);
+    writeScript(
+      hookPath(repo),
+      '#!/bin/sh\necho "something unexpected happened" >&2\nexit 42\n',
+    );
+    chmodSync(hookPath(repo), 0o755);
+
+    const runtime = runtimeCheck(repo);
+    expect(runtime?.status).toBe('fail');
+    expect(runtime?.detail).toMatch(/unclear|cannot determine/i);
+    expect(runtime?.detail).not.toContain('carries no node');
+  });
 });
 
 describe('doctor: PreToolUse hook runtime', () => {
