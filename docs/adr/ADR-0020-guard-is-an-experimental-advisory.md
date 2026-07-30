@@ -95,6 +95,26 @@ Guard is classified as an **experimental advisory**. Specifically:
   default text output.
 - The `READS_ONLY` annotation on the guard tool is preserved — it is accurate.
 
+
+### Tickets governed by this decision
+
+| Ticket | Issue | What it owes this ADR |
+|---|---|---|
+| T-1020 | #208 | States the measured limits on the MCP guard tool and removes the empty-result-as-verdict claim |
+| T-1021 | #209 | States the measured precision and recall in Known limitations, all four languages |
+| T-1022 | #210 | Experimental-advisory wording in CLI help and output; score out of default text |
+| T-1024 | #219 | Ticketed to close acceptance row `P0-8`. It exposes the guard signal on a second surface, so it is governed here, and it carries the **confidence-separation constraint** below |
+
+**Confidence-separation constraint (binding on T-1024).** A response that returns
+path-scoped context and a guard result together must keep their confidence levels
+separate *structurally*, not by adding a label. `guard_confidence` qualifies
+`possible_revival_matches` and nothing else; `active_decisions` and
+`verification_gaps` never inherit it. An empty `possible_revival_matches` is not a
+verdict, and `guard_confidence: "not-run"` exists so that absence cannot be read as
+a clean check. A single tool that lets a caller read a 44.8%-precision signal at the
+same confidence as path-scoped context would undo this ADR, so the separation is an
+acceptance criterion rather than a presentation detail.
+
 ## Falsification
 
 This classification is promoted out of "experimental" when a measurement on the

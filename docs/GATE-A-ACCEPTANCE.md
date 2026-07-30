@@ -1,19 +1,22 @@
 # Gate A acceptance matrix
 
-This file did not exist before this commit. `ADR-0020`, `ADR-0021`, `ADR-0022`
-and `PRD-F9-unified-capture.md` all cite specific rows of a "CTO acceptance
-matrix" (`P0-2`, `P0-3`, `P0-4`, `P1-5`, and others) as an authority those
-documents depend on or are accepted against. No such file was ever committed.
-An authority reference that points at nothing is exactly the failure
-`A-001`'s own acceptance criterion warns against: *"authority 문서 없이
-implementation 시작 불가."*
+`ADR-0020`, `ADR-0021`, `ADR-0022` and `PRD-F9-unified-capture.md` each cite
+rows of an acceptance matrix as an authority they depend on or are accepted
+against. This file is that authority. An authority reference that points at
+nothing cannot be checked, which is why the rows live here rather than in a
+working document.
 
-Every row below is reconstructed from where its label was actually cited —
-grep the row number across `docs/adr/`, `docs/prd/`, `docs/tickets/` to verify
-each one yourself rather than trusting this table. Two rows (`P0-1`, marked
-below) had no prior citation to reconstruct from; their content is written
-fresh, from the current ticket set, and is marked as such rather than
-presented as recovered.
+**The source review is the primary authority for every row.** Each row's
+assertion is derived from it directly. `docs/adr/`, `docs/prd/` and
+`docs/tickets/` are cross-checks, not sources: grep a row number across them to
+confirm the row and its tickets agree, and treat a disagreement as a defect in
+whichever document drifted rather than as a competing definition.
+
+That ordering is not a preference. An earlier version of this table derived its
+rows from where each label happened to be cited instead of from the review, and
+the result was wrong in five of eight rows: `P0-4`, `P0-7` and `P0-8` had the
+wrong subject entirely, and `P0-1` and `P0-5` had been narrowed to one sub-item
+each. Deriving from citations reproduces whatever the citing document assumed.
 
 ## Gate A rows (must close before the M5 milestone closes)
 
@@ -23,21 +26,20 @@ records that the source recommendation was accepted and ticketed — never that 
 complete. Row completion is decided by the named tickets' acceptance criteria, not by the
 existence of this table.
 
-**Provenance.** Rows P0-1, P0-4, P0-5, P0-7 and P0-8 were re-derived directly from the
-source review rather than from where their labels happened to be cited. Reconstructing from
-citations had put a different subject in four of them: P0-4 had become an end-to-end proof
-requirement, P0-7 had become pending-transaction cleanup, and P0-8 had become capture-pipeline
-guard integration. None of those are what the review says. The two tickets created to close
-the fabricated rows survive on their own merits and claim no row — see below.
+**What each corrected row had been.** `P0-4` had become an end-to-end proof requirement,
+`P0-7` pending-transaction cleanup, and `P0-8` capture-pipeline guard integration — three wrong
+subjects. `P0-1` had been narrowed to the install one-liner alone and `P0-5` to a README scene.
+None of the five is what the review says. The two tickets an earlier session created to close the
+wrong-subject `P0-4` and `P0-7` claim no row now and survive on their own merits — see below.
 
 | Row | Asserts | Source authority | Ticketed to close | Verification |
 |---|---|---|---|---|
 | P0-1 | The v0.3.0 release is closed end to end — partially true at this base, and the remainder is OPEN work: #192's flaky failure and its misreported cause are resolved, the promotion PR is re-verified at its exact head, the tag and four platform assets with checksums are published, and the README default install one-liner references the immutable release tag — never `dev` — with the pinned example matching `package.json` | Source review §8 P0-1 | T-1031 (#211) for the README install path; T-901 (#27) and T-1030 (#192) for the release process | `docs/tickets/release.md` T-1031 AC table, three rows already specified: one-liner excludes `/dev/`, matches a `/vX.Y.Z/` tag, pin equals `package.json` version |
 | P0-2 | Guard's MCP description, README disclosure, and CLI wording state measured precision/recall everywhere guard is exposed, and never claim an empty result as a verdict | ADR-0020 | T-1020 (#208), T-1021 (#209), T-1022 (#210) | ADR-0020 falsification conditions; each ticket's AC table |
-| P0-3 | The capture pipeline (prepare → verify → stage → apply → consume) enforces maker–checker separation: the agent supplies only a draft, CommitLore owns the source snapshot, verification result, and every state transition | ADR-0021 | T-1001–T-1009 (#193–#201) | ADR-0021 §7 falsification conditions; T-1009's AC row "Verify cannot be bypassed" |
+| P0-3 | The capture pipeline (prepare → verify → stage → apply → consume) enforces maker–checker separation: the agent supplies only a draft, CommitLore owns the source snapshot, verification result, and every state transition | ADR-0021 | T-1001–T-1009 (#193–#201) and T-1018 (#213) | ADR-0021 §7 falsification conditions; T-1009's AC row "Verify cannot be bypassed"; T-1018's AC table for the consume step this row's assertion names |
 | P0-4 | The MCP server exposes `commitlore_prepare_capture`, `commitlore_verify_capture` and `commitlore_stage_capture`; no `commitlore_write_record` tool exists; all three write only to `.git/commitlore/pending/`; the same verification and pending-transaction contract applies whichever agent calls them | Source review §8 P0-4; `docs/prd/PRD-F9-unified-capture.md` line 4 | T-1007 (#199), T-1008 (#200), T-1009 (#201) | PRD-F9 requirement 6 (no `commitlore_write_record`); T-1009's AC row "Verify cannot be bypassed"; each ticket's AC table |
 | P0-5 | `commitlore demo` is deterministic: it creates its own temporary repository, seeds one active and one superseded decision, shows that lifecycle filtering excludes the stale record where similarity retrieval does not, needs no network and no model, removes what it created, and finishes inside a minute | Source review §8 P0-5; ADR-0022 "Risked" section | T-1010 (#202), T-1011 (#203), T-1016 (#212) | T-1011's AC table (temporary repository removed even on failure, user repository never written, lifecycle filtering shown); ADR-0022 consequences |
-| P0-6 | README positioning (hero, section order) across all four languages ships as one coordinated change, never partially | ADR-0022 §"Consistency across languages" | T-1014, T-1015 (#206, #207) | F11 ticket doc's explicit merge-ordering note against T-1021 |
+| P0-6 | The README is restructured into the review's explicit product-first order — problem scene, core sentence, short demo, install, what happens automatically after install, how records get created, the lifecycle differentiator, how it differs from `CLAUDE.md`/ADRs/RAG, verified claims, benchmarks, known limitations, protocol reference — so the measurement no longer precedes the product, and hero plus order ship across all four languages as one coordinated change, never partially | ADR-0022 §"Consistency across languages" | T-1014, T-1015 (#206, #207) | F11 ticket doc's explicit merge-ordering note against T-1021 |
 | P0-7 | The default `init` output is result-oriented — it reports readiness rather than internal step names, stays short enough to read at a glance on a clean run, and never hides a warning or a failure; today's `[1/4]`…`[4/4]` step detail moves behind `--verbose`, and `--json` (which already exists) is unchanged | Source review §8 P0-7 | T-1012 (#204), T-1013 (#205) | T-1012's AC table (clean run is result-oriented, no internal command names, a failure stays visible); T-1013's AC table (`--verbose` restores the step detail) |
 | P0-8 | One MCP tool `commitlore_before_change` accepts `{path, proposal?}` and returns `{active_decisions, verification_gaps, possible_revival_matches, guard_confidence: "experimental", cache_key}`: context only when no proposal is given, plus an experimental guard result when one is, with the two confidence levels kept visibly separate so an agent has one tool to remember | Source review §8 P0-8 | T-1024 (#219) | T-1024's AC table; must show one tool call replacing a separate guard and context call, and must not present an experimental signal at the same confidence as path-scoped context |
 
@@ -108,7 +110,8 @@ Independent audit finding. It closes no acceptance-matrix row. An earlier sessio
 close `P0-4` as that session had reconstructed the row; the real `P0-4` is the MCP capture
 write-side, ticketed to close by T-1007, T-1008 and T-1009. Dependencies here were narrowed from
 "all of T-1001–T-1022" to the pipeline this ticket actually exercises, which makes it the last
-Gate A ticket to become startable.
+**capture-pipeline integration** ticket to become startable. It is not the last Gate A ticket:
+T-1024 sits behind its own dependency chain on `src/mcp/server.ts`.
 
 **Why it survives.** Every capture ticket proves its own slice against constructed inputs. None
 runs the chain — prepare, verify, stage, a real `git commit`, the hook applying, `post-commit`
