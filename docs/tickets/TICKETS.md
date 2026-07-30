@@ -16,8 +16,8 @@
 | [F9-unified-capture.md](F9-unified-capture.md) | T-1001 ~ T-1009, T-1018, T-1019, T-1023 (12) | M5 | #193–#201, #213, #215, #216 |
 | [F10-first-run-experience.md](F10-first-run-experience.md) | T-1010 ~ T-1016 (7) | M5 | #202–#207, #212 |
 | [F11-guard-classification.md](F11-guard-classification.md) | T-1020 ~ T-1022, T-1024 (4) | M5 | #208–#210, #219 |
-| [F12-universal-adoption.md](F12-universal-adoption.md) | T-1101 ~ T-1108 (8) | M6 | new×8 |
-| [F13-capture-advisory-and-policy.md](F13-capture-advisory-and-policy.md) | T-1109 ~ T-1110 (2) | M6 | new×2 |
+| [F12-universal-adoption.md](F12-universal-adoption.md) | T-1101 ~ T-1108 (8) | M6 | #265–#272 |
+| [F13-capture-advisory-and-policy.md](F13-capture-advisory-and-policy.md) | T-1109 ~ T-1110 (2) | M6 | #273–#274 |
 
 Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001) · 25 M5 Gate A tickets (T-1001 ~ T-1031; T-1019 and T-1023 are independent audit findings recorded in `docs/GATE-A-ACCEPTANCE.md` and close no acceptance-matrix row; T-1024 is ticketed to close row P0-8 and is defined in `F11-guard-classification.md`) · 10 M6 Gate B tickets (T-1101 ~ T-1110)
 
