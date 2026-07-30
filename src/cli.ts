@@ -30,6 +30,7 @@ import { register as registerMcp } from './commands/mcp.js';
 import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
+import { register as registerUninstall } from './commands/uninstall.js';
 import { register as registerValidate } from './commands/validate.js';
 import { register as registerPostCommit } from './hooks/post-commit.js';
 import { register as registerPrepareCommitMsg } from './hooks/prepare-commit-msg.js';
@@ -155,6 +156,7 @@ registerBackfill(program);
 registerCapture(program);
 registerDemo(program);
 registerMcp(program);
+registerUninstall(program);
 
 /**
  * Exit codes are a protocol property, not a per-command habit (SPEC §10): 0

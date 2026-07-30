@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync17 } from "node:fs";
+import { readFileSync as readFileSync18 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -28412,8 +28412,261 @@ var register17 = (program3) => {
   });
 };
 
+// src/commands/uninstall.ts
+import { existsSync as existsSync10, readFileSync as readFileSync16, rmSync as rmSync4, writeFileSync as writeFileSync12 } from "node:fs";
+import { homedir } from "node:os";
+import { join as join7 } from "node:path";
+import { spawnSync as spawnSync4 } from "node:child_process";
+
+// src/core/agent-configs.ts
+var AGENT_CONFIGS = [
+  {
+    agent: "claude-code",
+    configPath: null,
+    format: "claude-plugin",
+    entryKey: "commitlore"
+  },
+  {
+    agent: "codex",
+    configPath: ".codex/config.toml",
+    format: "toml-mcp_servers",
+    entryKey: "commitlore"
+  },
+  {
+    agent: "gemini-cli",
+    configPath: ".gemini/settings.json",
+    format: "json-mcpServers",
+    entryKey: "commitlore"
+  },
+  {
+    agent: "cursor",
+    configPath: ".cursor/mcp.json",
+    format: "json-mcpServers",
+    entryKey: "commitlore"
+  },
+  {
+    agent: "windsurf",
+    configPath: ".codeium/windsurf/mcp_config.json",
+    format: "json-mcpServers",
+    entryKey: "commitlore"
+  },
+  {
+    agent: "opencode",
+    configPath: ".config/opencode/opencode.json",
+    format: "json-mcp",
+    entryKey: "commitlore"
+  }
+];
+var resolveConfigPath = (entry, home) => {
+  if (entry.configPath === null) return null;
+  return `${home}/${entry.configPath}`;
+};
+
+// src/commands/uninstall.ts
+var isSelfIdentifyingCommitlore = (binPath) => {
+  try {
+    const result = spawnSync4(binPath, ["--version"], {
+      encoding: "utf8",
+      timeout: 5e3,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const version2 = (result.stdout ?? "").trim();
+    return /^[0-9]+\.[0-9]+\.[0-9]+/.test(version2);
+  } catch {
+    return false;
+  }
+};
+var removeJsonMcpServersEntry = (content, key) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return null;
+  }
+  const servers = parsed["mcpServers"];
+  if (!servers || !(key in servers)) return null;
+  delete servers[key];
+  return JSON.stringify(parsed, null, 2);
+};
+var removeJsonMcpEntry = (content, key) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return null;
+  }
+  const mcp = parsed["mcp"];
+  if (!mcp || !(key in mcp)) return null;
+  delete mcp[key];
+  return JSON.stringify(parsed, null, 2);
+};
+var removeTomlMcpServersEntry = (content, key) => {
+  const header2 = `[mcp_servers.${key}]`;
+  const lines = content.split("\n");
+  const headerIndex = lines.findIndex((line) => line.trim() === header2);
+  if (headerIndex === -1) return null;
+  let endIndex = lines.length;
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith("[") && !trimmed.startsWith("[[")) {
+      endIndex = i;
+      break;
+    }
+  }
+  const before = lines.slice(0, headerIndex);
+  const after = lines.slice(endIndex);
+  while (before.length > 0 && before[before.length - 1].trim() === "") {
+    before.pop();
+  }
+  const result = after.length > 0 && after.some((l) => l.trim() !== "") ? [...before, "", ...after].join("\n") : [...before, ...after].join("\n");
+  return result;
+};
+var removeEntryFromConfig = (entry, home, dryRun) => {
+  if (entry.format === "claude-plugin") {
+    return {
+      agent: entry.agent,
+      outcome: "left",
+      reason: "uses a plugin CLI \u2014 run `claude plugin uninstall commitlore` manually"
+    };
+  }
+  const configPath = resolveConfigPath(entry, home);
+  if (configPath === null) {
+    return { agent: entry.agent, outcome: "not-found", reason: "no config path defined" };
+  }
+  if (!existsSync10(configPath)) {
+    return { agent: entry.agent, outcome: "not-found", reason: "config file does not exist" };
+  }
+  const content = readFileSync16(configPath, "utf8");
+  let newContent = null;
+  switch (entry.format) {
+    case "json-mcpServers":
+      newContent = removeJsonMcpServersEntry(content, entry.entryKey);
+      break;
+    case "json-mcp":
+      newContent = removeJsonMcpEntry(content, entry.entryKey);
+      break;
+    case "toml-mcp_servers":
+      newContent = removeTomlMcpServersEntry(content, entry.entryKey);
+      break;
+  }
+  if (newContent === null) {
+    if (entry.format.startsWith("json")) {
+      try {
+        JSON.parse(content);
+        return { agent: entry.agent, outcome: "not-found", reason: "no commitlore entry in config" };
+      } catch {
+        return { agent: entry.agent, outcome: "left", reason: "config file is not parseable \u2014 left untouched" };
+      }
+    }
+    return { agent: entry.agent, outcome: "not-found", reason: "no commitlore entry in config" };
+  }
+  if (dryRun) {
+    return { agent: entry.agent, outcome: "would-remove" };
+  }
+  writeFileSync12(configPath, newContent);
+  return { agent: entry.agent, outcome: "removed" };
+};
+var runUninstall = (options) => {
+  const home = options.home ?? homedir();
+  const dryRun = options.dryRun ?? false;
+  const binPath = join7(home, ".local", "bin", "commitlore");
+  let binary;
+  if (!existsSync10(binPath)) {
+    binary = { path: binPath, outcome: "not-found", reason: "binary does not exist" };
+  } else if (!isSelfIdentifyingCommitlore(binPath)) {
+    binary = {
+      path: binPath,
+      outcome: "left",
+      reason: "does not identify itself as commitlore \u2014 refusing to remove"
+    };
+  } else if (dryRun) {
+    binary = { path: binPath, outcome: "would-remove" };
+  } else {
+    rmSync4(binPath);
+    binary = { path: binPath, outcome: "removed" };
+  }
+  const agents = AGENT_CONFIGS.map(
+    (entry) => removeEntryFromConfig(entry, home, dryRun)
+  );
+  return {
+    binary,
+    agents,
+    hint: "Per-repository state (hooks, index, notes) is not affected. Use `commitlore hooks uninstall` and `commitlore inject uninstall-claude-hook` in each repository."
+  };
+};
+var formatReport3 = (result) => {
+  const lines = [];
+  lines.push("== commitlore uninstall ==");
+  lines.push("");
+  switch (result.binary.outcome) {
+    case "removed":
+      lines.push(`Binary: removed ${result.binary.path}`);
+      break;
+    case "would-remove":
+      lines.push(`Binary: would remove ${result.binary.path}`);
+      break;
+    case "left":
+      lines.push(`Binary: left ${result.binary.path} (${result.binary.reason})`);
+      break;
+    case "not-found":
+      lines.push(`Binary: not found at ${result.binary.path}`);
+      break;
+  }
+  lines.push("");
+  const removed = [];
+  const left = [];
+  const notFound2 = [];
+  for (const agent of result.agents) {
+    switch (agent.outcome) {
+      case "removed":
+      case "would-remove":
+        removed.push(`  - ${agent.agent}${agent.outcome === "would-remove" ? " (dry-run)" : ""}`);
+        break;
+      case "left":
+        left.push(`  - ${agent.agent}: ${agent.reason}`);
+        break;
+      case "not-found":
+        notFound2.push(`  - ${agent.agent}`);
+        break;
+    }
+  }
+  if (removed.length > 0) {
+    lines.push(result.binary.outcome === "would-remove" ? "Would remove MCP entries:" : "Removed MCP entries:");
+    lines.push(...removed);
+  }
+  if (left.length > 0) {
+    lines.push("Left (with reason):");
+    lines.push(...left);
+  }
+  if (notFound2.length > 0) {
+    lines.push("Not found:");
+    lines.push(...notFound2);
+  }
+  lines.push("");
+  lines.push(result.hint);
+  lines.push("");
+  return lines.join("\n");
+};
+var register18 = (program3) => {
+  program3.command("uninstall").description("remove the installed binary and agent MCP config entries that install.sh wrote").option("--dry-run", "print what would be done without changing anything").option("--json", "emit the report as JSON").addHelpText(
+    "after",
+    "\nRemoves only what install.sh wrote: the binary at ~/.local/bin/commitlore and the commitlore MCP entry from each agent config.\nPer-repository state (hooks, index, notes) is not affected \u2014 use `commitlore hooks uninstall` and `commitlore inject uninstall-claude-hook` in each repository.\n\nExit codes: 0 ran successfully, 2 usage error (SPEC \xA710)."
+  ).action((options) => {
+    const result = runUninstall({
+      dryRun: options.dryRun ?? false,
+      json: options.json ?? false
+    });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+    } else {
+      process.stdout.write(formatReport3(result));
+    }
+  });
+};
+
 // src/commands/validate.ts
-import { readFileSync as readFileSync16 } from "node:fs";
+import { readFileSync as readFileSync17 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -28765,14 +29018,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync16(path2, "utf8");
+    return readFileSync17(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync16(0, "utf8");
+    return readFileSync17(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -29007,7 +29260,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -29028,11 +29281,11 @@ var register18 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync17(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync18(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync17(STDIN_FD2, "utf8");
+  return readFileSync18(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -29087,7 +29340,7 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register18(program2);
+register19(program2);
 register4(program2);
 register12(program2);
 register14(program2);
@@ -29105,6 +29358,7 @@ register(program2);
 register2(program2);
 register8(program2);
 register16(program2);
+register18(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
