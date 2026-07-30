@@ -366,3 +366,50 @@ describe('commitlore capture', () => {
     });
   });
 });
+
+describe('commitlore capture gc — CLI wiring', () => {
+  // Real-usage regression: `capture gc` was unreachable because the parent
+  // command declared `--transcript` as a required option, and commander
+  // enforces a parent's required options even when a subcommand is invoked.
+  // Seventeen unit tests for gcPending passed while the subcommand could not
+  // be run at all.
+  it('runs without --transcript', () => {
+    const cwd = makeRepo();
+    const result = runCapture(['gc'], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).not.toContain("required option '--transcript");
+    expect(result.stdout).toContain('nothing to collect');
+  });
+
+  // Second real-usage regression: `--json` is declared on both `capture` and
+  // `capture gc`, and commander binds it to the parent — so the subcommand's
+  // own opts never saw it and the flag was silently ignored.
+  it('honours --json after the subcommand', () => {
+    const cwd = makeRepo();
+    const result = runCapture(['gc', '--json'], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { removed: string[]; kept: string[] };
+    expect(Array.isArray(parsed.removed)).toBe(true);
+    expect(Array.isArray(parsed.kept)).toBe(true);
+  });
+
+  it('honours --json before the subcommand', () => {
+    const cwd = makeRepo();
+    const result = runCapture(['--json', 'gc'], { cwd });
+
+    expect(result.exitCode).toBe(0);
+    expect(() => JSON.parse(result.stdout)).not.toThrow();
+  });
+
+  // The requirement did not disappear; it moved into the action where it
+  // applies only to the capture flow.
+  it('still refuses the capture flow without --transcript', () => {
+    const cwd = makeRepo();
+    const result = runCapture([], { cwd });
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("required option '--transcript <path>' not specified");
+  });
+});

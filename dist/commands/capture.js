@@ -86,12 +86,21 @@ export const register = (program) => {
     const capture = program
         .command('capture')
         .description('prepare → verify → stage a record from a transcript and draft (no trailer syntax needed)')
-        .requiredOption('--transcript <path>', 'path to the session transcript file')
+        // Not `requiredOption`: commander enforces a parent's required options even
+        // when a subcommand was invoked, so `capture gc` — which needs no transcript
+        // — would fail before its own action ran. The requirement is enforced in the
+        // action below instead, where it applies only to the capture flow itself.
+        .option('--transcript <path>', 'path to the session transcript file')
         .option('--diff <path>', 'path to the diff file (defaults to empty)')
         .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
         .option('--out <path>', 'write the pending nonce to a file')
         .option('--json', 'emit structured JSON output')
         .action((options) => {
+        if (options.transcript === undefined) {
+            process.stderr.write("error: required option '--transcript <path>' not specified\n");
+            process.exitCode = 2;
+            return;
+        }
         try {
             const cwd = process.cwd();
             const runOpts = { transcriptPath: options.transcript, cwd };
@@ -136,11 +145,16 @@ export const register = (program) => {
         .command('gc')
         .description('remove expired pending transaction files')
         .option('--json', 'emit structured JSON output')
-        .action((options) => {
+        .action((options, command) => {
+        // `capture` declares `--json` too, and commander binds a flag declared on
+        // both a parent and a subcommand to the parent — so reading only the
+        // subcommand's own opts silently drops `capture gc --json`.
+        const parentOpts = command.parent?.opts();
+        const json = options.json === true || parentOpts?.json === true;
         try {
             const cwd = process.cwd();
             const result = gcPending(cwd);
-            if (options.json) {
+            if (json) {
                 process.stdout.write(JSON.stringify(result, null, 2) + '\n');
             }
             else {
