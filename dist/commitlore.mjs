@@ -11547,6 +11547,37 @@ var outputBlock = (entries) => {
     "  and the common one."
   ];
 };
+var buildHarvestContract = () => {
+  const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
+  return [
+    "# CommitLore harvest",
+    "",
+    "You are recording the decision context for a change that is about to be",
+    "committed. A CommitLore record is a set of git commit trailers that captures",
+    "what the diff cannot show: the conditions that shaped the decision, the",
+    "alternatives that were dropped, and the warnings whoever modifies this next",
+    "will need.",
+    "",
+    "Work only from the TRANSCRIPT and the DIFF at the end of this prompt.",
+    "",
+    "## Rules",
+    "",
+    ...RULES,
+    "",
+    ...vocabularyBlock(entries),
+    "",
+    ...outputBlock(entries),
+    "",
+    "## TRANSCRIPT",
+    "",
+    "(provided at harvest time)",
+    "",
+    "## DIFF",
+    "",
+    "(provided at harvest time)",
+    ""
+  ].join("\n");
+};
 var buildHarvestPrompt = (input) => {
   const entries = loadVocabulary().filter((entry) => entry.key !== "Verified");
   const diff = input.diff.trim() === "" ? "(no diff)" : input.diff.replace(/\n+$/, "");
@@ -17331,7 +17362,7 @@ var runDraftMode = (draft, out) => {
 };
 var runPromptMode = (options) => {
   if (options.transcript === void 0) {
-    return skip2("no --transcript, and there is no session to read one from");
+    return emit2(buildHarvestContract(), options.out);
   }
   const transcript = readTextFile(
     options.transcript,

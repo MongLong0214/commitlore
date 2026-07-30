@@ -424,6 +424,52 @@ describe('commitlore harvest', () => {
     expect(outcome.stderr).toContain('mutually exclusive');
   });
 
+  it('prints the contract under --prompt-only with no transcript or diff', () => {
+    const outcome = runHarvest({ promptOnly: true });
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stderr).toBe('');
+    expect(outcome.stdout).not.toBe('');
+    // The contract must contain the rules, vocabulary, and output format
+    expect(outcome.stdout).toContain('# CommitLore harvest');
+    expect(outcome.stdout).toContain('## Rules');
+    expect(outcome.stdout).toContain('## Vocabulary');
+    expect(outcome.stdout).toContain('## Output');
+    // It must NOT contain empty holes — transcript/diff sections should have
+    // explicit placeholder text, not blank content
+    expect(outcome.stdout).not.toContain('\n## TRANSCRIPT\n\n\n');
+    expect(outcome.stdout).not.toContain('\n## DIFF\n\n\n');
+  });
+
+  it('ORACLE: --prompt-only without inputs must not skip (mutation: restore transcript requirement)', () => {
+    // This oracle verifies the fix has teeth: if someone reintroduces a
+    // transcript requirement in runPromptMode, this test will catch it.
+    const outcome = runHarvest({ promptOnly: true });
+    // Must NOT be a skip — must produce actual output
+    expect(outcome.stderr).not.toContain('harvest skipped');
+    expect(outcome.stdout.length).toBeGreaterThan(100);
+  });
+
+  it('ORACLE: --prompt-only without inputs exits 0 not nonzero', () => {
+    // The old code exited 0 with a skip message. We need it to exit 0 with
+    // actual content (not a silent failure). If someone makes it exit nonzero,
+    // this catches it.
+    const outcome = runHarvest({ promptOnly: true });
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout).toContain('## Vocabulary');
+  });
+
+  it('ORACLE-STABLE: --prompt-only with transcript and diff still works as before', () => {
+    // This must NOT break — it verifies the existing path is unaffected.
+    const outcome = runHarvest({
+      promptOnly: true,
+      transcript: TRANSCRIPT_FILE,
+      diff: DIFF_FILE,
+    });
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stderr).toBe('');
+    expect(outcome.stdout).toBe(prompt);
+  });
+
   it('registers itself on a commander program', async () => {
     const program = new Command();
     program.exitOverride();
