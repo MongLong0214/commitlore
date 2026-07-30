@@ -29,6 +29,10 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/inst
 
 ## 看它实际运行
 
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
 **一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
 
 ```bash

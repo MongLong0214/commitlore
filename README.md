@@ -29,6 +29,10 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/inst
 
 ## See it work
 
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
 **A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
 
 ```bash
