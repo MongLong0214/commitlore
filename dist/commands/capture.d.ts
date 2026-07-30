@@ -15,10 +15,12 @@
  * Structured for subcommand extension (T-1019 will add `capture gc`).
  */
 import type { Command } from 'commander';
+import type { GuardAdvisory } from '../core/pending.js';
 interface CaptureResult {
     nonce: string | null;
     staged: boolean;
     prompt?: string;
+    guard_advisory?: GuardAdvisory | null;
 }
 /**
  * Run the full capture pipeline: prepare → verify → stage.

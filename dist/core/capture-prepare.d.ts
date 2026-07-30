@@ -5,6 +5,7 @@
  * contract via `buildHarvestPrompt`, and persists the prepared transaction
  * through `createPending`.
  */
+import { type GuardAdvisory } from './pending.js';
 export interface PrepareCaptureOptions {
     cwd: string;
     transcript: string;
@@ -20,6 +21,7 @@ export interface PrepareResult {
         diff: string;
     };
     prompt: string;
+    guard_advisory: GuardAdvisory | null;
 }
 /**
  * Prepares a capture context: computes all binding conditions, generates
