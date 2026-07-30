@@ -23,7 +23,7 @@
 一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh | sh
 ```
 
 ## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
@@ -68,11 +68,11 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.2.0/install.sh
-sh install.sh v0.2.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh
+sh install.sh v0.3.0
 
 # または release binary を自分で検証してから展開します。
-version=0.2.0; target=aarch64-apple-darwin
+version=0.3.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
