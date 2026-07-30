@@ -477,6 +477,7 @@ describe('handshake and declarations', () => {
       'commitlore_prepare_capture',
       'commitlore_query',
       'commitlore_stale',
+      'commitlore_verify_capture',
     ]);
 
     const query = tools.find((tool) => tool.name === 'commitlore_query');

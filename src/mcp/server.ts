@@ -63,6 +63,7 @@ import { buildReport, collectRecords } from '../commands/stale.js';
 import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
+import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 
 export const SERVER_NAME = 'commitlore';
@@ -90,6 +91,7 @@ export const STALE_TOOL = 'commitlore_stale';
 export const GUARD_TOOL = 'commitlore_guard';
 export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
 export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
+export const VERIFY_CAPTURE_TOOL = 'commitlore_verify_capture';
 
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
@@ -325,6 +327,42 @@ const TOOLS: readonly Tool[] = [
       title: 'Prepare a capture transaction',
     },
   },
+  {
+    name: VERIFY_CAPTURE_TOOL,
+    description:
+      'Verify a capture draft against the transcript and diff that were hashed at prepare time. ' +
+      'Evidence citations are checked mechanically (verbatim match); fabricated quotes are discarded. ' +
+      'Stores the verified result in the pending transaction for stage to consume.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nonce: {
+          type: 'string',
+          description: 'the 32-character lowercase hex nonce returned by prepare_capture',
+        },
+        draft: {
+          type: 'string',
+          description: 'JSON-serialised array of DraftRecord objects produced by the agent',
+        },
+        transcript: {
+          type: 'string',
+          description: 'the session transcript (same content hashed at prepare time)',
+        },
+        diff: {
+          type: 'string',
+          description: 'the staged diff (same content hashed at prepare time)',
+        },
+      },
+      required: ['nonce', 'draft', 'transcript', 'diff'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: 'Verify a capture draft',
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -436,6 +474,41 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         policy_identity_hash: result.policy_identity_hash,
         source_hashes: result.source_hashes,
         prompt: result.prompt,
+      });
+    },
+    [VERIFY_CAPTURE_TOOL]: (args) => {
+      const nonce = requiredString(args, 'nonce');
+      // Nonce validation at the boundary: lowercase hex, exactly 32 chars
+      if (!/^[0-9a-f]{32}$/.test(nonce)) {
+        throw new Error('nonce must be exactly 32 lowercase hex characters');
+      }
+      const draftRaw = requiredString(args, 'draft');
+      const transcript = requiredString(args, 'transcript');
+      const diff = stringArg(args, 'diff') ?? '';
+
+      // Parse draft JSON — malformed input is a caller error
+      let draft: unknown[];
+      try {
+        const parsed = JSON.parse(draftRaw);
+        if (!Array.isArray(parsed)) throw new Error('draft must be a JSON array');
+        draft = parsed;
+      } catch (e) {
+        throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      const result = verifyCaptureRecords({
+        nonce,
+        draft: draft as import('../core/harvest.js').DraftRecord[],
+        transcript,
+        diff,
+        cwd: root,
+      });
+      return asText({
+        validation_result: result.validation_result,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        incomplete: result.incomplete,
+        overlap_check: result.overlap_check,
       });
     },
   };

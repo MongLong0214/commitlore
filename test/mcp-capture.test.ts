@@ -344,3 +344,250 @@ describe('commitlore_prepare_capture mutation oracles', () => {
     expect(nonPromptJson).not.toContain(secret);
   });
 });
+
+// ===========================================================================
+// T-1008: commitlore_verify_capture
+// ===========================================================================
+
+describe('commitlore_verify_capture', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => { stub?.close(); });
+
+  it('is listed with readOnlyHint: false', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      annotations?: Record<string, unknown>;
+    }[];
+    const tool = tools.find((t) => t.name === 'commitlore_verify_capture');
+    expect(tool).toBeDefined();
+    expect(tool!.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
+  });
+
+  it('returns validation_result with a valid draft', async () => {
+    // First prepare a transaction
+    const transcript = 'User decided to use PostgreSQL instead of MySQL.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Build a valid draft with evidence from the transcript
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'MySQL: PostgreSQL chosen for its JSON support' },
+          { key: 'Record-Id', value: 'r-test00001' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'User decided to use PostgreSQL instead of MySQL.',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ];
+
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify(draft),
+        transcript,
+        diff: '',
+      },
+    });
+    expect(response.error).toBeUndefined();
+    expect(response.result?.['isError']).not.toBe(true);
+
+    const result = toolJson(response);
+    expect(result['validation_result']).toMatch(/^(pass|partial|empty)$/);
+    expect(result['overlap_check']).toBe('canonical_exact_only');
+    expect(result).toHaveProperty('accepted');
+    expect(result).toHaveProperty('rejected');
+    expect(result).toHaveProperty('incomplete');
+  });
+
+  it('returns empty for a fabricated evidence quote', async () => {
+    const transcript = 'We chose Redis for caching.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Draft with a fabricated quote (not in transcript)
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'Memcached: Redis chosen for persistence' },
+          { key: 'Record-Id', value: 'r-fabricated001' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'This quote does not exist in the actual transcript at all.',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ];
+
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify(draft),
+        transcript,
+        diff: '',
+      },
+    });
+    expect(response.error).toBeUndefined();
+    expect(response.result?.['isError']).not.toBe(true);
+
+    const result = toolJson(response);
+    expect(result['validation_result']).toBe('empty');
+  });
+
+  it('returns isError for malformed draft JSON', async () => {
+    const transcript = 'some transcript';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: 'this is not valid JSON {{{',
+        transcript,
+        diff: '',
+      },
+    });
+    expect(response.result?.['isError']).toBe(true);
+  });
+
+  it('rejects an invalid nonce format', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce: 'INVALID-NONCE-NOT-HEX!!',
+        draft: '[]',
+        transcript: 'test',
+        diff: '',
+      },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    const content = (response.result?.['content'] ?? []) as ContentBlock[];
+    expect(content[0]?.text).toMatch(/nonce/i);
+  });
+});
+
+// ===========================================================================
+// Mutation oracles — T-1008
+// ===========================================================================
+
+describe('commitlore_verify_capture mutation oracles', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => { stub?.close(); });
+
+  it('MUST FAIL: readOnlyHint must not be true (detects annotation mutation)', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      annotations?: Record<string, unknown>;
+    }[];
+    const tool = tools.find((t) => t.name === 'commitlore_verify_capture');
+    // If someone mutates annotation to readOnlyHint: true, this fails.
+    expect(tool).toBeDefined();
+    expect(tool!.annotations?.['readOnlyHint']).toBe(false);
+  });
+
+  it('MUST FAIL: fabricated evidence must be rejected (detects bypass mutation)', async () => {
+    const transcript = 'The team selected DynamoDB for its scalability.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Draft with completely fabricated evidence
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'MongoDB: DynamoDB chosen for serverless' },
+          { key: 'Record-Id', value: 'r-oracletest01' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'FABRICATED: MongoDB was rejected because it requires server management.',
+            locator: 'L5-L6',
+          },
+        ],
+      },
+    ];
+
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify(draft),
+        transcript,
+        diff: '',
+      },
+    });
+    expect(response.result?.['isError']).not.toBe(true);
+
+    const result = toolJson(response);
+    // A mutation that accepts fabricated evidence would make this pass → catches it
+    expect(result['validation_result']).toBe('empty');
+    const rejectedArr = result['rejected'] as unknown[];
+    expect(rejectedArr.length).toBeGreaterThan(0);
+  });
+
+  it('MUST PASS: nonce validation rejects path-traversal attempt', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce: '../../../etc/passwd__________',
+        draft: '[]',
+        transcript: 'test',
+        diff: '',
+      },
+    });
+    // Should error — nonce doesn't match ^[0-9a-f]{32}$
+    expect(response.result?.['isError']).toBe(true);
+  });
+});
