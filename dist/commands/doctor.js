@@ -398,7 +398,21 @@ const checkInjectRuntime = (opts) => {
             HOME: process.env['HOME'] ?? '',
         },
     });
-    return evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
+    const result = evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
+    // An unresolvable executable is an incomplete environment — the hook will
+    // not fire until the user installs it — but it does not make records
+    // incorrect or prevent the tool from working. Analogous to "no remote" in
+    // checkRefspec: a setup that has not reached that integration yet, not a
+    // misconfiguration. `evaluateInjectRun` reports `fail` (which standalone
+    // `doctor` surfaces for actionability), but `needsAttention` is cleared so
+    // `init`'s final doctor step does not treat a missing system binary as a
+    // blocking finding that the user must fix before the repository is usable
+    // (#192, #221).
+    if (result.status === 'fail' && run.status === null && run.error !== undefined &&
+        'code' in run.error && run.error.code === 'ENOENT') {
+        return { ...result, needsAttention: false };
+    }
+    return result;
 };
 const checkIndex = (opts) => {
     const cwd = opts.cwd ?? process.cwd();

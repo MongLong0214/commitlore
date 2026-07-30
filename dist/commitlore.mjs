@@ -16271,7 +16271,11 @@ var checkInjectRuntime = (opts) => {
       HOME: process.env["HOME"] ?? ""
     }
   });
-  return evaluateInjectRun(run, { id, title, executable, path: path2, fix, unavailableFix });
+  const result = evaluateInjectRun(run, { id, title, executable, path: path2, fix, unavailableFix });
+  if (result.status === "fail" && run.status === null && run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
+    return { ...result, needsAttention: false };
+  }
+  return result;
 };
 var checkIndex = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
