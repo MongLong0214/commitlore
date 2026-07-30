@@ -27396,6 +27396,7 @@ var GUARD_TOOL = "commitlore_guard";
 var BEFORE_CHANGE_TOOL = "commitlore_before_change";
 var PREPARE_CAPTURE_TOOL = "commitlore_prepare_capture";
 var VERIFY_CAPTURE_TOOL = "commitlore_verify_capture";
+var STAGE_CAPTURE_TOOL = "commitlore_stage_capture";
 var CONTEXT_URI_PREFIX = "commitlore://context/";
 var CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
 var errorMessage4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
@@ -27572,6 +27573,27 @@ var TOOLS = [
       openWorldHint: false,
       title: "Verify a capture draft"
     }
+  },
+  {
+    name: STAGE_CAPTURE_TOOL,
+    description: "Stage a verified capture transaction: advances the pending record from verified to staged, stamps expires_at (staged_at + 5 minutes), and makes it eligible for the prepare-commit-msg hook. Accepts only a nonce; all bindings are server-owned and computed from stored state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nonce: {
+          type: "string",
+          description: "the 32-character lowercase hex nonce returned by prepare_capture"
+        }
+      },
+      required: ["nonce"],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: "Stage a verified capture transaction"
+    }
   }
 ];
 var stringArg = (args, name) => {
@@ -27682,6 +27704,17 @@ var createServer = (opts = {}) => {
         incomplete: result.incomplete,
         overlap_check: result.overlap_check
       });
+    },
+    [STAGE_CAPTURE_TOOL]: (args) => {
+      const nonce = requiredString(args, "nonce");
+      if (!/^[0-9a-f]{32}$/.test(nonce)) {
+        throw new Error("nonce must be exactly 32 lowercase hex characters");
+      }
+      const result = stageCaptureRecord({ nonce, cwd: root });
+      if (result === null) {
+        return asText({ staged: false, reason: "nothing to stage (empty/incomplete verification or wrong phase)" });
+      }
+      return asText({ staged: true, nonce: result });
     }
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
