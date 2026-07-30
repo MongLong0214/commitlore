@@ -6,7 +6,11 @@
 
 ---
 
-## T-1020 MCP guard tool description: disclose measured limits (S) — #208 · depends on ADR-0020
+## T-1020 MCP guard tool description: disclose measured limits (S) — #208 · depends on ADR-0020, and merges after T-1009
+
+**Merge sequencing**: this ticket also edits `src/mcp/server.ts`. It merges
+last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
+`docs/GATE-A-ACCEPTANCE.md` "Execution constraint".
 
 **Owns**
 
