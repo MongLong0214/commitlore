@@ -26903,6 +26903,12 @@ import { createHash as createHash3 } from "node:crypto";
 import { randomBytes as randomBytes4 } from "node:crypto";
 import { existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync11, renameSync as renameSync4, unlinkSync as unlinkSync3, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve9 } from "node:path";
+var PendingFormatError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "PendingFormatError";
+  }
+};
 var NONCE_RE = /^[0-9a-f]{32}$/;
 var validateNonce = (nonce) => {
   if (!NONCE_RE.test(nonce)) {
@@ -26970,6 +26976,55 @@ var createPending = (opts) => {
   atomicWriteJson(filePath, record2);
   return nonce;
 };
+var readPending = (nonce, opts) => {
+  validateNonce(nonce);
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  if (!existsSync7(filePath)) return null;
+  let content;
+  try {
+    content = readFileSync11(filePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: invalid JSON`);
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: not an object`);
+  }
+  const obj = parsed;
+  if (obj["version"] !== 1) {
+    throw new PendingFormatError(
+      `Unsupported pending file version ${String(obj["version"])} for nonce ${nonce}`
+    );
+  }
+  return obj;
+};
+var storeVerification = (nonce, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "prepared") return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "verified",
+    verified_at: now,
+    // CEO amendment 1: expires_at remains null in verified phase
+    expires_at: null,
+    records: opts.accepted,
+    evidence_hash: opts.evidence_hash,
+    validation_result: opts.validation_result,
+    overlap_check: opts.overlap_check,
+    incomplete: opts.incomplete
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
 
 // src/core/capture-prepare.ts
 var HARDCODED_DEFAULTS = {
@@ -27009,6 +27064,174 @@ var prepareCaptureContext = (opts) => {
   };
 };
 
+// src/core/capture-verify.ts
+import { createHash as createHash4 } from "node:crypto";
+var sha256 = (input) => createHash4("sha256").update(input).digest("hex");
+var recordIdOf2 = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
+var canonicalTuple = (record2) => {
+  const keys = record2.trailers.filter((t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance").map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
+  return keys;
+};
+var classifyResult = (accepted, rejected) => {
+  if (accepted.length === 0) return "empty";
+  if (rejected.length === 0) return "pass";
+  return "partial";
+};
+var verifyCaptureRecords = (opts) => {
+  const { nonce, draft, transcript, diff, cwd } = opts;
+  const accepted = [];
+  const rejected = [];
+  try {
+    const pending = readPending(nonce, { cwd });
+    if (!pending) {
+      return {
+        accepted: [],
+        rejected: [],
+        validation_result: "empty",
+        incomplete: false,
+        overlap_check: "canonical_exact_only"
+      };
+    }
+    const transcriptHash = sha256(transcript);
+    const diffHash = sha256(diff);
+    if (pending.source_hashes.transcript !== transcriptHash) {
+      for (const record2 of draft) {
+        rejected.push({
+          record: record2,
+          reason: "source-mismatch",
+          detail: "transcript hash does not match the prepared transaction"
+        });
+      }
+      const result2 = {
+        accepted: [],
+        rejected,
+        validation_result: "empty",
+        incomplete: false,
+        overlap_check: "canonical_exact_only"
+      };
+      storeVerificationResult(nonce, cwd, result2);
+      return result2;
+    }
+    if (pending.source_hashes.diff !== diffHash) {
+      for (const record2 of draft) {
+        rejected.push({
+          record: record2,
+          reason: "source-mismatch",
+          detail: "diff hash does not match the prepared transaction"
+        });
+      }
+      const result2 = {
+        accepted: [],
+        rejected,
+        validation_result: "empty",
+        incomplete: false,
+        overlap_check: "canonical_exact_only"
+      };
+      storeVerificationResult(nonce, cwd, result2);
+      return result2;
+    }
+    const notes = notesAvailability({ cwd });
+    if (notes === "unfetched") {
+      const result2 = {
+        accepted: [],
+        rejected: [],
+        validation_result: "empty",
+        incomplete: true,
+        overlap_check: "canonical_exact_only"
+      };
+      storeVerificationResult(nonce, cwd, result2);
+      return result2;
+    }
+    let activeRecordIds = /* @__PURE__ */ new Set();
+    let activeCanonicalTuples = /* @__PURE__ */ new Set();
+    try {
+      const queryResult = runQuery({ cwd, noIndex: true });
+      for (const rec of queryResult.records) {
+        const idTrailer = rec.trailers.find((t) => t.key === "Record-Id");
+        if (idTrailer) activeRecordIds.add(idTrailer.value);
+        const tuple = rec.trailers.filter(
+          (t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance"
+        ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
+        activeCanonicalTuples.add(tuple);
+      }
+    } catch {
+      const result2 = {
+        accepted: [],
+        rejected: [],
+        validation_result: "empty",
+        incomplete: true,
+        overlap_check: "canonical_exact_only"
+      };
+      storeVerificationResult(nonce, cwd, result2);
+      return result2;
+    }
+    const verifyResult = verifyDraft(draft, { transcript, diff });
+    for (const verified of verifyResult.accepted) {
+      const id = recordIdOf2(verified.record);
+      if (id && activeRecordIds.has(id)) {
+        rejected.push({
+          record: verified.record,
+          reason: "duplicate-record-id",
+          detail: `Record-Id "${id}" already exists in active records`
+        });
+        continue;
+      }
+      const tuple = canonicalTuple(verified.record);
+      if (tuple && activeCanonicalTuples.has(tuple)) {
+        rejected.push({
+          record: verified.record,
+          reason: "canonical-duplicate",
+          detail: "a record with the same normalized key/value/scope already exists"
+        });
+        continue;
+      }
+      accepted.push(verified);
+    }
+    for (const rejectedRec of verifyResult.rejected) {
+      rejected.push({
+        record: rejectedRec.record,
+        reason: rejectedRec.reason,
+        detail: rejectedRec.detail
+      });
+    }
+    const validationResult = classifyResult(accepted, rejected);
+    const result = {
+      accepted,
+      rejected,
+      validation_result: validationResult,
+      incomplete: false,
+      overlap_check: "canonical_exact_only"
+    };
+    storeVerificationResult(nonce, cwd, result);
+    return result;
+  } catch {
+    const result = {
+      accepted: [],
+      rejected: [],
+      validation_result: "empty",
+      incomplete: false,
+      overlap_check: "canonical_exact_only"
+    };
+    try {
+      storeVerificationResult(nonce, cwd, result);
+    } catch {
+    }
+    return result;
+  }
+};
+var storeVerificationResult = (nonce, cwd, result) => {
+  const evidenceHash = sha256(JSON.stringify(result.accepted.map((a) => a.record)));
+  storeVerification(nonce, {
+    cwd,
+    accepted: result.accepted.map((a) => a.record),
+    rejected: result.rejected,
+    validation_result: result.validation_result,
+    overlap_check: result.overlap_check,
+    incomplete: result.incomplete,
+    evidence_hash: evidenceHash
+  });
+};
+
 // src/mcp/server.ts
 var SERVER_NAME = "commitlore";
 var FALLBACK_VERSION = "0.0.0";
@@ -27025,6 +27248,7 @@ var STALE_TOOL = "commitlore_stale";
 var GUARD_TOOL = "commitlore_guard";
 var BEFORE_CHANGE_TOOL = "commitlore_before_change";
 var PREPARE_CAPTURE_TOOL = "commitlore_prepare_capture";
+var VERIFY_CAPTURE_TOOL = "commitlore_verify_capture";
 var CONTEXT_URI_PREFIX = "commitlore://context/";
 var CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
 var errorMessage4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
@@ -27168,6 +27392,39 @@ var TOOLS = [
       openWorldHint: false,
       title: "Prepare a capture transaction"
     }
+  },
+  {
+    name: VERIFY_CAPTURE_TOOL,
+    description: "Verify a capture draft against the transcript and diff that were hashed at prepare time. Evidence citations are checked mechanically (verbatim match); fabricated quotes are discarded. Stores the verified result in the pending transaction for stage to consume.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        nonce: {
+          type: "string",
+          description: "the 32-character lowercase hex nonce returned by prepare_capture"
+        },
+        draft: {
+          type: "string",
+          description: "JSON-serialised array of DraftRecord objects produced by the agent"
+        },
+        transcript: {
+          type: "string",
+          description: "the session transcript (same content hashed at prepare time)"
+        },
+        diff: {
+          type: "string",
+          description: "the staged diff (same content hashed at prepare time)"
+        }
+      },
+      required: ["nonce", "draft", "transcript", "diff"],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: "Verify a capture draft"
+    }
   }
 ];
 var stringArg = (args, name) => {
@@ -27246,6 +27503,37 @@ var createServer = (opts = {}) => {
         policy_identity_hash: result.policy_identity_hash,
         source_hashes: result.source_hashes,
         prompt: result.prompt
+      });
+    },
+    [VERIFY_CAPTURE_TOOL]: (args) => {
+      const nonce = requiredString(args, "nonce");
+      if (!/^[0-9a-f]{32}$/.test(nonce)) {
+        throw new Error("nonce must be exactly 32 lowercase hex characters");
+      }
+      const draftRaw = requiredString(args, "draft");
+      const transcript = requiredString(args, "transcript");
+      const diff = stringArg(args, "diff") ?? "";
+      let draft;
+      try {
+        const parsed = JSON.parse(draftRaw);
+        if (!Array.isArray(parsed)) throw new Error("draft must be a JSON array");
+        draft = parsed;
+      } catch (e) {
+        throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      const result = verifyCaptureRecords({
+        nonce,
+        draft,
+        transcript,
+        diff,
+        cwd: root
+      });
+      return asText({
+        validation_result: result.validation_result,
+        accepted: result.accepted,
+        rejected: result.rejected,
+        incomplete: result.incomplete,
+        overlap_check: result.overlap_check
       });
     }
   };
@@ -28094,7 +28382,7 @@ var readMessage = (messageFile) => {
   }
   return readFileSync14(STDIN_FD2, "utf8");
 };
-var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
   const tags = [block.own ? "own" : "earlier", ...block.identityCollision ? ["Record-Id collision"] : []];
   return `# record ${index + 1}/${total} \u2014 ${tags.join(", ")}`;
@@ -28112,7 +28400,7 @@ var runParse = (options) => {
   }
   const reported = /* @__PURE__ */ new Set();
   for (const block of blocks) {
-    const id = recordIdOf2(block);
+    const id = recordIdOf3(block);
     if (id === void 0 || !block.identityCollision || reported.has(id)) continue;
     reported.add(id);
     process.stderr.write(
