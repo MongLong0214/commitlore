@@ -591,3 +591,331 @@ describe('commitlore_verify_capture mutation oracles', () => {
     expect(response.result?.['isError']).toBe(true);
   });
 });
+
+// ===========================================================================
+// T-1009: commitlore_stage_capture
+// ===========================================================================
+
+describe('commitlore_stage_capture', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => { stub?.close(); });
+
+  it('is listed with readOnlyHint: false', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      annotations?: Record<string, unknown>;
+    }[];
+    const tool = tools.find((t) => t.name === 'commitlore_stage_capture');
+    expect(tool).toBeDefined();
+    expect(tool!.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
+  });
+
+  it('stages a pending file given a verified nonce', async () => {
+    // Prepare
+    const transcript = 'User decided to use Kafka instead of RabbitMQ for event streaming.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Verify with valid evidence
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'RabbitMQ | Kafka chosen for event streaming throughput' },
+          { key: 'Record-Id', value: 'r-stage009a' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'User decided to use Kafka instead of RabbitMQ for event streaming.',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ];
+    const verifyResponse = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: JSON.stringify(draft), transcript, diff: '' },
+    });
+    const verifyResult = toolJson(verifyResponse);
+    expect(verifyResult['validation_result']).toBe('pass');
+
+    // Stage
+    const stageResponse = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce },
+    });
+    expect(stageResponse.error).toBeUndefined();
+    expect(stageResponse.result?.['isError']).not.toBe(true);
+
+    const stageResult = toolJson(stageResponse);
+    expect(stageResult['staged']).toBe(true);
+    expect(stageResult['nonce']).toBe(nonce);
+  });
+
+  it('returns staged: false for a verified-empty nonce', async () => {
+    // Prepare
+    const transcript = 'We talked about nothing actionable.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Verify with fabricated evidence → empty
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'Something | some reason' },
+          { key: 'Record-Id', value: 'r-emptystg01' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'This quote does not exist anywhere in the transcript.',
+            locator: 'L1-L2',
+          },
+        ],
+      },
+    ];
+    await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: JSON.stringify(draft), transcript, diff: '' },
+    });
+
+    // Stage — should return staged: false
+    const stageResponse = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce },
+    });
+    expect(stageResponse.error).toBeUndefined();
+    expect(stageResponse.result?.['isError']).not.toBe(true);
+
+    const stageResult = toolJson(stageResponse);
+    expect(stageResult['staged']).toBe(false);
+    expect(stageResult).toHaveProperty('reason');
+  });
+
+  it('does not write to Git history', async () => {
+    // Capture git log before
+    const logBefore = execGitOrThrow(['log', '--oneline'], { cwd: repo });
+
+    // Prepare + verify + stage
+    const transcript = 'User chose TypeScript instead of JavaScript for type safety.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'JavaScript | TypeScript chosen for type safety' },
+          { key: 'Record-Id', value: 'r-nohist001' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'User chose TypeScript instead of JavaScript for type safety.',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ];
+    await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: JSON.stringify(draft), transcript, diff: '' },
+    });
+    await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce },
+    });
+
+    // git log after must be identical
+    const logAfter = execGitOrThrow(['log', '--oneline'], { cwd: repo });
+    expect(logAfter).toBe(logBefore);
+  });
+
+  it('rejects an invalid nonce format', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce: 'INVALID-NOT-HEX!!!!!!!!!!!!!!!' },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    const content = (response.result?.['content'] ?? []) as ContentBlock[];
+    expect(content[0]?.text).toMatch(/nonce/i);
+  });
+
+  it('rejects a prepared (unverified) nonce', async () => {
+    // Prepare only — do not verify
+    const transcript = 'Some discussion about architecture.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    // Attempt to stage without verify
+    const stageResponse = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce },
+    });
+    expect(stageResponse.error).toBeUndefined();
+    expect(stageResponse.result?.['isError']).not.toBe(true);
+
+    const stageResult = toolJson(stageResponse);
+    expect(stageResult['staged']).toBe(false);
+    expect(stageResult).toHaveProperty('reason');
+  });
+
+  it('accepts only nonce in the input schema (no extra fields)', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      inputSchema?: Record<string, unknown>;
+    }[];
+    const tool = tools.find((t) => t.name === 'commitlore_stage_capture');
+    expect(tool).toBeDefined();
+    const schema = tool!.inputSchema!;
+    expect(schema['required']).toEqual(['nonce']);
+    expect(Object.keys(schema['properties'] as Record<string, unknown>)).toEqual(['nonce']);
+    expect(schema['additionalProperties']).toBe(false);
+  });
+});
+
+// ===========================================================================
+// Mutation oracles — T-1009
+// ===========================================================================
+
+describe('commitlore_stage_capture mutation oracles', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => { stub?.close(); });
+
+  it('MUST FAIL: schema must not accept a caller-supplied base_head', async () => {
+    // Verify the schema has ONLY nonce — if base_head were accepted, this fails
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      inputSchema?: Record<string, unknown>;
+    }[];
+    const tool = tools.find((t) => t.name === 'commitlore_stage_capture');
+    expect(tool).toBeDefined();
+    const props = Object.keys(tool!.inputSchema!['properties'] as Record<string, unknown>);
+    // If someone adds base_head to the schema, this assertion fails
+    expect(props).not.toContain('base_head');
+    expect(props).toEqual(['nonce']);
+  });
+
+  it('MUST FAIL: expires_at must be anchored to staged_at not created_at', async () => {
+    // Prepare + verify + stage, then read the pending file and check timestamps
+    const transcript = 'User chose Rust instead of Go for memory safety guarantees.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const prepResult = toolJson(prepResponse);
+    const nonce = prepResult['nonce'] as string;
+
+    const draft = [
+      {
+        trailers: [
+          { key: 'Ruled-out', value: 'Go | Rust chosen for memory safety without GC' },
+          { key: 'Record-Id', value: 'r-oracle009b' },
+        ],
+        evidence: [
+          {
+            key: 'Ruled-out',
+            source: 'transcript',
+            quote: 'User chose Rust instead of Go for memory safety guarantees.',
+            locator: 'L1-L1',
+          },
+        ],
+      },
+    ];
+    await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: JSON.stringify(draft), transcript, diff: '' },
+    });
+
+    // Small delay to make created_at and staged_at differ
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const stageResponse = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce },
+    });
+    const stageResult = toolJson(stageResponse);
+    expect(stageResult['staged']).toBe(true);
+
+    // Read the pending file directly to check the timestamps
+    const pendingDir = join(repo, '.git', 'commitlore', 'pending');
+    const files = readdirSync(pendingDir).filter((f) => f.startsWith(nonce));
+    expect(files.length).toBe(1);
+    const pendingContent = JSON.parse(readFileSync(join(pendingDir, files[0]), 'utf8'));
+
+    const stagedAt = new Date(pendingContent.staged_at).getTime();
+    const expiresAt = new Date(pendingContent.expires_at).getTime();
+    const createdAt = new Date(pendingContent.created_at).getTime();
+
+    // expires_at must equal staged_at + 5 minutes (300_000ms), NOT created_at + 5 min
+    const diffFromStaged = expiresAt - stagedAt;
+    const diffFromCreated = expiresAt - createdAt;
+
+    // The expires_at should be exactly 5 min from staged_at (within 1 second tolerance)
+    expect(Math.abs(diffFromStaged - 300_000)).toBeLessThan(1000);
+
+    // If expires_at were anchored to created_at, this would need to differ from
+    // staged_at anchor. Since there's a 50ms delay between create and stage,
+    // we just verify the anchor is staged_at.
+    // The key assertion: staged_at !== created_at (the delay guarantees this)
+    // and expires_at is anchored to staged_at.
+    expect(stagedAt).toBeGreaterThan(createdAt);
+    expect(Math.abs(diffFromStaged - 300_000)).toBeLessThan(1000);
+    // If someone mistakenly uses created_at, diffFromCreated would be 300_000 
+    // but diffFromStaged would be ~300_050 or more — however the key test is
+    // that the pending file's staged_at field is used as anchor.
+    // We verify by checking that expires_at - staged_at is exactly 5 min
+    // while expires_at - created_at is NOT exactly 5 min (because of the delay).
+    expect(Math.abs(diffFromCreated - 300_000)).toBeGreaterThan(10);
+  });
+
+  it('MUST PASS: valid nonce validation rejects path-traversal attempt', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_stage_capture',
+      arguments: { nonce: '../../../etc/passwd__________' },
+    });
+    // Should error — nonce doesn't match ^[0-9a-f]{32}$
+    expect(response.result?.['isError']).toBe(true);
+  });
+});

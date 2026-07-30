@@ -51,6 +51,7 @@ export declare const GUARD_TOOL = "commitlore_guard";
 export declare const BEFORE_CHANGE_TOOL = "commitlore_before_change";
 export declare const PREPARE_CAPTURE_TOOL = "commitlore_prepare_capture";
 export declare const VERIFY_CAPTURE_TOOL = "commitlore_verify_capture";
+export declare const STAGE_CAPTURE_TOOL = "commitlore_stage_capture";
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
  * expansion (`{+path}`) so a client fills it with a real path rather than one
