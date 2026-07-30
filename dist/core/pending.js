@@ -91,6 +91,7 @@ export const createPending = (opts) => {
         validation_result: null,
         overlap_check: null,
         incomplete: false,
+        guard_advisory: opts.guard_advisory ?? null,
     };
     const filePath = pendingFilePath(nonce, opts.cwd);
     atomicWriteJson(filePath, record);

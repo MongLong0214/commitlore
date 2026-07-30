@@ -24,6 +24,7 @@ import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
+import type { GuardAdvisory } from '../core/pending.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +42,7 @@ interface CaptureResult {
   nonce: string | null;
   staged: boolean;
   prompt?: string;
+  guard_advisory?: GuardAdvisory | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +73,7 @@ export const runCapture = (opts: {
 
   // 2. If no draft provided, print the prompt contract and exit (prompt-only mode)
   if (!draftPath) {
-    return { nonce: null, staged: false, prompt: prepareResult.prompt };
+    return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
   }
 
   // 3. Parse and verify the draft
@@ -111,6 +113,7 @@ export const runCapture = (opts: {
   return {
     nonce: stagedNonce ?? prepareResult.nonce,
     staged: stagedNonce !== null,
+    guard_advisory: prepareResult.guard_advisory,
   };
 };
 
@@ -157,8 +160,33 @@ export const register = (program: Command): void => {
         } else if (result.prompt) {
           // Prompt-only mode
           process.stdout.write(result.prompt);
+          // Render advisory in human output if present
+          if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+            process.stdout.write('\n--- guard advisory ---\n');
+            process.stdout.write(`${result.guard_advisory.disclosure}\n`);
+            for (const match of result.guard_advisory.matches) {
+              if (match.trust === 'blocked') {
+                process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}\n`);
+              } else {
+                process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}\n`);
+              }
+            }
+          } else if (result.guard_advisory) {
+            process.stdout.write('\n--- guard advisory ---\n');
+            process.stdout.write(`${result.guard_advisory.disclosure}\n`);
+          }
         } else if (result.staged) {
           process.stdout.write(`staged: ${result.nonce}\n`);
+          if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+            process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):\n`);
+            for (const match of result.guard_advisory.matches) {
+              if (match.trust === 'blocked') {
+                process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}\n`);
+              } else {
+                process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}\n`);
+              }
+            }
+          }
         } else {
           process.stdout.write('no record staged\n');
         }

@@ -7,6 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execGitOrThrow } from './git.js';
+import { guard, renderGuardMatch } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
 import { createPending } from './pending.js';
 // ---------------------------------------------------------------------------
@@ -18,6 +19,65 @@ const HARDCODED_DEFAULTS = {
     require_verified_evidence: true,
 };
 const computePolicyIdentityHash = () => createHash('sha256').update(JSON.stringify(HARDCODED_DEFAULTS)).digest('hex');
+// ---------------------------------------------------------------------------
+// Guard advisory — ADR-0020, T-1109
+// ---------------------------------------------------------------------------
+const GUARD_DISCLOSURE = 'Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. ' +
+    'An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.';
+/**
+ * Extracts file paths from a unified diff (git diff --cached output).
+ * Parses `diff --git a/<path> b/<path>` lines.
+ */
+const extractPathsFromDiff = (diff) => {
+    const paths = new Set();
+    for (const line of diff.split('\n')) {
+        const m = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+        if (m && m[1] && m[2]) {
+            paths.add(m[1]);
+            paths.add(m[2]);
+        }
+    }
+    return [...paths];
+};
+/**
+ * Maps GuardResult availability fields into the closed gap vocabulary.
+ */
+const deriveGuardGaps = (result) => {
+    const gaps = [];
+    if (result.history === 'unavailable')
+        gaps.push('history-unavailable');
+    if (result.shallow)
+        gaps.push('shallow-history');
+    if (result.notes === 'unfetched')
+        gaps.push('notes-unfetched');
+    return gaps;
+};
+/**
+ * Compute the guard advisory for a capture. Never throws — any error becomes
+ * a recorded gap. The capture must always succeed regardless of guard outcome.
+ */
+const computeGuardAdvisory = (opts) => {
+    try {
+        const result = guard({
+            proposal: opts.proposal,
+            ...(opts.paths.length > 0 ? { paths: opts.paths } : {}),
+            cwd: opts.cwd,
+        });
+        return {
+            matches: result.matches.map(renderGuardMatch),
+            gaps: deriveGuardGaps(result),
+            disclosure: GUARD_DISCLOSURE,
+        };
+    }
+    catch {
+        // Guard failure degrades to a recorded gap — never a capture failure
+        return {
+            matches: [],
+            gaps: ['history-unavailable'],
+            disclosure: GUARD_DISCLOSURE,
+        };
+    }
+};
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -50,13 +110,23 @@ export const prepareCaptureContext = (opts) => {
     const policyIdentityHash = computePolicyIdentityHash();
     // 6. Build the prompt contract via buildHarvestPrompt
     const prompt = buildHarvestPrompt({ transcript, diff });
-    // 7. Persist the prepared transaction via createPending (T-1001)
+    // 7. Compute guard advisory — T-1109
+    //    Uses the transcript as proposal text (the "draft record text") and the
+    //    staged diff's paths as the path scope.
+    const diffPaths = extractPathsFromDiff(diff);
+    const advisory = computeGuardAdvisory({
+        proposal: transcript,
+        paths: diffPaths,
+        cwd,
+    });
+    // 8. Persist the prepared transaction via createPending (T-1001)
     const nonce = createPending({
         cwd,
         source_hashes: sourceHashes,
         staged_diff_hash: stagedDiffHash,
         staged_tree_oid: stagedTreeOid,
         policy_identity_hash: policyIdentityHash,
+        guard_advisory: advisory,
     });
     return {
         nonce,
@@ -66,6 +136,7 @@ export const prepareCaptureContext = (opts) => {
         policy_identity_hash: policyIdentityHash,
         source_hashes: sourceHashes,
         prompt,
+        guard_advisory: advisory,
     };
 };
 //# sourceMappingURL=capture-prepare.js.map

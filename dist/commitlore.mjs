@@ -13546,226 +13546,6 @@ import { readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "
 // src/core/capture-prepare.ts
 import { createHash } from "node:crypto";
 
-// src/core/pending.ts
-import { randomBytes } from "node:crypto";
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { resolve as resolve3 } from "node:path";
-var PendingFormatError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "PendingFormatError";
-  }
-};
-var NONCE_RE = /^[0-9a-f]{32}$/;
-var validateNonce = (nonce) => {
-  if (!NONCE_RE.test(nonce)) {
-    throw new Error(`Invalid nonce: must be exactly 32 lowercase hex characters, got "${nonce}"`);
-  }
-};
-var pendingDir = (cwd) => {
-  const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/pending"], { cwd }).trim();
-  return resolve3(cwd, reported);
-};
-var pendingFilePath = (nonce, cwd) => {
-  validateNonce(nonce);
-  const dir = pendingDir(cwd);
-  return resolve3(dir, `${nonce}.json`);
-};
-var atomicWriteJson = (filePath, data) => {
-  const dir = resolve3(filePath, "..");
-  mkdirSync2(dir, { recursive: true });
-  const temporary = `${filePath}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
-  const body = JSON.stringify(data, null, 2) + "\n";
-  try {
-    writeFileSync(temporary, body);
-    renameSync(temporary, filePath);
-  } catch (error2) {
-    try {
-      unlinkSync(temporary);
-    } catch {
-    }
-    throw error2;
-  }
-};
-var createPending = (opts) => {
-  const nonce = randomBytes(16).toString("hex");
-  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
-  if (!baseHead || !/^[0-9a-f]{40}$/.test(baseHead)) {
-    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
-  }
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const record2 = {
-    version: 1,
-    nonce,
-    created_at: now,
-    // CEO amendment 1: expires_at is null while phase is prepared or verified
-    expires_at: null,
-    phase: "prepared",
-    consumed: false,
-    verified_at: null,
-    staged_at: null,
-    applied_at: null,
-    applied_record_hash: null,
-    consumed_at: null,
-    consumed_by: null,
-    base_head: baseHead,
-    staged_diff_hash: opts.staged_diff_hash,
-    staged_tree_oid: opts.staged_tree_oid,
-    policy_identity_hash: opts.policy_identity_hash,
-    source_hashes: opts.source_hashes,
-    evidence_hash: null,
-    records: [],
-    validation_result: null,
-    overlap_check: null,
-    incomplete: false
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, record2);
-  return nonce;
-};
-var readPending = (nonce, opts) => {
-  validateNonce(nonce);
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  if (!existsSync3(filePath)) return null;
-  let content;
-  try {
-    content = readFileSync3(filePath, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: invalid JSON`);
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: not an object`);
-  }
-  const obj = parsed;
-  if (obj["version"] !== 1) {
-    throw new PendingFormatError(
-      `Unsupported pending file version ${String(obj["version"])} for nonce ${nonce}`
-    );
-  }
-  return obj;
-};
-var storeVerification = (nonce, opts) => {
-  validateNonce(nonce);
-  const record2 = readPending(nonce, { cwd: opts.cwd });
-  if (!record2) return false;
-  if (record2.phase !== "prepared") return false;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updated = {
-    ...record2,
-    phase: "verified",
-    verified_at: now,
-    // CEO amendment 1: expires_at remains null in verified phase
-    expires_at: null,
-    records: opts.accepted,
-    evidence_hash: opts.evidence_hash,
-    validation_result: opts.validation_result,
-    overlap_check: opts.overlap_check,
-    incomplete: opts.incomplete
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, updated);
-  return true;
-};
-var stagePending = (nonce, opts) => {
-  validateNonce(nonce);
-  const record2 = readPending(nonce, { cwd: opts.cwd });
-  if (!record2) return false;
-  if (record2.phase !== "verified") return false;
-  const now = /* @__PURE__ */ new Date();
-  const minutes = opts.expiryMinutes ?? 5;
-  const expiresAt = new Date(now.getTime() + minutes * 6e4);
-  const updated = {
-    ...record2,
-    phase: "staged",
-    staged_at: now.toISOString(),
-    expires_at: expiresAt.toISOString()
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, updated);
-  return true;
-};
-var markApplied = (nonce, recordHash, opts) => {
-  validateNonce(nonce);
-  const record2 = readPending(nonce, { cwd: opts.cwd });
-  if (!record2) return false;
-  if (record2.phase !== "staged") return false;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updated = {
-    ...record2,
-    phase: "applied",
-    applied_at: now,
-    applied_record_hash: recordHash
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, updated);
-  return true;
-};
-var consumePending = (nonce, commitSha, opts) => {
-  validateNonce(nonce);
-  const record2 = readPending(nonce, { cwd: opts.cwd });
-  if (!record2) return false;
-  if (record2.phase !== "applied") return false;
-  if (record2.consumed) return false;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updated = {
-    ...record2,
-    phase: "consumed",
-    consumed: true,
-    consumed_at: now,
-    consumed_by: commitSha
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, updated);
-  return true;
-};
-
-// src/core/capture-prepare.ts
-var HARDCODED_DEFAULTS = {
-  mode: "suggest",
-  max_records_per_commit: 1,
-  require_verified_evidence: true
-};
-var computePolicyIdentityHash = () => createHash("sha256").update(JSON.stringify(HARDCODED_DEFAULTS)).digest("hex");
-var prepareCaptureContext = (opts) => {
-  const { cwd, transcript } = opts;
-  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
-  if (!/^[0-9a-f]{40}$/.test(baseHead)) {
-    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
-  }
-  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
-  const stagedDiffHash = createHash("sha256").update(diff).digest("hex");
-  const stagedTreeOid = execGitOrThrow(["write-tree"], { cwd }).trim();
-  const transcriptHash = createHash("sha256").update(transcript).digest("hex");
-  const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
-  const policyIdentityHash = computePolicyIdentityHash();
-  const prompt = buildHarvestPrompt({ transcript, diff });
-  const nonce = createPending({
-    cwd,
-    source_hashes: sourceHashes,
-    staged_diff_hash: stagedDiffHash,
-    staged_tree_oid: stagedTreeOid,
-    policy_identity_hash: policyIdentityHash
-  });
-  return {
-    nonce,
-    base_head: baseHead,
-    staged_diff_hash: stagedDiffHash,
-    staged_tree_oid: stagedTreeOid,
-    policy_identity_hash: policyIdentityHash,
-    source_hashes: sourceHashes,
-    prompt
-  };
-};
-
-// src/core/capture-verify.ts
-import { createHash as createHash2 } from "node:crypto";
-
 // src/core/grade.ts
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
 
@@ -14782,7 +14562,731 @@ var runQuery = (opts = {}) => {
 };
 var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 
+// src/core/guard.ts
+var renderGuardMatch = (match) => {
+  const identity = {
+    recordId: match.recordId ?? null,
+    sha: match.sha,
+    score: match.score,
+    signals: [...match.signals]
+  };
+  switch (match.trust) {
+    case "blocked":
+      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+    case "claim":
+    case "directive":
+      return {
+        ...identity,
+        trust: match.trust,
+        alternative: match.alternative,
+        reason: match.reason
+      };
+  }
+};
+var JACCARD_WEIGHT = 0.5;
+var KEYWORD_WEIGHT = 0.5;
+var MIN_KEYWORD_HITS = 2;
+var STRONG_KEYWORD_STRENGTH = 0.5;
+var MIN_JACCARD = 0.4;
+var RECORD_ID_WEIGHT = 0.6;
+var DEFAULT_THRESHOLD = 0.35;
+var STOPWORDS = [
+  "a",
+  "about",
+  "add",
+  "after",
+  "again",
+  "all",
+  "already",
+  "also",
+  "always",
+  "an",
+  "and",
+  "another",
+  "any",
+  "anything",
+  "are",
+  "as",
+  "at",
+  "back",
+  "be",
+  "because",
+  "been",
+  "before",
+  "being",
+  "best",
+  "better",
+  "both",
+  "but",
+  "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
+  "done",
+  "down",
+  "each",
+  "either",
+  "else",
+  "even",
+  "every",
+  "first",
+  "for",
+  "from",
+  "get",
+  "go",
+  "going",
+  "good",
+  "had",
+  "has",
+  "have",
+  "here",
+  "how",
+  "however",
+  "i",
+  "if",
+  "in",
+  "instead",
+  "into",
+  "is",
+  "it",
+  "its",
+  "just",
+  "keep",
+  "let",
+  "like",
+  "made",
+  "make",
+  "many",
+  "may",
+  "maybe",
+  "me",
+  "might",
+  "more",
+  "most",
+  "much",
+  "must",
+  "my",
+  "need",
+  "no",
+  "nor",
+  "not",
+  "now",
+  "of",
+  "off",
+  "on",
+  "once",
+  "one",
+  "only",
+  "or",
+  "other",
+  "our",
+  "out",
+  "over",
+  "own",
+  "perhaps",
+  "probably",
+  "put",
+  "rather",
+  "really",
+  "same",
+  "shall",
+  "should",
+  "since",
+  "so",
+  "some",
+  "something",
+  "still",
+  "such",
+  "sure",
+  "take",
+  "than",
+  "that",
+  "the",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "thing",
+  "think",
+  "this",
+  "those",
+  "through",
+  "to",
+  "too",
+  "try",
+  "under",
+  "until",
+  "up",
+  "us",
+  "use",
+  "using",
+  "very",
+  "want",
+  "was",
+  "we",
+  "well",
+  "were",
+  "what",
+  "when",
+  "where",
+  "whether",
+  "which",
+  "while",
+  "who",
+  "why",
+  "will",
+  "with",
+  "without",
+  "would",
+  "yet",
+  "you",
+  "your"
+];
+var GENERIC_TERMS = [
+  "api",
+  "app",
+  "application",
+  "approach",
+  "base",
+  "build",
+  "cache",
+  "call",
+  "change",
+  "check",
+  "class",
+  "client",
+  "code",
+  "column",
+  "component",
+  "config",
+  "configuration",
+  "connection",
+  "core",
+  "data",
+  "database",
+  "db",
+  "default",
+  "dependency",
+  "deploy",
+  "disk",
+  "endpoint",
+  "entry",
+  "error",
+  "event",
+  "fast",
+  "field",
+  "file",
+  "fix",
+  "flag",
+  "function",
+  "global",
+  "handler",
+  "hook",
+  "http",
+  "id",
+  "index",
+  "instance",
+  "interface",
+  "job",
+  "key",
+  "large",
+  "layer",
+  "library",
+  "limit",
+  "list",
+  "local",
+  "log",
+  "main",
+  "map",
+  "memory",
+  "message",
+  "method",
+  "migration",
+  "mode",
+  "model",
+  "module",
+  "name",
+  "network",
+  "new",
+  "node",
+  "number",
+  "object",
+  "old",
+  "option",
+  "package",
+  "page",
+  "path",
+  "pool",
+  "process",
+  "query",
+  "queue",
+  "remote",
+  "request",
+  "response",
+  "route",
+  "row",
+  "schema",
+  "script",
+  "server",
+  "service",
+  "session",
+  "set",
+  "shared",
+  "simple",
+  "size",
+  "slow",
+  "small",
+  "state",
+  "storage",
+  "store",
+  "string",
+  "system",
+  "table",
+  "task",
+  "test",
+  "thread",
+  "time",
+  "timeout",
+  "token",
+  "tool",
+  "transaction",
+  "type",
+  "update",
+  "url",
+  "user",
+  "value",
+  "version",
+  "view",
+  "worker"
+];
+var stem = (token) => {
+  let word = token;
+  if (word.endsWith("ies") && word.length >= 5) word = `${word.slice(0, -3)}y`;
+  else if (/(?:ss|sh|ch|x)es$/.test(word) && word.length >= 5) word = word.slice(0, -2);
+  else if (word.endsWith("s") && !word.endsWith("ss") && word.length >= 4) word = word.slice(0, -1);
+  if (word.endsWith("ing") && word.length >= 6) word = word.slice(0, -3);
+  else if (word.endsWith("ed") && word.length >= 5) word = word.slice(0, -2);
+  if (word.endsWith("e") && word.length >= 4) word = word.slice(0, -1);
+  return word;
+};
+var stemsOf = (words) => new Set(words.flatMap((word) => [word, stem(word)]));
+var STOPWORD_STEMS = stemsOf(STOPWORDS);
+var GENERIC_STEMS = stemsOf(GENERIC_TERMS);
+var RECORD_ID_SCAN = "r-[a-z0-9]{6,}";
+var EMPTY_TOKENS = { stems: /* @__PURE__ */ new Set(), surface: /* @__PURE__ */ new Map() };
+var tokenize = (text) => {
+  const stems = /* @__PURE__ */ new Set();
+  const surface = /* @__PURE__ */ new Map();
+  for (const raw of normalizeForMatch(text).split(/[^a-z0-9]+/)) {
+    if (raw.length < 2) continue;
+    const stemmed = stem(raw);
+    if (STOPWORD_STEMS.has(raw) || STOPWORD_STEMS.has(stemmed)) continue;
+    stems.add(stemmed);
+    if (!surface.has(stemmed)) surface.set(stemmed, raw);
+  }
+  return { stems, surface };
+};
+var jaccard = (left, right) => {
+  if (left.size === 0 || right.size === 0) return 0;
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  return shared / (left.size + right.size - shared);
+};
+var round = (value) => Math.round(value * 1e4) / 1e4;
+var buildCorpus = (alternatives) => {
+  const seen = /* @__PURE__ */ new Map();
+  for (const tokens of alternatives) {
+    for (const token of tokens.stems) seen.set(token, (seen.get(token) ?? 0) + 1);
+  }
+  const size = alternatives.length;
+  const ceiling = Math.log((size + 1) / 1.5);
+  return {
+    size,
+    // An empty corpus produces no candidates to score, so the guard here is
+    // only about never dividing by a non-positive ceiling.
+    weight: (token) => {
+      if (ceiling <= 0) return 1;
+      const documents = seen.get(token) ?? 1;
+      const value = Math.log((size + 1) / (documents + 0.5)) / ceiling;
+      return Math.min(1, Math.max(0, value));
+    }
+  };
+};
+var keywordCoverage = (alternative, proposal, corpus) => {
+  const distinctive = [...alternative.stems].filter((token) => !GENERIC_STEMS.has(token));
+  const considered = distinctive.length === 0 ? [...alternative.stems] : distinctive;
+  if (considered.length === 0) return { strength: 0, hits: [] };
+  let total = 0;
+  let named = 0;
+  const hits = [];
+  for (const token of considered) {
+    const weight = corpus.weight(token);
+    total += weight;
+    if (!proposal.stems.has(token)) continue;
+    named += weight;
+    hits.push(alternative.surface.get(token) ?? token);
+  }
+  const weightedMass = total === 0 ? 0 : named / total;
+  return {
+    strength: weightedMass * (hits.length / considered.length),
+    hits: hits.sort()
+  };
+};
+var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.strength >= STRONG_KEYWORD_STRENGTH || similarity >= MIN_JACCARD;
+var collapse = (text) => text.replace(/\s+/g, " ").trim();
+var parseRuledOut = (value) => {
+  const at = value.indexOf("|");
+  if (at === -1) return { alternative: collapse(value), reason: "", malformed: true };
+  return {
+    alternative: collapse(value.slice(0, at)),
+    reason: collapse(value.slice(at + 1)),
+    malformed: false
+  };
+};
+var recordIdsIn = (proposal) => new Set(normalizeForMatch(proposal).match(new RegExp(`\\b${RECORD_ID_SCAN}\\b`, "g")) ?? []);
+var compareMatches = (a, b) => {
+  if (a.score !== b.score) return b.score - a.score;
+  if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
+  return a.alternative < b.alternative ? -1 : a.alternative > b.alternative ? 1 : 0;
+};
+var matchOne = (candidate, proposal, corpus, requireContent = false) => {
+  const { record: record2, parsed, tokens, idHit } = candidate;
+  const similarity = jaccard(tokens.stems, proposal.stems);
+  const coverage = keywordCoverage(tokens, proposal, corpus);
+  if (!corroborated(idHit, coverage, similarity, requireContent)) return null;
+  const score = round(
+    Math.min(
+      1,
+      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.strength + (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)
+    )
+  );
+  const signals = [
+    ...idHit ? [`record-id:${record2.recordId ?? ""}`] : [],
+    ...coverage.hits.map((hit) => `keyword:${hit}`),
+    ...coverage.hits.length === 0 ? [] : [`keyword-strength:${round(coverage.strength).toFixed(2)}`],
+    ...similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : [],
+    ...parsed.malformed ? ["malformed:no-separator"] : []
+  ];
+  return {
+    sha: record2.sha,
+    trust: record2.trust ?? "claim",
+    alternative: parsed.alternative,
+    reason: parsed.reason,
+    score,
+    signals,
+    ...record2.recordId === void 0 ? {} : { recordId: record2.recordId }
+  };
+};
+var guard = (opts) => {
+  const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
+  const proposal = tokenize(opts.proposal);
+  const ids = recordIdsIn(opts.proposal);
+  const result = runQuery({
+    keys: [RULED_OUT_KEY],
+    ...opts.paths === void 0 ? {} : { paths: opts.paths },
+    ...opts.at === void 0 ? {} : { at: opts.at },
+    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
+    ...opts.noIndex === void 0 ? {} : { noIndex: opts.noIndex }
+  });
+  const availability = {
+    history: result.history,
+    shallow: result.shallow,
+    notes: result.notes,
+    incomplete: result.history === "unavailable" || result.notes === "unfetched"
+  };
+  if (proposal.stems.size === 0 && ids.size === 0) {
+    return { matches: [], ...availability };
+  }
+  const candidates = result.records.flatMap((record2) => {
+    const idHit = record2.recordId !== void 0 && ids.has(record2.recordId);
+    return valuesOf(record2, RULED_OUT_KEY).map((value) => {
+      const parsed = parseRuledOut(value);
+      return {
+        record: record2,
+        parsed,
+        tokens: parsed.alternative === "" ? EMPTY_TOKENS : tokenize(parsed.alternative),
+        idHit
+      };
+    });
+  });
+  const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
+  return {
+    matches: candidates.map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches),
+    ...availability
+  };
+};
+
+// src/core/pending.ts
+import { randomBytes } from "node:crypto";
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { resolve as resolve3 } from "node:path";
+var PendingFormatError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "PendingFormatError";
+  }
+};
+var NONCE_RE = /^[0-9a-f]{32}$/;
+var validateNonce = (nonce) => {
+  if (!NONCE_RE.test(nonce)) {
+    throw new Error(`Invalid nonce: must be exactly 32 lowercase hex characters, got "${nonce}"`);
+  }
+};
+var pendingDir = (cwd) => {
+  const reported = execGitOrThrow(["rev-parse", "--git-path", "commitlore/pending"], { cwd }).trim();
+  return resolve3(cwd, reported);
+};
+var pendingFilePath = (nonce, cwd) => {
+  validateNonce(nonce);
+  const dir = pendingDir(cwd);
+  return resolve3(dir, `${nonce}.json`);
+};
+var atomicWriteJson = (filePath, data) => {
+  const dir = resolve3(filePath, "..");
+  mkdirSync2(dir, { recursive: true });
+  const temporary = `${filePath}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
+  const body = JSON.stringify(data, null, 2) + "\n";
+  try {
+    writeFileSync(temporary, body);
+    renameSync(temporary, filePath);
+  } catch (error2) {
+    try {
+      unlinkSync(temporary);
+    } catch {
+    }
+    throw error2;
+  }
+};
+var createPending = (opts) => {
+  const nonce = randomBytes(16).toString("hex");
+  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
+  if (!baseHead || !/^[0-9a-f]{40}$/.test(baseHead)) {
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const record2 = {
+    version: 1,
+    nonce,
+    created_at: now,
+    // CEO amendment 1: expires_at is null while phase is prepared or verified
+    expires_at: null,
+    phase: "prepared",
+    consumed: false,
+    verified_at: null,
+    staged_at: null,
+    applied_at: null,
+    applied_record_hash: null,
+    consumed_at: null,
+    consumed_by: null,
+    base_head: baseHead,
+    staged_diff_hash: opts.staged_diff_hash,
+    staged_tree_oid: opts.staged_tree_oid,
+    policy_identity_hash: opts.policy_identity_hash,
+    source_hashes: opts.source_hashes,
+    evidence_hash: null,
+    records: [],
+    validation_result: null,
+    overlap_check: null,
+    incomplete: false,
+    guard_advisory: opts.guard_advisory ?? null
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, record2);
+  return nonce;
+};
+var readPending = (nonce, opts) => {
+  validateNonce(nonce);
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  if (!existsSync3(filePath)) return null;
+  let content;
+  try {
+    content = readFileSync3(filePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: invalid JSON`);
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new PendingFormatError(`Corrupt pending file for nonce ${nonce}: not an object`);
+  }
+  const obj = parsed;
+  if (obj["version"] !== 1) {
+    throw new PendingFormatError(
+      `Unsupported pending file version ${String(obj["version"])} for nonce ${nonce}`
+    );
+  }
+  return obj;
+};
+var storeVerification = (nonce, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "prepared") return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "verified",
+    verified_at: now,
+    // CEO amendment 1: expires_at remains null in verified phase
+    expires_at: null,
+    records: opts.accepted,
+    evidence_hash: opts.evidence_hash,
+    validation_result: opts.validation_result,
+    overlap_check: opts.overlap_check,
+    incomplete: opts.incomplete
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
+var stagePending = (nonce, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "verified") return false;
+  const now = /* @__PURE__ */ new Date();
+  const minutes = opts.expiryMinutes ?? 5;
+  const expiresAt = new Date(now.getTime() + minutes * 6e4);
+  const updated = {
+    ...record2,
+    phase: "staged",
+    staged_at: now.toISOString(),
+    expires_at: expiresAt.toISOString()
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
+var markApplied = (nonce, recordHash, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "staged") return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "applied",
+    applied_at: now,
+    applied_record_hash: recordHash
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
+var consumePending = (nonce, commitSha, opts) => {
+  validateNonce(nonce);
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "applied") return false;
+  if (record2.consumed) return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "consumed",
+    consumed: true,
+    consumed_at: now,
+    consumed_by: commitSha
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
+};
+
+// src/core/capture-prepare.ts
+var HARDCODED_DEFAULTS = {
+  mode: "suggest",
+  max_records_per_commit: 1,
+  require_verified_evidence: true
+};
+var computePolicyIdentityHash = () => createHash("sha256").update(JSON.stringify(HARDCODED_DEFAULTS)).digest("hex");
+var GUARD_DISCLOSURE = "Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.";
+var extractPathsFromDiff = (diff) => {
+  const paths = /* @__PURE__ */ new Set();
+  for (const line of diff.split("\n")) {
+    const m = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+    if (m && m[1] && m[2]) {
+      paths.add(m[1]);
+      paths.add(m[2]);
+    }
+  }
+  return [...paths];
+};
+var deriveGuardGaps = (result) => {
+  const gaps = [];
+  if (result.history === "unavailable") gaps.push("history-unavailable");
+  if (result.shallow) gaps.push("shallow-history");
+  if (result.notes === "unfetched") gaps.push("notes-unfetched");
+  return gaps;
+};
+var computeGuardAdvisory = (opts) => {
+  try {
+    const result = guard({
+      proposal: opts.proposal,
+      ...opts.paths.length > 0 ? { paths: opts.paths } : {},
+      cwd: opts.cwd
+    });
+    return {
+      matches: result.matches.map(renderGuardMatch),
+      gaps: deriveGuardGaps(result),
+      disclosure: GUARD_DISCLOSURE
+    };
+  } catch {
+    return {
+      matches: [],
+      gaps: ["history-unavailable"],
+      disclosure: GUARD_DISCLOSURE
+    };
+  }
+};
+var prepareCaptureContext = (opts) => {
+  const { cwd, transcript } = opts;
+  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
+  if (!/^[0-9a-f]{40}$/.test(baseHead)) {
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
+  }
+  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
+  const stagedDiffHash = createHash("sha256").update(diff).digest("hex");
+  const stagedTreeOid = execGitOrThrow(["write-tree"], { cwd }).trim();
+  const transcriptHash = createHash("sha256").update(transcript).digest("hex");
+  const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
+  const policyIdentityHash = computePolicyIdentityHash();
+  const prompt = buildHarvestPrompt({ transcript, diff });
+  const diffPaths = extractPathsFromDiff(diff);
+  const advisory = computeGuardAdvisory({
+    proposal: transcript,
+    paths: diffPaths,
+    cwd
+  });
+  const nonce = createPending({
+    cwd,
+    source_hashes: sourceHashes,
+    staged_diff_hash: stagedDiffHash,
+    staged_tree_oid: stagedTreeOid,
+    policy_identity_hash: policyIdentityHash,
+    guard_advisory: advisory
+  });
+  return {
+    nonce,
+    base_head: baseHead,
+    staged_diff_hash: stagedDiffHash,
+    staged_tree_oid: stagedTreeOid,
+    policy_identity_hash: policyIdentityHash,
+    source_hashes: sourceHashes,
+    prompt,
+    guard_advisory: advisory
+  };
+};
+
 // src/core/capture-verify.ts
+import { createHash as createHash2 } from "node:crypto";
 var sha256 = (input) => createHash2("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
 var canonicalTuple = (record2) => {
@@ -15121,7 +15625,7 @@ var runCapture = (opts) => {
   const diff = diffPath ? readFileSync5(diffPath, "utf8") : "";
   const prepareResult = prepareCaptureContext({ cwd, transcript });
   if (!draftPath) {
-    return { nonce: null, staged: false, prompt: prepareResult.prompt };
+    return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
   }
   const rawDraft = readFileSync5(draftPath, "utf8");
   let draftRecords;
@@ -15150,7 +15654,8 @@ var runCapture = (opts) => {
   });
   return {
     nonce: stagedNonce ?? prepareResult.nonce,
-    staged: stagedNonce !== null
+    staged: stagedNonce !== null,
+    guard_advisory: prepareResult.guard_advisory
   };
 };
 var register2 = (program3) => {
@@ -15172,9 +15677,40 @@ var register2 = (program3) => {
         process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       } else if (result.prompt) {
         process.stdout.write(result.prompt);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        } else if (result.guard_advisory) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+        }
       } else if (result.staged) {
         process.stdout.write(`staged: ${result.nonce}
 `);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        }
       } else {
         process.stdout.write("no record staged\n");
       }
@@ -17418,466 +17954,6 @@ var register9 = (program3) => {
 
 // src/commands/guard.ts
 import { readFileSync as readFileSync12 } from "node:fs";
-
-// src/core/guard.ts
-var renderGuardMatch = (match) => {
-  const identity = {
-    recordId: match.recordId ?? null,
-    sha: match.sha,
-    score: match.score,
-    signals: [...match.signals]
-  };
-  switch (match.trust) {
-    case "blocked":
-      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
-    case "claim":
-    case "directive":
-      return {
-        ...identity,
-        trust: match.trust,
-        alternative: match.alternative,
-        reason: match.reason
-      };
-  }
-};
-var JACCARD_WEIGHT = 0.5;
-var KEYWORD_WEIGHT = 0.5;
-var MIN_KEYWORD_HITS = 2;
-var STRONG_KEYWORD_STRENGTH = 0.5;
-var MIN_JACCARD = 0.4;
-var RECORD_ID_WEIGHT = 0.6;
-var DEFAULT_THRESHOLD = 0.35;
-var STOPWORDS = [
-  "a",
-  "about",
-  "add",
-  "after",
-  "again",
-  "all",
-  "already",
-  "also",
-  "always",
-  "an",
-  "and",
-  "another",
-  "any",
-  "anything",
-  "are",
-  "as",
-  "at",
-  "back",
-  "be",
-  "because",
-  "been",
-  "before",
-  "being",
-  "best",
-  "better",
-  "both",
-  "but",
-  "by",
-  "can",
-  "could",
-  "did",
-  "do",
-  "does",
-  "done",
-  "down",
-  "each",
-  "either",
-  "else",
-  "even",
-  "every",
-  "first",
-  "for",
-  "from",
-  "get",
-  "go",
-  "going",
-  "good",
-  "had",
-  "has",
-  "have",
-  "here",
-  "how",
-  "however",
-  "i",
-  "if",
-  "in",
-  "instead",
-  "into",
-  "is",
-  "it",
-  "its",
-  "just",
-  "keep",
-  "let",
-  "like",
-  "made",
-  "make",
-  "many",
-  "may",
-  "maybe",
-  "me",
-  "might",
-  "more",
-  "most",
-  "much",
-  "must",
-  "my",
-  "need",
-  "no",
-  "nor",
-  "not",
-  "now",
-  "of",
-  "off",
-  "on",
-  "once",
-  "one",
-  "only",
-  "or",
-  "other",
-  "our",
-  "out",
-  "over",
-  "own",
-  "perhaps",
-  "probably",
-  "put",
-  "rather",
-  "really",
-  "same",
-  "shall",
-  "should",
-  "since",
-  "so",
-  "some",
-  "something",
-  "still",
-  "such",
-  "sure",
-  "take",
-  "than",
-  "that",
-  "the",
-  "their",
-  "them",
-  "then",
-  "there",
-  "these",
-  "they",
-  "thing",
-  "think",
-  "this",
-  "those",
-  "through",
-  "to",
-  "too",
-  "try",
-  "under",
-  "until",
-  "up",
-  "us",
-  "use",
-  "using",
-  "very",
-  "want",
-  "was",
-  "we",
-  "well",
-  "were",
-  "what",
-  "when",
-  "where",
-  "whether",
-  "which",
-  "while",
-  "who",
-  "why",
-  "will",
-  "with",
-  "without",
-  "would",
-  "yet",
-  "you",
-  "your"
-];
-var GENERIC_TERMS = [
-  "api",
-  "app",
-  "application",
-  "approach",
-  "base",
-  "build",
-  "cache",
-  "call",
-  "change",
-  "check",
-  "class",
-  "client",
-  "code",
-  "column",
-  "component",
-  "config",
-  "configuration",
-  "connection",
-  "core",
-  "data",
-  "database",
-  "db",
-  "default",
-  "dependency",
-  "deploy",
-  "disk",
-  "endpoint",
-  "entry",
-  "error",
-  "event",
-  "fast",
-  "field",
-  "file",
-  "fix",
-  "flag",
-  "function",
-  "global",
-  "handler",
-  "hook",
-  "http",
-  "id",
-  "index",
-  "instance",
-  "interface",
-  "job",
-  "key",
-  "large",
-  "layer",
-  "library",
-  "limit",
-  "list",
-  "local",
-  "log",
-  "main",
-  "map",
-  "memory",
-  "message",
-  "method",
-  "migration",
-  "mode",
-  "model",
-  "module",
-  "name",
-  "network",
-  "new",
-  "node",
-  "number",
-  "object",
-  "old",
-  "option",
-  "package",
-  "page",
-  "path",
-  "pool",
-  "process",
-  "query",
-  "queue",
-  "remote",
-  "request",
-  "response",
-  "route",
-  "row",
-  "schema",
-  "script",
-  "server",
-  "service",
-  "session",
-  "set",
-  "shared",
-  "simple",
-  "size",
-  "slow",
-  "small",
-  "state",
-  "storage",
-  "store",
-  "string",
-  "system",
-  "table",
-  "task",
-  "test",
-  "thread",
-  "time",
-  "timeout",
-  "token",
-  "tool",
-  "transaction",
-  "type",
-  "update",
-  "url",
-  "user",
-  "value",
-  "version",
-  "view",
-  "worker"
-];
-var stem = (token) => {
-  let word = token;
-  if (word.endsWith("ies") && word.length >= 5) word = `${word.slice(0, -3)}y`;
-  else if (/(?:ss|sh|ch|x)es$/.test(word) && word.length >= 5) word = word.slice(0, -2);
-  else if (word.endsWith("s") && !word.endsWith("ss") && word.length >= 4) word = word.slice(0, -1);
-  if (word.endsWith("ing") && word.length >= 6) word = word.slice(0, -3);
-  else if (word.endsWith("ed") && word.length >= 5) word = word.slice(0, -2);
-  if (word.endsWith("e") && word.length >= 4) word = word.slice(0, -1);
-  return word;
-};
-var stemsOf = (words) => new Set(words.flatMap((word) => [word, stem(word)]));
-var STOPWORD_STEMS = stemsOf(STOPWORDS);
-var GENERIC_STEMS = stemsOf(GENERIC_TERMS);
-var RECORD_ID_SCAN = "r-[a-z0-9]{6,}";
-var EMPTY_TOKENS = { stems: /* @__PURE__ */ new Set(), surface: /* @__PURE__ */ new Map() };
-var tokenize = (text) => {
-  const stems = /* @__PURE__ */ new Set();
-  const surface = /* @__PURE__ */ new Map();
-  for (const raw of normalizeForMatch(text).split(/[^a-z0-9]+/)) {
-    if (raw.length < 2) continue;
-    const stemmed = stem(raw);
-    if (STOPWORD_STEMS.has(raw) || STOPWORD_STEMS.has(stemmed)) continue;
-    stems.add(stemmed);
-    if (!surface.has(stemmed)) surface.set(stemmed, raw);
-  }
-  return { stems, surface };
-};
-var jaccard = (left, right) => {
-  if (left.size === 0 || right.size === 0) return 0;
-  let shared = 0;
-  for (const token of left) if (right.has(token)) shared += 1;
-  return shared / (left.size + right.size - shared);
-};
-var round = (value) => Math.round(value * 1e4) / 1e4;
-var buildCorpus = (alternatives) => {
-  const seen = /* @__PURE__ */ new Map();
-  for (const tokens of alternatives) {
-    for (const token of tokens.stems) seen.set(token, (seen.get(token) ?? 0) + 1);
-  }
-  const size = alternatives.length;
-  const ceiling = Math.log((size + 1) / 1.5);
-  return {
-    size,
-    // An empty corpus produces no candidates to score, so the guard here is
-    // only about never dividing by a non-positive ceiling.
-    weight: (token) => {
-      if (ceiling <= 0) return 1;
-      const documents = seen.get(token) ?? 1;
-      const value = Math.log((size + 1) / (documents + 0.5)) / ceiling;
-      return Math.min(1, Math.max(0, value));
-    }
-  };
-};
-var keywordCoverage = (alternative, proposal, corpus) => {
-  const distinctive = [...alternative.stems].filter((token) => !GENERIC_STEMS.has(token));
-  const considered = distinctive.length === 0 ? [...alternative.stems] : distinctive;
-  if (considered.length === 0) return { strength: 0, hits: [] };
-  let total = 0;
-  let named = 0;
-  const hits = [];
-  for (const token of considered) {
-    const weight = corpus.weight(token);
-    total += weight;
-    if (!proposal.stems.has(token)) continue;
-    named += weight;
-    hits.push(alternative.surface.get(token) ?? token);
-  }
-  const weightedMass = total === 0 ? 0 : named / total;
-  return {
-    strength: weightedMass * (hits.length / considered.length),
-    hits: hits.sort()
-  };
-};
-var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.strength >= STRONG_KEYWORD_STRENGTH || similarity >= MIN_JACCARD;
-var collapse = (text) => text.replace(/\s+/g, " ").trim();
-var parseRuledOut = (value) => {
-  const at = value.indexOf("|");
-  if (at === -1) return { alternative: collapse(value), reason: "", malformed: true };
-  return {
-    alternative: collapse(value.slice(0, at)),
-    reason: collapse(value.slice(at + 1)),
-    malformed: false
-  };
-};
-var recordIdsIn = (proposal) => new Set(normalizeForMatch(proposal).match(new RegExp(`\\b${RECORD_ID_SCAN}\\b`, "g")) ?? []);
-var compareMatches = (a, b) => {
-  if (a.score !== b.score) return b.score - a.score;
-  if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
-  return a.alternative < b.alternative ? -1 : a.alternative > b.alternative ? 1 : 0;
-};
-var matchOne = (candidate, proposal, corpus, requireContent = false) => {
-  const { record: record2, parsed, tokens, idHit } = candidate;
-  const similarity = jaccard(tokens.stems, proposal.stems);
-  const coverage = keywordCoverage(tokens, proposal, corpus);
-  if (!corroborated(idHit, coverage, similarity, requireContent)) return null;
-  const score = round(
-    Math.min(
-      1,
-      JACCARD_WEIGHT * similarity + KEYWORD_WEIGHT * coverage.strength + (idHit && !requireContent ? RECORD_ID_WEIGHT : 0)
-    )
-  );
-  const signals = [
-    ...idHit ? [`record-id:${record2.recordId ?? ""}`] : [],
-    ...coverage.hits.map((hit) => `keyword:${hit}`),
-    ...coverage.hits.length === 0 ? [] : [`keyword-strength:${round(coverage.strength).toFixed(2)}`],
-    ...similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : [],
-    ...parsed.malformed ? ["malformed:no-separator"] : []
-  ];
-  return {
-    sha: record2.sha,
-    trust: record2.trust ?? "claim",
-    alternative: parsed.alternative,
-    reason: parsed.reason,
-    score,
-    signals,
-    ...record2.recordId === void 0 ? {} : { recordId: record2.recordId }
-  };
-};
-var guard = (opts) => {
-  const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
-  const proposal = tokenize(opts.proposal);
-  const ids = recordIdsIn(opts.proposal);
-  const result = runQuery({
-    keys: [RULED_OUT_KEY],
-    ...opts.paths === void 0 ? {} : { paths: opts.paths },
-    ...opts.at === void 0 ? {} : { at: opts.at },
-    ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
-    ...opts.noIndex === void 0 ? {} : { noIndex: opts.noIndex }
-  });
-  const availability = {
-    history: result.history,
-    shallow: result.shallow,
-    notes: result.notes,
-    incomplete: result.history === "unavailable" || result.notes === "unfetched"
-  };
-  if (proposal.stems.size === 0 && ids.size === 0) {
-    return { matches: [], ...availability };
-  }
-  const candidates = result.records.flatMap((record2) => {
-    const idHit = record2.recordId !== void 0 && ids.has(record2.recordId);
-    return valuesOf(record2, RULED_OUT_KEY).map((value) => {
-      const parsed = parseRuledOut(value);
-      return {
-        record: record2,
-        parsed,
-        tokens: parsed.alternative === "" ? EMPTY_TOKENS : tokenize(parsed.alternative),
-        idHit
-      };
-    });
-  });
-  const corpus = buildCorpus(candidates.map((candidate) => candidate.tokens));
-  return {
-    matches: candidates.map((candidate) => matchOne(candidate, proposal, corpus, opts.requireContent ?? false)).filter((match) => match !== null && match.score >= threshold).sort(compareMatches),
-    ...availability
-  };
-};
-
-// src/commands/guard.ts
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
