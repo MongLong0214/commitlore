@@ -33,6 +33,7 @@ import { formatReport, runDoctor } from './doctor.js';
 import { installHook } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex } from '../core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.js';
+import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -40,17 +41,16 @@ const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
  * Stricter than `doctor`'s own exit code on purpose. `doctor` exits 0 for a
  * `warn` check by design — it reports, it never blocks a command on its own
  * (`commitlore-setup` skill). `init` is not just reporting: it is the command
- * that is supposed to have taken care of everything at once, so a `warn` it
- * cannot fix itself (no remote configured, shallow history, ...) has to move
- * the needle here even though it would not move `doctor`'s. Folding that back
- * into "3/3 steps completed cleanly" is exactly the silent-success shape #63
- * and #67 were.
+ * that is supposed to have taken care of everything at once, so a warning it
+ * cannot fix itself has to move the needle even though it would not move
+ * `doctor`'s. A missing remote remains visible but is non-actionable: a fresh
+ * repository has not reached sharing yet, rather than being misconfigured.
+ * Folding actionable warnings back into "3/3 steps completed cleanly" is the
+ * silent-success shape #63 and #67 were.
  */
 const runDoctorStep = (opts) => {
     const report = runDoctor({ ...cwdOption(opts), fix: true });
-    const code = report.checks.some((entry) => entry.status === 'warn' || entry.status === 'fail')
-        ? 1
-        : 0;
+    const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
     return {
         step: 'doctor',
         title: 'doctor --fix',
@@ -60,16 +60,17 @@ const runDoctorStep = (opts) => {
     };
 };
 const runHooksStep = (opts) => {
-    const result = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
-    const lines = result.code === 0
+    const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
+    const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
+    const lines = [commitMsg, prepareCommitMsg].flatMap((result) => result.code === 0
         ? result.stdout.trimEnd().split('\n')
-        : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'];
+        : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic']);
     return {
         step: 'hooks',
         title: 'hooks install',
-        code: result.code,
+        code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
         lines,
-        detail: result,
+        detail: [commitMsg, prepareCommitMsg],
     };
 };
 const runIndexStep = (opts) => {
@@ -199,7 +200,7 @@ export const register = (program) => {
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
         'still exist on their own for anyone who wants one piece rather than all four.' +
         '\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not ' +
-        'fix itself (a warn or fail check — read the detail above), 2 hooks install, index rebuild, or claude ' +
+        'fix itself (an actionable warning or failure — read the detail above), 2 hooks install, index rebuild, or claude ' +
         'hook install could not run at all (SPEC §10).')
         .action((options) => {
         const report = runInit(options.force === undefined ? {} : { force: options.force });

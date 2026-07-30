@@ -8,6 +8,11 @@ export declare const SINGLE_VALUED: ReadonlySet<string>;
 export declare const STRUCTURAL_TRAILER_KEYS: ReadonlySet<string>;
 /** Keys omitted from the injection projection because they do not repay their token cost. */
 export declare const INJECT_OMITTED_KEYS: ReadonlySet<string>;
+export declare const CONVENTIONAL_TRAILER_KEYS: ReadonlySet<string>;
+/** Whether `key` names a reserved trailer from {@link CONVENTIONAL_TRAILER_KEYS}, case-insensitively. */
+export declare const isConventionalTrailerKey: (key: string) => boolean;
+/** The canonical spelling for a conventional key, regardless of how this occurrence was cased. */
+export declare const canonicalConventionalTrailerKey: (key: string) => string;
 export declare const BLAST_VALUES: readonly ["local", "module", "system"];
 export declare const UNDO_VALUES: readonly ["easy", "costly", "permanent"];
 export declare const CERTAINTY_VALUES: readonly ["firm", "tentative", "guess"];

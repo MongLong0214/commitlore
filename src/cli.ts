@@ -29,6 +29,7 @@ import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
 import { register as registerValidate } from './commands/validate.js';
+import { register as registerPrepareCommitMsg } from './hooks/prepare-commit-msg.js';
 import { labelRecordBlocks, serializeTrailers, type LabeledBlock } from './core/trailers.js';
 
 const pkg: { version?: string } = { version: packageVersion() };
@@ -143,6 +144,7 @@ registerInit(program);
 registerHarvest(program);
 registerHarvestVerify(program);
 registerSquashPreserve(program);
+registerPrepareCommitMsg(program);
 registerGuard(program);
 registerInject(program);
 registerBackfill(program);

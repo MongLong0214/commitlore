@@ -54,16 +54,6 @@ beforeAll(() => {
   }
 }, 120_000);
 
-const runInitAsCli = (opts: InitOptions): InitReport => {
-  const original = process.argv[1];
-  process.argv[1] = CLI_JS;
-  try {
-    return runInit(opts);
-  } finally {
-    process.argv[1] = original;
-  }
-};
-
 const scratch: string[] = [];
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
@@ -73,6 +63,29 @@ const tempDir = (label: string): string => {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), `commitlore-init-${label}-`));
   scratch.push(dir);
   return dir;
+};
+
+const injectBin = tempDir('inject-bin');
+const injectCommand = join(injectBin, 'commitlore');
+writeFileSync(
+  injectCommand,
+  '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n',
+  { mode: 0o755 },
+);
+chmodSync(injectCommand, 0o755);
+
+const runInitAsCli = (opts: InitOptions): InitReport => {
+  const originalArgv = process.argv[1];
+  const originalPath = process.env['PATH'];
+  process.argv[1] = CLI_JS;
+  process.env['PATH'] = `${injectBin}:/usr/bin:/bin`;
+  try {
+    return runInit(opts);
+  } finally {
+    process.argv[1] = originalArgv;
+    if (originalPath === undefined) delete process.env['PATH'];
+    else process.env['PATH'] = originalPath;
+  }
 };
 
 const git = (cwd: string, args: string[]): string => {
@@ -174,23 +187,38 @@ describe('commitlore init — the happy path', () => {
 });
 
 describe('commitlore init — a step that cannot fully succeed is reported, not hidden', () => {
-  it('a repo with no remote configured comes back as needing attention, not as a clean pass', () => {
-    // No `git remote add`, unlike repoWithRemote — this is exactly the case
-    // the task's own verification calls out: init must not claim success
-    // over a warning it cannot fix itself.
+  it('a fresh repo with no remote keeps its warnings and skips visible, but exits cleanly', () => {
     const repo = initRepo('no-remote');
     git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
 
     const report = runInitAsCli({ cwd: repo });
 
     const doctorStep = report.steps.find((s) => s.step === 'doctor');
-    expect(doctorStep?.code).toBe(1);
+    expect(doctorStep?.code).toBe(0);
     expect(doctorStep?.lines.join('\n')).toContain('no remote is configured');
-    expect(report.exitCode).toBe(1);
+    expect(doctorStep?.lines.join('\n')).toContain('skipped squash conservation');
+    expect(report.exitCode).toBe(0);
 
-    // The hook and the index still got installed — one check being unfixable
-    // does not stop the other two steps from doing their job.
     expect(readHookStatus(repo).state).toBe('installed');
+
+    const text = formatInitReport(report);
+    expect(text).toContain('completed cleanly');
+    expect(text).not.toContain('need(s) attention');
+  });
+
+  it('a configured but unreachable remote remains an actionable doctor warning', () => {
+    const remote = initBare('remote-unreachable');
+    const repo = initRepo('remote-unreachable');
+    git(repo, ['remote', 'add', 'origin', remote]);
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
+    rmSync(remote, { recursive: true, force: true });
+
+    const report = runInitAsCli({ cwd: repo });
+
+    const doctorStep = report.steps.find((s) => s.step === 'doctor');
+    expect(doctorStep?.code).toBe(1);
+    expect(doctorStep?.lines.join('\n')).toContain('could not verify');
+    expect(report.exitCode).toBe(1);
 
     const text = formatInitReport(report);
     expect(text).not.toContain('completed cleanly');

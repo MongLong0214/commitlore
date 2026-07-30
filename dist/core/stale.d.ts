@@ -19,6 +19,13 @@ import { type Lifecycle, type Record, type Trailer, type Violation } from './typ
 /** The only flag the core raises today. `flags` stays open for later routes. */
 export declare const REVIEW_FLAG = "review";
 /**
+ * Exported so `commands/validate.ts` can report the exact same wording for
+ * the same `duplicate-id` rule when it detects a same-message collision
+ * directly from `core/trailers.ts`'s `labelRecordBlocks` (bug-issue-145) — one
+ * rule should read the same regardless of which check found it.
+ */
+export declare const UNIQUE_ID_WANT = "exactly one record per Record-Id";
+/**
  * A record plus the instant its commit was made — the axis the fold orders by.
  *
  * `committedAt` is optional so a plain `Record[]` (SPEC's knowledge unit, which
@@ -89,17 +96,30 @@ export declare const foldLifecycle: (records: StaleRecord[], opts: FoldOptions) 
  * line with two fixes.
  */
 export declare const findDanglingRefs: (records: StaleRecord[], referencedBy?: StaleRecord[]) => Violation[];
+/** Whether a record cannot be safely merged because its identity is ambiguous. */
+export declare const hasAmbiguousIdCollision: (records: StaleRecord[]) => boolean;
 /**
- * A note may mirror a commit byte-for-byte, but it may not add or replace
- * content under an identity already declared elsewhere. Commit-only
- * re-declarations remain lifecycle updates (SPEC §5) *only when they are
- * declared by different commits* — two commit-sourced blocks that share a
- * `sha` never got there by a later commit re-declaring the id over time, they
- * got there because the multi-record grammar (SPEC §2.4) recovered more than
- * one block from a single message, and an id must resolve to exactly one
- * record *within* a message exactly as much as it must across notes and
- * commits (bug-issue-92; `commitlore parse`'s `labelRecordBlocks` already
- * enforces this locally to one message, in `core/trailers.ts`).
+ * Whether a `Record-Id` that appears more than once in `records` has a later
+ * commit declaring `Supersedes:` for it, making the duplication an intentional
+ * succession rather than an error.
+ *
+ * Ambiguity takes unconditional precedence: a same-message duplicate or a
+ * divergent notes mirror cannot be resolved by a later succession (the group
+ * is inherently unresolvable), so this predicate returns `false` for them
+ * exactly as `findIdCollisions` does. Placing the check here rather than in
+ * the caller ensures every call site — `stale`, `validate`, and any future
+ * third — shares the same rule and cannot diverge (bug-issue-187, packet
+ * item 2).
+ *
+ * Exported so `commands/validate.ts` can apply the same predicate
+ * `findIdCollisions` uses internally, against a record stream that includes
+ * commits beyond what the individual source commit can see (bug-issue-187).
+ */
+export declare const isSuccessionDeclared: (recordId: string, records: StaleRecord[]) => boolean;
+/**
+ * A Record-Id belongs to exactly one record unless a later commit declares
+ * `Supersedes:` for it. Same-message duplicates and divergent notes are still
+ * collisions: neither is a later authored succession.
  */
 export declare const findIdCollisions: (records: StaleRecord[]) => Violation[];
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */

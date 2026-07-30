@@ -7,6 +7,7 @@
  * Callers that want a failure to be fatal use `execGitOrThrow`, which throws a
  * plain `Error` carrying `code` and `stderr` as own properties.
  */
+import { type SpawnSyncReturns } from 'node:child_process';
 /** One `git` invocation's outcome. A non-zero `code` is a result, not a throw. */
 export interface GitResult {
     stdout: string;
@@ -26,6 +27,8 @@ export interface ExecGitOptions {
  * which is 0-255.
  */
 export declare const GIT_SPAWN_FAILED = -1;
+/** Maps a completed spawn result to the git wrapper's stable result shape. */
+export declare const gitResultFromSpawn: (result: SpawnSyncReturns<string>) => GitResult;
 /**
  * Runs `git` with `args` and returns its outcome. Never throws for a git-level
  * failure; check `code`.

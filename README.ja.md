@@ -18,13 +18,51 @@
 
 **AI 支援コードベースのための Git-native decision memory。** CommitLore は、コード変更の背後にある制約、除外した代案、警告、検証の空白を Git に直接記録します。開発者やコーディングエージェントは、何を変える前にもなぜこうなっているかを理解できます。
 
-ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリと共に移動する、レビュー可能な意思決定コンテキストだけです。
+ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
+
+一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
+## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
+
+レコードを一つ取り逃がせば、モデルはコンテキストを失います。すでに覆された意思決定を渡せば、正しさを損ないます。この[検索測定](bench/retrieval/result.md)では、ノイズが 0 件から 10,000 件までのすべてのサイズで、BM25、embedding top-k、hybrid RRF、パスフィルター付き embedding がそれぞれ廃止済みのレコードを一つ返しました。lifecycle を伴う CommitLore のパス範囲は古いレコードをゼロにし、現在の二つのレコード (2/2) を返しました。
+
+再現率は補助的な結果です。検索はおおむねどちらでも同じレコードを見つけますが、どの意思決定がまだ有効かを知るルートは一つだけです。廃止済みのレコードがない #166 のコーパスでは、embedding 検索はパス範囲と同じ 2/2 でした。意思決定が覆されたときに違いが現れます。これはまさにこの製品が存在するケースです。
+
+別の #167 の露出実行も重要です。10,002 件のうちモデルに届いたレコードは 2 件だけでした。
+
+| ルート | モデルに見えるレコード | 関連レコード | モデルに見えるトークン |
+|---|---:|---:|---:|
+| すべて注入 | 10,002 | 2/2 | 1,004,554 |
+| top-k 語彙検索 | 2 | 1/2 | 190 |
+| CommitLore パス範囲 | 2 | 2/2 | 335 |
+
+これは固定した 2 レコードの出力予算における露出と再現率の測定であり、トークンコスト、請求コスト、正確さ、エージェントの振る舞いを測るものではありません。これは一つのコーパス、一つのクエリ、一つの固定された embedding モデルによる結果です。
+
 検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
+
+## init の後に起きること
+
+- 普段どおりコミットします。ほとんどのコミットには record がありません。
+- record がある場合、commit-msg hook が検証します。record を作成することはありません。
+- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
+- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+
+## リポジトリで試す
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+その後もコーディングエージェントと作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
+
+<details>
+<summary>インストールを確認または固定したいですか？</summary>
 
 この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone するか、リリース資産を手動でダウンロードして `SHA256SUMS` を検証してください。スクリプトはダウンロードするバイナリのチェックサムを検証しますが、すでに `sh` に渡したスクリプト自体を認証するものではありません。
 
@@ -40,22 +78,37 @@ curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$vers
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
+</details>
+
 ## 実際に動かす
 
-**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** この checkout で、`install.sh` に対する実際の Claude `PreToolUse` payload を同じ hook path に送ります。
+**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
+
+```bash
+commitlore context install.sh
+```
+
+出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>正確な PreToolUse hook path を再現する</summary>
 
 ```bash
 printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
   | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
-応答には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
-
-```console
-Ruled-out:
-  [claim] r-instci99a ... publishing a `-musl` release target |
-  a release.yml/build-matrix change, not an install.sh or CI-verification fix
-```
+</details>
 
 ## 違い
 
@@ -65,7 +118,40 @@ Ruled-out:
 
 権威ある原本は通常の commit trailer と `refs/notes/commitlore` です。index と report はこれらの Git record から派生し、再構築できます。
 
-## 一つの記録
+## record が作られる方法
+
+すべてのコミットに trailer を手書きする必要はありません。ほとんどのコミットには record がないべきです。外部制約、除外した代案、warning、verification gap のように、diff だけでは復元できない意思決定にだけ record を追加します。
+
+### コーディングエージェント経由
+
+エージェントには、普段どおりコミットし、diff では説明できない意思決定コンテキストだけを残すよう頼みます。
+
+> この変更をコミットしてください。diff で重要な制約、除外した代案、warning、または verification gap を復元できない場合にだけ、CommitLore record を追加してください。
+
+ほとんどのコミットには、やはり record は不要です。エージェント向けの指針は `skills/commitlore-commits/` にあり、commit hook はエージェントが追加した record を検証します。
+
+### 高度な経路: harvest
+
+`commitlore harvest` は session transcript と staged diff から prompt contract を作り、`commitlore harvest-verify` はそれに対する draft を検証します。これらは draft を支援しますが、自動でコミットしません。interactive record builder は未実装です。
+
+### 手書き
+
+逃げ道として、人は通常の Git trailer を手書きできます。commit-msg hook はすでにある record を検証するだけで、record を発明したり黙って追加したりしません。
+
+## 最小の record
+
+record は小さくできます。失われるものだけを入れてください。
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+ほとんどの record に protocol field のすべては不要です。意思決定が必要とするときは、identity、lifecycle、risk、provenance、verification field を使えます。
+
+## 完全な record
 
 この例は conformance fixture でもあります。Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
 
@@ -125,11 +211,20 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 
 これは Git に結び付けられ、人間が検証できる意思決定履歴についての製品上の主張です。CommitLore が agent performance を改善するという主張には依存しません。
 
-## Evidence: 112 回の実験、null の結果
+## Evidence: より狭い製品上の主張
 
-> **AI tool を作り、112 回実験した。結果は null だった。**
+112 回の実験は記録されましたが、M4 には run ごとの `guard_exposure` 記録がありません。treatment があったか検証できないため、agent behavior の主張を検証も支持も反証もしていません。上記のより狭い製品上の主張は独立して検証可能な動作に基づきます。クリーンなデータセットと撤回については [M4 verdict](bench/VERDICT-M4.md) を読んでください。
 
-これは製品の信頼モデルの一部なので脚注に隠しません。M4 は測定した agent behavior で裏付けられる効果を見つけませんでした。その後、paired・clustered design を反映して分析を修正し、記録された算術エラーも訂正しました。全ての限界は [M4 verdict](bench/VERDICT-M4.md)、その結果から導いた製品上の主張は [roadmap](docs/ROADMAP-TO-DONE.md) で読めます。
+### レイテンシ、コスト、損益分岐
+
+100,000 コミットではインデックス付き `context` の p50 は 496 ms、CommitLore 自身の `--no-index` フォールバックは 86,673 ms です。この内部フォールバックの差は 1k で 4.8×、10k で 36×、100k で 175×へと大きくなります（[完全な決定論的実行](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)）。これは規模に対する形であり、製品と代替手段の比較結果ではありません。
+
+guard が一回実行されるコストは、注入される context と測定した hook overhead です。commit-msg は p50 185.85 ms、injection hook は p50 102.40 ms です（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
+
+損益分岐の数値を再び示すには、プロバイダー報告のターンごとのトークン使用量台帳と、リポジトリがすでに却下した代案に費やした作業の観測済みコストが必要です。
+
+<details>
+<summary>完全な benchmark record（112 回の実験）</summary>
 
 <!-- BENCH:BEGIN -->
 <!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
@@ -171,6 +266,8 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 - 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
 <!-- BENCH:END -->
 
+</details>
+
 ## source からインストール
 
 source distribution を確認または実行するには次を使います。
@@ -186,7 +283,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - Alpine および他の musl Linux host は未対応です: [#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- benchmark は agent behavior に対する guard の効果を実証していません: [#37](https://github.com/MongLong0214/commitlore/issues/37)。
+- M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 
 ## コントリビュート
 

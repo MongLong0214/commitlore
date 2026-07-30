@@ -18,13 +18,51 @@
 
 **Git-native decision memory for AI-assisted codebases.** CommitLore records the limits, ruled-out alternatives, warnings, and verification gaps behind code changes—directly in Git—so a developer or coding agent can understand the why before changing the what.
 
-No hosted memory service. No vendor-specific chat history. Just reviewable decision context that travels with the repository.
+No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
+
+Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
+## Retrieval can find records. Path scope keeps reversed decisions out.
+
+Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
+
+Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. On #166's corpus with no superseded records, embedding retrieval matched path scope at 2/2. The advantage appears when decisions have been reversed—the case this product exists for.
+
+The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
+
+| route | model-visible records | relevant records | model-visible tokens |
+|---|---:|---:|---:|
+| inject everything | 10,002 | 2/2 | 1,004,554 |
+| top-k lexical | 2 | 1/2 | 190 |
+| CommitLore path scope | 2 | 2/2 | 335 |
+
+This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model.
+
 Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
+
+## What happens after init
+
+- Commit normally. Most commits carry no record.
+- If a record is present, the commit-msg hook validates it; it never creates one.
+- Agents query decision context through MCP or receive it from the `PreToolUse` hook.
+- Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
+
+## Try it in a repository
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+Then keep working through your coding agent. When a change contains decision context the diff cannot preserve, ask the agent to include a CommitLore record in the commit.
+
+<details>
+<summary>Prefer to inspect or pin the installation?</summary>
 
 The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, clone the repository, or manually download a release asset and verify its `SHA256SUMS`. The script checksum-verifies the binary it downloads; it does not authenticate the script already piped to `sh`.
 
@@ -40,22 +78,37 @@ curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$vers
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
+</details>
+
 ## See it work
 
-**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** From this checkout, send a real Claude `PreToolUse` payload for `install.sh` through the same hook path:
+**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
+
+```bash
+commitlore context install.sh
+```
+
+The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>Reproduce the exact PreToolUse hook path</summary>
 
 ```bash
 printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
   | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
-The response contains the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
-
-```console
-Ruled-out:
-  [claim] r-instci99a ... publishing a `-musl` release target |
-  a release.yml/build-matrix change, not an install.sh or CI-verification fix
-```
+</details>
 
 ## What makes it different
 
@@ -65,7 +118,40 @@ Ruled-out:
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
 
-## A record
+## How records get created
+
+You do not hand-write a trailer for every commit. Most commits should carry no record at all. Add one only for a decision the diff cannot recover: an external constraint, a rejected alternative, a warning, or a verification gap.
+
+### Through a coding agent
+
+Ask the agent to commit normally and preserve only the decision context the diff cannot explain:
+
+> Commit this change. Add a CommitLore record only if the diff cannot recover an important constraint, rejected alternative, warning, or verification gap.
+
+Most commits should still carry no record. The agent instructions live in `skills/commitlore-commits/`, and the commit hook validates any record the agent adds.
+
+### Advanced: harvest
+
+`commitlore harvest` builds a prompt contract from a session transcript and staged diff; `commitlore harvest-verify` checks a draft against them. They support drafting, not automatic commits. Interactive record building is not implemented.
+
+### By hand
+
+As an escape hatch, a human can write ordinary Git trailers by hand. The commit-msg hook validates records that are already present; it never invents or silently adds one.
+
+## A minimal record
+
+A record can be small. Include only the context that would otherwise be lost:
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+Most records do not need every protocol field. Identity, lifecycle, risk, provenance, and verification fields are available when the decision needs them.
+
+## A complete record
 
 This example is also a conformance fixture. Git's trailer parser reads the code block identically in every translated README.
 
@@ -125,11 +211,20 @@ Use Git's trailer parser, not a text search: prose containing `Key:` is not nece
 
 These are product claims about Git-bound, human-verifiable decision history. They do not depend on a claim that CommitLore improves agent performance.
 
-## Evidence: 112 experiments, a null result
+## Evidence: a narrower product claim
 
-> **I built an AI tool, ran 112 experiments, and the result was null.**
+112 experiments were recorded, but M4 recorded no per-run guard exposure. Whether the treatment was present is unverifiable, so it does not test, support, or refute the agent-behavior claim. The narrower product claim above rests on independently testable behavior; read the [M4 verdict](bench/VERDICT-M4.md) for the clean dataset and withdrawal.
 
-That result stays here because it is part of the product's trust model, not a footnote. M4 found no supported effect on the measured agent behavior; its analysis was later corrected for the paired and clustered design, including a recorded arithmetic error. Read the [M4 verdict](bench/VERDICT-M4.md) for the full limits and the [roadmap](docs/ROADMAP-TO-DONE.md) for the resulting product claim.
+### Latency, cost, and break-even
+
+At 100,000 commits, indexed `context` p50 is 496 ms; CommitLore's own `--no-index` fallback is 86,673 ms. That internal fallback gap grows 4.8× at 1k, 36× at 10k, and 175× at 100k ([complete deterministic run](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)); it is a scaling shape, not a product-versus-alternative result.
+
+The guard costs injected context plus measured hook overhead: 185.85 ms p50 for commit-msg and 102.40 ms p50 for the injection hook ([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
+
+A break-even figure would require a per-turn ledger of provider-reported token usage and an observed cost for work spent on an alternative the repository had already rejected.
+
+<details>
+<summary>Full benchmark record (112 experiments)</summary>
 
 <!-- BENCH:BEGIN -->
 <!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
@@ -171,6 +266,8 @@ That result stays here because it is part of the product's trust model, not a fo
 - 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
 <!-- BENCH:END -->
 
+</details>
+
 ## Install from source
 
 To inspect or run the source distribution:
@@ -186,7 +283,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows is unsupported: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Alpine and other musl Linux hosts are unsupported: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
-- The benchmark does not demonstrate a guard effect on agent behavior: [#37](https://github.com/MongLong0214/commitlore/issues/37).
+- M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
 
 ## Contributing
 

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
@@ -31,7 +32,38 @@ const row = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   ...overrides,
 });
 
+const repoRoot = new URL("..", import.meta.url).pathname;
+const hookRunningClaude = `#!/usr/bin/env node\nconst{readFileSync}=require("node:fs"),{spawnSync}=require("node:child_process"),args=process.argv.slice(2);if(args.includes("--help")){process.stdout.write("--max-turns --strict-mcp-config --setting-sources --no-session-persistence\\n");process.exit()}const settings=JSON.parse(readFileSync(args[args.indexOf("--settings")+1],"utf8")),hook=spawnSync(settings.hooks.PreToolUse[0].hooks[0].command,{shell:true,cwd:process.cwd(),encoding:"utf8",input:JSON.stringify({tool_input:{file_path:"src/cache.ts",new_string:"rename the cache helper"}})});if(hook.status!==0)process.exit(hook.status??1);process.stdout.write(JSON.stringify({result:"completed edit",num_turns:1,usage:{input_tokens:1,output_tokens:1}}));`;
+
 describe("benchmark guard exposure", () => {
+  it("records a guard shim execution on the row from a hook-plan arm", () => {
+    const dir = mkdtempSync(join(tmpdir(), "commitlore-hook-exposure-"));
+    const privateDist = join(dir, "dist");
+    const out = join(dir, "rows.jsonl");
+    cpSync(join(repoRoot, "dist"), privateDist, { recursive: true });
+    writeFileSync(join(dir, "claude"), hookRunningClaude, { mode: 0o755 });
+
+    try {
+      execFileSync(
+        process.execPath,
+        ["--experimental-strip-types", join(repoRoot, "bench", "runner.ts"), "--tasks", join(repoRoot, "bench", "tasks"), "--out", out, "--task", "reproposal-redis-cache", "--cond", "commitlore-guard", "--seed", "1", "--driver", "claude-headless", "--model", "hook-test", "--timeout-ms", "5000"],
+        {
+          cwd: repoRoot,
+          env: {
+            ...process.env,
+            COMMITLORE_BENCH_DIST_DIR: privateDist,
+            PATH: `${dir}:${process.env.PATH ?? ""}`,
+          },
+        },
+      );
+      const [record] = parseRows("hook-plan.jsonl", readFileSync(out, "utf8"));
+
+      expect(record?.guard_exposure).toMatchObject({ complete: true, executed: true, checks: 1, fires: 0 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("records an actual guard fire even when the synthetic agent complies", () => {
     const tasks = loadTasks(new URL("../bench/tasks", import.meta.url).pathname);
     const task = tasks.find((candidate) => candidate.id === "reproposal-redis-cache");
@@ -216,5 +248,32 @@ describe("benchmark guard exposure", () => {
     expect(output).toContain("guard exposure  yes=0 no=0 unknown=1 checks=0 fires=0");
     expect(output).toContain("not computed — guard exposure is unknown for 1 analysis rows");
     expect(output).not.toContain("Fisher exact (two-tailed)");
+  });
+
+  it("refuses analysis when treatment exposure is identical to its comparator", () => {
+    // Given: two usable arms with complete, known, identical no-exposure observations.
+    const rows = [
+      row({
+        cond: "commitlore-guard",
+        guard_exposure: { complete: true, executed: true, checks: 1, fires: 0, matches: [] },
+      }),
+      row({
+        cond: "commitlore-on",
+        guard_exposure: { complete: true, executed: false, checks: 0, fires: 0, matches: [] },
+      }),
+    ];
+
+    // When/Then: analysis refuses the void comparison instead of estimating an effect.
+    expect(() => summarize(rows, ["identical-exposure.jsonl"])).toThrow(/treatment exposure.*does not differ/i);
+  });
+
+  it("refuses rows without guard exposure as unknown rather than analysing them", () => {
+    const summary = summarize(
+      [row({ cond: "commitlore-guard" }), row({ cond: "commitlore-on" })],
+      ["absent-exposure.jsonl"],
+    );
+
+    expect(summary.comparison).toBeNull();
+    expect(summary.comparison_unavailable_because).toBe("guard exposure is unknown for 2 analysis rows");
   });
 });

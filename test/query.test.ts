@@ -393,6 +393,137 @@ describe('D2: prose containing a Key: line yields no record', () => {
 });
 
 // ---------------------------------------------------------------------------
+// bug-issue-150 — a standard git trailer is not a record, even ingested alone
+// ---------------------------------------------------------------------------
+
+describe('bug-issue-150: conventional trailers are not records', () => {
+  /**
+   * The exact reproduction from the issue: a commit whose only trailer is
+   * `Co-authored-by:` used to answer `context` with one `[claim]` record —
+   * 100% noise reported as "1 other in 1 record".
+   */
+  it('reproduces empty for the reported repro: Co-authored-by alone yields no record', () => {
+    const dir = makeRepo();
+    commitAt(
+      dir,
+      '2026-01-01T00:00:00Z',
+      'Add package manifest\n\nCo-authored-by: Claude <noreply@anthropic.com>\n',
+      { 'Package.swift': 'manifest' },
+    );
+
+    const result = runQuery({ cwd: dir, path: 'Package.swift', noIndex: true });
+    expect(result.records).toEqual([]);
+
+    const text = formatContext(result);
+    expect(text).toBe('no active records for Package.swift\n');
+    expect(text).not.toContain('[claim]');
+    expect(text).not.toContain('Co-authored-by');
+  });
+
+  // The three casings bug-issue-150 reports seeing in one real repository.
+  it.each(['Co-authored-by', 'Co-Authored-By', 'Co-authored-By'])(
+    'drops %s case-insensitively',
+    (key) => {
+      const dir = makeRepo();
+      commitAt(dir, '2026-01-01T00:00:00Z', `Wire up CI\n\n${key}: Claude <noreply@anthropic.com>\n`, {
+        '.github/workflows/ci.yml': 'ci',
+      });
+
+      const result = runQuery({ cwd: dir, path: '.github/workflows/ci.yml', noIndex: true });
+      expect(result.records).toEqual([]);
+    },
+  );
+
+  it('drops Signed-off-by the same way', () => {
+    const dir = makeRepo();
+    commitAt(dir, '2026-01-01T00:00:00Z', 'Tidy a comment\n\nSigned-off-by: Dev <dev@example.com>\n', {
+      'src/a.ts': 'a',
+    });
+
+    const result = runQuery({ cwd: dir, path: 'src/a.ts', noIndex: true });
+    expect(result.records).toEqual([]);
+  });
+
+  it('keeps a genuine record that shares a message with a conventional trailer', () => {
+    const dir = makeRepo();
+    commitAt(
+      dir,
+      '2026-01-01T00:00:00Z',
+      record('Guard the session TTL', [
+        'Limit: the vendor SSO ships no refresh token',
+        'Co-authored-by: Claude <noreply@anthropic.com>',
+        'Record-Id: r-mixed150',
+      ]),
+      { 'src/auth/session.ts': 'session' },
+    );
+
+    const result = runQuery({ cwd: dir, path: 'src/auth/session.ts', noIndex: true });
+    expect(recordIds(result.records)).toEqual(['r-mixed150']);
+    const [only] = result.records;
+    expect(only?.trailers.map((trailer) => trailer.key).sort()).toEqual(['Limit', 'Record-Id']);
+
+    const text = formatContext(result);
+    expect(text).toContain('the vendor SSO ships no refresh token');
+    expect(text).not.toContain('Co-authored-by');
+  });
+
+  /**
+   * `Fixes:`/`Closes:` are deliberately not in the exclusion set (see
+   * `types.ts` `CONVENTIONAL_TRAILER_KEYS`): they name the issue a change
+   * addresses, which reads closer to decision context than to attribution, so
+   * they still reach the "other" bucket like any trailer this protocol has no
+   * vocabulary slot for.
+   */
+  it('leaves Fixes: and Closes: alone — they still surface as records', () => {
+    const dir = makeRepo();
+    commitAt(
+      dir,
+      '2026-01-01T00:00:00Z',
+      'Patch the retry loop\n\nFixes: #42\nCloses: #7\nRecord-Id: r-fixes150\n',
+      { 'src/retry.ts': 'retry' },
+    );
+
+    const result = runQuery({ cwd: dir, path: 'src/retry.ts', noIndex: true });
+    expect(recordIds(result.records)).toEqual(['r-fixes150']);
+    const [only] = result.records;
+    expect(only?.trailers.map((trailer) => trailer.key).sort()).toEqual([
+      'Closes',
+      'Fixes',
+      'Record-Id',
+    ]);
+
+    const text = formatContext(result);
+    expect(text).toContain('Fixes: #42');
+    expect(text).toContain('Closes: #7');
+  });
+
+  it('index and --no-index agree once conventional trailers are stripped', () => {
+    const dir = makeRepo();
+    commitAt(
+      dir,
+      '2026-01-01T00:00:00Z',
+      'Add package manifest\n\nCo-authored-by: Claude <noreply@anthropic.com>\n',
+      { 'Package.swift': 'manifest' },
+    );
+    commitAt(
+      dir,
+      '2026-01-02T00:00:00Z',
+      record('Guard the session TTL', [
+        'Limit: the vendor SSO ships no refresh token',
+        'Co-authored-by: Claude <noreply@anthropic.com>',
+        'Record-Id: r-agree150',
+      ]),
+      { 'src/auth/session.ts': 'session' },
+    );
+
+    const indexed = runQuery({ cwd: dir });
+    const scanned = runQuery({ cwd: dir, noIndex: true });
+    expect(recordIds(indexed.records)).toEqual(recordIds(scanned.records));
+    expect(recordIds(indexed.records)).toEqual(['r-agree150']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // D4 — renames
 // ---------------------------------------------------------------------------
 
@@ -675,7 +806,10 @@ type Declaration = {
   readonly warning: string;
 };
 
-const dualDeclarationRepo = (declarations: readonly Declaration[]): string => {
+const dualDeclarationRepo = (
+  declarations: readonly Declaration[],
+  declaresSuccession = false,
+): string => {
   const dir = makeRepo();
   for (const [index, declaration] of declarations.entries()) {
     commitAt(
@@ -684,6 +818,7 @@ const dualDeclarationRepo = (declarations: readonly Declaration[]): string => {
       record(`Declare r-dual01 (${declaration.provenance})`, [
         `Warn: ${declaration.warning}`,
         `Provenance: ${declaration.provenance}`,
+        ...(declaresSuccession && index > 0 ? ['Supersedes: r-dual01'] : []),
         'Record-Id: r-dual01',
       ]),
       { 'src/dual.ts': String(index) },
@@ -732,6 +867,23 @@ describe('merged-record trust', () => {
     expect(query.records[0]?.trust).toBe('claim');
     expect(injection.text).toMatch(/\[claim\]\s+r-dual01/);
   });
+
+  it.each(orders)(
+    'keeps a duplicated-and-declared record a claim regardless of declaration order',
+    (...declarations) => {
+      const dir = dualDeclarationRepo(declarations, true);
+      const query = runQuery({ cwd: dir, trustedAuthors: [TRUSTED_AUTHOR] });
+      const injection = buildInjection({
+        cwd: dir,
+        path: 'src/dual.ts',
+        trustedAuthors: [TRUSTED_AUTHOR],
+        noIndex: true,
+      });
+
+      expect(query.records[0]?.trust).toBe('claim');
+      expect(injection.text).toMatch(/\[claim\]\s+r-dual01/);
+    },
+  );
 
   it('leaves a singly declared record directive', () => {
     const dir = dualDeclarationRepo([authored(ordinaryWarning)]);

@@ -120,7 +120,7 @@ for readme in "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md; do
     const fs = require("fs");
     const md = fs.readFileSync(process.argv[1], "utf8");
     const fixture = fs.readFileSync(process.argv[2], "utf8");
-    const m = md.match(/```text\n([\s\S]*?)\n```/);
+    const m = [...md.matchAll(/```text\n([\s\S]*?)\n```/g)].at(-1);
     if (!m) { console.error("no ```text example block"); process.exit(1); }
     if (m[1] + "\n" !== fixture) {
       console.error("README example drifted from spec/fixtures/valid/11-readme-example.txt");

@@ -12,6 +12,7 @@ export interface Machine {
 export interface BaseRow {
   readonly schema_version: 1;
   readonly harness_commit: string;
+  readonly harness_digest: string;
   readonly dist_digest: string;
   readonly measured_at: string;
   readonly machine: Machine;
@@ -59,10 +60,11 @@ export type SurvivalOperation =
 export interface SurvivalRow extends BaseRow {
   readonly metric: 'record_survival';
   readonly operation: SurvivalOperation;
+  readonly outcome: 'history-retention' | 'path-reachability';
+  readonly measurement: 'historyCount' | 'pathCount';
   readonly survived: number;
   readonly total: number;
   readonly rate: number;
-  readonly method: 'history' | 'path-query';
 }
 
 export interface InjectionDetectionRow extends BaseRow {
@@ -94,6 +96,25 @@ export interface GuardScoreBand {
   readonly correct: number;
 }
 
+export interface GuardThresholdPoint {
+  readonly threshold: number;
+  readonly true_positives: number;
+  readonly false_positives: number;
+  readonly false_negatives: number;
+  readonly true_negatives: number;
+  readonly precision: number | null;
+  readonly recall: number;
+  readonly f1: number | null;
+  readonly firings: number;
+  readonly correct_silences: number;
+}
+
+export interface PrecisionInterval {
+  readonly level: 0.95;
+  readonly lower: number;
+  readonly upper: number;
+}
+
 export interface GuardQualityRow extends BaseRow {
   readonly metric: 'guard_quality';
   readonly corpus: string;
@@ -102,17 +123,14 @@ export interface GuardQualityRow extends BaseRow {
   readonly false_positives: number;
   readonly false_negatives: number;
   readonly true_negatives: number;
-  /**
-   * Kept for programmatic use (trend tracking as the corpus grows). Never
-   * rendered alone in the report: issue #61 decided precision is reported by
-   * score band, because a rate computed from a handful of firings has a wide
-   * interval and a single number invites reading it as more than it is.
-   */
   readonly precision: number;
   readonly recall: number;
   /** True positives + false positives; the denominator the bands partition. */
   readonly firings: number;
   readonly bands: readonly GuardScoreBand[];
+  readonly curve_step: number;
+  readonly curve: readonly GuardThresholdPoint[];
+  readonly precision_interval: PrecisionInterval;
 }
 
 export type HookName = 'commit-msg' | 'pre-tool-use-inject';
@@ -126,15 +144,77 @@ export interface HookOverheadRow extends BaseRow {
   readonly delta_p95_ms: number;
 }
 
+export interface HarvestCapture {
+  readonly output_bytes: number;
+  readonly output_tokens: number;
+  readonly timing: Timing;
+}
+
+export interface VerificationCapture {
+  readonly input_bytes: number;
+  readonly input_tokens: number;
+  readonly timing: Timing;
+}
+
+export interface CacheReadCapture {
+  readonly input_bytes: number;
+  readonly input_tokens: number;
+}
+
+export interface CaptureCostRow extends BaseRow {
+  readonly metric: 'capture_cost';
+  readonly fixture: string;
+  readonly accepted_records: number;
+  readonly rejected_records: number;
+  readonly harvest: HarvestCapture;
+  readonly verify: VerificationCapture;
+  /** Transcript + diff re-read by verification after harvest already supplied them. */
+  readonly cache_read: CacheReadCapture;
+  readonly marginal_tokens_per_accepted_record: number;
+  readonly tokens_including_cache_reads_per_accepted_record: number;
+}
+
+export type NoiseRoute =
+  | 'inject-everything'
+  | 'top-k-lexical'
+  | 'commitlore-path-lifecycle';
+
+export interface NoiseExposureRow extends BaseRow {
+  readonly metric: 'noise_exposure';
+  readonly distractors: number;
+  readonly corpus_records: number;
+  readonly route: NoiseRoute;
+  readonly visible_records: number;
+  readonly visible_tokens: number;
+  readonly relevant_records: number;
+  readonly relevant_total: 2;
+  readonly timing: Timing;
+}
+
+export interface DensityRow extends BaseRow {
+  readonly metric: 'rationale_density';
+  readonly history_ref: string;
+  readonly commits_examined: number;
+  readonly record_bearing_commits: number;
+  readonly structured_trailers: number;
+  readonly non_empty_body_lines: number;
+  readonly record_bearing_rate: number;
+  readonly trailers_per_commit: number;
+  readonly structured_trailer_line_share: number;
+}
+
 export type DeterministicRow =
   | QueryLatencyRow
   | IndexCostRow
   | SurvivalRow
   | InjectionDetectionRow
   | GuardQualityRow
-  | HookOverheadRow;
+  | HookOverheadRow
+  | CaptureCostRow
+  | NoiseExposureRow
+  | DensityRow;
 
 export type RowBase = Pick<
   BaseRow,
-  'schema_version' | 'harness_commit' | 'dist_digest' | 'measured_at' | 'machine'
+  'schema_version' | 'harness_commit' | 'harness_digest' | 'dist_digest' | 'measured_at' | 'machine'
 >;

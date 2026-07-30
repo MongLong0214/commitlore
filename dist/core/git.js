@@ -17,6 +17,20 @@ import { resolve } from 'node:path';
  */
 export const GIT_SPAWN_FAILED = -1;
 const DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
+/** Maps a completed spawn result to the git wrapper's stable result shape. */
+export const gitResultFromSpawn = (result) => {
+    const stdout = result.stdout ?? '';
+    const stderr = result.stderr ?? '';
+    // A child can exit before Node finishes writing its input pipe, leaving EPIPE
+    // alongside its real status and output. The completed child result wins.
+    if (result.status !== null)
+        return { stdout, stderr, code: result.status };
+    if (result.error !== undefined) {
+        return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+    }
+    const signal = result.signal ?? 'unknown';
+    return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
+};
 /**
  * Runs `git` with `args` and returns its outcome. Never throws for a git-level
  * failure; check `code`.
@@ -33,16 +47,7 @@ export const execGit = (args, opts = {}) => {
         input: opts.stdin ?? '',
         maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
     });
-    const stdout = result.stdout ?? '';
-    const stderr = result.stderr ?? '';
-    if (result.error) {
-        return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
-    }
-    if (result.status === null) {
-        const signal = result.signal ?? 'unknown';
-        return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
-    }
-    return { stdout, stderr, code: result.status };
+    return gitResultFromSpawn(result);
 };
 /**
  * Runs `git` and returns stdout, throwing on any failure. The thrown `Error`

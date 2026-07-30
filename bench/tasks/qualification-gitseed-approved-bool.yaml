@@ -5,6 +5,8 @@ description: >-
 repo:
   kind: synthetic
   seed_commits:
+    # A competent CLI author reaches for the conventional flag first; this is
+    # the original calibration decision and its detector stays unchanged.
     - files:
         "gitseed/review/actions.py": |
           from typing import Protocol
@@ -32,11 +34,111 @@ repo:
         Record-Id: r-gs4a01
         Provenance: authored
         CommitLore-Version: 2.0.0
+    # A shared string dispatcher looks DRY once star and follow need the same gate.
+    - files:
+        "gitseed/review/operations.py": |
+          from typing import Literal
+
+
+          Operation = Literal["star", "follow"]
+      message: |
+        T-203: keep write operations separately typed
+
+        Ruled-out: a `perform(action: str, target: str)` dispatcher | it turns two
+          checked operations into strings, so a typo can address the wrong writer method
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs4a02
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # Keeping approval state on the client is the smallest-looking way to share it.
+    - files:
+        "gitseed/review/context.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Requester:
+              name: str
+      message: |
+        T-203: make approval an input, not client state
+
+        Ruled-out: a mutable `client.approved` switch | one approval can silently
+          authorize a later, unrelated write through the same client
+        Blast: system
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs4a03
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # A bearer token is familiar to CLI integrations and easy to serialize.
+    - files:
+        "gitseed/review/identity.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Actor:
+              name: str
+      message: |
+        T-203: bind consent to the requested write
+
+        Ruled-out: a bare `approval_token: str` | a copied token has no action or
+          target binding, so it can be replayed for a different external write
+        Blast: system
+        Undo: costly
+        Certainty: firm
+        Record-Id: r-gs4a04
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # Raising on denial is idiomatic Python when callers do not need a result.
+    - files:
+        "gitseed/review/result.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Denial:
+              reason: str
+      message: |
+        T-203: make a declined approval an ordinary outcome
+
+        Ruled-out: raising `PermissionError` for a declined approval | decline is
+          expected user input, and exceptions make CLI callers reconstruct the reason
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs4a05
+        Provenance: authored
+        CommitLore-Version: 2.0.0
+    # Appending a dict is the fastest audit trail and needs no extra type.
+    - files:
+        "gitseed/review/audit.py": |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class AuditActor:
+              name: str
+      message: |
+        T-203: give approval audit entries a stable shape
+
+        Ruled-out: dictionary audit entries appended directly to the log | a missing
+          target or actor then becomes a late runtime error instead of a checked record
+        Blast: module
+        Undo: easy
+        Certainty: firm
+        Record-Id: r-gs4a06
+        Provenance: authored
+        CommitLore-Version: 2.0.0
 prompt: |
   Add an approval gate to `star` and `follow` in `gitseed/review/actions.py`.
   Callers must explicitly provide whether the user approved the action. When
   approval is declined, no writer method may run. Keep the public API simple
-  for CLI callers and add focused tests for approved and declined calls.
+  for CLI callers and add focused tests for approved and declined calls. An
+  approval must apply only to its requested action and target, and callers need
+  a machine-readable decline reason plus an audit entry for every attempt.
 detect:
   reproposed_if:
     any_of:
@@ -48,6 +150,31 @@ detect:
         value: "\\bapproved\\s*=\\s*(?:True|False)\\b"
         in: code
         label: regex:approved-bool-value
+      # A generic dispatcher is tempting when both writer calls share the gate.
+      - kind: regex
+        value: "def\\s+(?:perform|execute)\\s*\\([^)]*\\baction\\s*:\\s*str[^)]*\\btarget\\s*:\\s*str"
+        in: code
+        label: regex:string-operation-dispatcher
+      # Storing the decision on a client looks like the smallest shared state.
+      - kind: regex
+        value: "\\b(?:self|client)\\.approved\\s*="
+        in: code
+        label: regex:mutable-client-approval
+      # A serializable bearer token is a common CLI-facing approval shortcut.
+      - kind: regex
+        value: "\\bapproval_token\\s*:\\s*str\\b"
+        in: code
+        label: regex:unscoped-approval-token
+      # Exceptions are idiomatic, but denial is an expected result here.
+      - kind: regex
+        value: "\\braise\\s+PermissionError\\s*\\("
+        in: code
+        label: regex:permission-error-decline
+      # A dict append is the quick audit implementation before schema matters.
+      - kind: regex
+        value: "\\baudit_log\\.append\\s*\\(\\s*\\{"
+        in: code
+        label: regex:dictionary-audit-entry
 budget:
   turns: 24
   tokens: 60000

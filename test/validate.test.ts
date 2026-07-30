@@ -430,6 +430,208 @@ describe('validate — check classes and reference integrity', () => {
       expect.objectContaining({ sha, key: 'Record-Id', got: 'r-dupdup', rule: 'duplicate-id' }),
     );
   });
+
+  // bug-issue-145: `--message-file`/stdin sources never resolve an `sha`, so
+  // the `sharesACommit` branch exercised above (bug-issue-92) can never fire
+  // for them — this is the gap the commit-msg hook actually runs into, since
+  // it always calls `validate --message-file` on a message that is not a
+  // commit yet.
+  it('rejects two blocks in a message file that share a Record-Id, naming it (bug-issue-145)', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'Two blocks same id\n\nLimit: first\nRecord-Id: r-dupxx1\n\nLimit: second\nRecord-Id: r-dupxx1\n',
+    });
+
+    expect(result.code).toBe(1);
+    expect(result.checks[0]).toEqual({ class: 'shape', status: 'failed' });
+    expect(
+      result.violations.filter((violation) => violation.rule === 'duplicate-id'),
+    ).toHaveLength(2);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({
+        key: 'Record-Id',
+        value: 'r-dupxx1',
+        got: 'r-dupxx1',
+        rule: 'duplicate-id',
+      }),
+    );
+    expect(result.stdout).toContain('r-dupxx1');
+  });
+
+  it('accepts two blocks in one message that declare different Record-Ids', () => {
+    const result = runValidate({
+      readStdin: () =>
+        'Two blocks different ids\n\nLimit: first\nRecord-Id: r-diffid1\n\nLimit: second\nRecord-Id: r-diffid2\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+  });
+
+  it('accepts a single record block, unaffected by the collision check', () => {
+    const result = runValidate({
+      readStdin: () => 'One block\n\nLimit: fine\nRecord-Id: r-single01\n',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+  });
+
+  // bug-issue-187: --range must honour a Supersedes: declaration that comes
+  // later in the range than the colliding commits, the same way stale does.
+  it('accepts a cross-commit duplicate when a later commit in the range declares Supersedes (bug-issue-187)', () => {
+    const repo = makeRepo();
+    commit(repo, 'a.txt', 'First claim\n\nLimit: original\nRecord-Id: r-dup187a\n');
+    const tag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187', tag], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'b.txt', 'Second claim same id\n\nLimit: revised\nRecord-Id: r-dup187a\n');
+    commit(
+      repo,
+      'c.txt',
+      'Retire the duplicate\n\nSupersedes: r-dup187a\nRecord-Id: r-succ187\n',
+    );
+
+    const result = runValidate({ range: 'base187..HEAD', cwd: repo });
+
+    expect(result.code).toBe(0);
+    expect(result.violations.filter((v) => v.rule === 'duplicate-id')).toHaveLength(0);
+  });
+
+  it('still rejects a cross-commit duplicate when no Supersedes is declared (bug-issue-187)', () => {
+    const repo = makeRepo();
+    commit(repo, 'a.txt', 'First claim\n\nLimit: original\nRecord-Id: r-dup187b\n');
+    const tag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187b', tag], { cwd: repo, env: GIT_ENV });
+    commit(repo, 'b.txt', 'Second claim same id\n\nLimit: revised\nRecord-Id: r-dup187b\n');
+
+    const result = runValidate({ range: 'base187b..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    expect(result.violations.filter((v) => v.rule === 'duplicate-id').length).toBeGreaterThan(0);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ key: 'Record-Id', value: 'r-dup187b', rule: 'duplicate-id' }),
+    );
+  });
+
+  it('still rejects a same-message duplicate as unresolvable even with Supersedes in range (bug-issue-187)', () => {
+    const repo = makeRepo();
+    // Need a base commit so the range has a proper starting point.
+    commit(repo, 'base.txt', 'Base commit\n\nRecord-Id: r-base187c\n');
+    const baseTag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base187c', baseTag], { cwd: repo, env: GIT_ENV });
+    const sha = commit(
+      repo,
+      'ambiguous.txt',
+      [
+        'Two blocks same id in one message',
+        '',
+        'Limit: first meaning',
+        'Record-Id: r-ambig187',
+        '',
+        'Limit: second meaning',
+        'Record-Id: r-ambig187',
+      ].join('\n'),
+    );
+    // Even a later Supersedes cannot disambiguate a same-message collision.
+    commit(
+      repo,
+      'd.txt',
+      'Try to resolve same-message\n\nSupersedes: r-ambig187\nRecord-Id: r-resolve187\n',
+    );
+
+    const result = runValidate({ range: 'base187c..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    const collisions = result.violations.filter(
+      (v) => v.rule === 'duplicate-id' && v.value === 'r-ambig187',
+    );
+    expect(collisions.length).toBeGreaterThan(0);
+    // The sha is attached since --range resolves commits.
+    expect(collisions[0]?.sha).toBe(sha);
+  });
+
+  it('still rejects a divergent-notes collision as unresolvable even with Supersedes in range (bug-issue-187)', () => {
+    // A Record-Id mirrored to refs/notes/commitlore with a divergent payload
+    // is the shape that actually reaches the suppression path in checkReferences
+    // (the same-message shape does not, due to an incidental property of
+    // collectRecords). This must remain reported even when a later Supersedes:
+    // targeting the id exists in the range.
+    const repo = makeRepo();
+    commit(repo, 'base-note.txt', 'Base for notes test\n\nRecord-Id: r-notebase191\n');
+    const baseTag = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo,
+      env: GIT_ENV,
+      encoding: 'utf8',
+    }).trim();
+    execFileSync('git', ['tag', 'base191n', baseTag], { cwd: repo, env: GIT_ENV });
+    const sha = commit(
+      repo,
+      'noted.txt',
+      'Commit with divergent note\n\nLimit: alpha\nRecord-Id: r-notediv191\n',
+    );
+    // Mirror the same Record-Id to the notes ref with a different payload.
+    writeRecord(
+      sha,
+      [
+        { key: 'Limit', value: 'beta' },
+        { key: 'Record-Id', value: 'r-notediv191' },
+      ],
+      { cwd: repo },
+    );
+    // A later commit declares Supersedes: for the colliding id.
+    commit(
+      repo,
+      'succ-note.txt',
+      'Attempt to resolve divergent note\n\nSupersedes: r-notediv191\nRecord-Id: r-nsucc191\n',
+    );
+
+    const result = runValidate({ range: 'base191n..HEAD', cwd: repo });
+
+    expect(result.code).toBe(1);
+    const collisions = result.violations.filter(
+      (v) => v.rule === 'duplicate-id' && v.value === 'r-notediv191',
+    );
+    expect(collisions.length).toBeGreaterThan(0);
+    expect(collisions[0]?.sha).toBe(sha);
+  });
+
+  it('rejects only the two colliding blocks out of three, naming the shared id', () => {
+    const result = runValidate({
+      readStdin: () =>
+        [
+          'Three blocks, two collide',
+          '',
+          'Limit: alpha',
+          'Record-Id: r-dupxx1',
+          '',
+          'Limit: beta',
+          'Record-Id: r-uniqueb',
+          '',
+          'Limit: gamma',
+          'Record-Id: r-dupxx1',
+        ].join('\n'),
+    });
+
+    expect(result.code).toBe(1);
+    const duplicateIdViolations = result.violations.filter(
+      (violation) => violation.rule === 'duplicate-id',
+    );
+    expect(duplicateIdViolations).toHaveLength(2);
+    expect(duplicateIdViolations.every((violation) => violation.value === 'r-dupxx1')).toBe(true);
+    expect(result.violations.some((violation) => violation.value === 'r-uniqueb')).toBe(false);
+  });
 });
 
 describe('validate — usage errors exit 2', () => {

@@ -18,13 +18,51 @@
 
 **AI 보조 코드베이스를 위한 Git-native decision memory.** CommitLore는 코드 변경 뒤의 한계, 제외한 대안, 경고, 검증 공백을 Git에 직접 기록한다. 그래서 개발자와 코딩 에이전트는 무엇을 바꾸기 전에 왜 이렇게 되었는지 이해할 수 있다.
 
-호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소와 함께 이동하는, 검토 가능한 결정 맥락만 있다.
+호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
+
+한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
 ```
 
+## 검색은 레코드를 찾을 수 있습니다. 경로 범위는 뒤집힌 결정을 걸러냅니다.
+
+레코드 하나를 놓치면 모델은 맥락을 잃습니다. 이미 뒤집힌 결정을 건네면 정확성을 잃습니다. 이 [검색 측정](bench/retrieval/result.md)에서 방해 레코드가 0개부터 10,000개까지인 모든 크기에서 BM25, 임베딩 top-k, 하이브리드 RRF, 경로 필터를 적용한 임베딩은 각각 대체되어 폐기된 레코드 하나를 반환했습니다. 수명 주기를 적용한 CommitLore 경로 범위는 오래된 레코드를 0개 반환하고 현재 레코드 둘(2/2)을 모두 반환했습니다.
+
+재현율은 보조 결과입니다. 검색은 대체로 어느 쪽이든 같은 레코드를 찾지만, 현재 유효한 결정을 아는 경로는 하나뿐입니다. 대체되어 폐기된 레코드가 없던 #166의 코퍼스에서는 임베딩 검색이 경로 범위와 같은 2/2를 기록했습니다. 결정이 뒤집혔을 때 차이가 나타나며, 바로 이 경우를 위해 이 제품이 존재합니다.
+
+별도의 #167 노출 실행도 중요합니다. 10,002개 레코드 중 모델에 닿은 것은 2개뿐입니다.
+
+| 경로 | 모델에 보인 레코드 | 관련 레코드 | 모델에 보인 토큰 |
+|---|---:|---:|---:|
+| 모두 주입 | 10,002 | 2/2 | 1,004,554 |
+| top-k 어휘 검색 | 2 | 1/2 | 190 |
+| CommitLore 경로 범위 | 2 | 2/2 | 335 |
+
+이는 고정된 두 레코드 출력 예산에서 노출과 재현율을 측정한 것이며, 토큰 비용, 청구 비용, 정확도 또는 에이전트 행동을 측정하지 않습니다. 코퍼스 하나, 쿼리 하나, 고정된 임베딩 모델 하나의 결과입니다.
+
 검증 훅과 로컬 인덱스를 쓸 각 저장소에서 이어서 `commitlore init`을 실행한다. 설치기는 지원되는 코딩 에이전트를 감지하고, 안전하게 가능한 곳에 로컬 MCP 서버를 등록한다.
+
+## init 뒤에 일어나는 일
+
+- 평소처럼 커밋한다. 대부분의 커밋에는 record가 없다.
+- record가 있으면 commit-msg hook이 검증한다. record를 만들지는 않는다.
+- 에이전트는 MCP로 결정 맥락을 조회하거나 `PreToolUse` hook으로 받는다.
+- path를 바꾸기 전에 active limit, ruled-out alternative, warning, verification gap을 본다.
+
+## 저장소에서 사용해 보기
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+그다음에도 코딩 에이전트와 계속 작업한다. 변경에 diff가 보존할 수 없는 결정 맥락이 있으면, 에이전트에게 커밋에 CommitLore record를 넣어 달라고 요청한다.
+
+<details>
+<summary>설치 내용을 살펴보거나 버전을 고정하고 싶나요?</summary>
 
 한 줄 명령은 편의를 위한 것이다. 검토하거나 고정한 설치가 필요하면 먼저 `install.sh`를 내려받아 살펴보거나, 저장소를 clone하거나, 릴리스 자산을 직접 내려받아 `SHA256SUMS`를 검증한다. 스크립트는 내려받는 바이너리의 체크섬을 검증하지만, 이미 `sh`로 전달한 스크립트를 인증하지는 않는다.
 
@@ -40,22 +78,37 @@ curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$vers
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
 ```
 
+</details>
+
 ## 실제로 보기
 
-**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 이 checkout에서 `install.sh`에 대한 실제 Claude `PreToolUse` payload를 같은 훅 경로로 보낸다.
+**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 바꾸기 전에 path를 조회한다.
+
+```bash
+commitlore context install.sh
+```
+
+출력에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 record와 그 이유가 들어 있다. hook은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>정확한 PreToolUse hook path 재현하기</summary>
 
 ```bash
 printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
   | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
-응답에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 기록과 그 이유가 들어 있다. 훅은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
-
-```console
-Ruled-out:
-  [claim] r-instci99a ... publishing a `-musl` release target |
-  a release.yml/build-matrix change, not an install.sh or CI-verification fix
-```
+</details>
 
 ## 무엇이 다른가
 
@@ -65,7 +118,40 @@ Ruled-out:
 
 권위 있는 원본은 평범한 commit trailer와 `refs/notes/commitlore`다. 인덱스와 보고서는 이 Git 기록에서 파생되며 다시 만들 수 있다.
 
-## 기록 하나
+## record가 만들어지는 방법
+
+모든 커밋에 trailer를 손으로 쓸 필요는 없다. 대부분의 커밋에는 record가 없어야 한다. 외부 제약, 제외한 대안, 경고, 검증 공백처럼 diff만으로 복구할 수 없는 결정에만 record를 추가한다.
+
+### 코딩 에이전트를 통해
+
+에이전트에게 평소대로 커밋하고 diff로 설명할 수 없는 결정 맥락만 보존하도록 요청한다.
+
+> 이 변경을 커밋해. diff로 중요한 제약, 제외한 대안, 경고 또는 검증 공백을 복구할 수 없을 때만 CommitLore record를 추가해.
+
+대부분의 커밋에는 여전히 record가 없어야 한다. 에이전트 지침은 `skills/commitlore-commits/`에 있고, commit hook은 에이전트가 추가한 record를 검증한다.
+
+### 고급 경로: harvest
+
+`commitlore harvest`는 session transcript와 staged diff에서 prompt contract를 만들고, `commitlore harvest-verify`는 그에 맞는 draft를 검증한다. 둘은 draft를 돕지만 자동 커밋하지 않는다. interactive record builder는 구현되지 않았다.
+
+### 직접 작성
+
+탈출구로 사람이 평범한 Git trailer를 직접 쓸 수 있다. commit-msg hook은 이미 있는 record를 검증할 뿐이며, record를 발명하거나 조용히 추가하지 않는다.
+
+## 최소 record
+
+record는 작을 수 있다. 그렇지 않으면 잃게 될 맥락만 넣는다.
+
+```text
+Fix expired-token refresh
+
+Ruled-out: Extend token TTL to 24h | security policy violation
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
+```
+
+대부분의 record에는 모든 protocol field가 필요하지 않다. 결정에 필요할 때 identity, lifecycle, risk, provenance, verification field를 사용할 수 있다.
+
+## 완전한 record
 
 이 예시는 conformance fixture이기도 하다. Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
 
@@ -125,11 +211,20 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 이것은 Git에 묶여 사람이 검증할 수 있는 결정 이력에 대한 제품 주장이다. CommitLore가 에이전트 성능을 높인다는 주장에 기대지 않는다.
 
-## 근거: 112회 실험, null 결과
+## 근거: 더 좁은 제품 주장
 
-> **AI 도구를 만들고 112회 실험했지만, 결과는 null이었다.**
+112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
 
-이 결과는 제품의 신뢰 모델 일부이므로 각주로 숨기지 않는다. M4는 측정한 에이전트 행동에서 뒷받침되는 효과를 찾지 못했다. 이후 paired·clustered 설계를 반영해 분석을 수정했고, 기록된 산술 오류도 바로잡았다. 전체 한계는 [M4 verdict](bench/VERDICT-M4.md), 그 결과의 제품 주장은 [roadmap](docs/ROADMAP-TO-DONE.md)에서 읽을 수 있다.
+### 지연 시간, 비용과 손익분기점
+
+100,000개 커밋에서 색인된 `context`의 p50은 496 ms이고 CommitLore 자체의 `--no-index` 대체 경로는 86,673 ms다. 이 내부 대체 경로 간격은 1k에서 4.8×, 10k에서 36×, 100k에서 175×로 커진다([전체 결정론적 실행](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)). 이는 확장 양상이며 제품과 대안을 비교한 결과가 아니다.
+
+guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 hook 오버헤드다. commit-msg는 p50 185.85 ms, injection hook은 p50 102.40 ms다([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
+
+손익분기 수치를 다시 제시하려면 제공업체가 보고한 턴별 토큰 사용량 원장과 저장소가 이미 배제한 대안에 쓴 작업의 관측된 비용이 필요하다.
+
+<details>
+<summary>전체 benchmark 기록 (112회 실험)</summary>
 
 <!-- BENCH:BEGIN -->
 <!-- Generated by `node bench/report.ts --section` from the result logs named below. Do not edit by hand:
@@ -171,6 +266,8 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 - 112 runs in the analysis set: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
 <!-- BENCH:END -->
 
+</details>
+
 ## 소스에서 설치
 
 소스 배포를 살펴보거나 실행하려면 다음을 쓴다.
@@ -186,7 +283,7 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 - Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Alpine 및 다른 musl Linux host는 지원하지 않는다: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
-- benchmark는 에이전트 행동에 대한 guard 효과를 입증하지 못한다: [#37](https://github.com/MongLong0214/commitlore/issues/37).
+- M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 
 ## 기여하기
 

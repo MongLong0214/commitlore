@@ -1,17 +1,36 @@
 import { writeFileSync } from 'node:fs';
 
+import { renderEconomicCase } from './economics.ts';
 import type {
+  CaptureCostRow,
+  DensityRow,
   DeterministicRow,
   GuardQualityRow,
   HookOverheadRow,
   IndexCostRow,
   InjectionDetectionRow,
+  NoiseExposureRow,
   QueryLatencyRow,
   SurvivalRow,
 } from './types.ts';
 
+export const ADDRESSABILITY_STATEMENT =
+  'This measures addressability, not abundance: prose rationale is not machine-addressable while structured trailers are.';
+
+export const DENSITY_CITATIONS = [
+  '[CoMRAT (MSR 2025)](https://arxiv.org/abs/2506.10986)',
+  '[Commit Message Matters (ICSE 2023)](https://dl.acm.org/doi/abs/10.1109/ICSE48619.2023)',
+  '[What Makes a Good Commit Message? (ICSE 2022)](https://arxiv.org/abs/2202.02974)',
+  '[Linux OOM-Killer rationale dataset (ICPC 2024)](https://arxiv.org/abs/2403.18832)',
+] as const;
+
 export const SCOPE_SENTENCE =
   'These numbers say what CommitLore costs and what it catches. They say nothing about whether recorded context helps an agent; M4 is registered for that question and may still come back null.';
+
+export const EXPOSURE_SCOPE_SENTENCE =
+  'This section measures exposure only, not token cost, billed cost, or accuracy.';
+export const DENSITY_SCOPE_SENTENCE =
+  'These numbers measure structured addressability. They say nothing about semantic rationale abundance or agent benefit.';
 
 export const percentile = (samples: readonly number[], proportion: number): number => {
   if (samples.length === 0) throw new Error('cannot take a percentile of zero samples');
@@ -65,6 +84,9 @@ export const assertSingleProvenance = (rows: readonly DeterministicRow[]): void 
 
 const fixed = (value: number, digits = 2): string => value.toFixed(digits);
 const percent = (value: number): string => `${fixed(value * 100, 1)}%`;
+const optionalPercent = (value: number | null): string => (value === null ? 'n/a' : percent(value));
+const COMMIT_MSG_P50_MS = 185.85;
+const PRE_TOOL_USE_P50_MS = 102.4;
 
 const latencySection = (rows: readonly QueryLatencyRow[]): string[] => {
   if (rows.length === 0) return [];
@@ -89,12 +111,14 @@ const survivalSection = (rows: readonly SurvivalRow[]): string[] => {
   return [
     '## 2. Record survival',
     '',
-    'Method: seed the same number of trailer records in an isolated repository, run each Git operation, then count surviving `Record-Id` values in `HEAD`; rename cases query the new path through the shipped CLI.',
+    'Method: history-retention rows count `Record-Id` values in `HEAD` with `historyCount`; path-reachability rows query the new path through the shipped CLI with `pathCount`. These are distinct outcomes and are never averaged.',
     '',
-    '| operation | survived / total | rate |',
-    '|---|---:|---:|',
+    'The local `squash-merge` row exercises the installed `prepare-commit-msg` hook. GitHub’s server-side squash button runs no local hook, remains uncovered, and still loses records. `rename-heavy-edit` is a path lookup miss, not preservation: its record remains in Git history and is retrievable by commit or `Record-Id`.',
+    '',
+    '| operation | outcome | counter | survived / total | rate |',
+    '|---|---|---|---:|---:|',
     ...rows.map(
-      (row) => `| ${row.operation} | ${row.survived} / ${row.total} | ${percent(row.rate)} |`,
+      (row) => `| ${row.operation} | ${row.outcome} | ${row.measurement} | ${row.survived} / ${row.total} | ${percent(row.rate)} |`,
     ),
     '',
   ];
@@ -136,11 +160,17 @@ const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
   return [
     '## 4. Guard precision and recall',
     '',
-    `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard at threshold **${row.threshold}**.`,
+    `Method: replay the existing labelled task artifacts in \`${row.corpus}\` through the shipped guard across the full **0.00–1.00** score range in **${row.curve_step.toFixed(2)}** steps. The shipped default is **${row.threshold}**.`,
     '',
-    `Precision is reported by score band, never as one figure (issue #61): a rate computed from a ` +
-      'handful of firings has a wide interval, and a single number invites reading it as more ' +
-      `precise than it is. **Firings: ${row.firings}** (of ${row.true_positives + row.false_positives + row.false_negatives + row.true_negatives} replayed decisions).`,
+    `Corpus limit: **${row.true_positives + row.false_positives + row.false_negatives + row.true_negatives} labelled decisions**. At the default, precision is ${row.true_positives}/${row.firings}; its 95% Wilson interval is **${percent(row.precision_interval.lower)}–${percent(row.precision_interval.upper)}**.`,
+    '',
+    '| threshold | precision | recall | F1 | firings | correct silences |',
+    '|---:|---:|---:|---:|---:|---:|',
+    ...row.curve.map(
+      (entry) =>
+        `| ${fixed(entry.threshold)} | ${optionalPercent(entry.precision)} | ${percent(entry.recall)} | ` +
+        `${optionalPercent(entry.f1)} | ${entry.firings} | ${entry.correct_silences} |`,
+    ),
     '',
     '| score band | firings | correct |',
     '|---|---:|---:|',
@@ -152,7 +182,7 @@ const guardSection = (rows: readonly GuardQualityRow[]): string[] => {
           `| [${band(entry.min)}, ${band(entry.max)}${entry.max >= 1 ? ']' : ')'} | ${entry.firings} | ${entry.correct} |`,
       ),
     '',
-    `Recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
+    `Default-point recall: **${percent(row.recall)}** (${row.true_positives} TP, ${row.false_negatives} FN). ` +
       `Correct silence: ${row.true_negatives}.`,
     'Ground truth is the frozen corpus label; the suite does not relabel archived agent output after seeing the guard result.',
     'No guard precision figure is carried into the README until the corpus is large enough for one to mean something.',
@@ -179,10 +209,52 @@ const hookSection = (rows: readonly HookOverheadRow[]): string[] => {
   ];
 };
 
+const captureSection = (rows: readonly CaptureCostRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 6. Record capture cost',
+    '',
+    'Method: run the shipped local `harvest --prompt-only` and `harvest-verify --json` commands against the truthful harvest-verifier fixture after one discarded warmup; the harvest contract is what the session receives and verification input is the draft, transcript, and diff it re-reads.',
+    '',
+    '| fixture | accepted / rejected records | harvest bytes / tokens | harvest p50 / p95 ms | verify bytes / tokens | verify p50 / p95 ms | cache-read bytes / tokens | marginal / including-cache tokens per accepted record |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|',
+    ...rows.map(
+      (row) =>
+        `| ${row.fixture} | ${row.accepted_records} / ${row.rejected_records} | ` +
+        `${row.harvest.output_bytes} / ${row.harvest.output_tokens} | ` +
+        `${fixed(row.harvest.timing.p50_ms)} / ${fixed(row.harvest.timing.p95_ms)} | ` +
+        `${row.verify.input_bytes} / ${row.verify.input_tokens} | ` +
+        `${fixed(row.verify.timing.p50_ms)} / ${fixed(row.verify.timing.p95_ms)} | ` +
+        `${row.cache_read.input_bytes} / ${row.cache_read.input_tokens} | ` +
+        `${fixed(row.marginal_tokens_per_accepted_record)} / ` +
+        `${fixed(row.tokens_including_cache_reads_per_accepted_record)} |`,
+    ),
+    '',
+    'The two floors bracket the same deterministic work. Marginal tokens exclude the transcript and diff that verification re-reads after harvest already supplied them; including-cache tokens count that prefix again. A cache-aware bill charges such reads at a fraction of the full input rate, so the figures do not contradict each other.',
+    '',
+    'Model generation tokens are not measured: this benchmark makes no model call, so the model\'s cost to compose a draft sits on top of both floors.',
+    '',
+    ...rows.map(
+      (row) =>
+        `The denominator is ${row.accepted_records} accepted record(s); this fixture had ${row.rejected_records} rejected record(s). A rejected draft that is rewritten raises verification input tokens while the accepted-record denominator stays fixed.`,
+    ),
+    '',
+    ...rows.map(
+      (row) =>
+        `Common commit cost: a commit with no record pays the existing \`commit-msg\` p50 overhead of **${fixed(COMMIT_MSG_P50_MS)} ms**. ` +
+        `A record-bearing commit has a **${fixed(COMMIT_MSG_P50_MS + row.harvest.timing.p50_ms + row.verify.timing.p50_ms)} ms** serial p50 component sum ` +
+        '(commit-msg + harvest + verify); it is not a jointly sampled percentile. ' +
+        `The separate PreToolUse injection p50 is **${fixed(PRE_TOOL_USE_P50_MS)} ms**. ` +
+        'Both existing hook figures are cited from `bench/results/deterministic-20260727T174801Z.md`, not remeasured here.',
+    ),
+    '',
+  ];
+};
+
 const indexSection = (rows: readonly IndexCostRow[]): string[] => {
   if (rows.length === 0) return [];
   return [
-    '## 6. Index cost',
+    '## 7. Index cost',
     '',
     'Method: rebuild the derived index once in each fresh synthetic history, time the rebuild, then measure the on-disk database size after the process exits.',
     '',
@@ -193,6 +265,50 @@ const indexSection = (rows: readonly IndexCostRow[]): string[] => {
         `| ${row.commits} | ${row.records} | ${fixed(row.build_ms)} | ${row.size_bytes} | ` +
         `${fixed(row.bytes_per_record)} |`,
     ),
+    '',
+  ];
+};
+
+const exposureSection = (rows: readonly NoiseExposureRow[]): string[] => {
+  if (rows.length === 0) return [];
+  return [
+    '## 8. Irrelevant decision-context exposure',
+    '',
+    EXPOSURE_SCOPE_SENTENCE,
+    '',
+    'Fixture: exactly two active records apply to `src/core/decision-context.ts`; each corpus adds the stated fixed-seed distractors with the same trailer vocabulary, plausible repository paths, and overlapping decision-context language.',
+    'Routes: `inject everything`; `top-k lexical` (k=2, case-insensitive query-token frequency over path and record text); and the shipped CommitLore injection path scope plus lifecycle filter. The current CLI has neither a pointer nor pull delivery route, so neither is simulated here.',
+    '',
+    '| distractors | corpus records | route | model-visible records | model-visible tokens | relevant density | runs | p50 ms | p95 ms |',
+    '|---:|---:|---|---:|---:|---|---:|---:|---:|',
+    ...rows.map((row) => {
+      const density = row.visible_records === 0 ? 0 : row.relevant_records / row.visible_records;
+      return `| ${row.distractors} | ${row.corpus_records} | ${row.route} | ${row.visible_records} | ` +
+        `${row.visible_tokens} | ${row.relevant_records} of ${row.visible_records} (${percent(density)}) | ` +
+        `${row.timing.runs} | ${fixed(row.timing.p50_ms)} | ${fixed(row.timing.p95_ms)} |`;
+    }),
+    '',
+  ];
+};
+
+const densitySection = (rows: readonly DensityRow[]): string[] => {
+  const row = rows[0];
+  if (row === undefined) return [];
+  return [
+    '## 9. Addressable rationale density',
+    '',
+    `Method: \`git log ${row.history_ref}\` supplies commit messages at run time. Git parses each record block; the denominator is non-empty body lines, excluding the subject.`,
+    '',
+    `CoMRAT defines rationale density and decision density with rationale and decision sentences per commit message (${DENSITY_CITATIONS[0]}). This benchmark does not infer those semantic sentences: it reports structured trailer lines and record-bearing messages instead.`,
+    '',
+    '| commits examined | commits carrying a record | structured trailers | trailers / commit | structured trailer share of non-empty body lines |',
+    '|---:|---:|---:|---:|---:|',
+    `| ${row.commits_examined} | ${row.record_bearing_commits} (${percent(row.record_bearing_rate)}) | ${row.structured_trailers} | ${fixed(row.trailers_per_commit)} | ${percent(row.structured_trailer_line_share)} |`,
+    '',
+    ADDRESSABILITY_STATEMENT,
+    `The Linux OOM-Killer dataset reports 98.9% of commits containing a rationale sentence (${DENSITY_CITATIONS[3]}), above this repository's ${percent(row.record_bearing_rate)} record-bearing rate; CommitLore does not claim more rationale than that disciplined project.`,
+    '',
+    `Published context: roughly 44% of commit messages omit either the what or the why (${DENSITY_CITATIONS[1]}; ${DENSITY_CITATIONS[2]}).`,
     '',
   ];
 };
@@ -211,7 +327,9 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
       `${fixed(machine.memory_bytes / 1024 ** 3, 1)} GiB RAM, ${machine.platform} ${machine.release} ` +
       `(${machine.arch}), Node ${machine.node}, ${machine.git}.`,
     '',
-    SCOPE_SENTENCE,
+    rows.every((row) => row.metric === 'rationale_density')
+      ? DENSITY_SCOPE_SENTENCE
+      : SCOPE_SENTENCE,
     '',
     ...latencySection(rows.filter((row): row is QueryLatencyRow => row.metric === 'query_latency')),
     ...survivalSection(rows.filter((row): row is SurvivalRow => row.metric === 'record_survival')),
@@ -220,7 +338,11 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
     ),
     ...guardSection(rows.filter((row): row is GuardQualityRow => row.metric === 'guard_quality')),
     ...hookSection(rows.filter((row): row is HookOverheadRow => row.metric === 'hook_overhead')),
+    ...captureSection(rows.filter((row): row is CaptureCostRow => row.metric === 'capture_cost')),
     ...indexSection(rows.filter((row): row is IndexCostRow => row.metric === 'index_cost')),
+    ...exposureSection(rows.filter((row): row is NoiseExposureRow => row.metric === 'noise_exposure')),
+    ...densitySection(rows.filter((row): row is DensityRow => row.metric === 'rationale_density')),
+    ...renderEconomicCase(),
   ];
   return `${lines.join('\n').trim()}\n`;
 };

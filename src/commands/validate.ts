@@ -31,9 +31,11 @@ import { validateRecord } from '../core/schema.js';
 import {
   findDanglingRefs,
   findIdCollisions,
+  isSuccessionDeclared,
+  UNIQUE_ID_WANT,
   type StaleRecord,
 } from '../core/stale.js';
-import { parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
+import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED, type Trailer, type Violation } from '../core/types.js';
 import { scanForSecrets, formatFindings, type SecretFinding } from '../core/secret-guard.js';
 
@@ -300,6 +302,51 @@ const violationsForBlock = (source: MessageSource, trailers: Trailer[]): Located
 };
 
 /**
+ * A `Record-Id` declared by more than one block of the *same* message (SPEC
+ * §2.4) is shape-only information: `commitlore parse`'s `labelRecordBlocks`
+ * (`core/trailers.ts`) already computes it from the message alone, on every
+ * block, via its `identityCollision` flag. This calls that computation
+ * directly rather than re-deriving "do two blocks in this message declare the
+ * same id" a second way — a second detector for the same rule is how the two
+ * commands read the same message differently (bug-issue-145).
+ *
+ * Scoped to sources with no resolved `sha`: once a commit is known,
+ * `checkReferences` below already reports the identical collision through
+ * `findIdCollisions`'s same-commit branch, complete with its own line
+ * attribution (bug-issue-92) — running this too would report the same
+ * collision twice for the same commit. A `--message-file`/stdin source — what
+ * a commit-msg hook always hands `validate`, and the shape SPEC §6.1 requires
+ * working from "the message alone" — never resolves an `sha`, so
+ * `findIdCollisions` structurally cannot see it there (it keys same-message
+ * collisions off two records sharing one `sha`); this is exactly, and only,
+ * that blind spot.
+ */
+const identityCollisionViolations = (source: MessageSource): LocatedViolation[] => {
+  if (source.sha !== undefined) return [];
+
+  return labelRecordBlocks(source.message).flatMap((block) => {
+    if (!block.identityCollision) return [];
+    const id = block.trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+    if (id === undefined) return [];
+
+    const lines = locateTrailerLines(source.message, block.trailers);
+    const index = block.trailers.findIndex((trailer) => trailer.key === 'Record-Id');
+    const line = lines[index];
+
+    return [
+      {
+        ...(line === undefined ? {} : { line }),
+        key: 'Record-Id',
+        value: id,
+        rule: 'duplicate-id' as const,
+        got: id,
+        want: UNIQUE_ID_WANT,
+      },
+    ];
+  });
+};
+
+/**
  * Validates every record block a message carries (SPEC §2.4), not only the
  * one git recognizes as the message's own last paragraph.
  *
@@ -353,10 +400,14 @@ const inspectSource = (
     },
   );
   const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
-  // Document order: the blocks the grammar recovers from earlier in the
-  // message are reported before whatever the message's own last paragraph
-  // has to say.
-  const violations = [...earlierViolations, ...lastViolations];
+  // A same-message Record-Id collision is reported before any other shape
+  // finding, the same way `commitlore parse` surfaces it on stderr ahead of
+  // the parsed blocks — it is the fact most likely to explain the others.
+  const violations = [
+    ...identityCollisionViolations(source),
+    ...earlierViolations,
+    ...lastViolations,
+  ];
 
   const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map((warning) =>
     warning.tabIndented
@@ -520,6 +571,41 @@ const checkReferences = (
 
   try {
     const violations: LocatedViolation[] = [];
+
+    // When validating a range, collect the full record set reachable from the
+    // range endpoint so that `isSuccessionDeclared` can see succession
+    // declarations made later in the range than the commit currently being
+    // checked (bug-issue-187). Without this, a `Supersedes:` that post-dates
+    // the colliding commit is invisible and the collision is reported even
+    // though it has been resolved.
+    const tipSha =
+      input.range !== undefined && sources.length > 0
+        ? sources[sources.length - 1]!.sha
+        : undefined;
+    let tipAllRecords: StaleRecord[] | undefined;
+    if (tipSha !== undefined) {
+      const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd);
+      if (tipScan.notes === 'unfetched') {
+        return {
+          check: {
+            class: 'reference',
+            status: 'not-checked',
+            reason: 'notes mirror not fetched',
+          },
+          violations: [],
+        };
+      }
+      const tipReachable = reachableShas(tipSha, cwd);
+      // Reverse so that same-second commits resolve ties in topological
+      // (oldest-first) order inside `chronological` — `collectRecords`
+      // returns newest-first from `git log`.
+      tipAllRecords = tipScan.records
+        .filter(
+          (record) => record.sha !== undefined && tipReachable.has(record.sha),
+        )
+        .reverse();
+    }
+
     for (const source of sources) {
       // A message may carry several record blocks (SPEC §2.4); each is its
       // own reference-checkable record. Cross-references between two blocks
@@ -579,9 +665,17 @@ const checkReferences = (
         const collisions =
           recordId === undefined
             ? []
-            : findIdCollisions([...prior, ...ownRecords]).filter(
-                (violation) => violation.value === recordId,
-              );
+            : findIdCollisions([...prior, ...ownRecords])
+                .filter((violation) => violation.value === recordId)
+                // When tip-scoped records are available (--range mode), filter
+                // out collisions that have been resolved by a Supersedes:
+                // declaration later in the range. This gives validate the same
+                // succession awareness stale already has (bug-issue-187).
+                .filter(
+                  (violation) =>
+                    tipAllRecords === undefined ||
+                    !isSuccessionDeclared(violation.value, tipAllRecords),
+                );
         violations.push(
           ...locateReferenceViolations(source, trailers, [...dangling, ...collisions]),
         );

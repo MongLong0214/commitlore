@@ -62,7 +62,7 @@ be exercised without depending on a live measurement that is still being written
 - Fixture data. Every rate derived from this file is conditional on a model that does not exist, which is the point: the report must carry the model forward even when the rows do not.
 - Every rate here is conditional on the model that produced it. Re-proposal is a behaviour, and behaviours differ between models, so these figures are not evidence about any other model.
 - 11 and 11 runs per arm: this matrix is only powered to detect a large effect, so a non-significant result from it is a statement about the sample size, not about CommitLore. The exact power table is in [`bench/README.md`](bench/README.md).
-- Fisher exact treats the runs as independent while the design is paired by (task, seed). It is the pre-registered test and, on paired data, the conservative choice rather than the most powerful one.
+- Fisher exact treats the runs as independent while the design is paired by (task, seed). It is the pre-registered result, but it is not a valid paired-data test. See the correction in [`docs/VERDICT-M4.md`](docs/VERDICT-M4.md).
 <!-- BENCH:END -->
 
 ## After the block

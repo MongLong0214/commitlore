@@ -5,9 +5,9 @@ description: Use when about to read, edit, or reason about a file and it would h
 
 # CommitLore query
 
-Four commands read the same underlying record set for one or more paths;
-`stale` reads it repo-wide. All of them read-only — none of them touch git
-state.
+`context`, `limits`, `ruled-out`, and `warnings` read the same underlying
+record set for one or more paths; `stale` reads it repo-wide. All are
+read-only — none of them touch git state.
 
 ## Reading records for a path
 
@@ -50,9 +50,11 @@ commitlore limits src/core/types.ts
   r-b2e7f1  00d348d1  Parsing must delegate to git interpret-trailers -- reimplementing the block rules would drift from the rest of the git ecosystem
 ```
 
-All four take zero or more paths (`commitlore context a.ts b.ts` answers for
-both). One path can follow a detected rename lineage; with multiple paths Git cannot
-follow renames, so query each path separately when historical names matter.
+Those four take zero or more paths (`commitlore context a.ts b.ts` answers for
+both). Several paths work, but Git follows renames only for a single path.
+When several paths are supplied, the CLI answers each literal path and
+prints a diagnostic that renames were not followed; query one path at a time
+when historical names matter.
 They share these flags:
 
 - `--json` — the full structured answer instead of the printed summary: each

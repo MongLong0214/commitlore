@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve8.call(this, root, ref);
+      let _sch = resolve9.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve8(root, ref) {
+    function resolve9(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve8(baseURI, relativeURI, options) {
+    function resolve9(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve8,
+      resolve: resolve9,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -11100,6 +11100,16 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 var GIT_SPAWN_FAILED = -1;
 var DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
+var gitResultFromSpawn = (result) => {
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  if (result.status !== null) return { stdout, stderr, code: result.status };
+  if (result.error !== void 0) {
+    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+  }
+  const signal = result.signal ?? "unknown";
+  return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
+};
 var execGit = (args, opts = {}) => {
   const result = spawnSync("git", args, {
     shell: false,
@@ -11108,16 +11118,7 @@ var execGit = (args, opts = {}) => {
     input: opts.stdin ?? "",
     maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER
   });
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-  if (result.error) {
-    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
-  }
-  if (result.status === null) {
-    const signal = result.signal ?? "unknown";
-    return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
-  }
-  return { stdout, stderr, code: result.status };
+  return gitResultFromSpawn(result);
 };
 var execGitOrThrow = (args, opts = {}) => {
   const result = execGit(args, opts);
@@ -11224,6 +11225,25 @@ var INJECT_OMITTED_KEYS = /* @__PURE__ */ new Set([
   "Evidence",
   "CommitLore-Version"
 ]);
+var CONVENTIONAL_TRAILER_LIST = [
+  "Co-authored-by",
+  "Signed-off-by",
+  "Reviewed-by",
+  "Acked-by",
+  "Tested-by",
+  "Reported-by",
+  "Suggested-by",
+  "Cc",
+  "Change-Id"
+];
+var CONVENTIONAL_TRAILER_KEYS = new Set(
+  CONVENTIONAL_TRAILER_LIST.map((key) => key.toLowerCase())
+);
+var CONVENTIONAL_TRAILER_CANONICAL = new Map(
+  CONVENTIONAL_TRAILER_LIST.map((key) => [key.toLowerCase(), key])
+);
+var isConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_KEYS.has(key.toLowerCase());
+var canonicalConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_CANONICAL.get(key.toLowerCase()) ?? key;
 var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
@@ -12116,6 +12136,16 @@ var parseTrailerField = (field) => {
     return { key: entry.slice(0, separator), value: entry.slice(separator + 1) };
   });
 };
+var recordExclusion = (counts, key) => {
+  if (counts === void 0) return;
+  const canonical2 = canonicalConventionalTrailerKey(key);
+  counts.set(canonical2, (counts.get(canonical2) ?? 0) + 1);
+};
+var stripConventional = (trailers, counts) => trailers.filter((trailer) => {
+  if (!isConventionalTrailerKey(trailer.key)) return true;
+  recordExclusion(counts, trailer.key);
+  return false;
+});
 var parsePathFields = (fields) => {
   const paths = [];
   for (const field of fields) {
@@ -12182,7 +12212,7 @@ var readFullMessages = (cwd, shas) => {
   }
   return byCommit;
 };
-var explodeRecordBlocks = (cwd, records) => {
+var explodeRecordBlocks = (cwd, records, excluded) => {
   const messages = readFullMessages(
     cwd,
     records.map((record2) => record2.sha)
@@ -12192,10 +12222,14 @@ var explodeRecordBlocks = (cwd, records) => {
     if (message === void 0) return [record2];
     const blocks = parseRecordBlocks(message);
     if (blocks.length <= 1) return [record2];
-    return blocks.map((trailers, block) => ({ ...record2, block, trailers }));
+    const earlierBlocks = blocks.slice(0, -1).map((block) => stripConventional(block, excluded)).filter((trailers) => trailers.length > 0);
+    return [
+      ...earlierBlocks.map((trailers, block) => ({ ...record2, block, trailers })),
+      { ...record2, block: earlierBlocks.length, trailers: record2.trailers }
+    ];
   });
 };
-var readCommitRecords = (cwd, shas) => {
+var readCommitRecords = (cwd, shas, excluded) => {
   const records = [];
   for (const batch of chunked(shas, LOG_BATCH)) {
     const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00${TRAILERS_ATOM}%x00`, []);
@@ -12210,19 +12244,21 @@ var readCommitRecords = (cwd, shas) => {
       const fields = record2.split(FIELD_SEP);
       const [sha, rawTs, committedAt, trailerField] = fields;
       if (sha === void 0 || rawTs === void 0 || committedAt === void 0) continue;
-      const trailers = parseTrailerField(trailerField ?? "");
-      if (trailers.length === 0) continue;
+      const rawTrailers = parseTrailerField(trailerField ?? "");
+      if (rawTrailers.length === 0) continue;
       batchRecords.push({
         sha,
         block: 0,
         committedAt,
         committedTs: Number.parseInt(rawTs, 10),
         source: "commit",
-        trailers,
+        trailers: stripConventional(rawTrailers, excluded),
         paths: []
       });
     }
-    const exploded = explodeRecordBlocks(cwd, batchRecords);
+    const exploded = explodeRecordBlocks(cwd, batchRecords, excluded).filter(
+      (record2) => record2.trailers.length > 0
+    );
     const paths = readPaths(
       cwd,
       batchRecords.map((record2) => record2.sha)
@@ -12232,7 +12268,7 @@ var readCommitRecords = (cwd, shas) => {
   }
   return records;
 };
-var readNoteRecords = (cwd) => {
+var readNoteRecords = (cwd, excluded) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "");
   if (annotated.length === 0) return [];
@@ -12263,7 +12299,8 @@ var readNoteRecords = (cwd) => {
       const blocks = parseRecordBlocks(`${NOTE_SUBJECT}
 
 ${noteText}`);
-      blocks.forEach((trailers, block) => {
+      blocks.forEach((rawTrailers, block) => {
+        const trailers = stripConventional(rawTrailers, excluded);
         if (trailers.length === 0) return;
         batchRecords.push({
           sha,
@@ -12502,11 +12539,11 @@ var deleteNoteRows = (handle) => {
     handle.db.exec(`DELETE FROM trailers WHERE source = 'notes'`);
   });
 };
-var indexNotes = (handle, opts = {}) => {
+var indexNotes = (handle, opts = {}, excluded) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
-  const records = refSha === null ? [] : readNoteRecords(handle.cwd);
+  const records = refSha === null ? [] : readNoteRecords(handle.cwd, excluded);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
@@ -12524,8 +12561,14 @@ var emptyStats = (handle, started) => ({
   noteTrailersIndexed: 0,
   headSha: null,
   fts: handle.fts,
-  elapsedMs: Date.now() - started
+  elapsedMs: Date.now() - started,
+  trailersExcluded: 0,
+  excludedKeys: []
 });
+var applyExclusions = (stats, excluded) => {
+  stats.trailersExcluded = [...excluded.values()].reduce((sum, count2) => sum + count2, 0);
+  stats.excludedKeys = [...excluded.keys()].sort();
+};
 var requireWritable = (handle) => {
   if (handle.readonly) throw new Error("the index was opened read-only");
 };
@@ -12534,9 +12577,10 @@ var rebuildIndex = (handle, opts = {}) => {
   const started = Date.now();
   const head = revParse(handle.cwd, "HEAD");
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
-  const records = readCommitRecords(handle.cwd, shas);
+  const excluded = /* @__PURE__ */ new Map();
+  const records = readCommitRecords(handle.cwd, shas, excluded);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, excluded);
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -12559,6 +12603,7 @@ var rebuildIndex = (handle, opts = {}) => {
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
   });
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -12588,11 +12633,13 @@ var updateIndex = (handle, opts = {}) => {
     return rebuildIndex(handle, { reason: problem });
   }
   if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested" });
+  const excluded = /* @__PURE__ */ new Map();
   const head = revParse(handle.cwd, "HEAD");
   if (head === null) {
     const stats2 = emptyStats(handle, started);
     writeMeta(handle.db, "last_indexed_sha", null);
-    stats2.noteTrailersIndexed = indexNotes(handle);
+    stats2.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+    applyExclusions(stats2, excluded);
     stats2.elapsedMs = Date.now() - started;
     return stats2;
   }
@@ -12603,7 +12650,7 @@ var updateIndex = (handle, opts = {}) => {
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
     stats.commitsScanned = shas.length;
-    const records = readCommitRecords(handle.cwd, shas);
+    const records = readCommitRecords(handle.cwd, shas, excluded);
     try {
       const counts = insertRecords(handle, records);
       stats.trailersIndexed = counts.trailers;
@@ -12615,7 +12662,8 @@ var updateIndex = (handle, opts = {}) => {
     }
     writeMeta(handle.db, "last_indexed_sha", head);
   }
-  stats.noteTrailersIndexed = indexNotes(handle);
+  stats.noteTrailersIndexed = indexNotes(handle, {}, excluded);
+  applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
   return stats;
 };
@@ -13465,7 +13513,7 @@ var register = (program3) => {
 import { spawnSync as spawnSync3 } from "node:child_process";
 import { existsSync as existsSync4, readFileSync as readFileSync4, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { dirname as dirname4, join as join3, resolve as resolve4 } from "node:path";
+import { join as join3, resolve as resolve4 } from "node:path";
 
 // src/core/hook-target.ts
 import { realpathSync, statSync } from "node:fs";
@@ -13604,8 +13652,10 @@ var declarations = (ordered) => {
 var supersessions = (ordered) => {
   const found = /* @__PURE__ */ new Map();
   for (const { record: record2 } of ordered) {
+    const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
     for (const trailer of record2.trailers) {
       if (trailer.key !== SUPERSEDES_KEY) continue;
+      if (trailer.value === recordId) continue;
       if (found.has(trailer.value)) continue;
       found.set(trailer.value, record2.sha ?? "");
     }
@@ -13659,7 +13709,7 @@ var findDanglingRefs = (records, referencedBy = records) => {
   return violations;
 };
 var payloadSignature = (record2) => record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY2).map((trailer) => `${trailer.key}\0${trailer.value}`).sort().join("");
-var findIdCollisions = (records) => {
+var groupsByRecordId = (records) => {
   const groups = /* @__PURE__ */ new Map();
   for (const record2 of records) {
     const recordId = trailerValue(record2.trailers, RECORD_ID_KEY2);
@@ -13668,10 +13718,33 @@ var findIdCollisions = (records) => {
     if (group === void 0) groups.set(recordId, [record2]);
     else group.push(record2);
   }
-  return [...groups].filter(([, group]) => {
-    if (sharesACommit(group)) return true;
-    if (!group.some((record2) => record2.source === "notes")) return false;
-    return new Set(group.map(payloadSignature)).size > 1;
+  return groups;
+};
+var hasAmbiguousGroup = (group) => sharesACommit(group) || group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1;
+var hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
+var hasDeclaredSuccession = (recordId, ordered) => {
+  let declarations2 = 0;
+  for (const { record: record2 } of ordered) {
+    if (trailerValue(record2.trailers, RECORD_ID_KEY2) === recordId) declarations2 += 1;
+    if (declarations2 >= 2 && record2.source !== "notes" && record2.trailers.some(
+      (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId
+    )) {
+      return true;
+    }
+  }
+  return false;
+};
+var isSuccessionDeclared = (recordId, records) => {
+  const group = groupsByRecordId(records).get(recordId);
+  if (group !== void 0 && hasAmbiguousGroup(group)) return false;
+  return hasDeclaredSuccession(recordId, chronological(records));
+};
+var findIdCollisions = (records) => {
+  const groups = groupsByRecordId(records);
+  const ordered = chronological(records);
+  return [...groups].filter(([recordId, group]) => {
+    if (hasAmbiguousGroup(group)) return true;
+    return group.filter((record2) => record2.source !== "notes").length > 1 && !hasDeclaredSuccession(recordId, ordered);
   }).map(([recordId]) => ({
     key: RECORD_ID_KEY2,
     value: recordId,
@@ -14432,7 +14505,7 @@ var mergeByIdentity = (records, states) => {
     const recordId = trailerValue2(trailers, RECORD_ID_KEY3);
     const provenanceValue = trailerValue2(trailers, PROVENANCE_KEY2);
     const provenance = parseProvenance(provenanceValue);
-    const identityCollision = findIdCollisions(ordered).length > 0;
+    const identityCollision = hasAmbiguousIdCollision(ordered);
     merged.push({
       trailers,
       sha: latest2.sha,
@@ -15152,7 +15225,7 @@ var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
-var check = (id, title, status, detail, fix = null, fixed = false) => ({ id, title, status, detail, fix, fixed });
+var check = (id, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail") => ({ id, title, status, needsAttention, detail, fix, fixed });
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
@@ -15162,7 +15235,9 @@ var checkRefspec = (opts) => {
       title,
       "warn",
       "no remote is configured, so records cannot be shared with anyone",
-      "add a remote, then rerun: commitlore doctor --fix"
+      "add a remote, then rerun: commitlore doctor --fix",
+      false,
+      false
     );
   }
   let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
@@ -15402,46 +15477,25 @@ var checkHookRuntime = (opts) => {
     rmSync2(probe, { force: true });
   }
 };
-var checkInjectRuntime = (opts) => {
-  const title = "PreToolUse hook runtime";
-  const id = "inject-runtime";
-  const fix = "commitlore inject install-claude-hook";
-  const cwd = opts.cwd ?? process.cwd();
-  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
-  if (settings.state !== "installed") {
-    const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
-    return check(id, title, "warn", detail, fix);
-  }
-  const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
-  if (path2 === void 0) {
-    return check(id, title, "skipped", "no recorded path is available for a runtime probe");
-  }
-  const configuredRoot = process.env["CLAUDE_PLUGIN_ROOT"];
-  const pluginRoot = configuredRoot === void 0 || configuredRoot === "" ? PACKAGE_ROOT : resolve4(process.cwd(), configuredRoot);
-  const payload = JSON.stringify({
-    session_id: "commitlore-doctor",
-    cwd,
-    hook_event_name: "PreToolUse",
-    tool_name: "Edit",
-    tool_input: { file_path: resolve4(cwd, path2) }
-  });
-  const run = spawnSync3(
-    "/bin/bash",
-    [installedPath("scripts/commitlore-run.sh"), "inject", "--hook-input"],
-    {
-      shell: false,
-      encoding: "utf8",
-      cwd,
-      input: payload,
-      env: {
-        PATH: `${dirname4(process.execPath)}:/usr/bin:/bin`,
-        HOME: process.env["HOME"] ?? "",
-        CLAUDE_PLUGIN_ROOT: pluginRoot
-      }
+var evaluateInjectRun = (run, ctx) => {
+  const { id, title, executable, path: path2, fix, unavailableFix } = ctx;
+  if (run.status === null || run.status === void 0) {
+    if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
+      return check(
+        id,
+        title,
+        "fail",
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix
+      );
     }
-  );
-  if (run.error !== void 0) {
-    return check(id, title, "fail", `could not run the PreToolUse hook: ${run.error.message}`, fix);
+    return check(
+      id,
+      title,
+      "fail",
+      `could not run the PreToolUse hook: ${run.error?.message ?? "no diagnosis"}`,
+      fix
+    );
   }
   if (run.status !== 0) {
     const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
@@ -15464,6 +15518,56 @@ var checkInjectRuntime = (opts) => {
     );
   }
   return check(id, title, "ok", `the PreToolUse hook returned context for ${path2}`);
+};
+var checkInjectRuntime = (opts) => {
+  const title = "PreToolUse hook runtime";
+  const id = "inject-runtime";
+  const fix = "reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor";
+  const unavailableFix = "install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor";
+  const cwd = opts.cwd ?? process.cwd();
+  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
+  if (settings.state !== "installed") {
+    const command2 = settings.commands[0];
+    if (settings.state === "outdated" && command2 !== void 0) {
+      return check(
+        id,
+        title,
+        "skipped",
+        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`
+      );
+    }
+    const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
+    return check(id, title, "warn", detail, "commitlore inject install-claude-hook");
+  }
+  const command = settings.commands[0];
+  if (command !== CLAUDE_HOOK_COMMAND) {
+    return check(id, title, "skipped", "not checked: the configured command is not recognised");
+  }
+  const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
+  if (path2 === void 0) {
+    return check(id, title, "skipped", "no recorded path is available for a runtime probe");
+  }
+  const payload = JSON.stringify({
+    session_id: "commitlore-doctor",
+    cwd,
+    hook_event_name: "PreToolUse",
+    tool_name: "Edit",
+    tool_input: { file_path: resolve4(cwd, path2) }
+  });
+  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
+  const executable = configured.slice(0, configured.indexOf(" "));
+  const args = configured.slice(executable.length + 1).split(" ");
+  const run = spawnSync3(executable, args, {
+    shell: false,
+    encoding: "utf8",
+    cwd,
+    input: payload,
+    env: {
+      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+      HOME: process.env["HOME"] ?? ""
+    }
+  });
+  return evaluateInjectRun(run, { id, title, executable, path: path2, fix, unavailableFix });
 };
 var checkIndex = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
@@ -16716,6 +16820,7 @@ var reportRebuild = (stats) => {
   process.stderr.write(`commitlore: rebuilt the index \u2014 ${stats.rebuildReason}
 `);
 };
+var excludedNote = (stats) => stats.trailersExcluded === 0 ? "" : ` (excluded ${plural(stats.trailersExcluded, "conventional trailer")}: ${stats.excludedKeys.join(", ")})`;
 var runIndex = (options) => {
   const rebuild = options.rebuild ?? false;
   const { handle, stats } = rebuild ? (() => {
@@ -16738,14 +16843,14 @@ var runIndex = (options) => {
         `head       ${info.lastIndexedSha ?? "(none)"}`,
         `notes ref  ${info.notesRefSha ?? "(none)"}`,
         `holds      ${plural(info.trailers, "trailer")}, ${plural(info.commits, "commit")}, ${plural(info.paths, "path")}`,
-        `last run   ${stats.rebuilt ? "rebuild" : "incremental"} \xB7 scanned ${plural(stats.commitsScanned, "commit")} \xB7 +${stats.trailersIndexed} trailers \xB7 +${stats.noteTrailersIndexed} from notes \xB7 ${stats.elapsedMs}ms`
+        `last run   ${stats.rebuilt ? "rebuild" : "incremental"} \xB7 scanned ${plural(stats.commitsScanned, "commit")} \xB7 +${stats.trailersIndexed} trailers \xB7 +${stats.noteTrailersIndexed} from notes${stats.trailersExcluded === 0 ? "" : ` \xB7 -${stats.trailersExcluded} conventional (${stats.excludedKeys.join(", ")})`} \xB7 ${stats.elapsedMs}ms`
       ];
       process.stdout.write(`${lines.join("\n")}
 `);
       return;
     }
     process.stdout.write(
-      `${stats.rebuilt ? "rebuilt" : "updated"}: scanned ${plural(stats.commitsScanned, "commit")}, indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, "trailer")} in ${stats.elapsedMs}ms
+      `${stats.rebuilt ? "rebuilt" : "updated"}: scanned ${plural(stats.commitsScanned, "commit")}, indexed ${plural(stats.trailersIndexed + stats.noteTrailersIndexed, "trailer")}${excludedNote(stats)} in ${stats.elapsedMs}ms
 `
     );
   } finally {
@@ -16773,12 +16878,104 @@ var register7 = (program3) => {
   });
 };
 
+// src/hooks/prepare-commit-msg.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync9, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { resolve as resolve6 } from "node:path";
+var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
+var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
+var PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_NAME}${CHAINED_SUFFIX}`;
+var RECORD_KEYS = new Set(KNOWN_KEYS);
+var prepareCommitMsgStub = () => commitMsgStub().replaceAll("commit-msg", PREPARE_COMMIT_MSG_HOOK_NAME).replaceAll('validate --message-file "$1"', 'prepare-commit-msg "$@"');
+var isRecordBlock = (trailers) => trailers.some((trailer) => RECORD_KEYS.has(trailer.key));
+var squashMessagePath = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", "SQUASH_MSG"], { cwd });
+  if (result.code !== 0) return null;
+  return resolve6(cwd, result.stdout.trim());
+};
+var squashCommitIds = (message) => {
+  const ids = [];
+  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+    const id = match[1];
+    if (id !== void 0) ids.push(id);
+  }
+  return ids;
+};
+var recordsFromSquashMessage = (cwd, message) => {
+  const blocks = [];
+  for (const id of squashCommitIds(message)) {
+    const result = execGit(["show", "--no-patch", "--format=%B", "--end-of-options", id], { cwd });
+    if (result.code !== 0) {
+      throw new Error(`could not read squashed commit ${id}: ${result.stderr.trim()}`);
+    }
+    blocks.push(...parseRecordBlocks(result.stdout).filter(isRecordBlock));
+  }
+  return blocks;
+};
+var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
+  const squashPath = squashMessagePath(cwd);
+  if (squashPath === null || !existsSync6(squashPath)) return false;
+  const draft = readFileSync9(messageFile, "utf8");
+  if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
+  const blocks = recordsFromSquashMessage(cwd, readFileSync9(squashPath, "utf8"));
+  if (blocks.length === 0) return false;
+  const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
+  writeFileSync6(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
+  return true;
+};
+var prepareHookPath = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
+  if (result.code !== 0) throw new Error(result.stderr.trim() || "not a git repository");
+  return resolve6(cwd, result.stdout.trim());
+};
+var hookSuccess = (line) => ({ code: 0, stdout: `${line}
+`, stderr: "" });
+var hookFailure = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
+` });
+var writePrepareHook = (path2) => {
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes3(4).toString("hex")}`;
+  writeFileSync6(temporary, prepareCommitMsgStub(), { mode: HOOK_MODE });
+  chmodSync2(temporary, HOOK_MODE);
+  renameSync3(temporary, path2);
+};
+var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
+  let path2;
+  try {
+    path2 = prepareHookPath(cwd);
+    mkdirSync4(resolve6(path2, ".."), { recursive: true });
+  } catch (error2) {
+    return hookFailure(error2 instanceof Error ? error2.message : String(error2));
+  }
+  try {
+    if (existsSync6(path2)) {
+      const current = readFileSync9(path2, "utf8");
+      if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
+        return hookFailure(`${path2} is not a commitlore hook \u2014 left in place`);
+      }
+      if (current === prepareCommitMsgStub()) {
+        return hookSuccess(`${PREPARE_COMMIT_MSG_HOOK_NAME} hook already installed: ${path2} (unchanged)`);
+      }
+      writePrepareHook(path2);
+      return hookSuccess(`updated ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+    }
+    writePrepareHook(path2);
+    return hookSuccess(`installed ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+  } catch (error2) {
+    return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
+  }
+};
+var register8 = (program3) => {
+  program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
+    preserveSquashRecords(messageFile);
+  });
+};
+
 // src/commands/init.ts
 var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
-  const code = report.checks.some((entry) => entry.status === "warn" || entry.status === "fail") ? 1 : 0;
+  const code = report.checks.some((entry) => entry.needsAttention) ? 1 : 0;
   return {
     step: "doctor",
     title: "doctor --fix",
@@ -16788,14 +16985,17 @@ var runDoctorStep = (opts) => {
   };
 };
 var runHooksStep = (opts) => {
-  const result = installHook({ ...cwdOption(opts), ...opts.force === void 0 ? {} : { force: opts.force } });
-  const lines = result.code === 0 ? result.stdout.trimEnd().split("\n") : [result.stderr.trimEnd() || "hooks install failed with no diagnostic"];
+  const commitMsg = installHook({ ...cwdOption(opts), ...opts.force === void 0 ? {} : { force: opts.force } });
+  const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg].flatMap(
+    (result) => result.code === 0 ? result.stdout.trimEnd().split("\n") : [result.stderr.trimEnd() || "hooks install failed with no diagnostic"]
+  );
   return {
     step: "hooks",
     title: "hooks install",
-    code: result.code,
+    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
     lines,
-    detail: result
+    detail: [commitMsg, prepareCommitMsg]
   };
 };
 var runIndexStep = (opts) => {
@@ -16881,10 +17081,10 @@ ${body}`;
   return `${[...blocks, summary2].join("\n\n")}
 `;
 };
-var register8 = (program3) => {
+var register9 = (program3) => {
   program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
     "after",
-    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (a warn or fail check \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
+    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
   ).action((options) => {
     const report = runInit(options.force === void 0 ? {} : { force: options.force });
     process.stdout.write(
@@ -16896,8 +17096,8 @@ var register8 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync9, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve6, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync10, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname4, isAbsolute as isAbsolute2, join as join5, relative as relative2, resolve as resolve7, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash } from "node:crypto";
@@ -17247,7 +17447,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync9(0, "utf8");
+    return readFileSync10(0, "utf8");
   } catch {
     return "";
   }
@@ -17270,7 +17470,7 @@ var repositoryRoot = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve6(target);
+  const absolute = resolve7(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
@@ -17278,7 +17478,7 @@ var canonical = (target) => {
       const real = realpathSync3(current);
       return tail.length === 0 ? real : join5(real, ...tail);
     } catch {
-      const parent = dirname5(current);
+      const parent = dirname4(current);
       if (parent === current) return absolute;
       tail.unshift(basename2(current));
       current = parent;
@@ -17301,7 +17501,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve6(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve7(cwd, raw));
   const scoped = relative2(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep2}`) || isAbsolute2(scoped)) {
@@ -17395,7 +17595,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register9 = (program3) => {
+var register10 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -17431,7 +17631,7 @@ var register9 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve7, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve8, sep as sep3 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -24751,7 +24951,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve8) => setTimeout(resolve8, pollInterval));
+        await new Promise((resolve9) => setTimeout(resolve9, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -24768,7 +24968,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve8, reject2) => {
+    return new Promise((resolve9, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -24846,7 +25046,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve8(parseResult.data);
+            resolve9(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -25107,12 +25307,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve8, reject2) => {
+    return new Promise((resolve9, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve8, interval);
+      const timeoutId = setTimeout(resolve9, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -25982,12 +26182,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve8) => {
+    return new Promise((resolve9) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve8();
+        resolve9();
       } else {
-        this._stdout.once("drain", resolve8);
+        this._stdout.once("drain", resolve9);
       }
     });
   }
@@ -26216,7 +26416,7 @@ var emit4 = (name, result, options, render2) => {
   else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
 };
 var define = (program3, name, description, keys, render2) => {
-  program3.command(name).description(description).argument("[paths...]", "limit the answer to these paths (renames are followed)").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
+  program3.command(name).description(description).argument("[paths...]", "limit paths; renames follow only when one path is given").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
     collect2,
@@ -26236,7 +26436,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   define(
     program3,
     "context",
@@ -26380,7 +26580,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -26438,7 +26638,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve7(root, raw);
+  const resolved = resolve8(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep3}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -26544,7 +26744,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve7(opts.cwd ?? process.cwd());
+  const root = resolve8(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -26642,7 +26842,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -26655,7 +26855,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
+import { readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -26696,14 +26896,14 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync10(path2, "utf8");
+    return readFileSync11(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync6(path2, text);
+    writeFileSync7(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -26781,7 +26981,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -26800,7 +27000,7 @@ var register13 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync11 } from "node:fs";
+import { readFileSync as readFileSync12 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -27063,6 +27263,27 @@ var violationsForBlock = (source, trailers) => {
     };
   });
 };
+var identityCollisionViolations = (source) => {
+  if (source.sha !== void 0) return [];
+  return labelRecordBlocks(source.message).flatMap((block) => {
+    if (!block.identityCollision) return [];
+    const id = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id === void 0) return [];
+    const lines = locateTrailerLines(source.message, block.trailers);
+    const index = block.trailers.findIndex((trailer) => trailer.key === "Record-Id");
+    const line = lines[index];
+    return [
+      {
+        ...line === void 0 ? {} : { line },
+        key: "Record-Id",
+        value: id,
+        rule: "duplicate-id",
+        got: id,
+        want: UNIQUE_ID_WANT
+      }
+    ];
+  });
+};
 var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
   const blocks = parseRecordBlocks(source.message);
@@ -27082,7 +27303,11 @@ var inspectSource = (source) => {
     }
   );
   const earlierViolations = earlierBlocks.flatMap((block) => violationsForBlock(source, block));
-  const violations = [...earlierViolations, ...lastViolations];
+  const violations = [
+    ...identityCollisionViolations(source),
+    ...earlierViolations,
+    ...lastViolations
+  ];
   const warnings = locateUnparsedTrailerWarnings(source.message, blocks).map(
     (warning) => warning.tabIndented ? `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; remove the leading tab` : `commitlore: line ${warning.line} looks like a ${warning.key} trailer, but git did not parse it; the trailer block needs a blank line before it`
   );
@@ -27127,14 +27352,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync11(path2, "utf8");
+    return readFileSync12(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync11(0, "utf8");
+    return readFileSync12(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -27204,6 +27429,25 @@ var checkReferences = (input, sources, cwd) => {
   }
   try {
     const violations = [];
+    const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
+    let tipAllRecords;
+    if (tipSha !== void 0) {
+      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd);
+      if (tipScan.notes === "unfetched") {
+        return {
+          check: {
+            class: "reference",
+            status: "not-checked",
+            reason: "notes mirror not fetched"
+          },
+          violations: []
+        };
+      }
+      const tipReachable = reachableShas(tipSha, cwd);
+      tipAllRecords = tipScan.records.filter(
+        (record2) => record2.sha !== void 0 && tipReachable.has(record2.sha)
+      ).reverse();
+    }
     for (const source of sources) {
       const blocks = parseRecordBlocks(source.message);
       const scan2 = recordsFor(source, cwd);
@@ -27240,8 +27484,8 @@ var checkReferences = (input, sources, cwd) => {
         };
         const dangling = findDanglingRefs(prior, [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter(
-          (violation) => violation.value === recordId
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
+          (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
         );
         violations.push(
           ...locateReferenceViolations(source, trailers, [...dangling, ...collisions])
@@ -27350,7 +27594,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register14 = (program3) => {
+var register15 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -27371,11 +27615,11 @@ var register14 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync12(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync13(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync12(STDIN_FD2, "utf8");
+  return readFileSync13(STDIN_FD2, "utf8");
 };
 var recordIdOf2 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -27430,20 +27674,21 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register14(program2);
+register15(program2);
 register6(program2);
 register7(program2);
-register10(program2);
 register11(program2);
+register12(program2);
 register2(program2);
-register8(program2);
+register9(program2);
 register3(program2);
 register5(program2);
-register13(program2);
+register14(program2);
+register8(program2);
 register4(program2);
-register9(program2);
+register10(program2);
 register(program2);
-register12(program2);
+register13(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",

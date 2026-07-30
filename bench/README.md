@@ -1,17 +1,20 @@
 # CommitLoreBench
 
-**M4 is the citable dataset.** `bench/results/t702-m4-final.jsonl` records the
-harness commit and the `dist/` digest for every row, `bench/report.ts` summarizes
-it, and the README's numbers block is generated from it. M3 was voided for
-lacking that provenance (§15); M4 was designed, registered and run to supply it,
-and its result is null — see `bench/VERDICT-M4.md`. Every earlier dataset
-(M1, M1-b, M2) still lacks the fields and is not pooled into the generated block
-for that reason, not because it was withdrawn as a record; each has its own
-verdict document.
+**M4 is a citable, clean-provenance dataset, not a guard test.**
+`bench/results/t702-m4-final.jsonl` records the harness commit and `dist/`
+digest for every row, and `bench/report.ts` summarizes it. M3 was voided for
+lacking that provenance (§15); M4 has it. But none of M4's 112 rows records
+`guard_exposure`, so its valid data cannot establish whether the treatment was
+present and do not answer the guard question. The withdrawal and the corrected
+statistics as observations about the data are in `bench/VERDICT-M4.md`. Every earlier dataset (M1, M1-b, M2)
+still lacks the fields and is not pooled into the generated block for that
+reason, not because it was withdrawn as a record; each has its own verdict
+document.
 
-Measures the one thing that decides whether CommitLore is worth building: does an
-agent that can see recorded decisions stop re-proposing the approaches a team
-already rejected?
+The benchmark is designed to ask whether an agent that receives recorded
+decisions stops re-proposing approaches a team already rejected. M4 did not
+record whether that treatment reached a run, so it does not answer that
+question.
 
 - Design: `docs/adr/ADR-0007-commitlorebench.md`
 - Requirements: `docs/prd/PRD-F7-commitlorebench.md`
@@ -78,6 +81,12 @@ Conditions are an open string enum, so M4 adds arms without touching the runner.
 | `records-uninjected` | planned | yes | no |
 
 Planned arms are rejected at CLI parse time with a pointer to their ticket.
+
+**M4 correction:** although its labels were `commitlore-on` and
+`commitlore-guard`, all 112 stored M4 transcripts have `injected_context: null`.
+For hook arms that null is the designed delivery-route signature, and the
+transcript holds only a final assistant message rather than a conversation log.
+M4 has no `guard_exposure` rows, so it is not evidence about the guard.
 
 `--cond both` is the two arms of the primary comparison and `--cond all` is
 every supported arm. Until T-703 those were the same list; they are not any
@@ -934,8 +943,11 @@ Anyone reading a null result from this harness has to read this table with it.
 
 Fisher exact also treats runs as independent, while the design is paired by
 (task, seed). The output says so. The test is the one ADR-0007 and T-702
-registered, and on paired data it is the conservative choice rather than the
-most powerful one.
+registered, but it does not provide a valid hypothesis test for paired data.
+The original number remains part of the historical report; the registered
+replacement is in `docs/MEASUREMENT-PROTOCOL.md`. M4's paired/clustered
+statistics are preserved in `bench/VERDICT-M4.md` as descriptions of rows that
+do not record treatment exposure, not as a correction of a guard estimate.
 
 ### What makes the measured effect a floor — one thing, not two
 
@@ -1058,9 +1070,10 @@ Still open:
    runs can and cannot detect*. Raising seeds or tasks is the only fix; no choice
    of test recovers power that the sample size does not contain.
 4. **Fisher exact ignores the pairing.** The design is paired by (task, seed);
-   the registered test treats runs as independent. A paired test (McNemar, or a
-   mixed model over tasks) would use the design, and should be decided in ADR-0007
-   rather than swapped in after seeing a p-value.
+   the registered test treats runs as independent and is invalid here. M4 keeps
+   that original result beside its post-result correction; future measurements
+   use the paired and clustered design registered in
+   `docs/MEASUREMENT-PROTOCOL.md`.
 5. Transcript-level re-proposal detection (negation) — see *Detection surfaces*.
    The saved transcripts from this run are the calibration input.
 6. Whether `records-uninjected` becomes a third arm — see *the control arm*. This

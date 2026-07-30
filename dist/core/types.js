@@ -48,6 +48,54 @@ export const INJECT_OMITTED_KEYS = new Set([
     'Evidence',
     'CommitLore-Version',
 ]);
+/**
+ * Trailers whose meaning was already fixed by git or code-review tooling
+ * before this protocol existed, and which assert nothing SPEC §3 gives a
+ * vocabulary slot to. `Co-authored-by:` says who touched a commit, not why
+ * it happened; `Signed-off-by:` is a DCO attestation; the rest are the same
+ * shape. None of them is a limit, a ruled-out alternative or a warning, so
+ * ingesting one as a record manufactures a claim the line never made and
+ * crowds out whatever a path's real records have to say (bug-issue-150).
+ *
+ * This is a denylist, not a second `KNOWN_KEYS`. A project can still invent
+ * its own trailer today — `Ticket:`, `Design-Doc:`, anything — and it reaches
+ * the "other" bucket unrecognized but not misrepresented, because CommitLore
+ * has no opinion about a key nobody else has claimed. It does have an opinion
+ * about a key someone *else* already gave a fixed, unrelated meaning: never a
+ * record, no matter what else the commit carries.
+ *
+ * `Fixes:` and `Closes:` are deliberately not here. They name the issue a
+ * change addresses, which is closer to decision context than to attribution —
+ * an agent reading "Fixes #123" learns something a co-author's name never
+ * tells it — so they are left to land in "other" like any trailer this
+ * protocol simply has no vocabulary slot for yet, rather than being silently
+ * discarded alongside pure attribution.
+ *
+ * Matched case-insensitively via {@link isConventionalTrailerKey}: SPEC's own
+ * key match is case-sensitive (§3), but that is a different question — this
+ * set is not SPEC vocabulary, and `Co-authored-by`, `Co-Authored-By` and
+ * `Co-authored-By` all reach a commit message from GitHub, git and various
+ * editors for the identical trailer (bug-issue-150's own report shows all
+ * three in one repository).
+ */
+const CONVENTIONAL_TRAILER_LIST = [
+    'Co-authored-by',
+    'Signed-off-by',
+    'Reviewed-by',
+    'Acked-by',
+    'Tested-by',
+    'Reported-by',
+    'Suggested-by',
+    'Cc',
+    'Change-Id',
+];
+export const CONVENTIONAL_TRAILER_KEYS = new Set(CONVENTIONAL_TRAILER_LIST.map((key) => key.toLowerCase()));
+/** Lowercased key -> the canonical spelling used in reports (e.g. `commitlore index --stats`). */
+const CONVENTIONAL_TRAILER_CANONICAL = new Map(CONVENTIONAL_TRAILER_LIST.map((key) => [key.toLowerCase(), key]));
+/** Whether `key` names a reserved trailer from {@link CONVENTIONAL_TRAILER_KEYS}, case-insensitively. */
+export const isConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_KEYS.has(key.toLowerCase());
+/** The canonical spelling for a conventional key, regardless of how this occurrence was cased. */
+export const canonicalConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_CANONICAL.get(key.toLowerCase()) ?? key;
 export const BLAST_VALUES = ['local', 'module', 'system'];
 export const UNDO_VALUES = ['easy', 'costly', 'permanent'];
 export const CERTAINTY_VALUES = ['firm', 'tentative', 'guess'];

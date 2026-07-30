@@ -4,6 +4,7 @@
  * local config, and it never installs a hook or pushes to a remote.
  */
 
+import type { SpawnSyncReturns } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -23,6 +24,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   type CheckStatus,
   type DoctorReport,
+  evaluateInjectRun,
   formatReport,
   runDoctor,
 } from '../src/commands/doctor.js';
@@ -30,12 +32,15 @@ import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md', import.meta.url));
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
+import { runQuery } from '../src/core/query.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
 import {
+  CLAUDE_HOOK_MARKER,
   claudeSettingsPath,
   installClaudeHook,
 } from '../src/hooks/claude-settings.js';
@@ -206,7 +211,27 @@ describe('doctor: notes fetch refspec', () => {
     );
 
     expect(check?.status).toBe('warn');
+    expect(check?.needsAttention).toBe(false);
     expect(check?.detail).toContain('no remote');
+  });
+});
+
+describe('commitlore-query skill', () => {
+  it('documents that multi-path queries answer literal paths and report skipped rename following', () => {
+    const repo = initRepo('query-skill-multiple-paths');
+    const result = runQuery({ cwd: repo, paths: ['a.ts', 'b.ts'] });
+    const skill = readFileSync(QUERY_SKILL, 'utf8');
+
+    expect(result.follow).toBe(false);
+    expect(result.diagnostics).toEqual([
+      'git log --follow accepts exactly one pathspec, so renames are not followed for 2 paths; ' +
+        'query one path at a time to follow its rename chain',
+    ]);
+    expect(skill).toContain(
+      'When several paths are supplied, the CLI answers each literal path and\n' +
+        'prints a diagnostic that renames were not followed; query one path at a time\n' +
+        'when historical names matter.',
+    );
   });
 });
 
@@ -484,22 +509,95 @@ describe('doctor: PreToolUse hook runtime', () => {
     expect(check?.fix).toContain('install-claude-hook');
   });
 
-  it('runs a known-good payload and reports non-empty context', () => {
+  it('runs the configured binary command without node on PATH', () => {
     const repo = recordedRepo('doctor-inject-ok');
     installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const bin = tempDir('doctor-inject-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+
+    try {
+      const check = runtimeCheck(repo);
+
+      expect(check?.status).toBe('ok');
+      expect(check?.detail).toContain('returned context');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('reports when the configured executable is not resolvable', () => {
+    const repo = recordedRepo('doctor-inject-not-resolvable');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = '/usr/bin:/bin';
+
+    try {
+      const check = runtimeCheck(repo);
+
+      expect(check?.status).toBe('fail');
+      expect(check?.detail).toContain('configured PreToolUse hook executable "commitlore" is not resolvable from PATH');
+      expect(check?.fix).toContain('PATH');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('does not run an unrecognised configured command', () => {
+    const repo = recordedRepo('doctor-inject-unrecognised');
+    installClaudeHook({
+      settingsPath: claudeSettingsPath(repo),
+      command: `printf unsafe ${CLAUDE_HOOK_MARKER}`,
+    });
 
     const check = runtimeCheck(repo);
 
-    expect(check?.status).toBe('ok');
-    expect(check?.detail).toContain('returned context');
+    expect(check?.status).toBe('skipped');
+    expect(check?.detail).toContain('not checked');
+    expect(check?.detail).toContain('might have side effects');
+    expect(check?.fix).toBeNull();
+  });
+
+  it('fails for a broken configured command until its executable is repaired', () => {
+    const repo = recordedRepo('doctor-inject-broken');
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+    const bin = tempDir('doctor-inject-broken-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\necho broken >&2\nexit 7\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+
+    try {
+      const failed = runtimeCheck(repo);
+
+      expect(failed?.status).toBe('fail');
+      expect(failed?.detail).toContain('exits 7');
+      expect(failed?.fix).toContain('reinstall the commitlore executable');
+
+      writeScript(command, '#!/bin/sh\nprintf context\\n\n');
+      chmodSync(command, 0o755);
+      expect(runtimeCheck(repo)?.status).toBe('ok');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
   });
 
   it('fails when the hook returns empty for a known-good payload', () => {
     const repo = recordedRepo('doctor-inject-empty');
     installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
-    const emptyRoot = tempDir('doctor-inject-empty-root');
-    const previous = process.env['CLAUDE_PLUGIN_ROOT'];
-    process.env['CLAUDE_PLUGIN_ROOT'] = emptyRoot;
+    const bin = tempDir('doctor-inject-empty-bin');
+    const command = join(bin, 'commitlore');
+    writeScript(command, '#!/bin/sh\nexit 0\n');
+    chmodSync(command, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
     try {
       const report = runDoctor({ cwd: repo });
       const check = report.checks.find((entry) => entry.id === 'inject-runtime');
@@ -507,9 +605,99 @@ describe('doctor: PreToolUse hook runtime', () => {
       expect(check?.detail).toContain('returned no context');
       expect(report.exitCode).toBe(1);
     } finally {
-      if (previous === undefined) delete process.env['CLAUDE_PLUGIN_ROOT'];
-      else process.env['CLAUDE_PLUGIN_ROOT'] = previous;
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
     }
+  });
+});
+
+/**
+ * `spawnSync`'s `input` write races a child that exits before reading stdin —
+ * reproduced directly against the actual CI Node 22 and 24 images at a
+ * 15-25% hit rate per run, 0/several-thousand on macOS, which is why the two
+ * tests above only ever caught this in CI. When that write is what fails,
+ * Node still reports the process's real `status`/`stdout`/`stderr` on the
+ * same result object that carries the `error` — so these tests hand
+ * `evaluateInjectRun` a synthetic result with both, and assert on the
+ * decision without depending on the race actually firing.
+ */
+describe('doctor: PreToolUse hook runtime — deciding a completed run', () => {
+  const ctx = {
+    id: 'inject-runtime',
+    title: 'PreToolUse hook runtime',
+    executable: 'commitlore',
+    path: 'probe.ts',
+    fix: 'reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor',
+    unavailableFix:
+      'install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor',
+  };
+
+  const epipe = (): NodeJS.ErrnoException => {
+    const error = new Error('spawnSync commitlore EPIPE') as NodeJS.ErrnoException;
+    error.code = 'EPIPE';
+    return error;
+  };
+
+  const run = (overrides: Partial<SpawnSyncReturns<string>>): SpawnSyncReturns<string> => ({
+    pid: 1,
+    output: [null, '', ''],
+    stdout: '',
+    stderr: '',
+    status: 0,
+    signal: null,
+    ...overrides,
+  });
+
+  it('reports ok when a real success status arrives alongside an EPIPE from the input-write race', () => {
+    const result = evaluateInjectRun(
+      run({ status: 0, stdout: '{"hookSpecificOutput":{"additionalContext":"context"}}\n', error: epipe() }),
+      ctx,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.detail).toContain('returned context');
+  });
+
+  it('still fails a hook that resolves and genuinely exits non-zero, even racing the same EPIPE', () => {
+    const result = evaluateInjectRun(run({ status: 7, stderr: 'broken\n', error: epipe() }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('exits 7');
+    expect(result.detail).toContain('broken');
+  });
+
+  it('still fails empty output from a hook that ran, even racing the same EPIPE', () => {
+    const result = evaluateInjectRun(run({ status: 0, stdout: '', error: epipe() }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('returned no context');
+  });
+
+  it('fails a broken command with no EPIPE in the picture, the ordinary case', () => {
+    const result = evaluateInjectRun(run({ status: 7, stderr: 'broken\n' }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('exits 7');
+  });
+
+  it('treats a genuinely unresolvable executable as unresolvable, not as "could not run"', () => {
+    const error = new Error('spawnSync commitlore ENOENT') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    const result = evaluateInjectRun(run({ status: null, error }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('is not resolvable from PATH');
+    expect(result.fix).toBe(ctx.unavailableFix);
+  });
+
+  it('falls back to a generic message when spawning fails for a reason other than ENOENT', () => {
+    const error = new Error('spawnSync commitlore EACCES') as NodeJS.ErrnoException;
+    error.code = 'EACCES';
+    const result = evaluateInjectRun(run({ status: null, error }), ctx);
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toBe('could not run the PreToolUse hook: spawnSync commitlore EACCES');
+    expect(result.fix).toBe(ctx.fix);
   });
 });
 
