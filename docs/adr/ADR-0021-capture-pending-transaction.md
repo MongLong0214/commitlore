@@ -52,7 +52,7 @@ where `<nonce>` is 16 bytes of `crypto.randomBytes` hex-encoded (32 characters).
   "version": 1,
   "nonce": "<hex>",
   "created_at": "<ISO 8601 UTC>",
-  "expires_at": "<ISO 8601 UTC>",
+  "expires_at": null,          // null until stage succeeds; then staged_at + 5 minutes
   "phase": "prepared" | "verified" | "staged" | "applied" | "consumed",
   "consumed": false,
   "verified_at": null,
@@ -105,7 +105,10 @@ still-unconsumed `phase: "applied"` record from an aborted commit attempt,
 1. **HEAD unchanged**: current HEAD equals `base_head`.
 2. **Staged diff unchanged**: SHA-256 of the current `git diff --cached` output
    equals `staged_diff_hash`.
-3. **Unexpired**: `now < expires_at` (default expiry: 5 minutes from creation).
+3. **Unexpired**: `now < expires_at`. `expires_at` is **null while the record is `prepared`
+   or `verified`** and is stamped only when stage succeeds, as `staged_at + 5 minutes`. A
+   record whose `expires_at` is null has not been staged and therefore fails gate 4 before
+   expiry is ever consulted — expiry never expires work that is still being verified.
 4. **Unconsumed**: `consumed === false`.
 5. **Policy unchanged**: SHA-256 of the current policy identity equals
    `policy_identity_hash`.

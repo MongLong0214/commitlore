@@ -33,6 +33,11 @@
 - Do NOT alter exit codes or the `check()` function signature
 - A root-cause fix for the intermittency is NOT guaranteed by this ticket
 
+**Scope (CEO amendment — binding).** This ticket is **diagnostic honesty only**. It does not
+explain, reproduce or fix the intermittent failure, and it **may not close #192 on its own**:
+#192 has been split, and the node-22 intermittency is tracked separately. Closing this ticket
+means the probe stops asserting a cause it cannot determine — nothing more.
+
 **RED test**
 
 - File: `test/doctor.test.ts` (new or addition to existing)

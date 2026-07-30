@@ -461,6 +461,21 @@ lifecycle outcome.
 - Do not modify `scripts/check-readme-numbers.mjs`
 - Do not change the content of any section — only its position relative to others
 
+**Section anchors (CEO amendment — binding, not the implementer's to choose).** #167's five
+abstract labels map to these concrete `README.md` headings, and to their translated equivalents:
+
+| #167 label | concrete anchor |
+|---|---|
+| product | `Git remembers what changed. CommitLore remembers why.` |
+| local-first | `No hosted memory service.` |
+| install promise | `Install once.` |
+| install command | the `curl` block |
+| evidence | `Retrieval can find records. Path scope keeps reversed decisions out.` |
+
+**`See it work` moves to sit after the install command and before evidence.** The RED assertion is
+that the current order is wrong: at the canonical head evidence precedes `See it work`, so a test
+asserting the amended sequence fails until the sections move.
+
 **RED test**
 
 - File: `test/readme-order.test.ts`
@@ -556,6 +571,13 @@ instead of maintaining a second hand-authored story.
   command behaviour
 - Do not introduce a browser/runtime dependency solely for recording if a
   repository-native terminal renderer already suffices
+
+**Recording mechanism (CEO amendment — binding).** A **Node-stdlib animated SVG**. No recorder
+dependency and no manifest fallback: the artifact is the SVG and it is checked byte-exactly.
+Environment, viewport and frame timing are fixed so the output is reproducible, and
+`--check` re-renders and compares bytes, failing on one differing byte. There is no
+“approximately equal” mode — a frame manifest was considered and rejected, because a check that
+tolerates drift stops detecting the thing it exists to detect.
 
 **RED test**
 
