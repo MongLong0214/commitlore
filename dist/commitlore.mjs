@@ -16941,10 +16941,10 @@ var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var NO_REASON = 'no reason recorded \u2014 this Ruled-out: is missing the required "|" separator';
 var formatMatches = (matches) => {
   if (matches.length === 0) return "";
-  const header2 = `commitlore guard: ${matches.length} ruled-out ${matches.length === 1 ? "alternative matches" : "alternatives match"} this proposal`;
+  const header2 = `commitlore guard: ${matches.length} possible ${matches.length === 1 ? "match" : "matches"} against ruled-out alternatives (experimental \u2014 precision 44.8%, recall 22.0%)`;
   const blocks = matches.map((match) => {
     const rendered = renderGuardMatch(match);
-    const recorded = `  recorded:  ${rendered.recordId ?? "-"} in ${rendered.trust === "blocked" ? rendered.sha : shortSha2(rendered.sha)} (score ${rendered.score.toFixed(2)}; ${rendered.signals.join(", ")})`;
+    const recorded = `  recorded:  ${rendered.recordId ?? "-"} in ${rendered.trust === "blocked" ? rendered.sha : shortSha2(rendered.sha)}`;
     switch (rendered.trust) {
       case "blocked":
         return [`  withheld: ${rendered.withheld}`, recorded].join("\n");
@@ -17038,7 +17038,7 @@ var runAsHook = async (options) => {
   );
 };
 var register8 = (program3) => {
-  program3.command("guard").description("flag a proposal that revives an alternative already ruled out").argument("[paths...]", "limit the check to records touching these paths").option(
+  program3.command("guard").description("[experimental advisory] flag a proposal that may revive a ruled-out alternative \u2014 a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
   ).option("--threshold <n>", `match score required to flag (default: ${DEFAULT_THRESHOLD})`).option("--json", "emit the matches as JSON on stdout").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option(
