@@ -29,6 +29,10 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/inst
 
 ## 実際に動かす
 
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
 **新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
 
 ```bash

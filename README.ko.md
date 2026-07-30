@@ -29,6 +29,10 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/inst
 
 ## 실제로 보기
 
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
 **새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 바꾸기 전에 path를 조회한다.
 
 ```bash
