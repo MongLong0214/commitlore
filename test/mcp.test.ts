@@ -474,6 +474,7 @@ describe('handshake and declarations', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'commitlore_before_change',
       'commitlore_guard',
+      'commitlore_prepare_capture',
       'commitlore_query',
       'commitlore_stale',
     ]);
@@ -491,8 +492,11 @@ describe('handshake and declarations', () => {
     const guard = tools.find((tool) => tool.name === 'commitlore_guard');
     expect(guard?.inputSchema).toMatchObject({ required: ['proposal'] });
 
-    // Every tool must announce that it reads, and that it reaches nowhere.
-    for (const tool of tools) {
+    // Every query tool must announce that it reads, and that it reaches nowhere.
+    const queryTools = tools.filter((t) =>
+      ['commitlore_query', 'commitlore_stale', 'commitlore_guard', 'commitlore_before_change'].includes(t.name),
+    );
+    for (const tool of queryTools) {
       expect(tool, tool.name).toMatchObject({
         annotations: { readOnlyHint: true, openWorldHint: false },
       });

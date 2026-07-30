@@ -62,6 +62,7 @@ import { toJson, withholdBlocked, type JsonOutput } from '../commands/query.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
 import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
+import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 
 export const SERVER_NAME = 'commitlore';
@@ -88,6 +89,7 @@ export const QUERY_TOOL = 'commitlore_query';
 export const STALE_TOOL = 'commitlore_stale';
 export const GUARD_TOOL = 'commitlore_guard';
 export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
+export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
 
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
@@ -299,6 +301,30 @@ const TOOLS: readonly Tool[] = [
     },
     annotations: { ...READS_ONLY, title: 'Context and guard for a path before editing it' },
   },
+  {
+    name: PREPARE_CAPTURE_TOOL,
+    description:
+      'Prepare a capture transaction: computes binding conditions (HEAD, staged diff, tree, ' +
+      'policy hash), generates the prompt contract for the agent to use, and persists a ' +
+      'phase:"prepared" pending transaction. Returns the nonce needed for verify and stage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transcript: {
+          type: 'string',
+          description: 'the session transcript to compute source hashes from',
+        },
+      },
+      required: ['transcript'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+      title: 'Prepare a capture transaction',
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -398,6 +424,19 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
           cwd: root,
         }),
       );
+    },
+    [PREPARE_CAPTURE_TOOL]: (args) => {
+      const transcript = requiredString(args, 'transcript');
+      const result = prepareCaptureContext({ cwd: root, transcript });
+      return asText({
+        nonce: result.nonce,
+        base_head: result.base_head,
+        staged_diff_hash: result.staged_diff_hash,
+        staged_tree_oid: result.staged_tree_oid,
+        policy_identity_hash: result.policy_identity_hash,
+        source_hashes: result.source_hashes,
+        prompt: result.prompt,
+      });
     },
   };
 
