@@ -69,3 +69,72 @@ describe('README install one-liner and version pin', () => {
     });
   }
 });
+
+describe('T-1021: Known limitations discloses guard precision and recall', () => {
+  for (const file of README_FILES) {
+    describe(file, () => {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+
+      // Extract the Known limitations section (between its heading and the next ## heading)
+      const knownLimStart = content.search(/^## (Known limitations|알려진 제한 사항|既知の制限事項|已知限制)/m);
+      const afterStart = content.slice(knownLimStart + 1);
+      const nextSection = afterStart.search(/^## /m);
+      const knownLimSection = nextSection === -1
+        ? afterStart
+        : afterStart.slice(0, nextSection);
+
+      it('mentions guard precision 44.8%', () => {
+        expect(knownLimSection).toMatch(/precision 44\.8%/i);
+      });
+
+      it('mentions guard recall 22.0%', () => {
+        expect(knownLimSection).toMatch(/recall 22\.0%/i);
+      });
+
+      it('includes the Wilson confidence interval (32.7%–57.5%)', () => {
+        // The interval must accompany the precision figure
+        expect(knownLimSection).toMatch(/32\.7%/);
+        expect(knownLimSection).toMatch(/57\.5%/);
+      });
+    });
+  }
+});
+
+/**
+ * Mutation oracles: prove the T-1021 assertions have teeth.
+ *
+ * Oracle-FAIL tests: mutated content MUST fail the regex assertions.
+ * Oracle-PASS test: irrelevant mutation (changing a different bullet) MUST NOT
+ * cause a T-1021 failure.
+ */
+describe('T-1021 mutation oracles', () => {
+  const enContent = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
+
+  // Extract the Known limitations section for English
+  const knownLimStart = enContent.search(/^## Known limitations/m);
+  const afterStart = enContent.slice(knownLimStart + 1);
+  const nextSection = afterStart.search(/^## /m);
+  const knownLimSection = nextSection === -1 ? afterStart : afterStart.slice(0, nextSection);
+
+  it('oracle-FAIL: dropping the interval makes the interval assertion fail', () => {
+    // Simulate removing the Wilson CI from the section
+    const mutated = knownLimSection.replace(/\(95% Wilson CI 32\.7%–57\.5%\)/, '');
+    expect(mutated).not.toMatch(/32\.7%/);
+    expect(mutated).not.toMatch(/57\.5%/);
+  });
+
+  it('oracle-FAIL: dropping the recall makes the recall assertion fail', () => {
+    // Simulate removing recall from the section
+    const mutated = knownLimSection.replace(/recall 22\.0%/i, '');
+    expect(mutated).not.toMatch(/recall 22\.0%/i);
+  });
+
+  it('oracle-PASS: changing the Windows bullet does not affect guard assertions', () => {
+    // A mutation to an unrelated bullet must NOT break the guard assertions
+    const mutated = knownLimSection.replace('Windows is unsupported', 'Windows is not supported');
+    expect(mutated).toMatch(/precision 44\.8%/i);
+    expect(mutated).toMatch(/recall 22\.0%/i);
+    expect(mutated).toMatch(/32\.7%/);
+    expect(mutated).toMatch(/57\.5%/);
+  });
+});
