@@ -22,6 +22,17 @@
 
 一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
+**Claude Code** — プラグイン一つで MCP サーバー、編集前のコンテキストフック、スキルが登録されます:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+プラグイン経路の前提条件: Node.js 22+ と Git。
+
+**その他のコーディングエージェント** — CLI をインストールします:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```

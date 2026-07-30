@@ -22,6 +22,17 @@
 
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
 
+**Claude Code** — 플러그인 하나가 MCP 서버, 편집 전 컨텍스트 훅, 스킬을 함께 등록한다:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+플러그인 경로의 전제 조건: Node.js 22+ 와 Git.
+
+**그 밖의 코딩 에이전트** — CLI를 설치한다:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
