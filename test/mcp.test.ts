@@ -464,7 +464,7 @@ describe('handshake and declarations', () => {
     expect(instructions).toContain('unknown, not empty');
   });
 
-  it('declares exactly the three tools of the ticket', async () => {
+  it('declares exactly the tools this server exposes', async () => {
     const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as {
       name: string;
@@ -476,6 +476,7 @@ describe('handshake and declarations', () => {
       'commitlore_guard',
       'commitlore_prepare_capture',
       'commitlore_query',
+      'commitlore_stage_capture',
       'commitlore_stale',
       'commitlore_verify_capture',
     ]);
