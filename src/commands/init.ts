@@ -37,6 +37,7 @@ import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
+import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -53,7 +54,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult];
 }
 
 interface IndexStepDetail {
@@ -100,7 +101,8 @@ const runDoctorStep = (opts: InitOptions): InitStep => {
 const runHooksStep = (opts: InitOptions): InitStep => {
   const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
   const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
-  const lines = [commitMsg, prepareCommitMsg].flatMap((result) =>
+  const postCommit = installPostCommitHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) =>
     result.code === 0
       ? result.stdout.trimEnd().split('\n')
       : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'],
@@ -108,9 +110,9 @@ const runHooksStep = (opts: InitOptions): InitStep => {
   return {
     step: 'hooks',
     title: 'hooks install',
-    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 ? 2 : 0,
+    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
     lines,
-    detail: [commitMsg, prepareCommitMsg],
+    detail: [commitMsg, prepareCommitMsg, postCommit],
   };
 };
 

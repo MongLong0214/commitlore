@@ -35,6 +35,7 @@ import { type HookResult } from './hooks.js';
 import { type IndexStats } from '../core/index-db.js';
 import { type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
+import { type PostCommitHookResult } from '../hooks/post-commit.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
@@ -48,7 +49,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
