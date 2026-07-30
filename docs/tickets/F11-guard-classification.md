@@ -262,7 +262,8 @@ last, after T-1007, T-1008 and T-1009 — not in parallel with any of them. See
 
 ## T-1024 Unified `commitlore_before_change` MCP tool (M) — #219 · depends on T-1007, T-1008, T-1009, T-1020
 
-Closes acceptance row `P0-8`. The source review asks for one tool an agent has to remember
+Ticketed to close acceptance row `P0-8`, which stays OPEN work until this ticket's acceptance
+criteria are met. The source review asks for one tool an agent has to remember
 instead of a separate context call and guard call. The reason this ticket is here rather than in
 F9 is that its hard problem is not composition, it is **confidence separation**: it returns
 path-scoped context, whose measured behaviour is trustworthy, in the same payload as a guard
