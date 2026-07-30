@@ -22,7 +22,7 @@ there is never a window with neither install path.
 
 ---
 
-## T-1120 Rewrite `install.sh` as a Node-only installer (L) — new · PRD-F14 req 4–15
+## T-1120 Rewrite `install.sh` as a Node-only installer (L) — #281 · PRD-F14 req 4–15
 
 **Owns**
 
@@ -104,7 +104,7 @@ upgrade, and missing-Node transcripts; a diff containing no asset or checksum lo
 
 ---
 
-## T-1121 Add `install.ps1` for Windows, same contract (L) — new · PRD-F14 req 16–19
+## T-1121 Add `install.ps1` for Windows, same contract (L) — #282 · PRD-F14 req 16–19
 
 **Owns** — `install.ps1` (new); `.github/workflows/ci.yml` (one `windows-latest` job that
 executes it); `test/install-ps1.test.ts` (new, shape and contract assertions)
@@ -220,7 +220,7 @@ drift, and the bidirectional agreement test green.
 
 ---
 
-## T-1124 Establish #71's containment for the wrapper path on Windows (M) — new · PRD-F14 req 26
+## T-1124 Establish #71's containment for the wrapper path on Windows (M) — #283 · PRD-F14 req 26
 
 **Owns** — `.github/workflows/ci.yml` (extend T-1121's Windows job, or one adjacent required
 job); `test/hook-target.test.ts` (wrapper-path cases); `docs/COMPATIBILITY.md` (the Windows row,
@@ -254,7 +254,7 @@ with the recorded reason.
 
 ---
 
-## T-1125 Remove the compiled-binary code (L) — new · PRD-F14 req 27–29
+## T-1125 Remove the compiled-binary code (L) — #284 · PRD-F14 req 27–29
 
 **Owns** — every site in ADR-0026's inventory: `scripts/build-binary.mjs`;
 `package.json` `build:binary`; `.github/workflows/release.yml` `build` and `publish` asset and

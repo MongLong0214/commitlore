@@ -17,7 +17,7 @@
 | [F10-first-run-experience.md](F10-first-run-experience.md) | T-1010 ~ T-1016 (7) | M5 | #202–#207, #212 |
 | [F11-guard-classification.md](F11-guard-classification.md) | T-1020 ~ T-1022, T-1024 (4) | M5 | #208–#210, #219 |
 | [F13-capture-advisory-and-policy.md](F13-capture-advisory-and-policy.md) | T-1109 ~ T-1110 (2) | M6 | #273–#274 |
-| [F14-distribution.md](F14-distribution.md) | T-1120 ~ T-1125 (6) | M6 | #271, #272, new×4 |
+| [F14-distribution.md](F14-distribution.md) | T-1120 ~ T-1125 (6) | M6 | #281, #282, #271, #272, #283, #284 |
 
 Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001) · 25 M5 Gate A tickets (T-1001 ~ T-1031; T-1019 and T-1023 are independent audit findings recorded in `docs/GATE-A-ACCEPTANCE.md` and close no acceptance-matrix row; T-1024 is ticketed to close row P0-8 and is defined in `F11-guard-classification.md`) · 2 M6 Gate B tickets (T-1109 ~ T-1110). T-1101 ~ T-1108 and `F12-universal-adoption.md` were withdrawn on 2026-07-31 by an owner scope change: they served a compiled-executable and platform-asset plan that ADR-0026 removed from the product. Their issues (#265–#270) are closed as not planned
 
