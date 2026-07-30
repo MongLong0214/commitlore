@@ -8,7 +8,10 @@ name: Demo — PR lint
 #
 # Separate from ci.yml on purpose: this job needs `pull-requests: write` and
 # only runs on pull requests, and CI must not inherit either.
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches: [dev]
 
 permissions:
   # The action asks for nothing beyond the comment; the read is the checkout's.
@@ -17,6 +20,9 @@ permissions:
 
 jobs:
   lint:
+    # The action's own range derivation works for PRs. On push events there is
+    # no base_ref, so this job only runs for pull requests.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,3 +57,35 @@ jobs:
       - uses: ./action/lint
         with:
           cli-path: dist/cli.js
+
+  # #186: a feature-branch PR lints only its own commits. Two commits that
+  # duplicate a Record-Id appear together only in the full origin/main..dev
+  # range — which nothing checked until a promotion PR. This job closes that
+  # gap: every push to dev lints the entire promotion range, so a collision
+  # that a narrow PR range hid is caught the moment it lands.
+  promotion-range-lint:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bring the record notes mirror, if there is one
+        run: |
+          if git ls-remote --exit-code origin refs/notes/commitlore >/dev/null 2>&1; then
+            git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore'
+          else
+            echo "origin carries no refs/notes/commitlore yet -- nothing to mirror"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Lint the full promotion range (origin/main..HEAD)
+        run: node dist/commitlore.mjs validate --range origin/main..HEAD
