@@ -262,6 +262,47 @@ const outputBlock = (entries) => {
     ];
 };
 /**
+ * Builds the static prompt contract — everything an agent session needs to know
+ * about CommitLore's rules, vocabulary, and expected output format, without any
+ * session-specific transcript or diff content.
+ *
+ * This is what `--prompt-only` prints when invoked with no other flags: the
+ * contract a session reads *before* it has produced a transcript or diff.
+ * The TRANSCRIPT and DIFF sections state explicitly that they will be appended
+ * separately at harvest time — no empty holes, no template variables.
+ */
+export const buildHarvestContract = () => {
+    const entries = loadVocabulary().filter((entry) => entry.key !== 'Verified');
+    return [
+        '# CommitLore harvest',
+        '',
+        'You are recording the decision context for a change that is about to be',
+        'committed. A CommitLore record is a set of git commit trailers that captures',
+        'what the diff cannot show: the conditions that shaped the decision, the',
+        'alternatives that were dropped, and the warnings whoever modifies this next',
+        'will need.',
+        '',
+        'Work only from the TRANSCRIPT and the DIFF at the end of this prompt.',
+        '',
+        '## Rules',
+        '',
+        ...RULES,
+        '',
+        ...vocabularyBlock(entries),
+        '',
+        ...outputBlock(entries),
+        '',
+        '## TRANSCRIPT',
+        '',
+        '(provided at harvest time)',
+        '',
+        '## DIFF',
+        '',
+        '(provided at harvest time)',
+        '',
+    ].join('\n');
+};
+/**
  * Builds the prompt contract handed to the user's agent session. Deterministic
  * by construction — no clock, no randomness, no model — so the same transcript
  * and diff always produce the same bytes.

@@ -24,7 +24,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
-import { buildHarvestPrompt, parseDraft, type DraftRejection } from '../core/harvest.js';
+import { buildHarvestContract, buildHarvestPrompt, parseDraft, type DraftRejection } from '../core/harvest.js';
 
 export interface HarvestOptions {
   transcript?: string | undefined;
@@ -104,7 +104,9 @@ const runDraftMode = (draft: string, out: string | undefined): HarvestOutcome =>
 
 const runPromptMode = (options: HarvestOptions): HarvestOutcome => {
   if (options.transcript === undefined) {
-    return skip('no --transcript, and there is no session to read one from');
+    // No transcript: emit the static contract (rules + vocabulary + output format).
+    // The contract is what a session needs *before* it has produced a transcript.
+    return emit(buildHarvestContract(), options.out);
   }
   const transcript = readTextFile(
     options.transcript,
