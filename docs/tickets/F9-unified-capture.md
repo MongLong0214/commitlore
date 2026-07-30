@@ -333,6 +333,11 @@ Exit codes: 0 always (success or no-record). 2 only for usage errors (missing re
 
 ## T-1007 MCP `commitlore_prepare_capture` (S) — #199 · depends on T-1002
 
+**Merge sequencing**: T-1007, T-1008, T-1009 and T-1020 (F11) all edit
+`src/mcp/server.ts`. Merge strictly in that order; do not open a second PR
+against this file while one of the four is unmerged. See
+`docs/GATE-A-ACCEPTANCE.md` "Execution constraint".
+
 **Owns**: `src/mcp/server.ts` (add tool declaration + handler for `commitlore_prepare_capture`), `test/mcp-capture.test.ts` (new or added to existing `test/mcp.test.ts`).
 
 **Depends on**: T-1002.
@@ -378,6 +383,9 @@ Exit codes: 0 always (success or no-record). 2 only for usage errors (missing re
 
 ## T-1008 MCP `commitlore_verify_capture` (S) — #200 · depends on T-1003
 
+**Merge sequencing**: merges after T-1007, before T-1009. See
+`docs/GATE-A-ACCEPTANCE.md` "Execution constraint".
+
 **Owns**: `src/mcp/server.ts` (add tool declaration + handler for `commitlore_verify_capture`), `test/mcp-capture.test.ts` (extend).
 
 **Depends on**: T-1003.
@@ -422,6 +430,10 @@ Exit codes: 0 always (success or no-record). 2 only for usage errors (missing re
 ---
 
 ## T-1009 MCP `commitlore_stage_capture` (S) — #201 · depends on T-1004, T-1007, T-1008
+
+**Merge sequencing**: last of T-1007/T-1008/T-1009; T-1020 (F11) merges after
+this one, not concurrently. See `docs/GATE-A-ACCEPTANCE.md` "Execution
+constraint".
 
 **Owns**: `src/mcp/server.ts` (add tool declaration + handler for `commitlore_stage_capture`), `test/mcp-capture.test.ts` (extend).
 
@@ -573,3 +585,15 @@ The tool writes only to the nonce transaction under `.git/commitlore/pending/`. 
 - Manual receipt for successful and failed commit paths
 - `git diff` shows no pre-success `consumePending` call
 - `commitlore init` idempotently reports the post-commit hook state
+
+---
+
+## T-1019 Pending-transaction recovery and garbage collection (M) — new · depends on T-1001, T-1018
+
+## T-1023 Gate A integrated E2E acceptance (M) — new · depends on all of T-1001–T-1022
+
+Full specifications for both live in `docs/GATE-A-ACCEPTANCE.md`, not here —
+they close acceptance-matrix rows P0-7 and P0-4 respectively, and that document
+is the authority for which ticket closes which row. This entry exists so the
+F9 ticket count and dependency graph in `TICKETS.md` stay accurate; do not
+duplicate the ticket body in both places.

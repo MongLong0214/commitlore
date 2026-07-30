@@ -13,11 +13,15 @@
 | [F7-commitlorebench.md](F7-commitlorebench.md) | T-701 ~ T-704 (4) | M1 / M4 | #22–#25 |
 | [F8-backfill.md](F8-backfill.md) | T-801 (1, stretch) | M4 | #26 |
 | [release.md](release.md) | T-901, T-1030 ~ T-1031 (3) | M4 / M5 | #27, #192, #211 |
-| [F9-unified-capture.md](F9-unified-capture.md) | T-1001 ~ T-1009, T-1018 (10) | M5 | #193–#201, #213 |
+| [F9-unified-capture.md](F9-unified-capture.md) | T-1001 ~ T-1009, T-1018, T-1019, T-1023 (12) | M5 | #193–#201, #213, new×2 |
 | [F10-first-run-experience.md](F10-first-run-experience.md) | T-1010 ~ T-1016 (7) | M5 | #202–#207, #212 |
 | [F11-guard-classification.md](F11-guard-classification.md) | T-1020 ~ T-1022 (3) | M5 | #208–#210 |
 
-Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001) · 22 M5 Gate A tickets (T-1001 ~ T-1031)
+Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001) · 24 M5 Gate A tickets (T-1001 ~ T-1031, plus T-1019 and T-1023 added by `docs/GATE-A-ACCEPTANCE.md` to close rows P0-7 and P0-4)
+
+`docs/GATE-A-ACCEPTANCE.md` is the authority for which ticket closes which
+acceptance-matrix row (`P0-1`…`P0-8`, `P1-5`) and for the `src/mcp/server.ts`
+merge-sequencing constraint across T-1007/T-1008/T-1009/T-1020.
 
 ## Dependency overview (critical path)
 
