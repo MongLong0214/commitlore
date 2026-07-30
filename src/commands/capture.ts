@@ -23,6 +23,7 @@ import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { parseDraft } from '../core/harvest.js';
+import { gcPending } from '../core/pending-gc.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,7 +119,7 @@ export const runCapture = (opts: {
 // ---------------------------------------------------------------------------
 
 export const register = (program: Command): void => {
-  program
+  const capture = program
     .command('capture')
     .description(
       'prepare → verify → stage a record from a transcript and draft (no trailer syntax needed)',
@@ -171,6 +172,35 @@ export const register = (program: Command): void => {
           `commitlore capture: ${error instanceof Error ? error.message : String(error)}\n`,
         );
         process.exitCode = 0;
+      }
+    });
+
+  // T-1019: gc subcommand — garbage-collect expired pending transactions
+  capture
+    .command('gc')
+    .description('remove expired pending transaction files')
+    .option('--json', 'emit structured JSON output')
+    .action((options: { json?: boolean }) => {
+      try {
+        const cwd = process.cwd();
+        const result = gcPending(cwd);
+
+        if (options.json) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        } else {
+          if (result.removed.length > 0) {
+            process.stdout.write(`removed ${result.removed.length} expired pending file(s)\n`);
+          } else {
+            process.stdout.write('nothing to collect\n');
+          }
+        }
+
+        process.exitCode = 0;
+      } catch (error) {
+        process.stderr.write(
+          `commitlore capture gc: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+        process.exitCode = 2;
       }
     });
 };
