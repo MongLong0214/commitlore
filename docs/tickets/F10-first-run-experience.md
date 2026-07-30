@@ -35,24 +35,37 @@
 - No filesystem operations (the fixture is pure data, not a temp repo creator)
 - No changes to `src/commands/`, `src/cli.ts`, or any existing source file
 
+**Correction (this document, `dev@15d8113a63f760dfc5493e5924b83fe09ee1c7c4`)**: the RED
+test and AC table below previously asserted `active.lifecycle`, `superseded.lifecycle`
+and `proposal.lifecycle` directly on the static fixture objects. `Lifecycle` (`src/core/types.ts:151`)
+is `'active' | 'superseded' | 'expired'` — `'proposal'` is not a member of the type, so
+that assertion could never pass — and the field is documented as "Computed by the
+stale engine" (`Record.lifecycle`, `types.ts:162`), never a property a hand-authored
+`CommitMessage` fixture carries. A pure-data ticket (see Forbidden scope: no
+filesystem operations) cannot fold history, so it cannot know a lifecycle value.
+Corrected below: the fixture is raw commit-message text: only T-1011, which
+actually creates commits and runs the real stale-fold engine, can assert a
+lifecycle outcome.
+
 **RED test**
 
 - File: `test/demo-fixture.test.ts`
-- Reason: imports `src/demo/fixture.ts` which does not exist → module resolution fails. The test asserts: (a) the fixture exports an active decision, a superseded decision linked by `Supersedes`, and a proposal; (b) each is a valid `CommitMessage` per `spec/schema`; (c) the superseded record's `Record-Id` appears in the active record's `Supersedes` field.
+- Reason: imports `src/demo/fixture.ts` which does not exist → module resolution fails. The test asserts: (a) the fixture exports a predecessor commit message, a successor commit message, and a proposal text; (b) the predecessor and successor are each a valid `CommitMessage` per `spec/schema` when parsed; (c) the successor's trailer block declares `Supersedes` with the predecessor's `Record-Id`; (d) the proposal text is a plausible re-proposal of the superseded decision (used by T-1011 to exercise the lifecycle-filtered result, not a `Record` itself).
 
 **Minimum GREEN**
 
-- `src/demo/fixture.ts` exports the three records as static objects that pass schema validation and satisfy the lifecycle relationship.
+- `src/demo/fixture.ts` exports `{ predecessorCommitMessage, successorCommitMessage, proposalText, targetPath, expectedActiveRecordId, expectedSupersededRecordId }` as static strings/constants. `predecessorCommitMessage` and `successorCommitMessage` are full raw commit message text (subject, body, trailer block) that parse and validate as `CommitMessage` per `spec/schema`. No object in this file carries a `.lifecycle` property — lifecycle is computed only by the stale engine, downstream, from real git history.
 
 **AC ↔ test**
 
 | AC | Test assertion | PRD-F10 requirement |
 |---|---|---|
-| Fixture contains an active decision | `expect(active.lifecycle).toBe('active')` | 6 |
-| Fixture contains a superseded decision | `expect(superseded.lifecycle).toBe('superseded')` | 6 |
-| Lifecycle link is correct | `expect(active.supersedes).toBe(superseded.recordId)` | 6 |
-| Fixture contains a proposal | `expect(proposal.lifecycle).toBe('proposal')` | 6 |
-| All pass schema validation | `validate(record)` returns no errors for each | 6 |
+| Predecessor is a schema-valid commit message | `validate(parse(predecessorCommitMessage))` returns no errors | 6 |
+| Successor is a schema-valid commit message | `validate(parse(successorCommitMessage))` returns no errors | 6 |
+| Successor declares Supersedes correctly | `parse(successorCommitMessage).trailers` contains `Supersedes: <predecessor Record-Id>` | 6 |
+| Record ids match the exported expectations | `expectedActiveRecordId`/`expectedSupersededRecordId` equal the parsed messages' `Record-Id` values | 6 |
+| Proposal text is non-empty and distinct from both commit messages | string content check | 6 |
+| No fixture object exposes a `.lifecycle` property | `Object.keys` check, or a type-level test | correction above |
 
 **Commands**
 
@@ -69,7 +82,7 @@
 
 **Stop / escalate**
 
-- If `spec/schema` does not support the `Supersedes` field or `lifecycle` enum values needed for the fixture, escalate to the architect — a schema extension is required before this ticket can proceed.
+- Resolved by the correction above: the fixture needs the `Supersedes` trailer key only (already in `spec/schema`), not a `lifecycle` enum value — that escalation no longer applies.
 
 **Safety checks**
 
@@ -88,7 +101,7 @@
 
 - `npx vitest run test/demo-fixture.test.ts` passes
 - `npx tsc --noEmit` exits 0
-- `src/demo/fixture.ts` exists and exports 3 records
+- `src/demo/fixture.ts` exists and exports the six named constants, none carrying a `.lifecycle` property
 
 ---
 
