@@ -23,7 +23,7 @@ No hosted memory service. No vendor-specific chat history. Just reviewable decis
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
 
 
@@ -103,11 +103,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.0/install.sh
-sh install.sh v0.4.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
+sh install.sh v0.4.1
 
 # Or verify the release binary yourself before extracting it.
-version=0.4.0; target=aarch64-apple-darwin
+version=0.4.1; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
