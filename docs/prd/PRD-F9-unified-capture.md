@@ -18,7 +18,9 @@ every agent the same contract without per-agent prompts.
   user's agent session; CommitLore owns everything on either side of it).
 - Blocking a commit on verification failure (ADR-0006, ADR-0021).
 - A user-editable policy file (Gate B, P1-5).
-- Guard integration into the capture pipeline (Gate B, P0-8).
+- Guard integration into the capture pipeline (Gate B). This non-goal stands on its own and
+  is not acceptance-matrix row P0-8: that row is the unified `commitlore_before_change`
+  query tool, which is a different subject.
 
 ## User stories
 

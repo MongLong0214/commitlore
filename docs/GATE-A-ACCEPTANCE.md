@@ -1,119 +1,164 @@
 # Gate A acceptance matrix
 
-This file did not exist before this commit. `ADR-0020`, `ADR-0021`, `ADR-0022`
-and `PRD-F9-unified-capture.md` all cite specific rows of a "CTO acceptance
-matrix" (`P0-2`, `P0-3`, `P0-4`, `P1-5`, and others) as an authority those
-documents depend on or are accepted against. No such file was ever committed.
-An authority reference that points at nothing is exactly the failure
-`A-001`'s own acceptance criterion warns against: *"authority 문서 없이
-implementation 시작 불가."*
+`ADR-0020`, `ADR-0021`, `ADR-0022` and `PRD-F9-unified-capture.md` each cite
+rows of an acceptance matrix as an authority they depend on or are accepted
+against. This file is that authority. An authority reference that points at
+nothing cannot be checked, which is why the rows live here rather than in a
+working document.
 
-Every row below is reconstructed from where its label was actually cited —
-grep the row number across `docs/adr/`, `docs/prd/`, `docs/tickets/` to verify
-each one yourself rather than trusting this table. Two rows (`P0-1`, marked
-below) had no prior citation to reconstruct from; their content is written
-fresh, from the current ticket set, and is marked as such rather than
-presented as recovered.
+**The source review is the primary authority for every row.** Each row's
+assertion is derived from it directly. `docs/adr/`, `docs/prd/` and
+`docs/tickets/` are cross-checks, not sources: grep a row number across them to
+confirm the row and its tickets agree, and treat a disagreement as a defect in
+whichever document drifted rather than as a competing definition.
+
+That ordering is not a preference. An earlier version of this table derived its
+rows from where each label happened to be cited instead of from the review, and
+the result was wrong in five of eight rows: `P0-4`, `P0-7` and `P0-8` had the
+wrong subject entirely, and `P0-1` and `P0-5` had been narrowed to one sub-item
+each. Deriving from citations reproduces whatever the citing document assumed.
 
 ## Gate A rows (must close before the M5 milestone closes)
 
-| Row | Asserts | Source authority | Closing ticket(s) | Verification |
+**Status semantics.** A row's *Ticketed to close* column names the tickets that are expected to close
+it. At the canonical base `a10679cafdcb36bff59cd98122e5007807aa4031` every one of those tickets is **OPEN work**. A row
+records that the source recommendation was accepted and ticketed — never that it is
+complete. Row completion is decided by the named tickets' acceptance criteria, not by the
+existence of this table.
+
+**What each corrected row had been.** `P0-4` had become an end-to-end proof requirement,
+`P0-7` pending-transaction cleanup, and `P0-8` capture-pipeline guard integration — three wrong
+subjects. `P0-1` had been narrowed to the install one-liner alone and `P0-5` to a README scene.
+None of the five is what the review says. The two tickets an earlier session created to close the
+wrong-subject `P0-4` and `P0-7` claim no row now and survive on their own merits — see below.
+
+| Row | Asserts | Source authority | Ticketed to close | Verification |
 |---|---|---|---|---|
-| P0-1 | The published install one-liner references an immutable tag, never `dev`, and the version pin matches `package.json` | `docs/tickets/release.md` (fresh — first written as this table's row, no prior citation existed for `P0-1`) | T-1031 (#211) | `docs/tickets/release.md` T-1031 AC table, three rows already specified: one-liner excludes `/dev/`, matches a `/vX.Y.Z/` tag, pin equals `package.json` version |
-| P0-2 | Guard's MCP description, README disclosure, and CLI wording state measured precision/recall everywhere guard is exposed, and never claim an empty result as a verdict | ADR-0020 | T-1020 (#208), T-1021 (#209), T-1022 (#210) | ADR-0020 falsification conditions; each ticket's AC table |
-| P0-3 | The capture pipeline (prepare → verify → stage → apply → consume) enforces maker–checker separation: the agent supplies only a draft, CommitLore owns the source snapshot, verification result, and every state transition | ADR-0021 | T-1001–T-1009 (#193–#201) | ADR-0021 §7 falsification conditions; T-1009's AC row "Verify cannot be bypassed" |
-| P0-4 | The P0-3 architecture is proven end-to-end — real CLI invocation, real MCP call sequence, real Git commit — not only unit-level per-ticket AC | PRD-F9-unified-capture.md line 4 cites this row and no ticket closes it | **T-1023 (new, see below)** | New ticket's AC table |
-| P0-5 | The README (or `commitlore demo`) carries a concrete before/after scene demonstrating lifecycle filtering, not only the positioning claim | ADR-0022 | T-1010–T-1016 (#202–#207, #212) | ADR-0022 "Risked" section; F10 ticket AC tables |
-| P0-6 | README positioning (hero, section order) across all four languages ships as one coordinated change, never partially | ADR-0022 §"Consistency across languages" | T-1014, T-1015 (#206, #207) | F11 ticket doc's explicit merge-ordering note against T-1021 |
-| P0-7 | *(no prior citation anywhere in `docs/`.)* Reconstructed from an operational gap, not a recovered definition: `PRD-F9-unified-capture.md`'s 14 requirements never mention pending-transaction cleanup, and no ticket owns deleting a `.git/commitlore/pending/*.json` file. T-1002's prepare step writes a file on every capture attempt, including ones that verify empty; nothing ever removes it. The numbering gap between T-1018 and T-1020, and between P0-6 and P0-8, is circumstantial — not evidence this row previously had different content. | *(none — this document is the first place it is asserted)* | **T-1019 (new, see below)** | New ticket's AC table |
-| P0-8 | Guard integration into the capture pipeline | PRD-F9-unified-capture.md "Non-goals" | *(none — explicitly Gate B)* | Not required for Gate A; listed here only because the label is cited |
+| P0-1 | The v0.3.0 release is closed end to end — partially true at this base, and the remainder is OPEN work: #192's flaky failure and its misreported cause are resolved, the promotion PR is re-verified at its exact head, the tag and four platform assets with checksums are published, and the README default install one-liner references the immutable release tag — never `dev` — with the pinned example matching `package.json` | Source review §8 P0-1 | T-1031 (#211) for the README install path; T-901 (#27) and T-1030 (#192) for the release process | T-1031's AC table in `docs/tickets/release.md` (one-liner excludes `/dev/`, matches a `/vX.Y.Z/` tag, pin equals `package.json` version); T-1030's AC table (#192) for the diagnostic that must stop asserting a cause it cannot determine; T-901's release-process evidence (#27) — promotion PR green at its exact head, tag present, four platform assets published with checksums, and `--version` agreeing across `dev`, `package.json`, tag and binary |
+| P0-2 | Guard's MCP description, README disclosure, and CLI wording state measured precision/recall everywhere guard is exposed, and never claim an empty result as a verdict | Source review §8 P0-2; ADR-0020 | T-1020 (#208), T-1021 (#209), T-1022 (#210) | ADR-0020 falsification conditions; each ticket's AC table |
+| P0-3 | The capture pipeline (prepare → verify → stage → apply → consume) enforces maker–checker separation: the agent supplies only a draft, CommitLore owns the source snapshot, verification result, and every state transition | Source review §8 P0-3; ADR-0021 | T-1001–T-1009 (#193–#201) and T-1018 (#213) | ADR-0021 §7 falsification conditions; T-1009's AC row "Verify cannot be bypassed"; T-1018's AC table for the consume step this row's assertion names |
+| P0-4 | The MCP server exposes `commitlore_prepare_capture`, `commitlore_verify_capture` and `commitlore_stage_capture`; no `commitlore_write_record` tool exists; all three write only to `.git/commitlore/pending/`; the same verification and pending-transaction contract applies whichever agent calls them | Source review §8 P0-4; `docs/prd/PRD-F9-unified-capture.md` line 4 | T-1007 (#199), T-1008 (#200), T-1009 (#201) | PRD-F9 requirement 6 (no `commitlore_write_record`); T-1009's AC row "Verify cannot be bypassed"; each ticket's AC table |
+| P0-5 | `commitlore demo` is deterministic: it creates its own temporary repository, seeds one active and one superseded decision, shows that lifecycle filtering excludes the stale record where similarity retrieval does not, needs no network and no model, removes what it created, and finishes inside a minute | Source review §8 P0-5; ADR-0022 "Risked" section | T-1010 (#202), T-1011 (#203), T-1016 (#212) | T-1011's AC table (temporary repository removed even on failure, user repository never written, lifecycle filtering shown); ADR-0022 consequences |
+| P0-6 | The README is restructured into the review's explicit product-first order — problem scene, core sentence, short demo, install, what happens automatically after install, how records get created, the lifecycle differentiator, how it differs from `CLAUDE.md`/ADRs/RAG, verified claims, benchmarks, known limitations, protocol reference — so the measurement no longer precedes the product, and hero plus order ship across all four languages as one coordinated change, never partially | Source review §8 P0-6; ADR-0022 §"Consistency across languages" | T-1014 (#206), T-1015 (#207) | T-1014's AC table (hero and positioning, all four language files as one change); T-1015's AC table (the explicit product-first section order, measurement below the product, `BENCH` block untouched, exposure table retained, four-language coordination); F11's merge-ordering note against T-1021, which owns the same README files |
+| P0-7 | The default `init` output is result-oriented — it reports readiness rather than internal step names, stays short enough to read at a glance on a clean run, and never hides a warning or a failure; today's `[1/4]`…`[4/4]` step detail moves behind `--verbose`, and `--json` (which already exists) is unchanged | Source review §8 P0-7 | T-1012 (#204), T-1013 (#205) | T-1012's AC table (clean run is result-oriented, no internal command names, a failure stays visible); T-1013's AC table (`--verbose` restores the step detail) |
+| P0-8 | One MCP tool `commitlore_before_change` accepts `{path, proposal?}` and returns `{active_decisions, verification_gaps, possible_revival_matches, guard_confidence: "experimental", cache_key}`: context only when no proposal is given, plus an experimental guard result when one is, with the two confidence levels kept visibly separate so an agent has one tool to remember | Source review §8 P0-8 | T-1024 (#219) | T-1024's AC table; must show one tool call replacing a separate guard and context call, and must not present an experimental signal at the same confidence as path-scoped context |
 
 `P1-5` (user-editable policy file) is cited in ADR-0021 §7 and PRD-F9 "Non-goals" as explicitly Gate B. It is listed for completeness, not required for Gate A.
 
-## New tickets this document adds
+## Tickets this document adds — independent audit findings
 
-### T-1019 Pending-transaction recovery and garbage collection (M) — new · depends on T-1001, T-1018
+Neither ticket closes an acceptance-matrix row. Both were created by an earlier session to
+close rows P0-7 and P0-4 as it had reconstructed them; those reconstructions were wrong, and
+the real P0-4 and P0-7 are ticketed to close by the MCP and `init` tickets respectively, and those issues are OPEN work. Each ticket is
+kept here because the gap it names is real, audited independently, and reduced to one
+responsibility.
 
-**Owns**: `src/core/pending-gc.ts` (new), `src/commands/capture.ts` (extend with `status`/`discard`/`gc` subcommands), `test/pending-gc.test.ts` (new).
+### T-1019 Pending-transaction garbage collection (S) — #215 · P1 · depends on T-1001, T-1006, T-1018
 
-**Depends on**: T-1001 (transaction primitives), T-1018 (consumption finalisation — GC must never touch a file another process is finalising).
+Independent audit finding. It closes no acceptance-matrix row. An earlier session created it to
+close `P0-7` as that session had reconstructed the row; the reconstruction was wrong. Reduced
+from three responsibilities (`status`, `discard`, `gc`) to one: garbage collection. `status` and
+`discard` were operator conveniences with no defect behind them and were dropped rather than
+carried.
 
-**Forbidden scope**: Release gate, `bench/fixtures/`, `README*`, any version string, `src/mcp/server.ts`, `src/hooks/`.
+**Why it survives the reduction.** `T-1002`'s prepare step writes a file under
+`.git/commitlore/pending/` on every capture attempt, including attempts whose verification
+returns nothing. No ticket from `T-1001` to `T-1018` owns deleting one. Once `T-1002` lands the
+directory grows without bound. That is an operational defect, not a data-integrity or security
+one, which is why it is `P1` and not a gate row.
 
-**RED test**: `test/pending-gc.test.ts` — "gc removes an expired, unconsumed pending file and leaves a staged-but-unexpired one untouched". Must fail before the change because no GC function exists and pending files, once written, are never deleted.
+**Owns**: `src/core/pending-gc.ts` (new), `src/commands/capture.ts` (add the `gc` subcommand only), `test/pending-gc.test.ts` (new).
 
-**Minimum GREEN**: Export `gcPending(cwd): { removed: string[], kept: string[] }`, `discardPending(cwd, nonce): boolean`, `statusPending(cwd): PendingSummary[]` from `src/core/pending-gc.ts`. `gcPending` removes files where `now > expires_at` **and** `phase` is not `staged`/`applied` with an in-window retry, since an applied-but-not-yet-consumed file may still be legitimately finalised by a delayed `post-commit` run. A `consumed:true` file older than a retention window (default 24h) is also eligible for removal — it is historical, not actionable. `discardPending` removes exactly the named nonce regardless of expiry, refusing only a file with `phase:"staged"` or `phase:"applied"` for a commit still in progress (heuristic: the CLI declines with a named reason; it does not attempt to detect an in-progress commit process). `statusPending` reports every current pending file's phase, age, and expiry without mutating anything. Wire `commitlore capture status`, `commitlore capture discard <nonce>`, and `commitlore capture gc` to these three functions.
+**Depends on**: T-1001 (transaction primitives), T-1006 (owns `src/commands/capture.ts` — this ticket lands after it, never beside it), T-1018 (finalisation; gc must never remove a file another process is finalising).
+
+**Forbidden scope**: The release gate, `bench/fixtures/`, `README*`, any version string, `src/mcp/server.ts`, `src/hooks/`. Do not add `status` or `discard`: they were removed deliberately.
+
+**RED test**: `test/pending-gc.test.ts` — "gc removes an expired, unconsumed pending file and leaves a staged-but-unexpired one untouched". It must fail before the change because no GC function exists and a pending file, once written, is never deleted.
+
+**Minimum GREEN**: Export `gcPending(cwd): { removed: string[], kept: string[] }` from `src/core/pending-gc.ts`. It removes a file when `now > expires_at` **and** `phase` is neither `staged` nor `applied` — those two phases are protected regardless of expiry, because an applied-but-unconsumed file may still be finalised by a delayed `post-commit`. A `consumed: true` file older than a retention window (default 24h) is also eligible: it is history, not state. A file whose age or phase cannot be determined is skipped. Wire `commitlore capture gc` to this one function.
 
 **AC ↔ test**:
 
 | AC | Test | Source |
 |---|---|---|
-| Expired unconsumed file is removed by gc | `gc removes expired prepared/verified file` | P0-7 |
-| Staged/applied file within expiry is kept | `gc keeps unexpired staged file` | P0-7, ADR-0021 §3 (does not weaken the five-gate check) |
-| Consumed file older than retention window is removed | `gc removes consumed file past 24h` | P0-7 |
-| Consumed file within retention window is kept | `gc keeps recent consumed file` | P0-7 (inspection value) |
-| discard removes a named nonce | `discard removes exact file, others untouched` | P0-7 |
-| discard refuses a staged/applied nonce | `discard on staged file returns false with reason` | wrong-target/partial-state safety, matching T-1004/T-1018's existing refusal pattern |
-| status lists phase and age without mutation | `status is read-only, file mtimes unchanged` | P0-7 |
-| gc never touches a file mid-finalisation by another process | `concurrent post-commit claim is not removed by a simultaneous gc run` | ADR-0021 consequence: post-commit and gc must not race |
+| An expired unconsumed file is removed | `gc removes expired prepared/verified file` | This ticket; ADR-0021 §2 expiry field |
+| A staged or applied file is kept regardless of expiry | `gc keeps staged/applied file even past expires_at` | ADR-0021 §3 — gc must not weaken the five-gate application check |
+| A consumed file past the retention window is removed | `gc removes consumed file past 24h` | This ticket |
+| A consumed file inside the retention window is kept | `gc keeps recent consumed file` | This ticket — recent history stays inspectable |
+| A file whose age or phase cannot be read is skipped | `gc skips file with missing or corrupt created_at` | Fail-closed check below |
+| gc never removes a file another process is finalising | `concurrent post-commit claim is not removed by a simultaneous gc run` | ADR-0021 — post-commit and gc must not race |
 
 **Commands**:
 - Focused: `npx vitest run test/pending-gc.test.ts`
-- Full suite: `npx vitest run`
+- Full: `npx vitest run` — no regression against the baseline established at the branch head
 - Release: `npx tsc -p tsconfig.json --noEmit` exit 0; `npx tsc -p bench/tsconfig.json --noEmit` exit 0
+- Manual: `LIVE_NA` — gc has no interactive surface; the concurrency AC is exercised by the focused test, not by hand
 
-**Evidence invalidation**: Bound to the exact HEAD SHA at test execution; void if T-1001's phase transitions or T-1018's finalisation matching change.
+**Evidence invalidation**: Bound to the exact head SHA at execution. Void if T-1001's phase transitions or T-1018's finalisation matching change.
 
-**Stop / escalate**: Stop if (a) a reliable way to detect "a commit is currently in progress" does not exist cross-platform (the discard refusal may need to be phase-only, not process-aware), (b) the default 24h consumed-retention window conflicts with a requirement written elsewhere that this ticket's author has not seen.
+**Stop / escalate**: Stop if the default 24h consumed-retention window contradicts a requirement written elsewhere that this ticket's author has not seen. The process-aware refusal the wider version needed is gone with `discard`: protection is decided by phase alone, which is readable from the file.
 
-**Safety checks**: Fail-closed (gc that cannot determine a file's age skips it rather than guessing); wrong-target (gc never removes a `staged`/`applied` file within its expiry window, preserving T-1005/T-1018's retry path); partial state (removal is an unlink, not a rewrite — no partial-delete state is observable); privacy (gc reads only the fields already in the pending schema).
+**Safety checks**: *Fail-closed* — gc that cannot determine a file's age or phase skips it rather than guessing. *Wrong-target* — gc never removes a `staged` or `applied` file at all, expiry notwithstanding, preserving T-1005's application path and T-1018's retry. *Ambiguity* — two files claiming the same nonce is not gc's decision to resolve; it skips both and reports them. *Timeout* — expiry comes from the record's own `expires_at`; a file without one is skipped, never treated as expired. *Partial state* — removal is an unlink rather than a rewrite, so no partially deleted state is observable and a crash mid-run leaves every remaining file valid. *Security and privacy* — gc reads only fields already in the pending schema and never opens a transcript.
 
-**Completion evidence**: Paste `npx vitest run test/pending-gc.test.ts` output, plus `npx tsc -p tsconfig.json --noEmit` exit 0.
+**Completion evidence**: `npx vitest run test/pending-gc.test.ts` output, both typecheck exits, and the full-suite summary line at one exact head SHA.
 
 ---
 
-### T-1023 Gate A integrated E2E acceptance (M) — new · depends on all of T-1001–T-1022
+### T-1023 Capture pipeline E2E integration (M) — #216 · depends on T-1001–T-1009, T-1018
 
-This is the ticket that closes `P0-4` and is the milestone's final gate, matching `RELEASE-GATE.md`'s existing convention of a command-checkable table rather than a narrative sign-off.
+Independent audit finding. It closes no acceptance-matrix row. An earlier session created it to
+close `P0-4` as that session had reconstructed the row; the real `P0-4` is the MCP capture
+write-side, ticketed to close by T-1007, T-1008 and T-1009. Dependencies here were narrowed from
+"all of T-1001–T-1022" to the pipeline this ticket actually exercises, which makes it the last
+**capture-pipeline integration** ticket to become startable. It is not the last Gate A ticket:
+T-1024 sits behind its own dependency chain on `src/mcp/server.ts`.
 
-**Owns**: `test/e2e/gate-a.test.ts` (new). No production code — this ticket adds proof, not behaviour.
+**Why it survives.** Every capture ticket proves its own slice against constructed inputs. None
+runs the chain — prepare, verify, stage, a real `git commit`, the hook applying, `post-commit`
+consuming, the record queryable — as one continuous sequence, and none drives the three MCP
+tools over a single nonce. Those are real integration gaps, not restatements of the unit ACs.
 
-**Depends on**: Every T-1001–T-1022 ticket (transitively, all of F9/F10/F11).
+**Owns**: `test/gate-a-e2e.test.ts` (new — `test/` is flat in this repository; only `test/fixtures/` has subdirectories). No production code. If a scenario fails, the fix belongs to the ticket that owns the failing behaviour, not to this one.
 
-**Forbidden scope**: Any production source file. If a scenario in this ticket fails, the fix belongs to the ticket that owns the failing behaviour, not to this one.
+**Depends on**: T-1001–T-1009 and T-1018 (#193–#201, #213). It does not depend on the guard, `init` or README tickets: it proves nothing about them.
 
-**RED test**: Each scenario below, run against `dev` before T-1001–T-1022 land, fails or does not exist.
+**Forbidden scope**: Any production source file. Any change that makes a scenario pass by weakening what it asserts.
 
-**Required scenarios** (mirrors the source review's A-005, cross-checked against what each individual ticket's AC table already covers at unit level — this ticket proves the same properties hold when the pieces run together):
+**RED test**: Every scenario below, run before its dependency tickets land, must fail or fail to exist. This ticket must not become green by construction: each scenario drives the real CLI binary against a real temporary Git repository, so a scenario that cannot fail has been written wrongly.
 
-| Scenario | Proves |
+**Minimum GREEN**: One test file whose scenarios are exactly the table below, each driving real subprocesses and a real repository rather than in-process module calls.
+
+**AC ↔ test**:
+
+| Scenario (one test each) | Proves |
 |---|---|
-| Happy path: CLI `capture` with a valid draft → `prepare-commit-msg` → real `git commit` → `post-commit` → record queryable | The full chain works against a real repository, not mocked modules |
-| MCP happy path: `commitlore_prepare_capture` → `commitlore_verify_capture` → `commitlore_stage_capture` → same commit flow | MCP and CLI produce the same outcome (PRD-F9 AC row 5) |
-| Wrong target: HEAD moves between prepare and commit | Record does not attach (T-1005's unit test proves the check exists; this proves the real hook invocation honours it) |
-| Trust bypass: MCP `stage` called with a fabricated nonce, or a nonce from another repository's `.git` | Fails closed, no record attaches |
-| Concurrent capture in a linked worktree | Each worktree's pending directory is independent (ADR-0021: "per-worktree and per-clone") |
-| Existing hook preservation | A repository with a pre-existing foreign `prepare-commit-msg`/`post-commit` hook keeps it working (T-1018's containment requirement, exercised against real hook files) |
-| Aborted commit (empty commit message, or `commit --no-edit` failure) | Pending record remains retriable, is not marked consumed |
-
-**AC ↔ test**: Each row above is one test in `test/e2e/gate-a.test.ts`; the AC is the scenario passing against the real CLI binary and a real temporary Git repository, not against in-process module calls.
+| CLI `capture` with a valid draft → `prepare-commit-msg` → real `git commit` → `post-commit` → record queryable | The chain works against a real repository, not mocked modules |
+| MCP `prepare` → `verify` → `stage` over one nonce, then the same commit flow | MCP and CLI reach the same outcome (PRD-F9 requirement for an agent-agnostic contract) |
+| HEAD moves between prepare and commit | No record attaches — T-1005 proves the check exists, this proves the real hook invocation honours it |
+| `stage` called with a fabricated nonce, or one from another repository's `.git` | Fails closed, nothing attaches |
+| Concurrent capture in a linked worktree | Each worktree's pending directory is independent (ADR-0021: per-worktree and per-clone) |
+| Aborted commit (empty message, or a failing `commit`) | The pending record stays retriable and is not marked consumed |
 
 **Commands**:
-- Focused: `npx vitest run test/e2e/gate-a.test.ts`
-- Full suite: `npx vitest run`
-- Release: both typechecks exit 0
-- Manual: one full capture → commit cycle run by hand in a scratch repository, output pasted as completion evidence
+- Focused: `npx vitest run test/gate-a-e2e.test.ts`
+- Full: `npx vitest run` — no regression against the baseline established at the branch head
+- Release: `npx tsc -p tsconfig.json --noEmit` exit 0; `npx tsc -p bench/tsconfig.json --noEmit` exit 0
+- Manual: one capture-to-commit cycle run by hand in a scratch repository, output pasted as completion evidence
 
-**Evidence invalidation**: Bound to exact HEAD; every dependency ticket landing after this one invalidates prior evidence and requires a re-run.
+**Evidence invalidation**: Bound to the exact head SHA. Any dependency ticket landing after this one voids prior evidence and requires a re-run.
 
-**Stop / escalate**: Stop if any individual T-1001–T-1022 ticket has not landed — this ticket has nothing to prove against. Stop if a scenario cannot be constructed without a real filesystem/subprocess Git repository (it must not be mocked; that would defeat the ticket's purpose).
+**Stop / escalate**: Stop if any of T-1001–T-1009 or T-1018 has not landed — there is nothing to prove against. Stop if a scenario cannot be built without a real filesystem and subprocess Git repository; mocking it would defeat the ticket.
 
-**Completion evidence**: `npx vitest run test/e2e/gate-a.test.ts` output showing every scenario passing at one exact HEAD SHA, plus the manual scratch-repository receipt.
+**Safety checks**: *Fail-closed* — the fabricated-nonce and cross-repository scenarios assert refusal, not tolerance. *Wrong-target* — the moved-HEAD and linked-worktree scenarios are the wrong-target proof. *Ambiguity* — a scenario whose outcome could be produced by two different code paths is split until it cannot. *Timeout* — each scenario bounds its subprocess wait and fails on expiry rather than hanging CI. *Partial state* — the aborted-commit scenario is the partial-state proof. *Security and privacy* — scratch repositories are created under a temporary directory, removed on both success and failure, and no scenario writes into the developer's own repository.
+
+**Completion evidence**: `npx vitest run test/gate-a-e2e.test.ts` showing every scenario passing at one exact head SHA, both typecheck exits, and the manual scratch-repository receipt.
+
+---
 
 ## Execution constraint: `src/mcp/server.ts` is a shared-file conflict zone
 
-T-1007 (#199), T-1008 (#200), T-1009 (#201) and T-1020 (#208) each add or edit a
-section of `src/mcp/server.ts`. T-1009 already depends on T-1007 and T-1008, but
+T-1007 (#199), T-1008 (#200), T-1009 (#201), T-1020 (#208) and T-1024 each add or edit
+a section of `src/mcp/server.ts`. T-1009 already depends on T-1007 and T-1008, but
 T-1007/T-1008 have no ordering between each other, and T-1020 depends only on
 `ADR-0020` (already accepted) — meaning all four were eligible to start in
 parallel and collide on the same file.
@@ -121,10 +166,10 @@ parallel and collide on the same file.
 **Merge order, strict, one PR open against `src/mcp/server.ts` at a time**:
 
 ```
-T-1007 → T-1008 → T-1009 → T-1020
+T-1007 → T-1008 → T-1009 → T-1020 → T-1024
 ```
 
-Do not open a second PR touching `src/mcp/server.ts` while one of these four is
+Do not open a second PR touching `src/mcp/server.ts` while one of these five is
 unmerged. This is a process constraint, not a code constraint — nothing enforces
 it automatically, which is itself worth naming rather than assuming away.
 
