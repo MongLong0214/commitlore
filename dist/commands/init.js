@@ -226,11 +226,27 @@ export const formatInitReport = (report) => {
     }
     return lines.join('\n') + '\n';
 };
+/**
+ * Verbose output: step-by-step `[1/4]`…`[4/4]` format with indented detail
+ * lines. Preserves the pre-T-1012 output style for users who want the full
+ * view. Failures and warnings are always visible — never folded (#63, #67).
+ */
+export const formatInitReportVerbose = (report) => {
+    const lines = [];
+    for (const step of report.steps) {
+        lines.push(STEP_HEADING[step.step]);
+        for (const detail of step.lines) {
+            lines.push(`${VERBOSE_INDENT}${detail}`);
+        }
+    }
+    return lines.join('\n') + '\n';
+};
 export const register = (program) => {
     program
         .command('init')
         .description('one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix')
         .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
+        .option('--verbose', 'show step-by-step detail output instead of the result summary')
         .option('--json', 'emit the report as JSON')
         .addHelpText('after', '\nRuns four setup steps in sequence — hooks install, index --rebuild, claude hook install, ' +
         'then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
@@ -244,7 +260,17 @@ export const register = (program) => {
         'hook install could not run at all (SPEC §10).')
         .action((options) => {
         const report = runInit(options.force === undefined ? {} : { force: options.force });
-        process.stdout.write(options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatInitReport(report));
+        let output;
+        if (options.json === true) {
+            output = `${JSON.stringify(report, null, 2)}\n`;
+        }
+        else if (options.verbose === true) {
+            output = formatInitReportVerbose(report);
+        }
+        else {
+            output = formatInitReport(report);
+        }
+        process.stdout.write(output);
         process.exitCode = report.exitCode;
     });
 };

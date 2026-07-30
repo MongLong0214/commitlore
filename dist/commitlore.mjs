@@ -16178,6 +16178,13 @@ var STEP_LABEL = {
   "claude-hook": "Agent integration",
   doctor: "Final check"
 };
+var STEP_HEADING = {
+  hooks: "[1/4] hooks install",
+  index: "[2/4] index --rebuild",
+  "claude-hook": "[3/4] claude hook install",
+  doctor: "[4/4] doctor --fix (final check)"
+};
+var VERBOSE_INDENT = "        ";
 var formatInitReport = (report) => {
   const failed = report.steps.filter((step) => step.code === 2);
   const needsAttention = report.steps.filter((step) => step.code === 1);
@@ -16215,16 +16222,32 @@ var formatInitReport = (report) => {
   }
   return lines.join("\n") + "\n";
 };
+var formatInitReportVerbose = (report) => {
+  const lines = [];
+  for (const step of report.steps) {
+    lines.push(STEP_HEADING[step.step]);
+    for (const detail of step.lines) {
+      lines.push(`${VERBOSE_INDENT}${detail}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+};
 var register5 = (program3) => {
-  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--json", "emit the report as JSON").addHelpText(
+  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").addHelpText(
     "after",
     "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
   ).action((options) => {
     const report = runInit(options.force === void 0 ? {} : { force: options.force });
-    process.stdout.write(
-      options.json === true ? `${JSON.stringify(report, null, 2)}
-` : formatInitReport(report)
-    );
+    let output;
+    if (options.json === true) {
+      output = `${JSON.stringify(report, null, 2)}
+`;
+    } else if (options.verbose === true) {
+      output = formatInitReportVerbose(report);
+    } else {
+      output = formatInitReport(report);
+    }
+    process.stdout.write(output);
     process.exitCode = report.exitCode;
   });
 };
