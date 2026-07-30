@@ -15456,13 +15456,17 @@ var checkHookRuntime = (opts) => {
     }
     if (run.status !== 0) {
       const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
-      return check(
-        id,
-        title,
-        "fail",
-        `the hook fails when git's PATH carries no node: ${said || `exit ${String(run.status)}`}`,
-        fix
-      );
+      const nodeMissing = run.status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
+      const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+      let detail;
+      if (nodeMissing) {
+        detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
+      } else if (nodeThrew) {
+        detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
+      } else {
+        detail = `the hook exited ${String(run.status)} under the restricted PATH \u2014 cause unclear: ${said || "no output"}`;
+      }
+      return check(id, title, "fail", detail, fix);
     }
     return check(id, title, "ok", "the hook runs and validates without node on PATH");
   } catch (error2) {
