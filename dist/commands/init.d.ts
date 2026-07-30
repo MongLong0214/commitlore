@@ -87,5 +87,11 @@ export declare const VERBOSE_INDENT = "        ";
  * warnings are always named — never folded into a cheerful summary (#63, #67).
  */
 export declare const formatInitReport: (report: InitReport) => string;
+/**
+ * Verbose output: step-by-step `[1/4]`…`[4/4]` format with indented detail
+ * lines. Preserves the pre-T-1012 output style for users who want the full
+ * view. Failures and warnings are always visible — never folded (#63, #67).
+ */
+export declare const formatInitReportVerbose: (report: InitReport) => string;
 export declare const register: (program: Command) => void;
 export {};
