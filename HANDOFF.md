@@ -222,6 +222,25 @@ still at the ceiling, just a higher one.
 
 ## Traps that cost real time
 
+**A bounded test run that dies at its timeout is not a hang.** `test/guard.test.ts`
+takes about **440 seconds on a loaded machine** — 66 tests, each spawning the
+bundled CLI as a subprocess — against 148 seconds in CI. I wrapped local runs in a
+480-second watchdog, watched it get killed with zero test results reported, and
+concluded the file hung on unmodified `dev`. It does not: it passes 66/66, and the
+whole suite passes locally with nothing excluded in about **540 seconds**.
+
+The misreading is easy because vitest buffers a file's results until the file
+finishes, so a killed run shows the file's `stderr` output and no test lines at
+all — which looks exactly like a stall. I then put "do not run
+`test/guard.test.ts`, it hangs" into several delegated packets, and those workers
+excluded it from their local verification. CI ran it on every pull request, so
+nothing shipped unverified, but their evidence was weaker than it looked and one
+of them widened the claim to three more innocent files.
+
+Budget at least **ten minutes** for a local full suite and **eight** for
+`guard.test.ts` alone, and before calling anything hung, check whether the file
+simply needs longer than the bound you chose.
+
 **Judging whether a long process is alive.** I killed three healthy benchmark
 runs. Instantaneous CPU is 0 while a parent waits on a child; accumulated CPU
 (`ps -o time=`) barely moves for the same reason; the log only prints between
