@@ -26,6 +26,37 @@
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.3.0/install.sh | sh
 ```
 
+
+## 実際に動かす
+
+**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
+
+```bash
+commitlore context install.sh
+```
+
+出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+<details>
+<summary>正確な PreToolUse hook path を再現する</summary>
+
+```bash
+printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
+  | node dist/commitlore.mjs inject --hook-input --budget 5000
+```
+
+</details>
+
 ## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
 
 レコードを一つ取り逃がせば、モデルはコンテキストを失います。すでに覆された意思決定を渡せば、正しさを損ないます。この[検索測定](bench/retrieval/result.md)では、ノイズが 0 件から 10,000 件までのすべてのサイズで、BM25、embedding top-k、hybrid RRF、パスフィルター付き embedding がそれぞれ廃止済みのレコードを一つ返しました。lifecycle を伴う CommitLore のパス範囲は古いレコードをゼロにし、現在の二つのレコード (2/2) を返しました。
@@ -76,36 +107,6 @@ version=0.3.0; target=aarch64-apple-darwin
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
 curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
 grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
-```
-
-</details>
-
-## 実際に動かす
-
-**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを知っています。** 変更する前に path を照会します。
-
-```bash
-commitlore context install.sh
-```
-
-出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-<details>
-<summary>正確な PreToolUse hook path を再現する</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
 ```
 
 </details>
