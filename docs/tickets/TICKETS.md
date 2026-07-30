@@ -17,6 +17,7 @@
 | [F10-first-run-experience.md](F10-first-run-experience.md) | T-1010 ~ T-1016 (7) | M5 | #202–#207, #212 |
 | [F11-guard-classification.md](F11-guard-classification.md) | T-1020 ~ T-1022, T-1024 (4) | M5 | #208–#210, #219 |
 | [F13-capture-advisory-and-policy.md](F13-capture-advisory-and-policy.md) | T-1109 ~ T-1110 (2) | M6 | #273–#274 |
+| [F14-distribution.md](F14-distribution.md) | T-1120 ~ T-1125 (6) | M6 | #271, #272, new×4 |
 
 Total: 27 v0.1.0 tickets · 7 Backlog (#28–#34, items cut from scope in ADR-0001) · 25 M5 Gate A tickets (T-1001 ~ T-1031; T-1019 and T-1023 are independent audit findings recorded in `docs/GATE-A-ACCEPTANCE.md` and close no acceptance-matrix row; T-1024 is ticketed to close row P0-8 and is defined in `F11-guard-classification.md`) · 2 M6 Gate B tickets (T-1109 ~ T-1110). T-1101 ~ T-1108 and `F12-universal-adoption.md` were withdrawn on 2026-07-31 by an owner scope change: they served a compiled-executable and platform-asset plan that ADR-0026 removed from the product. Their issues (#265–#270) are closed as not planned
 
@@ -29,10 +30,14 @@ reversal it carries two active rows: `B-6` (T-1109, shipped) and `B-7` (T-1110).
 `B-1`…`B-5` are recorded there as withdrawn, with the reason per row. **T-1109 closes
 `B-6`, not `P0-8`** — `P0-8` is `commitlore_before_change` and T-1024 already closed it.
 
-Distribution work is re-planned from [`../adr/ADR-0026-node-only-distribution.md`](../adr/ADR-0026-node-only-distribution.md):
-the Claude Code plugin is the primary install path, and Node-only `install.sh` /
-`install.ps1` are the secondary one. Its tickets are added here once the revised PRD and
-each atomic ticket have been approved; no implementation code starts before that.
+Distribution work is re-planned from [`../adr/ADR-0026-node-only-distribution.md`](../adr/ADR-0026-node-only-distribution.md)
+and specified by [`../prd/PRD-F14-distribution.md`](../prd/PRD-F14-distribution.md): the Claude
+Code plugin is the primary install path, and Node-only `install.sh` / `install.ps1` are the
+secondary one. Its six atomic tickets are in [F14-distribution.md](F14-distribution.md), ordered
+`T-1120 → T-1121 → T-1124`, with `T-1122` and `T-1123` after both installers and `T-1125` (the
+compiled-binary code removal) last so there is never a window with neither install path.
+**No implementation code until this PRD and the individual ticket are both approved**, and Gate
+B acceptance rows are added as each ticket is approved rather than in advance.
 
 ## Dependency overview (critical path)
 
