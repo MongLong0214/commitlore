@@ -35,7 +35,9 @@
 **Order.** `T-1120 → T-1121` (shared contract) → `T-1124` (Windows containment) ; `T-1122`
 and `T-1123` follow both installers ; `T-1126` precedes `T-1122`, because a README that calls a
 host unsupported must stop saying so before a document says otherwise ; `T-1125`
-(remove the compiled-binary code) is last, so
+(remove the compiled-binary code) is last. `T-1127` was not in the original plan: T-1124's
+measurement found the hook broken rather than merely unverified, and its stop condition sends
+that to a ticket of its own. `T-1124` is blocked on it, so
 there is never a window with neither install path.
 
 ## Ownership map — one owner per region
@@ -58,6 +60,7 @@ not have to reconstruct it:
 | Windows containment for the wrapper path | **T-1124** | — |
 | Residual compiled-binary and release references left after T-1120 | **T-1125** | T-1120 |
 | The Known-limitations host-status bullets in all four READMEs | **T-1126** | T-1122, T-1125 |
+| The hook's path comparison and its `doctor` mirror — `src/hooks/commit-msg.ts`, `src/commands/hooks.ts`, `src/core/hook-target.ts` | **T-1127** | T-1124, T-1125 |
 
 `.github/workflows/ci.yml` is the one file with more than one owner, and deliberately so: the
 four tickets own four **different jobs** in it. A filename-level scan cannot see that, so the
@@ -557,3 +560,87 @@ bullets, not the tests that read the section around them.
 **Completion evidence** — the four-file diff, the focused run of `test/readme.test.ts`,
 `test/readme-order.test.ts` and `test/readme-numbers.test.ts`, and `check-readme-numbers.mjs`
 at 0.
+
+---
+
+## T-1127 The Windows hook returns, and its containment compares like with like (L, P0) — #321 · PRD-F14 req 26
+
+**Owns** — `src/hooks/commit-msg.ts` (the recorded-path branch and the `node_modules` walk);
+`src/commands/hooks.ts` (what `recordBinPath` writes for `commitlore.root`, line 240);
+`src/core/hook-target.ts` (`isInsidePackage`, lines 33-36); `test/hooks.test.ts` and
+`test/hook-target.test.ts` for the cases this adds
+
+**Not owned** — the `install-ps1` job's containment steps. T-1124 keeps those; this ticket has
+to make them pass, not rewrite them.
+
+**Depends on** — nothing. **T-1124 (#283) depends on this.**
+
+**Severity.** P0 availability, not a latent hardening gap. A Windows user who runs
+`commitlore init` cannot commit again in that repository: the hook does not refuse, it does not
+return. This ships ahead of documentation work.
+
+**What was measured, on `windows-latest`** — full evidence in
+[#321](https://github.com/MongLong0214/commitlore/issues/321). The load-bearing lines:
+
+```
+commitlore.root = C:\Users\...\commitlore\v9.9.9      <- written by node, win32
+dirname+pwd -P  = /c/Users/.../commitlore/v9.9.9/dist   <- read under MSYS sh, POSIX
+containment case: NO MATCH -- the stub falls through
+test -x node: yes     test -L bin: no
+command -v commitlore: NOT found (the shim is commitlore.cmd)
+real commit: HUNG -- killed at 90s, the hook never returned
+
+hook PWD    = C:/Users/RUNNER~1/AppData/Local/Temp/.../probe
+hook pwd -P = /c/Users/runneradmin/AppData/Local/Temp/.../probe
+walk: NON-TERMINATING, stuck at [C:]
+```
+
+Both guards on the containment line pass. Only the comparison fails, and it fails for **every**
+value including the installer's own bundle -- so the check neither contains nor permits, and
+that is what lets control reach a walk that does not terminate.
+
+**Acceptance — six conditions, all executed on `windows-latest`**
+
+1. Two representations of one location compare equal. Whatever form is chosen, the writer in
+   `hooks.ts` and the reader in the stub agree on it; a fix that normalises one side only moves
+   the mismatch.
+2. The ancestor walk terminates at a drive root and at a filesystem root. `${dir%/*}` returns its
+   input unchanged once no `/` remains, which is the whole defect.
+3. The legitimate recorded bundle **executes**. This is the baseline, and until it passes the
+   containment attacks cannot run at all.
+4. A target outside the install root, and a target with an unallowed extension, are still
+   refused. See the forbidden scope.
+5. `doctor` and the hook agree on one state. `isInsidePackage` uses `node:path`, which is
+   `path.win32` on Windows and handles the backslashed pair correctly -- so the mirror reports
+   no problem in exactly the state where the hook is dead. A fix that leaves this divergence
+   keeps the check that should warn about it reporting healthy.
+6. **An already-installed repository recovers.** A user whose repository is wedged cannot commit,
+   so "new installs work" is not a fix for them. Establish by execution whether installing the
+   corrected version is sufficient, or whether `commitlore hooks install` must be re-run, and
+   say which in the release note.
+
+**Forbidden scope**
+
+- **do not loosen containment to make the baseline pass.** Trading #71's property for a working
+  hook is exchanging one defect for another, and it is the specific failure T-1124's forbidden
+  scope names
+- do not mark Windows `supported` here. T-1124 owns that claim and `docs/COMPATIBILITY.md`'s
+  Windows cell; this ticket only makes the claim reachable
+- do not edit the `install-ps1` containment steps to accommodate the fix
+- `continue-on-error` and skipped assertions are forbidden, for the same reason they are in
+  T-1124: an assertion that cannot fail asserts nothing
+
+**RED test** — already written and already red: PR
+[#320](https://github.com/MongLong0214/commitlore/pull/320)'s baseline step fails on
+`windows-latest` and the two attack steps behind it never execute. This ticket adds POSIX-level
+coverage for conditions 1, 2 and 5 in `test/hook-target.test.ts` and `test/hooks.test.ts`, which
+must fail before the fix, and inherits #320 as the platform gate.
+
+**Minimum GREEN** — conditions 1-6 hold, verified by running the fix branch against #320's job.
+
+**Stop / escalate** — if the two path worlds cannot be reconciled without changing what
+`commitlore.root` means for existing installs, stop: that is a recorded-state migration and
+needs its own decision, not an inline rewrite.
+
+**Completion evidence** — the failing POSIX tests then passing; #320's baseline and both attacks
+green at an exact head that contains this fix; and the executed answer to condition 6.
