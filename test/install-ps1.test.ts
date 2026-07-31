@@ -174,4 +174,16 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     // match is also the correct one -- it is what typing `node` would run.
     expect(body()).toMatch(/Get-Command node[^\n]*\| Select-Object -First 1/);
   });
+  it('judges the clone by its exit code, not by whether git printed to stderr', () => {
+    // Windows PowerShell 5.1 promotes a native command's stderr to a terminating
+    // error under `$ErrorActionPreference = 'Stop'`. A first draft merged git's
+    // stderr with `2>&1`, so git's harmless "--depth is ignored in local clones"
+    // warning aborted a clone that had succeeded. Only the exit code distinguishes
+    // a warning from a failure.
+    const text = body();
+    expect(text).toContain('2> $cloneLogPath');
+    expect(text).toContain('$cloneCode = $LASTEXITCODE');
+    expect(text).toContain('if ($cloneCode -ne 0)');
+    expect(text).not.toMatch(/git clone[^\n]*2>&1/);
+  });
 });

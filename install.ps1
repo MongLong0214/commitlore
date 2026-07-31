@@ -182,13 +182,27 @@ if (Test-Path -LiteralPath (Join-Path $checkout 'dist')) {
     # looking in the wrong place whenever the cause is something else, which is
     # most of the time. git puts the useful line first and the generic advice
     # last, so the first fatal: line is what a reader needs.
+    #
+    # git's stderr goes to a file, exactly as install.sh does it, and success is
+    # decided by the exit code alone. Merging stderr into the output stream with
+    # 2>&1 is what a first draft did, and Windows PowerShell 5.1 promotes a native
+    # command's stderr to a terminating error under $ErrorActionPreference =
+    # 'Stop' -- so git's harmless "--depth is ignored in local clones" warning
+    # aborted a clone that had otherwise succeeded. A warning is not a failure, and
+    # only the exit code says which one this is.
+    $cloneLogPath = Join-Path ([System.IO.Path]::GetTempPath()) ("commitlore-clone-{0}.log" -f $PID)
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & git clone --quiet --depth 1 --branch $Version $SourceUrl $checkoutTmp 2> $cloneLogPath
+    $cloneCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
     $cloneLog = ''
-    try {
-        $cloneLog = (& git clone --quiet --depth 1 --branch $Version $SourceUrl $checkoutTmp 2>&1 | Out-String)
-    } catch {
-        $cloneLog = $_.Exception.Message
+    if (Test-Path -LiteralPath $cloneLogPath) {
+        $cloneLog = (Get-Content -LiteralPath $cloneLogPath -Raw -ErrorAction SilentlyContinue)
+        if ($null -eq $cloneLog) { $cloneLog = '' }
+        Remove-Item -LiteralPath $cloneLogPath -Force -ErrorAction SilentlyContinue
     }
-    if ($LASTEXITCODE -ne 0) {
+    if ($cloneCode -ne 0) {
         if (Test-Path -LiteralPath $checkoutTmp) {
             Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
         }
