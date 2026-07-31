@@ -6,10 +6,26 @@
 > Acceptance: rows are added to [`../GATE-B-ACCEPTANCE.md`](../GATE-B-ACCEPTANCE.md) **as each
 > ticket is approved**, never in advance — an acceptance row with no approved ticket is the
 > dangling authority Gate A's matrix exists to prevent.
-> Baseline head: `8b0c9fa`. `install.sh` is 483 lines there; its `SHA256SUMS` handling is at
-> lines 12, 76, 95, 98, 114 and 118, `uname` at 48, the extract at 145; `release.yml`'s
-> `build` job starts at 77 and `publish` at 138; `README.md` carries the shell-install
-> one-liner at line 37 and the pinned-asset block at lines 113–124.
+> Baseline head: **`5ef4692`** (T-1120 merged). The earlier baseline `8b0c9fa` is kept only
+> where a ticket's RED justification cites what was true *before* T-1120 shipped; every
+> anchor a later ticket must edit is re-derived below.
+>
+> **What T-1120 shipped, as facts the remaining tickets must match** (read at `5ef4692`):
+>
+> | Fact | Value |
+> |---|---|
+> | Node floor constant | `NODE_MAJOR_MIN=22`, `install.sh:44` |
+> | Prerequisite failures | exit `1`, message names Node with its major or names Git, and nothing is written |
+> | Checkout root | `${XDG_DATA_HOME:-$HOME/.local/share}/commitlore/<tag>`, `install.sh:111–112` |
+> | Wrapper path | `$dest_dir/commitlore`, default `$HOME/.local/bin`, `install.sh:154` |
+> | Wrapper marker | `# commitlore:wrapper:v1`, `install.sh:156` — how a re-run recognises its own wrapper |
+> | Foreign target | exit `4`, left byte-identical |
+> | Fetch failure | exit `2`, quoting git's first `fatal:` line |
+> | Verification | retries once, then reports "installed, but unverified" and **exits 0** |
+> | `release.yml` | `build` job from line 77, `publish` from 138 — unchanged by T-1120 |
+>
+> `install.sh` carries no `SHA256SUMS`, `.tar.gz`, `tar -xzf` or target triple, and `README*`
+> carry none either. A ticket that plans to remove one is planning against a stale reading.
 
 **No implementation code until this PRD and the individual ticket are both approved.**
 
@@ -179,8 +195,16 @@ exists in which a README describes an installer that is not the one beside it.
 **Owns** — `install.ps1` (new); `.github/workflows/ci.yml` (one `windows-latest` job that
 executes it); `test/install-ps1.test.ts` (new, shape and contract assertions)
 
-**Depends on** — T-1120 merged. The two scripts must implement one contract, and the shell one
-defines it.
+**Depends on** — T-1120, **merged at `5ef4692`**. The two scripts implement one contract and
+the shell one defines it, so the contract is now a fact rather than a plan: see the table in
+this file's header. `install.ps1` must produce the Windows equivalent of each row — the same
+Node floor and the same "nothing was installed" guarantee, a user-local checkout keyed by tag,
+a shim carrying a marker its own re-run recognises, a foreign target left untouched, and a
+verification step that reports without deciding the exit code.
+
+One asymmetry is deliberate and must not be "fixed": the shell wrapper resolves `node` at
+install time and falls back to `PATH`. A PowerShell shim has the same choice to make, and
+whichever it makes has to be stated in the ticket's own record rather than inherited silently.
 
 **Forbidden scope**
 
@@ -189,7 +213,7 @@ defines it.
 - do not claim Windows is supported anywhere — that is T-1124's precondition
 - do not touch `install.sh`, the uninstall command, or `README*`
 
-**RED test** — the file does not exist at `8b0c9fa`, so every assertion fails: Node and Git
+**RED test** — the file does not exist at `5ef4692`, so every assertion fails: Node and Git
 checks with named messages; user-local checkout and shim paths; the shim invoking
 `node <checkout>\dist\commitlore.mjs`; no asset or compile reference; correct line endings for
 the shim type; idempotent re-run; and a `windows-latest` CI job that actually runs it.
