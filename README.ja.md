@@ -29,7 +29,7 @@
 /plugin install commitlore@commitlore
 ```
 
-プラグイン経路の前提条件: Node.js 22+ と Git。
+どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
 
 **その他のコーディングエージェント** — CLI をインストールします:
 
@@ -110,18 +110,16 @@ commitlore context .
 <details>
 <summary>インストールを確認または固定したいですか？</summary>
 
-この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone するか、リリース資産を手動でダウンロードして `SHA256SUMS` を検証してください。スクリプトはダウンロードするバイナリのチェックサムを検証しますが、すでに `sh` に渡したスクリプト自体を認証するものではありません。
+この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone してください。スクリプトは固定タグのソースチェックアウトと、`node <checkout>/dist/commitlore.mjs` を実行する薄い wrapper だけをインストールします — コンパイル済み成果物のダウンロードもビルド手順もないため、マシンに置かれるのは読めるソースです。
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
 curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
 sh install.sh v0.4.1
 
-# または release binary を自分で検証してから展開します。
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
+git clone --depth 1 --branch v0.4.1 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
