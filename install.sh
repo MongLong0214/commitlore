@@ -124,7 +124,12 @@ else
   # cause is something else, which is most of the time.
   clone_log="$(mktemp)"
   if ! git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>"$clone_log"; then
-    clone_reason="$(tail -n 3 "$clone_log" | tr '\n' ' ' | sed 's/  */ /g')"
+    # git puts the useful line first ("does not appear to be a git repository",
+    # "could not read Username", "dubious ownership") and the generic advice
+    # last, so the first fatal: line is what a reader needs. Falling back to the
+    # whole log keeps the case where there is no fatal: at all.
+    clone_reason="$(grep -m1 '^fatal:' "$clone_log" 2>/dev/null || true)"
+    [ -n "$clone_reason" ] || clone_reason="$(tr '\n' ' ' <"$clone_log" | sed 's/  */ /g')"
     rm -f "$clone_log"
     die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
   fi

@@ -412,6 +412,12 @@ jobs:
             apt-get update -qq && apt-get install -y -qq git >/dev/null
             # The checkout is owned by the runner uid, not this container user.
             git config --global --add safe.directory /w
+            git config --global --add safe.directory "*"
+            # Raw clone first, unfiltered: if the installer cannot fetch, this
+            # shows git saying why instead of leaving it to be inferred.
+            echo "--- raw clone probe ---"
+            git clone --depth 1 --branch v9.9.9 /w /tmp/probe || echo "(probe failed, see above)"
+            echo "--- installer ---"
             COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
             "$HOME/.local/bin/commitlore" --version
           '
