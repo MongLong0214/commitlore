@@ -29,7 +29,7 @@
 /plugin install commitlore@commitlore
 ```
 
-플러그인 경로의 전제 조건: Node.js 22+ 와 Git.
+두 경로 모두의 전제 조건: Node.js 22+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
@@ -110,18 +110,16 @@ commitlore context .
 <details>
 <summary>설치 내용을 살펴보거나 버전을 고정하고 싶나요?</summary>
 
-한 줄 명령은 편의를 위한 것이다. 검토하거나 고정한 설치가 필요하면 먼저 `install.sh`를 내려받아 살펴보거나, 저장소를 clone하거나, 릴리스 자산을 직접 내려받아 `SHA256SUMS`를 검증한다. 스크립트는 내려받는 바이너리의 체크섬을 검증하지만, 이미 `sh`로 전달한 스크립트를 인증하지는 않는다.
+한 줄 명령은 편의를 위한 것이다. 검토하거나 고정한 설치가 필요하면 먼저 `install.sh`를 내려받아 살펴보거나, 저장소를 clone한다. 스크립트는 고정된 태그의 소스 체크아웃과 `node <checkout>/dist/commitlore.mjs`를 실행하는 얇은 wrapper만 설치한다 — 컴파일된 산출물을 내려받지 않고 빌드 단계도 없으므로, 기계에 놓이는 것은 읽을 수 있는 소스다.
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
 curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
 sh install.sh v0.4.1
 
-# 또는 릴리스 바이너리를 직접 검증한 뒤 압축을 푼다.
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
+git clone --depth 1 --branch v0.4.1 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>

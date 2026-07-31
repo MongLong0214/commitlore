@@ -29,7 +29,7 @@ Install once. Your coding agent can record the decisions worth carrying forward,
 /plugin install commitlore@commitlore
 ```
 
-Prerequisites for the plugin path: Node.js 22+ and Git.
+Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
 
@@ -110,18 +110,16 @@ Then keep working through your coding agent. When a change contains decision con
 <details>
 <summary>Prefer to inspect or pin the installation?</summary>
 
-The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, clone the repository, or manually download a release asset and verify its `SHA256SUMS`. The script checksum-verifies the binary it downloads; it does not authenticate the script already piped to `sh`.
+The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, or clone the repository. The script installs a pinned source checkout and a thin wrapper that runs `node <checkout>/dist/commitlore.mjs` — it downloads no compiled artifact and runs no build step, so what it puts on your machine is the source you can read.
 
 ```bash
 # Pin and inspect the installer before executing it.
 curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
 sh install.sh v0.4.1
 
-# Or verify the release binary yourself before extracting it.
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# Or skip the script entirely: the checkout it makes is one you can make yourself.
+git clone --depth 1 --branch v0.4.1 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>

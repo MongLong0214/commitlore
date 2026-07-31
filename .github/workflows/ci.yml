@@ -326,265 +326,89 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm run build:binary
 
-      # Stage a release the exact shape release.yml publishes — same
-      # asset-naming convention (`commitlore-<version>-<target>.tar.gz`), same
-      # `sha256sum *.tar.gz > SHA256SUMS` invocation (compare
-      # .github/workflows/release.yml's `build`/`publish` jobs) — just not
-      # fetched from github.com. A second, corrupted copy exists only to
-      # prove the checksum check rejects a bad download: flipped bytes in the
-      # archive, SHA256SUMS left pointing at the original (now wrong) hash.
-      - name: Stage a release layout for install.sh to fetch
+      # install.sh no longer downloads a release asset (ADR-0026), so there is
+      # no staged tarball, no SHA256SUMS and no corrupted copy to reject. What
+      # it does instead is clone a pinned tag and write a thin wrapper, so the
+      # source under test is a local repository with a tag on it. Nothing here
+      # reaches github.com, and nothing here builds a binary.
+      - name: Stage a tagged source repository for install.sh to clone
         id: stage
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          target="x86_64-unknown-linux-gnu"  # ubuntu-latest's own arch -- matches the build:binary output above
-          asset="commitlore-${version}-${target}.tar.gz"
+          src="$RUNNER_TEMP/source"
+          git clone --quiet . "$src"
+          git -C "$src" -c user.name=ci -c user.email=ci@example.invalid tag v9.9.9
+          echo "source=$src" >> "$GITHUB_OUTPUT"
 
-          good="$RUNNER_TEMP/staged-good"
-          bin_stage="$RUNNER_TEMP/staged-bin"
-          mkdir -p "$good" "$bin_stage"
-          cp dist/commitlore "$bin_stage/commitlore"
-          chmod +x "$bin_stage/commitlore"
-          tar -czf "$good/$asset" -C "$bin_stage" commitlore
-          ( cd "$good" && sha256sum "$asset" > SHA256SUMS )
-
-          corrupt="$RUNNER_TEMP/staged-corrupt"
-          mkdir -p "$corrupt"
-          cp "$good/$asset" "$good/SHA256SUMS" "$corrupt/"
-          # Overwrite 16 bytes well inside the archive with fixed, non-matching
-          # content. SHA256SUMS in $corrupt is untouched -- still the hash of
-          # the *original* bytes -- so this is deliberately a mismatch, not a
-          # coincidence.
-          dd if=/dev/zero of="$corrupt/$asset" bs=1 seek=1000 count=16 conv=notrunc status=none
-
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "good_dir=$good" >> "$GITHUB_OUTPUT"
-          echo "corrupt_dir=$corrupt" >> "$GITHUB_OUTPUT"
-
-      - name: Serve the staged releases over HTTP
+      - name: Fresh install, then upgrade over it
         run: |
           set -euo pipefail
-          python3 -m http.server 8199 --directory "${{ steps.stage.outputs.good_dir }}" --bind 127.0.0.1 &
-          python3 -m http.server 8198 --directory "${{ steps.stage.outputs.corrupt_dir }}" --bind 127.0.0.1 &
-          for port in 8199 8198; do
-            up=""
-            for _ in $(seq 1 20); do
-              if curl -sf "http://127.0.0.1:$port/SHA256SUMS" >/dev/null 2>&1; then up=1; break; fi
-              sleep 0.5
-            done
-            [ -n "$up" ] || { echo "::error::staging HTTP server on :$port never came up"; exit 1; }
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          export COMMITLORE_INSTALL_SOURCE="${{ steps.stage.outputs.source }}"
+
+          sh install.sh v9.9.9
+          wrapper="$HOME/.local/bin/commitlore"
+          test -x "$wrapper"
+          grep -qF '# commitlore:wrapper:v1' "$wrapper"
+          test -f "$HOME/.local/share/commitlore/v9.9.9/dist/commitlore.mjs"
+          "$wrapper" --version
+
+          # The wrapper is replaced by rename, and a second run is an upgrade
+          # rather than a refusal. An in-place overwrite of a file that may be
+          # executing is the defect that forced a same-day patch release.
+          sh install.sh v9.9.9
+          "$wrapper" --version
+
+          # No shell profile is written. Printing the PATH line is the whole of
+          # what this script does about PATH.
+          for rc in .bashrc .zshrc .profile .bash_profile; do
+            test ! -e "$HOME/$rc" || { echo "::error::install.sh wrote $rc"; exit 1; }
           done
 
-      # install.sh's documented, default command has no override -- it hits
-      # github.com directly. "Download from a release if one exists" means
-      # checking first and using it when so, rather than assuming either way.
-      # As of #99 it does not: v0.1.0 was published with zero attached
-      # assets (`gh release view v0.1.0` -- `assets: []`), which is exactly
-      # what this check finds on its own (SHA256SUMS 404s). Every assertion
-      # below therefore runs against the staged layout above; this step also
-      # means that changes the day a real release actually carries assets,
-      # with no edit to this workflow required.
-      - name: Does the latest real release publish this target's asset?
-        id: real
+      - name: The script carries no asset, checksum or target triple
         run: |
           set -euo pipefail
-          url="https://github.com/${{ github.repository }}/releases/latest/download/SHA256SUMS"
-          code="$(curl -s -o /dev/null -w '%{http_code}' -L "$url")"
-          if [ "$code" = "200" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::latest release publishes SHA256SUMS -- the real-path step below will run against github.com"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::latest release has no SHA256SUMS asset (HTTP $code) -- install.sh's documented one-liner cannot be exercised against a real release right now; every assertion in this job uses the staged release from the previous step instead"
-          fi
+          for forbidden in SHA256SUMS '.tar.gz' 'tar -xzf' unknown-linux-gnu apple-darwin; do
+            if grep -qF "$forbidden" install.sh; then
+              echo "::error::install.sh still mentions $forbidden"
+              exit 1
+            fi
+          done
 
-      # === debian:stable-slim ==================================================
-
-      # Nothing preinstalled. Neither curl nor wget ships on this image by
-      # default -- confirmed by removing both from consideration entirely,
-      # not by reading the Dockerfile. fetch()'s own command -v checks should
-      # catch this and die with a named, actionable message instead of a raw
-      # "curl: not found" from the shell.
-      - name: "debian: nothing preinstalled -- the dependency check fires cleanly"
+      # A bare image is the point: the prerequisites are genuinely absent, so
+      # the named failure is the thing being asserted rather than routed around.
+      # Adding them afterwards is the same progression the previous version of
+      # this job used for curl -- assert the clean failure first, then the
+      # success once the requirement is satisfied.
+      - name: Bare debian names the missing prerequisite and installs nothing
         run: |
           set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh /install.sh 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 2 || { echo "::error::expected exit 2 (download failed), got $rc"; exit 1; }
-          echo "$out" | grep -qF "neither curl nor wget is available to download the release" || {
-            echo "::error::expected the curl/wget-missing message, got something else"; exit 1;
-          }
+          src="${{ steps.stage.outputs.source }}"
+          docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w debian:stable-slim sh -c '
+            set -eu
+            out=$(COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9 2>&1 || true)
+            printf "%s\n" "$out"
+            printf "%s" "$out" | grep -qi "node" || { echo "expected the message to name Node"; exit 1; }
+            test ! -e "$HOME/.local/bin/commitlore" || { echo "something was installed"; exit 1; }
+          '
 
-      # curl is the one thing this image is missing that install.sh hard
-      # requires (sha256sum and tar both ship by default on Debian). Adding
-      # it here is not "pre-installing dependencies to make the test pass" --
-      # it is the second half of the same test: the step above already
-      # proved the bare-machine failure is clean and named; this step proves
-      # the success path actually works once that one gap is filled, which
-      # #99's item 4 (binary runs, --version, agent detection with none
-      # installed) needs a working download to even reach.
-      - name: "debian: add curl, then the full install + agent-detection path succeeds"
+      - name: The same image succeeds once Node and Git are present
         run: |
           set -euo pipefail
-          expected_version="$(node -p "require('./package.json').version")"
-          docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -e EXPECTED_VERSION="$expected_version" \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              echo "=== install.sh ==="
-              sh /install.sh
-              echo "=== post-install assertions ==="
-              [ -x /root/.local/bin/commitlore ] || { echo "binary was not installed"; exit 1; }
-              v="$(/root/.local/bin/commitlore --version)"
-              [ "$v" = "$EXPECTED_VERSION" ] || { echo "unexpected --version output: $v (expected $EXPECTED_VERSION)"; exit 1; }
-              if command -v commitlore >/dev/null 2>&1; then
-                v_by_name="$(commitlore --version)"
-                [ "$v_by_name" = "$EXPECTED_VERSION" ] || { echo "unexpected by-name --version output: $v_by_name (expected $EXPECTED_VERSION)"; exit 1; }
-                echo "commitlore-ci: commitlore is invokable by name"
-              else
-                echo "commitlore-ci: commitlore is not on PATH"
-              fi
-              # None of the six clients this script knows about exist in this
-              # container. All six must be reported absent, none "wired", and
-              # -- the part a clean summary line alone does not prove -- no
-              # config file may exist at any path install.sh would have
-              # written to.
-              for p in /root/.claude /root/.codex/config.toml /root/.gemini/settings.json \
-                       /root/.cursor/mcp.json /root/.codeium/windsurf/mcp_config.json \
-                       /root/.config/opencode/opencode.json; do
-                [ ! -e "$p" ] || { echo "a config was written for an agent that is not installed: $p"; exit 1; }
-              done
-            ' 2>&1 | tee "$RUNNER_TEMP/debian-success.log"
-          grep -qF "Not detected on this machine: Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode" \
-            "$RUNNER_TEMP/debian-success.log" || {
-            echo "::error::the six-agent-absent summary line is missing or changed"; exit 1;
-          }
-          if ! grep -qF "commitlore-ci: commitlore is invokable by name" "$RUNNER_TEMP/debian-success.log"; then
-            grep -qF "commitlore-install: note: /root/.local/bin is not on PATH." \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh neither made commitlore invokable by name nor explained its missing PATH entry"; exit 1;
-            }
-            grep -qF "commitlore-install: add this line to /root/.profile:" \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh did not name the shell file to update"; exit 1;
-            }
-            grep -qF 'commitlore-install:   export PATH="/root/.local/bin:$PATH"' \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh did not print the exact PATH export line"; exit 1;
-            }
-            note_line="$(grep -nF "commitlore-install: note: /root/.local/bin is not on PATH." "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
-            next_line="$(grep -nF "commitlore-install: Next: cd into a repository and run 'commitlore init'" "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
-            [ -n "$note_line" ] && [ -n "$next_line" ] && [ "$note_line" -lt "$next_line" ] || {
-              echo "::error::PATH guidance must be printed before the Next instruction"; exit 1;
-            }
-          fi
-
-      # === alpine:latest -- busybox sh, not bash. The real portability test. ==
-
-      # Nothing preinstalled here either, and nothing needs to be: busybox
-      # ships wget, sha256sum, and tar by default, so the download and
-      # checksum-verify steps run with no setup at all. What actually breaks
-      # is the binary itself -- the published target is
-      # `<arch>-unknown-linux-gnu` (glibc), and Alpine is musl. Before #99's
-      # fix, install.sh copied the unusable binary into place, printed
-      # "installed to ...", and then crashed on its own "$dest" --version
-      # sanity check with a bare `not found` (busybox's rendering of "no
-      # dynamic interpreter") and exit 127 -- not one of the four exit codes
-      # this script documents for itself. The fix executes the freshly
-      # extracted binary *before* installing it anywhere and `die`s with a
-      # named, attributed message if it cannot run.
-      - name: "alpine: nothing preinstalled -- the musl/glibc mismatch is refused cleanly"
-        run: |
-          set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            alpine:latest sh /install.sh 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 1 || { echo "::error::expected exit 1 (unsupported platform), got $rc"; exit 1; }
-          echo "$out" | grep -qF "does not run on this machine" || {
-            echo "::error::expected the musl/glibc diagnostic, got something else"; exit 1;
-          }
-          echo "$out" | grep -qF "nothing was installed" || {
-            echo "::error::expected the nothing-was-installed reassurance"; exit 1;
-          }
-          docker run --rm --network host -e HOME=/root debian:stable-slim \
-            test ! -e /root/.local/bin/commitlore
-
-      # Checksum verification is the one guarantee this script exists to make
-      # (see install.sh's own header comment) -- a check that has never been
-      # seen to reject anything is not a checksum check. Run against both
-      # images: debian with curl added (glibc, the common case) and bare
-      # alpine (busybox's own sha256sum applet, reached before the musl
-      # binary-execution guard above ever runs -- checksum verification
-      # happens first). Both must refuse the corrupted asset the same way.
-      - name: "checksum corruption is rejected on both images -- nothing is installed"
-        run: |
-          set -euo pipefail
-
-          out_debian="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8198" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              sh /install.sh
-            ' 2>&1)" && rc_debian=0 || rc_debian=$?
-          echo "$out_debian"
-          test "$rc_debian" -eq 3 || { echo "::error::debian: expected exit 3 (checksum mismatch), got $rc_debian"; exit 1; }
-          echo "$out_debian" | grep -qF "checksum mismatch for" || { echo "::error::debian: expected the checksum-mismatch message"; exit 1; }
-          echo "$out_debian" | grep -qF "Nothing was installed" || { echo "::error::debian: expected the nothing-was-installed reassurance"; exit 1; }
-
-          out_alpine="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8198" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            alpine:latest sh /install.sh 2>&1)" && rc_alpine=0 || rc_alpine=$?
-          echo "$out_alpine"
-          test "$rc_alpine" -eq 3 || { echo "::error::alpine: expected exit 3 (checksum mismatch), got $rc_alpine"; exit 1; }
-          echo "$out_alpine" | grep -qF "checksum mismatch for" || { echo "::error::alpine: expected the checksum-mismatch message"; exit 1; }
-
-      # === the real path, once it exists ======================================
-
-      # Skipped entirely today (see the "Does the latest real release
-      # publish..." step -- v0.1.0 has no assets). The day a real release
-      # does carry an asset for this target, this step starts running
-      # automatically and must pass: the actual documented one-liner,
-      # against the actual GitHub release, with no override at all.
-      - name: "real release path (only runs once a release actually publishes assets)"
-        if: steps.real.outputs.available == 'true'
-        run: |
-          set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              sh /install.sh
-              /root/.local/bin/commitlore --version
-            ' 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 0 || { echo "::error::the real, documented install command failed against the actual GitHub release"; exit 1; }
+          src="${{ steps.stage.outputs.source }}"
+          docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w node:22-bookworm-slim sh -c '
+            set -eu
+            apt-get update -qq && apt-get install -y -qq git >/dev/null
+            COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9
+            "$HOME/.local/bin/commitlore" --version
+          '

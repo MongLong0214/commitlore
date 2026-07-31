@@ -1,38 +1,47 @@
 #!/bin/sh
-# Installs a prebuilt commitlore release binary.
+# Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/dev/install.sh | sh -s v0.2.0
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh -s v0.4.1
 #
-# This is a *second* install path, not the canonical one — `git clone` plus
-# either a Node runtime or `npm run build:binary` (see the README, ADR-0011,
-# ADR-0015) remains that. What this script adds is a way to get a working
-# binary with no Node, no build step, and no clone at all: it downloads the
-# release asset matching this machine's OS/arch and the matching
-# `SHA256SUMS` from the same GitHub release, verifies the asset's checksum
-# *before* anything is installed, and only then puts the binary in place.
+# **Claude Code users do not need this script.** The repository is itself a
+# plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
+# server, the pre-edit context hook and the skills. That path is first in the
+# README and this one is second.
 #
-# A script that skips that verification step is worse than no script at all
-# — it teaches whoever runs it that piping a URL to `sh` is safe by itself,
-# which is exactly the habit this project's own trust model (README §"Trust
-# is routing, not a badge") argues against. Piping to a shell should never be
-# the *only* documented install path either — the READMEs also carry the
-# manual curl + verify steps this script automates, unabbreviated.
+# What this installs: a pinned source checkout in the user's data directory,
+# and a thin wrapper on PATH that runs `node <checkout>/dist/commitlore.mjs`.
+# `dist/` is committed (ADR-0011), so there is no build step and no
+# dependency install. **No compiled executable, no platform asset, no
+# checksum of a downloaded tarball** -- ADR-0026 removed all of that from the
+# product, and a script that reintroduced it would contradict the release it
+# came from.
 #
-# Exit codes: 1 = unsupported platform or bad usage, 2 = download failed,
-# 3 = checksum did not match (nothing was installed), 4 = install target
-# already occupied by something this script did not put there.
+# Prerequisites are Node.js 22+ (ADR-0010) and Git, and they are checked
+# before anything is written rather than assumed.
 #
-# A second phase runs after the binary is in place (see "detect and wire
-# coding agents" below): it looks for which coding agents are on this
-# machine and registers commitlore's MCP server — the plugin, for Claude
-# Code — with each one it finds. That phase never fails the script: an agent
-# config it cannot verify from that agent's own docs, or cannot merge
-# safely, is reported and skipped, never guessed at.
+# Exit codes: 1 = missing or too-old prerequisite, or bad usage (nothing was
+# written), 2 = the source could not be fetched, 4 = the install target is
+# occupied by something this script did not put there.
+#
+# Post-install verification never decides the exit code. An install that
+# succeeded is not retroactively failed by a check that could not run: that
+# was a real defect once, where the installer's own `--version` was killed by
+# a signal and its exit code became the script's.
+#
+# This script never edits a shell profile. If the wrapper's directory is not
+# on PATH it prints the line to add, which is the whole of what it does about
+# it.
+#
+# A second phase runs after the wrapper is in place (see "detect and wire
+# coding agents" below): it looks for which coding agents are on this machine
+# and registers commitlore's MCP server with each one it finds. That phase
+# never fails the script.
 set -eu
 
 REPO="MongLong0214/commitlore"
-RAW_VERSION="${1:-${COMMITLORE_INSTALL_VERSION:-latest}}"
+SOURCE_URL="${COMMITLORE_INSTALL_SOURCE:-https://github.com/$REPO.git}"
+NODE_MAJOR_MIN=22
 
 log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {
@@ -40,125 +49,87 @@ die() {
   exit "${2:-1}"
 }
 
-# --- 1. platform detection -> target triple -----------------------------
+# --- 1. prerequisites, before anything is written ---------------------------
 #
-# The Rust ecosystem's target-triple convention (`<arch>-<vendor>-<os>`) is
-# what release.yml names assets with, precisely so a script like this one
-# has one string to build instead of a table of special cases per OS.
-os_raw="$(uname -s)"
-arch_raw="$(uname -m)"
+# Both are hard requirements rather than conveniences: the wrapper runs the
+# bundle with node, and the checkout is a git clone. A missing one is named,
+# with what to do about it, and nothing is installed.
 
-case "$os_raw" in
-  Darwin) os=apple-darwin ;;
-  Linux) os=unknown-linux-gnu ;;
-  *)
-    die "unsupported OS \"$os_raw\" — only macOS and Linux release binaries are published (no Windows asset yet: the SEA build and the commit-msg hook shim are not verified there, see ADR-0015). Install from source instead: https://github.com/$REPO#install-from-source" 1
-    ;;
+node_bin="$(command -v node 2>/dev/null || true)"
+[ -n "$node_bin" ] || die "Node.js $NODE_MAJOR_MIN or newer is required and no \"node\" was found on PATH. Install Node.js $NODE_MAJOR_MIN+ (https://nodejs.org), then run this again. Nothing was installed." 1
+
+node_version="$("$node_bin" --version 2>/dev/null || true)"
+case "$node_version" in
+  v[0-9]*) ;;
+  *) die "\"$node_bin --version\" did not report a version (got: \"$node_version\"), so the Node.js major version cannot be checked. Nothing was installed." 1 ;;
 esac
-
-case "$arch_raw" in
-  arm64 | aarch64) arch=aarch64 ;;
-  x86_64 | amd64) arch=x86_64 ;;
-  *)
-    die "unsupported architecture \"$arch_raw\" — published binaries are aarch64 and x86_64 only. Install from source instead: https://github.com/$REPO#install-from-source" 1
-    ;;
-esac
-
-target="${arch}-${os}"
-
-# --- 2. resolve the release + build download URLs -----------------------
-#
-# `releases/latest/download/<asset>` and `releases/download/<tag>/<asset>`
-# both redirect straight to the asset without an API call — no token, no
-# rate limit, the same pattern GitHub's own docs use for install scripts.
-if [ -n "${COMMITLORE_INSTALL_BASE_URL:-}" ]; then
-  # Escape hatch for a mirror, or for testing this script against a locally
-  # built binary and a hand-made SHA256SUMS — never needed for the documented
-  # install command.
-  base_url="$COMMITLORE_INSTALL_BASE_URL"
-  log "using COMMITLORE_INSTALL_BASE_URL override: $base_url"
-elif [ "$RAW_VERSION" = "latest" ]; then
-  release_path="latest/download"
-  log "resolving the latest release for $target"
-  base_url="https://github.com/$REPO/releases/$release_path"
-else
-  case "$RAW_VERSION" in
-    v*) tag="$RAW_VERSION" ;;
-    *) tag="v$RAW_VERSION" ;;
-  esac
-  release_path="download/$tag"
-  log "installing $tag for $target"
-  base_url="https://github.com/$REPO/releases/$release_path"
+node_major="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f1)"
+if [ "$node_major" -lt "$NODE_MAJOR_MIN" ]; then
+  die "Node.js $NODE_MAJOR_MIN or newer is required; this machine has $node_version. Upgrade Node.js, then run this again. Nothing was installed." 1
 fi
-# The version segment of the asset name is only known once "latest" is
-# resolved, and this script never calls the API to resolve it — it downloads
-# the fixed-name SHA256SUMS first (every release has exactly one, at a fixed
-# URL) and reads the real asset name for this target back out of that,
-# instead of guessing the version and hoping GitHub's redirect saves it.
-sums_url="$base_url/SHA256SUMS"
 
-fetch() {
-  # $1 = url, $2 = output path
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$1" -o "$2"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q "$1" -O "$2"
-  else
-    die "neither curl nor wget is available to download the release" 2
-  fi
-}
+# Run it rather than only look for it: a git that cannot execute is as useless
+# here as a missing one, and this is the check that catches both.
+git --version >/dev/null 2>&1 || die "Git is required, and \"git --version\" did not run. Install Git (or repair the installation), then run this again. Nothing was installed." 1
 
+# --- 2. resolve the version to install -------------------------------------
+#
+# A tag, never a branch. Passing one explicitly is the reviewable path; with
+# none, the newest semver tag is resolved with `git ls-remote`, which needs no
+# API token and no rate limit. The default must not resolve to a branch --
+# installing a moving target is what pinning exists to prevent.
+
+version="${1:-}"
+if [ -n "$version" ]; then
+  case "$version" in
+    v[0-9]*) ;;
+    [0-9]*) version="v$version" ;;
+    *) die "\"$version\" is not a version tag. Pass a tag such as v0.4.1, or pass nothing to install the newest one." 1 ;;
+  esac
+else
+  version="$(git ls-remote --tags --refs "$SOURCE_URL" 2>/dev/null \
+    | awk '{print $2}' | sed 's#refs/tags/##' \
+    | grep '^v[0-9]' \
+    | sort -t. -k1,1V -k2,2n -k3,3n \
+    | tail -n 1 || true)"
+  [ -n "$version" ] || die "no version tag could be resolved from $SOURCE_URL. Pass one explicitly, for example: sh install.sh v0.4.1" 2
+fi
+
+log "installing $version"
+
+# Scratch space for the wiring phase's write-temp-then-rename config merges.
+# Created here, removed on exit, exactly as the previous script did.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-sums_file="$work/SHA256SUMS"
-fetch "$sums_url" "$sums_file" || die "could not download $sums_url (bad version, or no release published yet)" 2
+# --- 3. fetch the pinned checkout ------------------------------------------
+#
+# Into the user's data directory, keyed by tag, so an upgrade adds a checkout
+# beside the old one instead of mutating it. Cloned to a temporary name and
+# renamed, so a failed clone never leaves a half-checkout that looks installed.
 
-asset_line="$(grep -- "-${target}\.tar\.gz\$" "$sums_file" || true)"
-[ -n "$asset_line" ] || die "SHA256SUMS at $sums_url lists no asset for $target" 2
-asset_name="$(printf '%s\n' "$asset_line" | awk '{print $2}' | sed 's/^\*//')"
+data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
+checkout="$data_root/$version"
 
-asset_url="$base_url/$asset_name"
-asset_file="$work/$asset_name"
-log "downloading $asset_name"
-fetch "$asset_url" "$asset_file" || die "could not download $asset_url" 2
-
-# --- 3. verify the checksum before installing anything -------------------
-expected="$(printf '%s\n' "$asset_line" | awk '{print $1}')"
-if command -v sha256sum >/dev/null 2>&1; then
-  actual="$(cd "$work" && sha256sum "$asset_name" | awk '{print $1}')"
-elif command -v shasum >/dev/null 2>&1; then
-  actual="$(cd "$work" && shasum -a 256 "$asset_name" | awk '{print $1}')"
+if [ -d "$checkout/dist" ]; then
+  log "reusing the existing checkout at $checkout"
 else
-  die "neither sha256sum nor shasum is available to verify the download — refusing to install an unverified binary" 3
+  mkdir -p "$data_root"
+  checkout_tmp="$data_root/.$version.incoming.$$"
+  rm -rf "$checkout_tmp"
+  cleanup_checkout_tmp() { rm -rf "$checkout_tmp"; }
+  trap cleanup_checkout_tmp EXIT
+  git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>/dev/null \
+    || die "could not fetch $version from $SOURCE_URL. Check the tag name and your network. Nothing was installed." 2
+  [ -f "$checkout_tmp/dist/commitlore.mjs" ] \
+    || die "$version does not carry dist/commitlore.mjs, so there is nothing to run. Nothing was installed." 2
+  rm -rf "$checkout"
+  mv "$checkout_tmp" "$checkout"
+  trap - EXIT
+  log "checked out $version into $checkout"
 fi
 
-if [ "$expected" != "$actual" ]; then
-  die "checksum mismatch for $asset_name
-  expected: $expected
-  got:      $actual
-  Nothing was installed. Do not re-run against the same cache; re-download fresh, and if it mismatches again, report it — the release may be corrupted." 3
-fi
-log "checksum verified ($actual)"
-
-# --- 4. install ------------------------------------------------------------
-tar -xzf "$asset_file" -C "$work" commitlore
-chmod +x "$work/commitlore"
-
-# The checksum proves the bytes are the ones the release published — it says
-# nothing about whether this machine can *run* them. The published target is
-# `<arch>-unknown-linux-gnu`: built against glibc, dynamically linked against
-# glibc's loader. A musl-libc host (Alpine and its `#!/bin/sh` -> busybox ash
-# are the common case; there is no `-musl` asset for this target) has no
-# `/lib/ld-linux-*.so.*` for that binary to run against, and the kernel's
-# refusal to exec it surfaces as a bare "not found" from the shell — which
-# reads exactly like a typo in this script, not a platform gap. Executing the
-# freshly extracted binary here, before it is copied anywhere, turns that
-# into the same clear, attributed failure every other unsupported-platform
-# case in this script already gives.
-if ! "$work/commitlore" --version >/dev/null 2>&1; then
-  die "the downloaded binary for $target does not run on this machine (nothing was installed). This usually means a musl-libc host such as Alpine — only glibc (\"-gnu\") Linux binaries are published, and Alpine's dynamic linker cannot load them. Install from source instead: https://github.com/$REPO#install-from-source" 1
-fi
+# --- 4. install the wrapper ------------------------------------------------
 
 if [ -n "${COMMITLORE_INSTALL_DIR:-}" ]; then
   dest_dir="$COMMITLORE_INSTALL_DIR"
@@ -169,45 +140,52 @@ else
 fi
 dest="$dest_dir/commitlore"
 
-# Refuse to silently clobber a file this script did not put there. A prior
-# commitlore install (from this script, `hooks install`'s own binary
-# resolution, or a manual copy) is a legitimate upgrade target — but exit 0
-# alone does not prove that: plenty of unrelated executables exit 0 and print
-# *something* for an unrecognized `--version` flag. The output has to look
-# like ours — a bare semver, nothing else — before this overwrites anything.
+WRAPPER_MARKER="# commitlore:wrapper:v1"
+
+# Refuse to clobber a file this script did not put there. A previous wrapper
+# carries the marker; a previous binary install prints a bare semver. Anything
+# else is somebody else's file and is left exactly where it is.
 if [ -e "$dest" ]; then
-  existing_version="$("$dest" --version 2>/dev/null || true)"
-  case "$existing_version" in
-    [0-9]*.[0-9]*.[0-9]*)
-      log "upgrading existing install at $dest ($existing_version -> $(cd "$work" && ./commitlore --version))"
-      ;;
-    *)
-      die "$dest already exists and does not look like a commitlore binary (got: \"$existing_version\") — refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
-      ;;
-  esac
+  if grep -qF "$WRAPPER_MARKER" "$dest" 2>/dev/null; then
+    log "upgrading the existing commitlore wrapper at $dest"
+  else
+    existing_version="$("$dest" --version 2>/dev/null || true)"
+    case "$existing_version" in
+      [0-9]*.[0-9]*.[0-9]*)
+        log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
+        ;;
+      *)
+        die "$dest already exists and is not a commitlore wrapper (got: \"$existing_version\") -- refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
+        ;;
+    esac
+  fi
 fi
 
 mkdir -p "$dest_dir"
-# Write beside the destination and rename, rather than `cp` over it. An
-# in-place overwrite leaves the destination inode holding new bytes, and this
-# file already uses write-temp-then-rename for config merges below. Rename is
-# atomic, so a reader either sees the old binary or the new one and never a
-# half-written 100 MB executable.
+# Write beside the destination and rename. An in-place overwrite of a file that
+# may be executing is the defect that forced a same-day patch release; rename is
+# atomic, so a reader sees either the old wrapper or the new one.
 dest_tmp="$dest.commitlore-install.$$"
 cleanup_dest_tmp() { rm -f "$dest_tmp"; }
 trap cleanup_dest_tmp EXIT
-cp "$work/commitlore" "$dest_tmp"
+cat >"$dest_tmp" <<WRAPPER
+#!/bin/sh
+$WRAPPER_MARKER
+# Installed by install.sh. Edits are lost on reinstall.
+NODE="$node_bin"
+[ -x "\$NODE" ] || NODE=node
+exec "\$NODE" "$checkout/dist/commitlore.mjs" "\$@"
+WRAPPER
 chmod +x "$dest_tmp"
 mv "$dest_tmp" "$dest"
 trap - EXIT
 
 log "installed to $dest"
 
-# The install is already complete. A verification that cannot run says so; it
-# does not retroactively fail an install that succeeded. On macOS the first
-# exec of a freshly written large binary has been observed being killed by a
-# signal (see #256) while the second succeeds, so a single failure is retried
-# before it is reported.
+# The install is complete by this point. Verification reports; it does not
+# decide. A single failure is retried once before it is reported, and a
+# reported failure still exits 0 -- an install that succeeded must not be
+# failed by a check that could not run.
 if ! installed_version=$("$dest" --version 2>/dev/null); then
   sleep 1
   installed_version=$("$dest" --version 2>/dev/null) || installed_version=""
@@ -215,8 +193,8 @@ fi
 if [ -n "$installed_version" ]; then
   printf '%s\n' "$installed_version"
 else
-  log "installed, but could not run \"$dest --version\" in this shell to confirm it."
-  log "the binary is in place; verify it yourself with: $dest --version"
+  log "installed, but unverified: \"$dest --version\" did not run in this shell."
+  log "the wrapper is in place; verify it yourself with: $dest --version"
 fi
 
 path_file="$HOME/.profile"
@@ -226,6 +204,8 @@ case "${SHELL:-}" in
 esac
 path_export="export PATH=\"$dest_dir:\$PATH\""
 
+# Printed, never written. Rewriting a shell profile from a piped installer is
+# ruled out on this file: it is what makes people distrust curl-to-shell.
 case ":$PATH:" in
   *":$dest_dir:"*) ;;
   *)
@@ -238,17 +218,17 @@ esac
 # --- 5. detect and wire coding agents --------------------------------------
 #
 # Everything below is additive and best-effort: it never touches the exit
-# codes above (1-4 stay reserved for phase 1 — the binary is already
+# codes above (1-4 stay reserved for phase 1 -- the binary is already
 # installed and working by the time this runs), and every agent it wires is
 # detect-then-act, in the same order every time:
 #
 #   1. Is the agent actually on this machine? An agent that is not found is
-#      left alone completely — no config is created "for later".
+#      left alone completely -- no config is created "for later".
 #   2. Does its config already mention commitlore? If so, this is a re-run:
 #      report it and change nothing (the whole install is safe to run
 #      again this way, same as phase 1's upgrade path above).
 #   3. Otherwise, either create the config fresh, or merge into the existing
-#      one with `jq` (only if `jq` is actually present — this script does
+#      one with `jq` (only if `jq` is actually present -- this script does
 #      not install it), or, failing both, report exactly what to add by
 #      hand rather than risk the rest of the file.
 #
@@ -260,11 +240,11 @@ esac
 #
 # Every other client here documents the same MCP shape
 # (`{"mcpServers":{"<name>":{"command":...,"args":[...]}}}`) at the path
-# named next to its has_/wire_ pair below — verified against each agent's
+# named next to its has_/wire_ pair below -- verified against each agent's
 # own docs, not assumed from one client's format working for another.
 # opencode is the one exception to *that*: its config key is `mcp`, not
 # `mcpServers`, and its `command` is an argv array rather than
-# command+args — see its own comment below.
+# command+args -- see its own comment below.
 
 log ""
 log "Detecting coding agents..."
@@ -277,7 +257,7 @@ skipped_log="$work/skipped.log"
 record_wired() { printf '%s\n' "$1" >>"$wired_log"; }
 record_skipped() { printf '%s: %s\n' "$1" "$2" >>"$skipped_log"; }
 
-# `mcpServers: { name: { command, args } }` — Gemini CLI, Cursor, and
+# `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor, and
 # Windsurf all document this exact shape.
 wire_mcp_servers_json() {
   agent="$1"
@@ -305,7 +285,7 @@ EOF
   fi
 
   if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
-    record_skipped "$agent" "$config_path already mentions commitlore — left unchanged"
+    record_skipped "$agent" "$config_path already mentions commitlore -- left unchanged"
     return
   fi
 
@@ -317,7 +297,7 @@ EOF
       record_wired "$agent: added the commitlore MCP server into the existing $config_path"
     else
       rm -f "$merge_tmp"
-      record_skipped "$agent" "$config_path exists but jq could not parse it as JSON (or the merge could not be written) — left untouched. Add manually: {\"mcpServers\":{\"commitlore\":{\"command\":\"$dest\",\"args\":[\"mcp\"]}}}"
+      record_skipped "$agent" "$config_path exists but jq could not parse it as JSON (or the merge could not be written) -- left untouched. Add manually: {\"mcpServers\":{\"commitlore\":{\"command\":\"$dest\",\"args\":[\"mcp\"]}}}"
     fi
     return
   fi
@@ -325,29 +305,29 @@ EOF
   record_skipped "$agent" "$config_path already exists and jq is not installed, so it cannot be merged without risking its other entries. Add manually: {\"mcpServers\":{\"commitlore\":{\"command\":\"$dest\",\"args\":[\"mcp\"]}}}"
 }
 
-# Claude Code — https://code.claude.com/docs/en/discover-plugins#install-plugins
+# Claude Code -- https://code.claude.com/docs/en/discover-plugins#install-plugins
 has_claude_code() { command -v claude >/dev/null 2>&1; }
 wire_claude_code() {
   installed_plugins="$(claude plugin list 2>/dev/null || true)"
   case "$installed_plugins" in
     *commitlore*)
-      record_skipped "claude-code" "the commitlore plugin is already installed — left unchanged"
+      record_skipped "claude-code" "the commitlore plugin is already installed -- left unchanged"
       return
       ;;
   esac
 
   if ! claude plugin marketplace add "$REPO" >/dev/null 2>&1; then
-    record_skipped "claude-code" "could not add the $REPO marketplace (offline, or already added under a different state) — run manually: claude plugin marketplace add $REPO"
+    record_skipped "claude-code" "could not add the $REPO marketplace (offline, or already added under a different state) -- run manually: claude plugin marketplace add $REPO"
     return
   fi
   if claude plugin install commitlore@commitlore --scope user >/dev/null 2>&1; then
     record_wired "claude-code: installed the commitlore plugin (marketplace: commitlore, scope: user)"
   else
-    record_skipped "claude-code" "marketplace added, but plugin install failed — run manually: claude plugin install commitlore@commitlore"
+    record_skipped "claude-code" "marketplace added, but plugin install failed -- run manually: claude plugin install commitlore@commitlore"
   fi
 }
 
-# Codex CLI — TOML, one [mcp_servers.<name>] table per server.
+# Codex CLI -- TOML, one [mcp_servers.<name>] table per server.
 # https://developers.openai.com/codex/mcp
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
 wire_codex() {
@@ -356,7 +336,7 @@ wire_codex() {
   mkdir -p "$config_dir" 2>/dev/null || { record_skipped "codex" "could not create $config_dir"; return; }
 
   if [ -f "$config_path" ] && grep -q '^\[mcp_servers\.commitlore\]' "$config_path" 2>/dev/null; then
-    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block — left unchanged"
+    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block -- left unchanged"
     return
   fi
 
@@ -377,22 +357,22 @@ wire_codex() {
   fi
 }
 
-# Gemini CLI — same mcpServers shape as Claude Desktop.
+# Gemini CLI -- same mcpServers shape as Claude Desktop.
 # https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
 has_gemini() { command -v gemini >/dev/null 2>&1 || [ -d "$HOME/.gemini" ]; }
 wire_gemini() { wire_mcp_servers_json "gemini-cli" "$HOME/.gemini/settings.json"; }
 
-# Cursor — global config (community-documented; Cursor has no single
+# Cursor -- global config (community-documented; Cursor has no single
 # canonical MCP-config reference page at the time of writing).
 has_cursor() { command -v cursor >/dev/null 2>&1 || [ -d "$HOME/.cursor" ] || [ -d "/Applications/Cursor.app" ]; }
 wire_cursor() { wire_mcp_servers_json "cursor" "$HOME/.cursor/mcp.json"; }
 
-# Windsurf — same mcpServers shape, under Codeium's config directory.
+# Windsurf -- same mcpServers shape, under Codeium's config directory.
 # https://docs.windsurf.com/windsurf/cascade/mcp
 has_windsurf() { command -v windsurf >/dev/null 2>&1 || [ -d "$HOME/.codeium/windsurf" ] || [ -d "/Applications/Windsurf.app" ]; }
 wire_windsurf() { wire_mcp_servers_json "windsurf" "$HOME/.codeium/windsurf/mcp_config.json"; }
 
-# opencode — different shape from the rest: the key is `mcp`, not
+# opencode -- different shape from the rest: the key is `mcp`, not
 # `mcpServers`, and `command` is an argv array alongside a `type`/`enabled`
 # pair. https://opencode.ai/docs/mcp-servers/ (config path: https://opencode.ai/docs/config/)
 has_opencode() { command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ]; }
@@ -423,7 +403,7 @@ EOF
   fi
 
   if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
-    record_skipped "opencode" "$config_path already mentions commitlore — left unchanged"
+    record_skipped "opencode" "$config_path already mentions commitlore -- left unchanged"
     return
   fi
 
@@ -435,7 +415,7 @@ EOF
       record_wired "opencode: added the commitlore MCP server into the existing $config_path"
     else
       rm -f "$merge_tmp"
-      record_skipped "opencode" "$config_path exists but jq could not parse it as JSON (or the merge could not be written) — left untouched. Add manually under \"mcp\": {\"commitlore\":{\"type\":\"local\",\"command\":[\"$dest\",\"mcp\"],\"enabled\":true}}"
+      record_skipped "opencode" "$config_path exists but jq could not parse it as JSON (or the merge could not be written) -- left untouched. Add manually under \"mcp\": {\"commitlore\":{\"type\":\"local\",\"command\":[\"$dest\",\"mcp\"],\"enabled\":true}}"
     fi
     return
   fi
@@ -480,4 +460,4 @@ if [ -n "$not_found" ]; then
 fi
 log ""
 log "Next: cd into a repository and run 'commitlore init' to install its git hook and index."
-log "(install.sh never runs init for you — it only installs the tool and wires agents, never touches a repository's .git.)"
+log "(install.sh never runs init for you -- it only installs the tool and wires agents, never touches a repository's .git.)"

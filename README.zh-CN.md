@@ -29,7 +29,7 @@
 /plugin install commitlore@commitlore
 ```
 
-插件路径的前置条件: Node.js 22+ 与 Git。
+两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
 
 **其他编程代理** — 安装 CLI:
 
@@ -110,18 +110,16 @@ commitlore context .
 <details>
 <summary>想检查或固定安装版本？</summary>
 
-这一行命令是为了方便。若需要经过审阅或固定版本的安装，请先下载并检查 `install.sh`，或 clone 仓库，或手动下载发布资产并验证其 `SHA256SUMS`。脚本会校验下载二进制文件的校验和；它不会认证已经通过管道交给 `sh` 的脚本本身。
+这一行命令是为了方便。若需要经过审阅或固定版本的安装，请先下载并检查 `install.sh`，或 clone 仓库。脚本只安装一个固定标签的源码检出，以及一个运行 `node <checkout>/dist/commitlore.mjs` 的薄 wrapper —— 它不下载任何编译产物，也没有构建步骤，因此放到机器上的就是你能阅读的源码。
 
 ```bash
 # 固定版本并检查 installer 后再执行。
 curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
 sh install.sh v0.4.1
 
-# 或自行验证 release binary 后再解压。
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# 或者完全不用脚本：它创建的检出，你自己也能创建。
+git clone --depth 1 --branch v0.4.1 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
