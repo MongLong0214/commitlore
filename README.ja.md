@@ -37,6 +37,7 @@
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
 
+どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 ## 実際に動かす
 

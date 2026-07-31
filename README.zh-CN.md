@@ -37,6 +37,7 @@
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
 
+支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 ## 看它实际运行
 
