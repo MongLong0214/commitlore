@@ -253,6 +253,37 @@ shape.
 **Depends on** — T-1120 and T-1121 merged. The document may not describe an installer that has
 not shipped; that constraint is why this ticket is not first.
 
+**Measured correspondence** (at `e8e19cd`) — every capability the document may claim, and the
+file that provides it. The assertion checks this table, not prose:
+
+| Capability | Provided by | Value |
+|---|---|---|
+| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
+| pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` |
+| skills | `skills/` | `commitlore-commits`, `commitlore-query`, `commitlore-setup` |
+| plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |
+| marketplace | `.claude-plugin/marketplace.json` | `commitlore`, `source: "./"` |
+
+`/plugin install commitlore@commitlore` resolves as `<plugin>@<marketplace>` from the last two
+rows, so the documented command is derivable from the manifests rather than asserted separately.
+
+**Checked is not the same as required, and the document must not blur them.** Measured:
+`install.sh` enforces Node ≥ 22 and a working `git` before it writes anything. **The plugin path
+enforces nothing** — it needs Node just as much, because the hook and the MCP server both run
+`node dist/commitlore.mjs`, but a user without Node gets a hook that fails open with
+"CLI could not be resolved; no context was injected" at exit 0 and no statement that Node is
+missing. A compatibility statement that lists Node under one heading for both paths would imply
+an enforcement the plugin path does not perform, so the two columns are separate: **required**,
+and **checked by the installer**.
+
+**Do not inherit the musl reason.** `README.md`'s Known limitations still says Alpine and other
+musl hosts are unsupported *because only glibc binaries are published*. Measured at `e8e19cd`,
+`install.sh` has no platform gate at all — no `uname`, no architecture mapping, no libc check —
+so that reason no longer describes anything. Whether musl now works is **unverified**: it was not
+executed, because the container daemon was unavailable. This ticket must resolve musl's row from
+an executed check rather than by carrying the old reason forward or by assuming the gate's
+removal implies support. The stale bullet itself is T-1125's, per the ownership map.
+
 **Forbidden scope**
 
 - no build target, release matrix, `SHA256SUMS`, or platform asset in the document
