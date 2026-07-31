@@ -17,10 +17,13 @@ repository asks for a binary.
    integration into the capture pipeline, and the user-editable policy file. Both survive
    the reversal untouched — neither has anything to do with distribution.
 2. Distribution work is **re-planned from ADR-0026**: plugin-first for Claude Code,
-   Node-only `install.sh` / `install.ps1` elsewhere. Its rows are added here by the revised
-   PRD and its atomic tickets, each separately approved. **This file does not pre-empt them
-   with placeholder rows** — an acceptance row with no approved ticket is exactly the
-   dangling authority Gate A's matrix was written to stop.
+   Node-only `install.sh` / `install.ps1` elsewhere, specified by
+   [`PRD-F14`](prd/PRD-F14-distribution.md) and broken into six atomic tickets in
+   [`docs/tickets/F14-distribution.md`](tickets/F14-distribution.md). A row lands here **as
+   its ticket becomes approval-ready**, never before — an acceptance row with no approved
+   ticket is exactly the dangling authority Gate A's matrix was written to stop. `B-8` below is
+   the first, added when T-1120 was corrected to a single owner per region; `T-1121`…`T-1125`
+   have no row yet.
 
 ## Rows
 
@@ -28,6 +31,7 @@ repository asks for a binary.
 |---|---|---|---|---|
 | B-6 | Guard participates in the capture pipeline as an advisory that **cannot block a capture or a commit** | `PRD-F9-unified-capture.md` "Non-goals" — a standalone deferral, explicitly **not** row `P0-8` (that row is `commitlore_before_change`, closed by T-1024 #219); [ADR-0020](adr/ADR-0020-guard-is-an-experimental-advisory.md); `bench/GUARD-CANNOT-BLOCK.md` | T-1109 (#273) — **shipped** | A differential test: a guard match at any score changes no exit code and no pending phase, and the two pending records differ in exactly one field |
 | B-7 (row `P1-5`) | The user-editable policy file ships, and the pending-transaction format absorbs it **without a breaking change** | `P1-5`, cited as explicitly Gate B in [ADR-0021](adr/ADR-0021-capture-pending-transaction.md) §"P1-5" and `PRD-F9` "Non-goals". ADR-0021 already fixes the migration: the policy identity hash input changes from `sha256(hardcoded-defaults-json)` to `sha256(policy-file-contents)` | T-1110 (#274) | A pending file written by the pre-policy code path is still consumable after the policy file ships; the identity hash changes and the format version does not |
+| B-8 | `install.sh` installs with **no compiled artifact** — Node ≥ 22 and Git checked before anything is written, a pinned checkout in the user's data directory, and a thin `PATH` wrapper that runs `node dist/commitlore.mjs` — and the README describes **that** installer, in the same commit | [ADR-0026](adr/ADR-0026-node-only-distribution.md); [PRD-F14](prd/PRD-F14-distribution.md) requirements 4–15 and 29 | T-1120 (#281) | Eight RED assertions in `test/install-script.test.ts` and `test/readme.test.ts`, `sh -n install.sh` at 0, `node scripts/check-readme-numbers.mjs` at 0, and a live fresh-install, upgrade-over-running-wrapper and missing-Node run. **One commit** carries the installer and all four README shell-install regions, so no revision exists in which a README describes an installer that is not beside it |
 
 ## Withdrawn rows, and why
 
