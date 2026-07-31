@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
+import { resolvePolicy } from '../core/capture-policy.js';
 import { execGit } from '../core/git.js';
 import { markApplied, type PendingRecord } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
@@ -120,15 +121,6 @@ export const installPrepareCommitMsgHook = (cwd = process.cwd()): PrepareCommitM
 // Capture application guard — ADR-0021 §3, five-gate check (T-1005)
 // ---------------------------------------------------------------------------
 
-const CAPTURE_POLICY_DEFAULTS = {
-  mode: 'suggest' as const,
-  max_records_per_commit: 1,
-  require_verified_evidence: true,
-} as const;
-
-const computePolicyIdentityHash = (): string =>
-  createHash('sha256').update(JSON.stringify(CAPTURE_POLICY_DEFAULTS)).digest('hex');
-
 /**
  * Resolve the pending directory via `git rev-parse --git-path`.
  * Returns null if not in a git repo or the path cannot be resolved.
@@ -216,7 +208,7 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
   if (diffResult.code !== 0) return;
   const currentDiffHash = createHash('sha256').update(diffResult.stdout).digest('hex');
 
-  const currentPolicyHash = computePolicyIdentityHash();
+  const currentPolicyHash = resolvePolicy(cwd).identityHash;
   const now = Date.now();
 
   // Read current message to check for existing Record-Id

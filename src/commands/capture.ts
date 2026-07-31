@@ -70,6 +70,13 @@ export const runCapture = (opts: {
 
   // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
   const prepareResult = prepareCaptureContext({ cwd, transcript });
+  if (prepareResult.policy_error !== null) {
+    // The defaults ran. Say which policy actually applied rather than letting a
+    // user assume their file did (T-1110, PRD-F13 requirement 10).
+    process.stderr.write(
+      `commitlore capture: ${prepareResult.policy_error}\ncommitlore capture: the built-in defaults were used for this capture\n`,
+    );
+  }
 
   // 2. If no draft provided, print the prompt contract and exit (prompt-only mode)
   if (!draftPath) {

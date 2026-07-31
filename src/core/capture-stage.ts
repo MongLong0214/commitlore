@@ -15,20 +15,8 @@
 
 import { createHash } from 'node:crypto';
 import { readPending, stagePending, type PendingRecord } from './pending.js';
+import { resolvePolicy } from './capture-policy.js';
 import { execGitOrThrow } from './git.js';
-
-// ---------------------------------------------------------------------------
-// Policy defaults — must match capture-prepare.ts (ADR-0021 §7)
-// ---------------------------------------------------------------------------
-
-const HARDCODED_DEFAULTS = {
-  mode: 'suggest' as const,
-  max_records_per_commit: 1,
-  require_verified_evidence: true,
-} as const;
-
-const computePolicyIdentityHash = (): string =>
-  createHash('sha256').update(JSON.stringify(HARDCODED_DEFAULTS)).digest('hex');
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,10 +55,16 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
   if (record.validation_result === 'empty') return null;
   if (record.incomplete) return null;
 
-  // 3. Enforce max_records_per_commit (hardcoded: 1)
-  if (record.records.length > HARDCODED_DEFAULTS.max_records_per_commit) {
+  // 3. Enforce max_records_per_commit from the resolved policy (T-1110).
+  //    Reading the current policy here is safe because gate 4 below rejects when
+  //    the policy identity differs from the one `prepare` recorded: a changed
+  //    policy cannot pass both gates. Where it changes anything, it changes only
+  //    which of the two rejection messages the user sees, never whether the
+  //    staging is rejected.
+  const policy = resolvePolicy(cwd);
+  if (record.records.length > policy.policy.max_records_per_commit) {
     throw new Error(
-      `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${HARDCODED_DEFAULTS.max_records_per_commit})`,
+      `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`,
     );
   }
 
@@ -93,7 +87,7 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
     throw new Error('Staging rejected: staged tree changed since prepare');
   }
 
-  const currentPolicy = computePolicyIdentityHash();
+  const currentPolicy = policy.identityHash;
   if (currentPolicy !== record.policy_identity_hash) {
     throw new Error('Staging rejected: policy identity changed since prepare');
   }
