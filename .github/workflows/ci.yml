@@ -601,9 +601,14 @@ jobs:
           # that dies at the runner's timeout with nothing printed.
           printf 'export const value = 1;\n' > file.ts
           git add file.ts
+          # `|| rc=$?`, not a bare call: Actions runs a bash step as `bash -eo
+          # pipefail`, and `set -uo pipefail` above does not clear the -e it was
+          # invoked with. A bare timeout that fires would abort the step at that
+          # line, which is how the first attempt lost its own verdict and the
+          # probe output underneath it.
+          rc=0
           timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
-            > "$probe_log.commit" 2>&1
-          rc=$?
+            > "$probe_log.commit" 2>&1 || rc=$?
           sed -n '1,40p' "$probe_log.commit" || true
           case "$rc" in
             0)   echo "real commit: ACCEPTED (exit 0)" ;;
@@ -642,12 +647,16 @@ jobs:
           # Every commit that passes through the hook is bounded. A hang is a
           # distinct outcome from a refusal and has to be reported as one; left
           # unbounded it becomes a job that dies at the runner timeout instead.
+          # `|| c=$?` throughout: Actions runs a bash step as `bash -eo pipefail`,
+          # and `set -uo pipefail` above does not clear that -e. A bare command
+          # that times out would abort the step before it could report which of
+          # the three outcomes -- accepted, refused, hung -- actually happened.
           out=$(mktemp)
           commit_bounded() {
-            timeout -k 5 90 git commit -m "$1" > "$out" 2>&1
-            rc=$?
+            local c=0
+            timeout -k 5 90 git commit -m "$1" > "$out" 2>&1 || c=$?
             sed -n '1,25p' "$out" || true
-            return $rc
+            return $c
           }
 
           # Acceptance first: this is the direction a dead hook fails. A hook that
@@ -655,8 +664,8 @@ jobs:
           # while blocking every commit on the platform.
           printf 'export const value = 1;\n' > file.ts
           git add file.ts
-          commit_bounded "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')"
-          rc=$?
+          rc=0
+          commit_bounded "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')" || rc=$?
           if [ "$rc" -eq 124 ]; then
             echo "::error::the hook hung on a valid record and was killed at 90s"
             exit 1
@@ -671,8 +680,8 @@ jobs:
           # that is accepted here means git never invoked it.
           printf 'export const value = 2;\n' > file.ts
           git add file.ts
-          commit_bounded "$(printf 'Bad\n\nBlast: wide\n')"
-          rc=$?
+          rc=0
+          commit_bounded "$(printf 'Bad\n\nBlast: wide\n')" || rc=$?
           if [ "$rc" -eq 124 ]; then
             echo "::error::the hook hung on an invalid record and was killed at 90s"
             exit 1
@@ -714,9 +723,9 @@ jobs:
           printf 'export const value = 3;\n' > file.ts
           git add file.ts
           out=$(mktemp)
+          rc=0
           timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" \
-            > "$out" 2>&1
-          rc=$?
+            > "$out" 2>&1 || rc=$?
           # Printed, not swallowed: "the witness is absent" is only containment if
           # the hook actually ran and declined. The refusal text is what tells a
           # reader which of the two happened.
@@ -765,9 +774,9 @@ jobs:
           printf 'export const value = 4;\n' > file.ts
           git add file.ts
           out=$(mktemp)
+          rc=0
           timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" \
-            > "$out" 2>&1
-          rc=$?
+            > "$out" 2>&1 || rc=$?
           echo "--- commit exit $rc, hook output ---"
           sed -n '1,25p' "$out" || true
           # Removed before the verdict, so a failing assertion cannot leave the
