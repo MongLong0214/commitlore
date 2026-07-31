@@ -293,6 +293,29 @@ source of the agent config paths); `src/cli.ts` (one `register` line);
 
 **Depends on** — T-1120 and T-1121 merged: the command removes what they wrote.
 
+**Measured inventory** (shipped installer, scratch `HOME`, at `6e1d46d`) — the contract is bound
+to these numbers rather than to a description:
+
+| Owner | Artefact | Count |
+|---|---|---|
+| **this ticket** | wrapper `~/.local/bin/commitlore` | 1 file |
+| **this ticket** | checkout `~/.local/share/commitlore/<tag>/` | 1206 files |
+| **this ticket** | agent MCP entries — `.codex/config.toml`, `.gemini/settings.json`, `.cursor/mcp.json`, `.config/opencode/opencode.json` | 4 configs |
+| **Claude Code** | `~/.claude/plugins/cache/**` | 6948 files, of which 4527 are `node_modules` |
+| **Claude Code** | `~/.claude.json` | written by the `claude` CLI |
+
+The plugin cache is a full copy of the repository with its dependencies, keyed by plugin
+version. It is why this ticket names the plugin uninstall step instead of performing it: a
+command that removed 6948 files it did not write would be doing Claude Code's job badly.
+
+**The entry shape to match** is `{"command": "<wrapper path>", "args": ["mcp"]}` — the value is
+the wrapper, not `node` and not the bundle. Recognition matches that shape. Matching any entry
+whose command merely contains `commitlore` would also match an unrelated server a user happened
+to name that way, which is the "never remove an entry the installer did not write" rule failing
+in the one case nobody would notice. Two of the four configs pre-existed and were merged into,
+and an unrelated entry with its token plus an unrelated top-level key both survived — so the
+byte-for-byte survival requirement below is measured, not hoped for.
+
 **Forbidden scope**
 
 - do not reach into Claude Code plugin state — name the plugin uninstall step and stop
