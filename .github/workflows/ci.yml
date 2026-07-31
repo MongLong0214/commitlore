@@ -395,35 +395,59 @@ jobs:
           if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
           if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
 
+      # These two run under cmd, deliberately. A pwsh step on GitHub runs with
+      # $ErrorActionPreference = 'Stop', which promotes a native command's stderr
+      # to a terminating error -- so a step that captures the installer's own
+      # error message with 2>&1 aborts on reading it and never reaches its
+      # assertion. cmd has no error records: %ERRORLEVEL% is the exit code and
+      # findstr reads the text. This is the same hazard the installer itself hit,
+      # in the harness rather than the script.
       - name: A foreign file at the destination is refused with exit 4
-        shell: pwsh
+        shell: cmd
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          $dir = Join-Path $env:TEMP 'commitlore-occupied'
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Set-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Value '@echo not commitlore'
-          $env:COMMITLORE_INSTALL_DIR = $dir
-          $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 2>&1 | Out-String)
-          $code = $LASTEXITCODE
-          Remove-Item Env:\COMMITLORE_INSTALL_DIR
-          Write-Host $out
-          if ($code -ne 4) { throw "expected exit 4 for an occupied destination, got $code" }
-          if ($out -notmatch 'refusing to overwrite it') { throw 'the refusal was not named' }
-          $body = Get-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Raw
-          if ($body -notmatch 'not commitlore') { throw 'the foreign file was modified' }
+          set "dir=%TEMP%\commitlore-occupied"
+          mkdir "%dir%" 2>nul
+          > "%dir%\commitlore.cmd" echo @echo not commitlore
+          set "COMMITLORE_INSTALL_DIR=%dir%"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%TEMP%\occupied.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          set "COMMITLORE_INSTALL_DIR="
+          type "%TEMP%\occupied.log"
+          if not "%code%"=="4" (
+            echo ::error::expected exit 4 for an occupied destination, got %code%
+            exit /b 1
+          )
+          findstr /C:"refusing to overwrite it" "%TEMP%\occupied.log" >nul || (
+            echo ::error::the refusal was not named
+            exit /b 1
+          )
+          findstr /C:"not commitlore" "%dir%\commitlore.cmd" >nul || (
+            echo ::error::the foreign file was modified
+            exit /b 1
+          )
 
       - name: An unknown tag is refused with exit 2 and installs nothing
-        shell: pwsh
+        shell: cmd
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v0.0.0 2>&1 | Out-String)
-          $code = $LASTEXITCODE
-          Write-Host $out
-          if ($code -ne 2) { throw "expected exit 2 for an unknown tag, got $code" }
-          if ($out -notmatch 'git said:') { throw "git's own reason was not quoted" }
-          if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'commitlore\v0.0.0')) { throw 'a checkout was left behind' }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v0.0.0 > "%TEMP%\badtag.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%TEMP%\badtag.log"
+          if not "%code%"=="2" (
+            echo ::error::expected exit 2 for an unknown tag, got %code%
+            exit /b 1
+          )
+          findstr /C:"git said:" "%TEMP%\badtag.log" >nul || (
+            echo ::error::git's own reason was not quoted
+            exit /b 1
+          )
+          if exist "%LOCALAPPDATA%\commitlore\v0.0.0" (
+            echo ::error::a checkout was left behind
+            exit /b 1
+          )
 
       # The hook is the point. Windows support is not claimed by this job (T-1124
       # owns that), but what the installer puts on the machine has to work.
