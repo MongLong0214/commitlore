@@ -118,6 +118,10 @@ const queryOptions = (paths, options, keys) => {
         paths,
         allHistory: options.allHistory === true,
         noIndex: options.index === false,
+        // A caller who typed a path meant that path, so an empty answer has to say
+        // whether the path was ever there (#307). The hook path deliberately does
+        // not set this: a new file has no history and that is not a finding.
+        explainEmptyResult: true,
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
         ...(keys === undefined ? {} : { keys }),
         ...(at === undefined ? {} : { at }),

@@ -56,6 +56,18 @@ export declare const WARN_KEY = "Warn";
  */
 export type TrustGrade = 'directive' | 'claim' | 'blocked';
 export interface QueryOptions {
+    /**
+     * Whether an empty answer should say if the path was never in the history (#307).
+     *
+     * On for the surfaces a caller queries deliberately -- `context` and MCP -- where
+     * `records: 0` for a path that never existed is a false observation waiting to be
+     * written down.
+     *
+     * Off for the `PreToolUse` injection path, where a file being created for the
+     * first time legitimately has no history, so the diagnostic would fire on every
+     * new file and the hook's contract is silence when there is nothing to say.
+     */
+    explainEmptyResult?: boolean;
     /** A single path to scope to. Sugar for `paths: [path]`. */
     path?: string;
     /** Several paths. Renames are followed only for one (see `QueryResult.follow`). */
