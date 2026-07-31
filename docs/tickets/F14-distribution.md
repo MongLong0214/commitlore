@@ -347,14 +347,17 @@ source of the agent config paths); `src/cli.ts` (one `register` line);
 
 **Depends on** — T-1120 and T-1121 merged: the command removes what they wrote.
 
-**Measured inventory** (shipped installer, scratch `HOME`, at `6e1d46d`) — the contract is bound
+**Measured inventory** — corrected at `51abef8` by executing the shipped installer. The original
+table recorded four agent configs; both installers write five, and Windsurf was absent from the
+count as well as from the list. The bidirectional assertion this ticket requires is what found it,
+which is the argument for that assertion rather than a footnote to it. (shipped installer, scratch `HOME`) — the contract is bound
 to these numbers rather than to a description:
 
 | Owner | Artefact | Count |
 |---|---|---|
 | **this ticket** | wrapper `~/.local/bin/commitlore` | 1 file |
-| **this ticket** | checkout `~/.local/share/commitlore/<tag>/` | 1206 files |
-| **this ticket** | agent MCP entries — `.codex/config.toml`, `.gemini/settings.json`, `.cursor/mcp.json`, `.config/opencode/opencode.json` | 4 configs |
+| **this ticket** | checkout `~/.local/share/commitlore/<tag>/` | 1206 files at `6e1d46d`; **1366** re-measured at `51abef8` |
+| **this ticket** | agent MCP entries — `.codex/config.toml`, `.gemini/settings.json`, `.cursor/mcp.json`, `.codeium/windsurf/mcp_config.json`, `.config/opencode/opencode.json` | **5 configs** |
 | **Claude Code** | `~/.claude/plugins/cache/**` | 6948 files, of which 4527 are `node_modules` |
 | **Claude Code** | `~/.claude.json` | written by the `claude` CLI |
 
@@ -362,8 +365,12 @@ The plugin cache is a full copy of the repository with its dependencies, keyed b
 version. It is why this ticket names the plugin uninstall step instead of performing it: a
 command that removed 6948 files it did not write would be doing Claude Code's job badly.
 
-**The entry shape to match** is `{"command": "<wrapper path>", "args": ["mcp"]}` — the value is
-the wrapper, not `node` and not the bundle. Recognition matches that shape. Matching any entry
+**The entry shapes to match** are three, not one. `{"command": "<wrapper path>", "args": ["mcp"]}`
+for the `mcpServers` configs, the same pair as TOML keys under `[mcp_servers.commitlore]`, and
+opencode's own `{"type": "local", "command": ["<wrapper path>", "mcp"], "enabled": true}` —
+where the command is an **array**. A recogniser written for the first alone leaves opencode's
+entry behind, and a removal that finds nothing looks exactly like a removal with nothing to do.
+In every shape the value is the wrapper, not `node` and not the bundle. Recognition matches that shape. Matching any entry
 whose command merely contains `commitlore` would also match an unrelated server a user happened
 to name that way, which is the "never remove an entry the installer did not write" rule failing
 in the one case nobody would notice. Two of the four configs pre-existed and were merged into,

@@ -29,6 +29,7 @@ import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
 import { register as registerValidate } from './commands/validate.js';
+import { registerUninstall } from './commands/uninstall.js';
 import { register as registerPostCommit } from './hooks/post-commit.js';
 import { register as registerPrepareCommitMsg } from './hooks/prepare-commit-msg.js';
 import { labelRecordBlocks, serializeTrailers } from './core/trailers.js';
@@ -104,6 +105,7 @@ program
     runParse(options);
 });
 registerValidate(program);
+registerUninstall(program);
 registerHooks(program);
 registerIndex(program);
 registerQuery(program);
