@@ -334,6 +334,11 @@ jobs:
   # job was first written and how it first failed (actions/runner#444).
   install-ps1:
     runs-on: windows-latest
+    # A hook that hangs rather than refusing is one of the outcomes this job now
+    # measures, and every commit it makes is individually bounded. This is the
+    # backstop for the case a bound is ever missed: without it the job runs to
+    # the runner's six-hour default and prints nothing.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -503,3 +508,353 @@ jobs:
 
           echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
           "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
+
+      # T-1124 (#283): #71's install-root containment, executed on Windows against
+      # a wrapper install. A property verified on one platform is not a property of
+      # the product, and macOS is the only place it has ever been executed.
+      #
+      # Paths are converted with `cygpath` rather than passed between the two path
+      # worlds as-is. `init` records a win32 path (`C:\...`), the stub reads it
+      # under Git for Windows' MSYS `sh`, and a witness file named `/tmp/ran.log`
+      # by bash is `C:\tmp\ran.log` to node. A test that mixed the two forms would
+      # report "the tampered program never ran" because it looked in the wrong
+      # place -- the exact false pass this ticket cannot afford.
+      - name: What the hook actually sees on Windows (measurement, not assertion)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/measure
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124m\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          echo "--- which sh will run the hook ---"
+          git --version
+          command -v sh || echo "(no sh on this PATH)"
+
+          echo "--- what init recorded ---"
+          recorded=$(git config --local --get commitlore.bin || true)
+          recorded_root=$(git config --local --get commitlore.root || true)
+          recorded_node=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $recorded"
+          echo "commitlore.root = $recorded_root"
+          echo "commitlore.node = $recorded_node"
+
+          echo "--- the stub's containment comparison, recomputed here ---"
+          # Verbatim from src/hooks/commit-msg.ts: this is the branch that decides
+          # whether the recorded bundle is executed at all.
+          recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=
+          echo "dirname+pwd -P  = ${recorded_dir:-(empty)}"
+          case "$recorded_dir" in
+            "$recorded_root"|"$recorded_root"/*)
+              echo "containment case: MATCH -- the recorded bundle is exec'd" ;;
+            *)
+              echo "containment case: NO MATCH -- the stub falls through" ;;
+          esac
+          [ -x "$recorded_node" ] && echo "test -x node: yes" || echo "test -x node: no"
+          [ -L "$recorded" ] && echo "test -L bin: yes" || echo "test -L bin: no"
+
+          echo "--- where a fall-through lands ---"
+          command -v commitlore >/dev/null 2>&1 \
+            && echo "command -v commitlore: found -- $(command -v commitlore)" \
+            || echo "command -v commitlore: NOT found (the shim is commitlore.cmd)"
+
+          echo "--- what a commit-msg hook sees on this platform ---"
+          # A scratch repository with a hook of its own, so this measures Git for
+          # Windows rather than commitlore. The stub's chained-hook slot was tried
+          # first and the probe there was never invoked, which is itself a reading:
+          # the stub finds that slot with `hook_dir=${0%/*}`, and $0 with no `/`
+          # in it leaves hook_dir as `.`.
+          probe_repo=$(mktemp -d)/probe
+          mkdir -p "$probe_repo"
+          (
+            cd "$probe_repo"
+            git init -q -b main
+            git config user.email t@example.com
+            git config user.name "CommitLore CI"
+            git config commit.gpgsign false
+            {
+              echo '#!/bin/sh'
+              echo 'echo "hook argv0    = $0"'
+              echo 'echo "hook PWD      = $PWD"'
+              echo 'echo "hook pwd      = $(pwd)"'
+              echo 'echo "hook pwd -P   = $(pwd -P)"'
+              echo 'echo "hook uname    = $(uname -s 2>/dev/null || echo unknown)"'
+              echo 'case "$0" in'
+              echo '  */*) echo "hook dir-from-argv0 = ${0%/*}" ;;'
+              echo '  *)   echo "hook argv0 holds no slash: a stub falls back to ." ;;'
+              echo 'esac'
+              echo '# The stub walk, bounded so this reports instead of joining the'
+              echo '# hang it exists to measure.'
+              echo 'dir=$PWD; n=0'
+              echo 'while [ -n "$dir" ]; do'
+              echo '  n=$((n+1))'
+              echo '  if [ "$n" -gt 40 ]; then echo "walk: NON-TERMINATING, stuck at [$dir]"; break; fi'
+              echo '  dir=${dir%/*}'
+              echo 'done'
+              echo '[ "$n" -le 40 ] && echo "walk: terminates after $n iterations"'
+              echo 'exit 0'
+            } > .git/hooks/commit-msg
+            chmod +x .git/hooks/commit-msg
+            printf 'x\n' > f.txt
+            git add f.txt
+            rc=0
+            timeout -k 5 30 git commit -m "probe" > probe-out.txt 2>&1 || rc=$?
+            echo "(probe commit exit $rc)"
+            cat probe-out.txt 2>/dev/null || echo "(no probe output)"
+          )
+
+          echo "--- a real commit through the real hook, bounded ---"
+          # Bounded on purpose. An unbounded hang is not evidence, it is a job
+          # that dies at the runner's timeout with nothing printed.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          # `|| rc=$?`, not a bare call: Actions runs a bash step as `bash -eo
+          # pipefail`, and `set -uo pipefail` above does not clear the -e it was
+          # invoked with. A bare timeout that fires would abort the step at that
+          # line, which is how the first attempt lost its own verdict and the
+          # probe output underneath it.
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
+            > "$(mktemp)" 2>&1 || rc=$?
+          
+          case "$rc" in
+            0)   echo "real commit: ACCEPTED (exit 0)" ;;
+            124) echo "real commit: HUNG -- killed at 90s, the hook never returned" ;;
+            *)   echo "real commit: REFUSED (exit $rc)" ;;
+          esac
+
+          # The commit hung, so the hook certainly ran. What the stub did after
+          # that is what the scratch-repo probe above reports.
+
+      # The baseline runs before the attacks and is not decoration. An attack that
+      # "passes" because nothing resolves at all is not containment -- it is a hook
+      # that refuses everything, which fails the legitimate user too. The baseline
+      # is the only thing that tells those two apart, so it asserts both
+      # directions: a valid record is accepted, and an invalid one is refused.
+      #
+      # No continue-on-error, by the ticket's own terms.
+      - name: The hook runs and discriminates through the recorded install (baseline)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/baseline
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124s\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
+          # Every commit that passes through the hook is bounded. A hang is a
+          # distinct outcome from a refusal and has to be reported as one; left
+          # unbounded it becomes a job that dies at the runner timeout instead.
+          # `|| c=$?` throughout: Actions runs a bash step as `bash -eo pipefail`,
+          # and `set -uo pipefail` above does not clear that -e. A bare command
+          # that times out would abort the step before it could report which of
+          # the three outcomes -- accepted, refused, hung -- actually happened.
+          out=$(mktemp)
+          commit_bounded() {
+            local c=0
+            timeout -k 5 90 git commit -m "$1" > "$out" 2>&1 || c=$?
+            sed -n '1,25p' "$out" || true
+            return $c
+          }
+
+          # Acceptance first: this is the direction a dead hook fails. A hook that
+          # exits non-zero unconditionally would satisfy the refusal case below
+          # while blocking every commit on the platform.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          rc=0
+          commit_bounded "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on a valid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::the hook refused a valid record through the recorded install (exit $rc)"
+            exit 1
+          fi
+
+          # The refusal direction doubles as proof the hook ran at all: an
+          # uninstalled or unreachable hook cannot reject anything, so a commit
+          # that is accepted here means git never invoked it.
+          printf 'export const value = 2;\n' > file.ts
+          git add file.ts
+          rc=0
+          commit_bounded "$(printf 'Bad\n\nBlast: wide\n')" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on an invalid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the hook accepted an invalid record, so it never ran"
+            exit 1
+          fi
+          echo "baseline ok: the hook runs, accepts a valid record and refuses an invalid one"
+
+      - name: A recorded target outside the install root is refused (#71, attack 1)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack1
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124t\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
+          outside=$(mktemp -d)
+          witness="$outside/ran.log"
+          # A .mjs, so it clears the extension allowlist: the only thing between it
+          # and execution is the install-root check. ESM, because .mjs is ESM and a
+          # `require` here would throw before writing the witness -- a false pass.
+          # Forward slashes: node on Windows accepts them, and they need no escaping.
+          printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
+            "$(cygpath -m "$witness")" > "$outside/evil.mjs"
+          # Positive control, before the attack: prove the witness mechanism can
+          # fire at all. Without it "the witness is absent" is equally consistent
+          # with a witness this harness could never have observed -- a path in the
+          # wrong world, an ESM error, an unwritable directory.
+          node "$outside/evil.mjs" || { echo "::error::the witness payload does not run"; exit 1; }
+          test -f "$witness" || {
+            echo "::error::the witness payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the witness fires when the payload runs"
+
+          # Recorded in win32 form, which is the form `init` itself writes.
+          git config --local commitlore.bin "$(cygpath -w "$outside/evil.mjs")"
+
+          printf 'export const value = 3;\n' > file.ts
+          git add file.ts
+          out=$(mktemp)
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" \
+            > "$out" 2>&1 || rc=$?
+          # Printed, not swallowed: "the witness is absent" is only containment if
+          # the hook actually ran and declined. The refusal text is what tells a
+          # reader which of the two happened.
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the tampered record and was killed at 90s"
+            exit 1
+          fi
+          if [ -f "$witness" ]; then
+            echo "::error::the recorded program outside the install root was executed"
+            cat "$witness"
+            exit 1
+          fi
+          echo "attack 1 refused: the program outside the install root never ran"
+
+      - name: A recorded target that is not a script is refused (#71, attack 2)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack2
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124v\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
+          root=$(git config --local --get commitlore.root || true)
+          test -n "$root" || { echo "::error::no commitlore.root was recorded"; exit 1; }
+          root_posix=$(cygpath -u "$root")
+          witness=$(mktemp -d)/ran.log
+          # Inside the install root, so the location check cannot be what refuses
+          # it -- only the extension allowlist can.
+          #
+          # `.cmd`, not an extensionless name: the objection to the earlier payload
+          # was that nothing in the stub could ever exec it, so refusing it tested
+          # a branch that does not exist. `.cmd` is the extension a Windows fix is
+          # most likely to add to the allowlist -- the installer's own shim carries
+          # it -- which makes this a regression guard on a loosening somebody would
+          # plausibly make. It is not evidence that containment holds; the
+          # install-root check in attack 1 is.
+          planted="$root_posix/commitlore.cmd"
+          trap 'rm -f "$planted"' EXIT
+          printf '@echo off\r\necho ran >> "%s"\r\n' "$(cygpath -w "$witness")" > "$planted"
+          cmd //c "$(cygpath -w "$planted")" || true
+          test -f "$witness" || {
+            echo "::error::the planted payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the planted .cmd fires when it is run"
+          git config --local commitlore.bin "$(cygpath -w "$planted")"
+
+          printf 'export const value = 4;\n' > file.ts
+          git add file.ts
+          out=$(mktemp)
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" \
+            > "$out" 2>&1 || rc=$?
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the planted record and was killed at 90s"
+            exit 1
+          fi
+          if [ -f "$witness" ]; then
+            echo "::error::a recorded target with an unallowed extension was executed"
+            exit 1
+          fi
+          echo "attack 2 refused: the unallowed-extension target never ran"
