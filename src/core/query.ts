@@ -107,6 +107,18 @@ const MAX_ALIASES = 64;
 export type TrustGrade = 'directive' | 'claim' | 'blocked';
 
 export interface QueryOptions {
+  /**
+   * Whether an empty answer should say if the path was never in the history (#307).
+   *
+   * On for the surfaces a caller queries deliberately -- `context` and MCP -- where
+   * `records: 0` for a path that never existed is a false observation waiting to be
+   * written down.
+   *
+   * Off for the `PreToolUse` injection path, where a file being created for the
+   * first time legitimately has no history, so the diagnostic would fire on every
+   * new file and the hook's contract is silence when there is nothing to say.
+   */
+  explainEmptyResult?: boolean;
   /** A single path to scope to. Sugar for `paths: [path]`. */
   path?: string;
   /** Several paths. Renames are followed only for one (see `QueryResult.follow`). */
@@ -318,6 +330,60 @@ const followedNames = (cwd: string, path: string): string[] => {
  * add a query that can only return rows the prefix match already returns, and
  * for a directory pathspec that would be one query per file in the tree.
  */
+/** How many parent directories are probed for the "did you mean" hint. */
+const MAX_ANCESTOR_PROBES = 4;
+
+/**
+ * Whether the walked history mentions a path at all.
+ *
+ * Deliberately not a working-tree check: a deleted file has legitimate history
+ * and legitimate records, and `stat` would call it missing (#307). This asks the
+ * same history the query walks -- HEAD's -- so the answer describes the same
+ * corpus the record count came from.
+ */
+const historyMentions = (cwd: string, path: string): boolean => {
+  const result = execGit(['log', '-1', '--format=%H', '--', path], { cwd });
+  return result.code === 0 && result.stdout.trim() !== '';
+};
+
+/**
+ * Says an empty answer is uninformative when the path was never in the history.
+ *
+ * `records: 0` reads as "nothing was recorded here, proceed". That is right for a
+ * path that exists and recorded nothing, and wrong for a typo or a since-renamed
+ * path, where the zero carries no information at all. Only the second case gets a
+ * diagnostic.
+ *
+ * The nearest ancestor that does have history is named when there is one, because
+ * that is what closes the loop in practice: the reporter's containing directory
+ * held 15 records while the queried file had never existed.
+ */
+const pathPresenceDiagnostics = (cwd: string, paths: readonly string[]): string[] => {
+  // One path only: with several, `git log --follow` is already off and the caller
+  // has been told so, and a per-path probe would multiply git calls.
+  if (paths.length !== 1) return [];
+  const [path = ''] = paths;
+  if (path === '' || path === '.') return [];
+  if (historyMentions(cwd, path)) return [];
+
+  let hint = '';
+  let ancestor = path;
+  for (let probe = 0; probe < MAX_ANCESTOR_PROBES; probe += 1) {
+    const cut = ancestor.lastIndexOf('/');
+    if (cut <= 0) break;
+    ancestor = ancestor.slice(0, cut);
+    if (historyMentions(cwd, ancestor)) {
+      hint = `; ${ancestor} does have history, so query that if the name has changed`;
+      break;
+    }
+  }
+
+  return [
+    `${path} matched no blob in the walked history, so 0 records is uninformative rather than ` +
+      `a statement that nothing was recorded${hint}`,
+  ];
+};
+
 const resolveScope = (cwd: string, paths: readonly string[]): Scope => {
   if (paths.length === 0) return { aliases: [], follow: false, diagnostics: [] };
 
@@ -732,6 +798,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
   try {
     const scope = resolveScope(cwd, paths);
     diagnostics.push(...scope.diagnostics);
+    if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
 
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));

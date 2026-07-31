@@ -14257,6 +14257,31 @@ var followedNames = (cwd, path2) => {
   }
   return names;
 };
+var MAX_ANCESTOR_PROBES = 4;
+var historyMentions = (cwd, path2) => {
+  const result = execGit(["log", "-1", "--format=%H", "--", path2], { cwd });
+  return result.code === 0 && result.stdout.trim() !== "";
+};
+var pathPresenceDiagnostics = (cwd, paths) => {
+  if (paths.length !== 1) return [];
+  const [path2 = ""] = paths;
+  if (path2 === "" || path2 === ".") return [];
+  if (historyMentions(cwd, path2)) return [];
+  let hint = "";
+  let ancestor = path2;
+  for (let probe = 0; probe < MAX_ANCESTOR_PROBES; probe += 1) {
+    const cut = ancestor.lastIndexOf("/");
+    if (cut <= 0) break;
+    ancestor = ancestor.slice(0, cut);
+    if (historyMentions(cwd, ancestor)) {
+      hint = `; ${ancestor} does have history, so query that if the name has changed`;
+      break;
+    }
+  }
+  return [
+    `${path2} matched no blob in the walked history, so 0 records is uninformative rather than a statement that nothing was recorded${hint}`
+  ];
+};
 var resolveScope = (cwd, paths) => {
   if (paths.length === 0) return { aliases: [], follow: false, diagnostics: [] };
   if (paths.length > 1) {
@@ -14514,6 +14539,7 @@ var runQuery = (opts = {}) => {
   try {
     const scope = resolveScope(cwd, paths);
     diagnostics.push(...scope.diagnostics);
+    if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));
     const visible = foldMirroredNotes(
@@ -27664,6 +27690,10 @@ var queryOptions = (paths, options, keys) => {
     paths,
     allHistory: options.allHistory === true,
     noIndex: options.index === false,
+    // A caller who typed a path meant that path, so an empty answer has to say
+    // whether the path was ever there (#307). The hook path deliberately does
+    // not set this: a new file has no history and that is not a finding.
+    explainEmptyResult: true,
     ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
     ...keys === void 0 ? {} : { keys },
     ...at === void 0 ? {} : { at },
@@ -28135,6 +28165,9 @@ var contextJson = (root, kind, path2) => {
   const keys = KEYS_BY_KIND[kind];
   const result = withholdBlocked(
     runQuery({
+      // The agent's query surface answers like `context`: an empty result must
+      // say whether the path was ever in the history (#307).
+      explainEmptyResult: true,
       cwd: root,
       ...path2 === "" ? {} : { paths: [path2] },
       ...keys === void 0 ? {} : { keys }

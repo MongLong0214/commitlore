@@ -199,6 +199,9 @@ const contextJson = (root: string, kind: QueryKind, path: string): JsonOutput =>
   const keys = KEYS_BY_KIND[kind];
   const result = withholdBlocked(
     runQuery({
+      // The agent's query surface answers like `context`: an empty result must
+      // say whether the path was ever in the history (#307).
+      explainEmptyResult: true,
       cwd: root,
       ...(path === '' ? {} : { paths: [path] }),
       ...(keys === undefined ? {} : { keys }),
