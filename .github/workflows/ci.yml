@@ -548,19 +548,19 @@ jobs:
           echo "commitlore.root = $recorded_root"
           echo "commitlore.node = $recorded_node"
 
-          echo "--- the stub's containment comparison, recomputed here ---"
-          # Verbatim from src/hooks/commit-msg.ts: this is the branch that decides
-          # whether the recorded bundle is executed at all.
-          recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=
-          echo "dirname+pwd -P  = ${recorded_dir:-(empty)}"
-          case "$recorded_dir" in
-            "$recorded_root"|"$recorded_root"/*)
-              echo "containment case: MATCH -- the recorded bundle is exec'd" ;;
-            *)
-              echo "containment case: NO MATCH -- the stub falls through" ;;
-          esac
-          [ -x "$recorded_node" ] && echo "test -x node: yes" || echo "test -x node: no"
-          [ -L "$recorded" ] && echo "test -L bin: yes" || echo "test -L bin: no"
+          echo "--- what the installed hook itself contains, and what it resolves ---"
+          # Not a recomputation. An earlier version of this step restated the
+          # stub's comparison inline, and once the stub was fixed the restatement
+          # kept printing the original defect next to a commit that had plainly
+          # succeeded. A measurement that paraphrases what it measures reports on
+          # the paraphrase.
+          hook="$(git rev-parse --git-path hooks)/commit-msg"
+          test -f "$hook" || { echo "::error::no commit-msg hook was installed"; exit 1; }
+          echo "the hook's containment branch, as shipped:"
+          sed -n '/recorded_root=/,/^fi$/p' "$hook" | sed 's/^/    /'
+          echo "resolved: recorded parent = $(cd "$(printf %s "$recorded" | tr '"'"'\\'"'"' / | sed 's|/[^/]*$||')" 2>/dev/null && pwd -P)"
+          echo "resolved: recorded root   = $(cd "$(printf %s "$recorded_root" | tr '"'"'\\'"'"' /)" 2>/dev/null && pwd -P)"
+          echo "(the verdict is the real commit below, not a restatement here)"
 
           echo "--- where a fall-through lands ---"
           command -v commitlore >/dev/null 2>&1 \
@@ -592,15 +592,6 @@ jobs:
               echo '  */*) echo "hook dir-from-argv0 = ${0%/*}" ;;'
               echo '  *)   echo "hook argv0 holds no slash: a stub falls back to ." ;;'
               echo 'esac'
-              echo '# The stub walk, bounded so this reports instead of joining the'
-              echo '# hang it exists to measure.'
-              echo 'dir=$PWD; n=0'
-              echo 'while [ -n "$dir" ]; do'
-              echo '  n=$((n+1))'
-              echo '  if [ "$n" -gt 40 ]; then echo "walk: NON-TERMINATING, stuck at [$dir]"; break; fi'
-              echo '  dir=${dir%/*}'
-              echo 'done'
-              echo '[ "$n" -le 40 ] && echo "walk: terminates after $n iterations"'
               echo 'exit 0'
             } > .git/hooks/commit-msg
             chmod +x .git/hooks/commit-msg
@@ -611,6 +602,22 @@ jobs:
             echo "(probe commit exit $rc)"
             cat probe-out.txt 2>/dev/null || echo "(no probe output)"
           )
+
+          echo "--- the walk, taken out of the installed hook and run from a drive root ---"
+          # Sliced from the shipped stub, so a fix made only in a comment cannot
+          # pass this. The seeded PWD is the form the probe above reports.
+          awk '/^dir=\$PWD$/,/^done$/' "$hook" > "$RUNNER_TEMP/walk.sh"
+          test -s "$RUNNER_TEMP/walk.sh" || { echo "::error::could not find the walk in the installed hook"; exit 1; }
+          { echo 'PWD="C:/Users/RUNNER~1/AppData/Local/Temp/probe"'
+            cat "$RUNNER_TEMP/walk.sh"
+            echo 'echo "walk: returned"'
+          } > "$RUNNER_TEMP/walk-run.sh"
+          rc=0
+          timeout -k 5 20 sh "$RUNNER_TEMP/walk-run.sh" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the walk did not return from a drive-letter root"
+            exit 1
+          fi
 
           echo "--- a real commit through the real hook, bounded ---"
           # Bounded on purpose. An unbounded hang is not evidence, it is a job
