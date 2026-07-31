@@ -338,14 +338,16 @@ describe('T-1122 the host table uses one vocabulary and claims nothing unreached
     }
   });
 
-  it('Windows is not marked supported', () => {
-    // T-1124 (#283) owns that claim, and its baseline does not pass. Reachability
-    // through install.ps1 is not the same statement.
+  it('the Windows row cites the containment work its status depends on', () => {
+    // This asserted `status !== 'supported'` while T-1124 was unproven, which
+    // pinned a transient fact as an invariant and made the cell flip that ticket
+    // is authorised to perform unlandable. What is actually invariant is that
+    // the row's status rests on #71's containment being established there, so
+    // the citation is what gets checked -- in either direction.
     const row = rows().find(([h]) => /windows/i.test(h));
     expect(row, 'no Windows row').toBeDefined();
-    expect(row![1], 'T-1124 owns the Windows support claim').not.toBe('supported');
-    expect(row![2], 'the Windows row must cite #95 and T-1124').toMatch(/#95/);
-    expect(row![2]).toMatch(/T-1124|#283/);
+    expect(row![2], 'the Windows row must cite the containment issue').toMatch(/#71|#95/);
+    expect(row![2], 'and the ticket that established or blocked it').toMatch(/T-1124|#283|#321/);
   });
 
   it('no supported row names a host no install path reaches', () => {

@@ -409,7 +409,12 @@ drift, and the bidirectional agreement test green.
 job); `test/hook-target.test.ts` (wrapper-path cases)
 
 **Also changes, under the single-writer rule** — the compatibility document's Windows row
-`status` cell and its reason, and **nothing else in that file**. T-1122 owns the document and
+`status` cell and its reason, and **nothing else in that file**; and the one assertion in
+`test/compatibility-matrix.test.ts` that pins that cell away from `supported`. That assertion
+was written by T-1122 as a guard while this ticket was unproven, and it encodes a transient
+fact as an invariant: it makes the cell flip this ticket is authorised to perform impossible to
+land. Correcting it is removing an obstacle to an authorised change, not widening scope — the
+rest of that file stays T-1122's. T-1122 owns the document and
 ships that row already present with status `unsupported`, citing #95 and this ticket, so this
 ticket has exactly one cell to change and never has to add or restructure a row. A diff here
 that adds a row, edits another row, or touches the table's shape belongs to T-1122. The path is
