@@ -334,6 +334,11 @@ jobs:
   # job was first written and how it first failed (actions/runner#444).
   install-ps1:
     runs-on: windows-latest
+    # A hook that hangs rather than refusing is one of the outcomes this job now
+    # measures, and every commit it makes is individually bounded. This is the
+    # backstop for the case a bound is ever missed: without it the job runs to
+    # the runner's six-hour default and prints nothing.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -562,12 +567,53 @@ jobs:
             && echo "command -v commitlore: found -- $(command -v commitlore)" \
             || echo "command -v commitlore: NOT found (the shim is commitlore.cmd)"
 
-          echo "--- a real commit through the real hook ---"
+          echo "--- what the hook sees from inside, via the chained-hook slot ---"
+          # The stub runs a pre-existing hook first, from its own directory. That
+          # is a supported slot, so a probe there reads the hook's real
+          # environment -- $PWD in the form git actually hands it -- without
+          # editing the stub, which this ticket does not own.
+          hooks_dir=$(git rev-parse --git-path hooks)
+          probe="$hooks_dir/commit-msg.commitlore-chained"
+          probe_log=$(mktemp -d)/probe.txt
+          {
+            echo '#!/bin/sh'
+            echo "exec >> \"$probe_log\" 2>&1"
+            echo 'echo "hook \$0        = $0"'
+            echo 'echo "hook \$PWD      = $PWD"'
+            echo 'echo "hook pwd       = $(pwd)"'
+            echo 'echo "hook pwd -P    = $(pwd -P)"'
+            echo 'echo "hook uname     = $(uname -s 2>/dev/null || echo unknown)"'
+            echo '# The stub walk that follows this probe, bounded so the probe'
+            echo '# reports instead of joining the hang it is measuring.'
+            echo 'dir=$PWD; n=0'
+            echo 'while [ -n "$dir" ]; do'
+            echo '  n=$((n+1))'
+            echo '  if [ "$n" -gt 40 ]; then echo "walk: NON-TERMINATING, stuck at [$dir]"; break; fi'
+            echo '  dir=${dir%/*}'
+            echo 'done'
+            echo '[ "$n" -le 40 ] && echo "walk: terminates after $n iterations"'
+            echo 'exit 0'
+          } > "$probe"
+          chmod +x "$probe"
+
+          echo "--- a real commit through the real hook, bounded ---"
+          # Bounded on purpose. An unbounded hang is not evidence, it is a job
+          # that dies at the runner's timeout with nothing printed.
           printf 'export const value = 1;\n' > file.ts
           git add file.ts
-          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
-            && echo "real commit: ACCEPTED (exit 0)" \
-            || echo "real commit: REFUSED (exit $?)"
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
+            > "$probe_log.commit" 2>&1
+          rc=$?
+          sed -n '1,40p' "$probe_log.commit" || true
+          case "$rc" in
+            0)   echo "real commit: ACCEPTED (exit 0)" ;;
+            124) echo "real commit: HUNG -- killed at 90s, the hook never returned" ;;
+            *)   echo "real commit: REFUSED (exit $rc)" ;;
+          esac
+
+          echo "--- the probe's view from inside the hook ---"
+          cat "$probe_log" 2>/dev/null || echo "(the probe never ran: git did not invoke the hook)"
+          rm -f "$probe"
 
       # The baseline runs before the attacks and is not decoration. An attack that
       # "passes" because nothing resolves at all is not containment -- it is a hook
@@ -593,20 +639,46 @@ jobs:
           git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124s\n')"
           "$shim" init || echo "(init reported steps needing attention)"
 
+          # Every commit that passes through the hook is bounded. A hang is a
+          # distinct outcome from a refusal and has to be reported as one; left
+          # unbounded it becomes a job that dies at the runner timeout instead.
+          out=$(mktemp)
+          commit_bounded() {
+            timeout -k 5 90 git commit -m "$1" > "$out" 2>&1
+            rc=$?
+            sed -n '1,25p' "$out" || true
+            return $rc
+          }
+
           # Acceptance first: this is the direction a dead hook fails. A hook that
           # exits non-zero unconditionally would satisfy the refusal case below
           # while blocking every commit on the platform.
           printf 'export const value = 1;\n' > file.ts
           git add file.ts
-          if ! git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')"; then
-            echo "::error::the hook refused a valid record through the recorded install"
+          commit_bounded "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')"
+          rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on a valid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::the hook refused a valid record through the recorded install (exit $rc)"
             exit 1
           fi
 
+          # The refusal direction doubles as proof the hook ran at all: an
+          # uninstalled or unreachable hook cannot reject anything, so a commit
+          # that is accepted here means git never invoked it.
           printf 'export const value = 2;\n' > file.ts
           git add file.ts
-          if git commit -m "$(printf 'Bad\n\nBlast: wide\n')"; then
-            echo "::error::the hook accepted an invalid record"
+          commit_bounded "$(printf 'Bad\n\nBlast: wide\n')"
+          rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on an invalid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the hook accepted an invalid record, so it never ran"
             exit 1
           fi
           echo "baseline ok: the hook runs, accepts a valid record and refuses an invalid one"
@@ -641,7 +713,19 @@ jobs:
 
           printf 'export const value = 3;\n' > file.ts
           git add file.ts
-          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" || true
+          out=$(mktemp)
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" \
+            > "$out" 2>&1
+          rc=$?
+          # Printed, not swallowed: "the witness is absent" is only containment if
+          # the hook actually ran and declined. The refusal text is what tells a
+          # reader which of the two happened.
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the tampered record and was killed at 90s"
+            exit 1
+          fi
           if [ -f "$witness" ]; then
             echo "::error::the recorded program outside the install root was executed"
             cat "$witness"
@@ -680,8 +764,19 @@ jobs:
 
           printf 'export const value = 4;\n' > file.ts
           git add file.ts
-          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" || true
+          out=$(mktemp)
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" \
+            > "$out" 2>&1
+          rc=$?
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          # Removed before the verdict, so a failing assertion cannot leave the
+          # planted file in the install root that every later step shares.
           rm -f "$planted"
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the planted record and was killed at 90s"
+            exit 1
+          fi
           if [ -f "$witness" ]; then
             echo "::error::a recorded target with no recognised extension was executed"
             exit 1
