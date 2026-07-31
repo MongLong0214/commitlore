@@ -558,8 +558,10 @@ jobs:
           test -f "$hook" || { echo "::error::no commit-msg hook was installed"; exit 1; }
           echo "the hook's containment branch, as shipped:"
           sed -n '/recorded_root=/,/^fi$/p' "$hook" | sed 's/^/    /'
-          echo "resolved: recorded parent = $(cd "$(printf %s "$recorded" | tr '"'"'\\'"'"' / | sed 's|/[^/]*$||')" 2>/dev/null && pwd -P)"
-          echo "resolved: recorded root   = $(cd "$(printf %s "$recorded_root" | tr '"'"'\\'"'"' /)" 2>/dev/null && pwd -P)"
+          recorded_slashed=$(printf %s "$recorded" | tr '\\' /)
+          root_slashed=$(printf %s "$recorded_root" | tr '\\' /)
+          echo "resolved: recorded parent = $(cd "${recorded_slashed%/*}" 2>/dev/null && pwd -P)"
+          echo "resolved: recorded root   = $(cd "$root_slashed" 2>/dev/null && pwd -P)"
           echo "(the verdict is the real commit below, not a restatement here)"
 
           echo "--- where a fall-through lands ---"
