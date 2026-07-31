@@ -139,6 +139,36 @@ No code is mutated by this change. Measured at `69e5208`:
 install-root containment. Their removal must **preserve that property for the wrapper case**
 rather than delete the check along with the binary arm.
 
+## Records this reversal retires, and the ones it deliberately does not
+
+The documents above are not the only place the withdrawn decision is served. CommitLore's own
+record surface answers `commitlore ruled-out scripts/build-binary.mjs`, and at `9b57019` it
+returned `r-seabin39` as **active** — the record that adopted the Node SEA build. Every
+alternative it rules out is a way of producing an executable (`pkg`/`nexe`, Deno or Bun
+compile, a Go or Rust rewrite, committing the binary, an ESM SEA main), and one of them states
+that Windows `commitlore.exe` is "a small additive follow-up, not a redesign".
+
+An agent reading that today would be told the compiled-binary approach is the live one and a
+Windows executable is nearly free. That is the precise failure this product exists to prevent:
+a reversed decision still reading active. Documentation saying otherwise does not fix it,
+because the agent asks the tool, not the docs.
+
+So this change carries `Supersedes: r-seabin39`. Nothing is deleted — the record stays in
+history with its measurements intact; it stops being served as live guidance.
+
+**Records deliberately left active**, because they describe code this change does not touch:
+
+| Record | On | Why it stays |
+|---|---|---|
+| `r-1e58d3`, `r-83d43117`, `r-3d92a8`, `r-5b9e37`, `r-9a5e17` | `src/core/hook-target.ts`, `src/hooks/commit-msg.ts` | they describe the install-root containment logic, which is still live and must survive the removal. T-1125 retires only what it actually changes |
+| `r-instci99a` | `install.sh` | its ruled-out items about installer CI verification are still sound reasoning; only its musl-target clause is affected, and that alternative remains rejected — for a new reason |
+| `r-relinstall` | `install.sh` | it describes how the shipped installer resolves an asset, and the shipped installer still does that. T-1120 retires it when the behaviour actually changes |
+| `r-relworkflow` | `.github/workflows/release.yml` | the release workflow is unchanged here |
+
+The rule applied: **retire a record when the decision is reversed, not when a document says it
+will be.** A record that describes running code stays active until that code changes.
+
+
 ## Falsification
 
 This ADR is wrong if any of the following is true:
