@@ -167,4 +167,11 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(ci).toContain('windows-latest');
     expect(ci).toContain('install.ps1');
   });
+  it('takes the first node on PATH, not every match', () => {
+    // Found by the Windows runner, not by reading: `Get-Command` returns every
+    // match, a hosted runner carries two `node.exe`, and the array turned the
+    // version check into an invocation of two paths joined by a space. The first
+    // match is also the correct one -- it is what typing `node` would run.
+    expect(body()).toMatch(/Get-Command node[^\n]*\| Select-Object -First 1/);
+  });
 });

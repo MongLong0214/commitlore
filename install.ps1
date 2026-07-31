@@ -80,7 +80,12 @@ function Stop-Install {
 # with node, and the checkout is a git clone. A missing one is named, with what
 # to do about it, and nothing is installed.
 
-$nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+# `Select-Object -First 1`: Get-Command returns *every* match on PATH, and a
+# Windows runner really does carry two node.exe. Without it $nodeBin becomes an
+# array, the interpolated error message reads as two paths joined by a space, and
+# the version check invokes something that is not a program. The first match is
+# also the right one -- it is what typing `node` would run.
+$nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -eq $nodeCommand) {
     Stop-Install "Node.js $NodeMajorMin or newer is required and no ""node"" was found on PATH. Install Node.js $NodeMajorMin+ (https://nodejs.org), then run this again. Nothing was installed." 1
 }
