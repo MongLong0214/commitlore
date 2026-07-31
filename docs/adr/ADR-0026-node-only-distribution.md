@@ -129,7 +129,7 @@ No code is mutated by this change. Measured at `69e5208`:
 | `.github/workflows/release.yml` → `build` job, four-target matrix (lines 77–137) | compiles and uploads one asset per target |
 | `.github/workflows/release.yml` → `publish` job asset and `SHA256SUMS` steps (lines 138–170) | asserts every asset landed, publishes checksums |
 | `.github/workflows/ci.yml` → `binary` job (lines 200+) | builds the compiled binary on two runners |
-| `install.sh` → asset resolution, download, checksum, extract (lines ~71–160) | fetches `SHA256SUMS`, downloads the per-target tarball, verifies and extracts it |
+| ~~`install.sh` → asset resolution, download, checksum, extract~~ | **Done, 2026-07-31 by T-1120 (#281).** The script now checks Node ≥ 22 and Git, clones a pinned tag, and writes a thin wrapper. `SHA256SUMS`, `.tar.gz`, `tar -xzf` and every target triple are gone from the file — verified by a repository-wide assertion, not by reading. Nothing in `install.sh` remains for the removal ticket |
 | `scripts/commitlore-run.sh` → `resolve()` first branch | probes `$CLAUDE_PLUGIN_ROOT/dist/commitlore` before the Node bundle |
 | `src/core/hook-target.ts` → `BinKind`, `classifyBinTarget`, `matchesRunningBinary` | classifies an install target as `script` or compiled `binary` |
 | `src/hooks/commit-msg.ts` → the stub allowlist glob | accepts a bare `commitlore` executable as a hook target |
