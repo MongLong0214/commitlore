@@ -6,7 +6,7 @@
  * no concurrent reader can observe a partial file.
  */
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execGitOrThrow } from './git.js';
 export class PendingFormatError extends Error {
@@ -91,10 +91,33 @@ export const createPending = (opts) => {
         validation_result: null,
         overlap_check: null,
         incomplete: false,
+        guard_advisory: opts.guard_advisory ?? null,
     };
     const filePath = pendingFilePath(nonce, opts.cwd);
     atomicWriteJson(filePath, record);
     return nonce;
+};
+/**
+ * The nonces of every pending transaction in this repository, sorted oldest name
+ * first so a listing is stable between runs.
+ *
+ * Returns an empty list when the directory does not exist: a repository that has
+ * never captured has nothing pending, which is an answer rather than an error
+ * (#311).
+ */
+export const listPendingNonces = (cwd) => {
+    let entries;
+    try {
+        entries = readdirSync(pendingDir(cwd));
+    }
+    catch {
+        return [];
+    }
+    return entries
+        .filter((name) => name.endsWith('.json'))
+        .map((name) => name.slice(0, -'.json'.length))
+        .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
+        .sort();
 };
 /**
  * Reads a pending transaction by nonce.

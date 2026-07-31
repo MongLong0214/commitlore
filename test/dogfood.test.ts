@@ -226,20 +226,34 @@ describe('dogfooding: this repository obeys its own protocol', () => {
     expect(dangling, `\n${dangling.join('\n')}\n`).toEqual([]);
   });
 
-  it('Evidence: paths that look repo-relative actually exist', () => {
+  it('Evidence: paths that look repo-relative existed in the commit that cited them', () => {
     // The harvest verifier's job (T-404), applied to the records we wrote by
     // hand. A citation nobody can follow is decoration.
+    //
+    // Resolved against the tree of the commit that carries the trailer, not the
+    // working tree. A record cites what the author was looking at, and a file
+    // deleted later does not retroactively make that citation false -- it makes it
+    // history, which is the thing this product exists to keep. Checking the
+    // working tree conflated the two: removing the compiled-binary build (#284)
+    // failed this assertion for three citations that were accurate when written.
+    //
+    // The working tree is still accepted as a fallback, so a citation added to a
+    // file that is staged but not yet committed is not reported as broken.
     const { existsSync } = require('node:fs') as typeof import('node:fs');
     const { resolve } = require('node:path') as typeof import('node:path');
+    const { spawnSync } = require('node:child_process') as typeof import('node:child_process');
+    const existedAt = (sha: string, path: string): boolean =>
+      spawnSync('git', ['cat-file', '-e', `${sha}:${path}`], { cwd: REPO_ROOT }).status === 0;
     const broken: string[] = [];
     for (const entry of withRecords) {
       for (const t of entry.trailers) {
         if (t.key !== 'Evidence') continue;
         if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(t.value)) continue; // URL
         const path = t.value.split('#')[0] ?? '';
-        if (!existsSync(resolve(REPO_ROOT, path))) {
-          broken.push(`${entry.sha.slice(0, 7)} Evidence: ${t.value}`);
-        }
+        if (path === '') continue;
+        if (existedAt(entry.sha, path)) continue;
+        if (existsSync(resolve(REPO_ROOT, path))) continue;
+        broken.push(`${entry.sha.slice(0, 7)} Evidence: ${t.value}`);
       }
     }
     expect(broken, `\n${broken.join('\n')}\n`).toEqual([]);

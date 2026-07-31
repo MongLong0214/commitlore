@@ -1,6 +1,13 @@
 # ADR-0015: single executable binary via Node SEA — git clone stays canonical
 
-- Status: Accepted (2026-07-28)
+- Status: **Superseded (2026-07-31) by [ADR-0026](ADR-0026-node-only-distribution.md).**
+  Nothing in this document is a live prescription. CommitLore no longer builds or ships a
+  compiled single executable, a platform binary, or a Windows `.exe`; distribution is the
+  Claude Code plugin first, and Node-only install scripts second. This record is kept
+  because the decision was really made and ADR-0011 links to it — not because any part of
+  it still governs. The code this ADR introduced is inventoried in ADR-0026 and is removed
+  by a separately approved ticket, so the sections below still describe what exists today.
+- Original status: Accepted (2026-07-28)
 - Supersedes: nothing. Amends ADR-0011 (adds a second, optional distribution
   artifact; the registry-free git-clone channel it established remains the
   default and the only one required). Enabled by ADR-0012 (`node:sqlite`

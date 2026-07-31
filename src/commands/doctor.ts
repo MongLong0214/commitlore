@@ -37,7 +37,7 @@ import {
   describeRecordedHookTarget,
   readRecordedHookTarget,
 } from '../core/hook-target.js';
-import { installedPath, isSea, packageVersion } from '../core/paths.js';
+import { installedPath, packageVersion } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import {
   NOTES_REF,
@@ -282,8 +282,8 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
       : classifyBinTarget(override) !== null
         ? ['COMMITLORE_BIN override is active']
         : [
-            'COMMITLORE_BIN override is active, but is not a .js, .mjs, or compiled commitlore ' +
-              'binary — the hook ignores it and falls through to the remaining resolution steps',
+            'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
+              'ignores it and falls through to the remaining resolution steps',
           ]),
   ];
   if (runtime.status !== 'ok') {
@@ -355,15 +355,6 @@ const checkGit = (opts: DoctorOptions): DoctorCheck => {
 const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'cli runtime';
   const id = 'cli-runtime';
-
-  if (isSea()) {
-    return check(
-      id,
-      title,
-      'ok',
-      `running as a compiled binary at ${process.execPath} (commitlore ${packageVersion()})`,
-    );
-  }
 
   // The bundle first: it is what a clone has and what the plugin invokes. The
   // tsc output is the fallback for a checkout that has not been bundled.

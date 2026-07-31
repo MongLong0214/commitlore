@@ -4,6 +4,61 @@
 
 Nothing yet.
 
+## 0.5.0 — 2026-08-01
+
+Windows works, and this is the release that can say so from a run rather than
+from an argument.
+
+### Upgrade reasons
+
+- **On Windows, `git commit` in a repository with the hook installed did not
+  return.** It did not refuse and it did not succeed — it hung, and the shell it
+  spawned kept running after the commit was killed. Two defects in one chain: the
+  install root is recorded by Node as a win32 path and read by the hook under Git
+  for Windows' shell, where `pwd -P` answers in POSIX form, so the containment
+  comparison matched **nothing** — an attacker's path and the installer's own
+  bundle alike — and control fell through to a directory walk that could not
+  terminate at a drive root. Both are fixed; both sides of the comparison are now
+  resolved before they are compared, and the walk stops when stripping a
+  component stops making progress (#321).
+- **If you installed the hook before this release, installing this release does
+  not repair it.** The hook is written into `.git/hooks/commit-msg` when it is
+  installed, so an existing repository keeps the old one. Run `commitlore hooks
+  install` in each affected repository — it is not a commit, so it still works
+  where commits are blocked. `commitlore doctor` reports such a repository as
+  `outdated`.
+- **Windows is supported.** Not because a PowerShell installer exists — that
+  shipped in 0.4.1 and made Windows *reachable*, which is a different claim — but
+  because #71's install-root containment is now established there by execution:
+  in a required job on `windows-latest`, a real commit through the recorded
+  install is accepted, an invalid record refused, and both containment attacks
+  execute and refuse with the tampered program run zero times (#283).
+- **`commitlore uninstall` removes what the installers wrote, and nothing else.**
+  The wrapper, the pinned checkout, and one MCP entry per agent config. An entry
+  is matched on its shape and on the wrapper it points at, never on the key it
+  sits under — a server you named `commitlore` yourself, or the other install's
+  entry on a machine carrying two, is left alone. Per-repository state and the
+  Claude Code plugin are named rather than touched (#272).
+- **`docs/COMPATIBILITY.md` states which hosts are supported and what each
+  install path checks**, and a test compares every row to the file that provides
+  what it claims (#271). It also separates *required* from *checked*: the plugin
+  path enforces nothing, so a machine without Node gets a hook that fails open
+  rather than a message naming what is missing.
+- **Alpine and other musl Linux hosts are no longer described as unsupported.**
+  The reason was that only glibc-linked binaries were published; there are no
+  binaries. Executed in `alpine:3.21` on `aarch64` and `x86_64`: the install
+  lands and the tool runs. Alpine 3.21 is supported; musl as a class is recorded
+  as undecided, because one image is not a family (#323).
+
+### What this release does not claim
+
+Windows `supported` means the containment property was established there by
+execution. It does not mean Windows has the same mileage behind it as macOS and
+Linux, and it does not reach a repository whose hook predates this release.
+
+`commitlore uninstall` does not remove the Claude Code plugin cache — thousands
+of files it did not write, keyed by plugin version. It names the step instead.
+
 ## 0.4.1 — 2026-07-31
 
 ### Upgrade reasons

@@ -78,60 +78,100 @@ happens silently.
 running at load 40–70 on 12 cores. Check `uptime` before any wall-clock
 measurement and record it with the result.
 
-## The release is mid-flight and blocked
+## The release is out
 
-**PR #184 promotes `dev` to `main` for the v0.3.0 tag. It is failing lint, and
-the failure is real.** Do not merge it and do not tag until #187 is fixed.
+v0.4.1 is tagged and published. `main` carries it, `dev` is at 0.4.1, and the
+four-platform build ran on the tag with all four asset checksums verified against
+the published `SHA256SUMS`.
 
-CommitLore's own lint found one trailer violation: `r-readme729` is declared by
-two commits thirteen minutes apart (`051fee9` claimed a retrieval result from a
-single lexical baseline, `a2c657a` retracted it). Both are published; neither can
-be rewritten.
+Two releases went out in one session. v0.4.0 carried Gate A: the capture pipeline,
+the MCP write side, the demo, result-oriented `init`, the README repositioning, and
+guard's reclassification as an experimental advisory. v0.4.1 followed within the
+hour for one reason — running the install one-liner the v0.4.0 README documents,
+upgrading over an existing install, exited 137. The install had succeeded; the
+installer's own post-install `--version` was killed by a signal and its exit code
+became the installer's. `install.sh` is fetched from the tag, so a fix on `dev`
+reaches nobody until a tag carries it.
 
-Three things came out of chasing it, and they are separate:
+**The cause of that signal kill is still unknown.** #256 records what was ruled
+out: overwriting an already-executed ad-hoc-signed copy of the same binary in
+place and re-executing it exits 0, so cached-signature invalidation alone does not
+explain it. v0.4.1 makes the installer honest about a verification it cannot
+complete — atomic rename, one retry, and a plain statement when it still cannot
+run — rather than claiming to have fixed the kill. If it recurs, that issue is
+where the evidence goes.
 
-- **#187 — the blocker.** Two code paths emit `duplicate-id`. `stale.ts` honours a
-  later `Supersedes:` declaration; `validate.ts` has no succession logic at all,
-  and the lint action runs `validate`. I declared the succession (`cf0a94e`,
-  merged) and it changed nothing, because it went to the path that was never
-  taught. The issue records what I verified, what I ruled out, and what I did not
-  read — the empty-commit hypothesis is dead, do not re-run it.
-- **#186** — the range that surfaces this is only ever linted on a promotion PR.
-  A feature-branch PR lints its own commits, so the two duplicates never appeared
-  together for a day. 98 commits of green CI while a known collision sat unresolved.
-- **#183** — the density figure names no denominator.
-
-The pattern in all three is the house defect class, in this project's own tools:
-a check answered without saying what it could not see.
-
-**gitseed released cleanly.** Its `dev` carries a written CHANGELOG, both version
-declarations at 0.3.0, and a README whose limitations section was rebuilt by
-checking each closed issue against current source rather than trusting closure —
-four were genuinely fixed and removed, and #49 is still true and stayed. Nothing
-enforces agreement between `pyproject.toml` and `gitseed/__init__.py`; they are
-two hand-maintained strings and that is how they drifted.
+The lesson worth keeping: the fresh-install path is what CI exercises, and this
+defect only appeared on upgrade. A release that installs cleanly on a machine
+that has never seen the tool is not evidence that it upgrades cleanly.
 
 ## Open issues
 
-Four. #176 is the only one that is not a defect — it is a thing nobody knows yet.
-#183, #186 and #187 all came out of the release attempt.
+Six, all on M6, all in the distribution epic: #271, #272, #281, #282, #283, #284.
+Every other issue in the repository is closed, including the four from the v0.3.0
+release attempt (#183, #186, #187) and the two intermittent-test issues (#192,
+#221).
 
-**#176** — guard scoring. Against the 417-decision corpus: precision 44.8%
-(95% Wilson 32.7%–57.5%), recall **22.0%**, 92 false negatives against 26 true
-positives. A ready-to-run closed packet sits at `.github/PACKET-176.md`.
+Re-derive that before trusting it: `gh issue list --state open` and
+`gh api repos/:owner/:repo/milestones`.
 
-Its first instruction is the one that matters: **read the 92 false negatives and
-report the recurring shapes, with counts, before proposing any code.** Four
-attempts on this guard have failed by tuning a threshold against a number instead
-of looking at what was missed, and #157 closed on the finding that no
-precision-safe cutoff exists.
+Three of those closures are worth knowing about because they changed how the
+repository checks itself rather than only what it does:
 
-Two rules for whoever picks it up. Do not change the corpus in the same commit as
-the scorer — the corpus is the instrument now. And report both figures on every
-change, because a scorer that suppresses firings lifts precision while making
-recall worse and looks like an improvement. **The interval is the acceptance
-criterion, not the point estimate**; at n=417 the interval is ±12 points, so a
-2-point precision gain is not a result.
+- **#186** — the record lint now runs the full `origin/main..HEAD` range on pushes
+  to `dev`, not only a pull request's own commits. A known duplicate identity had
+  sat unresolved for a day because the two colliding commits never appeared
+  together in a narrow range. The wider net was clean on its first run, and it is
+  the check that would have caught the collision a day earlier.
+- **#183** — `rationale_density` names both denominators now. The gap between all
+  commits and authored non-merge commits was 26.3 points at the time of writing
+  (71.8% against 98.1%), which is merge volume rather than a change in discipline.
+- **#192 and #221** were one defect, not two: both tests asserted a clean `init`
+  exit while depending on whether a `commitlore` executable was resolvable from
+  `PATH`, which the temporary repository did not control.
+
+## The product scope changed, and it changed the plan
+
+**CommitLore no longer builds or ships a compiled executable.** No single
+executable, no Node SEA, no Windows `.exe`, no musl binary, no platform binary
+matrix, no binary package channel. `docs/adr/ADR-0026-node-only-distribution.md`
+is the authority and supersedes ADR-0015 entirely.
+
+Distribution is now stated as one thing:
+
+1. **Claude Code users are plugin-first** — `/plugin marketplace add
+   MongLong0214/commitlore`, then `/plugin install commitlore@commitlore`. The
+   plugin registers the MCP server, the pre-edit context hook and the skills. All
+   four manifests are already Node-based; nothing about that path needed changing.
+2. **Everyone else** uses Node-only `install.sh` (macOS, Linux) or `install.ps1`
+   (Windows), each checking Node >= 22 and Git, installing a pinned checkout into
+   the user's data directory, and putting a thin wrapper on `PATH` that runs
+   `node dist/commitlore.mjs`.
+
+Read the release section above as history, not as the plan. The four-platform
+build and `SHA256SUMS` are gone: #284 removed every site ADR-0026's inventory
+named, plus one it did not -- `src/core/paths.ts` carried a live `node:sea` asset
+branch. The release workflow now publishes a tag with no assets, because the tag
+*is* what both install paths resolve.
+
+The containment constraint held. `src/core/hook-target.ts` and
+`src/hooks/commit-msg.ts` kept #71's install-root check for the path that ships:
+removing the compiled arm made classification stricter rather than looser, since an
+extensionless name is now refused instead of trusted. The wrapper records the
+`.mjs` bundle, so it was always the script arm that mattered.
+
+Eight tickets and their issues (#265-#270) were withdrawn as not planned by that
+change, and Gate B acceptance rows `B-1` through `B-5` are recorded in
+`docs/GATE-B-ACCEPTANCE.md` as withdrawn with a reason each rather than deleted.
+
+**M6 (Gate B) is where work now is.** Nine issues closed, six open. Shipped: the
+guard capture advisory (#273) and the user-editable policy file (#274). Open: the
+six-ticket distribution epic in `docs/tickets/F14-distribution.md`, specified by
+`docs/prd/PRD-F14-distribution.md`, and **gated** — the owner requires the revised
+ADR, the PRD, and each atomic ticket to pass review separately before any
+implementation code. Do not start T-1120 because it is next in the file.
+
+Gate C (M7) still exists as a milestone with no tickets.
 
 ## What the numbers currently say
 
@@ -222,6 +262,25 @@ still at the ceiling, just a higher one.
 
 ## Traps that cost real time
 
+**A bounded test run that dies at its timeout is not a hang.** `test/guard.test.ts`
+takes about **440 seconds on a loaded machine** — 66 tests, each spawning the
+bundled CLI as a subprocess — against 148 seconds in CI. I wrapped local runs in a
+480-second watchdog, watched it get killed with zero test results reported, and
+concluded the file hung on unmodified `dev`. It does not: it passes 66/66, and the
+whole suite passes locally with nothing excluded in about **540 seconds**.
+
+The misreading is easy because vitest buffers a file's results until the file
+finishes, so a killed run shows the file's `stderr` output and no test lines at
+all — which looks exactly like a stall. I then put "do not run
+`test/guard.test.ts`, it hangs" into several delegated packets, and those workers
+excluded it from their local verification. CI ran it on every pull request, so
+nothing shipped unverified, but their evidence was weaker than it looked and one
+of them widened the claim to three more innocent files.
+
+Budget at least **ten minutes** for a local full suite and **eight** for
+`guard.test.ts` alone, and before calling anything hung, check whether the file
+simply needs longer than the bound you chose.
+
 **Judging whether a long process is alive.** I killed three healthy benchmark
 runs. Instantaneous CPU is 0 while a parent waits on a child; accumulated CPU
 (`ps -o time=`) barely moves for the same reason; the log only prints between
@@ -250,39 +309,40 @@ is non-null.
 
 ## State at handoff
 
-Nothing is in flight. Every worktree was removed after checking it for
-uncommitted files and unmerged commits; `git worktree list` shows the main
-checkout only. `dev` is green.
+Work is in flight. Three pull requests are open and none of them is ready to merge
+on someone else's judgement:
+
+- **the distribution re-plan** (PRD-F14 plus six atomic tickets) — documents only,
+  CI green, waiting on review. Nothing implements it yet.
+- **two held drafts** whose contracts the scope change invalidated. Their
+  structure survives; their authority did not. Each carries a comment stating the
+  rebound contract, and each is rewritten when its ticket is approved.
 
 ```
-1,494 tests passing, 1 skipped
-1 open issue (#176)
-0 worktrees
+dev 0.4.1, CI green at the head    main carries v0.4.1
+67 test files                      6 open issues, 3 open pull requests
+M6: 9 closed, 6 open               every other milestone 0 open
 ```
 
-Establish those yourself — `npx vitest run`, `gh issue list --state open`,
-`gh run list --branch dev --limit 1`. Do not cite this block.
+**The passing test count is deliberately absent.** This document previously
+carried one that had gone stale, and a number nobody measured is worse than no
+number. CI is green at the head, which is the evidence that the suite passes;
+`npx vitest run` is how you get the count.
 
-**The release is in flight and blocked on #187 — see the section at the top.**
-`dev` is at 0.3.0 with a written CHANGELOG; PR #184 promotes it. Tagging triggers
-a four-platform binary build.
+Establish the rest yourself — `gh issue list --state open`, `gh pr list`,
+`gh run list --branch dev --limit 1`, `git worktree list`. Do not cite this block.
 
-Three bugs reported by real users against v0.2.1 are fixed on `dev` and
-unreleased — **#128, #149, #107** — so every day untagged is a day those users
-still have the broken binary. #128 in particular is a `doctor` false failure on
-binary-only installs, so an affected user's diagnostic tool tells them the wrong
-thing.
-
-That pressure is exactly why the lint failure must not be waved through. The rule
-found a real duplicate; the fault is in a check that ignores a declaration, not in
-the declaration. Fix #187, then merge #184 and tag.
+Budget the time: a local full suite takes about **nine minutes** on a loaded
+machine, and `test/guard.test.ts` alone about **seven and a half**. See the trap
+about killed bounded runs above before concluding anything has stalled.
 
 ## Delegation
 
-**The owner's current instruction is Claude subagents — `sonnet` or `opus`,
-chosen by difficulty.** This replaced the `gpt-worker.sh` terra/sol routing on
-2026-07-29; the routing hook was deleted. Earlier sections of the git history
-assume the old broker, so do not restore it from a commit message.
+**The executor profile is owner-specified and changes; read the current
+instruction rather than this file for it.** An earlier external routing broker was
+removed on 2026-07-29 and must not be restored from a commit message that predates
+its removal. This document names no model, provider or routing detail on purpose:
+this is a public surface, and that metadata does not belong on one.
 
 Whichever executor is used, the packet shape is what made delegation work: goal,
 task class, exact files, acceptance criteria, verification, forbidden scope. State

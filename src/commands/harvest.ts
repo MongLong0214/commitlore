@@ -115,7 +115,19 @@ const runPromptMode = (options: HarvestOptions): HarvestOutcome => {
   if (transcript.trim() === '') return skip('the transcript is empty');
 
   const diff = resolveDiff(options);
-  if (diff === null) return skip('no --diff and nothing staged');
+  if (diff === null) {
+    // No diff is not a reason to withhold the contract (#310). The contract is
+    // static text, and this is the one document that defines a valid draft -- a
+    // caller reaching for it is usually trying to learn the format, which is
+    // exactly when nothing is staged yet. `harvest` without --prompt-only
+    // prescribes --prompt-only, so suppressing it here made the prescription
+    // produce zero bytes: the same shape as #296, a remedy named under
+    // conditions in which it does not work.
+    //
+    // The transcript is still read and validated above, so an empty one is still
+    // reported. What is dropped is only the diff-derived section.
+    return emit(buildHarvestContract(), options.out);
+  }
 
   return emit(buildHarvestPrompt({ transcript, diff }), options.out);
 };

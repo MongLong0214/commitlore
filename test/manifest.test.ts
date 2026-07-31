@@ -257,4 +257,41 @@ describe("plugin manifest: hooks/hooks.json's command resolves and produces outp
     expect(parsed.hookSpecificOutput.hookEventName).toBe('PreToolUse');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('r-manifestprobe');
   });
+
+  // The runner's own first rule: fail open, always. A PreToolUse hook that
+  // exits non-zero can stop the edit, and the worst acceptable outcome is that
+  // the agent proceeds without records — exactly where it was before the plugin
+  // existed. Its third rule is no stdout on failure, because stdout garbage
+  // would corrupt the payload the agent reads.
+  //
+  // `test/inject.test.ts` covers the CLI's own fail-open branches (unparseable
+  // payload, missing file_path, path outside the repository). The branch below
+  // is the runner script's: it could not find a CLI to exec at all. That one had
+  // no test, and it is the one whose regression would block edits rather than
+  // merely lose context.
+  it('exits 0 with no stdout when it cannot resolve a CLI at all', () => {
+    const unresolvable = tempDir('no-cli');
+    const payload = JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Edit',
+      tool_input: { file_path: join(unresolvable, 'anything.ts') },
+    });
+
+    const run = spawnSync('/bin/bash', [clonePath('scripts/commitlore-run.sh'), 'inject', '--hook-input'], {
+      encoding: 'utf8',
+      cwd: unresolvable,
+      input: payload,
+      // A PATH with a shell but deliberately no node, and a plugin root holding
+      // neither the bundle nor a binary: every branch of resolve() must miss.
+      env: {
+        PATH: '/usr/bin:/bin',
+        HOME: process.env['HOME'] ?? '',
+        CLAUDE_PLUGIN_ROOT: unresolvable,
+      },
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toBe('');
+    expect(run.stderr).toContain('no context was injected');
+  });
 });

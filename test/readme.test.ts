@@ -50,12 +50,15 @@ describe('README install one-liner and version pin', () => {
         expect(pinMatch).not.toBeNull();
         expect(pinMatch![1]).toBe(PACKAGE_VERSION);
 
-        // Also check the version= assignment line
-        const versionAssign = lines.find((l) => /^version=\d+\.\d+\.\d+/.test(l));
-        expect(versionAssign).toBeDefined();
-        const assignMatch = versionAssign!.match(/version=(\d+\.\d+\.\d+)/);
-        expect(assignMatch).not.toBeNull();
-        expect(assignMatch![1]).toBe(PACKAGE_VERSION);
+        // T-1120: the `version=<semver>; target=<triple>` line this used to assert
+        // belonged to the release-asset download example, and ADR-0026 removed
+        // compiled artifacts from the product. The pinned example is now a source
+        // checkout, so that is what carries the pin.
+        const clonePin = lines.find((l) => l.includes('git clone') && l.includes('--branch v'));
+        expect(clonePin).toBeDefined();
+        const cloneMatch = clonePin!.match(/--branch v(\d+\.\d+\.\d+)/);
+        expect(cloneMatch).not.toBeNull();
+        expect(cloneMatch![1]).toBe(PACKAGE_VERSION);
 
         // Also check the pinned curl download URL
         const pinnedCurl = lines.find(

@@ -160,6 +160,59 @@ const followedNames = (cwd, path) => {
  * add a query that can only return rows the prefix match already returns, and
  * for a directory pathspec that would be one query per file in the tree.
  */
+/** How many parent directories are probed for the "did you mean" hint. */
+const MAX_ANCESTOR_PROBES = 4;
+/**
+ * Whether the walked history mentions a path at all.
+ *
+ * Deliberately not a working-tree check: a deleted file has legitimate history
+ * and legitimate records, and `stat` would call it missing (#307). This asks the
+ * same history the query walks -- HEAD's -- so the answer describes the same
+ * corpus the record count came from.
+ */
+const historyMentions = (cwd, path) => {
+    const result = execGit(['log', '-1', '--format=%H', '--', path], { cwd });
+    return result.code === 0 && result.stdout.trim() !== '';
+};
+/**
+ * Says an empty answer is uninformative when the path was never in the history.
+ *
+ * `records: 0` reads as "nothing was recorded here, proceed". That is right for a
+ * path that exists and recorded nothing, and wrong for a typo or a since-renamed
+ * path, where the zero carries no information at all. Only the second case gets a
+ * diagnostic.
+ *
+ * The nearest ancestor that does have history is named when there is one, because
+ * that is what closes the loop in practice: the reporter's containing directory
+ * held 15 records while the queried file had never existed.
+ */
+const pathPresenceDiagnostics = (cwd, paths) => {
+    // One path only: with several, `git log --follow` is already off and the caller
+    // has been told so, and a per-path probe would multiply git calls.
+    if (paths.length !== 1)
+        return [];
+    const [path = ''] = paths;
+    if (path === '' || path === '.')
+        return [];
+    if (historyMentions(cwd, path))
+        return [];
+    let hint = '';
+    let ancestor = path;
+    for (let probe = 0; probe < MAX_ANCESTOR_PROBES; probe += 1) {
+        const cut = ancestor.lastIndexOf('/');
+        if (cut <= 0)
+            break;
+        ancestor = ancestor.slice(0, cut);
+        if (historyMentions(cwd, ancestor)) {
+            hint = `; ${ancestor} does have history, so query that if the name has changed`;
+            break;
+        }
+    }
+    return [
+        `${path} matched no blob in the walked history, so 0 records is uninformative rather than ` +
+            `a statement that nothing was recorded${hint}`,
+    ];
+};
 const resolveScope = (cwd, paths) => {
     if (paths.length === 0)
         return { aliases: [], follow: false, diagnostics: [] };
@@ -529,6 +582,8 @@ export const runQuery = (opts = {}) => {
     try {
         const scope = resolveScope(cwd, paths);
         diagnostics.push(...scope.diagnostics);
+        if (opts.explainEmptyResult === true)
+            diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
         const states = foldStates(source, at, cutoff);
         const commitRecords = groupByCommit(collectRows(source, scope.aliases));
         const visible = foldMirroredNotes(commitRecords.filter((record) => {

@@ -57,13 +57,12 @@ export const HOOK_MODE = 0o755;
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
  *
- * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
- * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
- * plain executable named `commitlore`. It is recognized by that name rather
- * than by "has no extension", which would allow-list every other executable
- * on the machine, and its containment check is an exact match against
- * `commitlore.root` rather than a directory prefix: a binary has no
- * subdirectory for a foreign file to hide in, it *is* the whole install.
+ * Only `.js`/`.mjs` is recognized. ADR-0026 removed the compiled
+ * single-executable build, and with it the arm that would exec an extensionless
+ * file named `commitlore` directly. That name now belongs to the installer's own
+ * wrapper, which is a shell script that execs node — so the path worth trusting is
+ * the bundle it runs, and an extensionless recorded path falls through to the
+ * PATH search below rather than being exec'd on the strength of its name.
  */
 export const commitMsgStub = (): string =>
   [
@@ -92,10 +91,8 @@ export const commitMsgStub = (): string =>
     'if [ -n "${COMMITLORE_BIN:-}" ]; then',
     '  # Same allowlist as the recorded commitlore.bin case below: any executable',
     '  # here used to run unchecked, which is exactly the gap an env var is for.',
-    '  # A compiled binary (#39) needs no interpreter to reach here either, so it',
-    '  # execs the same way a properly shebanged script does.',
     '  case "$COMMITLORE_BIN" in',
-    '    *.mjs|*.js|*/commitlore|commitlore)',
+    '    *.mjs|*.js)',
     '      exec "$COMMITLORE_BIN" validate --message-file "$1"',
     '      ;;',
     '  esac',
@@ -117,9 +114,8 @@ export const commitMsgStub = (): string =>
     '# also validates commits with a different version than the one installed here.',
     'recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)',
     'if [ -n "$recorded" ]; then',
-    "  # Shared by every recognized branch below: what `hooks install` recorded",
-    "  # as this install's trusted location, whether that is a directory a script",
-    '  # sits under or, for a binary, the one trusted file itself.',
+    "  # What `hooks install` recorded as this install's trusted location: the",
+    '  # directory the recorded script has to sit under.',
     '  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)',
     '  case "$recorded" in',
     '    *.mjs|*.js)',
@@ -134,26 +130,29 @@ export const commitMsgStub = (): string =>
     '      # gap a directory-only containment check would leave open: a symlink',
     '      # planted inside the root but pointing outside it.',
     '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
-    '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
-    '        case "$recorded_dir" in',
-    '          "$recorded_root"|"$recorded_root"/*)',
-    '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
-    '            ;;',
+    '        # Both sides are resolved before they are compared. Matching a stored',
+    '        # string against a resolved one is what broke this on Windows: the',
+    '        # installer records a win32 path and the shell git runs hooks with',
+    '        # answers in POSIX form from `pwd -P`, so the case matched nothing --',
+    "        # not an attacker's path, and not the installer's own bundle either.",
+    '        #',
+    '        # The separator is normalised first because neither `dirname` nor',
+    '        # ${var%/*} finds a parent in a backslash-separated path; both yield',
+    '        # `.`, which resolves to the repository rather than to the install.',
+    "        recorded_slashed=$(printf %s \"$recorded\" | tr '\\\\' /)",
+    "        root_slashed=$(printf %s \"$recorded_root\" | tr '\\\\' /)",
+    '        case "$recorded_slashed" in',
+    '          */*) recorded_parent=${recorded_slashed%/*} ;;',
+    '          *) recorded_parent=. ;;',
     '        esac',
-    '      fi',
-    '      ;;',
-    '    */commitlore|commitlore)',
-    '      # A compiled single-executable build (#39): no extension, no separate',
-    '      # interpreter to check — the binary reads and validates the message',
-    '      # itself. Its "install root" is the one file recorded at the same key,',
-    '      # so containment is an exact match rather than a directory prefix.',
-    '      # `-L` still rejects a symlink planted at the recorded location, and',
-    '      # `pwd -P` still resolves a symlinked ancestor directory before the',
-    '      # comparison, exactly as the script branch above.',
-    '      if [ -n "$recorded_root" ] && [ -x "$recorded" ] && [ ! -L "$recorded" ]; then',
-    '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
-    '        if [ "$recorded_dir/${recorded##*/}" = "$recorded_root" ]; then',
-    '          exec "$recorded" validate --message-file "$1"',
+    '        recorded_dir=$(cd "$recorded_parent" 2>/dev/null && pwd -P) || recorded_dir=',
+    '        root_dir=$(cd "$root_slashed" 2>/dev/null && pwd -P) || root_dir=',
+    '        if [ -n "$recorded_dir" ] && [ -n "$root_dir" ]; then',
+    '          case "$recorded_dir" in',
+    '            "$root_dir"|"$root_dir"/*)',
+    '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
+    '              ;;',
+    '          esac',
     '        fi',
     '      fi',
     '      ;;',
@@ -166,12 +165,22 @@ export const commitMsgStub = (): string =>
     '',
     '# A local devDependency is not on PATH inside a hook, so resolve it the way',
     '# node would: walk up from the working directory.',
+    '#',
+    '# The loop stops when stripping a component stops making progress, not when',
+    '# the result is empty. ${dir%/*} returns its input unchanged once no `/`',
+    '# remains, so a drive-letter root settles on `C:` and the walk never ends --',
+    '# measured on a Windows runner, where $PWD inside a hook is `C:/Users/...`',
+    '# and a real commit therefore never returned.',
     'dir=$PWD',
     'while [ -n "$dir" ]; do',
     '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
     '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
     '  fi',
-    '  dir=${dir%/*}',
+    '  parent=${dir%/*}',
+    '  if [ "$parent" = "$dir" ]; then',
+    '    break',
+    '  fi',
+    '  dir=$parent',
     'done',
     '',
     '# Passing silently here would report a clean record for a message nothing',

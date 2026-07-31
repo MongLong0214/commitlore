@@ -5,22 +5,21 @@ export interface RecordedHookTarget {
 }
 /**
  * What the recorded (or `COMMITLORE_BIN`-overridden) path resolves to, if
- * anything: `script` runs through a separate interpreter and sits somewhere
- * under the install root (a directory); `binary` (#39) is a compiled
- * single-executable build with neither extension nor an interpreter of its
- * own — it *is* the interpreter, so its "root" is the one file, not a
- * directory it happens to sit under.
+ * anything: a `script` runs through a separate interpreter and sits somewhere
+ * under the install root (a directory).
  *
- * A binary is recognized by name (`commitlore`, the name `scripts/build-binary.mjs`
- * gives its output), not merely by having no extension — "any extensionless
- * file" would allow-list every other executable on the machine the moment it
- * lost the `.js`/`.mjs` check.
+ * There is one kind because there is one shipped artifact. ADR-0026 removed the
+ * compiled single-executable build, and with it the arm that classified an
+ * extensionless file named `commitlore` as something to exec directly. An
+ * extensionless name is now refused rather than trusted: the installer's own
+ * wrapper carries that name, and a wrapper is a shell script that execs node
+ * rather than an interpreter in its own right, so the path worth recording is the
+ * bundle it runs.
  */
-export type BinKind = 'script' | 'binary';
+export type BinKind = 'script';
 export declare const classifyBinTarget: (path: string) => BinKind | null;
 /**
- * The shell stub's `case "$recorded" in` patterns — `*.mjs`/`*.js` for a
- * script, a basename of `commitlore` for a compiled binary — restated so
+ * The shell stub's `case "$recorded" in` pattern — `*.mjs`/`*.js` — restated so
  * TypeScript callers — `readRecordedHookTarget` below and `doctor`'s
  * `COMMITLORE_BIN` report — agree with the stub about what it will run
  * instead of guessing at it independently.

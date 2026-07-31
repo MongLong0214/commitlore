@@ -22,10 +22,22 @@
 
 一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
+**Claude Code** — プラグイン一つで MCP サーバー、編集前のコンテキストフック、スキルが登録されます:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
 ```
 
+どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
+
+**その他のコーディングエージェント** — CLI をインストールします:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh | sh
+```
+
+どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 ## 実際に動かす
 
@@ -99,18 +111,16 @@ commitlore context .
 <details>
 <summary>インストールを確認または固定したいですか？</summary>
 
-この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone するか、リリース資産を手動でダウンロードして `SHA256SUMS` を検証してください。スクリプトはダウンロードするバイナリのチェックサムを検証しますが、すでに `sh` に渡したスクリプト自体を認証するものではありません。
+この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone してください。スクリプトは固定タグのソースチェックアウトと、`node <checkout>/dist/commitlore.mjs` を実行する薄い wrapper だけをインストールします — コンパイル済み成果物のダウンロードもビルド手順もないため、マシンに置かれるのは読めるソースです。
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
-sh install.sh v0.4.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh
+sh install.sh v0.5.0
 
-# または release binary を自分で検証してから展開します。
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
+git clone --depth 1 --branch v0.5.0 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
@@ -286,7 +296,6 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 ## 既知の制限事項
 
 - Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
-- Alpine および他の musl Linux host は未対応です: [#99](https://github.com/MongLong0214/commitlore/issues/99)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 - Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。

@@ -180,6 +180,241 @@ afterAll(() => {
 });
 
 // ===========================================================================
+// ===========================================================================
+// The prepare response must carry every field an agent needs (found in real use)
+//
+// MCP is the first-class surface for every agent other than the Claude Code
+// plugin. Two fields were computed and persisted but never forwarded here, so an
+// agent using MCP saw neither: the guard advisory (B-6, T-1109) and the policy
+// error (B-7, T-1110). An absent advisory reads as "nothing applies", and an
+// absent policy error is the silent fallback requirement 10 forbids.
+// ===========================================================================
+
+describe('commitlore_prepare_capture surfaces the advisory and the policy error', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = mkdtempSync(join(tmpdir(), 'commitlore-mcp-advisory-'));
+    temporaries.push(repo);
+    execGitOrThrow(['init', repo], { cwd: repo });
+    const file = join(repo, 'svc.ts');
+    writeFileSync(file, 'export const rank = () => 0;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    // A record whose ruled-out alternative the transcript below revives.
+    execGitOrThrow(
+      [
+        ...GIT_CONFIG,
+        '-C',
+        repo,
+        'commit',
+        '-m',
+        [
+          'Add the ranking entry point',
+          '',
+          'Record-Id: r-mcpadv001',
+          'Ruled-out: let the model decide the final ranking | it takes far less code but the ranking becomes unauditable and cannot be replayed',
+          'Certainty: firm',
+          'Blast: module',
+          'Undo: easy',
+        ].join('\n'),
+      ],
+      { cwd: repo },
+    );
+    // Something staged, so prepare has a diff to bind to.
+    writeFileSync(file, 'export const rank = () => 1;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('carries the guard advisory, with its measured disclosure', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: {
+        transcript:
+          'We considered letting the model decide the final ranking because it is much less code.',
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+
+    // Present, not absent: an agent must never read absence as "nothing applies".
+    expect(result).toHaveProperty('guard_advisory');
+    const advisory = result['guard_advisory'] as {
+      matches: { alternative?: string }[];
+      gaps: string[];
+      disclosure: string;
+    } | null;
+    expect(advisory).not.toBeNull();
+    expect(advisory!.matches.length).toBeGreaterThan(0);
+    expect(advisory!.matches[0]!.alternative).toContain('final ranking');
+    // ADR-0020: the measured figures travel with the advisory everywhere it shows.
+    expect(advisory!.disclosure).toContain('44.8%');
+    expect(advisory!.disclosure).toContain('22.0%');
+    expect(Array.isArray(advisory!.gaps)).toBe(true);
+  });
+
+  it('carries policy_error as null when the policy resolved cleanly', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: 'A decision with no policy file present.' },
+    });
+    const result = toolJson(response);
+    expect(result).toHaveProperty('policy_error');
+    expect(result['policy_error']).toBeNull();
+  });
+
+  it('names the reason when a policy file cannot be used, instead of falling back silently', async () => {
+    writeFileSync(join(repo, '.commitlore-policy.json'), '{ not json');
+    try {
+      const response = await stub.request('tools/call', {
+        name: 'commitlore_prepare_capture',
+        arguments: { transcript: 'A decision made while the policy file is broken.' },
+      });
+      const result = toolJson(response);
+      expect(typeof result['policy_error']).toBe('string');
+      expect(result['policy_error'] as string).toContain('.commitlore-policy.json');
+      // The identity must still describe the policy that actually ran.
+      expect(result['policy_identity_hash']).toMatch(/^[0-9a-f]{64}$/);
+    } finally {
+      rmSync(join(repo, '.commitlore-policy.json'), { force: true });
+    }
+  });
+});
+
+// ===========================================================================
+// The draft shape the contract hands the agent must be the shape verify accepts
+//
+// #291: `commitlore_prepare_capture` returns a prompt that tells the agent to
+// emit `{"records": [...]}` — `harvest.ts` says so in the contract text and
+// validates that shape, and the CLI accepts it. `commitlore_verify_capture`
+// required a bare array and rejected it, so an agent following the product's own
+// contract could not complete the cycle over MCP. Gate A row P0-4 asserts that
+// the same contract applies whichever agent calls it; these tests pin that.
+// ===========================================================================
+
+describe('commitlore_verify_capture accepts the contract draft shape (#291)', () => {
+  let repo: string;
+  let stub: Stub;
+
+  const TRANSCRIPT =
+    'We rejected polling the API every second because the rate limit is 60 per minute.';
+
+  /**
+   * Every trailer needs a citation — the verifier rejects a record with
+   * `evidence-missing` otherwise, which is the cite-or-omit rule working. Only
+   * the trailer this transcript can actually support is recorded here.
+   */
+  const RECORD = {
+    trailers: [
+      {
+        key: 'Ruled-out',
+        value: 'polling the API every second | the rate limit is 60 per minute',
+      },
+    ],
+    evidence: [
+      {
+        key: 'Ruled-out',
+        source: 'transcript',
+        quote: 'the rate limit is 60 per minute',
+        locator: 'L1-L1',
+      },
+    ],
+  };
+
+  const prepareNonce = async (): Promise<string> => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: TRANSCRIPT },
+    });
+    return toolJson(response)['nonce'] as string;
+  };
+
+  /**
+   * The verifier binds to the snapshot `prepare` hashed, so the diff passed to
+   * `verify` must be the staged diff itself. Passing an empty string is rejected
+   * as `source-mismatch`, which is the maker-checker boundary working.
+   */
+  const stagedDiff = (): string => execGitOrThrow([...GIT_CONFIG, '-C', repo, 'diff', '--cached'], { cwd: repo });
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    writeFileSync(join(repo, 'poller.ts'), 'export const poll = () => 0;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('accepts the contract object shape `{ records: [...] }`', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify({ records: [RECORD] }),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+    expect(result['validation_result']).not.toBe('empty');
+    expect(result['accepted']).toBeDefined();
+  });
+
+  it('still accepts a bare array, so callers written against the old description keep working', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify([RECORD]),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+    expect(result['validation_result']).not.toBe('empty');
+  });
+
+  it('rejects a shape that is neither, naming both accepted forms', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify({ trailers: [] }),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    const text = JSON.stringify(response);
+    expect(text).toMatch(/records/);
+    expect(text).toMatch(/array/);
+  });
+
+  it('the tool description names the contract shape', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      inputSchema?: { properties?: Record<string, { description?: string }> };
+    }[];
+    const verify = tools.find((t) => t.name === 'commitlore_verify_capture');
+    const description = verify?.inputSchema?.properties?.['draft']?.description ?? '';
+    expect(description).toContain('records');
+  });
+});
+
 // T-1007: commitlore_prepare_capture
 // ===========================================================================
 
@@ -239,8 +474,7 @@ describe('commitlore_prepare_capture', () => {
     expect((result['prompt'] as string).length).toBeGreaterThan(0);
   });
 
-  it('does not expose a commitlore_write_record tool', async () => {
-    const response = await stub.request('tools/list');
+  it('does not expose a commitlore_write_record tool', async () => {    const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('commitlore_write_record');

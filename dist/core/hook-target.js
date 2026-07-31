@@ -1,5 +1,5 @@
-import { realpathSync, statSync } from 'node:fs';
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { execGit } from './git.js';
 import { PACKAGE_ROOT } from './paths.js';
 const configValue = (cwd, key) => execGit(['config', '--local', '--get', key], { cwd }).stdout.trim();
@@ -20,26 +20,39 @@ const isExecutableFile = (path) => {
         return false;
     }
 };
-const isInsidePackage = (path) => {
-    const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path));
-    return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
-};
-const matchesRunningBinary = (path) => {
+/**
+ * The root the stub actually trusts, which is the one `hooks install` recorded
+ * — not the root of whichever CLI happens to be running this check.
+ *
+ * They are usually the same and were assumed to be, which is how this mirror
+ * came to report no problem for a hook that would refuse: on a machine with two
+ * installs, or with a `commitlore.root` edited after install, the stub compares
+ * against one root and `doctor` was comparing against another. `PACKAGE_ROOT`
+ * remains the fallback for a repository recorded before the root was written.
+ */
+const trustedRoot = (cwd) => configValue(cwd, 'commitlore.root') || PACKAGE_ROOT;
+const isInsidePackage = (root, path) => {
     try {
-        return realpathSync(path) === realpathSync(process.execPath);
+        const fromRoot = relative(realpathSync(root), realpathSync(path));
+        return fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+    }
+    catch {
+        // An unresolvable root cannot vouch for anything, and the stub's `cd` into
+        // it fails the same way — so both refuse rather than both guessing.
+        return false;
+    }
+};
+const isSymlink = (path) => {
+    try {
+        return lstatSync(path).isSymbolicLink();
     }
     catch {
         return false;
     }
 };
-export const classifyBinTarget = (path) => {
-    if (path.endsWith('.js') || path.endsWith('.mjs'))
-        return 'script';
-    return basename(path) === 'commitlore' ? 'binary' : null;
-};
+export const classifyBinTarget = (path) => path.endsWith('.js') || path.endsWith('.mjs') ? 'script' : null;
 /**
- * The shell stub's `case "$recorded" in` patterns — `*.mjs`/`*.js` for a
- * script, a basename of `commitlore` for a compiled binary — restated so
+ * The shell stub's `case "$recorded" in` pattern — `*.mjs`/`*.js` — restated so
  * TypeScript callers — `readRecordedHookTarget` below and `doctor`'s
  * `COMMITLORE_BIN` report — agree with the stub about what it will run
  * instead of guessing at it independently.
@@ -55,23 +68,21 @@ export const readRecordedHookTarget = (cwd) => {
         const binPath = resolve(cwd, bin);
         const kind = classifyBinTarget(bin);
         if (kind === null) {
-            problems.push('commitlore.bin is not a .js, .mjs, or compiled commitlore binary');
+            problems.push('commitlore.bin is not a .js or .mjs file');
         }
         if (!isFile(binPath))
             problems.push('commitlore.bin does not exist');
-        else if (kind === 'script' && !isInsidePackage(binPath)) {
-            problems.push('commitlore.bin is outside this package root');
-        }
-        else if (kind === 'binary' && !isExecutableFile(binPath)) {
-            problems.push('commitlore.bin is not an executable file');
-        }
-        else if (kind === 'binary' && !matchesRunningBinary(binPath)) {
-            // A binary has no install root to be contained by — it *is* the trusted
-            // artifact, so containment collapses to "is this the one currently
-            // running", the same question `commitlore.node` asks below for the
-            // script case. Same message as the script branch: both report the same
-            // fact, that the recorded path is not the trusted install.
-            problems.push('commitlore.bin is outside this package root');
+        else if (kind === 'script') {
+            // #71's containment, unchanged by the removal of the compiled arm: the
+            // recorded path has to sit under the install root that recorded it.
+            if (!isInsidePackage(trustedRoot(cwd), binPath)) {
+                problems.push('commitlore.bin is outside this package root');
+            }
+            // The stub refuses a symlinked target outright, because a link planted
+            // inside the root can point anywhere. Reporting it here is what makes
+            // `doctor` explain a hook that declines rather than contradict it.
+            if (isSymlink(binPath))
+                problems.push('commitlore.bin is a symlink');
         }
     }
     if (node === '')

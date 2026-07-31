@@ -5,6 +5,14 @@
  * of a single capture pipeline run. Every mutation is an atomic rename so
  * no concurrent reader can observe a partial file.
  */
+import type { RenderedGuardMatch } from './guard.js';
+/** The three verification gaps, in canonical order (T-1024's closed vocabulary). */
+export type GuardGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched';
+export interface GuardAdvisory {
+    matches: RenderedGuardMatch[];
+    gaps: GuardGap[];
+    disclosure: string;
+}
 export interface PendingRecord {
     version: 1;
     nonce: string;
@@ -31,6 +39,7 @@ export interface PendingRecord {
     validation_result: 'pass' | 'partial' | 'empty' | null;
     overlap_check: 'canonical_exact_only' | null;
     incomplete: boolean;
+    guard_advisory?: GuardAdvisory | null;
 }
 export declare class PendingFormatError extends Error {
     constructor(message: string);
@@ -44,12 +53,22 @@ export interface CreatePendingOptions {
     staged_diff_hash: string;
     staged_tree_oid: string;
     policy_identity_hash: string;
+    guard_advisory?: GuardAdvisory | null;
 }
 /**
  * Creates a pending transaction in `prepared` phase.
  * Returns the nonce (32 hex chars).
  */
 export declare const createPending: (opts: CreatePendingOptions) => string;
+/**
+ * The nonces of every pending transaction in this repository, sorted oldest name
+ * first so a listing is stable between runs.
+ *
+ * Returns an empty list when the directory does not exist: a repository that has
+ * never captured has nothing pending, which is an answer rather than an error
+ * (#311).
+ */
+export declare const listPendingNonces: (cwd: string) => string[];
 export interface ReadPendingOptions {
     cwd: string;
 }

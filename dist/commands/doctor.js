@@ -29,7 +29,7 @@ import { tmpdir as tmpdirPath } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
-import { installedPath, isSea, packageVersion } from '../core/paths.js';
+import { installedPath } from '../core/paths.js';
 import { closeIndex, indexInfo, openIndex } from '../core/index-db.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, listRemotes, fetchRefspecs, } from '../core/notes.js';
 import { runQuery } from '../core/query.js';
@@ -145,8 +145,8 @@ const checkHook = (opts, runtime) => {
             : classifyBinTarget(override) !== null
                 ? ['COMMITLORE_BIN override is active']
                 : [
-                    'COMMITLORE_BIN override is active, but is not a .js, .mjs, or compiled commitlore ' +
-                        'binary — the hook ignores it and falls through to the remaining resolution steps',
+                    'COMMITLORE_BIN override is active, but is not a .js or .mjs file — the hook ' +
+                        'ignores it and falls through to the remaining resolution steps',
                 ]),
     ];
     if (runtime.status !== 'ok') {
@@ -208,9 +208,6 @@ const checkGit = (opts) => {
 const checkRuntime = (opts) => {
     const title = 'cli runtime';
     const id = 'cli-runtime';
-    if (isSea()) {
-        return check(id, title, 'ok', `running as a compiled binary at ${process.execPath} (commitlore ${packageVersion()})`);
-    }
     // The bundle first: it is what a clone has and what the plugin invokes. The
     // tsc output is the fallback for a checkout that has not been bundled.
     const candidates = ['dist/commitlore.mjs', 'dist/cli.js'].map((rel) => installedPath(rel));

@@ -189,114 +189,6 @@ jobs:
       - name: Conformance suite
         run: bash spec/verify.sh
 
-  # #39 / ADR-0015: the compiled single-executable build is the one artifact
-  # this repository ships that needs no Node runtime at all, and the only way
-  # to prove that is to actually take Node off PATH and run it — `check`'s
-  # fresh-clone step above always runs through `node`, so it cannot. Building
-  # it is platform-specific (postject injects into a real, local copy of
-  # `node`, never a cross-compiled one), so this runs on the same two OSes
-  # `git-matrix` already does. One build per platform proves the recipe still
-  # works; it is not a release matrix and does not attach anything anywhere.
-  binary:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Build
-        run: npm run build
-      - name: Build the compiled binary
-        run: npm run build:binary
-
-      # Same shape as `check`'s fresh-clone step: prove what a user actually
-      # gets works, by using it the way a user with no Node installed would —
-      # `env -i` strips the runner's own Node off PATH entirely, leaving only
-      # what `doctor`'s own `hook-runtime`/`PreToolUse hook runtime` checks
-      # already assume a git hook gets (`/usr/bin:/bin`, `HOME`).
-      - name: The binary runs every required command with no Node on PATH
-        run: |
-          set -euo pipefail
-          bin="$PWD/dist/commitlore"
-          test -x "$bin" || { echo "::error::binary was not produced at $bin"; exit 1; }
-
-          repo="$(mktemp -d)/repo"
-          mkdir -p "$repo"
-          cd "$repo"
-          run() { env -i PATH=/usr/bin:/bin HOME="$HOME" "$@"; }
-
-          run git init -q -b main
-          run git config user.email t@example.com
-          run git config user.name "CommitLore CI"
-          run git config commit.gpgsign false
-          printf 'export const value = 0;\n' > file.ts
-          run git add file.ts
-          run git commit -q -m "$(printf 'Seed\n\nRecord-Id: r-ci-binary01\nBlast: local\nUndo: easy\nCertainty: firm\n')"
-
-          run "$bin" doctor
-          printf 'Subject\n\nBlast: wide\n' | run "$bin" validate && {
-            echo "::error::expected a violation to exit non-zero"; exit 1;
-          } || test $? -eq 1
-          run "$bin" index --rebuild
-          run "$bin" context file.ts
-          payload="$(printf '{"session_id":"s1","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"%s/file.ts"}}' "$repo" "$repo")"
-          printf '%s' "$payload" | run "$bin" guard --hook-input
-          printf '%s' "$payload" | run "$bin" inject --hook-input
-
-      # #71's containment guarantee, restated for the binary branch
-      # (`core/hook-target.ts#classifyBinTarget`, `hooks/commit-msg.ts`):
-      # `hooks install` records the binary itself, and both a `.git/config`
-      # edit pointing outside that record and a symlink planted inside it are
-      # still refused, with no Node on PATH to fall back to.
-      - name: The commit-msg hook installs and validates through the binary, and #71's containment holds
-        run: |
-          set -euo pipefail
-          bin="$PWD/dist/commitlore"
-          repo="$(mktemp -d)/hookrepo"
-          mkdir -p "$repo"
-          cd "$repo"
-          run() { env -i PATH=/usr/bin:/bin HOME="$HOME" "$@"; }
-
-          run git init -q -b main
-          run git config user.email t@example.com
-          run git config user.name "CommitLore CI"
-          run git config commit.gpgsign false
-          run "$bin" hooks install
-
-          printf 'x\n' > a.txt
-          run git add a.txt
-          run git commit -q -m "$(printf 'Bad\n\nBlast: nonsense\n')" && {
-            echo "::error::expected the bad commit to be rejected"; exit 1;
-          } || test $? -eq 1
-          run git commit -q -m "$(printf 'Good\n\nBlast: local\nUndo: easy\nCertainty: firm\n')"
-
-          outside="$(mktemp -d)"
-          cp "$bin" "$outside/commitlore"
-          chmod +x "$outside/commitlore"
-          run git config --local commitlore.bin "$outside/commitlore"
-          printf 'y\n' > b.txt
-          run git add b.txt
-          run git commit -q -m "$(printf 'Attack1\n\nBlast: local\nUndo: easy\nCertainty: firm\n')" && {
-            echo "::error::expected the outside-root commitlore.bin to be refused"; exit 1;
-          } || test $? -eq 1
-
-          run "$bin" hooks install
-          root="$(run git config --local --get commitlore.root)"
-          symlink_dir="$(dirname "$root")"
-          symlink_path="$symlink_dir/commitlore-ci-symlink-$$"
-          ln -s "$outside/commitlore" "$symlink_path"
-          run git config --local commitlore.bin "$symlink_path"
-          run git commit -q -m "$(printf 'Attack2\n\nBlast: local\nUndo: easy\nCertainty: firm\n')" && {
-            rm -f "$symlink_path"
-            echo "::error::expected the symlinked commitlore.bin to be refused"; exit 1;
-          } || { status=$?; rm -f "$symlink_path"; test $status -eq 1; }
-
   # #99: install.sh (the README's second, non-canonical install path — curl the
   # script, pipe it to sh) had never run on a machine that was not the
   # author's. `check`'s fresh-clone step and `binary` above both prove
@@ -326,265 +218,652 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm run build:binary
 
-      # Stage a release the exact shape release.yml publishes — same
-      # asset-naming convention (`commitlore-<version>-<target>.tar.gz`), same
-      # `sha256sum *.tar.gz > SHA256SUMS` invocation (compare
-      # .github/workflows/release.yml's `build`/`publish` jobs) — just not
-      # fetched from github.com. A second, corrupted copy exists only to
-      # prove the checksum check rejects a bad download: flipped bytes in the
-      # archive, SHA256SUMS left pointing at the original (now wrong) hash.
-      - name: Stage a release layout for install.sh to fetch
-        id: stage
+      # install.sh no longer downloads a release asset (ADR-0026), so there is
+      # no staged tarball, no checksum file and no corrupted copy to reject. What
+      # it does instead is clone a pinned tag and write a thin wrapper, so the
+      # source under test is a local repository with a tag on it. Nothing here
+      # reaches github.com, and nothing here builds a binary.
+      # The checkout itself is the source. An earlier revision cloned it to a
+      # separate directory and bind-mounted that read-only into the containers,
+      # which made git report only "correct access rights and the repository
+      # exists" -- a mount and ownership problem standing in for the thing under
+      # test. One repository, mounted read-write where the container already
+      # mounts it, removes that whole class of noise.
+      - name: Tag the checkout so install.sh has a pinned version to clone
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          target="x86_64-unknown-linux-gnu"  # ubuntu-latest's own arch -- matches the build:binary output above
-          asset="commitlore-${version}-${target}.tar.gz"
+          git -c user.name=ci -c user.email=ci@example.invalid tag -f v9.9.9
+          git tag --list v9.9.9
 
-          good="$RUNNER_TEMP/staged-good"
-          bin_stage="$RUNNER_TEMP/staged-bin"
-          mkdir -p "$good" "$bin_stage"
-          cp dist/commitlore "$bin_stage/commitlore"
-          chmod +x "$bin_stage/commitlore"
-          tar -czf "$good/$asset" -C "$bin_stage" commitlore
-          ( cd "$good" && sha256sum "$asset" > SHA256SUMS )
-
-          corrupt="$RUNNER_TEMP/staged-corrupt"
-          mkdir -p "$corrupt"
-          cp "$good/$asset" "$good/SHA256SUMS" "$corrupt/"
-          # Overwrite 16 bytes well inside the archive with fixed, non-matching
-          # content. SHA256SUMS in $corrupt is untouched -- still the hash of
-          # the *original* bytes -- so this is deliberately a mismatch, not a
-          # coincidence.
-          dd if=/dev/zero of="$corrupt/$asset" bs=1 seek=1000 count=16 conv=notrunc status=none
-
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "good_dir=$good" >> "$GITHUB_OUTPUT"
-          echo "corrupt_dir=$corrupt" >> "$GITHUB_OUTPUT"
-
-      - name: Serve the staged releases over HTTP
+      - name: Fresh install, then upgrade over it
         run: |
           set -euo pipefail
-          python3 -m http.server 8199 --directory "${{ steps.stage.outputs.good_dir }}" --bind 127.0.0.1 &
-          python3 -m http.server 8198 --directory "${{ steps.stage.outputs.corrupt_dir }}" --bind 127.0.0.1 &
-          for port in 8199 8198; do
-            up=""
-            for _ in $(seq 1 20); do
-              if curl -sf "http://127.0.0.1:$port/SHA256SUMS" >/dev/null 2>&1; then up=1; break; fi
-              sleep 0.5
-            done
-            [ -n "$up" ] || { echo "::error::staging HTTP server on :$port never came up"; exit 1; }
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          export COMMITLORE_INSTALL_SOURCE="$GITHUB_WORKSPACE"
+
+          sh install.sh v9.9.9
+          wrapper="$HOME/.local/bin/commitlore"
+          test -x "$wrapper"
+          grep -qF '# commitlore:wrapper:v1' "$wrapper"
+          test -f "$HOME/.local/share/commitlore/v9.9.9/dist/commitlore.mjs"
+          "$wrapper" --version
+
+          # The wrapper is replaced by rename, and a second run is an upgrade
+          # rather than a refusal. An in-place overwrite of a file that may be
+          # executing is the defect that forced a same-day patch release.
+          sh install.sh v9.9.9
+          "$wrapper" --version
+
+          # No shell profile is written. Printing the PATH line is the whole of
+          # what this script does about PATH.
+          for rc in .bashrc .zshrc .profile .bash_profile; do
+            test ! -e "$HOME/$rc" || { echo "::error::install.sh wrote $rc"; exit 1; }
           done
 
-      # install.sh's documented, default command has no override -- it hits
-      # github.com directly. "Download from a release if one exists" means
-      # checking first and using it when so, rather than assuming either way.
-      # As of #99 it does not: v0.1.0 was published with zero attached
-      # assets (`gh release view v0.1.0` -- `assets: []`), which is exactly
-      # what this check finds on its own (SHA256SUMS 404s). Every assertion
-      # below therefore runs against the staged layout above; this step also
-      # means that changes the day a real release actually carries assets,
-      # with no edit to this workflow required.
-      - name: Does the latest real release publish this target's asset?
-        id: real
+      - name: The script carries no asset, checksum or target triple
         run: |
           set -euo pipefail
-          url="https://github.com/${{ github.repository }}/releases/latest/download/SHA256SUMS"
-          code="$(curl -s -o /dev/null -w '%{http_code}' -L "$url")"
-          if [ "$code" = "200" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::latest release publishes SHA256SUMS -- the real-path step below will run against github.com"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::latest release has no SHA256SUMS asset (HTTP $code) -- install.sh's documented one-liner cannot be exercised against a real release right now; every assertion in this job uses the staged release from the previous step instead"
+          for forbidden in SHA256SUMS '.tar.gz' 'tar -xzf' unknown-linux-gnu apple-darwin; do
+            if grep -qF "$forbidden" install.sh; then
+              echo "::error::install.sh still mentions $forbidden"
+              exit 1
+            fi
+          done
+
+      # A bare image is the point: the prerequisites are genuinely absent, so
+      # the named failure is the thing being asserted rather than routed around.
+      # Adding them afterwards is the same progression the previous version of
+      # this job used for curl -- assert the clean failure first, then the
+      # success once the requirement is satisfied.
+      - name: Bare debian names the missing prerequisite and installs nothing
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/w" -w /w debian:stable-slim sh -c '
+            set -eu
+            out=$(COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9 2>&1 || true)
+            printf "%s\n" "$out"
+            printf "%s" "$out" | grep -qi "node" || { echo "expected the message to name Node"; exit 1; }
+            test ! -e "$HOME/.local/bin/commitlore" || { echo "something was installed"; exit 1; }
+          '
+
+      - name: The same image succeeds once Node and Git are present
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/w" -w /w node:22-bookworm-slim sh -c '
+            set -eu
+            apt-get update -qq && apt-get install -y -qq git >/dev/null
+            # The checkout is owned by the runner uid, not this container user.
+            git config --global --add safe.directory /w
+            git config --global --add safe.directory "*"
+            # Raw clone first, unfiltered: if the installer cannot fetch, this
+            # shows git saying why instead of leaving it to be inferred.
+            echo "--- raw clone probe ---"
+            git clone --depth 1 --branch v9.9.9 /w /tmp/probe || echo "(probe failed, see above)"
+            echo "--- installer ---"
+            COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
+            "$HOME/.local/bin/commitlore" --version
+          '
+
+  # T-1121 (#282): install.ps1 is install.sh's twin, and a shape test cannot show
+  # that a PowerShell script runs. This job is the evidence -- a real
+  # windows-latest runner, the script executed the way a user would execute it,
+  # and the tool it installs used afterwards.
+  #
+  # The source is this checkout with a local tag, exactly as the install-script
+  # job does for the shell installer: nothing here reaches github.com, so the job
+  # tests the script rather than the network.
+  #
+  # Both hosts are exercised, and each one does real work rather than repeating
+  # the other: Windows PowerShell 5.1 performs the first install, PowerShell 7
+  # performs the upgrade. 5.1 matters because it is what a Windows machine has
+  # before anyone installs anything, and a 7-only construct fails to parse the
+  # whole file rather than one branch of it.
+  #
+  # The hosts are named literally. `shell:` accepts no expression -- a
+  # `${{ matrix.shell }}` there makes the workflow unloadable, which is how this
+  # job was first written and how it first failed (actions/runner#444).
+  install-ps1:
+    runs-on: windows-latest
+    # A hook that hangs rather than refusing is one of the outcomes this job now
+    # measures, and every commit it makes is individually bounded. This is the
+    # backstop for the case a bound is ever missed: without it the job runs to
+    # the runner's six-hour default and prints nothing.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tag this checkout so the installer has a pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git tag v9.9.9
+
+      # -File, under 5.1, with the version as a positional argument: the same
+      # entry point a user gets from `& ([scriptblock]::Create((irm ...))) v9.9.9`,
+      # and the one that proves param() binds.
+      - name: Install under Windows PowerShell 5.1
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9
+          if errorlevel 1 exit /b 1
+
+      - name: The 5.1 host reports its own version, for the record
+        shell: cmd
+        run: powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+
+      - name: The shim exists, is CRLF, and reports the declared version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          if (-not (Test-Path -LiteralPath $shim)) { throw "no shim at $shim" }
+          $body = Get-Content -LiteralPath $shim -Raw
+          if ($body -notmatch 'commitlore:wrapper:v1') { throw 'the shim carries no marker' }
+          if ($body -notmatch "`r`n") { throw 'the shim is not CRLF' }
+          $version = (& $shim --version | Select-Object -First 1)
+          Write-Host "shim reports: $version"
+          $declared = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          if ($version.Trim() -ne $declared) { throw "shim reports $version, package.json declares $declared" }
+          & $shim --help > $null
+          if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
+
+      # The documented piped form, under PowerShell 7. `iex` gives a piped script
+      # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
+      # why that variable exists. This step is also the only check that a leading
+      # param() block survives Invoke-Expression at all.
+      - name: A second install through the documented pipe is an upgrade
+        shell: pwsh
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+          COMMITLORE_VERSION: v9.9.9
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = (Get-Content -LiteralPath .\install.ps1 -Raw | Invoke-Expression 2>&1 | Out-String)
+          Write-Host $out
+          if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
+          if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
+
+      # These two run under cmd, deliberately. A pwsh step on GitHub runs with
+      # $ErrorActionPreference = 'Stop', which promotes a native command's stderr
+      # to a terminating error -- so a step that captures the installer's own
+      # error message with 2>&1 aborts on reading it and never reaches its
+      # assertion. cmd has no error records: %ERRORLEVEL% is the exit code and
+      # findstr reads the text. This is the same hazard the installer itself hit,
+      # in the harness rather than the script.
+      - name: A foreign file at the destination is refused with exit 4
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          set "dir=%TEMP%\commitlore-occupied"
+          mkdir "%dir%" 2>nul
+          > "%dir%\commitlore.cmd" echo @echo not commitlore
+          set "COMMITLORE_INSTALL_DIR=%dir%"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%TEMP%\occupied.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          set "COMMITLORE_INSTALL_DIR="
+          type "%TEMP%\occupied.log"
+          if not "%code%"=="4" (
+            echo ::error::expected exit 4 for an occupied destination, got %code%
+            exit /b 1
+          )
+          findstr /C:"refusing to overwrite it" "%TEMP%\occupied.log" >nul || (
+            echo ::error::the refusal was not named
+            exit /b 1
+          )
+          findstr /C:"not commitlore" "%dir%\commitlore.cmd" >nul || (
+            echo ::error::the foreign file was modified
+            exit /b 1
+          )
+
+      - name: An unknown tag is refused with exit 2 and installs nothing
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v0.0.0 > "%TEMP%\badtag.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%TEMP%\badtag.log"
+          if not "%code%"=="2" (
+            echo ::error::expected exit 2 for an unknown tag, got %code%
+            exit /b 1
+          )
+          findstr /C:"git said:" "%TEMP%\badtag.log" >nul || (
+            echo ::error::git's own reason was not quoted
+            exit /b 1
+          )
+          if exist "%LOCALAPPDATA%\commitlore\v0.0.0" (
+            echo ::error::a checkout was left behind
+            exit /b 1
+          )
+
+      # What T-1121 owns is that the installer put a working CLI on this machine.
+      # It deliberately does not require a healthy `doctor`: on Windows the
+      # hook-runtime probe spawns /bin/sh, which does not exist there, and the
+      # PreToolUse entry names `commitlore` while the shim is `commitlore.cmd`.
+      # Both are real findings and both belong to T-1124, which owns the Windows
+      # hook path and the support claim that depends on it. Asserting a green
+      # doctor here would either fail this ticket for another ticket's work or
+      # smuggle in a support claim this one is forbidden from making.
+      - name: The installed tool works in a real repository
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/repo
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: the runner has no compiled artifact\nRecord-Id: r-ciwin0001\n')"
+
+          # init reports; a check that needs attention is not this step's failure.
+          "$shim" init || echo "(init reported steps needing attention -- see above)"
+
+          echo "--- what init recorded ---"
+          bin=$(git config --local --get commitlore.bin || true)
+          node_path=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $bin"
+          echo "commitlore.node = $node_path"
+          case "$bin" in
+            *dist/commitlore.mjs|*dist\\commitlore.mjs) ;;
+            *) echo "::error::commitlore.bin is not the bundle: $bin"; exit 1 ;;
+          esac
+          test -n "$node_path" || { echo "::error::no interpreter was recorded"; exit 1; }
+
+          echo "--- the CLI itself ---"
+          "$shim" context file.ts || { echo "::error::context failed"; exit 1; }
+
+          printf 'Bad\n\nBlast: wide\n' > /tmp/bad-message.txt
+          if "$shim" validate --message-file /tmp/bad-message.txt; then
+            echo "::error::an invalid record was accepted"
+            exit 1
+          fi
+          printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin0002\n' > /tmp/good-message.txt
+          "$shim" validate --message-file /tmp/good-message.txt || {
+            echo "::error::a valid record was rejected"
+            exit 1
+          }
+
+          echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
+          "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
+
+      # T-1124 (#283): #71's install-root containment, executed on Windows against
+      # a wrapper install. A property verified on one platform is not a property of
+      # the product, and macOS is the only place it has ever been executed.
+      #
+      # Paths are converted with `cygpath` rather than passed between the two path
+      # worlds as-is. `init` records a win32 path (`C:\...`), the stub reads it
+      # under Git for Windows' MSYS `sh`, and a witness file named `/tmp/ran.log`
+      # by bash is `C:\tmp\ran.log` to node. A test that mixed the two forms would
+      # report "the tampered program never ran" because it looked in the wrong
+      # place -- the exact false pass this ticket cannot afford.
+      - name: What the hook actually sees on Windows (measurement, not assertion)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/measure
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124m\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          echo "--- which sh will run the hook ---"
+          git --version
+          command -v sh || echo "(no sh on this PATH)"
+
+          echo "--- what init recorded ---"
+          recorded=$(git config --local --get commitlore.bin || true)
+          recorded_root=$(git config --local --get commitlore.root || true)
+          recorded_node=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $recorded"
+          echo "commitlore.root = $recorded_root"
+          echo "commitlore.node = $recorded_node"
+
+          echo "--- what the installed hook itself contains, and what it resolves ---"
+          # Not a recomputation. An earlier version of this step restated the
+          # stub's comparison inline, and once the stub was fixed the restatement
+          # kept printing the original defect next to a commit that had plainly
+          # succeeded. A measurement that paraphrases what it measures reports on
+          # the paraphrase.
+          hook="$(git rev-parse --git-path hooks)/commit-msg"
+          test -f "$hook" || { echo "::error::no commit-msg hook was installed"; exit 1; }
+          echo "the hook's containment branch, as shipped:"
+          sed -n '/recorded_root=/,/^fi$/p' "$hook" | sed 's/^/    /'
+          recorded_slashed=$(printf %s "$recorded" | tr '\\' /)
+          root_slashed=$(printf %s "$recorded_root" | tr '\\' /)
+          echo "resolved: recorded parent = $(cd "${recorded_slashed%/*}" 2>/dev/null && pwd -P)"
+          echo "resolved: recorded root   = $(cd "$root_slashed" 2>/dev/null && pwd -P)"
+          echo "(the verdict is the real commit below, not a restatement here)"
+
+          echo "--- where a fall-through lands ---"
+          command -v commitlore >/dev/null 2>&1 \
+            && echo "command -v commitlore: found -- $(command -v commitlore)" \
+            || echo "command -v commitlore: NOT found (the shim is commitlore.cmd)"
+
+          echo "--- what a commit-msg hook sees on this platform ---"
+          # A scratch repository with a hook of its own, so this measures Git for
+          # Windows rather than commitlore. The stub's chained-hook slot was tried
+          # first and the probe there was never invoked, which is itself a reading:
+          # the stub finds that slot with `hook_dir=${0%/*}`, and $0 with no `/`
+          # in it leaves hook_dir as `.`.
+          probe_repo=$(mktemp -d)/probe
+          mkdir -p "$probe_repo"
+          (
+            cd "$probe_repo"
+            git init -q -b main
+            git config user.email t@example.com
+            git config user.name "CommitLore CI"
+            git config commit.gpgsign false
+            {
+              echo '#!/bin/sh'
+              echo 'echo "hook argv0    = $0"'
+              echo 'echo "hook PWD      = $PWD"'
+              echo 'echo "hook pwd      = $(pwd)"'
+              echo 'echo "hook pwd -P   = $(pwd -P)"'
+              echo 'echo "hook uname    = $(uname -s 2>/dev/null || echo unknown)"'
+              echo 'case "$0" in'
+              echo '  */*) echo "hook dir-from-argv0 = ${0%/*}" ;;'
+              echo '  *)   echo "hook argv0 holds no slash: a stub falls back to ." ;;'
+              echo 'esac'
+              echo 'exit 0'
+            } > .git/hooks/commit-msg
+            chmod +x .git/hooks/commit-msg
+            printf 'x\n' > f.txt
+            git add f.txt
+            rc=0
+            timeout -k 5 30 git commit -m "probe" > probe-out.txt 2>&1 || rc=$?
+            echo "(probe commit exit $rc)"
+            cat probe-out.txt 2>/dev/null || echo "(no probe output)"
+          )
+
+          echo "--- the walk, taken out of the installed hook and run from a drive root ---"
+          # Sliced from the shipped stub, so a fix made only in a comment cannot
+          # pass this. The seeded PWD is the form the probe above reports.
+          awk '/^dir=\$PWD$/,/^done$/' "$hook" > "$RUNNER_TEMP/walk.sh"
+          test -s "$RUNNER_TEMP/walk.sh" || { echo "::error::could not find the walk in the installed hook"; exit 1; }
+          { echo 'PWD="C:/Users/RUNNER~1/AppData/Local/Temp/probe"'
+            cat "$RUNNER_TEMP/walk.sh"
+            echo 'echo "walk: returned"'
+          } > "$RUNNER_TEMP/walk-run.sh"
+          rc=0
+          timeout -k 5 20 sh "$RUNNER_TEMP/walk-run.sh" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the walk did not return from a drive-letter root"
+            exit 1
           fi
 
-      # === debian:stable-slim ==================================================
+          echo "--- a real commit through the real hook, bounded ---"
+          # Bounded on purpose. An unbounded hang is not evidence, it is a job
+          # that dies at the runner's timeout with nothing printed.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          # `|| rc=$?`, not a bare call: Actions runs a bash step as `bash -eo
+          # pipefail`, and `set -uo pipefail` above does not clear the -e it was
+          # invoked with. A bare timeout that fires would abort the step at that
+          # line, which is how the first attempt lost its own verdict and the
+          # probe output underneath it.
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
+            > "$(mktemp)" 2>&1 || rc=$?
+          
+          case "$rc" in
+            0)   echo "real commit: ACCEPTED (exit 0)" ;;
+            124) echo "real commit: HUNG -- killed at 90s, the hook never returned" ;;
+            *)   echo "real commit: REFUSED (exit $rc)" ;;
+          esac
 
-      # Nothing preinstalled. Neither curl nor wget ships on this image by
-      # default -- confirmed by removing both from consideration entirely,
-      # not by reading the Dockerfile. fetch()'s own command -v checks should
-      # catch this and die with a named, actionable message instead of a raw
-      # "curl: not found" from the shell.
-      - name: "debian: nothing preinstalled -- the dependency check fires cleanly"
+          # The commit hung, so the hook certainly ran. What the stub did after
+          # that is what the scratch-repo probe above reports.
+
+      # The baseline runs before the attacks and is not decoration. An attack that
+      # "passes" because nothing resolves at all is not containment -- it is a hook
+      # that refuses everything, which fails the legitimate user too. The baseline
+      # is the only thing that tells those two apart, so it asserts both
+      # directions: a valid record is accepted, and an invalid one is refused.
+      #
+      # No continue-on-error, by the ticket's own terms.
+      - name: The hook runs and discriminates through the recorded install (baseline)
+        shell: bash
         run: |
-          set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh /install.sh 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 2 || { echo "::error::expected exit 2 (download failed), got $rc"; exit 1; }
-          echo "$out" | grep -qF "neither curl nor wget is available to download the release" || {
-            echo "::error::expected the curl/wget-missing message, got something else"; exit 1;
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/baseline
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124s\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
+          # Every commit that passes through the hook is bounded. A hang is a
+          # distinct outcome from a refusal and has to be reported as one; left
+          # unbounded it becomes a job that dies at the runner timeout instead.
+          # `|| c=$?` throughout: Actions runs a bash step as `bash -eo pipefail`,
+          # and `set -uo pipefail` above does not clear that -e. A bare command
+          # that times out would abort the step before it could report which of
+          # the three outcomes -- accepted, refused, hung -- actually happened.
+          out=$(mktemp)
+          commit_bounded() {
+            local c=0
+            timeout -k 5 90 git commit -m "$1" > "$out" 2>&1 || c=$?
+            sed -n '1,25p' "$out" || true
+            return $c
           }
 
-      # curl is the one thing this image is missing that install.sh hard
-      # requires (sha256sum and tar both ship by default on Debian). Adding
-      # it here is not "pre-installing dependencies to make the test pass" --
-      # it is the second half of the same test: the step above already
-      # proved the bare-machine failure is clean and named; this step proves
-      # the success path actually works once that one gap is filled, which
-      # #99's item 4 (binary runs, --version, agent detection with none
-      # installed) needs a working download to even reach.
-      - name: "debian: add curl, then the full install + agent-detection path succeeds"
-        run: |
-          set -euo pipefail
-          expected_version="$(node -p "require('./package.json').version")"
-          docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -e EXPECTED_VERSION="$expected_version" \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              echo "=== install.sh ==="
-              sh /install.sh
-              echo "=== post-install assertions ==="
-              [ -x /root/.local/bin/commitlore ] || { echo "binary was not installed"; exit 1; }
-              v="$(/root/.local/bin/commitlore --version)"
-              [ "$v" = "$EXPECTED_VERSION" ] || { echo "unexpected --version output: $v (expected $EXPECTED_VERSION)"; exit 1; }
-              if command -v commitlore >/dev/null 2>&1; then
-                v_by_name="$(commitlore --version)"
-                [ "$v_by_name" = "$EXPECTED_VERSION" ] || { echo "unexpected by-name --version output: $v_by_name (expected $EXPECTED_VERSION)"; exit 1; }
-                echo "commitlore-ci: commitlore is invokable by name"
-              else
-                echo "commitlore-ci: commitlore is not on PATH"
-              fi
-              # None of the six clients this script knows about exist in this
-              # container. All six must be reported absent, none "wired", and
-              # -- the part a clean summary line alone does not prove -- no
-              # config file may exist at any path install.sh would have
-              # written to.
-              for p in /root/.claude /root/.codex/config.toml /root/.gemini/settings.json \
-                       /root/.cursor/mcp.json /root/.codeium/windsurf/mcp_config.json \
-                       /root/.config/opencode/opencode.json; do
-                [ ! -e "$p" ] || { echo "a config was written for an agent that is not installed: $p"; exit 1; }
-              done
-            ' 2>&1 | tee "$RUNNER_TEMP/debian-success.log"
-          grep -qF "Not detected on this machine: Claude Code, Codex, Gemini CLI, Cursor, Windsurf, opencode" \
-            "$RUNNER_TEMP/debian-success.log" || {
-            echo "::error::the six-agent-absent summary line is missing or changed"; exit 1;
-          }
-          if ! grep -qF "commitlore-ci: commitlore is invokable by name" "$RUNNER_TEMP/debian-success.log"; then
-            grep -qF "commitlore-install: note: /root/.local/bin is not on PATH." \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh neither made commitlore invokable by name nor explained its missing PATH entry"; exit 1;
-            }
-            grep -qF "commitlore-install: add this line to /root/.profile:" \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh did not name the shell file to update"; exit 1;
-            }
-            grep -qF 'commitlore-install:   export PATH="/root/.local/bin:$PATH"' \
-              "$RUNNER_TEMP/debian-success.log" || {
-              echo "::error::install.sh did not print the exact PATH export line"; exit 1;
-            }
-            note_line="$(grep -nF "commitlore-install: note: /root/.local/bin is not on PATH." "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
-            next_line="$(grep -nF "commitlore-install: Next: cd into a repository and run 'commitlore init'" "$RUNNER_TEMP/debian-success.log" | cut -d: -f1)"
-            [ -n "$note_line" ] && [ -n "$next_line" ] && [ "$note_line" -lt "$next_line" ] || {
-              echo "::error::PATH guidance must be printed before the Next instruction"; exit 1;
-            }
+          # Acceptance first: this is the direction a dead hook fails. A hook that
+          # exits non-zero unconditionally would satisfy the refusal case below
+          # while blocking every commit on the platform.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          rc=0
+          commit_bounded "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on a valid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::the hook refused a valid record through the recorded install (exit $rc)"
+            exit 1
           fi
 
-      # === alpine:latest -- busybox sh, not bash. The real portability test. ==
+          # The refusal direction doubles as proof the hook ran at all: an
+          # uninstalled or unreachable hook cannot reject anything, so a commit
+          # that is accepted here means git never invoked it.
+          printf 'export const value = 2;\n' > file.ts
+          git add file.ts
+          rc=0
+          commit_bounded "$(printf 'Bad\n\nBlast: wide\n')" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on an invalid record and was killed at 90s"
+            exit 1
+          fi
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the hook accepted an invalid record, so it never ran"
+            exit 1
+          fi
+          echo "baseline ok: the hook runs, accepts a valid record and refuses an invalid one"
 
-      # Nothing preinstalled here either, and nothing needs to be: busybox
-      # ships wget, sha256sum, and tar by default, so the download and
-      # checksum-verify steps run with no setup at all. What actually breaks
-      # is the binary itself -- the published target is
-      # `<arch>-unknown-linux-gnu` (glibc), and Alpine is musl. Before #99's
-      # fix, install.sh copied the unusable binary into place, printed
-      # "installed to ...", and then crashed on its own "$dest" --version
-      # sanity check with a bare `not found` (busybox's rendering of "no
-      # dynamic interpreter") and exit 127 -- not one of the four exit codes
-      # this script documents for itself. The fix executes the freshly
-      # extracted binary *before* installing it anywhere and `die`s with a
-      # named, attributed message if it cannot run.
-      - name: "alpine: nothing preinstalled -- the musl/glibc mismatch is refused cleanly"
+      - name: A recorded target outside the install root is refused (#71, attack 1)
+        shell: bash
         run: |
-          set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8199" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            alpine:latest sh /install.sh 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 1 || { echo "::error::expected exit 1 (unsupported platform), got $rc"; exit 1; }
-          echo "$out" | grep -qF "does not run on this machine" || {
-            echo "::error::expected the musl/glibc diagnostic, got something else"; exit 1;
-          }
-          echo "$out" | grep -qF "nothing was installed" || {
-            echo "::error::expected the nothing-was-installed reassurance"; exit 1;
-          }
-          docker run --rm --network host -e HOME=/root debian:stable-slim \
-            test ! -e /root/.local/bin/commitlore
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack1
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124t\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
 
-      # Checksum verification is the one guarantee this script exists to make
-      # (see install.sh's own header comment) -- a check that has never been
-      # seen to reject anything is not a checksum check. Run against both
-      # images: debian with curl added (glibc, the common case) and bare
-      # alpine (busybox's own sha256sum applet, reached before the musl
-      # binary-execution guard above ever runs -- checksum verification
-      # happens first). Both must refuse the corrupted asset the same way.
-      - name: "checksum corruption is rejected on both images -- nothing is installed"
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
+          outside=$(mktemp -d)
+          witness="$outside/ran.log"
+          # A .mjs, so it clears the extension allowlist: the only thing between it
+          # and execution is the install-root check. ESM, because .mjs is ESM and a
+          # `require` here would throw before writing the witness -- a false pass.
+          # Forward slashes: node on Windows accepts them, and they need no escaping.
+          printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
+            "$(cygpath -m "$witness")" > "$outside/evil.mjs"
+          # Positive control, before the attack: prove the witness mechanism can
+          # fire at all. Without it "the witness is absent" is equally consistent
+          # with a witness this harness could never have observed -- a path in the
+          # wrong world, an ESM error, an unwritable directory.
+          node "$outside/evil.mjs" || { echo "::error::the witness payload does not run"; exit 1; }
+          test -f "$witness" || {
+            echo "::error::the witness payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the witness fires when the payload runs"
+
+          # Recorded in win32 form, which is the form `init` itself writes.
+          git config --local commitlore.bin "$(cygpath -w "$outside/evil.mjs")"
+
+          printf 'export const value = 3;\n' > file.ts
+          git add file.ts
+          out=$(mktemp)
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" \
+            > "$out" 2>&1 || rc=$?
+          # Printed, not swallowed: "the witness is absent" is only containment if
+          # the hook actually ran and declined. The refusal text is what tells a
+          # reader which of the two happened.
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the tampered record and was killed at 90s"
+            exit 1
+          fi
+          if [ -f "$witness" ]; then
+            echo "::error::the recorded program outside the install root was executed"
+            cat "$witness"
+            exit 1
+          fi
+          echo "attack 1 refused: the program outside the install root never ran"
+
+      - name: A recorded target that is not a script is refused (#71, attack 2)
+        shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack2
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124v\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
 
-          out_debian="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8198" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              sh /install.sh
-            ' 2>&1)" && rc_debian=0 || rc_debian=$?
-          echo "$out_debian"
-          test "$rc_debian" -eq 3 || { echo "::error::debian: expected exit 3 (checksum mismatch), got $rc_debian"; exit 1; }
-          echo "$out_debian" | grep -qF "checksum mismatch for" || { echo "::error::debian: expected the checksum-mismatch message"; exit 1; }
-          echo "$out_debian" | grep -qF "Nothing was installed" || { echo "::error::debian: expected the nothing-was-installed reassurance"; exit 1; }
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
 
-          out_alpine="$(docker run --rm --network host \
-            -e COMMITLORE_INSTALL_BASE_URL="http://127.0.0.1:8198" \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            alpine:latest sh /install.sh 2>&1)" && rc_alpine=0 || rc_alpine=$?
-          echo "$out_alpine"
-          test "$rc_alpine" -eq 3 || { echo "::error::alpine: expected exit 3 (checksum mismatch), got $rc_alpine"; exit 1; }
-          echo "$out_alpine" | grep -qF "checksum mismatch for" || { echo "::error::alpine: expected the checksum-mismatch message"; exit 1; }
+          root=$(git config --local --get commitlore.root || true)
+          test -n "$root" || { echo "::error::no commitlore.root was recorded"; exit 1; }
+          root_posix=$(cygpath -u "$root")
+          witness=$(mktemp -d)/ran.log
+          # Inside the install root, so the location check cannot be what refuses
+          # it -- only the extension allowlist can.
+          #
+          # `.cmd`, not an extensionless name: the objection to the earlier payload
+          # was that nothing in the stub could ever exec it, so refusing it tested
+          # a branch that does not exist. `.cmd` is the extension a Windows fix is
+          # most likely to add to the allowlist -- the installer's own shim carries
+          # it -- which makes this a regression guard on a loosening somebody would
+          # plausibly make. It is not evidence that containment holds; the
+          # install-root check in attack 1 is.
+          planted="$root_posix/commitlore.cmd"
+          trap 'rm -f "$planted"' EXIT
+          printf '@echo off\r\necho ran >> "%s"\r\n' "$(cygpath -w "$witness")" > "$planted"
+          cmd //c "$(cygpath -w "$planted")" || true
+          test -f "$witness" || {
+            echo "::error::the planted payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the planted .cmd fires when it is run"
+          git config --local commitlore.bin "$(cygpath -w "$planted")"
 
-      # === the real path, once it exists ======================================
-
-      # Skipped entirely today (see the "Does the latest real release
-      # publish..." step -- v0.1.0 has no assets). The day a real release
-      # does carry an asset for this target, this step starts running
-      # automatically and must pass: the actual documented one-liner,
-      # against the actual GitHub release, with no override at all.
-      - name: "real release path (only runs once a release actually publishes assets)"
-        if: steps.real.outputs.available == 'true'
-        run: |
-          set -euo pipefail
-          out="$(docker run --rm --network host \
-            -e HOME=/root \
-            -v "$PWD/install.sh:/install.sh:ro" \
-            debian:stable-slim sh -c '
-              set -eu
-              apt-get update -qq
-              apt-get install -y -qq curl
-              sh /install.sh
-              /root/.local/bin/commitlore --version
-            ' 2>&1)" && rc=0 || rc=$?
-          echo "$out"
-          test "$rc" -eq 0 || { echo "::error::the real, documented install command failed against the actual GitHub release"; exit 1; }
+          printf 'export const value = 4;\n' > file.ts
+          git add file.ts
+          out=$(mktemp)
+          rc=0
+          timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" \
+            > "$out" 2>&1 || rc=$?
+          echo "--- commit exit $rc, hook output ---"
+          sed -n '1,25p' "$out" || true
+          if [ "$rc" -eq 124 ]; then
+            echo "::error::the hook hung on the planted record and was killed at 90s"
+            exit 1
+          fi
+          if [ -f "$witness" ]; then
+            echo "::error::a recorded target with an unallowed extension was executed"
+            exit 1
+          fi
+          echo "attack 2 refused: the unallowed-extension target never ran"

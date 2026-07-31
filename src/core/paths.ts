@@ -1,57 +1,8 @@
-/**
- * Where this installation's files are, resolved the same way from every layout.
- *
- * Four call sites used to compute their own path back to the package root with
- * a hardcoded number of `..` segments: `../package.json` from `cli.ts`,
- * `../../package.json` from `mcp/server.ts`, `../../spec/...` from `schema.ts`
- * and `harvest.ts`. That works only while every module sits at the depth its
- * author assumed, which stops being true the moment the code is bundled: a
- * bundle is one file, so one `import.meta.url` has to satisfy both a depth of
- * one and a depth of two, and it cannot (ADR-0011, #38).
- *
- * Walking up until `package.json` appears removes the assumption entirely. It
- * is correct from `dist/core/schema.js`, from a bundled `dist/cli.js`, and from
- * `src/core/schema.ts` under vitest, without any of them knowing where they
- * are.
- *
- * A fourth layout (#39) breaks the assumption a different way: a Node SEA
- * binary has no directory tree beside it at all. Node's own docs say what
- * `import.meta.url`/`__dirname` become inside one — the executable's own path
- * and its containing directory — which is not where `spec/` or `package.json`
- * live, so walking up from there would either throw or, worse, find an
- * unrelated `package.json` that happens to sit above wherever the binary was
- * installed. `PACKAGE_ROOT` stays a real, non-throwing directory in every case
- * so importing this module never crashes a binary at startup, but nothing
- * shipped reads a file through it while running as one — `readInstalledFile`
- * below routes to the assets `scripts/build-binary.mjs` embeds in the blob
- * instead.
- */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type * as NodeSea from 'node:sea';
-
-/**
- * `createRequire` rather than a static `import … from 'node:sea'`, purely for
- * a test-environment reason: Vite/vitest's SSR module graph (as pinned here)
- * externalizes a `node:`-prefixed specifier by checking it against
- * `node:module`'s `builtinModules` list, which does not carry `node:sea` yet,
- * and mis-resolves the import as a package named `sea` instead — failing
- * every test file that transitively imports this module, which under
- * `commands/hooks.ts` and `commands/doctor.ts` is most of them.
- * `createRequire` resolves through real Node module resolution instead,
- * which knows `node:sea` fine — this sidesteps the bundler's older check
- * rather than arguing with it. `import type` above costs nothing at
- * runtime — TypeScript erases it — and keeps the real function signatures
- * for the cast below.
- */
-const { isSea, getAsset } = createRequire(process.execPath)('node:sea') as typeof NodeSea;
-
-/** Re-exported so other modules never need their own `node:sea` workaround. */
-export { isSea };
 
 /**
  * Walks up from `startDir` until a directory containing `package.json` appears.
@@ -78,32 +29,28 @@ export const findPackageRoot = (startDir: string): string => {
 /**
  * The root of this installation, resolved once from this module's location.
  *
- * Under a compiled binary this is only ever the directory the executable
- * happens to sit in — not a package root in any meaningful sense — because
- * `PACKAGE_ROOT` is imported at module scope by several files (`hook-target.ts`,
- * `commands/hooks.ts`, `commands/doctor.ts`) and an ES module graph evaluates
- * every import before any command runs. Throwing here would crash `commitlore
- * --version` in the one environment #39 exists to support.
+ * Imported at module scope by several files (`hook-target.ts`,
+ * `commands/hooks.ts`, `commands/doctor.ts`), and an ES module graph evaluates
+ * every import before any command runs -- so a throw here fails the whole CLI
+ * rather than one command. It throws anyway: every caller needs a real root, and
+ * the alternative is reading another project's files.
  */
-export const PACKAGE_ROOT = isSea()
-  ? dirname(process.execPath)
-  : findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+export const PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
 
 /** A file shipped with the installation, addressed from its root. */
 export const installedPath = (...segments: readonly string[]): string =>
   join(PACKAGE_ROOT, ...segments);
 
 /**
- * Reads a file this installation ships, whichever installation this is.
+ * Reads a file this installation ships.
  *
- * A checkout (or its bundle) has a real `spec/` and `package.json` on disk,
- * addressed through `installedPath`. A compiled single-executable build has
- * neither — `scripts/build-binary.mjs` embeds the same files as SEA assets,
- * keyed by the same relative path joined with `/`, and `sea.getAsset` reads
- * them back out of the binary instead of the filesystem.
+ * Every shipped installation has a real `spec/` and `package.json` on disk: a
+ * clone, the bundle inside one, or the pinned checkout an installer makes. The
+ * SEA-asset branch this used to carry existed for the compiled build ADR-0026
+ * removed.
  */
 export const readInstalledFile = (...segments: readonly string[]): string =>
-  isSea() ? getAsset(segments.join('/'), 'utf8') : readFileSync(installedPath(...segments), 'utf8');
+  readFileSync(installedPath(...segments), 'utf8');
 
 /**
  * The declared version, read from the installation's own `package.json`.

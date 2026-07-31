@@ -22,10 +22,22 @@ No hosted memory service. No vendor-specific chat history. Just reviewable decis
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
+**Claude Code** — one plugin registers the MCP server, the pre-edit context hook and the skills:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
 ```
 
+Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
+
+**Any other coding agent** — install the CLI:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh | sh
+```
+
+Which hosts are supported, and what each install path requires: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## See it work
 
@@ -99,18 +111,16 @@ Then keep working through your coding agent. When a change contains decision con
 <details>
 <summary>Prefer to inspect or pin the installation?</summary>
 
-The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, clone the repository, or manually download a release asset and verify its `SHA256SUMS`. The script checksum-verifies the binary it downloads; it does not authenticate the script already piped to `sh`.
+The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, or clone the repository. The script installs a pinned source checkout and a thin wrapper that runs `node <checkout>/dist/commitlore.mjs` — it downloads no compiled artifact and runs no build step, so what it puts on your machine is the source you can read.
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
-sh install.sh v0.4.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh
+sh install.sh v0.5.0
 
-# Or verify the release binary yourself before extracting it.
-version=0.4.1; target=aarch64-apple-darwin
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/commitlore-$version-$target.tar.gz"
-curl -fsSLO "https://github.com/MongLong0214/commitlore/releases/download/v$version/SHA256SUMS"
-grep "commitlore-$version-$target.tar.gz" SHA256SUMS | shasum -a 256 -c - # Linux: sha256sum -c -
+# Or skip the script entirely: the checkout it makes is one you can make yourself.
+git clone --depth 1 --branch v0.5.0 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
@@ -286,7 +296,6 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 ## Known limitations
 
 - Windows is unsupported: [#95](https://github.com/MongLong0214/commitlore/issues/95).
-- Alpine and other musl Linux hosts are unsupported: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
 - Guard (ruled-out alternative matching) is an experimental advisory: precision 44.8% (95% Wilson CI 32.7%–57.5%), recall 22.0% on the 417-decision corpus ([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). An empty guard result does not guarantee a proposal avoids all ruled-out alternatives — at 22% recall, a miss is the common case.
