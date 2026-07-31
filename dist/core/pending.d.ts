@@ -60,6 +60,15 @@ export interface CreatePendingOptions {
  * Returns the nonce (32 hex chars).
  */
 export declare const createPending: (opts: CreatePendingOptions) => string;
+/**
+ * The nonces of every pending transaction in this repository, sorted oldest name
+ * first so a listing is stable between runs.
+ *
+ * Returns an empty list when the directory does not exist: a repository that has
+ * never captured has nothing pending, which is an answer rather than an error
+ * (#311).
+ */
+export declare const listPendingNonces: (cwd: string) => string[];
 export interface ReadPendingOptions {
     cwd: string;
 }

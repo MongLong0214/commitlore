@@ -24,6 +24,7 @@ import { register as registerIndex } from './commands/index-cmd.js';
 import { register as registerInit } from './commands/init.js';
 import { register as registerInject } from './commands/inject.js';
 import { register as registerMcp } from './commands/mcp.js';
+import { register as registerPending } from './commands/pending.js';
 import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
@@ -120,6 +121,7 @@ registerBackfill(program);
 registerCapture(program);
 registerDemo(program);
 registerMcp(program);
+registerPending(program);
 /**
  * Exit codes are a protocol property, not a per-command habit (SPEC §10): 0
  * clean, 1 the check found something, 2 the invocation was wrong, 3 answered
