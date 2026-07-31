@@ -107,9 +107,10 @@ that has never seen the tool is not evidence that it upgrades cleanly.
 
 ## Open issues
 
-None. Every issue in the repository is closed and every milestone reads 0 open,
-including the four that came out of the v0.3.0 release attempt (#183, #186, #187)
-and the two intermittent-test issues (#192, #221).
+Six, all on M6, all in the distribution epic: #271, #272, #281, #282, #283, #284.
+Every other issue in the repository is closed, including the four from the v0.3.0
+release attempt (#183, #186, #187) and the two intermittent-test issues (#192,
+#221).
 
 Re-derive that before trusting it: `gh issue list --state open` and
 `gh api repos/:owner/:repo/milestones`.
@@ -129,8 +130,44 @@ repository checks itself rather than only what it does:
   exit while depending on whether a `commitlore` executable was resolvable from
   `PATH`, which the temporary repository did not control.
 
-Gate B (M6) and Gate C (M7) exist as milestones with no tickets. Nothing is
-scheduled against them.
+## The product scope changed, and it changed the plan
+
+**CommitLore no longer builds or ships a compiled executable.** No single
+executable, no Node SEA, no Windows `.exe`, no musl binary, no platform binary
+matrix, no binary package channel. `docs/adr/ADR-0026-node-only-distribution.md`
+is the authority and supersedes ADR-0015 entirely.
+
+Distribution is now stated as one thing:
+
+1. **Claude Code users are plugin-first** — `/plugin marketplace add
+   MongLong0214/commitlore`, then `/plugin install commitlore@commitlore`. The
+   plugin registers the MCP server, the pre-edit context hook and the skills. All
+   four manifests are already Node-based; nothing about that path needed changing.
+2. **Everyone else** uses Node-only `install.sh` (macOS, Linux) or `install.ps1`
+   (Windows), each checking Node >= 22 and Git, installing a pinned checkout into
+   the user's data directory, and putting a thin wrapper on `PATH` that runs
+   `node dist/commitlore.mjs`.
+
+Read the release section above as history, not as the plan. The four-platform
+build and `SHA256SUMS` still run, because **the binary code has not been removed
+yet** — removing it is its own ticket (#284) and ADR-0026 carries the inventory of
+every site it must own. Two of those sites, `src/core/hook-target.ts` and
+`src/hooks/commit-msg.ts`, carry #71's install-root containment: a diff that
+deletes the check along with the compiled-binary arm removes a verified security
+property.
+
+Eight tickets and their issues (#265-#270) were withdrawn as not planned by that
+change, and Gate B acceptance rows `B-1` through `B-5` are recorded in
+`docs/GATE-B-ACCEPTANCE.md` as withdrawn with a reason each rather than deleted.
+
+**M6 (Gate B) is where work now is.** Nine issues closed, six open. Shipped: the
+guard capture advisory (#273) and the user-editable policy file (#274). Open: the
+six-ticket distribution epic in `docs/tickets/F14-distribution.md`, specified by
+`docs/prd/PRD-F14-distribution.md`, and **gated** — the owner requires the revised
+ADR, the PRD, and each atomic ticket to pass review separately before any
+implementation code. Do not start T-1120 because it is next in the file.
+
+Gate C (M7) still exists as a milestone with no tickets.
 
 ## What the numbers currently say
 
@@ -268,20 +305,28 @@ is non-null.
 
 ## State at handoff
 
-Nothing is in flight: no open pull request, no open issue, and `git worktree list`
-shows the main checkout only. Thirty-six worktrees accumulated during the session
-and were removed after checking each for uncommitted files and confirming its
-branch had merged; the 42 stale `/private/tmp` records from earlier sessions are
-gone too.
+Work is in flight. Three pull requests are open and none of them is ready to merge
+on someone else's judgement:
+
+- **the distribution re-plan** (PRD-F14 plus six atomic tickets) — documents only,
+  CI green, waiting on review. Nothing implements it yet.
+- **two held drafts** whose contracts the scope change invalidated. Their
+  structure survives; their authority did not. Each carries a comment stating the
+  rebound contract, and each is rewritten when its ticket is approved.
 
 ```
-dev 0.4.1, green            main carries v0.4.1
-65 test files, 1,750 passing, 1 skipped
-0 open issues, 0 open pull requests, all milestones 0 open
+dev 0.4.1, CI green at the head    main carries v0.4.1
+67 test files                      6 open issues, 3 open pull requests
+M6: 9 closed, 6 open               every other milestone 0 open
 ```
 
-Establish those yourself — `npx vitest run`, `gh issue list --state open`,
-`gh run list --branch dev --limit 1`. Do not cite this block.
+**The passing test count is deliberately absent.** This document previously
+carried one that had gone stale, and a number nobody measured is worse than no
+number. CI is green at the head, which is the evidence that the suite passes;
+`npx vitest run` is how you get the count.
+
+Establish the rest yourself — `gh issue list --state open`, `gh pr list`,
+`gh run list --branch dev --limit 1`, `git worktree list`. Do not cite this block.
 
 Budget the time: a local full suite takes about **nine minutes** on a loaded
 machine, and `test/guard.test.ts` alone about **seven and a half**. See the trap
@@ -289,10 +334,11 @@ about killed bounded runs above before concluding anything has stalled.
 
 ## Delegation
 
-**The owner's current instruction is Claude subagents — `sonnet` or `opus`,
-chosen by difficulty.** This replaced the `gpt-worker.sh` terra/sol routing on
-2026-07-29; the routing hook was deleted. Earlier sections of the git history
-assume the old broker, so do not restore it from a commit message.
+**The executor profile is owner-specified and changes; read the current
+instruction rather than this file for it.** An earlier external routing broker was
+removed on 2026-07-29 and must not be restored from a commit message that predates
+its removal. This document names no model, provider or routing detail on purpose:
+this is a public surface, and that metadata does not belong on one.
 
 Whichever executor is used, the packet shape is what made delegation work: goal,
 task class, exact files, acceptance criteria, verification, forbidden scope. State
