@@ -180,6 +180,113 @@ afterAll(() => {
 });
 
 // ===========================================================================
+// ===========================================================================
+// The prepare response must carry every field an agent needs (found in real use)
+//
+// MCP is the first-class surface for every agent other than the Claude Code
+// plugin. Two fields were computed and persisted but never forwarded here, so an
+// agent using MCP saw neither: the guard advisory (B-6, T-1109) and the policy
+// error (B-7, T-1110). An absent advisory reads as "nothing applies", and an
+// absent policy error is the silent fallback requirement 10 forbids.
+// ===========================================================================
+
+describe('commitlore_prepare_capture surfaces the advisory and the policy error', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = mkdtempSync(join(tmpdir(), 'commitlore-mcp-advisory-'));
+    temporaries.push(repo);
+    execGitOrThrow(['init', repo], { cwd: repo });
+    const file = join(repo, 'svc.ts');
+    writeFileSync(file, 'export const rank = () => 0;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    // A record whose ruled-out alternative the transcript below revives.
+    execGitOrThrow(
+      [
+        ...GIT_CONFIG,
+        '-C',
+        repo,
+        'commit',
+        '-m',
+        [
+          'Add the ranking entry point',
+          '',
+          'Record-Id: r-mcpadv001',
+          'Ruled-out: let the model decide the final ranking | it takes far less code but the ranking becomes unauditable and cannot be replayed',
+          'Certainty: firm',
+          'Blast: module',
+          'Undo: easy',
+        ].join('\n'),
+      ],
+      { cwd: repo },
+    );
+    // Something staged, so prepare has a diff to bind to.
+    writeFileSync(file, 'export const rank = () => 1;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('carries the guard advisory, with its measured disclosure', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: {
+        transcript:
+          'We considered letting the model decide the final ranking because it is much less code.',
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+
+    // Present, not absent: an agent must never read absence as "nothing applies".
+    expect(result).toHaveProperty('guard_advisory');
+    const advisory = result['guard_advisory'] as {
+      matches: { alternative?: string }[];
+      gaps: string[];
+      disclosure: string;
+    } | null;
+    expect(advisory).not.toBeNull();
+    expect(advisory!.matches.length).toBeGreaterThan(0);
+    expect(advisory!.matches[0]!.alternative).toContain('final ranking');
+    // ADR-0020: the measured figures travel with the advisory everywhere it shows.
+    expect(advisory!.disclosure).toContain('44.8%');
+    expect(advisory!.disclosure).toContain('22.0%');
+    expect(Array.isArray(advisory!.gaps)).toBe(true);
+  });
+
+  it('carries policy_error as null when the policy resolved cleanly', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: 'A decision with no policy file present.' },
+    });
+    const result = toolJson(response);
+    expect(result).toHaveProperty('policy_error');
+    expect(result['policy_error']).toBeNull();
+  });
+
+  it('names the reason when a policy file cannot be used, instead of falling back silently', async () => {
+    writeFileSync(join(repo, '.commitlore-policy.json'), '{ not json');
+    try {
+      const response = await stub.request('tools/call', {
+        name: 'commitlore_prepare_capture',
+        arguments: { transcript: 'A decision made while the policy file is broken.' },
+      });
+      const result = toolJson(response);
+      expect(typeof result['policy_error']).toBe('string');
+      expect(result['policy_error'] as string).toContain('.commitlore-policy.json');
+      // The identity must still describe the policy that actually ran.
+      expect(result['policy_identity_hash']).toMatch(/^[0-9a-f]{64}$/);
+    } finally {
+      rmSync(join(repo, '.commitlore-policy.json'), { force: true });
+    }
+  });
+});
+
 // T-1007: commitlore_prepare_capture
 // ===========================================================================
 
@@ -239,8 +346,7 @@ describe('commitlore_prepare_capture', () => {
     expect((result['prompt'] as string).length).toBeGreaterThan(0);
   });
 
-  it('does not expose a commitlore_write_record tool', async () => {
-    const response = await stub.request('tools/list');
+  it('does not expose a commitlore_write_record tool', async () => {    const response = await stub.request('tools/list');
     const tools = (response.result?.['tools'] ?? []) as { name: string }[];
     const names = tools.map((t) => t.name);
     expect(names).not.toContain('commitlore_write_record');
