@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync18 } from "node:fs";
+import { readFileSync as readFileSync19 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -29448,15 +29448,166 @@ var register19 = (program3) => {
   });
 };
 
+// src/commands/uninstall.ts
+import { existsSync as existsSync11, readFileSync as readFileSync18, rmSync as rmSync4, writeFileSync as writeFileSync12 } from "node:fs";
+import { homedir } from "node:os";
+import { join as join8 } from "node:path";
+
+// src/core/agent-configs.ts
+var AGENT_CONFIGS = [
+  { agent: "codex", homeRelativePath: [".codex", "config.toml"], format: "toml-mcp_servers" },
+  { agent: "gemini-cli", homeRelativePath: [".gemini", "settings.json"], format: "json-mcpServers" },
+  { agent: "cursor", homeRelativePath: [".cursor", "mcp.json"], format: "json-mcpServers" },
+  // Windsurf, under Codeium's config directory. Absent from the ticket's
+  // measured inventory, which lists four configs; both installers write five.
+  // The bidirectional assertion found it, which is the reason that assertion
+  // reads the installers instead of trusting a list.
+  {
+    agent: "windsurf",
+    homeRelativePath: [".codeium", "windsurf", "mcp_config.json"],
+    format: "json-mcpServers"
+  },
+  {
+    agent: "opencode",
+    homeRelativePath: [".config", "opencode", "opencode.json"],
+    format: "json-mcp"
+  }
+];
+var SERVER_KEY = "commitlore";
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var isCommitloreEntry = (format, entry, wrapperPath) => {
+  if (!isRecord(entry)) return false;
+  if (format === "json-mcp") {
+    const command = entry["command"];
+    return Array.isArray(command) && command.length === 2 && command[0] === wrapperPath && command[1] === "mcp";
+  }
+  const args = entry["args"];
+  return entry["command"] === wrapperPath && Array.isArray(args) && args.length === 1 && args[0] === "mcp";
+};
+
+// src/commands/uninstall.ts
+var WRAPPER_MARKER = "# commitlore:wrapper:v1";
+var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var withoutJsonEntry = (parsed, format, wrapper) => {
+  if (!isRecord2(parsed)) return null;
+  const container = format === "json-mcp" ? "mcp" : "mcpServers";
+  const servers = parsed[container];
+  if (!isRecord2(servers)) return null;
+  if (!isCommitloreEntry(format, servers[SERVER_KEY], wrapper)) return null;
+  const { [SERVER_KEY]: _removed, ...rest } = servers;
+  return { ...parsed, [container]: rest };
+};
+var withoutTomlBlock = (contents, wrapper) => {
+  const lines = contents.split("\n");
+  const start = lines.findIndex((l) => l.trim() === `[mcp_servers.${SERVER_KEY}]`);
+  if (start === -1) return null;
+  let end = start + 1;
+  while (end < lines.length && !(lines[end] ?? "[").trim().startsWith("[")) end += 1;
+  const block = lines.slice(start, end);
+  const value = (key) => block.find((l) => l.trim().startsWith(`${key} `) || l.trim().startsWith(`${key}=`))?.split("=")[1]?.trim();
+  const command = value("command")?.replace(/^"|"$/g, "");
+  const args = value("args")?.replace(/\s/g, "");
+  if (command !== wrapper || args !== '["mcp"]') return null;
+  let from = start;
+  if (from > 0 && (lines[from - 1] ?? "x").trim() === "") from -= 1;
+  return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
+};
+var runUninstall = async (options = {}) => {
+  const home = options.home ?? homedir();
+  const dataHome = options.dataHome ?? join8(home, ".local", "share");
+  const dryRun = options.dryRun === true;
+  const say = dryRun ? "would remove" : "removed";
+  const report = [];
+  const removed = [];
+  const kept = [];
+  const wrapper = join8(home, ".local", "bin", "commitlore");
+  if (existsSync11(wrapper)) {
+    const contents = (() => {
+      try {
+        return readFileSync18(wrapper, "utf8");
+      } catch {
+        return "";
+      }
+    })();
+    if (contents.includes(WRAPPER_MARKER)) {
+      if (!dryRun) rmSync4(wrapper, { force: true });
+      removed.push(wrapper);
+      report.push(`${say}: ${wrapper}`);
+    } else {
+      kept.push(wrapper);
+      report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
+    }
+  }
+  const dataRoot = join8(dataHome, "commitlore");
+  if (existsSync11(dataRoot)) {
+    if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
+    removed.push(dataRoot);
+    report.push(`${say}: ${dataRoot}`);
+  }
+  for (const config2 of AGENT_CONFIGS) {
+    const path2 = join8(home, ...config2.homeRelativePath);
+    if (!existsSync11(path2)) continue;
+    let contents;
+    try {
+      contents = readFileSync18(path2, "utf8");
+    } catch {
+      kept.push(path2);
+      report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
+      continue;
+    }
+    if (config2.format === "toml-mcp_servers") {
+      const next2 = withoutTomlBlock(contents, wrapper);
+      if (next2 === null) continue;
+      if (!dryRun) writeFileSync12(path2, next2);
+      removed.push(`${path2} (${SERVER_KEY} entry)`);
+      report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(contents);
+    } catch {
+      kept.push(path2);
+      report.push(`kept: ${path2} \u2014 it could not be parsed as JSON, so it was left untouched`);
+      continue;
+    }
+    const next = withoutJsonEntry(parsed, config2.format, wrapper);
+    if (next === null) continue;
+    if (!dryRun) writeFileSync12(path2, `${JSON.stringify(next, null, 2)}
+`);
+    removed.push(`${path2} (${SERVER_KEY} entry)`);
+    report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
+  }
+  report.push("");
+  report.push("Not removed by this command, because it did not write them:");
+  report.push("  per-repository hooks and index \u2014 run `commitlore hooks uninstall` in each repository");
+  report.push("  the Claude Code agent hook \u2014 run `commitlore inject uninstall-claude-hook`");
+  report.push("  the Claude Code plugin \u2014 remove it with `/plugin uninstall commitlore@commitlore`");
+  return {
+    exitCode: 0,
+    report,
+    removed,
+    json: { removed, kept, dryRun }
+  };
+};
+var registerUninstall = (program3) => {
+  program3.command("uninstall").description("Remove what install.sh or install.ps1 wrote: the wrapper, the checkout and the MCP entries").option("--dry-run", "report what would be removed and change nothing").option("--json", "emit the result as JSON").action(async (options) => {
+    const result = await runUninstall(options.dryRun === true ? { dryRun: true } : {});
+    if (options.json === true) console.log(JSON.stringify(result.json, null, 2));
+    else for (const line of result.report) console.log(line);
+    process.exitCode = result.exitCode;
+  });
+};
+
 // src/cli.ts
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync18(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync19(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync18(STDIN_FD2, "utf8");
+  return readFileSync19(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -29512,6 +29663,7 @@ program2.command("parse").description("Parse a commit message into its CommitLor
   runParse(options);
 });
 register19(program2);
+registerUninstall(program2);
 register4(program2);
 register12(program2);
 register14(program2);
