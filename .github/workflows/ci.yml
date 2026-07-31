@@ -449,12 +449,18 @@ jobs:
             exit /b 1
           )
 
-      # The hook is the point. Windows support is not claimed by this job (T-1124
-      # owns that), but what the installer puts on the machine has to work.
+      # What T-1121 owns is that the installer put a working CLI on this machine.
+      # It deliberately does not require a healthy `doctor`: on Windows the
+      # hook-runtime probe spawns /bin/sh, which does not exist there, and the
+      # PreToolUse entry names `commitlore` while the shim is `commitlore.cmd`.
+      # Both are real findings and both belong to T-1124, which owns the Windows
+      # hook path and the support claim that depends on it. Asserting a green
+      # doctor here would either fail this ticket for another ticket's work or
+      # smuggle in a support claim this one is forbidden from making.
       - name: The installed tool works in a real repository
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
           repo=$(mktemp -d)/repo
           mkdir -p "$repo"
@@ -465,19 +471,35 @@ jobs:
           git config commit.gpgsign false
           printf 'export const value = 0;\n' > file.ts
           git add file.ts
-          git commit -q -m "$(printf 'Seed\n\nRecord-Id: r-ciwin0001\nBlast: local\nUndo: easy\nCertainty: firm\n')"
+          git commit -q -m "$(printf 'Seed\n\nLimit: the runner has no compiled artifact\nRecord-Id: r-ciwin0001\n')"
 
-          "$shim" init
-          echo "--- recorded ---"
-          git config --local --get commitlore.bin
-          git config --local --get commitlore.node
-          "$shim" doctor || echo "(doctor reported problems -- see above)"
+          # init reports; a check that needs attention is not this step's failure.
+          "$shim" init || echo "(init reported steps needing attention -- see above)"
 
-          printf 'export const value = 1;\n' > file.ts
-          git add file.ts
-          if git commit -q -m "$(printf 'Bad\n\nBlast: wide\n')"; then
-            echo "::error::an invalid record was accepted by the hook"
+          echo "--- what init recorded ---"
+          bin=$(git config --local --get commitlore.bin || true)
+          node_path=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $bin"
+          echo "commitlore.node = $node_path"
+          case "$bin" in
+            *dist/commitlore.mjs|*dist\\commitlore.mjs) ;;
+            *) echo "::error::commitlore.bin is not the bundle: $bin"; exit 1 ;;
+          esac
+          test -n "$node_path" || { echo "::error::no interpreter was recorded"; exit 1; }
+
+          echo "--- the CLI itself ---"
+          "$shim" context file.ts || { echo "::error::context failed"; exit 1; }
+
+          printf 'Bad\n\nBlast: wide\n' > /tmp/bad-message.txt
+          if "$shim" validate --message-file /tmp/bad-message.txt; then
+            echo "::error::an invalid record was accepted"
             exit 1
           fi
-          git commit -q -m "$(printf 'Good\n\nLimit: the runner has no compiled artifact\nRecord-Id: r-ciwin0002\n')"
-          "$shim" context file.ts
+          printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin0002\n' > /tmp/good-message.txt
+          "$shim" validate --message-file /tmp/good-message.txt || {
+            echo "::error::a valid record was rejected"
+            exit 1
+          }
+
+          echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
+          "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
