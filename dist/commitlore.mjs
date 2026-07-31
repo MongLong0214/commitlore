@@ -15729,7 +15729,7 @@ var gcPending = (cwd) => {
 var runCapture = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
   const transcript = readFileSync6(transcriptPath, "utf8");
-  const diff = diffPath ? readFileSync6(diffPath, "utf8") : "";
+  const diff = diffPath ? readFileSync6(diffPath, "utf8") : execGitOrThrow(["diff", "--cached"], { cwd });
   const prepareResult = prepareCaptureContext({ cwd, transcript });
   if (prepareResult.policy_error !== null) {
     process.stderr.write(
@@ -15743,17 +15743,22 @@ commitlore capture: the built-in defaults were used for this capture
   }
   const rawDraft = readFileSync6(draftPath, "utf8");
   let draftRecords;
-  try {
-    const parsed = JSON.parse(rawDraft);
-    if (parsed.records && Array.isArray(parsed.records)) {
-      draftRecords = parsed.records;
-    } else {
-      const review = parseDraft(rawDraft);
-      draftRecords = review.records;
+  const draftRejections = [];
+  const collect3 = (review) => {
+    for (const rejection of review.rejected) {
+      draftRejections.push({
+        index: rejection.index,
+        rule: rejection.rule,
+        detail: rejection.detail
+      });
     }
+    return review.records;
+  };
+  try {
+    JSON.parse(rawDraft);
+    draftRecords = collect3(parseDraft(rawDraft));
   } catch {
-    const review = parseDraft(rawDraft);
-    draftRecords = review.records;
+    draftRecords = collect3(parseDraft(rawDraft));
   }
   const verifyResult = verifyCaptureRecords({
     nonce: prepareResult.nonce,
@@ -15766,10 +15771,20 @@ commitlore capture: the built-in defaults were used for this capture
     nonce: prepareResult.nonce,
     cwd
   });
+  const rejected = [
+    ...draftRejections,
+    ...verifyResult.rejected.map((rejection, index) => ({
+      index,
+      rule: rejection.reason,
+      detail: rejection.detail,
+      reason: rejection.reason
+    }))
+  ];
   return {
     nonce: stagedNonce ?? prepareResult.nonce,
     staged: stagedNonce !== null,
-    guard_advisory: prepareResult.guard_advisory
+    guard_advisory: prepareResult.guard_advisory,
+    rejected
   };
 };
 var register2 = (program3) => {
@@ -15827,6 +15842,12 @@ var register2 = (program3) => {
         }
       } else {
         process.stdout.write("no record staged\n");
+      }
+      for (const rejection of result.rejected ?? []) {
+        process.stderr.write(
+          `commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}
+`
+        );
       }
       if (options.out && result.nonce) {
         writeFileSync2(options.out, result.nonce + "\n");
