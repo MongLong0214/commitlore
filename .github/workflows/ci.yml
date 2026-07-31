@@ -323,15 +323,17 @@ jobs:
   # job does for the shell installer: nothing here reaches github.com, so the job
   # tests the script rather than the network.
   #
-  # Windows PowerShell 5.1 is tested alongside PowerShell 7 because 5.1 is what a
-  # Windows machine has before anyone installs anything, and a 7-only construct
-  # fails to parse the *whole* file rather than one branch of it.
+  # Both hosts are exercised, and each one does real work rather than repeating
+  # the other: Windows PowerShell 5.1 performs the first install, PowerShell 7
+  # performs the upgrade. 5.1 matters because it is what a Windows machine has
+  # before anyone installs anything, and a 7-only construct fails to parse the
+  # whole file rather than one branch of it.
+  #
+  # The hosts are named literally. `shell:` accepts no expression -- a
+  # `${{ matrix.shell }}` there makes the workflow unloadable, which is how this
+  # job was first written and how it first failed (actions/runner#444).
   install-ps1:
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -346,17 +348,23 @@ jobs:
           git config user.name "CommitLore CI"
           git tag v9.9.9
 
-      - name: Install from the local tag
-        shell: ${{ matrix.shell }}
+      # -File, under 5.1, with the version as a positional argument: the same
+      # entry point a user gets from `& ([scriptblock]::Create((irm ...))) v9.9.9`,
+      # and the one that proves param() binds.
+      - name: Install under Windows PowerShell 5.1
+        shell: cmd
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          & .\install.ps1 v9.9.9
-          if ($LASTEXITCODE -ne 0) { throw "installer exited $LASTEXITCODE" }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9
+          if errorlevel 1 exit /b 1
 
-      - name: The shim exists, reports a version, and runs a real command
-        shell: ${{ matrix.shell }}
+      - name: The 5.1 host reports its own version, for the record
+        shell: cmd
+        run: powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+
+      - name: The shim exists, is CRLF, and reports the declared version
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
@@ -366,34 +374,37 @@ jobs:
           if ($body -notmatch "`r`n") { throw 'the shim is not CRLF' }
           $version = (& $shim --version | Select-Object -First 1)
           Write-Host "shim reports: $version"
-          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+') { throw "unexpected version output: $version" }
           $declared = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
           if ($version.Trim() -ne $declared) { throw "shim reports $version, package.json declares $declared" }
           & $shim --help > $null
           if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
 
-      - name: A second run is an upgrade, not a refusal
-        shell: ${{ matrix.shell }}
+      # The documented piped form, under PowerShell 7. `iex` gives a piped script
+      # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
+      # why that variable exists. This step is also the only check that a leading
+      # param() block survives Invoke-Expression at all.
+      - name: A second install through the documented pipe is an upgrade
+        shell: pwsh
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+          COMMITLORE_VERSION: v9.9.9
         run: |
           $ErrorActionPreference = 'Stop'
-          $out = (& .\install.ps1 v9.9.9 2>&1 | Out-String)
+          $out = (Get-Content -LiteralPath .\install.ps1 -Raw | Invoke-Expression 2>&1 | Out-String)
           Write-Host $out
-          if ($LASTEXITCODE -ne 0) { throw "re-run exited $LASTEXITCODE" }
           if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
           if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
 
       - name: A foreign file at the destination is refused with exit 4
-        shell: ${{ matrix.shell }}
+        shell: pwsh
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          $ErrorActionPreference = 'Continue'
           $dir = Join-Path $env:TEMP 'commitlore-occupied'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           Set-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Value '@echo not commitlore'
           $env:COMMITLORE_INSTALL_DIR = $dir
-          $env:COMMITLORE_INSTALL_SOURCE = '${{ github.workspace }}'
-          $out = (& .\install.ps1 v9.9.9 2>&1 | Out-String)
+          $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 2>&1 | Out-String)
           $code = $LASTEXITCODE
           Remove-Item Env:\COMMITLORE_INSTALL_DIR
           Write-Host $out
@@ -402,18 +413,20 @@ jobs:
           $body = Get-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Raw
           if ($body -notmatch 'not commitlore') { throw 'the foreign file was modified' }
 
-      - name: A bad tag is refused with exit 2 and installs nothing
-        shell: ${{ matrix.shell }}
+      - name: An unknown tag is refused with exit 2 and installs nothing
+        shell: pwsh
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          $ErrorActionPreference = 'Continue'
-          $env:COMMITLORE_INSTALL_SOURCE = '${{ github.workspace }}'
-          $out = (& .\install.ps1 v0.0.0 2>&1 | Out-String)
+          $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v0.0.0 2>&1 | Out-String)
           $code = $LASTEXITCODE
           Write-Host $out
           if ($code -ne 2) { throw "expected exit 2 for an unknown tag, got $code" }
           if ($out -notmatch 'git said:') { throw "git's own reason was not quoted" }
           if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'commitlore\v0.0.0')) { throw 'a checkout was left behind' }
 
+      # The hook is the point. Windows support is not claimed by this job (T-1124
+      # owns that), but what the installer puts on the machine has to work.
       - name: The installed tool works in a real repository
         shell: bash
         run: |
@@ -436,9 +449,6 @@ jobs:
           git config --local --get commitlore.node
           "$shim" doctor || echo "(doctor reported problems -- see above)"
 
-          # The hook is the point: a record that violates the vocabulary must be
-          # rejected, and a valid one accepted. Windows support is not claimed by
-          # this job (T-1124 owns that), but what it installs has to work.
           printf 'export const value = 1;\n' > file.ts
           git add file.ts
           if git commit -q -m "$(printf 'Bad\n\nBlast: wide\n')"; then
