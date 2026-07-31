@@ -149,12 +149,16 @@ Distribution is now stated as one thing:
    `node dist/commitlore.mjs`.
 
 Read the release section above as history, not as the plan. The four-platform
-build and `SHA256SUMS` still run, because **the binary code has not been removed
-yet** — removing it is its own ticket (#284) and ADR-0026 carries the inventory of
-every site it must own. Two of those sites, `src/core/hook-target.ts` and
-`src/hooks/commit-msg.ts`, carry #71's install-root containment: a diff that
-deletes the check along with the compiled-binary arm removes a verified security
-property.
+build and `SHA256SUMS` are gone: #284 removed every site ADR-0026's inventory
+named, plus one it did not -- `src/core/paths.ts` carried a live `node:sea` asset
+branch. The release workflow now publishes a tag with no assets, because the tag
+*is* what both install paths resolve.
+
+The containment constraint held. `src/core/hook-target.ts` and
+`src/hooks/commit-msg.ts` kept #71's install-root check for the path that ships:
+removing the compiled arm made classification stricter rather than looser, since an
+extensionless name is now refused instead of trusted. The wrapper records the
+`.mjs` bundle, so it was always the script arm that mattered.
 
 Eight tickets and their issues (#265-#270) were withdrawn as not planned by that
 change, and Gate B acceptance rows `B-1` through `B-5` are recorded in

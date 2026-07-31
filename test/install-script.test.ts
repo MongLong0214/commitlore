@@ -338,7 +338,12 @@ describe('T-1120 the README describes the installer that ships beside it (req 29
   it('all four change together — the set is asserted, not one file', () => {
     const b = bodies();
     expect(Object.keys(b)).toHaveLength(4);
-    const mentionsAsset = Object.entries(b).filter(([, body]) => body.includes('SHA256SUMS'));
-    expect(mentionsAsset.map(([f]) => f)).toEqual([]);
+    // A forbidden mention: no README may describe a checksum file, because no
+
+    // release publishes one (ADR-0026).
+
+    const forbidden = Object.entries(b).filter(([, body]) => body.includes('SHA256SUMS'));
+
+    expect(forbidden.map(([f]) => f)).toEqual([]);
   });
 });

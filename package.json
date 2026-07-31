@@ -14,7 +14,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
-    "build:binary": "npm run build && node scripts/build-binary.mjs",
     "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -46,7 +45,6 @@
     "commander": "^15.0.0",
     "esbuild": "^0.28.1",
     "js-yaml": "^5.2.2",
-    "postject": "^1.0.0-alpha.6",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

@@ -402,13 +402,13 @@ describe('doctor: a stale stub', () => {
   });
 
   /**
-   * #39: a compiled binary is a recognized COMMITLORE_BIN shape too — it gets
-   * the same active-override notice a valid `.mjs` override already gets
-   * (`warn`, not `fail`: an override is a deliberate bypass of the recorded
-   * install, worth surfacing, not a broken one), rather than the "is not a
-   * .js, .mjs, or compiled commitlore binary" rejection wording.
+   * An extensionless `commitlore` is no longer a recognized COMMITLORE_BIN shape
+   * (ADR-0026 removed the compiled build that made the name meaningful), so doctor
+   * reports the rejection wording rather than the active-override notice. The
+   * distinction matters to a reader: the override is being *ignored*, and saying
+   * "override is active" would tell them the opposite.
    */
-  it('accepts a COMMITLORE_BIN override named the way a compiled binary is named', () => {
+  it('rejects a COMMITLORE_BIN override with no extension', () => {
     const { repo } = repoWithRemote('doctor-hook-env-override-binary');
     writeScript(hookPath(repo), commitMsgStub());
     recordHookTarget(repo);
@@ -418,8 +418,8 @@ describe('doctor: a stale stub', () => {
     try {
       const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
       expect(check?.status).toBe('warn');
-      expect(check?.detail).toContain('COMMITLORE_BIN override is active');
-      expect(check?.detail).not.toContain('is not a .js, .mjs, or compiled commitlore binary');
+      expect(check?.detail).toContain('is not a .js or .mjs file');
+      expect(check?.detail).toContain('the hook ignores it');
     } finally {
       if (previous === undefined) delete process.env['COMMITLORE_BIN'];
       else process.env['COMMITLORE_BIN'] = previous;

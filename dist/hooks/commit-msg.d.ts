@@ -51,12 +51,11 @@ export declare const HOOK_MODE = 493;
  * every commit and make offline commits fail. The local `node_modules/.bin`
  * walk covers the same case without leaving the machine.
  *
- * A compiled single-executable build (#39, `scripts/build-binary.mjs`) needs
- * no interpreter and carries no `.js`/`.mjs` extension — Node SEA output is a
- * plain executable named `commitlore`. It is recognized by that name rather
- * than by "has no extension", which would allow-list every other executable
- * on the machine, and its containment check is an exact match against
- * `commitlore.root` rather than a directory prefix: a binary has no
- * subdirectory for a foreign file to hide in, it *is* the whole install.
+ * Only `.js`/`.mjs` is recognized. ADR-0026 removed the compiled
+ * single-executable build, and with it the arm that would exec an extensionless
+ * file named `commitlore` directly. That name now belongs to the installer's own
+ * wrapper, which is a shell script that execs node — so the path worth trusting is
+ * the bundle it runs, and an extensionless recorded path falls through to the
+ * PATH search below rather than being exec'd on the strength of its name.
  */
 export declare const commitMsgStub: () => string;
