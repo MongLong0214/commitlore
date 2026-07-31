@@ -37,6 +37,7 @@ Prerequisites for either path: Node.js 22+ and Git. The script checks both befor
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
 ```
 
+Which hosts are supported, and what each install path requires: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## See it work
 
