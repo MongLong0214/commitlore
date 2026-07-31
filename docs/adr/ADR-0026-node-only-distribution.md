@@ -133,7 +133,7 @@ No code is mutated by this change. Measured at `69e5208`:
 | `scripts/commitlore-run.sh` → `resolve()` first branch | probes `$CLAUDE_PLUGIN_ROOT/dist/commitlore` before the Node bundle |
 | `src/core/hook-target.ts` → `BinKind`, `classifyBinTarget`, `matchesRunningBinary` | classifies an install target as `script` or compiled `binary` |
 | `src/hooks/commit-msg.ts` → the stub allowlist glob | accepts a bare `commitlore` executable as a hook target |
-| `README.md` and the three translations | the pinned-asset verification block and the platform limitation bullets |
+| `README.md` and the three translations | the pinned-asset verification block and the platform limitation bullets. **Owned by T-1120, not by the removal ticket**: it rewrites that region in the same commit that makes the installer Node-only, because that is the only arrangement in which the README is never wrong. The removal ticket owns only a residual reference surviving elsewhere in these files |
 
 `src/core/hook-target.ts` and `src/hooks/commit-msg.ts` are the two carrying #71's
 install-root containment. Their removal must **preserve that property for the wrapper case**

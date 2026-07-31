@@ -41,7 +41,11 @@ Linux and Windows, with no compiled artifact anywhere in the path.
 
 ## Requirements
 
-### Plugin path — document and bind what already works (verified at `da1c733`)
+### Plugin path — document and bind what already works (verified at `8b0c9fa`)
+
+Owner: **T-1122**. Requirement 1 is **already implemented** at this base — all four READMEs
+lead with the two commands. What is missing is the assertion, so requirement 1 is satisfied by
+a test rather than by an edit, and a diff that rewrites the plugin-first block is out of scope.
 
 1. The install documentation leads with the two Claude Code commands
    (`/plugin marketplace add MongLong0214/commitlore`, then
@@ -131,7 +135,20 @@ Linux and Windows, with no compiled artifact anywhere in the path.
     `src/hooks/commit-msg.ts` are the two sites that carry it.
 29. The README's shell-install section is rewritten in the same change that makes the
     installer Node-only, never before it — otherwise the README describes behaviour the code
-    does not have.
+    does not have. **Owner: T-1120**, which owns both the installer and that region, because a
+    single commit is the only arrangement in which the README is never wrong: earlier makes it
+    false immediately, later leaves it false in between. T-1122 owns only a pointer line in
+    those files, and T-1125 owns only whatever compiled-binary or release reference survives
+    elsewhere in them — expected to be none. This requirement sits in the removal section
+    because that is where it was first written, not because T-1125 owns it.
+
+## Ownership
+
+One owner per region, so no requirement can be claimed twice. The table lives in
+[`../tickets/F14-distribution.md`](../tickets/F14-distribution.md) "Ownership map" and is
+authoritative; this PRD's requirements name their owner where it is not obvious. The first
+draft of both documents failed review because requirement 29 and T-1120's forbidden scope
+contradicted each other while T-1122 and T-1125 each also claimed the same README block.
 
 ## Verification
 
