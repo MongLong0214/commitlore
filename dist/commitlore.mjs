@@ -15163,7 +15163,7 @@ var resolvePolicy = (cwd) => {
 
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15238,6 +15238,15 @@ var createPending = (opts) => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, record2);
   return nonce;
+};
+var listPendingNonces = (cwd) => {
+  let entries;
+  try {
+    entries = readdirSync(pendingDir(cwd));
+  } catch {
+    return [];
+  }
+  return entries.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -".json".length)).filter((nonce) => /^[0-9a-f]{32}$/.test(nonce)).sort();
 };
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
@@ -15632,7 +15641,7 @@ var stageCaptureRecord = (opts) => {
 };
 
 // src/core/pending-gc.ts
-import { existsSync as existsSync5, readdirSync, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var PROTECTED_PHASES = /* @__PURE__ */ new Set(["staged", "applied"]);
@@ -15663,7 +15672,7 @@ var gcPending = (cwd) => {
   if (!existsSync5(dir)) return { removed, kept };
   let files;
   try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+    files = readdirSync2(dir).filter((f) => f.endsWith(".json"));
   } catch {
     return { removed, kept };
   }
@@ -17405,7 +17414,7 @@ var register4 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync2, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -17534,7 +17543,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   if (!pendingDirPath || !existsSync9(pendingDirPath)) return;
   let files;
   try {
-    files = readdirSync2(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+    files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
   } catch {
     return;
   }
@@ -17593,7 +17602,7 @@ var register5 = (program3) => {
 
 // src/hooks/post-commit.ts
 import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync11, readdirSync as readdirSync3, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync11, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
 import { resolve as resolve9 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -17688,7 +17697,7 @@ var runPostCommitFinaliser = (cwd) => {
   if (!pendingDirPath || !existsSync10(pendingDirPath)) return;
   let files;
   try {
-    files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+    files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
   } catch {
     return;
   }
@@ -28539,6 +28548,149 @@ var register16 = (program3) => {
   });
 };
 
+// src/commands/pending.ts
+var headOf = (cwd) => {
+  const result = execGit(["rev-parse", "HEAD"], { cwd });
+  if (result.code !== 0) return null;
+  const head = result.stdout.trim();
+  return /^[0-9a-f]{40}$/.test(head) ? head : null;
+};
+var gcEligible = (record2) => {
+  if (record2.phase === "staged" || record2.phase === "applied") return false;
+  if (record2.phase === "consumed" && record2.consumed) return true;
+  if (record2.expires_at === null || record2.expires_at === "") return false;
+  return !Number.isNaN(Date.parse(record2.expires_at));
+};
+var summarise = (record2, head) => ({
+  nonce: record2.nonce,
+  phase: record2.phase,
+  records: record2.records.length,
+  validation_result: record2.validation_result,
+  created_at: record2.created_at,
+  expires_at: record2.expires_at,
+  base_head: record2.base_head,
+  stale: head !== null && record2.base_head !== head,
+  gc_eligible: gcEligible(record2)
+});
+var runPendingList = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const head = headOf(cwd);
+  const transactions = [];
+  const unreadable = [];
+  for (const nonce of listPendingNonces(cwd)) {
+    let record2 = null;
+    try {
+      record2 = readPending(nonce, { cwd });
+    } catch {
+      unreadable.push(nonce);
+      continue;
+    }
+    if (record2 === null) {
+      unreadable.push(nonce);
+      continue;
+    }
+    transactions.push(summarise(record2, head));
+  }
+  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return { transactions, unreadable };
+};
+var runPendingShow = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const wanted = opts.nonce.trim().toLowerCase();
+  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  if (candidates.length === 0) {
+    return { transaction: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+  }
+  if (candidates.length > 1) {
+    return {
+      transaction: null,
+      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
+    };
+  }
+  const [only = ""] = candidates;
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error2) {
+    const detail = error2 instanceof Error ? error2.message : String(error2);
+    return { transaction: null, error: `${only} could not be read: ${detail}` };
+  }
+  if (record2 === null) {
+    return { transaction: null, error: `${only} could not be read as a transaction` };
+  }
+  const head = headOf(cwd);
+  return {
+    transaction: {
+      ...record2,
+      stale: head !== null && record2.base_head !== head,
+      gc_eligible: gcEligible(record2)
+    },
+    error: null
+  };
+};
+var age = (from, now) => {
+  const started = Date.parse(from);
+  if (Number.isNaN(started)) return "?";
+  const minutes = Math.max(0, Math.round((now - started) / 6e4));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+};
+var renderList = (result, now) => {
+  if (result.transactions.length === 0 && result.unreadable.length === 0) {
+    return "no pending capture transactions\n";
+  }
+  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
+  for (const row of result.transactions) {
+    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
+    lines.push(
+      [
+        row.nonce.slice(0, 8).padEnd(9),
+        row.phase.padEnd(9),
+        String(row.records).padEnd(8),
+        (row.validation_result ?? "-").padEnd(11),
+        age(row.created_at, now).padEnd(5),
+        row.base_head.slice(0, 8).padEnd(9),
+        flags
+      ].join(" ")
+    );
+  }
+  for (const nonce of result.unreadable) {
+    lines.push(`${nonce.slice(0, 8)} unreadable`);
+  }
+  return `${lines.join("\n")}
+`;
+};
+var register17 = (program3) => {
+  const pending = program3.command("pending").description("inspect capture transactions that have not reached a commit yet");
+  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
+    const result = runPendingList({});
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      return;
+    }
+    process.stdout.write(renderList(result, Date.now()));
+  });
+  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingShow({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.transaction === null) process.exitCode = 1;
+      return;
+    }
+    if (result.transaction === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not found"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
+`);
+  });
+};
+
 // src/commands/squash-preserve.ts
 import { readFileSync as readFileSync16, writeFileSync as writeFileSync11 } from "node:fs";
 var PREFIX4 = "commitlore:";
@@ -28666,7 +28818,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register17 = (program3) => {
+var register18 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -29279,7 +29431,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -29359,7 +29511,7 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register18(program2);
+register19(program2);
 register4(program2);
 register12(program2);
 register14(program2);
@@ -29368,7 +29520,7 @@ register3(program2);
 register7(program2);
 register9(program2);
 register11(program2);
-register17(program2);
+register18(program2);
 register5(program2);
 register6(program2);
 register10(program2);
@@ -29377,6 +29529,7 @@ register(program2);
 register2(program2);
 register8(program2);
 register16(program2);
+register17(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",

@@ -7,7 +7,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execGitOrThrow } from './git.js';
 import type { RenderedGuardMatch } from './guard.js';
@@ -159,6 +159,28 @@ export const createPending = (opts: CreatePendingOptions): string => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, record);
   return nonce;
+};
+
+/**
+ * The nonces of every pending transaction in this repository, sorted oldest name
+ * first so a listing is stable between runs.
+ *
+ * Returns an empty list when the directory does not exist: a repository that has
+ * never captured has nothing pending, which is an answer rather than an error
+ * (#311).
+ */
+export const listPendingNonces = (cwd: string): string[] => {
+  let entries: string[];
+  try {
+    entries = readdirSync(pendingDir(cwd));
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => name.slice(0, -'.json'.length))
+    .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
+    .sort();
 };
 
 export interface ReadPendingOptions {
