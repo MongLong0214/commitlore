@@ -248,6 +248,28 @@ describe('#298 tag auto-resolution needs no sort extension', () => {
    * v0.x so both orderings agree, which is exactly why this needs a test rather
    * than a reading.
    */
+  it('no grep invocation uses a non-POSIX option (#305)', () => {
+    // POSIX grep defines exactly these options. Anything else -- `-m` being the
+    // one that got in -- is an extension, and this file is declared POSIX sh.
+    // Generalised from the sort -V check because the same commit that removed
+    // that flag introduced grep -m1: a one-off assertion catches one instance,
+    // an invariant catches the next.
+    const POSIX_GREP = new Set(['E', 'F', 'c', 'e', 'f', 'i', 'l', 'n', 'q', 's', 'v', 'x']);
+    const offenders: string[] = [];
+    const code = readFileSync(INSTALLER, 'utf8')
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('#'));
+    for (const line of code) {
+      for (const match of line.matchAll(/\bgrep\s+(-[a-zA-Z0-9]+)/g)) {
+        const flags = match[1]!.slice(1).replace(/[0-9]+$/, '');
+        for (const flag of flags) {
+          if (!POSIX_GREP.has(flag)) offenders.push(`${match[1]} in: ${line.trim().slice(0, 80)}`);
+        }
+      }
+    }
+    expect(offenders, offenders.join('\n')).toEqual([]);
+  });
+
   it('the script resolves versions without depending on sort -V', () => {
     // Invocations, not prose: the comment beside the fix names the flag on
     // purpose, and a test that forbade the word would delete the explanation.
