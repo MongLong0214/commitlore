@@ -87,11 +87,22 @@ if [ -n "$version" ]; then
     *) die "\"$version\" is not a version tag. Pass a tag such as v0.4.1, or pass nothing to install the newest one." 1 ;;
   esac
 else
+  # Newest release tag, compared numerically without `sort -V`. That flag is a
+  # GNU/BSD extension and this script is POSIX sh: where it is missing the major
+  # field compares lexically, which puts v9 above v10 and installs an older
+  # release while reporting success. Zero-padding the three numbers turns a plain
+  # lexical `sort` into a numeric one, which needs no extension at all.
+  #
+  # Only `vMAJOR.MINOR.PATCH` is considered. A pre-release tag would otherwise tie
+  # with its release on the padded numbers and then win the tie-break by being
+  # the longer string, which is backwards.
   version="$(git ls-remote --tags --refs "$SOURCE_URL" 2>/dev/null \
     | awk '{print $2}' | sed 's#refs/tags/##' \
-    | grep '^v[0-9]' \
-    | sort -t. -k1,1V -k2,2n -k3,3n \
-    | tail -n 1 || true)"
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+    | awk -F. '{ maj = $1; sub(/^v/, "", maj); printf "%010d %010d %010d %s\n", maj + 0, $2 + 0, $3 + 0, $0 }' \
+    | sort \
+    | tail -n 1 \
+    | awk '{ print $4 }' || true)"
   [ -n "$version" ] || die "no version tag could be resolved from $SOURCE_URL. Pass one explicitly, for example: sh install.sh v0.4.1" 2
 fi
 
