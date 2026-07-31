@@ -28209,7 +28209,7 @@ var TOOLS = [
         },
         draft: {
           type: "string",
-          description: "JSON-serialised array of DraftRecord objects produced by the agent"
+          description: `The agent's draft, as the harvest contract specifies it: a JSON object with a "records" array. A bare JSON array of records is also accepted.`
         },
         transcript: {
           type: "string",
@@ -28350,8 +28350,15 @@ var createServer = (opts = {}) => {
       let draft;
       try {
         const parsed = JSON.parse(draftRaw);
-        if (!Array.isArray(parsed)) throw new Error("draft must be a JSON array");
-        draft = parsed;
+        if (Array.isArray(parsed)) {
+          draft = parsed;
+        } else if (parsed !== null && typeof parsed === "object" && Array.isArray(parsed.records)) {
+          draft = parsed.records;
+        } else {
+          throw new Error(
+            'draft must be a JSON object with a "records" array, as the harvest contract specifies, or a bare JSON array of records'
+          );
+        }
       } catch (e) {
         throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
       }

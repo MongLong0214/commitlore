@@ -296,7 +296,7 @@ const TOOLS = [
                 },
                 draft: {
                     type: 'string',
-                    description: 'JSON-serialised array of DraftRecord objects produced by the agent',
+                    description: 'The agent\'s draft, as the harvest contract specifies it: a JSON object with a "records" array. A bare JSON array of records is also accepted.',
                 },
                 transcript: {
                     type: 'string',
@@ -456,9 +456,24 @@ export const createServer = (opts = {}) => {
             let draft;
             try {
                 const parsed = JSON.parse(draftRaw);
-                if (!Array.isArray(parsed))
-                    throw new Error('draft must be a JSON array');
-                draft = parsed;
+                // Two shapes, because the product hands the agent one of them.
+                // `prepare_capture`'s prompt contract says to emit `{"records": [...]}`
+                // — explicitly, including for the empty case — and `harvest.ts` and the
+                // CLI both implement that. Requiring a bare array here made the surface
+                // that hands out the contract reject the contract, which is #291. The
+                // bare array stays accepted so callers written against the earlier
+                // description keep working.
+                if (Array.isArray(parsed)) {
+                    draft = parsed;
+                }
+                else if (parsed !== null &&
+                    typeof parsed === 'object' &&
+                    Array.isArray(parsed.records)) {
+                    draft = parsed.records;
+                }
+                else {
+                    throw new Error('draft must be a JSON object with a "records" array, as the harvest contract specifies, or a bare JSON array of records');
+                }
             }
             catch (e) {
                 throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
