@@ -295,7 +295,6 @@ node ~/.commitlore/dist/commitlore.mjs context src/auth
 ## 알려진 제한 사항
 
 - Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
-- Alpine 및 다른 musl Linux host는 지원하지 않는다: [#99](https://github.com/MongLong0214/commitlore/issues/99).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 - Guard(ruled-out alternative matching)는 실험적 참고 자료이다: precision 44.8%(95% Wilson CI 32.7%–57.5%), recall 22.0%, 417-decision corpus 기준([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). 빈 guard 결과는 제안이 모든 ruled-out alternative를 피했다는 보장이 아니다 — recall 22%에서 누락이 일반적이다.
