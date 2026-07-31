@@ -19,7 +19,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
-import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT } from '../core/paths.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_MODE, HOOK_NAME, commitMsgStub, } from '../hooks/commit-msg.js';
 const messageOf = (error) => error instanceof Error ? error.message : String(error);
@@ -162,9 +162,7 @@ const recordBinPath = (cwd) => {
     // `readRecordedHookTarget`'s node-comparison both expect.
     execGit(['config', '--local', 'commitlore.node', process.execPath], { cwd });
     // And the install root the stub trusts `commitlore.bin` to sit under (a
-    // script) or to equal exactly (a binary — it has no directory tree of its
-    // own for a foreign file to hide in, so its "root" is the one recorded
-    // file). A `.git/config` edit made after this install (ADR-0011's threat
+    // script). A `.git/config` edit made after this install (ADR-0011's threat
     // model: the same permission that can write this key can write
     // `.git/hooks` directly) can still repoint `commitlore.bin` at another
     // recognized file, but not at one outside here — the stub checks the
@@ -173,10 +171,10 @@ const recordBinPath = (cwd) => {
     // `cd ... && pwd -P`; best-effort like the rest of this function, so a
     // failure here is swallowed rather than failing the install.
     try {
-        const root = classifyBinTarget(resolvedEntry) === 'binary'
-            ? realpathSync(resolvedEntry)
-            : realpathSync(PACKAGE_ROOT);
-        execGit(['config', '--local', 'commitlore.root', root], { cwd });
+        // One artifact, one root: the package the recorded script has to sit under.
+        // ADR-0026 removed the compiled build, which was the only case whose root was
+        // a single file rather than a directory.
+        execGit(['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)], { cwd });
     }
     catch {
         // No root recorded means the stub's containment check cannot pass, which

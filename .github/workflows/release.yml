@@ -37,128 +37,16 @@ jobs:
       - name: Tag, package.json, and `commitlore --version` agree
         run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
 
-  # Standard matrix for a project this shape (ripgrep, fd, bat, gh, deno,
-  # bun all ship this set): both macOS architectures, Linux x64, and Linux
-  # arm64 — the last one on GitHub's own native `ubuntu-24.04-arm` hosted
-  # runner, confirmed (2026-07-28, against this branch) to build and run the
-  # SEA binary with no QEMU/cross-compilation involved. `node scripts/
-  # build-binary.mjs` always copies the *running* `node` binary and injects
-  # into that exact copy (see its own comments), so "native runner per
-  # target" is not a convenience here, it is the only way this build works
-  # at all — there is no cross-target flag to give it.
-  #
-  # Windows is deliberately not in this matrix. Verified empirically, not
-  # assumed, against a real windows-latest run of this exact branch
-  # (2026-07-28, throwaway probe workflow, deleted after):
-  #   1. `npm run build:binary` itself fails on Windows before SEA is even
-  #      reached: `scripts/build-binary.mjs`'s `REPO_ROOT` is computed as
-  #      `resolve(new URL('..', import.meta.url).pathname)`, and a Windows
-  #      file:// URL's `.pathname` keeps its leading slash in front of the
-  #      drive letter (`/D:/a/commitlore/commitlore/`). `path.resolve` (the
-  #      win32 variant) then treats that leading `/` as "root of the current
-  #      drive" and appends the rest literally, producing a doubled,
-  #      nonexistent path (observed: `D:\D:\a\commitlore\commitlore\dist\
-  #      commitlore.mjs does not exist`). The fix is `fileURLToPath(...)`
-  #      instead of `.pathname`, and it is not one-off — `scripts/
-  #      check-engines.mjs` has the identical pattern, so this is a systemic
-  #      gap across the script/ layer, not a single missed line.
-  #   2. Even past that: `src/core/hook-target.ts#classifyBinTarget` and the
-  #      `commit-msg` shell stub's `case` patterns
-  #      (`src/hooks/commit-msg.ts`) both recognize a compiled binary only by
-  #      the exact basename `commitlore` — `scripts/build-binary.mjs`'s own
-  #      `OUTPUT` already names the Windows build `commitlore.exe`, which
-  #      matches neither. The installed commit-msg hook would silently fall
-  #      through #71's containment check entirely rather than refuse to
-  #      resolve it, on the platform that most needs that check to hold.
-  #      ADR-0015 names this exact gap as "a small, additive follow-up" —
-  #      confirmed here, not fixed here. A broken or unverifiable asset is
-  #      worse than a missing one, so Windows stays out until both of the
-  #      above are fixed and re-verified on a real Windows runner.
-  build:
-    needs: version-consistency
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-          # macos-15-intel: GitHub's replacement for the retired macos-13 label
-          # (GitHub retired macos-13 on 2025-12-04; see
-          # https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/).
-          # x86_64 macOS support ends when macos-15 retires in Fall 2027.
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm run build:binary
-
-      - name: Package the release asset
-        id: package
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          asset="commitlore-${version}-${{ matrix.target }}"
-          stage="$(mktemp -d)/${asset}"
-          mkdir -p "$stage"
-          cp dist/commitlore "$stage/commitlore"
-          chmod +x "$stage/commitlore"
-          tar -czf "${asset}.tar.gz" -C "$stage" commitlore
-          echo "asset=${asset}.tar.gz" >> "$GITHUB_OUTPUT"
-
-      # Sigstore-backed, keyless, free — no key for this repo to manage or
-      # leak, and now the default expectation for a project whose own README
-      # argues decision records must be verifiable. Attesting the exact
-      # .tar.gz a user downloads (not just the binary inside it) ties the
-      # attestation to the actual bytes SHA256SUMS below will also cover.
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: ${{ steps.package.outputs.asset }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-asset-${{ matrix.target }}
-          path: ${{ steps.package.outputs.asset }}
-          if-no-files-found: error
-
-  # One job, after every platform has built: checksum everything together
-  # (a SHA256SUMS split per-platform would let one asset go unverifiable
-  # without the download even failing), attest the checksum file itself, and
-  # publish. Nothing before this point has touched a GitHub Release.
+  # Nothing is compiled and nothing is attached. ADR-0026 makes the plugin the
+  # canonical install path and `install.sh`/`install.ps1` the secondary one, and
+  # both take a pinned source checkout -- so the release itself is the tag, and the
+  # tag is what those installers resolve. A release with no assets is the whole
+  # artifact set, not an incomplete one.
   publish:
-    needs: build
+    needs: version-consistency
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: release-asset-*
-          path: release
-          merge-multiple: true
-
-      - name: Every asset landed
-        run: |
-          set -euo pipefail
-          count=$(find release -maxdepth 1 -name '*.tar.gz' | wc -l)
-          test "$count" -eq 4 || { echo "::error::expected 4 assets, found $count"; ls -la release; exit 1; }
-
-      - name: SHA256SUMS
-        working-directory: release
-        run: sha256sum *.tar.gz > SHA256SUMS
-
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: release/SHA256SUMS
 
       - name: Publish the release
         env:
@@ -167,5 +55,4 @@ jobs:
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            release/*.tar.gz release/SHA256SUMS
+            --generate-notes

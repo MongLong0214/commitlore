@@ -225,9 +225,7 @@ const recordBinPath = (cwd: string): void => {
   // `readRecordedHookTarget`'s node-comparison both expect.
   execGit(['config', '--local', 'commitlore.node', process.execPath], { cwd });
   // And the install root the stub trusts `commitlore.bin` to sit under (a
-  // script) or to equal exactly (a binary — it has no directory tree of its
-  // own for a foreign file to hide in, so its "root" is the one recorded
-  // file). A `.git/config` edit made after this install (ADR-0011's threat
+  // script). A `.git/config` edit made after this install (ADR-0011's threat
   // model: the same permission that can write this key can write
   // `.git/hooks` directly) can still repoint `commitlore.bin` at another
   // recognized file, but not at one outside here — the stub checks the
@@ -236,11 +234,10 @@ const recordBinPath = (cwd: string): void => {
   // `cd ... && pwd -P`; best-effort like the rest of this function, so a
   // failure here is swallowed rather than failing the install.
   try {
-    const root =
-      classifyBinTarget(resolvedEntry) === 'binary'
-        ? realpathSync(resolvedEntry)
-        : realpathSync(PACKAGE_ROOT);
-    execGit(['config', '--local', 'commitlore.root', root], { cwd });
+    // One artifact, one root: the package the recorded script has to sit under.
+    // ADR-0026 removed the compiled build, which was the only case whose root was
+    // a single file rather than a directory.
+    execGit(['config', '--local', 'commitlore.root', realpathSync(PACKAGE_ROOT)], { cwd });
   } catch {
     // No root recorded means the stub's containment check cannot pass, which
     // only narrows resolution to the remaining, still-safe fallback steps.

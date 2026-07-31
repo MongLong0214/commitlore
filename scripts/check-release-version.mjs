@@ -20,7 +20,7 @@
  *     the CLI reports, script or compiled binary, since both read it from
  *     the same `packageVersion()` (`src/core/paths.ts`) against the same
  *     `package.json`. Checking the script build is enough to cover both;
- *     `scripts/build-binary.mjs` does not touch the version.
+ *     the build does not touch the version.
  *
  * Usage:
  *   node scripts/check-release-version.mjs v0.1.0

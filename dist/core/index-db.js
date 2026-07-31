@@ -79,9 +79,8 @@ const loadDatabaseCtor = () => {
         // meaningful one — `node:sqlite` is a builtin, so resolution never
         // touches the filesystem relative to it. `process.execPath` over
         // `import.meta.url` on purpose: it stays a real path under every format
-        // this module ships in, including the CommonJS bundle
-        // `scripts/build-binary.mjs` produces for the compiled binary (#39),
-        // where a CJS `import.meta` is empty and would throw here instead.
+        // this module ships in, including a CommonJS bundle, where a CJS
+        // `import.meta` is empty and would throw here instead.
         const nodeSqlite = createRequire(process.execPath)('node:sqlite');
         cachedCtor = nodeSqlite.DatabaseSync;
         return cachedCtor;

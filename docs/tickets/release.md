@@ -113,7 +113,7 @@ means the probe stops asserting a cause it cannot determine — nothing more.
 
 - **SATISFIED PREREQUISITE:** `v0.3.0` exists and resolves to merge commit
   `16e2cfdabe22097969d47462d40d4c47425b0b19`; the public release contains four
-  platform assets plus `SHA256SUMS`. Re-resolve the tag before implementation
+  no assets: the tag is the artifact (ADR-0026). Re-resolve the tag before implementation
   and stop if it no longer points to that immutable commit.
 
 **Forbidden scope**
