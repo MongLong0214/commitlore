@@ -18388,9 +18388,9 @@ var stdoutFor = (options, result, malformed) => {
 };
 var harvestVerify = (options) => {
   const draftPath = required(options.draft, "--draft");
+  const review = parseDraft(readTextFile2(draftPath, `--draft ${JSON.stringify(draftPath)}`));
   const transcriptPath = required(options.transcript, "--transcript");
   const diffPath = required(options.diff, "--diff");
-  const review = parseDraft(readTextFile2(draftPath, `--draft ${JSON.stringify(draftPath)}`));
   const result = verifyDraft(review.records, {
     transcript: readTextFile2(transcriptPath, `--transcript ${JSON.stringify(transcriptPath)}`),
     diff: readTextFile2(diffPath, `--diff ${JSON.stringify(diffPath)}`)

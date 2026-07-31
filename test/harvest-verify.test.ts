@@ -11,7 +11,7 @@
  * case, or one space inside a token is discarded.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -512,6 +512,43 @@ describe('commitlore harvest-verify', () => {
     expect(runHarvestVerify({ draft: fixture('draft-truthful.json') }).stderr).toContain(
       'missing --transcript',
     );
+  });
+
+  /**
+   * #329: a draft that is prose rather than the contract's JSON object was
+   * reported as a missing transcript, and the transcript was not the problem.
+   * The reporter went looking for a file they did not need yet, for a draft that
+   * was never going to parse -- twice, before the real message appeared.
+   *
+   * The failure it hides is worth the ordering: a session that emitted prose
+   * believed it had staged records. Nothing contradicts that belief until
+   * somebody verifies, and the first thing they hear should be what is wrong.
+   */
+  it('says the draft is not a draft before asking for inputs it has not been given', () => {
+    const prose = join(workspace, 'prose.txt');
+    writeFileSync(prose, 'CommitLore reviewed the change and found two records.\n');
+
+    const outcome = runHarvestVerify({ draft: prose });
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr).toContain('not valid JSON');
+    expect(outcome.stderr, 'the transcript is not what is wrong here').not.toContain(
+      'missing --transcript',
+    );
+  });
+
+  it('still reports a missing transcript when the draft is fine', () => {
+    // The ordering change must not swallow the usage error it moved behind.
+    const outcome = runHarvestVerify({ draft: fixture('draft-truthful.json') });
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr).toContain('missing --transcript');
+  });
+
+  it('reports an unreadable draft before a missing transcript', () => {
+    const outcome = runHarvestVerify({ draft: join(workspace, 'absent.json') });
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr).toContain('cannot read --draft');
+    expect(outcome.stderr).not.toContain('missing --transcript');
   });
 
   it('registers itself on a commander program', async () => {
