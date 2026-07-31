@@ -500,6 +500,15 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
         policy_identity_hash: result.policy_identity_hash,
         source_hashes: result.source_hashes,
         prompt: result.prompt,
+        // MCP is the first-class surface for every agent other than the Claude
+        // Code plugin, so both of these must travel here and not only to the
+        // pending file and the CLI. `guard_advisory` is always present, never
+        // omitted: an absent advisory reads as "no ruled-out alternative
+        // applies", which is the claim ADR-0020 forbids. `policy_error` names
+        // why a policy file could not be used — omitting it is the silent
+        // fallback PRD-F13 requirement 10 rules out.
+        guard_advisory: result.guard_advisory,
+        policy_error: result.policy_error,
       });
     },
     [VERIFY_CAPTURE_TOOL]: (args) => {
