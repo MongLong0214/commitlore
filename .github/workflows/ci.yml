@@ -567,34 +567,50 @@ jobs:
             && echo "command -v commitlore: found -- $(command -v commitlore)" \
             || echo "command -v commitlore: NOT found (the shim is commitlore.cmd)"
 
-          echo "--- what the hook sees from inside, via the chained-hook slot ---"
-          # The stub runs a pre-existing hook first, from its own directory. That
-          # is a supported slot, so a probe there reads the hook's real
-          # environment -- $PWD in the form git actually hands it -- without
-          # editing the stub, which this ticket does not own.
-          hooks_dir=$(git rev-parse --git-path hooks)
-          probe="$hooks_dir/commit-msg.commitlore-chained"
-          probe_log=$(mktemp -d)/probe.txt
-          {
-            echo '#!/bin/sh'
-            echo "exec >> \"$probe_log\" 2>&1"
-            echo 'echo "hook \$0        = $0"'
-            echo 'echo "hook \$PWD      = $PWD"'
-            echo 'echo "hook pwd       = $(pwd)"'
-            echo 'echo "hook pwd -P    = $(pwd -P)"'
-            echo 'echo "hook uname     = $(uname -s 2>/dev/null || echo unknown)"'
-            echo '# The stub walk that follows this probe, bounded so the probe'
-            echo '# reports instead of joining the hang it is measuring.'
-            echo 'dir=$PWD; n=0'
-            echo 'while [ -n "$dir" ]; do'
-            echo '  n=$((n+1))'
-            echo '  if [ "$n" -gt 40 ]; then echo "walk: NON-TERMINATING, stuck at [$dir]"; break; fi'
-            echo '  dir=${dir%/*}'
-            echo 'done'
-            echo '[ "$n" -le 40 ] && echo "walk: terminates after $n iterations"'
-            echo 'exit 0'
-          } > "$probe"
-          chmod +x "$probe"
+          echo "--- what a commit-msg hook sees on this platform ---"
+          # A scratch repository with a hook of its own, so this measures Git for
+          # Windows rather than commitlore. The stub's chained-hook slot was tried
+          # first and the probe there was never invoked, which is itself a reading:
+          # the stub finds that slot with `hook_dir=${0%/*}`, and $0 with no `/`
+          # in it leaves hook_dir as `.`.
+          probe_repo=$(mktemp -d)/probe
+          mkdir -p "$probe_repo"
+          (
+            cd "$probe_repo"
+            git init -q -b main
+            git config user.email t@example.com
+            git config user.name "CommitLore CI"
+            git config commit.gpgsign false
+            {
+              echo '#!/bin/sh'
+              echo 'echo "hook argv0    = $0"'
+              echo 'echo "hook PWD      = $PWD"'
+              echo 'echo "hook pwd      = $(pwd)"'
+              echo 'echo "hook pwd -P   = $(pwd -P)"'
+              echo 'echo "hook uname    = $(uname -s 2>/dev/null || echo unknown)"'
+              echo 'case "$0" in'
+              echo '  */*) echo "hook dir-from-argv0 = ${0%/*}" ;;'
+              echo '  *)   echo "hook argv0 holds no slash: a stub falls back to ." ;;'
+              echo 'esac'
+              echo '# The stub walk, bounded so this reports instead of joining the'
+              echo '# hang it exists to measure.'
+              echo 'dir=$PWD; n=0'
+              echo 'while [ -n "$dir" ]; do'
+              echo '  n=$((n+1))'
+              echo '  if [ "$n" -gt 40 ]; then echo "walk: NON-TERMINATING, stuck at [$dir]"; break; fi'
+              echo '  dir=${dir%/*}'
+              echo 'done'
+              echo '[ "$n" -le 40 ] && echo "walk: terminates after $n iterations"'
+              echo 'exit 0'
+            } > .git/hooks/commit-msg
+            chmod +x .git/hooks/commit-msg
+            printf 'x\n' > f.txt
+            git add f.txt
+            rc=0
+            timeout -k 5 30 git commit -m "probe" > probe-out.txt 2>&1 || rc=$?
+            echo "(probe commit exit $rc)"
+            cat probe-out.txt 2>/dev/null || echo "(no probe output)"
+          )
 
           echo "--- a real commit through the real hook, bounded ---"
           # Bounded on purpose. An unbounded hang is not evidence, it is a job
@@ -608,17 +624,16 @@ jobs:
           # probe output underneath it.
           rc=0
           timeout -k 5 90 git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
-            > "$probe_log.commit" 2>&1 || rc=$?
-          sed -n '1,40p' "$probe_log.commit" || true
+            > "$(mktemp)" 2>&1 || rc=$?
+          
           case "$rc" in
             0)   echo "real commit: ACCEPTED (exit 0)" ;;
             124) echo "real commit: HUNG -- killed at 90s, the hook never returned" ;;
             *)   echo "real commit: REFUSED (exit $rc)" ;;
           esac
 
-          echo "--- the probe's view from inside the hook ---"
-          cat "$probe_log" 2>/dev/null || echo "(the probe never ran: git did not invoke the hook)"
-          rm -f "$probe"
+          # The commit hung, so the hook certainly ran. What the stub did after
+          # that is what the scratch-repo probe above reports.
 
       # The baseline runs before the attacks and is not decoration. An attack that
       # "passes" because nothing resolves at all is not containment -- it is a hook
@@ -643,6 +658,17 @@ jobs:
           git add file.ts
           git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124s\n')"
           "$shim" init || echo "(init reported steps needing attention)"
+
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
 
           # Every commit that passes through the hook is bounded. A hang is a
           # distinct outcome from a refusal and has to be reported as one; left
@@ -709,6 +735,17 @@ jobs:
           git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124t\n')"
           "$shim" init || echo "(init reported steps needing attention)"
 
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
           outside=$(mktemp -d)
           witness="$outside/ran.log"
           # A .mjs, so it clears the extension allowlist: the only thing between it
@@ -717,6 +754,16 @@ jobs:
           # Forward slashes: node on Windows accepts them, and they need no escaping.
           printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
             "$(cygpath -m "$witness")" > "$outside/evil.mjs"
+          # Positive control, before the attack: prove the witness mechanism can
+          # fire at all. Without it "the witness is absent" is equally consistent
+          # with a witness this harness could never have observed -- a path in the
+          # wrong world, an ESM error, an unwritable directory.
+          node "$outside/evil.mjs" || { echo "::error::the witness payload does not run"; exit 1; }
+          test -f "$witness" || {
+            echo "::error::the witness payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the witness fires when the payload runs"
+
           # Recorded in win32 form, which is the form `init` itself writes.
           git config --local commitlore.bin "$(cygpath -w "$outside/evil.mjs")"
 
@@ -759,16 +806,39 @@ jobs:
           git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124v\n')"
           "$shim" init || echo "(init reported steps needing attention)"
 
+          # grok-flagged: the stub prefers COMMITLORE_BIN over the recorded path,
+          # so a value inherited from the environment would satisfy this step
+          # without the recorded install ever being consulted.
+          unset COMMITLORE_BIN
+          hook_file="$(git rev-parse --git-path hooks)/commit-msg"
+          test -z "$(git config --local --get core.hooksPath || true)" || {
+            echo "::error::core.hooksPath is set; this step would measure another hook"; exit 1; }
+          test -f "$hook_file" || { echo "::error::init installed no commit-msg hook"; exit 1; }
+          grep -q 'commitlore:commit-msg:v1' "$hook_file" || {
+            echo "::error::the installed commit-msg hook is not commitlore's"; exit 1; }
+
           root=$(git config --local --get commitlore.root || true)
           test -n "$root" || { echo "::error::no commitlore.root was recorded"; exit 1; }
           root_posix=$(cygpath -u "$root")
           witness=$(mktemp -d)/ran.log
           # Inside the install root, so the location check cannot be what refuses
-          # it. An extensionless `commitlore` is the name ADR-0026 stopped
-          # trusting: the installer's own wrapper carries it.
-          planted="$root_posix/commitlore"
-          printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
-            "$(cygpath -m "$witness")" > "$planted"
+          # it -- only the extension allowlist can.
+          #
+          # `.cmd`, not an extensionless name: the objection to the earlier payload
+          # was that nothing in the stub could ever exec it, so refusing it tested
+          # a branch that does not exist. `.cmd` is the extension a Windows fix is
+          # most likely to add to the allowlist -- the installer's own shim carries
+          # it -- which makes this a regression guard on a loosening somebody would
+          # plausibly make. It is not evidence that containment holds; the
+          # install-root check in attack 1 is.
+          planted="$root_posix/commitlore.cmd"
+          trap 'rm -f "$planted"' EXIT
+          printf '@echo off\r\necho ran >> "%s"\r\n' "$(cygpath -w "$witness")" > "$planted"
+          cmd //c "$(cygpath -w "$planted")" || true
+          test -f "$witness" || {
+            echo "::error::the planted payload ran but wrote nothing this step can see"; exit 1; }
+          rm -f "$witness"
+          echo "positive control ok: the planted .cmd fires when it is run"
           git config --local commitlore.bin "$(cygpath -w "$planted")"
 
           printf 'export const value = 4;\n' > file.ts
@@ -779,15 +849,12 @@ jobs:
             > "$out" 2>&1 || rc=$?
           echo "--- commit exit $rc, hook output ---"
           sed -n '1,25p' "$out" || true
-          # Removed before the verdict, so a failing assertion cannot leave the
-          # planted file in the install root that every later step shares.
-          rm -f "$planted"
           if [ "$rc" -eq 124 ]; then
             echo "::error::the hook hung on the planted record and was killed at 90s"
             exit 1
           fi
           if [ -f "$witness" ]; then
-            echo "::error::a recorded target with no recognised extension was executed"
+            echo "::error::a recorded target with an unallowed extension was executed"
             exit 1
           fi
-          echo "attack 2 refused: the unrecognised target never ran"
+          echo "attack 2 refused: the unallowed-extension target never ran"
