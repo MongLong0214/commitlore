@@ -119,8 +119,16 @@ else
   rm -rf "$checkout_tmp"
   cleanup_checkout_tmp() { rm -rf "$checkout_tmp"; }
   trap cleanup_checkout_tmp EXIT
-  git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>/dev/null \
-    || die "could not fetch $version from $SOURCE_URL. Check the tag name and your network. Nothing was installed." 2
+  # Keep git's own reason. Swallowing it and printing a guess ("check the tag
+  # name and your network") sends a user looking in the wrong place whenever the
+  # cause is something else, which is most of the time.
+  clone_log="$(mktemp)"
+  if ! git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>"$clone_log"; then
+    clone_reason="$(tail -n 3 "$clone_log" | tr '\n' ' ' | sed 's/  */ /g')"
+    rm -f "$clone_log"
+    die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
+  fi
+  rm -f "$clone_log"
   [ -f "$checkout_tmp/dist/commitlore.mjs" ] \
     || die "$version does not carry dist/commitlore.mjs, so there is nothing to run. Nothing was installed." 2
   rm -rf "$checkout"

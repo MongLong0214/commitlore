@@ -396,6 +396,11 @@ jobs:
           src="${{ steps.stage.outputs.source }}"
           docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w debian:stable-slim sh -c '
             set -eu
+            # The mount is owned by the runner uid, not the container user, so
+            # git would refuse it as dubious ownership. That is an artefact of
+            # bind-mounting a local repository, not something a user installing
+            # from a URL ever meets.
+            git config --global --add safe.directory /src 2>/dev/null || true
             out=$(COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9 2>&1 || true)
             printf "%s\n" "$out"
             printf "%s" "$out" | grep -qi "node" || { echo "expected the message to name Node"; exit 1; }
@@ -409,6 +414,7 @@ jobs:
           docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w node:22-bookworm-slim sh -c '
             set -eu
             apt-get update -qq && apt-get install -y -qq git >/dev/null
+            git config --global --add safe.directory /src
             COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9
             "$HOME/.local/bin/commitlore" --version
           '
