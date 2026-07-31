@@ -33,7 +33,9 @@
 **No implementation code until this PRD and the individual ticket are both approved.**
 
 **Order.** `T-1120 → T-1121` (shared contract) → `T-1124` (Windows containment) ; `T-1122`
-and `T-1123` follow both installers ; `T-1125` (remove the compiled-binary code) is last, so
+and `T-1123` follow both installers ; `T-1126` precedes `T-1122`, because a README that calls a
+host unsupported must stop saying so before a document says otherwise ; `T-1125`
+(remove the compiled-binary code) is last, so
 there is never a window with neither install path.
 
 ## Ownership map — one owner per region
@@ -55,6 +57,7 @@ not have to reconstruct it:
 | `commitlore uninstall` | **T-1123** | — |
 | Windows containment for the wrapper path | **T-1124** | — |
 | Residual compiled-binary and release references left after T-1120 | **T-1125** | T-1120 |
+| The Known-limitations host-status bullets in all four READMEs | **T-1126** | T-1122, T-1125 |
 
 `.github/workflows/ci.yml` is the one file with more than one owner, and deliberately so: the
 four tickets own four **different jobs** in it. A filename-level scan cannot see that, so the
@@ -499,3 +502,58 @@ not a removal ticket.
 
 **Completion evidence** — the invariant test passing, the containment test green on both sides
 of the change, a release run with no platform asset, and the plugin path exercised end to end.
+
+---
+
+## T-1126 Retire the Known-limitations claims that measurement has overtaken (S) — #323 · PRD-F14 req 26
+
+**Owns** — the **host-status bullets** in the `Known limitations` section of `README.md` and the
+three translations, and nothing else in those files
+
+**Why this exists as its own ticket.** The ownership map gave the stale distribution bullets to
+T-1125, which merged without removing them, and T-1122 may add a pointer line to a README and
+nothing else. Neither ticket can now touch the bullet, so a third owner is allocated rather than
+widening either one. Reassignment, not a new claim: the row above moves these four regions off
+T-1125.
+
+**Depends on** — nothing. This ticket only **removes** a statement, so it is safe in any order,
+and it is sequenced *before* T-1122 for exactly that reason: deleting a false claim leaves an
+absence, while merging T-1122 first would leave four languages contradicting the document they
+point at.
+
+**The claim, and what overtook it** — each README carries:
+
+> `- Alpine and other musl Linux hosts are unsupported: #99.`
+
+Its reason was that only glibc-linked binaries were published. ADR-0026 removed compiled
+artifacts, and neither installer contains a platform, architecture or libc check of any kind.
+Executed on `alpine:3.21` against a clone at a pinned tag, on `aarch64` and again on `x86_64`:
+the checkout lands, the wrapper carries its marker, `--version` reports the packaged version and
+`validate` refuses an invalid record. Bare Alpine with no Node names the missing prerequisite and
+installs nothing. The bullet is false for Alpine 3.21 and its stated reason describes nothing.
+
+**Forbidden scope**
+
+- **do not replace it with a support claim.** T-1122 owns the compatibility statement; a second
+  summary in the README is the duplication the ownership map exists to prevent. This ticket
+  deletes and stops
+- do not touch the Windows bullet beside it. It remains true, `test/readme.test.ts` uses its
+  exact wording as a mutation oracle, and T-1124 owns that claim
+- do not touch the shell-install region, the pinned-asset block, or `BENCH:BEGIN`/`BENCH:END`
+- do not touch `docs/COMPATIBILITY.md` or `test/compatibility-matrix.test.ts`
+
+**RED test** — none is added. The removal is asserted by what must keep passing: the
+Known-limitations slice in `test/readme.test.ts` still finds the guard precision and recall
+figures in all four files, `test/readme-order.test.ts` still resolves its six anchors, and
+`node scripts/check-readme-numbers.mjs` exits 0. A bullet deletion that breaks any of those
+took a region it does not own.
+
+**Minimum GREEN** — the bullet is gone from all four languages in one commit, and the three
+checks above still pass.
+
+**Stop / escalate** — if any check fails, stop rather than adjusting it: this ticket owns four
+bullets, not the tests that read the section around them.
+
+**Completion evidence** — the four-file diff, the focused run of `test/readme.test.ts`,
+`test/readme-order.test.ts` and `test/readme-numbers.test.ts`, and `check-readme-numbers.mjs`
+at 0.
