@@ -34,7 +34,7 @@
 **その他のコーディングエージェント** — CLI をインストールします:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh | sh
 ```
 
 どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
@@ -115,11 +115,11 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh
-sh install.sh v0.4.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.0/install.sh
+sh install.sh v0.5.0
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v0.4.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.5.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
