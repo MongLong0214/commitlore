@@ -240,6 +240,51 @@ describe('T-1120 upgrade and verification', () => {
   });
 });
 
+describe('#298 tag auto-resolution needs no sort extension', () => {
+  /**
+   * `sort -V` is not POSIX, and this file is POSIX `sh`. Where it is absent the
+   * major field compares lexically, which puts v9 above v10 — the installer
+   * would log success while installing an older release. Today's tags are all
+   * v0.x so both orderings agree, which is exactly why this needs a test rather
+   * than a reading.
+   */
+  it('the script resolves versions without depending on sort -V', () => {
+    // Invocations, not prose: the comment beside the fix names the flag on
+    // purpose, and a test that forbade the word would delete the explanation.
+    const code = readFileSync(INSTALLER, 'utf8')
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('#'));
+    for (const line of code) {
+      expect(line, `no sort invocation may use -V: ${line}`).not.toMatch(/\bsort\b[^|]*-V/);
+      expect(line).not.toMatch(/-k1,1V/);
+    }
+  });
+
+  it('resolves the newest tag when a double-digit major exists', () => {
+    const repo = join(tempDir('majors'), 'commitlore');
+    mkdirSync(join(repo, 'dist'), { recursive: true });
+    writeFileSync(join(repo, 'dist', 'commitlore.mjs'), "console.log('10.0.0');\n");
+    execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: repo });
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '--quiet', '-m', 'src']);
+    for (const tag of ['v1.0.0', 'v2.5.0', 'v9.9.9', 'v10.0.0']) git(repo, ['tag', tag]);
+
+    const home = tempDir('majors-home');
+    const run = spawnSync('/bin/sh', [INSTALLER], {
+      encoding: 'utf8',
+      env: {
+        PATH: stubPath({ node: 'current' }),
+        HOME: home,
+        COMMITLORE_INSTALL_SOURCE: repo,
+      },
+    });
+    expect(run.status).toBe(0);
+    // The newest is v10.0.0, not v9.9.9.
+    expect(`${run.stdout}${run.stderr}`).toContain('installing v10.0.0');
+    expect(readdirSync(join(home, '.local', 'share', 'commitlore'))).toContain('v10.0.0');
+  });
+});
+
 describe('T-1120 the README describes the installer that ships beside it (req 29)', () => {
   const bodies = (): Record<string, string> =>
     Object.fromEntries(READMES.map((f) => [f, readFileSync(join(REPO_ROOT, f), 'utf8')]));
