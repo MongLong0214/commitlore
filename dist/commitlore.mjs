@@ -1870,8 +1870,8 @@ var require_keyword = __commonJS({
       var _a3;
       const { gen, keyword, schema, parentSchema, $data, it } = cxt;
       checkAsyncKeyword(it, def);
-      const validate = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
-      const validateRef = useKeyword(gen, keyword, validate);
+      const validate2 = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
+      const validateRef = useKeyword(gen, keyword, validate2);
       const valid = gen.let("valid");
       cxt.block$data(valid, validateKeyword);
       cxt.ok((_a3 = def.valid) !== null && _a3 !== void 0 ? _a3 : valid);
@@ -2944,28 +2944,28 @@ var require_compile = __commonJS({
         if (this.opts.code.process)
           sourceCode = this.opts.code.process(sourceCode, sch);
         const makeValidate = new Function(`${names_1.default.self}`, `${names_1.default.scope}`, sourceCode);
-        const validate = makeValidate(this, this.scope.get());
-        this.scope.value(validateName, { ref: validate });
-        validate.errors = null;
-        validate.schema = sch.schema;
-        validate.schemaEnv = sch;
+        const validate2 = makeValidate(this, this.scope.get());
+        this.scope.value(validateName, { ref: validate2 });
+        validate2.errors = null;
+        validate2.schema = sch.schema;
+        validate2.schemaEnv = sch;
         if (sch.$async)
-          validate.$async = true;
+          validate2.$async = true;
         if (this.opts.code.source === true) {
-          validate.source = { validateName, validateCode, scopeValues: gen._values };
+          validate2.source = { validateName, validateCode, scopeValues: gen._values };
         }
         if (this.opts.unevaluated) {
           const { props, items } = schemaCxt;
-          validate.evaluated = {
+          validate2.evaluated = {
             props: props instanceof codegen_1.Name ? void 0 : props,
             items: items instanceof codegen_1.Name ? void 0 : items,
             dynamicProps: props instanceof codegen_1.Name,
             dynamicItems: items instanceof codegen_1.Name
           };
-          if (validate.source)
-            validate.source.evaluated = (0, codegen_1.stringify)(validate.evaluated);
+          if (validate2.source)
+            validate2.source.evaluated = (0, codegen_1.stringify)(validate2.evaluated);
         }
-        sch.validate = validate;
+        sch.validate = validate2;
         return sch;
       } catch (e) {
         delete sch.validate;
@@ -6105,8 +6105,8 @@ var require_dynamicAnchor = __commonJS({
       const { gen, it } = cxt;
       it.schemaEnv.root.dynamicAnchors[anchor] = true;
       const v = (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`;
-      const validate = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
-      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate));
+      const validate2 = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate2));
     }
     exports.dynamicAnchor = dynamicAnchor;
     function _getValidate(cxt) {
@@ -6155,11 +6155,11 @@ var require_dynamicRef = __commonJS({
           _callRef(it.validateName, valid)();
         }
       }
-      function _callRef(validate, valid) {
+      function _callRef(validate2, valid) {
         return valid ? () => gen.block(() => {
-          (0, ref_1.callRef)(cxt, validate);
+          (0, ref_1.callRef)(cxt, validate2);
           gen.let(valid, true);
-        }) : () => (0, ref_1.callRef)(cxt, validate);
+        }) : () => (0, ref_1.callRef)(cxt, validate2);
       }
     }
     exports.dynamicRef = dynamicRef;
@@ -7159,8 +7159,8 @@ var require_formats = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
-    function fmtDef(validate, compare) {
-      return { validate, compare };
+    function fmtDef(validate2, compare) {
+      return { validate: validate2, compare };
     }
     exports.fullFormats = {
       // date: http://tools.ietf.org/html/rfc3339#section-5.6
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync17 } from "node:fs";
+import { readFileSync as readFileSync18 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -11322,9 +11322,9 @@ var violationFor = (trailer, field) => {
   return null;
 };
 var schemaViolations = (trailers) => {
-  const validate = getValidator();
-  if (validate({ trailers })) return [];
-  const errors = validate.errors ?? [];
+  const validate2 = getValidator();
+  if (validate2({ trailers })) return [];
+  const errors = validate2.errors ?? [];
   const found = /* @__PURE__ */ new Map();
   for (const error2 of errors) {
     const target = locate(error2.instancePath);
@@ -13541,10 +13541,10 @@ var register = (program3) => {
 };
 
 // src/commands/capture.ts
-import { readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync2 } from "node:fs";
 
 // src/core/capture-prepare.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 
 // src/core/grade.ts
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
@@ -15020,9 +15020,124 @@ var guard = (opts) => {
   };
 };
 
+// src/core/capture-policy.ts
+import { createHash } from "node:crypto";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
+import { join as join2 } from "node:path";
+var POLICY_DEFAULTS = {
+  mode: "suggest",
+  max_records_per_commit: 1,
+  require_verified_evidence: true
+};
+var POLICY_KEYS = [
+  "mode",
+  "max_records_per_commit",
+  "require_verified_evidence"
+];
+var POLICY_FILE_NAME = ".commitlore-policy.json";
+var sha256 = (input) => createHash("sha256").update(input).digest("hex");
+var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
+  JSON.stringify({
+    mode: policy.mode,
+    max_records_per_commit: policy.max_records_per_commit,
+    require_verified_evidence: policy.require_verified_evidence
+  })
+);
+var computePolicyFileIdentityHash = (contents) => sha256(contents);
+var defaultsResolution = (error2, path2) => ({
+  ok: error2 === null,
+  policy: POLICY_DEFAULTS,
+  identityHash: computePolicyIdentityHash(POLICY_DEFAULTS),
+  source: "defaults",
+  path: path2,
+  error: error2
+});
+var repoRoot = (cwd) => {
+  const res = execGit(["rev-parse", "--show-toplevel"], { cwd });
+  if (res.code !== 0) return null;
+  const root = res.stdout.trim();
+  return root.length > 0 ? root : null;
+};
+var validate = (raw) => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { error: `${POLICY_FILE_NAME} must contain a JSON object` };
+  }
+  const obj = raw;
+  const unknown2 = Object.keys(obj).filter(
+    (k) => !POLICY_KEYS.includes(k)
+  );
+  if (unknown2.length > 0) {
+    return {
+      error: `${POLICY_FILE_NAME} sets ${unknown2.length === 1 ? "an unknown key" : "unknown keys"}: ${unknown2.join(", ")}. Allowed keys are ${POLICY_KEYS.join(", ")}.`
+    };
+  }
+  const policy = { ...POLICY_DEFAULTS };
+  if ("mode" in obj) {
+    if (obj.mode !== "suggest") {
+      return {
+        error: `${POLICY_FILE_NAME}: mode must be "suggest" (got ${JSON.stringify(obj.mode)})`
+      };
+    }
+    policy.mode = "suggest";
+  }
+  if ("max_records_per_commit" in obj) {
+    const v = obj.max_records_per_commit;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 32) {
+      return {
+        error: `${POLICY_FILE_NAME}: max_records_per_commit must be an integer between 1 and 32 (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.max_records_per_commit = v;
+  }
+  if ("require_verified_evidence" in obj) {
+    const v = obj.require_verified_evidence;
+    if (typeof v !== "boolean") {
+      return {
+        error: `${POLICY_FILE_NAME}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.require_verified_evidence = v;
+  }
+  return { policy };
+};
+var resolvePolicy = (cwd) => {
+  const root = repoRoot(cwd);
+  if (root === null) return defaultsResolution(null, null);
+  const path2 = join2(root, POLICY_FILE_NAME);
+  if (!existsSync3(path2)) return defaultsResolution(null, null);
+  let contents;
+  try {
+    contents = readFileSync3(path2, "utf8");
+  } catch (err) {
+    return defaultsResolution(
+      `${POLICY_FILE_NAME} could not be read: ${err.message}`,
+      path2
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (err) {
+    return defaultsResolution(
+      `${POLICY_FILE_NAME} is not valid JSON: ${err.message}`,
+      path2
+    );
+  }
+  const checked = validate(parsed);
+  if ("error" in checked) return defaultsResolution(checked.error, path2);
+  return {
+    ok: true,
+    policy: checked.policy,
+    identityHash: computePolicyFileIdentityHash(contents),
+    source: "repository",
+    path: path2,
+    error: null
+  };
+};
+
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15101,10 +15216,10 @@ var createPending = (opts) => {
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
   const filePath = pendingFilePath(nonce, opts.cwd);
-  if (!existsSync3(filePath)) return null;
+  if (!existsSync4(filePath)) return null;
   let content;
   try {
-    content = readFileSync3(filePath, "utf8");
+    content = readFileSync4(filePath, "utf8");
   } catch {
     return null;
   }
@@ -15201,12 +15316,6 @@ var consumePending = (nonce, commitSha, opts) => {
 };
 
 // src/core/capture-prepare.ts
-var HARDCODED_DEFAULTS = {
-  mode: "suggest",
-  max_records_per_commit: 1,
-  require_verified_evidence: true
-};
-var computePolicyIdentityHash = () => createHash("sha256").update(JSON.stringify(HARDCODED_DEFAULTS)).digest("hex");
 var GUARD_DISCLOSURE = "Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.";
 var extractPathsFromDiff = (diff) => {
   const paths = /* @__PURE__ */ new Set();
@@ -15253,11 +15362,13 @@ var prepareCaptureContext = (opts) => {
     throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
   const diff = execGitOrThrow(["diff", "--cached"], { cwd });
-  const stagedDiffHash = createHash("sha256").update(diff).digest("hex");
+  const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
   const stagedTreeOid = execGitOrThrow(["write-tree"], { cwd }).trim();
-  const transcriptHash = createHash("sha256").update(transcript).digest("hex");
+  const transcriptHash = createHash2("sha256").update(transcript).digest("hex");
   const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
-  const policyIdentityHash = computePolicyIdentityHash();
+  const policy = resolvePolicy(cwd);
+  const policyIdentityHash = policy.identityHash;
+  const policyError = policy.error;
   const prompt = buildHarvestPrompt({ transcript, diff });
   const diffPaths = extractPathsFromDiff(diff);
   const advisory = computeGuardAdvisory({
@@ -15281,13 +15392,14 @@ var prepareCaptureContext = (opts) => {
     policy_identity_hash: policyIdentityHash,
     source_hashes: sourceHashes,
     prompt,
+    policy_error: policyError,
     guard_advisory: advisory
   };
 };
 
 // src/core/capture-verify.ts
-import { createHash as createHash2 } from "node:crypto";
-var sha256 = (input) => createHash2("sha256").update(input).digest("hex");
+import { createHash as createHash3 } from "node:crypto";
+var sha2562 = (input) => createHash3("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
 var canonicalTuple = (record2) => {
   const keys = record2.trailers.filter((t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance").map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
@@ -15313,8 +15425,8 @@ var verifyCaptureRecords = (opts) => {
         overlap_check: "canonical_exact_only"
       };
     }
-    const transcriptHash = sha256(transcript);
-    const diffHash = sha256(diff);
+    const transcriptHash = sha2562(transcript);
+    const diffHash = sha2562(diff);
     if (pending.source_hashes.transcript !== transcriptHash) {
       for (const record2 of draft) {
         rejected.push({
@@ -15441,7 +15553,7 @@ var verifyCaptureRecords = (opts) => {
   }
 };
 var storeVerificationResult = (nonce, cwd, result) => {
-  const evidenceHash = sha256(JSON.stringify(result.accepted.map((a) => a.record)));
+  const evidenceHash = sha2562(JSON.stringify(result.accepted.map((a) => a.record)));
   storeVerification(nonce, {
     cwd,
     accepted: result.accepted.map((a) => a.record),
@@ -15454,13 +15566,7 @@ var storeVerificationResult = (nonce, cwd, result) => {
 };
 
 // src/core/capture-stage.ts
-import { createHash as createHash3 } from "node:crypto";
-var HARDCODED_DEFAULTS2 = {
-  mode: "suggest",
-  max_records_per_commit: 1,
-  require_verified_evidence: true
-};
-var computePolicyIdentityHash2 = () => createHash3("sha256").update(JSON.stringify(HARDCODED_DEFAULTS2)).digest("hex");
+import { createHash as createHash4 } from "node:crypto";
 var stageCaptureRecord = (opts) => {
   const { nonce, cwd, expiryMinutes } = opts;
   const record2 = readPending(nonce, { cwd });
@@ -15468,9 +15574,10 @@ var stageCaptureRecord = (opts) => {
   if (record2.phase !== "verified") return null;
   if (record2.validation_result === "empty") return null;
   if (record2.incomplete) return null;
-  if (record2.records.length > HARDCODED_DEFAULTS2.max_records_per_commit) {
+  const policy = resolvePolicy(cwd);
+  if (record2.records.length > policy.policy.max_records_per_commit) {
     throw new Error(
-      `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${HARDCODED_DEFAULTS2.max_records_per_commit})`
+      `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
     );
   }
   const currentHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
@@ -15480,7 +15587,7 @@ var stageCaptureRecord = (opts) => {
     );
   }
   const currentDiff = execGitOrThrow(["diff", "--cached"], { cwd });
-  const currentDiffHash = createHash3("sha256").update(currentDiff).digest("hex");
+  const currentDiffHash = createHash4("sha256").update(currentDiff).digest("hex");
   if (currentDiffHash !== record2.staged_diff_hash) {
     throw new Error("Staging rejected: staged diff changed since prepare");
   }
@@ -15488,7 +15595,7 @@ var stageCaptureRecord = (opts) => {
   if (currentTree !== record2.staged_tree_oid) {
     throw new Error("Staging rejected: staged tree changed since prepare");
   }
-  const currentPolicy = computePolicyIdentityHash2();
+  const currentPolicy = policy.identityHash;
   if (currentPolicy !== record2.policy_identity_hash) {
     throw new Error("Staging rejected: policy identity changed since prepare");
   }
@@ -15499,7 +15606,7 @@ var stageCaptureRecord = (opts) => {
 };
 
 // src/core/pending-gc.ts
-import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync5, readdirSync, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var PROTECTED_PHASES = /* @__PURE__ */ new Set(["staged", "applied"]);
@@ -15513,7 +15620,7 @@ var resolvePendingDir = (cwd) => {
 };
 var safeReadPending = (filePath) => {
   try {
-    const content = readFileSync4(filePath, "utf8");
+    const content = readFileSync5(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (typeof parsed !== "object" || parsed === null) return null;
     const obj = parsed;
@@ -15527,7 +15634,7 @@ var gcPending = (cwd) => {
   const removed = [];
   const kept = [];
   const dir = resolvePendingDir(cwd);
-  if (!existsSync4(dir)) return { removed, kept };
+  if (!existsSync5(dir)) return { removed, kept };
   let files;
   try {
     files = readdirSync(dir).filter((f) => f.endsWith(".json"));
@@ -15621,13 +15728,20 @@ var gcPending = (cwd) => {
 // src/commands/capture.ts
 var runCapture = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
-  const transcript = readFileSync5(transcriptPath, "utf8");
-  const diff = diffPath ? readFileSync5(diffPath, "utf8") : "";
+  const transcript = readFileSync6(transcriptPath, "utf8");
+  const diff = diffPath ? readFileSync6(diffPath, "utf8") : "";
   const prepareResult = prepareCaptureContext({ cwd, transcript });
+  if (prepareResult.policy_error !== null) {
+    process.stderr.write(
+      `commitlore capture: ${prepareResult.policy_error}
+commitlore capture: the built-in defaults were used for this capture
+`
+    );
+  }
   if (!draftPath) {
     return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
   }
-  const rawDraft = readFileSync5(draftPath, "utf8");
+  const rawDraft = readFileSync6(draftPath, "utf8");
   let draftRecords;
   try {
     const parsed = JSON.parse(rawDraft);
@@ -15763,7 +15877,7 @@ var register2 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync8, mkdirSync as mkdirSync7 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname4, join as join5, resolve as resolve10 } from "node:path";
+import { dirname as dirname4, join as join6, resolve as resolve10 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/services/cache.ts";
@@ -15801,9 +15915,9 @@ CommitLore-Version: 2.0.0
 
 // src/commands/doctor.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync6, readFileSync as readFileSync7, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { join as join3, resolve as resolve6 } from "node:path";
+import { join as join4, resolve as resolve6 } from "node:path";
 
 // src/core/hook-target.ts
 import { realpathSync, statSync } from "node:fs";
@@ -16132,13 +16246,13 @@ var attachToNotes = (targetSha, plan, opts = {}) => {
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync6, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname3, join as join2 } from "node:path";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
-var claudeSettingsPath = (cwd) => join2(cwd, ".claude", "settings.json");
+var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
 var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure = (settingsPath, message) => ({
@@ -16158,10 +16272,10 @@ var success = (status, lines, changed) => ({
   changed
 });
 var load = (settingsPath) => {
-  if (!existsSync5(settingsPath)) return { settings: {}, existed: false };
+  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
-    raw = readFileSync6(settingsPath, "utf8");
+    raw = readFileSync7(settingsPath, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
   }
@@ -16612,10 +16726,10 @@ var checkHook = (opts, runtime) => {
     ...describeRecordedHookTarget(target),
     ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
   ].join("; ");
-  if (!existsSync6(path2)) {
+  if (!existsSync7(path2)) {
     return check(id, title, "warn", `no commit-msg hook at ${path2}; ${targetDetail}`, install);
   }
-  const contents = readFileSync7(path2, "utf8");
+  const contents = readFileSync8(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
     return check(
       id,
@@ -16681,7 +16795,7 @@ var checkRuntime = (opts) => {
     );
   }
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync6(path2));
+  const entry = candidates.find((path2) => existsSync7(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -16713,8 +16827,8 @@ var checkHookRuntime = (opts) => {
   const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions3(opts));
   if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
   const hook = resolve6(cwd, located.stdout.trim());
-  if (!existsSync6(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
-  const probe = join3(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+  if (!existsSync7(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
+  const probe = join4(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync4(probe, PROBE_MESSAGE);
     const run = spawnSync3("/bin/sh", [hook, probe], {
@@ -17041,16 +17155,16 @@ var register3 = (program3) => {
 import { randomBytes as randomBytes4 } from "node:crypto";
 import {
   chmodSync,
-  existsSync as existsSync7,
+  existsSync as existsSync8,
   mkdirSync as mkdirSync4,
-  readFileSync as readFileSync8,
+  readFileSync as readFileSync9,
   realpathSync as realpathSync2,
   renameSync as renameSync3,
   statSync as statSync3,
   unlinkSync as unlinkSync4,
   writeFileSync as writeFileSync5
 } from "node:fs";
-import { join as join4, resolve as resolve7 } from "node:path";
+import { join as join5, resolve as resolve7 } from "node:path";
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure2 = (message) => ({
@@ -17081,10 +17195,10 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync7(hookPath)) return "absent";
+  if (!existsSync8(hookPath)) return "absent";
   let contents;
   try {
-    contents = readFileSync8(hookPath, "utf8");
+    contents = readFileSync9(hookPath, "utf8");
   } catch {
     return "foreign";
   }
@@ -17093,14 +17207,14 @@ var readHookState = (hookPath) => {
 };
 var readHookStatus = (cwd = process.cwd()) => {
   const hooksDir = resolveHooksDir(cwd);
-  const hookPath = join4(hooksDir, HOOK_NAME);
-  const chainedPath = join4(hooksDir, CHAINED_HOOK_NAME);
+  const hookPath = join5(hooksDir, HOOK_NAME);
+  const chainedPath = join5(hooksDir, CHAINED_HOOK_NAME);
   return {
     hooksDir,
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync7(chainedPath),
+    chained: existsSync8(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -17227,8 +17341,8 @@ var register4 = (program3) => {
 };
 
 // src/hooks/prepare-commit-msg.ts
-import { createHash as createHash4, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync8, mkdirSync as mkdirSync5, readFileSync as readFileSync9, readdirSync as readdirSync2, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync2, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -17262,10 +17376,10 @@ var recordsFromSquashMessage = (cwd, message) => {
 };
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
-  if (squashPath === null || !existsSync8(squashPath)) return false;
-  const draft = readFileSync9(messageFile, "utf8");
+  if (squashPath === null || !existsSync9(squashPath)) return false;
+  const draft = readFileSync10(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
-  const blocks = recordsFromSquashMessage(cwd, readFileSync9(squashPath, "utf8"));
+  const blocks = recordsFromSquashMessage(cwd, readFileSync10(squashPath, "utf8"));
   if (blocks.length === 0) return false;
   const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync6(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
@@ -17295,8 +17409,8 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync8(path2)) {
-      const current = readFileSync9(path2, "utf8");
+    if (existsSync9(path2)) {
+      const current = readFileSync10(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure(`${path2} is not a commitlore hook \u2014 left in place`);
       }
@@ -17312,12 +17426,6 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
   }
 };
-var CAPTURE_POLICY_DEFAULTS = {
-  mode: "suggest",
-  max_records_per_commit: 1,
-  require_verified_evidence: true
-};
-var computePolicyIdentityHash3 = () => createHash4("sha256").update(JSON.stringify(CAPTURE_POLICY_DEFAULTS)).digest("hex");
 var resolvePendingDir2 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
@@ -17325,7 +17433,7 @@ var resolvePendingDir2 = (cwd) => {
 };
 var readPendingFile = (filePath) => {
   try {
-    const content = readFileSync9(filePath, "utf8");
+    const content = readFileSync10(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -17360,7 +17468,7 @@ var messageContainsRecordId = (message, records) => {
 };
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
-  if (!pendingDirPath || !existsSync8(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync9(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync2(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -17373,12 +17481,12 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const currentHead = headResult.stdout.trim();
   const diffResult = execGit(["diff", "--cached"], { cwd });
   if (diffResult.code !== 0) return;
-  const currentDiffHash = createHash4("sha256").update(diffResult.stdout).digest("hex");
-  const currentPolicyHash = computePolicyIdentityHash3();
+  const currentDiffHash = createHash5("sha256").update(diffResult.stdout).digest("hex");
+  const currentPolicyHash = resolvePolicy(cwd).identityHash;
   const now = Date.now();
   let currentMessage;
   try {
-    currentMessage = readFileSync9(messageFile, "utf8");
+    currentMessage = readFileSync10(messageFile, "utf8");
   } catch {
     return;
   }
@@ -17398,7 +17506,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     if (!trailerBlock) return;
     const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
     writeFileSync6(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-    const recordHash = createHash4("sha256").update(trailerBlock).digest("hex");
+    const recordHash = createHash5("sha256").update(trailerBlock).digest("hex");
     try {
       markApplied(pending.nonce, recordHash, { cwd });
     } catch {
@@ -17421,8 +17529,8 @@ var register5 = (program3) => {
 };
 
 // src/hooks/post-commit.ts
-import { createHash as createHash5, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync9, mkdirSync as mkdirSync6, readFileSync as readFileSync10, readdirSync as readdirSync3, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
+import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
+import { chmodSync as chmodSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync11, readdirSync as readdirSync3, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
 import { resolve as resolve9 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -17449,8 +17557,8 @@ var installPostCommitHook = (cwd = process.cwd()) => {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync9(hookPath)) {
-      const current = readFileSync10(hookPath, "utf8");
+    if (existsSync10(hookPath)) {
+      const current = readFileSync11(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -17475,7 +17583,7 @@ var resolvePendingDir3 = (cwd) => {
 };
 var readPendingFile2 = (filePath) => {
   try {
-    const content = readFileSync10(filePath, "utf8");
+    const content = readFileSync11(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -17514,7 +17622,7 @@ var allRecordIdsPresent = (commitMessage, records) => {
 };
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync9(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync10(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -17544,7 +17652,7 @@ var runPostCommitFinaliser = (cwd) => {
     if (pending.staged_tree_oid !== committedTree) continue;
     if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
     const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
-    const expectedHash = createHash5("sha256").update(canonicalBlock).digest("hex");
+    const expectedHash = createHash6("sha256").update(canonicalBlock).digest("hex");
     if (pending.applied_record_hash !== expectedHash) continue;
     try {
       consumePending(pending.nonce, headSha2, { cwd });
@@ -17784,7 +17892,7 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join5(tmpdir(), "commitlore-demo-"));
+    tmpDir = mkdtempSync(join6(tmpdir(), "commitlore-demo-"));
     const userCwd = resolve10(opts.cwd ?? process.cwd());
     const tmpResolved = resolve10(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
@@ -17794,7 +17902,7 @@ var runDemo = async (opts = {}) => {
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
-    const targetFullPath = join5(tmpDir, targetPath);
+    const targetFullPath = join6(tmpDir, targetPath);
     mkdirSync7(dirname4(targetFullPath), { recursive: true });
     writeFileSync8(targetFullPath, "// session cache module\n");
     git(["add", "."], tmpDir);
@@ -17859,7 +17967,7 @@ var register8 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
+import { readFileSync as readFileSync12, writeFileSync as writeFileSync9 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -17870,7 +17978,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync11(path2, "utf8");
+    return readFileSync12(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -17953,7 +18061,7 @@ var register9 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -17961,8 +18069,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync12(STDIN_FD, "utf8");
-  return readFileSync12(path2, "utf8");
+  if (path2 === "-") return readFileSync13(STDIN_FD, "utf8");
+  return readFileSync13(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -18150,12 +18258,12 @@ var register10 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync13, writeFileSync as writeFileSync10 } from "node:fs";
+import { readFileSync as readFileSync14, writeFileSync as writeFileSync10 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync13(path2, "utf8");
+    return readFileSync14(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -18333,11 +18441,11 @@ var register12 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync14, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join6, relative as relative2, resolve as resolve11, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync15, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join7, relative as relative2, resolve as resolve11, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 var NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 var resolveAblation = (flags) => flags === void 0 ? NO_ABLATION : {
   noScope: flags.noScope === true,
@@ -18554,7 +18662,7 @@ var cacheKeyOf = (parts) => {
     // onto one key rather than two.
     ...parts.ablation.length === 0 ? [] : [parts.ablation]
   ]);
-  return createHash6("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
+  return createHash7("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
 };
 var resolveBudget = (budget) => {
   if (budget === void 0) return DEFAULT_BUDGET_TOKENS;
@@ -18684,7 +18792,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync14(0, "utf8");
+    return readFileSync15(0, "utf8");
   } catch {
     return "";
   }
@@ -18713,7 +18821,7 @@ var canonical = (target) => {
   for (; ; ) {
     try {
       const real = realpathSync3(current);
-      return tail.length === 0 ? real : join6(real, ...tail);
+      return tail.length === 0 ? real : join7(real, ...tail);
     } catch {
       const parent = dirname5(current);
       if (parent === current) return absolute;
@@ -27841,7 +27949,7 @@ var register15 = (program3) => {
 };
 
 // src/core/before-change.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
 var deriveVerificationGaps = (cwd) => {
   const gaps = [];
   const history = historyAvailability(cwd);
@@ -27875,12 +27983,12 @@ var resolveHead = (cwd) => {
   return result.stdout.trim();
 };
 var buildCacheKey = (head, path2, proposal) => {
-  const pathHash = createHash7("sha256").update(path2).digest("hex").slice(0, 16);
+  const pathHash = createHash8("sha256").update(path2).digest("hex").slice(0, 16);
   if (proposal === void 0) {
     return `ctx:${head}:${pathHash}`;
   }
   const normalised = proposal.trim().replace(/\s+/g, " ");
-  const proposalHash = createHash7("sha256").update(normalised).digest("hex").slice(0, 16);
+  const proposalHash = createHash8("sha256").update(normalised).digest("hex").slice(0, 16);
   return `full:${head}:${pathHash}:${proposalHash}`;
 };
 var beforeChange = (opts) => {
@@ -28344,7 +28452,7 @@ var register16 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync15, writeFileSync as writeFileSync11 } from "node:fs";
+import { readFileSync as readFileSync16, writeFileSync as writeFileSync11 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -28385,7 +28493,7 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync15(path2, "utf8");
+    return readFileSync16(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -28489,7 +28597,7 @@ var register17 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync16 } from "node:fs";
+import { readFileSync as readFileSync17 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -28841,14 +28949,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync16(path2, "utf8");
+    return readFileSync17(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync16(0, "utf8");
+    return readFileSync17(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -29104,11 +29212,11 @@ var register18 = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync17(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync18(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync17(STDIN_FD2, "utf8");
+  return readFileSync18(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {

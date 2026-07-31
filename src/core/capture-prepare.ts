@@ -10,20 +10,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch, type GuardResult } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
+import { resolvePolicy } from './capture-policy.js';
 import { createPending, type GuardAdvisory, type GuardGap } from './pending.js';
-
-// ---------------------------------------------------------------------------
-// Policy defaults — ADR-0021 §7
-// ---------------------------------------------------------------------------
-
-const HARDCODED_DEFAULTS = {
-  mode: 'suggest',
-  max_records_per_commit: 1,
-  require_verified_evidence: true,
-} as const;
-
-const computePolicyIdentityHash = (): string =>
-  createHash('sha256').update(JSON.stringify(HARDCODED_DEFAULTS)).digest('hex');
 
 // ---------------------------------------------------------------------------
 // Guard advisory — ADR-0020, T-1109
@@ -108,6 +96,13 @@ export interface PrepareResult {
   source_hashes: { transcript: string; diff: string };
   prompt: string;
   guard_advisory: GuardAdvisory | null;
+  /**
+   * A named reason when a policy file exists but could not be used (T-1110).
+   * The defaults ran, and `policy_identity_hash` describes them — but the caller
+   * must say so: silently ignoring an unusable policy file would let a user
+   * believe a setting applied.
+   */
+  policy_error: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,8 +139,12 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
   const transcriptHash = createHash('sha256').update(transcript).digest('hex');
   const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
 
-  // 5. Compute policy identity hash
-  const policyIdentityHash = computePolicyIdentityHash();
+  // 5. Resolve the policy and take its identity (T-1110, ADR-0021 §7). A policy
+  //    file that cannot be used yields the defaults plus a named reason; the
+  //    identity then describes the defaults, which is the policy that ran.
+  const policy = resolvePolicy(cwd);
+  const policyIdentityHash = policy.identityHash;
+  const policyError = policy.error;
 
   // 6. Build the prompt contract via buildHarvestPrompt
   const prompt = buildHarvestPrompt({ transcript, diff });
@@ -178,6 +177,7 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     policy_identity_hash: policyIdentityHash,
     source_hashes: sourceHashes,
     prompt,
+    policy_error: policyError,
     guard_advisory: advisory,
   };
 };

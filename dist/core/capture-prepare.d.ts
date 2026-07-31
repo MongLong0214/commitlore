@@ -22,6 +22,13 @@ export interface PrepareResult {
     };
     prompt: string;
     guard_advisory: GuardAdvisory | null;
+    /**
+     * A named reason when a policy file exists but could not be used (T-1110).
+     * The defaults ran, and `policy_identity_hash` describes them — but the caller
+     * must say so: silently ignoring an unusable policy file would let a user
+     * believe a setting applied.
+     */
+    policy_error: string | null;
 }
 /**
  * Prepares a capture context: computes all binding conditions, generates
