@@ -15974,7 +15974,7 @@ import { tmpdir as tmpdirPath } from "node:os";
 import { join as join4, resolve as resolve6 } from "node:path";
 
 // src/core/hook-target.ts
-import { realpathSync, statSync } from "node:fs";
+import { lstatSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve as resolve5, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
@@ -15992,9 +15992,21 @@ var isExecutableFile = (path2) => {
     return false;
   }
 };
-var isInsidePackage = (path2) => {
-  const fromRoot = relative(realpathSync(PACKAGE_ROOT), realpathSync(path2));
-  return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+var trustedRoot = (cwd) => configValue(cwd, "commitlore.root") || PACKAGE_ROOT;
+var isInsidePackage = (root, path2) => {
+  try {
+    const fromRoot = relative(realpathSync(root), realpathSync(path2));
+    return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
+  } catch {
+    return false;
+  }
+};
+var isSymlink = (path2) => {
+  try {
+    return lstatSync(path2).isSymbolicLink();
+  } catch {
+    return false;
+  }
 };
 var classifyBinTarget = (path2) => path2.endsWith(".js") || path2.endsWith(".mjs") ? "script" : null;
 var readRecordedHookTarget = (cwd) => {
@@ -16009,8 +16021,11 @@ var readRecordedHookTarget = (cwd) => {
       problems.push("commitlore.bin is not a .js or .mjs file");
     }
     if (!isFile(binPath)) problems.push("commitlore.bin does not exist");
-    else if (kind === "script" && !isInsidePackage(binPath)) {
-      problems.push("commitlore.bin is outside this package root");
+    else if (kind === "script") {
+      if (!isInsidePackage(trustedRoot(cwd), binPath)) {
+        problems.push("commitlore.bin is outside this package root");
+      }
+      if (isSymlink(binPath)) problems.push("commitlore.bin is a symlink");
     }
   }
   if (node === "") problems.push("commitlore.node is not recorded");
@@ -16597,12 +16612,30 @@ var commitMsgStub = () => [
   "      # gap a directory-only containment check would leave open: a symlink",
   "      # planted inside the root but pointing outside it.",
   '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
-  '        recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=',
-  '        case "$recorded_dir" in',
-  '          "$recorded_root"|"$recorded_root"/*)',
-  '            exec "$recorded_node" "$recorded" validate --message-file "$1"',
-  "            ;;",
+  "        # Both sides are resolved before they are compared. Matching a stored",
+  "        # string against a resolved one is what broke this on Windows: the",
+  "        # installer records a win32 path and the shell git runs hooks with",
+  "        # answers in POSIX form from `pwd -P`, so the case matched nothing --",
+  "        # not an attacker's path, and not the installer's own bundle either.",
+  "        #",
+  "        # The separator is normalised first because neither `dirname` nor",
+  "        # ${var%/*} finds a parent in a backslash-separated path; both yield",
+  "        # `.`, which resolves to the repository rather than to the install.",
+  `        recorded_slashed=$(printf %s "$recorded" | tr '\\\\' /)`,
+  `        root_slashed=$(printf %s "$recorded_root" | tr '\\\\' /)`,
+  '        case "$recorded_slashed" in',
+  "          */*) recorded_parent=${recorded_slashed%/*} ;;",
+  "          *) recorded_parent=. ;;",
   "        esac",
+  '        recorded_dir=$(cd "$recorded_parent" 2>/dev/null && pwd -P) || recorded_dir=',
+  '        root_dir=$(cd "$root_slashed" 2>/dev/null && pwd -P) || root_dir=',
+  '        if [ -n "$recorded_dir" ] && [ -n "$root_dir" ]; then',
+  '          case "$recorded_dir" in',
+  '            "$root_dir"|"$root_dir"/*)',
+  '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
+  "              ;;",
+  "          esac",
+  "        fi",
   "      fi",
   "      ;;",
   "  esac",
@@ -16614,12 +16647,22 @@ var commitMsgStub = () => [
   "",
   "# A local devDependency is not on PATH inside a hook, so resolve it the way",
   "# node would: walk up from the working directory.",
+  "#",
+  "# The loop stops when stripping a component stops making progress, not when",
+  "# the result is empty. ${dir%/*} returns its input unchanged once no `/`",
+  "# remains, so a drive-letter root settles on `C:` and the walk never ends --",
+  "# measured on a Windows runner, where $PWD inside a hook is `C:/Users/...`",
+  "# and a real commit therefore never returned.",
   "dir=$PWD",
   'while [ -n "$dir" ]; do',
   '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
   '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
   "  fi",
-  "  dir=${dir%/*}",
+  "  parent=${dir%/*}",
+  '  if [ "$parent" = "$dir" ]; then',
+  "    break",
+  "  fi",
+  "  dir=$parent",
   "done",
   "",
   "# Passing silently here would report a clean record for a message nothing",

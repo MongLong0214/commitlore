@@ -106,3 +106,74 @@ describe('readRecordedHookTarget', () => {
     );
   });
 });
+
+/**
+ * T-1127 (#321): `doctor` reads this module to report what the shell stub will
+ * do. On Windows the stub could not run anything at all while this mirror
+ * reported no problem, because the two were not looking at the same thing: the
+ * stub compares the recorded path against the recorded `commitlore.root`, and
+ * this compared it against the root of whichever CLI happened to be running.
+ *
+ * A mirror that is green while the hook is dead is worse than no mirror, so the
+ * two facts it got wrong are asserted here.
+ */
+describe('T-1127 the mirror checks what the stub checks', () => {
+  const scratch: string[] = [];
+  afterAll(() => {
+    for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+  });
+  const tempDir = (label: string): string => {
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), `commitlore-t1127-${label}-`));
+    scratch.push(dir);
+    return dir;
+  };
+  const setConfig = (cwd: string, key: string, value: string): void => {
+    const result = execGit(['config', '--local', key, value], { cwd });
+    if (result.code !== 0) throw new Error(`git config ${key} failed: ${result.stderr}`);
+  };
+
+  it('reports a recorded bundle that sits outside the recorded root', () => {
+    // The stub trusts `commitlore.root`, so a bin outside it is refused there.
+    // This mirror trusted its own package root instead, which is a different
+    // question and answered "fine" for a hook that would refuse.
+    const cwd = createTestRepo({ path: tempDir('repo') });
+    const elsewhere = tempDir('elsewhere');
+    const bin = join(elsewhere, 'cli.mjs');
+    writeFileSync(bin, 'export {};\n');
+    setConfig(cwd, 'commitlore.bin', bin);
+    setConfig(cwd, 'commitlore.node', process.execPath);
+    setConfig(cwd, 'commitlore.root', realpathSync(tempDir('root')));
+
+    expect(readRecordedHookTarget(cwd).problems).toContain(
+      'commitlore.bin is outside this package root',
+    );
+  });
+
+  it('accepts a recorded bundle inside the recorded root', () => {
+    const cwd = createTestRepo({ path: tempDir('repo-ok') });
+    const root = tempDir('root-ok');
+    const bin = join(root, 'cli.mjs');
+    writeFileSync(bin, 'export {};\n');
+    setConfig(cwd, 'commitlore.bin', bin);
+    setConfig(cwd, 'commitlore.node', process.execPath);
+    setConfig(cwd, 'commitlore.root', realpathSync(root));
+
+    expect(readRecordedHookTarget(cwd).problems).not.toContain(
+      'commitlore.bin is outside this package root',
+    );
+  });
+
+  it('reports a recorded bundle that is a symlink, which the stub refuses outright', () => {
+    const root = tempDir('root-link');
+    const cwd = createTestRepo({ path: tempDir('repo-link') });
+    const real = join(tempDir('target'), 'cli.mjs');
+    writeFileSync(real, 'export {};\n');
+    const link = join(root, 'cli.mjs');
+    symlinkSync(real, link);
+    setConfig(cwd, 'commitlore.bin', link);
+    setConfig(cwd, 'commitlore.node', process.execPath);
+    setConfig(cwd, 'commitlore.root', realpathSync(root));
+
+    expect(readRecordedHookTarget(cwd).problems).toContain('commitlore.bin is a symlink');
+  });
+});
