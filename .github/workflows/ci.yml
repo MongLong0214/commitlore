@@ -503,3 +503,187 @@ jobs:
 
           echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
           "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
+
+      # T-1124 (#283): #71's install-root containment, executed on Windows against
+      # a wrapper install. A property verified on one platform is not a property of
+      # the product, and macOS is the only place it has ever been executed.
+      #
+      # Paths are converted with `cygpath` rather than passed between the two path
+      # worlds as-is. `init` records a win32 path (`C:\...`), the stub reads it
+      # under Git for Windows' MSYS `sh`, and a witness file named `/tmp/ran.log`
+      # by bash is `C:\tmp\ran.log` to node. A test that mixed the two forms would
+      # report "the tampered program never ran" because it looked in the wrong
+      # place -- the exact false pass this ticket cannot afford.
+      - name: What the hook actually sees on Windows (measurement, not assertion)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/measure
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124m\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          echo "--- which sh will run the hook ---"
+          git --version
+          command -v sh || echo "(no sh on this PATH)"
+
+          echo "--- what init recorded ---"
+          recorded=$(git config --local --get commitlore.bin || true)
+          recorded_root=$(git config --local --get commitlore.root || true)
+          recorded_node=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $recorded"
+          echo "commitlore.root = $recorded_root"
+          echo "commitlore.node = $recorded_node"
+
+          echo "--- the stub's containment comparison, recomputed here ---"
+          # Verbatim from src/hooks/commit-msg.ts: this is the branch that decides
+          # whether the recorded bundle is executed at all.
+          recorded_dir=$(cd "$(dirname "$recorded")" 2>/dev/null && pwd -P) || recorded_dir=
+          echo "dirname+pwd -P  = ${recorded_dir:-(empty)}"
+          case "$recorded_dir" in
+            "$recorded_root"|"$recorded_root"/*)
+              echo "containment case: MATCH -- the recorded bundle is exec'd" ;;
+            *)
+              echo "containment case: NO MATCH -- the stub falls through" ;;
+          esac
+          [ -x "$recorded_node" ] && echo "test -x node: yes" || echo "test -x node: no"
+          [ -L "$recorded" ] && echo "test -L bin: yes" || echo "test -L bin: no"
+
+          echo "--- where a fall-through lands ---"
+          command -v commitlore >/dev/null 2>&1 \
+            && echo "command -v commitlore: found -- $(command -v commitlore)" \
+            || echo "command -v commitlore: NOT found (the shim is commitlore.cmd)"
+
+          echo "--- a real commit through the real hook ---"
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124n\n')" \
+            && echo "real commit: ACCEPTED (exit 0)" \
+            || echo "real commit: REFUSED (exit $?)"
+
+      # The baseline runs before the attacks and is not decoration. An attack that
+      # "passes" because nothing resolves at all is not containment -- it is a hook
+      # that refuses everything, which fails the legitimate user too. The baseline
+      # is the only thing that tells those two apart, so it asserts both
+      # directions: a valid record is accepted, and an invalid one is refused.
+      #
+      # No continue-on-error, by the ticket's own terms.
+      - name: The hook runs and discriminates through the recorded install (baseline)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/baseline
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124s\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          # Acceptance first: this is the direction a dead hook fails. A hook that
+          # exits non-zero unconditionally would satisfy the refusal case below
+          # while blocking every commit on the platform.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          if ! git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124a\n')"; then
+            echo "::error::the hook refused a valid record through the recorded install"
+            exit 1
+          fi
+
+          printf 'export const value = 2;\n' > file.ts
+          git add file.ts
+          if git commit -m "$(printf 'Bad\n\nBlast: wide\n')"; then
+            echo "::error::the hook accepted an invalid record"
+            exit 1
+          fi
+          echo "baseline ok: the hook runs, accepts a valid record and refuses an invalid one"
+
+      - name: A recorded target outside the install root is refused (#71, attack 1)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack1
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124t\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          outside=$(mktemp -d)
+          witness="$outside/ran.log"
+          # A .mjs, so it clears the extension allowlist: the only thing between it
+          # and execution is the install-root check. ESM, because .mjs is ESM and a
+          # `require` here would throw before writing the witness -- a false pass.
+          # Forward slashes: node on Windows accepts them, and they need no escaping.
+          printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
+            "$(cygpath -m "$witness")" > "$outside/evil.mjs"
+          # Recorded in win32 form, which is the form `init` itself writes.
+          git config --local commitlore.bin "$(cygpath -w "$outside/evil.mjs")"
+
+          printf 'export const value = 3;\n' > file.ts
+          git add file.ts
+          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124u\n')" || true
+          if [ -f "$witness" ]; then
+            echo "::error::the recorded program outside the install root was executed"
+            cat "$witness"
+            exit 1
+          fi
+          echo "attack 1 refused: the program outside the install root never ran"
+
+      - name: A recorded target that is not a script is refused (#71, attack 2)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/attack2
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: seeded before the hook exists\nRecord-Id: r-ciwin1124v\n')"
+          "$shim" init || echo "(init reported steps needing attention)"
+
+          root=$(git config --local --get commitlore.root || true)
+          test -n "$root" || { echo "::error::no commitlore.root was recorded"; exit 1; }
+          root_posix=$(cygpath -u "$root")
+          witness=$(mktemp -d)/ran.log
+          # Inside the install root, so the location check cannot be what refuses
+          # it. An extensionless `commitlore` is the name ADR-0026 stopped
+          # trusting: the installer's own wrapper carries it.
+          planted="$root_posix/commitlore"
+          printf 'import { appendFileSync } from "node:fs";\nappendFileSync("%s", "ran\\n");\nprocess.exit(0);\n' \
+            "$(cygpath -m "$witness")" > "$planted"
+          git config --local commitlore.bin "$(cygpath -w "$planted")"
+
+          printf 'export const value = 4;\n' > file.ts
+          git add file.ts
+          git commit -m "$(printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin1124w\n')" || true
+          rm -f "$planted"
+          if [ -f "$witness" ]; then
+            echo "::error::a recorded target with no recognised extension was executed"
+            exit 1
+          fi
+          echo "attack 2 refused: the unrecognised target never ran"
