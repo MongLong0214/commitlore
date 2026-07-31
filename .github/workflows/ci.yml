@@ -313,3 +313,137 @@ jobs:
             COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
             "$HOME/.local/bin/commitlore" --version
           '
+
+  # T-1121 (#282): install.ps1 is install.sh's twin, and a shape test cannot show
+  # that a PowerShell script runs. This job is the evidence -- a real
+  # windows-latest runner, the script executed the way a user would execute it,
+  # and the tool it installs used afterwards.
+  #
+  # The source is this checkout with a local tag, exactly as the install-script
+  # job does for the shell installer: nothing here reaches github.com, so the job
+  # tests the script rather than the network.
+  #
+  # Windows PowerShell 5.1 is tested alongside PowerShell 7 because 5.1 is what a
+  # Windows machine has before anyone installs anything, and a 7-only construct
+  # fails to parse the *whole* file rather than one branch of it.
+  install-ps1:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tag this checkout so the installer has a pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git tag v9.9.9
+
+      - name: Install from the local tag
+        shell: ${{ matrix.shell }}
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\install.ps1 v9.9.9
+          if ($LASTEXITCODE -ne 0) { throw "installer exited $LASTEXITCODE" }
+
+      - name: The shim exists, reports a version, and runs a real command
+        shell: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          if (-not (Test-Path -LiteralPath $shim)) { throw "no shim at $shim" }
+          $body = Get-Content -LiteralPath $shim -Raw
+          if ($body -notmatch 'commitlore:wrapper:v1') { throw 'the shim carries no marker' }
+          if ($body -notmatch "`r`n") { throw 'the shim is not CRLF' }
+          $version = (& $shim --version | Select-Object -First 1)
+          Write-Host "shim reports: $version"
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+') { throw "unexpected version output: $version" }
+          $declared = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          if ($version.Trim() -ne $declared) { throw "shim reports $version, package.json declares $declared" }
+          & $shim --help > $null
+          if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
+
+      - name: A second run is an upgrade, not a refusal
+        shell: ${{ matrix.shell }}
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = (& .\install.ps1 v9.9.9 2>&1 | Out-String)
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { throw "re-run exited $LASTEXITCODE" }
+          if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
+          if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
+
+      - name: A foreign file at the destination is refused with exit 4
+        shell: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $dir = Join-Path $env:TEMP 'commitlore-occupied'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Set-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Value '@echo not commitlore'
+          $env:COMMITLORE_INSTALL_DIR = $dir
+          $env:COMMITLORE_INSTALL_SOURCE = '${{ github.workspace }}'
+          $out = (& .\install.ps1 v9.9.9 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Remove-Item Env:\COMMITLORE_INSTALL_DIR
+          Write-Host $out
+          if ($code -ne 4) { throw "expected exit 4 for an occupied destination, got $code" }
+          if ($out -notmatch 'refusing to overwrite it') { throw 'the refusal was not named' }
+          $body = Get-Content -LiteralPath (Join-Path $dir 'commitlore.cmd') -Raw
+          if ($body -notmatch 'not commitlore') { throw 'the foreign file was modified' }
+
+      - name: A bad tag is refused with exit 2 and installs nothing
+        shell: ${{ matrix.shell }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $env:COMMITLORE_INSTALL_SOURCE = '${{ github.workspace }}'
+          $out = (& .\install.ps1 v0.0.0 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host $out
+          if ($code -ne 2) { throw "expected exit 2 for an unknown tag, got $code" }
+          if ($out -notmatch 'git said:') { throw "git's own reason was not quoted" }
+          if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'commitlore\v0.0.0')) { throw 'a checkout was left behind' }
+
+      - name: The installed tool works in a real repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/repo
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nRecord-Id: r-ciwin0001\nBlast: local\nUndo: easy\nCertainty: firm\n')"
+
+          "$shim" init
+          echo "--- recorded ---"
+          git config --local --get commitlore.bin
+          git config --local --get commitlore.node
+          "$shim" doctor || echo "(doctor reported problems -- see above)"
+
+          # The hook is the point: a record that violates the vocabulary must be
+          # rejected, and a valid one accepted. Windows support is not claimed by
+          # this job (T-1124 owns that), but what it installs has to work.
+          printf 'export const value = 1;\n' > file.ts
+          git add file.ts
+          if git commit -q -m "$(printf 'Bad\n\nBlast: wide\n')"; then
+            echo "::error::an invalid record was accepted by the hook"
+            exit 1
+          fi
+          git commit -q -m "$(printf 'Good\n\nLimit: the runner has no compiled artifact\nRecord-Id: r-ciwin0002\n')"
+          "$shim" context file.ts
