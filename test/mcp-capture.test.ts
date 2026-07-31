@@ -287,6 +287,134 @@ describe('commitlore_prepare_capture surfaces the advisory and the policy error'
   });
 });
 
+// ===========================================================================
+// The draft shape the contract hands the agent must be the shape verify accepts
+//
+// #291: `commitlore_prepare_capture` returns a prompt that tells the agent to
+// emit `{"records": [...]}` — `harvest.ts` says so in the contract text and
+// validates that shape, and the CLI accepts it. `commitlore_verify_capture`
+// required a bare array and rejected it, so an agent following the product's own
+// contract could not complete the cycle over MCP. Gate A row P0-4 asserts that
+// the same contract applies whichever agent calls it; these tests pin that.
+// ===========================================================================
+
+describe('commitlore_verify_capture accepts the contract draft shape (#291)', () => {
+  let repo: string;
+  let stub: Stub;
+
+  const TRANSCRIPT =
+    'We rejected polling the API every second because the rate limit is 60 per minute.';
+
+  /**
+   * Every trailer needs a citation — the verifier rejects a record with
+   * `evidence-missing` otherwise, which is the cite-or-omit rule working. Only
+   * the trailer this transcript can actually support is recorded here.
+   */
+  const RECORD = {
+    trailers: [
+      {
+        key: 'Ruled-out',
+        value: 'polling the API every second | the rate limit is 60 per minute',
+      },
+    ],
+    evidence: [
+      {
+        key: 'Ruled-out',
+        source: 'transcript',
+        quote: 'the rate limit is 60 per minute',
+        locator: 'L1-L1',
+      },
+    ],
+  };
+
+  const prepareNonce = async (): Promise<string> => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: TRANSCRIPT },
+    });
+    return toolJson(response)['nonce'] as string;
+  };
+
+  /**
+   * The verifier binds to the snapshot `prepare` hashed, so the diff passed to
+   * `verify` must be the staged diff itself. Passing an empty string is rejected
+   * as `source-mismatch`, which is the maker-checker boundary working.
+   */
+  const stagedDiff = (): string => execGitOrThrow([...GIT_CONFIG, '-C', repo, 'diff', '--cached'], { cwd: repo });
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    writeFileSync(join(repo, 'poller.ts'), 'export const poll = () => 0;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('accepts the contract object shape `{ records: [...] }`', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify({ records: [RECORD] }),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+    expect(result['validation_result']).not.toBe('empty');
+    expect(result['accepted']).toBeDefined();
+  });
+
+  it('still accepts a bare array, so callers written against the old description keep working', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify([RECORD]),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    expect(response.error).toBeUndefined();
+    const result = toolJson(response);
+    expect(result['validation_result']).not.toBe('empty');
+  });
+
+  it('rejects a shape that is neither, naming both accepted forms', async () => {
+    const nonce = await prepareNonce();
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce,
+        draft: JSON.stringify({ trailers: [] }),
+        transcript: TRANSCRIPT,
+        diff: stagedDiff(),
+      },
+    });
+    const text = JSON.stringify(response);
+    expect(text).toMatch(/records/);
+    expect(text).toMatch(/array/);
+  });
+
+  it('the tool description names the contract shape', async () => {
+    const response = await stub.request('tools/list');
+    const tools = (response.result?.['tools'] ?? []) as {
+      name: string;
+      inputSchema?: { properties?: Record<string, { description?: string }> };
+    }[];
+    const verify = tools.find((t) => t.name === 'commitlore_verify_capture');
+    const description = verify?.inputSchema?.properties?.['draft']?.description ?? '';
+    expect(description).toContain('records');
+  });
+});
+
 // T-1007: commitlore_prepare_capture
 // ===========================================================================
 
