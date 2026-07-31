@@ -313,3 +313,193 @@ jobs:
             COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
             "$HOME/.local/bin/commitlore" --version
           '
+
+  # T-1121 (#282): install.ps1 is install.sh's twin, and a shape test cannot show
+  # that a PowerShell script runs. This job is the evidence -- a real
+  # windows-latest runner, the script executed the way a user would execute it,
+  # and the tool it installs used afterwards.
+  #
+  # The source is this checkout with a local tag, exactly as the install-script
+  # job does for the shell installer: nothing here reaches github.com, so the job
+  # tests the script rather than the network.
+  #
+  # Both hosts are exercised, and each one does real work rather than repeating
+  # the other: Windows PowerShell 5.1 performs the first install, PowerShell 7
+  # performs the upgrade. 5.1 matters because it is what a Windows machine has
+  # before anyone installs anything, and a 7-only construct fails to parse the
+  # whole file rather than one branch of it.
+  #
+  # The hosts are named literally. `shell:` accepts no expression -- a
+  # `${{ matrix.shell }}` there makes the workflow unloadable, which is how this
+  # job was first written and how it first failed (actions/runner#444).
+  install-ps1:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tag this checkout so the installer has a pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git tag v9.9.9
+
+      # -File, under 5.1, with the version as a positional argument: the same
+      # entry point a user gets from `& ([scriptblock]::Create((irm ...))) v9.9.9`,
+      # and the one that proves param() binds.
+      - name: Install under Windows PowerShell 5.1
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9
+          if errorlevel 1 exit /b 1
+
+      - name: The 5.1 host reports its own version, for the record
+        shell: cmd
+        run: powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+
+      - name: The shim exists, is CRLF, and reports the declared version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          if (-not (Test-Path -LiteralPath $shim)) { throw "no shim at $shim" }
+          $body = Get-Content -LiteralPath $shim -Raw
+          if ($body -notmatch 'commitlore:wrapper:v1') { throw 'the shim carries no marker' }
+          if ($body -notmatch "`r`n") { throw 'the shim is not CRLF' }
+          $version = (& $shim --version | Select-Object -First 1)
+          Write-Host "shim reports: $version"
+          $declared = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+          if ($version.Trim() -ne $declared) { throw "shim reports $version, package.json declares $declared" }
+          & $shim --help > $null
+          if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
+
+      # The documented piped form, under PowerShell 7. `iex` gives a piped script
+      # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
+      # why that variable exists. This step is also the only check that a leading
+      # param() block survives Invoke-Expression at all.
+      - name: A second install through the documented pipe is an upgrade
+        shell: pwsh
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+          COMMITLORE_VERSION: v9.9.9
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = (Get-Content -LiteralPath .\install.ps1 -Raw | Invoke-Expression 2>&1 | Out-String)
+          Write-Host $out
+          if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
+          if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
+
+      # These two run under cmd, deliberately. A pwsh step on GitHub runs with
+      # $ErrorActionPreference = 'Stop', which promotes a native command's stderr
+      # to a terminating error -- so a step that captures the installer's own
+      # error message with 2>&1 aborts on reading it and never reaches its
+      # assertion. cmd has no error records: %ERRORLEVEL% is the exit code and
+      # findstr reads the text. This is the same hazard the installer itself hit,
+      # in the harness rather than the script.
+      - name: A foreign file at the destination is refused with exit 4
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          set "dir=%TEMP%\commitlore-occupied"
+          mkdir "%dir%" 2>nul
+          > "%dir%\commitlore.cmd" echo @echo not commitlore
+          set "COMMITLORE_INSTALL_DIR=%dir%"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%TEMP%\occupied.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          set "COMMITLORE_INSTALL_DIR="
+          type "%TEMP%\occupied.log"
+          if not "%code%"=="4" (
+            echo ::error::expected exit 4 for an occupied destination, got %code%
+            exit /b 1
+          )
+          findstr /C:"refusing to overwrite it" "%TEMP%\occupied.log" >nul || (
+            echo ::error::the refusal was not named
+            exit /b 1
+          )
+          findstr /C:"not commitlore" "%dir%\commitlore.cmd" >nul || (
+            echo ::error::the foreign file was modified
+            exit /b 1
+          )
+
+      - name: An unknown tag is refused with exit 2 and installs nothing
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v0.0.0 > "%TEMP%\badtag.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%TEMP%\badtag.log"
+          if not "%code%"=="2" (
+            echo ::error::expected exit 2 for an unknown tag, got %code%
+            exit /b 1
+          )
+          findstr /C:"git said:" "%TEMP%\badtag.log" >nul || (
+            echo ::error::git's own reason was not quoted
+            exit /b 1
+          )
+          if exist "%LOCALAPPDATA%\commitlore\v0.0.0" (
+            echo ::error::a checkout was left behind
+            exit /b 1
+          )
+
+      # What T-1121 owns is that the installer put a working CLI on this machine.
+      # It deliberately does not require a healthy `doctor`: on Windows the
+      # hook-runtime probe spawns /bin/sh, which does not exist there, and the
+      # PreToolUse entry names `commitlore` while the shim is `commitlore.cmd`.
+      # Both are real findings and both belong to T-1124, which owns the Windows
+      # hook path and the support claim that depends on it. Asserting a green
+      # doctor here would either fail this ticket for another ticket's work or
+      # smuggle in a support claim this one is forbidden from making.
+      - name: The installed tool works in a real repository
+        shell: bash
+        run: |
+          set -uo pipefail
+          shim="$LOCALAPPDATA\\commitlore\\bin\\commitlore.cmd"
+          repo=$(mktemp -d)/repo
+          mkdir -p "$repo"
+          cd "$repo"
+          git init -q -b main
+          git config user.email t@example.com
+          git config user.name "CommitLore CI"
+          git config commit.gpgsign false
+          printf 'export const value = 0;\n' > file.ts
+          git add file.ts
+          git commit -q -m "$(printf 'Seed\n\nLimit: the runner has no compiled artifact\nRecord-Id: r-ciwin0001\n')"
+
+          # init reports; a check that needs attention is not this step's failure.
+          "$shim" init || echo "(init reported steps needing attention -- see above)"
+
+          echo "--- what init recorded ---"
+          bin=$(git config --local --get commitlore.bin || true)
+          node_path=$(git config --local --get commitlore.node || true)
+          echo "commitlore.bin  = $bin"
+          echo "commitlore.node = $node_path"
+          case "$bin" in
+            *dist/commitlore.mjs|*dist\\commitlore.mjs) ;;
+            *) echo "::error::commitlore.bin is not the bundle: $bin"; exit 1 ;;
+          esac
+          test -n "$node_path" || { echo "::error::no interpreter was recorded"; exit 1; }
+
+          echo "--- the CLI itself ---"
+          "$shim" context file.ts || { echo "::error::context failed"; exit 1; }
+
+          printf 'Bad\n\nBlast: wide\n' > /tmp/bad-message.txt
+          if "$shim" validate --message-file /tmp/bad-message.txt; then
+            echo "::error::an invalid record was accepted"
+            exit 1
+          fi
+          printf 'Good\n\nLimit: a real condition\nRecord-Id: r-ciwin0002\n' > /tmp/good-message.txt
+          "$shim" validate --message-file /tmp/good-message.txt || {
+            echo "::error::a valid record was rejected"
+            exit 1
+          }
+
+          echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
+          "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
