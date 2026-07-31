@@ -17225,10 +17225,26 @@ var writeStub = (hookPath) => {
   chmodSync(temporary, HOOK_MODE);
   renameSync3(temporary, hookPath);
 };
+var resolveEntryForRecord = (entry, cwd) => {
+  if (entry === void 0 || entry === "") return null;
+  const existingFile = (candidate) => {
+    try {
+      return statSync3(candidate).isFile() ? candidate : null;
+    } catch {
+      return null;
+    }
+  };
+  if (entry.includes("/")) return existingFile(resolve7(cwd, entry));
+  for (const dir of (process.env["PATH"] ?? "").split(":")) {
+    if (dir === "") continue;
+    const found = existingFile(resolve7(dir, entry));
+    if (found !== null) return found;
+  }
+  return null;
+};
 var recordBinPath = (cwd) => {
-  const entry = process.argv[1];
-  if (entry === void 0 || entry === "") return;
-  const resolvedEntry = resolve7(entry);
+  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
+  if (resolvedEntry === null) return;
   execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
   try {
