@@ -353,6 +353,13 @@ a recorded target that is neither a script nor a recognised wrapper is refused. 
 absent at `8b0c9fa`, where no Windows job exists and the classification knows only a bare
 binary name.
 
+**The question is narrower than it looks.** Measured on macOS at `7b23e71`, a wrapper install
+records the `.mjs` bundle inside the checkout — not the wrapper, and not an executable — so
+there is no `.exe` to classify and the compiled-binary arm is not involved. What is unknown is
+whether Windows `init` records the same shape and whether the stub's root resolution agrees
+under Windows path semantics. The macOS baseline to compare against, including both attacks
+refused with the tampered program run zero times, is on #283.
+
 **Minimum GREEN** — the attacks pass on `windows-latest` for the wrapper path, in a required
 job, in this ticket's own PR. Only then may any document call Windows supported.
 
@@ -387,8 +394,14 @@ first, so there is never a window with neither.
 **Forbidden scope**
 
 - **do not delete #71's containment check along with the binary arm.** Requirement 28: the
-  property must hold for the wrapper case after this ticket. A diff that removes
-  `matchesRunningBinary` without a wrapper equivalent is the failure mode
+  property must hold for the wrapper case after this ticket. **Measured at `7b23e71`, the check
+  to protect is the script arm's install-root resolution, not `matchesRunningBinary`:**
+  `commitlore init` through the wrapper records `commitlore.bin` as the `.mjs` bundle inside the
+  checkout, so a wrapper install never reaches the compiled-binary arm. Both of #71's attacks
+  were executed against that install — a target outside the root, and an arbitrary executable —
+  and each was refused with a named message, exit 0, and the tampered program run zero times.
+  Building a "wrapper equivalent" of the binary arm would be work with nothing behind it, while
+  the check that actually holds the property went unnamed and unguarded. Evidence is on #284
 - do not change the version, the tag procedure, or the release gate's other checks
 - do not remove the plugin path's Node resolution in `scripts/commitlore-run.sh` — only the
   compiled-binary probe ahead of it
