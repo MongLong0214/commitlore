@@ -340,21 +340,24 @@ jobs:
       # it does instead is clone a pinned tag and write a thin wrapper, so the
       # source under test is a local repository with a tag on it. Nothing here
       # reaches github.com, and nothing here builds a binary.
-      - name: Stage a tagged source repository for install.sh to clone
-        id: stage
+      # The checkout itself is the source. An earlier revision cloned it to a
+      # separate directory and bind-mounted that read-only into the containers,
+      # which made git report only "correct access rights and the repository
+      # exists" -- a mount and ownership problem standing in for the thing under
+      # test. One repository, mounted read-write where the container already
+      # mounts it, removes that whole class of noise.
+      - name: Tag the checkout so install.sh has a pinned version to clone
         run: |
           set -euo pipefail
-          src="$RUNNER_TEMP/source"
-          git clone --quiet . "$src"
-          git -C "$src" -c user.name=ci -c user.email=ci@example.invalid tag v9.9.9
-          echo "source=$src" >> "$GITHUB_OUTPUT"
+          git -c user.name=ci -c user.email=ci@example.invalid tag -f v9.9.9
+          git tag --list v9.9.9
 
       - name: Fresh install, then upgrade over it
         run: |
           set -euo pipefail
           export HOME="$RUNNER_TEMP/home"
           mkdir -p "$HOME"
-          export COMMITLORE_INSTALL_SOURCE="${{ steps.stage.outputs.source }}"
+          export COMMITLORE_INSTALL_SOURCE="$GITHUB_WORKSPACE"
 
           sh install.sh v9.9.9
           wrapper="$HOME/.local/bin/commitlore"
@@ -393,15 +396,9 @@ jobs:
       - name: Bare debian names the missing prerequisite and installs nothing
         run: |
           set -euo pipefail
-          src="${{ steps.stage.outputs.source }}"
-          docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w debian:stable-slim sh -c '
+          docker run --rm -v "$PWD:/w" -w /w debian:stable-slim sh -c '
             set -eu
-            # The mount is owned by the runner uid, not the container user, so
-            # git would refuse it as dubious ownership. That is an artefact of
-            # bind-mounting a local repository, not something a user installing
-            # from a URL ever meets.
-            git config --global --add safe.directory /src 2>/dev/null || true
-            out=$(COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9 2>&1 || true)
+            out=$(COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9 2>&1 || true)
             printf "%s\n" "$out"
             printf "%s" "$out" | grep -qi "node" || { echo "expected the message to name Node"; exit 1; }
             test ! -e "$HOME/.local/bin/commitlore" || { echo "something was installed"; exit 1; }
@@ -410,11 +407,11 @@ jobs:
       - name: The same image succeeds once Node and Git are present
         run: |
           set -euo pipefail
-          src="${{ steps.stage.outputs.source }}"
-          docker run --rm -v "$PWD:/w" -v "$src:/src:ro" -w /w node:22-bookworm-slim sh -c '
+          docker run --rm -v "$PWD:/w" -w /w node:22-bookworm-slim sh -c '
             set -eu
             apt-get update -qq && apt-get install -y -qq git >/dev/null
-            git config --global --add safe.directory /src
-            COMMITLORE_INSTALL_SOURCE=/src sh install.sh v9.9.9
+            # The checkout is owned by the runner uid, not this container user.
+            git config --global --add safe.directory /w
+            COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
             "$HOME/.local/bin/commitlore" --version
           '
