@@ -22,6 +22,9 @@
 > | Foreign target | exit `4`, left byte-identical |
 > | Fetch failure | exit `2`, quoting git's first `fatal:` line |
 > | Verification | retries once, then reports "installed, but unverified" and **exits 0** |
+> | Wrapper node resolution | records the absolute `node` path found at install time, falling back to `node` on `PATH` when that path is gone |
+> | Fallback when the recorded path disappears | still runs, on whatever `node` is on `PATH` — **with no version check**, so the Node >= 22 the installer enforced no longer holds |
+> | No `node` anywhere | the shell's own `exec: node: not found`, **exit 127** — not a CommitLore message |
 > | `release.yml` | `build` job from line 77, `publish` from 138 — unchanged by T-1120 |
 >
 > `install.sh` carries no `SHA256SUMS`, `.tar.gz`, `tar -xzf` or target triple, and `README*`
@@ -202,9 +205,23 @@ Node floor and the same "nothing was installed" guarantee, a user-local checkout
 a shim carrying a marker its own re-run recognises, a foreign target left untouched, and a
 verification step that reports without deciding the exit code.
 
-One asymmetry is deliberate and must not be "fixed": the shell wrapper resolves `node` at
-install time and falls back to `PATH`. A PowerShell shim has the same choice to make, and
+One asymmetry is deliberate and must not be "fixed" by accident: the shell wrapper resolves
+`node` at install time and falls back to `PATH`. A PowerShell shim has the same choice, and
 whichever it makes has to be stated in the ticket's own record rather than inherited silently.
+
+**Two measured consequences of that fallback, to decide about rather than copy:**
+
+1. **The fallback is unchecked.** Measured: with the recorded path removed, the wrapper runs on
+   whatever `node` is on `PATH` and performs **zero** version checks. The Node >= 22 the
+   installer enforced stops holding the moment a version manager switches away, and nothing says
+   so. Whether an older Node breaks the bundle was **not established** — none was available — so
+   the statement is that the check no longer holds, not that it fails.
+2. **The no-Node failure is the shell's, not the product's.** With no `node` anywhere the user
+   gets `exec: node: not found` at exit 127, while the installer for the same missing
+   prerequisite says "Node.js 22 or newer is required ... Nothing was installed." Fixing that in
+   the wrapper costs a `command -v` on every invocation including the hook hot path, which is why
+   requirement 7 calls the wrapper thin. This ticket states which side it takes for the shim, and
+   says why if it diverges.
 
 **Forbidden scope**
 
