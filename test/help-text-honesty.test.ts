@@ -1,0 +1,75 @@
+/**
+ * #303: a user-facing message must not send someone after a package the product
+ * does not carry.
+ *
+ * `index --help` documented exit 2 as "conflicting flags, or better-sqlite3 is
+ * not installed". ADR-0012 replaced `better-sqlite3` with `node:sqlite`
+ * specifically so there is no native dependency, and `package.json` declares no
+ * runtime dependencies at all — so that message named a package that is not part
+ * of the product and never will be. The one place a failing user is sent has to
+ * be somewhere real.
+ *
+ * Comments that explain *why* a dependency was dropped are legitimate and are
+ * deliberately not covered: this asserts strings that reach a user, which are the
+ * ones with a cost attached.
+ */
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+const declared = new Set([
+  ...Object.keys(manifest.dependencies ?? {}),
+  ...Object.keys(manifest.devDependencies ?? {}),
+]);
+
+const sourceFiles = (dir: string): string[] => {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...sourceFiles(full));
+    else if (entry.name.endsWith('.ts')) out.push(full);
+  }
+  return out;
+};
+
+/** Lines that end up in front of a user: help text, stderr, thrown messages. */
+const userFacingLines = (body: string): string[] =>
+  body
+    .split('\n')
+    .filter((line) => {
+      const code = line.trim();
+      if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*')) return false;
+      return /Exit codes:|addHelpText|stderr\.write|new Error\(|\.description\(/.test(code);
+    });
+
+describe('#303 user-facing text names only packages the manifest carries', () => {
+  it('no help text, error or diagnostic names an undeclared package', () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(REPO_ROOT, 'src'))) {
+      const body = readFileSync(file, 'utf8');
+      for (const line of userFacingLines(body)) {
+        // Any bare package-looking token this project once used but no longer declares.
+        for (const suspect of ['better-sqlite3', 'node-gyp', 'prebuild-install']) {
+          if (line.includes(suspect) && !declared.has(suspect)) {
+            offenders.push(`${file.replace(REPO_ROOT + '/', '')}: ${line.trim().slice(0, 100)}`);
+          }
+        }
+      }
+    }
+    expect(offenders, offenders.join('\n')).toEqual([]);
+  });
+
+  it('better-sqlite3 is genuinely not a declared dependency, so the rule has teeth', () => {
+    expect(declared.has('better-sqlite3')).toBe(false);
+    expect(manifest.dependencies ?? {}).toEqual({});
+  });
+});

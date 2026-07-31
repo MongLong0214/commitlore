@@ -18422,7 +18422,7 @@ var runIndex = (options) => {
 var register12 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
-    "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or better-sqlite3 is not installed (SPEC \xA710)."
+    "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
   ).action((options) => {
     try {
       if (!options.index) {

@@ -131,8 +131,9 @@ export const register = (program: Command): void => {
     .option('--stats', 'report what the index currently holds')
     .addHelpText(
       'after',
-      '\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or better-sqlite3 is not ' +
-        'installed (SPEC §10).',
+      '\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite ' +
+        'binding is unavailable, in which case every read still answers from git with --no-index ' +
+        '(SPEC §10).',
     )
     .action((options: IndexCommandOptions) => {
       try {
