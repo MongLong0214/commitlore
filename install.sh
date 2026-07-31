@@ -139,7 +139,10 @@ else
     # "could not read Username", "dubious ownership") and the generic advice
     # last, so the first fatal: line is what a reader needs. Falling back to the
     # whole log keeps the case where there is no fatal: at all.
-    clone_reason="$(grep -m1 '^fatal:' "$clone_log" 2>/dev/null || true)"
+    # `sed -n '/re/{p;q;}'` rather than `grep -m1`: -m is a GNU/BSD extension and
+    # this script is POSIX sh. Same reason sort -V was removed from the version
+    # resolution above.
+    clone_reason="$(sed -n '/^fatal:/{p;q;}' "$clone_log" 2>/dev/null || true)"
     [ -n "$clone_reason" ] || clone_reason="$(tr '\n' ' ' <"$clone_log" | sed 's/  */ /g')"
     rm -f "$clone_log"
     die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
