@@ -8,8 +8,8 @@
  * - the draft handed back must be checked, never repaired.
  */
 
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,6 +58,66 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(workspace, { recursive: true, force: true });
+});
+
+describe('#310 --prompt-only prints the contract whatever the inputs', () => {
+  /**
+   * The contract is static text. Gating it on a staged diff made the one document
+   * that defines a valid draft unreachable exactly when a caller is trying to
+   * learn the format -- and `harvest` without `--prompt-only` prescribes
+   * `--prompt-only`, so the prescription produced zero bytes. Same shape as #296:
+   * a remedy named under conditions in which it does not work.
+   */
+  const scratch: string[] = [];
+  afterAll(() => {
+    for (const d of scratch) rmSync(d, { recursive: true, force: true });
+  });
+  const repoWithNothingStaged = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'commitlore-310-'));
+    scratch.push(dir);
+    execFileSync('git', ['init', '--quiet'], { cwd: dir });
+    execFileSync('git', ['config', 'user.email', 't@e.invalid'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'T'], { cwd: dir });
+    writeFileSync(join(dir, 'f.txt'), 'a\n');
+    execFileSync('git', ['add', 'f.txt'], { cwd: dir });
+    execFileSync('git', ['commit', '--quiet', '-m', 'seed'], { cwd: dir });
+    writeFileSync(join(dir, 'tr.txt'), 'we chose X because Y\n');
+    return dir;
+  };
+
+  it('emits the contract with a transcript and nothing staged', () => {
+    const dir = repoWithNothingStaged();
+    const previous = process.cwd();
+    process.chdir(dir);
+    try {
+      const outcome = runHarvest({ transcript: 'tr.txt', promptOnly: true });
+      expect(outcome.exitCode).toBe(0);
+      expect(outcome.stderr).toBe('');
+      expect(outcome.stdout.length).toBeGreaterThan(1000);
+      expect(outcome.stdout).toContain('## Output');
+    } finally {
+      process.chdir(previous);
+    }
+  });
+
+  it('still enriches the contract when a diff is available', () => {
+    const dir = repoWithNothingStaged();
+    writeFileSync(join(dir, 'f.txt'), 'a\nb\n');
+    execFileSync('git', ['add', 'f.txt'], { cwd: dir });
+    const previous = process.cwd();
+    process.chdir(dir);
+    try {
+      const withDiff = runHarvest({ transcript: 'tr.txt', promptOnly: true });
+      expect(withDiff.exitCode).toBe(0);
+      expect(withDiff.stdout).toContain('## Output');
+      // The diff-bearing prompt is strictly longer: it carries a DIFF section the
+      // bare contract has nothing to fill.
+      const bare = runHarvest({ promptOnly: true });
+      expect(withDiff.stdout.length).toBeGreaterThan(bare.stdout.length);
+    } finally {
+      process.chdir(previous);
+    }
+  });
 });
 
 describe('harvest prompt contract', () => {
@@ -370,14 +430,21 @@ describe('commitlore harvest', () => {
     expect(outcome.stderr).toContain('harvest skipped');
   });
 
-  it('skips when nothing is staged and no --diff was given', () => {
+  it('emits the contract when nothing is staged and no --diff was given (#310)', () => {
+    // This assertion is inverted from what it was. It used to require silence,
+    // which made the contract unreachable exactly when a caller was trying to
+    // learn the draft format: `harvest` without --prompt-only prescribes
+    // --prompt-only, and following that prescription produced zero bytes.
+    // The contract is static text; a missing diff drops the diff-derived section
+    // and nothing else.
     const repo = mkdtempSync(join(workspace, 'repo-'));
     createTestRepo({ path: repo });
 
     const outcome = runHarvest({ promptOnly: true, transcript: TRANSCRIPT_FILE, cwd: repo });
     expect(outcome.exitCode).toBe(0);
-    expect(outcome.stdout).toBe('');
-    expect(outcome.stderr).toContain('nothing staged');
+    expect(outcome.stdout).toContain('## Output');
+    expect(outcome.stdout.length).toBeGreaterThan(1000);
+    expect(outcome.stderr).toBe('');
   });
 
   it('prints the surviving records under --draft, and the reasons on stderr', () => {

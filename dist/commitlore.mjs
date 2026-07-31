@@ -18041,7 +18041,9 @@ var runPromptMode = (options) => {
   );
   if (transcript.trim() === "") return skip2("the transcript is empty");
   const diff = resolveDiff(options);
-  if (diff === null) return skip2("no --diff and nothing staged");
+  if (diff === null) {
+    return emit2(buildHarvestContract(), options.out);
+  }
   return emit2(buildHarvestPrompt({ transcript, diff }), options.out);
 };
 var harvest = (options) => {
