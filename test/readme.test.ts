@@ -132,9 +132,17 @@ describe('T-1021 mutation oracles', () => {
     expect(mutated).not.toMatch(/recall 22\.0%/i);
   });
 
-  it('oracle-PASS: changing the Windows bullet does not affect guard assertions', () => {
-    // A mutation to an unrelated bullet must NOT break the guard assertions
-    const mutated = knownLimSection.replace('Windows is unsupported', 'Windows is not supported');
+  it('oracle-PASS: changing an unrelated bullet does not affect guard assertions', () => {
+    // A mutation to an unrelated bullet must NOT break the guard assertions.
+    //
+    // This anchored on `Windows is unsupported` until v0.5.0 made that false and
+    // it was removed. A `replace` whose needle is gone is a no-op, so the oracle
+    // would have kept passing while testing nothing -- the exact false green
+    // this file exists to catch. The needle is asserted present first.
+    expect(knownLimSection, 'the oracle needle is gone; pick one that exists').toContain(
+      'symbol anchors',
+    );
+    const mutated = knownLimSection.replace('symbol anchors', 'symbol anchoring');
     expect(mutated).toMatch(/precision 44\.8%/i);
     expect(mutated).toMatch(/recall 22\.0%/i);
     expect(mutated).toMatch(/32\.7%/);

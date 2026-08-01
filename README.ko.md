@@ -293,9 +293,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## 제거
+
+```bash
+commitlore uninstall
+```
+
+`install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
+그리고 각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
+남기는 것을 명시한다: 저장소별 hook(`commitlore hooks uninstall`), agent
+hook(`commitlore inject uninstall-claude-hook`), Claude Code
+plugin(`/plugin uninstall commitlore@commitlore`). `--dry-run`은 아무것도 바꾸지
+않고 보고만 한다.
+
 ## 알려진 제한 사항
 
-- Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 - Guard(ruled-out alternative matching)는 실험적 참고 자료이다: precision 44.8%(95% Wilson CI 32.7%–57.5%), recall 22.0%, 417-decision corpus 기준([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). 빈 guard 결과는 제안이 모든 ruled-out alternative를 피했다는 보장이 아니다 — recall 22%에서 누락이 일반적이다.

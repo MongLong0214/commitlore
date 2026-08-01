@@ -293,9 +293,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## アンインストール
+
+```bash
+commitlore uninstall
+```
+
+`install.sh` または `install.ps1` が書いたものを削除します — wrapper、固定された
+checkout、そして各 agent config に追加した MCP エントリ。自分が書いていないものは
+削除せず、残すものを明示します: リポジトリごとの hook（`commitlore hooks
+uninstall`）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
+plugin（`/plugin uninstall commitlore@commitlore`）。`--dry-run` は何も変更せずに
+報告します。
+
 ## 既知の制限事項
 
-- Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 - Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。

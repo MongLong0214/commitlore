@@ -293,9 +293,20 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## 卸载
+
+```bash
+commitlore uninstall
+```
+
+移除 `install.sh` 或 `install.ps1` 写入的内容 — wrapper、固定的 checkout，以及它
+添加到各 agent config 的 MCP 条目。它不会移除自己没有写入的东西，并会明确说明留下
+了什么：每个仓库的 hook（`commitlore hooks uninstall`）、agent hook
+（`commitlore inject uninstall-claude-hook`）、Claude Code plugin
+（`/plugin uninstall commitlore@commitlore`）。`--dry-run` 只报告，不做任何更改。
+
 ## 已知限制
 
-- 不支持 Windows：[#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
 - Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。

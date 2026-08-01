@@ -293,9 +293,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## Uninstall
+
+```bash
+commitlore uninstall
+```
+
+Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
+checkout, and the MCP entry it added to each agent config. It removes nothing it
+did not write, and names what it leaves: per-repository hooks (`commitlore hooks
+uninstall`), the agent hook (`commitlore inject uninstall-claude-hook`), and the
+Claude Code plugin (`/plugin uninstall commitlore@commitlore`). `--dry-run`
+reports without changing anything.
+
 ## Known limitations
 
-- Windows is unsupported: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
 - Guard (ruled-out alternative matching) is an experimental advisory: precision 44.8% (95% Wilson CI 32.7%–57.5%), recall 22.0% on the 417-decision corpus ([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). An empty guard result does not guarantee a proposal avoids all ruled-out alternatives — at 22% recall, a miss is the common case.
