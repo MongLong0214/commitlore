@@ -375,11 +375,36 @@ const withIdentity = (record) => {
     return [{ key: RECORD_ID_KEY, value: identity }, ...rest];
 };
 /**
+ * Oldest commit first — the order `foldLifecycle` and `mergeByIdentity` both
+ * read, so the lifecycle and the payload of one answer cannot come from
+ * opposite ends of a tie.
+ *
+ * Both row sources return newest first (`ORDER BY committed_ts DESC,
+ * commit_sha ASC` in `core/index-db.ts`), and the fold breaks a same-second
+ * tie on input position, so handing over the rows as fetched resolved "latest
+ * declaration wins" to whichever commit sha happened to sort last — a coin
+ * flip dressed as a rule (issue #350). Reversed, it is deterministic, and it
+ * is *only* deterministic: neither the index nor `scanTrailers` stores an
+ * ordinal that says which of two commits in one second came first, so `sha`
+ * here breaks the tie without claiming to mean anything. What keeps that from
+ * being a quiet guess is `core/stale.ts`'s `instantConflicts`, which refuses
+ * the tie outright when the two declarations disagree.
+ */
+const oldestFirst = (a, b) => {
+    if (a.committedTs !== b.committedTs)
+        return a.committedTs - b.committedTs;
+    if (a.sha !== b.sha)
+        return a.sha < b.sha ? -1 : 1;
+    if (a.source !== b.source)
+        return a.source < b.source ? -1 : 1;
+    return a.block - b.block;
+};
+/**
  * Folds every record in the repository, so a supersession from outside the
  * path scope still retires what it names (SPEC §5).
  */
 const foldStates = (source, at, cutoff) => {
-    const records = groupByCommit(source.fetch({ keys: LIFECYCLE_KEYS }));
+    const records = groupByCommit(source.fetch({ keys: LIFECYCLE_KEYS })).sort(oldestFirst);
     const stream = records
         .filter((record) => {
         const instant = instantOf(record);
@@ -476,15 +501,6 @@ const gradeMerged = (merged, cwd, at, trustedAuthors) => {
             record.matchedTrailerKeys = resolved.matchedTrailerKeys;
         }
     }
-};
-const oldestFirst = (a, b) => {
-    if (a.committedTs !== b.committedTs)
-        return a.committedTs - b.committedTs;
-    if (a.sha !== b.sha)
-        return a.sha < b.sha ? -1 : 1;
-    if (a.source !== b.source)
-        return a.source < b.source ? -1 : 1;
-    return a.block - b.block;
 };
 const mergeByIdentity = (records, states) => {
     const groups = new Map();

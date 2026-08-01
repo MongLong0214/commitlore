@@ -20,7 +20,9 @@ import {
   findDanglingRefs,
   findIdCollisions,
   foldLifecycle,
+  hasAmbiguousIdCollision,
   isStale,
+  type RecordState,
   type StaleRecord,
 } from '../src/core/stale.js';
 import { buildReport, collectRecords, formatReport, register } from '../src/commands/stale.js';
@@ -196,6 +198,94 @@ describe('foldLifecycle', () => {
       { at: AT },
     );
     expect(states[0]?.resolvedTrailers).toEqual([trailer('Certainty', 'firm')]);
+  });
+
+  it('resolves a same-second tie to the record fed last', () => {
+    // The tie-break the whole serving contract rests on: `committed_ts` is
+    // `%ct`, one-second resolution, so two commits in one second are equal on
+    // the only axis the fold orders by and input position decides. A caller
+    // that feeds oldest-first therefore gets "latest declaration wins"; a
+    // caller that feeds newest-first gets the opposite (issue #350).
+    const older: StaleRecord = {
+      sha: 'c1',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [trailer('Record-Id', 'r-tie111'), trailer('Certainty', 'guess')],
+    };
+    const newer: StaleRecord = {
+      sha: 'c2',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [trailer('Record-Id', 'r-tie111'), trailer('Certainty', 'firm')],
+    };
+
+    const [state] = foldLifecycle([older, newer], { at: AT });
+    expect(state?.resolvedTrailers).toEqual([trailer('Certainty', 'firm')]);
+    expect(state?.sha).toBe('c2');
+  });
+
+  it('will not expire a record whose same-second declarations disagree on Expires', () => {
+    // No ordering of this stream is right, and the two answers are opposite:
+    // live until the end of the year, or lapsed four months ago. Handing an
+    // agent either one as fact is the failure mode of issue #350, so the
+    // engine does what it already does for a condition-form Expires — it
+    // declines to retire the record and asks a human.
+    const older: StaleRecord = {
+      sha: 'c1',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [trailer('Record-Id', 'r-abc123'), trailer('Expires', '2026-12-31')],
+    };
+    const newer: StaleRecord = {
+      sha: 'c2',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [
+        trailer('Record-Id', 'r-abc123'),
+        trailer('Supersedes', 'r-abc123'),
+        trailer('Expires', '2026-01-31'),
+      ],
+    };
+
+    for (const stream of [
+      [older, newer],
+      [newer, older],
+    ]) {
+      const [state] = foldLifecycle(stream, { at: AT });
+      expect(state?.lifecycle).toBe('active');
+      expect(state?.flags).toEqual([REVIEW_FLAG]);
+      expect(isStale(state as RecordState)).toBe(true);
+    }
+  });
+
+  it('still expires a same-second pair that agrees on Expires', () => {
+    // Two declarations in one second are only undecidable when they disagree.
+    // Agreeing ones fold to the same answer in either order, so there is
+    // nothing to refuse.
+    const [state] = foldLifecycle(
+      [
+        {
+          sha: 'c1',
+          source: 'commit',
+          committedAt: '2026-03-01T12:00:00Z',
+          trailers: [trailer('Record-Id', 'r-agr111'), trailer('Expires', '2026-04-01')],
+        },
+        {
+          sha: 'c2',
+          source: 'commit',
+          committedAt: '2026-03-01T12:00:00Z',
+          trailers: [
+            trailer('Record-Id', 'r-agr111'),
+            trailer('Supersedes', 'r-agr111'),
+            trailer('Expires', '2026-04-01'),
+            trailer('Warn', 'the retry guard is load bearing'),
+          ],
+        },
+      ],
+      { at: AT },
+    );
+    expect(state?.lifecycle).toBe('expired');
+    expect(state?.flags).toEqual([]);
   });
 
   it('names the commit that retired a record', () => {
@@ -471,6 +561,79 @@ describe('findIdCollisions', () => {
     ]);
     expect(violations).toHaveLength(1);
     expect(violations[0]?.value).toBe('r-collide');
+  });
+
+  it('flags a same-second conflict that a declared succession cannot order (issue #350)', () => {
+    // `Supersedes:` names the intent but not the order. Both commits landed in
+    // the same committer second, so nothing in history says which declaration
+    // is the later one — and they disagree on the value an agent acts on.
+    const violations = findIdCollisions([
+      {
+        sha: 'c1',
+        source: 'commit',
+        committedAt: '2026-03-01T12:00:00Z',
+        trailers: [trailer('Record-Id', 'r-abc123'), trailer('Expires', '2026-12-31')],
+      },
+      {
+        sha: 'c2',
+        source: 'commit',
+        committedAt: '2026-03-01T12:00:00Z',
+        trailers: [
+          trailer('Record-Id', 'r-abc123'),
+          trailer('Supersedes', 'r-abc123'),
+          trailer('Expires', '2026-01-31'),
+        ],
+      },
+    ]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.value).toBe('r-abc123');
+  });
+
+  it('reports the same-second conflict whichever order the caller feeds it', () => {
+    const older: StaleRecord = {
+      sha: 'c1',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [trailer('Record-Id', 'r-abc123'), trailer('Certainty', 'firm')],
+    };
+    const newer: StaleRecord = {
+      sha: 'c2',
+      source: 'commit',
+      committedAt: '2026-03-01T12:00:00Z',
+      trailers: [
+        trailer('Record-Id', 'r-abc123'),
+        trailer('Supersedes', 'r-abc123'),
+        trailer('Certainty', 'guess'),
+      ],
+    };
+    expect(hasAmbiguousIdCollision([older, newer])).toBe(true);
+    expect(hasAmbiguousIdCollision([newer, older])).toBe(true);
+  });
+
+  it('accepts a same-second succession that changes nothing non-repeatable', () => {
+    // A follow-up commit in the same second that only adds a repeatable key
+    // folds to the same record in either order. Refusing it would turn every
+    // rebase into a collision report.
+    expect(
+      findIdCollisions([
+        {
+          sha: 'c1',
+          source: 'commit',
+          committedAt: '2026-03-01T12:00:00Z',
+          trailers: [trailer('Record-Id', 'r-cal111'), trailer('Limit', 'the vendor caps at 5 rps')],
+        },
+        {
+          sha: 'c2',
+          source: 'commit',
+          committedAt: '2026-03-01T12:00:00Z',
+          trailers: [
+            trailer('Record-Id', 'r-cal111'),
+            trailer('Supersedes', 'r-cal111'),
+            trailer('Warn', 'the retry guard is load bearing'),
+          ],
+        },
+      ]),
+    ).toEqual([]);
   });
 
   it('does not flag a note that cleanly mirrors its own commit', () => {

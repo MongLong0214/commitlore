@@ -21,6 +21,7 @@ import { Command } from 'commander';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { formatContext, register, toJson } from '../src/commands/query.js';
+import { buildReport, collectRecords } from '../src/commands/stale.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import { scanTrailers } from '../src/core/index-db.js';
@@ -703,6 +704,74 @@ describe('notes merge and dedupe', () => {
 
   it('reports three records in the repository, not six', () => {
     expect(runQuery({ cwd: dir }).records).toHaveLength(3);
+  });
+});
+
+describe('two commits in one second declaring one Record-Id (issue #350)', () => {
+  /**
+   * The reproduction from the issue: one `GIT_COMMITTER_DATE` for both
+   * commits, so `committed_ts` — `%ct`, one-second resolution — cannot order
+   * them, and the two declarations disagree about when the constraint lapses.
+   */
+  const tieRepo = (): string => {
+    const dir = makeRepo();
+    const stamp = '2026-03-01T12:00:00Z';
+    commitAt(
+      dir,
+      stamp,
+      record('Cap the drain at the vendor rate', [
+        'Limit: the vendor caps us at 5 requests per second',
+        'Record-Id: r-abc123',
+        'Certainty: firm',
+        'Expires: 2026-12-31',
+      ]),
+      { 'src/tie/drain.ts': 'one' },
+    );
+    commitAt(
+      dir,
+      stamp,
+      record('Walk the cap back to a guess', [
+        'Limit: the vendor caps us at 5 requests per second',
+        'Record-Id: r-abc123',
+        'Supersedes: r-abc123',
+        'Certainty: guess',
+        'Expires: 2026-01-31',
+      ]),
+      { 'src/tie/drain.ts': 'two' },
+    );
+    return dir;
+  };
+
+  const tieAt = new Date('2026-06-01T00:00:00Z');
+
+  it('withholds the record instead of resolving the tie by commit sha', () => {
+    const dir = tieRepo();
+    for (const noIndex of [false, true]) {
+      const result = runQuery({ cwd: dir, path: 'src/tie/drain.ts', at: tieAt, noIndex });
+      expect(recordIds(result.records)).toEqual(['r-abc123']);
+
+      const [entry] = result.records;
+      expect(entry?.identityCollision).toBe(true);
+      expect(entry?.trust).toBe('blocked');
+
+      const context = formatContext(result);
+      expect(context).not.toContain('the vendor caps us at 5 requests per second');
+      expect(context).toContain('Record content was withheld because its Record-Id collides.');
+    }
+  });
+
+  it('answers the same as stale about the same repository', () => {
+    const dir = tieRepo();
+    const report = buildReport(collectRecords({ cwd: dir, allHistory: true }), tieAt);
+    const result = runQuery({ cwd: dir, path: 'src/tie/drain.ts', at: tieAt });
+
+    // One repository, one record, one answer: neither command may claim to
+    // know which declaration is the later one.
+    expect(report.idCollisions.map((violation) => violation.value)).toEqual(['r-abc123']);
+    expect(report.records.map((entry) => entry.recordId)).toEqual(['r-abc123']);
+    expect(report.records[0]?.lifecycle).toBe('active');
+    expect(result.records[0]?.lifecycle).toBe('active');
+    expect(result.records[0]?.trust).toBe('blocked');
   });
 });
 
