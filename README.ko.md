@@ -43,6 +43,8 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 /plugin install commitlore@commitlore
 ```
 
+플러그인이 담는 것은 여기까지다: MCP 서버, 편집 전 훅, 스킬. `commitlore`를 `PATH`에 올리지는 않으므로, 아래의 `commitlore …` 명령은 `install.sh` / `install.ps1`에서 오고 그 설치까지 필요하다.
+
 두 경로 모두의 전제 조건: Node.js 22+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
