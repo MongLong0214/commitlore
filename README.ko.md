@@ -262,7 +262,7 @@ CommitLore-Version: 2.0.0
 |---|---|
 | `Limit:` | External condition that constrained the decision |
 | `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` |
+| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
 | `Certainty:` | `firm` \| `tentative` \| `guess` |
 | `Blast:` | `local` \| `module` \| `system` |
 | `Undo:` | `easy` \| `costly` \| `permanent` |

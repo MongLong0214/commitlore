@@ -10,6 +10,7 @@ import {
   parseCommitMessage,
   parseRecordBlocks,
   serializeTrailers,
+  splitRuledOut,
 } from '../src/core/trailers.js';
 import { loadAllFixtures, loadCanonicalFixtures, loadFixtures } from './fixtures.js';
 
@@ -337,5 +338,108 @@ describe('labelRecordBlocks (bug-issue-89)', () => {
 
   it('returns [] for a message with no trailer paragraph at all', () => {
     expect(labelRecordBlocks('just a subject\n\nand some body prose\n')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `Ruled-out: alternative | reason` (SPEC §3.1, issue #372)
+// ---------------------------------------------------------------------------
+
+/**
+ * The separator decision, pinned against this repository's own records.
+ *
+ * `Ruled-out:` has one delimiter and no escape, so a value carrying a second
+ * `|` is ambiguous: the machine has to pick a side and the author's intent is
+ * not recoverable from the text. Which side to pick was settled by counting.
+ * Of the 620 distinct `Ruled-out:` values in this history, three carry more
+ * than one pipe, and two of those three carry it in the *reason* — a `||` in
+ * shell prose, an `.mjs|.js` alternation. Splitting on the last pipe would
+ * destroy both to rescue the third. The first pipe stays the separator, and
+ * the ambiguity is reported instead of resolved by guesswork.
+ */
+describe('splitRuledOut (SPEC §3.1)', () => {
+  it('separates on the first pipe and trims both halves', () => {
+    expect(splitRuledOut('shared Redis cache | ops refuses another stateful dependency')).toEqual({
+      alternative: 'shared Redis cache',
+      reason: 'ops refuses another stateful dependency',
+      malformed: false,
+      ambiguous: false,
+      unterminatedCodeSpan: false,
+    });
+  });
+
+  it('reports a value with no separator as malformed, keeping the whole value', () => {
+    expect(splitRuledOut('pointless without a pipe separator')).toEqual({
+      alternative: 'pointless without a pipe separator',
+      reason: '',
+      malformed: true,
+      ambiguous: false,
+      unterminatedCodeSpan: false,
+    });
+  });
+
+  it('keeps a reason that quotes an alternation whole (616005d)', () => {
+    const parsed = splitRuledOut(
+      'Keeping the extensionless payload for attack 2 | the stub execs a recorded ' +
+        'value only inside the .mjs|.js arm',
+    );
+    expect(parsed.alternative).toBe('Keeping the extensionless payload for attack 2');
+    expect(parsed.reason).toBe(
+      'the stub execs a recorded value only inside the .mjs|.js arm',
+    );
+    expect(parsed.ambiguous).toBe(true);
+    expect(parsed.unterminatedCodeSpan).toBe(false);
+  });
+
+  it('keeps a reason that quotes a shell or (aa68a9a)', () => {
+    const parsed = splitRuledOut(
+      'set +e at the top of each step | it also disables the abort for genuinely ' +
+        'unexpected failures; the || form is scoped to the one command',
+    );
+    expect(parsed.alternative).toBe('set +e at the top of each step');
+    expect(parsed.reason).toContain('the || form is scoped');
+    expect(parsed.ambiguous).toBe(true);
+  });
+
+  it('reports an alternative that contains the pipe as ambiguous (7bf6ced)', () => {
+    // This one the first-pipe rule gets wrong, and cannot know it does: the
+    // author meant `irm | iex` as one alternative. Nothing in the value says
+    // so, which is why it is reported rather than repaired.
+    const parsed = splitRuledOut(
+      'Passing the version through $args so irm | iex could take one | iex gives a ' +
+        'piped script no arguments',
+    );
+    expect(parsed.alternative).toBe('Passing the version through $args so irm');
+    expect(parsed.ambiguous).toBe(true);
+    expect(parsed.unterminatedCodeSpan).toBe(false);
+  });
+
+  it('reports an alternative whose code span the separator cut open (issue #372)', () => {
+    // An odd number of backticks before the first pipe is not a guess about
+    // intent: a span opened in the alternative closes after the separator, so
+    // the separator was taken out of quoted text. The alternative the guard
+    // route matches on is a fragment ending mid-span.
+    const parsed = splitRuledOut(
+      'shelling out to `grep | head` for counts | it silently returns head exit status',
+    );
+    expect(parsed.alternative).toBe('shelling out to `grep');
+    expect(parsed.ambiguous).toBe(true);
+    expect(parsed.unterminatedCodeSpan).toBe(true);
+  });
+
+  it('accepts balanced code spans on either side of the separator', () => {
+    const parsed = splitRuledOut('use `grep` or `rg` | `rg` is not installed everywhere');
+    expect(parsed.alternative).toBe('use `grep` or `rg`');
+    expect(parsed.unterminatedCodeSpan).toBe(false);
+    expect(parsed.ambiguous).toBe(false);
+  });
+
+  it('does not treat a backslash as an escape', () => {
+    // `\|` is not an escape and never was. The record that tries it splits at
+    // that pipe and keeps the backslash, which is worth pinning so nobody
+    // reads the parser as supporting one.
+    const parsed = splitRuledOut('shelling out to grep \\| head for counts | it hides the status');
+    expect(parsed.alternative).toBe('shelling out to grep \\');
+    expect(parsed.ambiguous).toBe(true);
   });
 });

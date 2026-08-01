@@ -11250,6 +11250,105 @@ var PROVENANCE_PREFIXES = ["authored", "inherited", "reconstructed", "unknown"];
 var RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
 
+// src/core/trailers.ts
+var RECORD_ID_KEY = "Record-Id";
+var PARSE_ARGS = [
+  "-c",
+  "trailer.separators=:",
+  "interpret-trailers",
+  "--parse",
+  "--no-divider"
+];
+var CONTINUATION_INDENT = "  ";
+var parseOutputLine = (line) => {
+  const separator = line.indexOf(": ");
+  if (separator !== -1) {
+    return { key: line.slice(0, separator), value: line.slice(separator + 2) };
+  }
+  if (line.endsWith(":")) {
+    return { key: line.slice(0, -1), value: "" };
+  }
+  throw new Error(
+    `git interpret-trailers emitted an unparseable line: ${JSON.stringify(line)}`
+  );
+};
+var parseCommitMessage = (msg) => {
+  const stdout = execGitOrThrow(PARSE_ARGS, { stdin: msg });
+  return stdout.split("\n").filter((line) => line.length > 0).map(parseOutputLine);
+};
+var RULED_OUT_SEPARATOR = "|";
+var splitRuledOut = (value) => {
+  const at = value.indexOf(RULED_OUT_SEPARATOR);
+  const head = at === -1 ? value : value.slice(0, at);
+  return {
+    alternative: head.trim(),
+    reason: at === -1 ? "" : value.slice(at + 1).trim(),
+    malformed: at === -1,
+    ambiguous: at !== -1 && value.includes(RULED_OUT_SEPARATOR, at + 1),
+    unterminatedCodeSpan: at !== -1 && (head.match(/`/g) ?? []).length % 2 === 1
+  };
+};
+var serializeOne = (trailer) => {
+  const [first = "", ...continuations] = trailer.value.split("\n");
+  const lines = [
+    `${trailer.key}: ${first}`,
+    ...continuations.map((line) => `${CONTINUATION_INDENT}${line.trim()}`)
+  ];
+  return `${lines.join("\n")}
+`;
+};
+var serializeTrailers = (trailers) => {
+  const known = new Set(KNOWN_KEYS);
+  const ordered = [];
+  for (const key of KNOWN_KEYS) {
+    for (const trailer of trailers) {
+      if (trailer.key === key) ordered.push(trailer);
+    }
+  }
+  for (const trailer of trailers) {
+    if (!known.has(trailer.key)) ordered.push(trailer);
+  }
+  return ordered.map(serializeOne).join("");
+};
+var splitParagraphs = (message) => message.replace(/\r\n/g, "\n").split(/\n\n+/).filter((paragraph) => paragraph.trim() !== "");
+var asIsolatedBlock = (paragraph) => parseCommitMessage(`x
+
+${paragraph}`);
+var parseRecordBlocks = (message) => {
+  const last = parseCommitMessage(message);
+  const paragraphs = splitParagraphs(message);
+  const earlier = paragraphs.slice(0, -1);
+  const extra = [];
+  for (const paragraph of earlier) {
+    const candidate = asIsolatedBlock(paragraph);
+    if (candidate.length === 0) continue;
+    if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
+    extra.push(candidate);
+  }
+  return last.length === 0 ? extra : [...extra, last];
+};
+var labelRecordBlocks = (message) => {
+  const blocks = parseRecordBlocks(message);
+  const ids = blocks.map(
+    (block) => block.find((trailer) => trailer.key === RECORD_ID_KEY)?.value
+  );
+  const seen = /* @__PURE__ */ new Set();
+  const duplicated = /* @__PURE__ */ new Set();
+  for (const id of ids) {
+    if (id === void 0) continue;
+    if (seen.has(id)) duplicated.add(id);
+    seen.add(id);
+  }
+  return blocks.map((trailers, index) => {
+    const id = ids[index];
+    return {
+      own: index === blocks.length - 1,
+      identityCollision: id !== void 0 && duplicated.has(id),
+      trailers
+    };
+  });
+};
+
 // src/core/schema.ts
 var import_ajv_formats = __toESM(require_dist(), 1);
 var addFormats = import_ajv_formats.default.default;
@@ -11270,6 +11369,12 @@ var FORMAT_WANT = {
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
+var RULED_OUT_CODE_SPAN_WANT = 'alternative | reason \u2014 the alternative opens a code span that closes after the separator, so the first "|" sits inside quoted text; there is no escape, so rephrase the alternative to hold no "|"';
+var formatWantFor = (trailer) => {
+  const want = FORMAT_WANT[trailer.key];
+  if (want === void 0 || trailer.key !== "Ruled-out") return want;
+  return splitRuledOut(trailer.value).unterminatedCodeSpan ? RULED_OUT_CODE_SPAN_WANT : want;
+};
 var compiled = null;
 var getValidator = () => {
   if (compiled === null) {
@@ -11308,7 +11413,7 @@ var violationFor = (trailer, field) => {
       want: enumWant
     };
   }
-  const formatWant = FORMAT_WANT[trailer.key];
+  const formatWant = formatWantFor(trailer);
   if (formatWant !== void 0) {
     return {
       key: trailer.key,
@@ -11991,95 +12096,6 @@ var buildRepairFeedback = (rejected) => {
 import { mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
-
-// src/core/trailers.ts
-var RECORD_ID_KEY = "Record-Id";
-var PARSE_ARGS = [
-  "-c",
-  "trailer.separators=:",
-  "interpret-trailers",
-  "--parse",
-  "--no-divider"
-];
-var CONTINUATION_INDENT = "  ";
-var parseOutputLine = (line) => {
-  const separator = line.indexOf(": ");
-  if (separator !== -1) {
-    return { key: line.slice(0, separator), value: line.slice(separator + 2) };
-  }
-  if (line.endsWith(":")) {
-    return { key: line.slice(0, -1), value: "" };
-  }
-  throw new Error(
-    `git interpret-trailers emitted an unparseable line: ${JSON.stringify(line)}`
-  );
-};
-var parseCommitMessage = (msg) => {
-  const stdout = execGitOrThrow(PARSE_ARGS, { stdin: msg });
-  return stdout.split("\n").filter((line) => line.length > 0).map(parseOutputLine);
-};
-var serializeOne = (trailer) => {
-  const [first = "", ...continuations] = trailer.value.split("\n");
-  const lines = [
-    `${trailer.key}: ${first}`,
-    ...continuations.map((line) => `${CONTINUATION_INDENT}${line.trim()}`)
-  ];
-  return `${lines.join("\n")}
-`;
-};
-var serializeTrailers = (trailers) => {
-  const known = new Set(KNOWN_KEYS);
-  const ordered = [];
-  for (const key of KNOWN_KEYS) {
-    for (const trailer of trailers) {
-      if (trailer.key === key) ordered.push(trailer);
-    }
-  }
-  for (const trailer of trailers) {
-    if (!known.has(trailer.key)) ordered.push(trailer);
-  }
-  return ordered.map(serializeOne).join("");
-};
-var splitParagraphs = (message) => message.replace(/\r\n/g, "\n").split(/\n\n+/).filter((paragraph) => paragraph.trim() !== "");
-var asIsolatedBlock = (paragraph) => parseCommitMessage(`x
-
-${paragraph}`);
-var parseRecordBlocks = (message) => {
-  const last = parseCommitMessage(message);
-  const paragraphs = splitParagraphs(message);
-  const earlier = paragraphs.slice(0, -1);
-  const extra = [];
-  for (const paragraph of earlier) {
-    const candidate = asIsolatedBlock(paragraph);
-    if (candidate.length === 0) continue;
-    if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
-    extra.push(candidate);
-  }
-  return last.length === 0 ? extra : [...extra, last];
-};
-var labelRecordBlocks = (message) => {
-  const blocks = parseRecordBlocks(message);
-  const ids = blocks.map(
-    (block) => block.find((trailer) => trailer.key === RECORD_ID_KEY)?.value
-  );
-  const seen = /* @__PURE__ */ new Set();
-  const duplicated = /* @__PURE__ */ new Set();
-  for (const id of ids) {
-    if (id === void 0) continue;
-    if (seen.has(id)) duplicated.add(id);
-    seen.add(id);
-  }
-  return blocks.map((trailers, index) => {
-    const id = ids[index];
-    return {
-      own: index === blocks.length - 1,
-      identityCollision: id !== void 0 && duplicated.has(id),
-      trailers
-    };
-  });
-};
-
-// src/core/index-db.ts
 var cachedCtor = null;
 var loadDatabaseCtor = () => {
   if (cachedCtor !== null) return cachedCtor;
@@ -15016,12 +15032,11 @@ var keywordCoverage = (alternative, proposal, corpus) => {
 var corroborated = (idHit, coverage, similarity, requireContent = false) => idHit && !requireContent || coverage.hits.length >= MIN_KEYWORD_HITS || coverage.strength >= STRONG_KEYWORD_STRENGTH || similarity >= MIN_JACCARD;
 var collapse = (text) => text.replace(/\s+/g, " ").trim();
 var parseRuledOut = (value) => {
-  const at = value.indexOf("|");
-  if (at === -1) return { alternative: collapse(value), reason: "", malformed: true };
+  const split = splitRuledOut(value);
   return {
-    alternative: collapse(value.slice(0, at)),
-    reason: collapse(value.slice(at + 1)),
-    malformed: false
+    ...split,
+    alternative: collapse(split.alternative),
+    reason: collapse(split.reason)
   };
 };
 var recordIdsIn = (proposal) => new Set(normalizeForMatch(proposal).match(new RegExp(`\\b${RECORD_ID_SCAN}\\b`, "g")) ?? []);
@@ -15046,7 +15061,10 @@ var matchOne = (candidate, proposal, corpus, requireContent = false) => {
     ...coverage.hits.map((hit) => `keyword:${hit}`),
     ...coverage.hits.length === 0 ? [] : [`keyword-strength:${round(coverage.strength).toFixed(2)}`],
     ...similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : [],
-    ...parsed.malformed ? ["malformed:no-separator"] : []
+    ...parsed.malformed ? ["malformed:no-separator"] : [],
+    // The score says how well the proposal matched the alternative; this says
+    // whether that alternative is the one the author wrote (issue #372).
+    ...parsed.ambiguous ? ["malformed:ambiguous-separator"] : []
   ];
   return {
     sha: record2.sha,
@@ -18337,6 +18355,8 @@ var toJson = (result, at, paths, threshold) => ({
 });
 var shortSha2 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var NO_REASON = 'no reason recorded \u2014 this Ruled-out: is missing the required "|" separator';
+var AMBIGUOUS_SEPARATOR = 'the Ruled-out: value holds more than one "|" and only the first separates, so this alternative may be a fragment (SPEC \xA73.1)';
+var caveatLines = (signals) => signals.includes("malformed:ambiguous-separator") ? [`  caveat:    ${AMBIGUOUS_SEPARATOR}`] : [];
 var formatMatches = (matches) => {
   if (matches.length === 0) return "";
   const header2 = `commitlore guard: ${matches.length} possible ${matches.length === 1 ? "match" : "matches"} against ruled-out alternatives (experimental \u2014 precision 44.8%, recall 22.0%)`;
@@ -18351,6 +18371,7 @@ var formatMatches = (matches) => {
         return [
           `  ruled out: ${rendered.alternative}`,
           `  because:   ${rendered.reason === "" ? NO_REASON : rendered.reason}`,
+          ...caveatLines(rendered.signals),
           recorded
         ].join("\n");
     }
@@ -27938,12 +27959,21 @@ var trustTag = (record2) => record2.trust === void 0 ? "" : `[${record2.trust}] 
 var blockedMessage = (record2) => record2.identityCollision === true ? "Record content was withheld because its Record-Id collides." : BLOCKED_RECORD_WITHHELD;
 var idColumn = (record2, width) => (record2.recordId ?? "-").padEnd(width);
 var idWidth = (records) => records.reduce((width, record2) => Math.max(width, (record2.recordId ?? "-").length), 1);
+var separatorNote = (key, value) => {
+  if (key !== RULED_OUT_KEY) return "";
+  const split = splitRuledOut(value);
+  if (!split.ambiguous) return "";
+  return `  (more than one "|" \u2014 alternative: ${JSON.stringify(split.alternative)})`;
+};
 var valueLines = (records, key) => {
   const width = idWidth(records);
   return records.flatMap((record2) => {
-    const values = record2.trust === "blocked" ? record2.withheldTrailerKeys?.includes(key) === true ? [blockedMessage(record2)] : [] : valuesOf(record2, key);
+    const withheld = record2.trust === "blocked";
+    const values = withheld ? record2.withheldTrailerKeys?.includes(key) === true ? [blockedMessage(record2)] : [] : valuesOf(record2, key);
     return values.map(
-      (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trustTag(record2)}${value}`
+      (value) => `  ${idColumn(record2, width)}  ${shortSha4(record2.sha)}  ${stateTag(record2)}${trustTag(record2)}${value}` + // A withheld record's line is a notice, not a value; annotating it
+      // would describe the notice's own punctuation.
+      (withheld ? "" : separatorNote(key, value))
     );
   });
 };
@@ -29344,6 +29374,16 @@ var identityCollisionViolations = (source) => {
     ];
   });
 };
+var ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
+  if (trailer.key !== RULED_OUT_KEY) return [];
+  const split = splitRuledOut(trailer.value);
+  if (!split.ambiguous || split.unterminatedCodeSpan) return [];
+  const at = lines[index];
+  const where = `${source.sha?.slice(0, 10) ?? "commit"}${at === void 0 ? "" : `:${at}`}`;
+  return [
+    `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not the split you meant, rephrase so only the separator is a pipe (SPEC \xA73.1)`
+  ];
+});
 var inspectSource = (source) => {
   const trailers = parseCommitMessage(source.message);
   const blocks = parseRecordBlocks(source.message);
@@ -29376,6 +29416,7 @@ var inspectSource = (source) => {
       `commitlore: ${source.sha?.slice(0, 10) ?? "commit"}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`
     );
   }
+  warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
   return { violations, warnings };
 };
 var locateReferenceViolations = (source, trailers, violations) => {
