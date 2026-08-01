@@ -10,6 +10,10 @@
  *   "ours" is a fact about the file, not a guess.
  * - `uninstall` restores exactly what was moved aside, and refuses to touch a
  *   hook it did not install.
+ * - `uninstall` accounts for every hook commitlore writes, not only the one
+ *   `install` writes here. `init` also installs `prepare-commit-msg` and
+ *   `post-commit`, and this is the only command that removes any of them, so a
+ *   hook it walked past would have no removal path at all (#354).
  *
  * The hooks directory comes from `git rev-parse --git-path hooks`, never from a
  * hardcoded `.git/hooks`: with a linked worktree `.git` is a file, and
@@ -47,6 +51,16 @@ import {
   HOOK_NAME,
   commitMsgStub,
 } from '../hooks/commit-msg.js';
+import {
+  POST_COMMIT_CHAINED_HOOK_NAME,
+  POST_COMMIT_HOOK_MARKER,
+  POST_COMMIT_HOOK_NAME,
+} from '../hooks/post-commit.js';
+import {
+  PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME,
+  PREPARE_COMMIT_MSG_HOOK_MARKER,
+  PREPARE_COMMIT_MSG_HOOK_NAME,
+} from '../hooks/prepare-commit-msg.js';
 
 /**
  * `installed` — our stub, current. `outdated` — our stub from an older build.
@@ -290,6 +304,61 @@ export const installHook = (input: HookInput = {}): HookResult => {
   return success(after, [headline, ...describeChained(after)]);
 };
 
+interface CaptureHook {
+  readonly name: string;
+  readonly marker: string;
+  readonly chainedName: string;
+}
+
+/**
+ * The hooks `init` installs beside the gate.
+ *
+ * They are listed here rather than read off the hooks directory: removing every
+ * file that happens to carry a `# commitlore:` line would let a marker invented
+ * elsewhere decide what this command deletes. Each entry names its own marker,
+ * so "ours" stays the same kind of fact it is for `commit-msg`.
+ */
+const CAPTURE_HOOKS: readonly CaptureHook[] = [
+  {
+    name: PREPARE_COMMIT_MSG_HOOK_NAME,
+    marker: PREPARE_COMMIT_MSG_HOOK_MARKER,
+    chainedName: PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME,
+  },
+  {
+    name: POST_COMMIT_HOOK_NAME,
+    marker: POST_COMMIT_HOOK_MARKER,
+    chainedName: POST_COMMIT_CHAINED_HOOK_NAME,
+  },
+];
+
+/** Throws on a filesystem failure, which the caller reports against the hook's name. */
+const removeCaptureHook = (hooksDir: string, hook: CaptureHook): string[] => {
+  const hookPath = join(hooksDir, hook.name);
+  const chainedPath = join(hooksDir, hook.chainedName);
+
+  if (!existsSync(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+
+  let contents: string;
+  try {
+    contents = readFileSync(hookPath, 'utf8');
+  } catch {
+    // Unreadable, so unclassifiable — the same call `readHookState` makes.
+    return [`${hookPath} was not installed by commitlore — left in place`];
+  }
+  if (!contents.includes(hook.marker)) {
+    return [`${hookPath} was not installed by commitlore — left in place`];
+  }
+
+  unlinkSync(hookPath);
+  // These two installers refuse a foreign hook rather than moving it aside, so
+  // nothing commitlore wrote puts a file here. The stub still calls one if it
+  // exists, so leaving it behind our removed stub would disable a hook that had
+  // been running.
+  if (!existsSync(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  renameSync(chainedPath, hookPath);
+  return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
+};
+
 export const uninstallHook = (input: HookInput = {}): HookResult => {
   const cwd = input.cwd ?? process.cwd();
 
@@ -300,25 +369,37 @@ export const uninstallHook = (input: HookInput = {}): HookResult => {
     return failure(messageOf(error));
   }
 
+  const lines: string[] = [];
+
   if (before.state === 'absent') {
-    return success(before, [`no ${HOOK_NAME} hook to remove: ${before.hookPath}`]);
-  }
-  if (before.state === 'foreign') {
-    return success(before, [
+    lines.push(`no ${HOOK_NAME} hook to remove: ${before.hookPath}`);
+  } else if (before.state === 'foreign') {
+    lines.push(
       `${before.hookPath} was not installed by commitlore — left in place`,
       ...describeChained(before),
-    ]);
+    );
+  } else {
+    try {
+      unlinkSync(before.hookPath);
+      if (before.chained) renameSync(before.chainedPath, before.hookPath);
+    } catch (error) {
+      return failure(`could not remove the ${HOOK_NAME} hook: ${messageOf(error)}`);
+    }
+    lines.push(`removed ${HOOK_NAME} hook: ${before.hookPath}`);
+    if (before.chained) lines.push(`restored the previous hook: ${before.hookPath}`);
   }
 
-  try {
-    unlinkSync(before.hookPath);
-    if (before.chained) renameSync(before.chainedPath, before.hookPath);
-  } catch (error) {
-    return failure(`could not remove the ${HOOK_NAME} hook: ${messageOf(error)}`);
+  // A gate that was absent or foreign is not a reason to stop: `init` installs
+  // the other two independently, and each of the three can be in any state.
+  for (const hook of CAPTURE_HOOKS) {
+    try {
+      lines.push(...removeCaptureHook(before.hooksDir, hook));
+    } catch (error) {
+      return failure(`could not remove the ${hook.name} hook: ${messageOf(error)}`);
+    }
   }
 
-  const restored = before.chained ? [`restored the previous hook: ${before.hookPath}`] : [];
-  return success(readHookStatus(cwd), [`removed ${HOOK_NAME} hook: ${before.hookPath}`, ...restored]);
+  return success(readHookStatus(cwd), lines);
 };
 
 export const hookStatus = (input: HookInput = {}): HookResult => {
@@ -358,7 +439,9 @@ const emit = (result: HookResult): void => {
 export const register = (program: Command): void => {
   const hooks = program
     .command('hooks')
-    .description(`manage the git ${HOOK_NAME} hook that runs commitlore validate`);
+    .description(
+      `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`,
+    );
 
   hooks
     .command('install')
@@ -371,7 +454,9 @@ export const register = (program: Command): void => {
 
   hooks
     .command('uninstall')
-    .description('remove the commit-msg hook and restore the one it replaced')
+    .description(
+      'remove every commitlore hook — commit-msg, prepare-commit-msg, post-commit — and restore any they replaced',
+    )
     .addHelpText('after', '\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC §10).')
     .action(() => {
       emit(uninstallHook());

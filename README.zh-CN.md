@@ -407,8 +407,8 @@ commitlore uninstall
 
 移除 `install.sh` 或 `install.ps1` 写入的内容 — wrapper、固定的 checkout，以及它
 添加到各 agent config 的 MCP 条目。它不会移除自己没有写入的东西，并会明确说明留下
-了什么：`commit-msg` hook（`commitlore hooks uninstall` —— 该命令只移除这一个，
-`init` 一并安装的 `prepare-commit-msg`、`post-commit` 会保留）、agent hook
+了什么：各仓库的 hook（`commit-msg`、`prepare-commit-msg`、`post-commit` 三个都由
+`commitlore hooks uninstall` 移除）、agent hook
 （`commitlore inject uninstall-claude-hook`）、Claude Code plugin
 （`/plugin uninstall commitlore@commitlore`）。`--dry-run` 只报告，不做任何更改。
 

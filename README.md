@@ -423,9 +423,9 @@ commitlore uninstall
 
 Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
 checkout, and the MCP entry it added to each agent config. It removes nothing it
-did not write, and names what it leaves: the `commit-msg` hook (`commitlore hooks
-uninstall` — note it removes that one, not the `prepare-commit-msg` and
-`post-commit` hooks `init` also installs), the agent hook (`commitlore inject uninstall-claude-hook`), and the
+did not write, and names what it leaves: the per-repository hooks — `commit-msg`,
+`prepare-commit-msg` and `post-commit`, all three removed by `commitlore hooks
+uninstall` — the agent hook (`commitlore inject uninstall-claude-hook`), and the
 Claude Code plugin (`/plugin uninstall commitlore@commitlore`). `--dry-run`
 reports without changing anything.
 

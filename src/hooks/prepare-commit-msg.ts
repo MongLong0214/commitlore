@@ -9,7 +9,7 @@ import { execGit } from '../core/git.js';
 import { markApplied, type PendingRecord } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
 import { KNOWN_KEYS, type Trailer } from '../core/types.js';
-import { CHAINED_SUFFIX, HOOK_MODE, commitMsgStub } from './commit-msg.js';
+import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
 export const PREPARE_COMMIT_MSG_HOOK_MARKER = '# commitlore:prepare-commit-msg:v1';
 export const PREPARE_COMMIT_MSG_HOOK_NAME = 'prepare-commit-msg';
@@ -17,8 +17,14 @@ export const PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_N
 
 const RECORD_KEYS = new Set<string>(KNOWN_KEYS);
 
+/**
+ * Renamed from the shared body, not from the gate's text: this hook composes a
+ * message, it never rejects one, so it takes the ending that lets the commit
+ * through (#354). The two replacements below only rename — the marker, the
+ * chained hook beside it, and the subcommand it execs.
+ */
 export const prepareCommitMsgStub = (): string =>
-  commitMsgStub()
+  captureHookStub()
     .replaceAll('commit-msg', PREPARE_COMMIT_MSG_HOOK_NAME)
     .replaceAll('validate --message-file "$1"', 'prepare-commit-msg "$@"');
 
