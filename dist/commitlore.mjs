@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync19 } from "node:fs";
+import { readFileSync as readFileSync20 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -16054,7 +16054,7 @@ var register2 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync8, mkdirSync as mkdirSync7 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname4, join as join6, resolve as resolve10 } from "node:path";
+import { dirname as dirname5, join as join7, resolve as resolve10 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/services/cache.ts";
@@ -16092,13 +16092,13 @@ CommitLore-Version: 2.0.0
 
 // src/commands/doctor.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync7, readFileSync as readFileSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync9, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
-import { join as join4, resolve as resolve6 } from "node:path";
+import { join as join5, resolve as resolve6 } from "node:path";
 
 // src/core/hook-target.ts
-import { lstatSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, relative, resolve as resolve5, sep } from "node:path";
+import { lstatSync, readFileSync as readFileSync7, realpathSync, statSync } from "node:fs";
+import { dirname as dirname3, isAbsolute, join as join3, relative, resolve as resolve5, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
   try {
@@ -16132,6 +16132,28 @@ var isSymlink = (path2) => {
   }
 };
 var classifyBinTarget = (path2) => path2.endsWith(".js") || path2.endsWith(".mjs") ? "script" : null;
+var recordedVersion = (binPath) => {
+  try {
+    const manifest = readFileSync7(join3(findPackageRoot(dirname3(binPath)), "package.json"), "utf8");
+    const parsed = JSON.parse(manifest);
+    return typeof parsed.version === "string" && parsed.version !== "" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+};
+var versionProblems = (binPath) => {
+  const running = packageVersion();
+  const pinned = recordedVersion(binPath);
+  if (pinned === null) {
+    return [
+      `commitlore.bin does not declare a version, so it cannot be compared with this CLI (${running}) \u2014 the hook may be validating commits with a different build`
+    ];
+  }
+  if (pinned === running) return [];
+  return [
+    `commitlore.bin is version ${pinned}, but this CLI is ${running} \u2014 the hook validates every commit with ${pinned}, so anything fixed since then does not apply here`
+  ];
+};
 var readRecordedHookTarget = (cwd) => {
   const bin = configValue(cwd, "commitlore.bin");
   const node = configValue(cwd, "commitlore.node");
@@ -16149,6 +16171,7 @@ var readRecordedHookTarget = (cwd) => {
         problems.push("commitlore.bin is outside this package root");
       }
       if (isSymlink(binPath)) problems.push("commitlore.bin is a symlink");
+      problems.push(...versionProblems(binPath));
     }
   }
   if (node === "") problems.push("commitlore.node is not recorded");
@@ -16424,13 +16447,13 @@ var attachToNotes = (targetSha, plan, opts = {}) => {
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname3, join as join3 } from "node:path";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync8, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname4, join as join4 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
-var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
+var claudeSettingsPath = (cwd) => join4(cwd, ".claude", "settings.json");
 var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure = (settingsPath, message) => ({
@@ -16453,7 +16476,7 @@ var load = (settingsPath) => {
   if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
-    raw = readFileSync7(settingsPath, "utf8");
+    raw = readFileSync8(settingsPath, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
   }
@@ -16545,7 +16568,7 @@ var withGroups = (settings, groups) => {
   return next;
 };
 var writeAtomic = (settingsPath, settings) => {
-  mkdirSync3(dirname3(settingsPath), { recursive: true });
+  mkdirSync3(dirname4(settingsPath), { recursive: true });
   let mode;
   try {
     mode = statSync2(settingsPath).mode & 511;
@@ -16929,7 +16952,7 @@ var checkHook = (opts, runtime) => {
   if (!existsSync7(path2)) {
     return check(id, title, "warn", `no commit-msg hook at ${path2}; ${targetDetail}`, install);
   }
-  const contents = readFileSync8(path2, "utf8");
+  const contents = readFileSync9(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
     return check(
       id,
@@ -17020,7 +17043,7 @@ var checkHookRuntime = (opts) => {
   if (located.code !== 0) return check(id, title, "warn", "not inside a git repository", fix);
   const hook = resolve6(cwd, located.stdout.trim());
   if (!existsSync7(hook)) return check(id, title, "ok", "no hook installed \u2014 nothing to run");
-  const probe = join4(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+  const probe = join5(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync4(probe, PROBE_MESSAGE);
     const run = spawnSync3("/bin/sh", [hook, probe], {
@@ -17349,18 +17372,18 @@ import {
   chmodSync as chmodSync3,
   existsSync as existsSync10,
   mkdirSync as mkdirSync6,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync12,
   realpathSync as realpathSync2,
   renameSync as renameSync5,
   statSync as statSync3,
   unlinkSync as unlinkSync4,
   writeFileSync as writeFileSync7
 } from "node:fs";
-import { join as join5, resolve as resolve9 } from "node:path";
+import { join as join6, resolve as resolve9 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes4 } from "node:crypto";
-import { chmodSync, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync9, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { chmodSync, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync10, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -17388,7 +17411,7 @@ var installPostCommitHook = (cwd = process.cwd()) => {
   }
   try {
     if (existsSync8(hookPath)) {
-      const current = readFileSync9(hookPath, "utf8");
+      const current = readFileSync10(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -17413,7 +17436,7 @@ var resolvePendingDir2 = (cwd) => {
 };
 var readPendingFile = (filePath) => {
   try {
-    const content = readFileSync9(filePath, "utf8");
+    const content = readFileSync10(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -17510,7 +17533,7 @@ var register4 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync4, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync11, readdirSync as readdirSync4, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -17545,9 +17568,9 @@ var recordsFromSquashMessage = (cwd, message) => {
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
   if (squashPath === null || !existsSync9(squashPath)) return false;
-  const draft = readFileSync10(messageFile, "utf8");
+  const draft = readFileSync11(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
-  const blocks = recordsFromSquashMessage(cwd, readFileSync10(squashPath, "utf8"));
+  const blocks = recordsFromSquashMessage(cwd, readFileSync11(squashPath, "utf8"));
   if (blocks.length === 0) return false;
   const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync6(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
@@ -17578,7 +17601,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
   }
   try {
     if (existsSync9(path2)) {
-      const current = readFileSync10(path2, "utf8");
+      const current = readFileSync11(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure2(`${path2} is not a commitlore hook \u2014 left in place`);
       }
@@ -17601,7 +17624,7 @@ var resolvePendingDir3 = (cwd) => {
 };
 var readPendingFile2 = (filePath) => {
   try {
-    const content = readFileSync10(filePath, "utf8");
+    const content = readFileSync11(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -17654,7 +17677,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const now = Date.now();
   let currentMessage;
   try {
-    currentMessage = readFileSync10(messageFile, "utf8");
+    currentMessage = readFileSync11(messageFile, "utf8");
   } catch {
     return;
   }
@@ -17730,7 +17753,7 @@ var readHookState = (hookPath) => {
   if (!existsSync10(hookPath)) return "absent";
   let contents;
   try {
-    contents = readFileSync11(hookPath, "utf8");
+    contents = readFileSync12(hookPath, "utf8");
   } catch {
     return "foreign";
   }
@@ -17739,8 +17762,8 @@ var readHookState = (hookPath) => {
 };
 var readHookStatus = (cwd = process.cwd()) => {
   const hooksDir = resolveHooksDir(cwd);
-  const hookPath = join5(hooksDir, HOOK_NAME);
-  const chainedPath = join5(hooksDir, CHAINED_HOOK_NAME);
+  const hookPath = join6(hooksDir, HOOK_NAME);
+  const chainedPath = join6(hooksDir, CHAINED_HOOK_NAME);
   return {
     hooksDir,
     hookPath,
@@ -17834,12 +17857,12 @@ var CAPTURE_HOOKS = [
   }
 ];
 var removeCaptureHook = (hooksDir, hook) => {
-  const hookPath = join5(hooksDir, hook.name);
-  const chainedPath = join5(hooksDir, hook.chainedName);
+  const hookPath = join6(hooksDir, hook.name);
+  const chainedPath = join6(hooksDir, hook.chainedName);
   if (!existsSync10(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
-    contents = readFileSync11(hookPath, "utf8");
+    contents = readFileSync12(hookPath, "utf8");
   } catch {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
@@ -18144,18 +18167,18 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join6(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
+    tmpDir = mkdtempSync(join7(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
     const userCwd = resolve10(opts.cwd ?? process.cwd());
     const tmpResolved = resolve10(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
-    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname4(tmpDir));
+    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname5(tmpDir));
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
-    const targetFullPath = join6(tmpDir, targetPath);
-    mkdirSync7(dirname4(targetFullPath), { recursive: true });
+    const targetFullPath = join7(tmpDir, targetPath);
+    mkdirSync7(dirname5(targetFullPath), { recursive: true });
     writeFileSync8(targetFullPath, "// session cache module\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
@@ -18219,7 +18242,7 @@ var register8 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync12, writeFileSync as writeFileSync9 } from "node:fs";
+import { readFileSync as readFileSync13, writeFileSync as writeFileSync9 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -18230,7 +18253,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync12(path2, "utf8");
+    return readFileSync13(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -18315,7 +18338,7 @@ var register9 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync13 } from "node:fs";
+import { readFileSync as readFileSync14 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -18323,8 +18346,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync13(STDIN_FD, "utf8");
-  return readFileSync13(path2, "utf8");
+  if (path2 === "-") return readFileSync14(STDIN_FD, "utf8");
+  return readFileSync14(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -18515,12 +18538,12 @@ var register10 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync14, writeFileSync as writeFileSync10 } from "node:fs";
+import { readFileSync as readFileSync15, writeFileSync as writeFileSync10 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync14(path2, "utf8");
+    return readFileSync15(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -18698,8 +18721,8 @@ var register12 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync15, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join7, relative as relative2, resolve as resolve11, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync16, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname6, isAbsolute as isAbsolute2, join as join8, relative as relative2, resolve as resolve11, sep as sep2 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash7 } from "node:crypto";
@@ -19049,7 +19072,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync15(0, "utf8");
+    return readFileSync16(0, "utf8");
   } catch {
     return "";
   }
@@ -19078,9 +19101,9 @@ var canonical = (target) => {
   for (; ; ) {
     try {
       const real = realpathSync3(current);
-      return tail.length === 0 ? real : join7(real, ...tail);
+      return tail.length === 0 ? real : join8(real, ...tail);
     } catch {
-      const parent = dirname5(current);
+      const parent = dirname6(current);
       if (parent === current) return absolute;
       tail.unshift(basename2(current));
       current = parent;
@@ -28945,7 +28968,7 @@ var register17 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync16, writeFileSync as writeFileSync11 } from "node:fs";
+import { readFileSync as readFileSync17, writeFileSync as writeFileSync11 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -28986,7 +29009,7 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync16(path2, "utf8");
+    return readFileSync17(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -29090,7 +29113,7 @@ var register18 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync17 } from "node:fs";
+import { readFileSync as readFileSync18 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -29453,14 +29476,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync17(path2, "utf8");
+    return readFileSync18(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync17(0, "utf8");
+    return readFileSync18(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -29737,9 +29760,9 @@ var register19 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { existsSync as existsSync11, readFileSync as readFileSync18, rmSync as rmSync4, writeFileSync as writeFileSync12 } from "node:fs";
+import { existsSync as existsSync11, readFileSync as readFileSync19, rmSync as rmSync4, writeFileSync as writeFileSync12 } from "node:fs";
 import { homedir } from "node:os";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
@@ -29802,17 +29825,17 @@ var withoutTomlBlock = (contents, wrapper) => {
 };
 var runUninstall = async (options = {}) => {
   const home = options.home ?? homedir();
-  const dataHome = options.dataHome ?? join8(home, ".local", "share");
+  const dataHome = options.dataHome ?? join9(home, ".local", "share");
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
   const removed = [];
   const kept = [];
-  const wrapper = join8(home, ".local", "bin", "commitlore");
+  const wrapper = join9(home, ".local", "bin", "commitlore");
   if (existsSync11(wrapper)) {
     const contents = (() => {
       try {
-        return readFileSync18(wrapper, "utf8");
+        return readFileSync19(wrapper, "utf8");
       } catch {
         return "";
       }
@@ -29826,18 +29849,18 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
   }
-  const dataRoot = join8(dataHome, "commitlore");
+  const dataRoot = join9(dataHome, "commitlore");
   if (existsSync11(dataRoot)) {
     if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
   }
   for (const config2 of AGENT_CONFIGS) {
-    const path2 = join8(home, ...config2.homeRelativePath);
+    const path2 = join9(home, ...config2.homeRelativePath);
     if (!existsSync11(path2)) continue;
     let contents;
     try {
-      contents = readFileSync18(path2, "utf8");
+      contents = readFileSync19(path2, "utf8");
     } catch {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
@@ -29891,11 +29914,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync19(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync20(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync19(STDIN_FD2, "utf8");
+  return readFileSync20(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {

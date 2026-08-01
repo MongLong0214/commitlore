@@ -9,14 +9,23 @@
  * `/bin/sh` execution of the shipped stub.
  */
 
-import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { classifyBinTarget, hasAllowedBinExtension, readRecordedHookTarget } from '../src/core/hook-target.js';
+import { packageVersion } from '../src/core/paths.js';
 import { createTestRepo } from './git-fixtures.js';
 
 describe('classifyBinTarget', () => {
@@ -104,6 +113,71 @@ describe('readRecordedHookTarget', () => {
     expect(target.problems).toContain(
       'commitlore.bin is not a .js or .mjs file',
     );
+  });
+});
+
+/**
+ * #382: the recorded pin is a version as well as a path.
+ *
+ * `hooks install` records the install it ran from; a later upgrade installs
+ * elsewhere and never comes back to rewrite it. The pinned build is the one
+ * that validates every commit, so "which version is pinned" is part of what
+ * this mirror owes its two readers (`doctor`, `hooks status`) — and an answer
+ * it cannot establish is not the same as no problem.
+ */
+describe('#382 the recorded pin carries a version', () => {
+  const scratch: string[] = [];
+  afterAll(() => {
+    for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+  });
+  const tempDir = (label: string): string => {
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), `commitlore-pin-${label}-`));
+    scratch.push(dir);
+    return dir;
+  };
+  const setConfig = (cwd: string, key: string, value: string): void => {
+    const result = execGit(['config', '--local', key, value], { cwd });
+    if (result.code !== 0) throw new Error(`git config ${key} failed: ${result.stderr}`);
+  };
+
+  /** A package root of its own, the shape a second install leaves on disk. */
+  const pinnedInstall = (label: string, version: string | null): string => {
+    const root = tempDir(label);
+    if (version !== null) {
+      writeFileSync(
+        join(root, 'package.json'),
+        `${JSON.stringify({ name: 'commitlore', version, type: 'module' })}\n`,
+      );
+    }
+    mkdirSync(join(root, 'dist'), { recursive: true });
+    const bin = join(root, 'dist', 'commitlore.mjs');
+    writeFileSync(bin, 'export {};\n');
+    return bin;
+  };
+
+  const pinnedProblems = (label: string, version: string | null): readonly string[] => {
+    const cwd = createTestRepo({ path: tempDir(`${label}-repo`) });
+    const bin = pinnedInstall(label, version);
+    setConfig(cwd, 'commitlore.bin', bin);
+    setConfig(cwd, 'commitlore.node', process.execPath);
+    setConfig(cwd, 'commitlore.root', realpathSync(dirname(dirname(bin))));
+    return readRecordedHookTarget(cwd).problems;
+  };
+
+  it('reports a pin left behind by an upgrade, naming both versions', () => {
+    const problems = pinnedProblems('skew', '0.5.0').join('\n');
+    expect(problems).toContain('0.5.0');
+    expect(problems).toContain(packageVersion());
+  });
+
+  it('reports nothing extra when the pinned install is the running version', () => {
+    expect(pinnedProblems('same', packageVersion())).toEqual([]);
+  });
+
+  it('reports an undeterminable pin rather than passing it', () => {
+    const problems = pinnedProblems('unknown', null).join('\n');
+    expect(problems).not.toBe('');
+    expect(problems).toContain('version');
   });
 });
 

@@ -30,6 +30,7 @@ import {
 } from '../src/commands/doctor.js';
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
+import { packageVersion } from '../src/core/paths.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md', import.meta.url));
@@ -424,6 +425,82 @@ describe('doctor: a stale stub', () => {
       if (previous === undefined) delete process.env['COMMITLORE_BIN'];
       else process.env['COMMITLORE_BIN'] = previous;
     }
+  });
+});
+
+/**
+ * #382: the pin outlives the upgrade.
+ *
+ * `hooks install` writes `commitlore.bin`/`commitlore.root` into the
+ * repository's own config, and nothing rewrites them when a newer CLI is
+ * installed somewhere else. The hook then keeps validating every commit with
+ * the build it was pinned to while `commitlore --version` reports the new one —
+ * and doctor printed that stale path inside its own `ok` line without ever
+ * comparing it.
+ *
+ * The fixture is a second install directory, because that is what the upgrade
+ * actually leaves behind: a complete package root of its own, with its own
+ * `package.json` version, still sitting on disk and still pinned.
+ */
+describe('doctor: the pinned CLI is a different version than the running one (#382)', () => {
+  /** A package root whose `package.json` declares `version`, with a runnable bundle in it. */
+  const otherInstall = (label: string, version: string | null): string => {
+    const root = tempDir(label);
+    if (version !== null) {
+      writeFileSync(
+        join(root, 'package.json'),
+        `${JSON.stringify({ name: 'commitlore', version, type: 'module' }, null, 2)}\n`,
+      );
+    }
+    const bin = join(root, 'dist', 'commitlore.mjs');
+    // Exits 0 for any argv, so the `hook-runtime` probe stays `ok` and this
+    // check is the only thing the assertions can be reacting to.
+    writeScript(bin, 'process.exit(0);\n');
+    return bin;
+  };
+
+  const pinnedTo = (label: string, bin: string): string => {
+    const { repo } = repoWithRemote(label);
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo, bin, process.execPath, realpathSync(dirname(dirname(bin))));
+    return repo;
+  };
+
+  it('does not report ok, and names both versions and the remedy', () => {
+    const repo = pinnedTo('doctor-pin-skew', otherInstall('doctor-pin-old-install', '0.5.0'));
+
+    const report = runDoctor({ cwd: repo });
+    const check = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(statusOf(report, 'hook-runtime')).toBe('ok');
+    expect(check?.status).not.toBe('ok');
+    expect(check?.detail).toContain('0.5.0');
+    expect(check?.detail).toContain(packageVersion());
+    expect(check?.fix).toContain('hooks install');
+  });
+
+  it('stays ok when the pinned install declares the running version', () => {
+    const repo = pinnedTo('doctor-pin-same', otherInstall('doctor-pin-same-install', packageVersion()));
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(check?.status).toBe('ok');
+  });
+
+  /**
+   * A pin whose version cannot be established is not health. It is also not a
+   * crash: doctor has to keep reporting the other nine checks.
+   */
+  it('does not report ok when the pinned install declares no version', () => {
+    const repo = pinnedTo('doctor-pin-unknown', otherInstall('doctor-pin-unknown-install', null));
+
+    const report = runDoctor({ cwd: repo });
+    const check = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(check?.status).not.toBe('ok');
+    expect(check?.detail).toContain('version');
+    expect(check?.fix).toContain('hooks install');
+    expect(report.checks).toHaveLength(10);
   });
 });
 
