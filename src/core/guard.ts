@@ -80,6 +80,7 @@
 import { BLOCKED_RECORD_WITHHELD, normalizeForMatch } from './grade.js';
 import type { HistoryAvailability } from './git.js';
 import type { NotesAvailability } from './notes.js';
+import { splitRuledOut, type RuledOutValue } from './trailers.js';
 import {
   RULED_OUT_KEY,
   runQuery,
@@ -542,27 +543,24 @@ const corroborated = (
   coverage.strength >= STRONG_KEYWORD_STRENGTH ||
   similarity >= MIN_JACCARD;
 
-/** `alternative | reason` (SPEC §3.1). Only the first `|` separates. */
-interface RuledOut {
-  alternative: string;
-  reason: string;
-  malformed: boolean;
-}
-
 /** Folded continuations arrive as one line already; this only tidies runs of spaces. */
 const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-const parseRuledOut = (value: string): RuledOut => {
-  const at = value.indexOf('|');
-  // A value with no separator violates SPEC §3.1 and `commitlore validate`
-  // reports it. Guarding on it anyway is deliberate: refusing to match a
-  // malformed record would turn a formatting mistake into a silent loss of the
-  // protection the record was written to provide.
-  if (at === -1) return { alternative: collapse(value), reason: '', malformed: true };
+/**
+ * `core/trailers.ts` owns the grammar; this only tidies whitespace for matching.
+ *
+ * A malformed or ambiguous value is still guarded on, not skipped. Refusing to
+ * match one would turn a formatting mistake into a silent loss of the
+ * protection the record was written to provide — which is the whole failure
+ * this route exists to prevent. What the caller gets instead is the fact,
+ * carried in `signals` next to the score.
+ */
+const parseRuledOut = (value: string): RuledOutValue => {
+  const split = splitRuledOut(value);
   return {
-    alternative: collapse(value.slice(0, at)),
-    reason: collapse(value.slice(at + 1)),
-    malformed: false,
+    ...split,
+    alternative: collapse(split.alternative),
+    reason: collapse(split.reason),
   };
 };
 
@@ -580,7 +578,7 @@ const compareMatches = (a: GuardMatch, b: GuardMatch): number => {
 /** One `Ruled-out:` value, parsed and tokenized once so the corpus can count it. */
 interface Candidate {
   record: GradedRecord;
-  parsed: RuledOut;
+  parsed: RuledOutValue;
   tokens: Tokens;
   idHit: boolean;
 }
@@ -621,6 +619,9 @@ const matchOne = (
       : [`keyword-strength:${round(coverage.strength).toFixed(2)}`]),
     ...(similarity > 0 ? [`jaccard:${round(similarity).toFixed(2)}`] : []),
     ...(parsed.malformed ? ['malformed:no-separator'] : []),
+    // The score says how well the proposal matched the alternative; this says
+    // whether that alternative is the one the author wrote (issue #372).
+    ...(parsed.ambiguous ? ['malformed:ambiguous-separator'] : []),
   ];
 
   return {

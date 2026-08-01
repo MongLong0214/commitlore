@@ -225,8 +225,16 @@
             "properties": {
               "value": {
                 "type": "string",
-                "pattern": "^.+\\|.+$",
-                "$comment": "alternative | reason — the pipe separator is REQUIRED (SPEC §3.1)."
+                "allOf": [
+                  {
+                    "pattern": "^.+\\|.+$",
+                    "$comment": "alternative | reason — the pipe separator is REQUIRED (SPEC §3.1)."
+                  },
+                  {
+                    "pattern": "^(?:[^|`]*`[^|`]*`)*[^|`]*\\|",
+                    "$comment": "The first | separates and there is no escape, so a code span opened in the alternative MUST close before it. An odd number of backticks ahead of the separator proves the separator was taken out of quoted text, leaving the alternative a fragment no consumer route can match (SPEC §3.1, issue #372). Pipes in the reason are unconstrained — everything after the first separator is the reason — and a value carrying one is reported as ambiguous rather than rejected, because a reason quoting `||` or `.mjs|.js` is well-formed."
+                  }
+                ]
               }
             }
           }

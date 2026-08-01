@@ -1,0 +1,15 @@
+{
+  "description": "format violation: the alternative half of a Ruled-out: value opens a code span that closes after the separator, so the first '|' — the one that separates — sits inside quoted text and the alternative is a fragment ending mid-span (SPEC §3.1, issue #372).",
+  "trailers": [
+    { "key": "Ruled-out", "value": "shelling out to `grep | head` for counts | it silently returns head exit status" }
+  ],
+  "violations": [
+    {
+      "key": "Ruled-out",
+      "value": "shelling out to `grep | head` for counts | it silently returns head exit status",
+      "rule": "format",
+      "got": "shelling out to `grep | head` for counts | it silently returns head exit status",
+      "want": "alternative | reason — the alternative opens a code span that closes after the separator, so the first \"|\" sits inside quoted text; there is no escape, so rephrase the alternative to hold no \"|\""
+    }
+  ]
+}

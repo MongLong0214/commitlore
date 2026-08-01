@@ -939,3 +939,81 @@ describe('validate — line numbers', () => {
     ]);
   });
 });
+
+/**
+ * Issue #372. `Ruled-out:` has one delimiter and no escape, so a value with a
+ * second `|` splits somewhere the author may not have meant. The record then
+ * cannot match the thing it rules out, and until now `validate` said
+ * `shape ok` about it.
+ *
+ * The two halves are reported differently on purpose, and the boundary was
+ * drawn by counting this repository's own records. 620 distinct `Ruled-out:`
+ * values, three with more than one pipe, two of those three correct — a `||`
+ * in a reason, an `.mjs|.js` alternation. Rejecting every multi-pipe value
+ * would invalidate two correct records to catch one broken one, so that half
+ * warns. An alternative whose code span the separator cut open is not a
+ * judgement call — the span opened before the pipe and closed after it, so the
+ * pipe was inside quoted text — and that half is refused.
+ */
+describe('validate — Ruled-out: separator ambiguity (issue #372)', () => {
+  const message = (value: string): string =>
+    `feat: pipes\n\nBody.\n\nRecord-Id: r-ggg777\nRuled-out: ${value}\nCertainty: firm\n` +
+    'CommitLore-Version: 1.0.0\n';
+
+  it('refuses an alternative whose code span the separator cut open', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message('shelling out to `grep | head` for counts | it silently returns head exit status'),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(1);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ key: 'Ruled-out', rule: 'format' }),
+    );
+    // The repair loop reads `want`, so it has to name the actual defect. A
+    // record that already carries a separator is told nothing at all by
+    // "alternative | reason".
+    expect(result.violations[0]?.want).toContain('code span');
+    expect(result.stdout).toContain('code span');
+  });
+
+  it('warns, without refusing, when the value merely carries a second pipe', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message(
+          'Passing the version through $args so irm | iex could take one | iex gives a piped ' +
+            'script no arguments',
+        ),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toContain('more than one "|"');
+    // The warning has to say where the split landed, or the author cannot tell
+    // whether it is the one they meant.
+    expect(result.stderr).toContain('Passing the version through $args so irm');
+  });
+
+  it('leaves a reason that quotes a pipe warned but valid', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message(
+          'set +e at the top of each step | it also disables the abort for genuinely ' +
+            'unexpected failures; the || form is scoped to the one command',
+        ),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toContain('more than one "|"');
+  });
+
+  it('says nothing about a value with exactly one pipe', () => {
+    const result = runValidate({
+      readStdin: () => message('shared Redis cache | ops refuses another stateful dependency'),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+  });
+});

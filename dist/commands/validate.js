@@ -23,9 +23,10 @@ import { collectRecords } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
+import { RULED_OUT_KEY } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, isSuccessionDeclared, UNIQUE_ID_WANT, } from '../core/stale.js';
-import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
+import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks, splitRuledOut, } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 export const CHECK_CLASS_NEEDS = {
@@ -245,6 +246,38 @@ const identityCollisionViolations = (source) => {
     });
 };
 /**
+ * The half of issue #372 that cannot be a violation.
+ *
+ * A `Ruled-out:` value carrying a second `|` may be split in the wrong place —
+ * the alternative the record rules out is then a fragment, `commitlore guard`
+ * matches the fragment instead of the alternative, and nothing in the output
+ * says so. Refusing every such value was measured against this repository's
+ * own history first: of 620 distinct `Ruled-out:` values, three carry more
+ * than one pipe and two of those three are *correct*, their extra pipe living
+ * in the reason (`||`, `.mjs|.js`). Rejecting the class would invalidate two
+ * well-formed records to catch one broken one.
+ *
+ * So it warns, and the warning quotes the alternative the split produced —
+ * the author is the only party who can tell whether that is the one they
+ * meant, and the commit-msg hook is the last moment they can still fix it.
+ * The subset that *is* provably wrong (a code span the separator cut open) is
+ * a `format` violation and is skipped here so it is not reported twice.
+ */
+const ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
+    if (trailer.key !== RULED_OUT_KEY)
+        return [];
+    const split = splitRuledOut(trailer.value);
+    if (!split.ambiguous || split.unterminatedCodeSpan)
+        return [];
+    const at = lines[index];
+    const where = `${source.sha?.slice(0, 10) ?? 'commit'}${at === undefined ? '' : `:${at}`}`;
+    return [
+        `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the ` +
+            `first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not ` +
+            'the split you meant, rephrase so only the separator is a pipe (SPEC §3.1)',
+    ];
+});
+/**
  * Validates every record block a message carries (SPEC §2.4), not only the
  * one git recognizes as the message's own last paragraph.
  *
@@ -305,6 +338,7 @@ const inspectSource = (source) => {
     if (nonTrailerParagraph !== undefined) {
         warnings.push(`commitlore: ${source.sha?.slice(0, 10) ?? 'commit'}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`);
     }
+    warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
     return { violations, warnings };
 };
 const locateReferenceViolations = (source, trailers, violations) => {

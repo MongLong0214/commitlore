@@ -19,6 +19,7 @@
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
+import { splitRuledOut } from '../core/trailers.js';
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
 const RECORD_ID_KEY = 'Record-Id';
@@ -207,6 +208,23 @@ const blockedMessage = (record) => record.identityCollision === true
 const idColumn = (record, width) => (record.recordId ?? '-').padEnd(width);
 const idWidth = (records) => records.reduce((width, record) => Math.max(width, (record.recordId ?? '-').length), 1);
 /**
+ * Issue #372: a `Ruled-out:` value with a second `|` is printed verbatim, and
+ * verbatim it reads exactly like one whose separator landed where the author
+ * meant it to. The consumer routes match on the alternative alone, so the
+ * split — not the value — is what a reader has to be able to check, and this
+ * is the surface where a record already in history can still be checked at
+ * all. `commitlore validate` refuses the provably-wrong subset at commit time,
+ * but it cannot reach back into records already written.
+ */
+const separatorNote = (key, value) => {
+    if (key !== RULED_OUT_KEY)
+        return '';
+    const split = splitRuledOut(value);
+    if (!split.ambiguous)
+        return '';
+    return `  (more than one "|" — alternative: ${JSON.stringify(split.alternative)})`;
+};
+/**
  * One line per trailer value, not per record: a commit that recorded three
  * `Limit:` lines constrains three different things, and collapsing them into
  * one row would hide two of them (SPEC §2.1 B5 keeps every repeat for exactly
@@ -215,13 +233,17 @@ const idWidth = (records) => records.reduce((width, record) => Math.max(width, (
 const valueLines = (records, key) => {
     const width = idWidth(records);
     return records.flatMap((record) => {
-        const values = record.trust === 'blocked'
+        const withheld = record.trust === 'blocked';
+        const values = withheld
             ? record.withheldTrailerKeys?.includes(key) === true
                 ? [blockedMessage(record)]
                 : []
             : valuesOf(record, key);
         return values.map((value) => `  ${idColumn(record, width)}  ${shortSha(record.sha)}  ` +
-            `${stateTag(record)}${trustTag(record)}${value}`);
+            `${stateTag(record)}${trustTag(record)}${value}` +
+            // A withheld record's line is a notice, not a value; annotating it
+            // would describe the notice's own punctuation.
+            (withheld ? '' : separatorNote(key, value)));
     });
 };
 const otherLines = (records) => {

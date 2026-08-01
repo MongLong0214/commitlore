@@ -93,13 +93,24 @@ Sixteen keys. Every key exists because a route consumes it — see §5.
 | Key | Value grammar | Repeatable | Meaning |
 |---|---|---|---|
 | `Limit:` | free text | yes | An external condition that constrained the decision and may still be active |
-| `Ruled-out:` | `alternative \| reason` — the `\|` separator is REQUIRED | yes | An alternative that was evaluated and dropped, with why |
+| `Ruled-out:` | `alternative \| reason` — the `\|` separator is REQUIRED, and the **first** one separates | yes | An alternative that was evaluated and dropped, with why |
 | `Warn:` | free text (folding allowed) | yes | An instruction for whoever modifies this next |
 | `Blast:` | `local` \| `module` \| `system` | no | How far the change reaches |
 | `Undo:` | `easy` \| `costly` \| `permanent` | no | What reverting this costs |
 | `Certainty:` | `firm` \| `tentative` \| `guess` | no | How sure the author is |
 | `Verified:` | free text | yes | What was checked, and how |
 | `Unverified:` | free text | yes | A known gap in verification |
+
+#### The `Ruled-out:` separator
+
+The **first** `|` separates, and there is **no escape**: a backslash in front of one is two literal characters, not an escape sequence. An alternative therefore MUST NOT contain a `|`; a reason MAY, because everything after the first separator is the reason.
+
+Splitting from the front rather than the back is not arbitrary. Both ends lose something, and which end loses less is a question about real records rather than about taste. In this specification's own repository, of 620 distinct `Ruled-out:` values three carry more than one `|` — and two of those three carry it in the *reason*: `||` quoted from shell prose, `.mjs|.js` quoted from a filename alternation. Splitting on the last `|` would destroy those two to rescue the third.
+
+That leaves the third: an author who wrote a pipe into the alternative and got a fragment. Two rules keep that from failing silently, which is the outcome this vocabulary exists to prevent.
+
+- A value whose alternative half opens a code span the separator closes outside of — an odd number of `` ` `` before the first `|` — is a `format` violation (§6). This is not an inference about intent: the span crosses the separator, so the separator was taken out of quoted text and the alternative is a fragment ending mid-span.
+- A value carrying more than one `|` MUST be reported by `commitlore validate` and by the consumer routes of §5, naming the alternative the split produced. It is **not** a violation: the extra `|` is usually in the reason, where it is well formed, and rejecting the class would refuse correct records in order to catch incorrect ones. Only the author knows which split was meant, so the report reaches the author while the record can still be changed.
 
 ### 3.2 Identity, lifecycle, provenance
 
@@ -204,7 +215,7 @@ Violation classes:
 |---|---|
 | `unknown-key` | `Constraint: x` (not in §3, not `X-`-prefixed) |
 | `enum` | `Blast: wide`, `Undo: clean`, `Certainty: high` |
-| `format` | `Ruled-out: no pipe here`, `Record-Id: nope`, `Expires: 2026-13-45` |
+| `format` | `Ruled-out: no pipe here`, ``Ruled-out: shelling out to `grep \| head` \| it hides the exit status`` (the alternative's code span does not close before the separator — §3.1), `Record-Id: nope`, `Expires: 2026-13-45` |
 | `cardinality` | Two `Blast:` lines in one record |
 | `dangling-ref` | `Supersedes: r-abc123` where no such record exists in history |
 | `duplicate-id` | A note adds different content under a `Record-Id` already declared by a commit |

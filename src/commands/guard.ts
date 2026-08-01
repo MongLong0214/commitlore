@@ -134,6 +134,23 @@ const shortSha = (sha: string): string => (sha.length > 8 ? sha.slice(0, 8) : sh
 const NO_REASON = 'no reason recorded — this Ruled-out: is missing the required "|" separator';
 
 /**
+ * Issue #372. stderr is what the hook protocol routes back to the agent, so
+ * this block is the whole of what the agent learns about a match. An
+ * alternative cut short by a second `|` reads there exactly like a whole one,
+ * and nothing tells the agent that the sentence it is being held to is half a
+ * sentence. Emitted only when the value is ambiguous, so a well-formed
+ * record's block keeps its three lines.
+ */
+const AMBIGUOUS_SEPARATOR =
+  'the Ruled-out: value holds more than one "|" and only the first separates, ' +
+  'so this alternative may be a fragment (SPEC §3.1)';
+
+const caveatLines = (signals: readonly string[]): string[] =>
+  signals.includes('malformed:ambiguous-separator')
+    ? [`  caveat:    ${AMBIGUOUS_SEPARATOR}`]
+    : [];
+
+/**
  * One block per match. The `because:` line is the whole point of the route, so
  * it sits directly under the alternative rather than in a details footer.
  */
@@ -159,6 +176,7 @@ export const formatMatches = (matches: readonly GuardMatch[]): string => {
         return [
           `  ruled out: ${rendered.alternative}`,
           `  because:   ${rendered.reason === '' ? NO_REASON : rendered.reason}`,
+          ...caveatLines(rendered.signals),
           recorded,
         ].join('\n');
     }

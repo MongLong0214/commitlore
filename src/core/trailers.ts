@@ -67,6 +67,60 @@ export const parseCommitMessage = (msg: string): Trailer[] => {
     .map(parseOutputLine);
 };
 
+/** SPEC §3.1: `Ruled-out: alternative | reason`. */
+const RULED_OUT_SEPARATOR = '|';
+
+export interface RuledOutValue {
+  /** Everything before the first separator, trimmed. */
+  alternative: string;
+  /** Everything after it, trimmed. Empty only when `malformed`. */
+  reason: string;
+  /** No separator at all. SPEC §3.1 requires one; `commitlore validate` refuses it. */
+  malformed: boolean;
+  /**
+   * More than one `|`, so the half the parser took as the alternative may not
+   * be the half the author meant. Reported, never resolved: nothing in the
+   * value says which pipe was the separator.
+   */
+  ambiguous: boolean;
+  /**
+   * The alternative half opens a code span that closes after the separator —
+   * an odd number of backticks before the first `|`. Unlike `ambiguous` this
+   * is not a judgement about intent: the span crosses the separator, so the
+   * separator was taken out of quoted text and the alternative is a fragment.
+   */
+  unterminatedCodeSpan: boolean;
+}
+
+/**
+ * Splits a `Ruled-out:` value into the alternative and the reason (SPEC §3.1).
+ *
+ * The **first** `|` separates and there is no escape, so a reason may contain
+ * pipes and an alternative may not. Which end to split from was settled by
+ * counting this repository's own records rather than by intuition (issue
+ * #372): of 620 distinct `Ruled-out:` values, three carry more than one pipe,
+ * and two of the three carry it in the reason — `||` in shell prose,
+ * `.mjs|.js` in a filename alternation. Splitting on the last pipe would
+ * destroy those two to rescue the third, so the first pipe stays the
+ * separator and the ambiguity is reported instead.
+ *
+ * Reporting rather than repairing is the same disposition SPEC §6 takes on
+ * every other malformed value: a consumer that guessed would produce an
+ * alternative no author wrote, and `commitlore guard` matches on exactly that
+ * string.
+ */
+export const splitRuledOut = (value: string): RuledOutValue => {
+  const at = value.indexOf(RULED_OUT_SEPARATOR);
+  const head = at === -1 ? value : value.slice(0, at);
+  return {
+    alternative: head.trim(),
+    reason: at === -1 ? '' : value.slice(at + 1).trim(),
+    malformed: at === -1,
+    ambiguous: at !== -1 && value.includes(RULED_OUT_SEPARATOR, at + 1),
+    unterminatedCodeSpan: at !== -1 && (head.match(/`/g) ?? []).length % 2 === 1,
+  };
+};
+
 const serializeOne = (trailer: Trailer): string => {
   const [first = '', ...continuations] = trailer.value.split('\n');
   const lines = [

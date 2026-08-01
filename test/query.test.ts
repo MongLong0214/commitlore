@@ -1450,3 +1450,49 @@ describe('formatting', () => {
     expect(text).toContain('(expired)');
   });
 });
+
+/**
+ * Issue #372. `commitlore ruled-out` printed the value verbatim, so a record
+ * whose separator landed in the wrong place read exactly like one whose
+ * separator landed in the right place. That is the surface an agent reads
+ * *after* the record is already in history, where `validate` can no longer
+ * refuse it — so it is the surface that has to say the split is in question.
+ */
+describe('ruled-out — an ambiguous separator (issue #372)', () => {
+  const dir = (() => {
+    const created = makeRepo();
+    commitAt(
+      created,
+      '2026-01-05T00:00:00Z',
+      record('Count matches in process', [
+        'Ruled-out: Passing the version through $args so irm | iex could take one | iex gives ' +
+          'a piped script no arguments',
+        'Record-Id: r-ggg777',
+      ]),
+      { 'src/install.ps1': 'install' },
+    );
+    commitAt(
+      created,
+      '2026-01-06T00:00:00Z',
+      record('Keep the writer', [
+        'Ruled-out: a background worker | it moves the failure, it does not remove it',
+        'Record-Id: r-cc3333',
+      ]),
+      { 'src/writer.ts': 'writer' },
+    );
+    return created;
+  })();
+
+  it('says where the split landed, so the reader can see it is not the intended one', () => {
+    const run = runCommand(dir, ['ruled-out', AT, PINNED]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain('Passing the version through $args so irm | iex could take one');
+    expect(run.stdout).toContain('alternative: "Passing the version through $args so irm"');
+  });
+
+  it('leaves an unambiguous value exactly as it was written', () => {
+    const run = runCommand(dir, ['ruled-out', AT, PINNED, '--', 'src/writer.ts']);
+    expect(run.stdout).toContain('a background worker | it moves the failure, it does not remove it');
+    expect(run.stdout).not.toContain('alternative:');
+  });
+});
