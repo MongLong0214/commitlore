@@ -3,6 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { HeadlessResult, TurnLedger } from "./stream-json.ts";
+import { StreamJsonReader } from "./stream-json.ts";
 import type { AgentDriver, DriverOptions, DriverRequest, DriverResult } from "./types.ts";
 import { composePrompt } from "./types.ts";
 
@@ -10,6 +12,21 @@ const DEFAULT_EXECUTABLE = "claude";
 const DEFAULT_PERMISSION_MODE = "acceptEdits";
 const KILL_GRACE_MS = 5_000;
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+/**
+ * How much stdout the streaming path keeps for a failure message.
+ *
+ * The non-streaming path retains all of stdout because it has to parse it at
+ * the end; the streaming path parses as it goes and would otherwise hold a
+ * long run's entire chunk-by-chunk transcript to print at most 500 characters
+ * of it on error. `--include-partial-messages` emits an event per streamed
+ * chunk, so "all of it" is tens of megabytes for a run whose numbers are a few
+ * hundred integers.
+ *
+ * The cost is on the failure path only: when no `result` event arrives, the
+ * transcript falls back to this tail rather than to the whole of stdout. A run
+ * that produced no result produced no measurement either way.
+ */
+const STREAM_TAIL_BYTES = 64 * 1024;
 
 interface SpawnOutcome {
   readonly stdout: string;
@@ -23,11 +40,13 @@ const spawnWithTimeout = (
   args: readonly string[],
   cwd: string,
   timeoutMs: number,
+  onStdoutLine?: (line: string) => void,
 ): Promise<SpawnOutcome> =>
   new Promise((resolve, reject) => {
     const child = spawn(executable, [...args], { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let pending = "";
     let timedOut = false;
     let settled = false;
 
@@ -39,7 +58,19 @@ const spawnWithTimeout = (
     }, timeoutMs);
 
     child.stdout.on("data", (chunk: Buffer) => {
-      if (stdout.length < MAX_OUTPUT_BYTES) stdout += chunk.toString("utf8");
+      const text = chunk.toString("utf8");
+      if (onStdoutLine === undefined) {
+        if (stdout.length < MAX_OUTPUT_BYTES) stdout += text;
+        return;
+      }
+      pending += text;
+      let newline = pending.indexOf("\n");
+      while (newline !== -1) {
+        onStdoutLine(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf("\n");
+      }
+      stdout = (stdout + text).slice(-STREAM_TAIL_BYTES);
     });
     child.stderr.on("data", (chunk: Buffer) => {
       if (stderr.length < MAX_OUTPUT_BYTES) stderr += chunk.toString("utf8");
@@ -54,6 +85,9 @@ const spawnWithTimeout = (
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // A killed process can leave a last line without its newline. Dropping it
+      // would lose the `result` event of a run that was cut off mid-write.
+      if (onStdoutLine !== undefined && pending !== "") onStdoutLine(pending);
       resolve({ stdout, stderr, code, timedOut });
     });
   });
@@ -86,14 +120,6 @@ const sumTokens = (usage: unknown): number => {
   }
   return total;
 };
-
-interface HeadlessResult {
-  readonly result?: unknown;
-  readonly num_turns?: unknown;
-  readonly usage?: unknown;
-  readonly is_error?: unknown;
-  readonly subtype?: unknown;
-}
 
 const parseHeadlessJson = (stdout: string): HeadlessResult | null => {
   const trimmed = stdout.trim();
@@ -139,13 +165,43 @@ const ISOLATION_FLAGS = [
   "--no-session-persistence",
 ] as const;
 
+/**
+ * What a per-turn ledger costs on the command line, and why each flag is there.
+ *
+ * `--verbose` is not a preference: the CLI refuses `--output-format stream-json`
+ * under `--print` without it ("requires --verbose"), so it is part of the format
+ * rather than an addition to it.
+ *
+ * `--include-partial-messages` is the one that matters. Without it the stream
+ * still carries an assistant event per content block with a `usage` object
+ * attached, but that object's `output_tokens` is the value from `message_start`
+ * — a snapshot taken before the model wrote anything. Measured on one probe:
+ * the assistant events reported 4, 1 and 1 output tokens for three turns whose
+ * real outputs were 157, 193 and 36. Input and cache figures on those events
+ * are already final and do reconcile; output does not, and output is the term
+ * the write side is missing.
+ */
+const STREAM_FLAGS = ["--verbose", "--include-partial-messages"] as const;
+
 export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDriver => {
   const executable = options.executable ?? DEFAULT_EXECUTABLE;
   let maxTurnsFlag: boolean | null = null;
   let isolation: string[] | null = null;
+  let perTurn: boolean | null = options.perTurnUsage === true ? null : false;
 
   const run = async (request: DriverRequest): Promise<DriverResult> => {
     if (maxTurnsFlag === null) maxTurnsFlag = supportsFlag(executable, "--max-turns");
+    if (perTurn === null) {
+      const missing = STREAM_FLAGS.filter((flag) => !supportsFlag(executable, flag));
+      perTurn = missing.length === 0;
+      if (!perTurn) {
+        process.stderr.write(
+          `!! ${executable} does not support ${missing.join(", ")} — per-turn usage was asked\n` +
+            `!! for and cannot be produced. Rows will carry no turn ledger, which reads as\n` +
+            `!! "not instrumented" rather than as zero.\n`,
+        );
+      }
+    }
     if (isolation === null) {
       const missing = ISOLATION_FLAGS.filter((flag) => !supportsFlag(executable, flag));
       if (missing.length > 0) {
@@ -187,7 +243,8 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       "-p",
       composePrompt(request),
       "--output-format",
-      "json",
+      perTurn ? "stream-json" : "json",
+      ...(perTurn ? STREAM_FLAGS : []),
       "--permission-mode",
       options.permissionMode ?? DEFAULT_PERMISSION_MODE,
       ...isolation,
@@ -196,9 +253,16 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       ...(maxTurnsFlag ? ["--max-turns", String(request.maxTurns)] : []),
     ];
 
+    const reader = perTurn ? new StreamJsonReader() : null;
     let outcome: SpawnOutcome;
     try {
-      outcome = await spawnWithTimeout(executable, args, request.workspace, request.timeoutMs);
+      outcome = await spawnWithTimeout(
+        executable,
+        args,
+        request.workspace,
+        request.timeoutMs,
+        reader === null ? undefined : (line) => reader.push(line),
+      );
     } catch (error) {
       return {
         transcript: "",
@@ -209,13 +273,27 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
       };
     }
 
-    const parsed = parseHeadlessJson(outcome.stdout);
+    // Both formats end in the same `result` object, carrying the same
+    // `result`, `num_turns` and `usage` fields. That is what keeps `transcript`,
+    // `turns` and `tokens` identical either way: the ledger is read from events
+    // the JSON format never printed, and nothing already measured is re-derived
+    // from them.
+    const parsed = reader === null ? parseHeadlessJson(outcome.stdout) : reader.result;
+    const ledger: TurnLedger | null = reader === null ? null : reader.ledger();
+    const carry = ledger === null ? {} : { turnLedger: ledger };
     const transcript = typeof parsed?.result === "string" ? parsed.result : outcome.stdout;
     const turns = typeof parsed?.num_turns === "number" ? parsed.num_turns : 0;
     const tokens = sumTokens(parsed?.usage);
 
     if (outcome.timedOut) {
-      return { transcript, turns, tokens, stoppedBy: "timeout", error: `timed out after ${request.timeoutMs}ms` };
+      return {
+        transcript,
+        turns,
+        tokens,
+        ...carry,
+        stoppedBy: "timeout",
+        error: `timed out after ${request.timeoutMs}ms`,
+      };
     }
     if (outcome.code !== 0 || parsed === null || parsed.is_error === true) {
       const detail = parsed === null ? outcome.stderr.trim().slice(0, 500) : String(parsed.subtype ?? "is_error");
@@ -223,6 +301,7 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
         transcript,
         turns,
         tokens,
+        ...carry,
         stoppedBy: "error",
         error: `claude exited ${outcome.code}: ${detail === "" ? "no output" : detail}`,
       };
@@ -233,7 +312,7 @@ export const createClaudeHeadlessDriver = (options: DriverOptions = {}): AgentDr
     // observed here -- hence `over-turns`, not `turns`: nothing stopped it.
     const stoppedBy =
       turns >= request.maxTurns ? "over-turns" : tokens >= request.maxTokens ? "over-tokens" : "completed";
-    return { transcript, turns, tokens, stoppedBy };
+    return { transcript, turns, tokens, ...carry, stoppedBy };
   };
 
   return { name: "claude-headless", simulated: false, run };

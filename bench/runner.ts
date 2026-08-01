@@ -44,6 +44,7 @@ interface RunnerOptions {
   readonly permissionMode?: string;
   readonly keep?: boolean;
   readonly saveTranscripts?: string;
+  readonly perTurnUsage?: boolean;
 }
 
 const makeRunId = (): string => {
@@ -170,6 +171,10 @@ const main = async (): Promise<number> => {
     .option("--permission-mode <mode>", "permission mode passed through to the agent driver")
     .option("--keep", "keep the temporary workspaces and print their paths")
     .option("--save-transcripts <dir>", "write each run's transcript, diff and commits for auditing")
+    .option(
+      "--per-turn-usage",
+      "record provider-reported token usage per turn (changes the driver's output format; off by default so a run matches every committed result)",
+    )
     .parse();
 
   const options = program.opts<RunnerOptions>();
@@ -184,6 +189,7 @@ const main = async (): Promise<number> => {
   const driver = createDriver(options.driver, {
     ...(model === undefined || model === "" ? {} : { model }),
     ...(options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode }),
+    ...(options.perTurnUsage === true ? { perTurnUsage: true } : {}),
   });
   let recordedModel: string;
   if (driver.simulated) {
@@ -363,6 +369,7 @@ const main = async (): Promise<number> => {
             rejected_path_lines_changed: rejectedPathWork.linesChanged,
             rejected_path_dependency_additions: rejectedPathWork.dependencyAdditions,
             rejected_path_first_edit: rejectedPathWork.firstEditOccurred,
+            ...(result.turnLedger === undefined ? {} : { turn_usage: result.turnLedger }),
             ...(result.error === undefined ? {} : { error: result.error }),
           };
         } catch (error) {

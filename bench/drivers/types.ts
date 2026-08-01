@@ -1,4 +1,5 @@
 import type { StopReason } from "../types.ts";
+import type { TurnLedger } from "./stream-json.ts";
 
 /** Simulation input for the dry-run driver. Real drivers MUST ignore it. */
 export interface SimulationHints {
@@ -38,6 +39,15 @@ export interface DriverResult {
   readonly tokens: number;
   readonly stoppedBy: StopReason;
   readonly error?: string;
+  /**
+   * Per-turn token usage, present only when the driver was asked for it and
+   * the installed CLI could supply it.
+   *
+   * Absent means "not instrumented", never "no usage". `tokens` above stays
+   * the session total under the same field selection it has always used, so a
+   * row carrying this ledger is comparable with every row that predates it.
+   */
+  readonly turnLedger?: TurnLedger;
 }
 
 export interface AgentDriver {
@@ -51,6 +61,15 @@ export interface DriverOptions {
   readonly model?: string;
   readonly permissionMode?: string;
   readonly executable?: string;
+  /**
+   * Ask the driver for a per-turn usage ledger. Off by default, and off is the
+   * shape every committed result was produced under.
+   *
+   * Turning it on changes the CLI's output format, so it is opt-in rather than
+   * inferred: a harness flag that silently rewrote how a measurement is read
+   * would make old rows and new rows two different things under one name.
+   */
+  readonly perTurnUsage?: boolean;
 }
 
 /** Both arms receive the same task text; only the record block differs. */
