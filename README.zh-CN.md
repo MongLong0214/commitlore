@@ -215,10 +215,19 @@ Ruled-out
 | `CLAUDE.md` / `AGENTS.md` | 代理应该如何工作 |
 | ADR | 以文档形式记录大的架构决策 |
 | Chat memory / RAG | 过去的相关文本 |
+| [Lore](https://arxiv.org/abs/2603.15566) | 同样的想法，更早发表 —— 放在 git trailer 里的决策记录 |
 | **CommitLore** | **对这条代码路径当下仍然有效的决定** |
 
 相似度检索能找到相关的决定。CommitLore 还知道那个决定是否仍然有效、是否已被取代或过期 ——
 并且只呈现第一种。
+
+**关于第三行。** [Lore](https://arxiv.org/abs/2603.15566)（2026 年 3 月）在本仓库存在的
+四个月前就提出了把决策记录放进 native git trailer 的做法，其词汇与这里几乎一一对应。
+**协议这个想法在这里并不新颖**，说它新颖也经不起任何读过那篇论文的人。Lore 没有对应物
+的是生命周期 —— `Supersedes:` 与 `Expires:`，以及让上表最后一行成立的那层过滤 —— 以及
+信任分级；论文本身写的是"*勾勒出*一条实证验证路径"，并未做实验。把那份验证做出来、连同
+失败的部分一起留下，才是本项目相对那篇论文所拥有的东西
+（[ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)）。
 
 ## 有何不同
 

@@ -237,10 +237,22 @@ authority is Git rather than a service:
 | `CLAUDE.md` / `AGENTS.md` | how the agent should work |
 | ADRs | large architecture decisions, as documents |
 | Chat memory / RAG | related text from the past |
+| [Lore](https://arxiv.org/abs/2603.15566) | the same idea, published first — decision records in git trailers |
 | **CommitLore** | **which decisions still apply to this code path** |
 
 Similarity search can find a related decision. CommitLore also knows whether that
 decision is still active, superseded, or expired — and shows only the first.
+
+**On that third row.** [Lore](https://arxiv.org/abs/2603.15566) (March 2026)
+proposed decision records in native git trailers four months before this
+repository existed, with a vocabulary that maps almost one-to-one onto this one.
+The protocol idea is not novel here and saying otherwise would not survive anyone
+reading the paper. What Lore has no counterpart for is the lifecycle —
+`Supersedes:` and `Expires:`, and the filtering that makes the row above true —
+or the trust grading; and it states that it "outlines an empirical validation
+path" rather than running one. That validation, including the parts that failed,
+is what this project has that the paper does not
+([ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)).
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
 
