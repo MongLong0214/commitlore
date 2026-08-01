@@ -156,13 +156,19 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 **CommitLore ありの場合。** 編集の前に、エージェントはこれを受け取ります:
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]` は実際に機能しています: この record はリポジトリの信頼された作成者が書いた
+ものではないため、エージェントは命令ではなく情報として扱うよう伝えられます。信頼された
+作成者による record は `[directive]` として描画されます。
 
 エージェントは代わりに純粋な計算プリミティブを共有し、checkout ポリシーの入口には触れません。
 そのレビューは起きません。決定が既にそこにあったからです。
@@ -407,8 +413,8 @@ commitlore uninstall
 
 `install.sh` または `install.ps1` が書いたものを削除します — wrapper、固定された
 checkout、そして各 agent config に追加した MCP エントリ。自分が書いていないものは
-削除せず、残すものを明示します: リポジトリごとの hook（`commitlore hooks
-uninstall`）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
+削除せず、残すものを明示します: `commit-msg` hook（`commitlore hooks uninstall` — このコマンドが外すのはそれ一つで、
+`init` が併せて入れる `prepare-commit-msg`・`post-commit` は残ります）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
 plugin（`/plugin uninstall commitlore@commitlore`）。`--dry-run` は何も変更せずに
 報告します。
 
