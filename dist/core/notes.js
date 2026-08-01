@@ -176,23 +176,23 @@ export const coversNotes = (refspec) => {
  * all reports `absent`: there is nowhere for unseen records to be, so an empty
  * answer is a true empty.
  *
- * A remote plus no local notes ref is `unfetched`, and the refspec does not
- * change that. It used to: a repository whose refspec covered notes but had
- * never fetched them reported `absent`, which is the state `doctor --fix`
- * creates — it writes the refspec and fetches nothing. So the remedy this tool
- * prescribes turned an honest "records may exist upstream" into a confident
- * "this repository has none", while the records stayed exactly as invisible.
- * The warning disappeared and the cause did not, which is the failure shape
- * #296 already cost this project once.
- *
- * Whether a refspec covers notes is still worth reporting — it decides whether
- * a fetch would help — but it is a separate question from whether an empty
- * answer can be trusted, and only the second one belongs here.
+ * A configured refspec that has never been fetched through is indistinguishable
+ * here from one that was fetched and found nothing, and the difference matters:
+ * `doctor --fix` writes the refspec and fetches nothing, so the state it leaves
+ * looks exactly like an upstream with no records. Reporting `unfetched` for both
+ * was tried and rejected — it fires on every repository whose refspec was added
+ * after cloning, and `incomplete` changes `guard`'s exit code. The honest fix
+ * lives in `doctor`, which now says a fetch is still owed instead of letting
+ * `ok` read as repaired.
  */
 export const notesAvailability = (opts = {}) => {
     const ref = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
     if (ref.code === 0)
         return 'present';
-    return listRemotes(opts).length === 0 ? 'absent' : 'unfetched';
+    const remotes = listRemotes(opts);
+    if (remotes.length === 0)
+        return 'absent';
+    const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+    return uncovered.length > 0 ? 'unfetched' : 'absent';
 };
 //# sourceMappingURL=notes.js.map

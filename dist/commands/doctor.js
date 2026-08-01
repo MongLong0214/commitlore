@@ -77,7 +77,14 @@ const checkRefspec = (opts) => {
             .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
             .join('; ')})`, failed.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed);
     }
-    return check('notes-refspec', title, 'ok', `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`, null, fixed);
+    // A refspec written by `--fix` has not been fetched through yet, and this
+    // check is the last thing the operator reads before believing the mirror is
+    // sorted. Without the second sentence `ok` plus `fixed by --fix` reads as
+    // "repaired", while every query still answers from a mirror that was never
+    // retrieved -- the configuration is right and the records are still missing.
+    return check('notes-refspec', title, 'ok', fixed
+        ? `${NOTES_REF} is now covered for ${remotes.join(', ')} — nothing has been fetched through it yet`
+        : `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`, fixed ? `git fetch ${remotes[0] ?? 'origin'}` : null, fixed);
 };
 /**
  * Pushing is never automatic: `git push` writes to a ref other people read,
