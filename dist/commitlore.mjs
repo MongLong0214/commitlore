@@ -28246,7 +28246,7 @@ var TOOLS = [
   },
   {
     name: BEFORE_CHANGE_TOOL,
-    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. An empty `matched` array means the check ran and found nothing \u2014 it is a verdict, not an absence.",
+    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.",
     inputSchema: {
       type: "object",
       properties: {

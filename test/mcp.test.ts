@@ -512,15 +512,23 @@ describe('handshake and declarations', () => {
       description: string;
       annotations?: unknown;
     }[];
+    // Every tool that returns guard matches, not just the one named `guard`.
+    // The disclosure was correct here and absent from `commitlore_before_change`
+    // -- the surface a model reads before it edits -- for as long as this test
+    // looked at one name.
+    for (const name of ['commitlore_guard', 'commitlore_before_change']) {
+      const tool = tools.find((candidate) => candidate.name === name);
+      expect(tool, `${name} is not in the tool list`).toBeDefined();
+      const description = tool?.description ?? '';
+
+      // ADR-0020 §Decision item 2: every surface that exposes guard states its measured limits
+      expect(description, name).toContain('precision 44.8%');
+      expect(description, name).toContain('recall 22.0%');
+
+      // ADR-0020 §Decision item 3: the overclaiming sentence is removed
+      expect(description, name).not.toContain('it is a verdict, not an absence');
+    }
     const guard = tools.find((tool) => tool.name === 'commitlore_guard');
-    const description = guard?.description ?? '';
-
-    // ADR-0020 §Decision item 2: every surface that exposes guard states its measured limits
-    expect(description).toContain('precision 44.8%');
-    expect(description).toContain('recall 22.0%');
-
-    // ADR-0020 §Decision item 3: the overclaiming sentence is removed
-    expect(description).not.toContain('it is a verdict, not an absence');
 
     // The annotation is preserved (ADR-0020 §Consequences)
     expect(guard?.annotations).toMatchObject({ readOnlyHint: true });
