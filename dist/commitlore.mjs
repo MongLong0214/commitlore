@@ -29278,13 +29278,14 @@ var collectSources2 = (input, cwd) => {
   if (input.range !== void 0) return readRange(input.range, cwd);
   return [{ message: (input.readStdin ?? readStdinSync)() }];
 };
+var SHALLOW_REFERENCE_REASON = "shallow history \u2014 a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)";
 var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
 var indexedHeadRecords = (cwd) => {
   const { handle } = ensureIndex({ cwd });
   try {
     const records = /* @__PURE__ */ new Map();
     for (const row of queryTrailers(handle)) {
-      const identity = `${row.sha}\0${row.source}`;
+      const identity = `${row.sha}\0${row.source}\0${row.block}`;
       const existing = records.get(identity);
       if (existing !== void 0) {
         existing.trailers.push({ key: row.key, value: row.value });
@@ -29371,23 +29372,19 @@ var checkReferences = (input, sources, cwd) => {
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
-      const ownRecords = [
-        ...blocks.map((trailers) => ({
-          trailers,
-          source: "commit",
-          ...source.sha === void 0 ? {} : { sha: source.sha }
-        })),
-        ...repositoryRecords.filter(
-          (record2) => record2.sha === source.sha && record2.source === "notes"
-        )
-      ];
-      for (const trailers of blocks) {
-        const candidate = {
-          trailers,
-          source: "commit",
-          ...source.sha === void 0 ? {} : { sha: source.sha }
-        };
-        const dangling = findDanglingRefs(prior, [candidate]);
+      const ownBlocks = blocks.map((trailers) => ({
+        trailers,
+        source: "commit",
+        ...source.sha === void 0 ? {} : { sha: source.sha }
+      }));
+      const ownNotes = repositoryRecords.filter(
+        (record2) => record2.sha === source.sha && record2.source === "notes"
+      );
+      const ownRecords = [...ownBlocks, ...ownNotes];
+      for (const [index, candidate] of ownBlocks.entries()) {
+        const trailers = candidate.trailers;
+        const siblings = ownBlocks.filter((_, other) => other !== index);
+        const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
         const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
           (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
@@ -29397,9 +29394,18 @@ var checkReferences = (input, sources, cwd) => {
         );
       }
     }
+    const suppressed = violations.some((violation) => violation.rule === "dangling-ref") && hasShallowHistory(cwd);
+    const reported = suppressed ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
     return {
-      check: { class: "reference", status: violations.length === 0 ? "ok" : "failed" },
-      violations
+      check: {
+        class: "reference",
+        // `not-checked` rather than `ok` when something was withheld: the
+        // green would be the part a reader carries away, and this command has
+        // no verdict to offer on the reference it could not resolve.
+        status: reported.length > 0 ? "failed" : suppressed ? "not-checked" : "ok",
+        ...suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}
+      },
+      violations: reported
     };
   } catch (error2) {
     return {
@@ -29414,7 +29420,10 @@ var checkReferences = (input, sources, cwd) => {
 };
 var formatCheck = (check2) => {
   const name = check2.class === "reference" ? "references" : check2.class;
-  return check2.status === "not-checked" ? `${name} not checked (${check2.reason ?? "required information unavailable"})` : `${name} ${check2.status}`;
+  if (check2.status === "not-checked") {
+    return `${name} not checked (${check2.reason ?? "required information unavailable"})`;
+  }
+  return check2.reason === void 0 ? `${name} ${check2.status}` : `${name} ${check2.status} (${check2.reason})`;
 };
 var formatViolation = (violation) => {
   const parts = [];

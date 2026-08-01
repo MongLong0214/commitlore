@@ -477,6 +477,125 @@ describe('validate — check classes and reference integrity', () => {
     expect(result.violations).toEqual([]);
   });
 
+  // bug-issue-352(a): a shallow clone cannot see the ancestor that declares the
+  // referenced id, and reporting `dangling-ref` there blocks a commit whose
+  // record is not invalid — the history is truncated. `action/lint/lint.mjs`
+  // refuses to report green over a shallow checkout for the mirror-image
+  // reason; the local hook must equally refuse to report red.
+  it('does not report a reference to an ancestor below the shallow boundary as dangling (bug-issue-352)', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'commitlore-validate-shallow-'));
+    expect(parent.startsWith(tmpdir())).toBe(true);
+    temporaryDirectories.push(parent);
+
+    const origin = join(parent, 'origin');
+    createTestRepo({ path: origin, env: GIT_ENV });
+    commit(origin, 'old.txt', 'Old decision\n\nLimit: one runner\nRecord-Id: r-old352\n');
+    commit(origin, 'tip.txt', 'Tip\n\nLimit: two runners\nRecord-Id: r-tip352\n');
+
+    const message = 'Retire it\n\nSupersedes: r-old352\nRecord-Id: r-new352\n';
+
+    // The notes refspec is configured, so the `unfetched` gate does not fire
+    // and the reference check genuinely runs — otherwise this fixture would
+    // pass for the wrong reason.
+    const shallow = join(parent, 'shallow');
+    createTestRepo({ path: shallow, source: `file://${origin}`, depth: 1, env: GIT_ENV });
+    execFileSync(
+      'git',
+      ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
+      { cwd: shallow, env: GIT_ENV },
+    );
+    const shallowMessage = join(shallow, 'message.txt');
+    writeFileSync(shallowMessage, message);
+
+    // Control: the same message against the same origin, cloned whole, is a
+    // valid record. Only the truncation makes it look dangling.
+    const full = join(parent, 'full');
+    createTestRepo({ path: full, source: `file://${origin}`, env: GIT_ENV });
+    execFileSync(
+      'git',
+      ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
+      { cwd: full, env: GIT_ENV },
+    );
+    const fullMessage = join(full, 'message.txt');
+    writeFileSync(fullMessage, message);
+
+    const fullResult = runValidate({ messageFile: fullMessage, cwd: full });
+    expect(fullResult.code).toBe(0);
+    expect(fullResult.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+
+    const result = runValidate({ messageFile: shallowMessage, cwd: shallow });
+
+    expect(result.violations.filter((violation) => violation.rule === 'dangling-ref')).toEqual([]);
+    expect(result.code).toBe(0);
+    // Skipped, and said so — never a silent pass.
+    expect(result.checks[1]).toEqual({
+      class: 'reference',
+      status: 'not-checked',
+      reason:
+        'shallow history — a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)',
+    });
+    expect(result.stdout).toContain('shallow history');
+  });
+
+  // bug-issue-352(b): `Follows:`/`Supersedes:` resolve against `Record-Id`s
+  // "regardless of which block declared them" (SPEC §2.4), and a multi-block
+  // message is what this project's own squash inheritance and GitHub's squash
+  // button both produce.
+  it('resolves a Follows: to an earlier block of the same message (bug-issue-352)', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n\nRecord-Id: r-base352\n');
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(
+      messageFile,
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-blocka352',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Follows: r-blocka352',
+        'Record-Id: r-blockb352',
+        '',
+      ].join('\n'),
+    );
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    expect(result.violations).toEqual([]);
+    expect(result.code).toBe(0);
+    expect(result.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+  });
+
+  // bug-issue-352(b), the indexed half: the index's identity is
+  // `(commit_sha, source, block, seq)`, and flattening it to `(sha, source)`
+  // hides every block after the first from the declared set.
+  it('resolves a Follows: to a Record-Id declared in a later block of a commit in history (bug-issue-352)', () => {
+    const repo = makeRepo();
+    commit(
+      repo,
+      'squash.txt',
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-hista352',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Record-Id: r-histb352',
+        '',
+      ].join('\n'),
+    );
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(messageFile, 'Follow up\n\nFollows: r-histb352\nRecord-Id: r-next352\n');
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    expect(result.violations).toEqual([]);
+    expect(result.code).toBe(0);
+    expect(result.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+  });
+
   // bug-issue-187: --range must honour a Supersedes: declaration that comes
   // later in the range than the colliding commits, the same way stale does.
   it('accepts a cross-commit duplicate when a later commit in the range declares Supersedes (bug-issue-187)', () => {
