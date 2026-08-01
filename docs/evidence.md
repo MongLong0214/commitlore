@@ -36,6 +36,31 @@ This measures exposure and recall at a fixed two-record output budget — not
 token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one
 query, and one pinned embedding model.
 
+### How much of the active decision set reaches a fresh agent
+
+On this repository's own history — 345 records, 338 active, 7 superseded, 0
+expired — the shipped path-scoped projection delivers **81.7%** of the 2,217
+active (path, record) pairs held for files an agent could edit, and **0 retired
+records** among the 1,947 it hands over. Ordinary `git log` for the same path,
+cut to the same 800-token budget, delivers **42.0%** and 7 retired records while
+spending more tokens. Method and full tables: [active-record
+delivery](../bench/DECISION-DELIVERY.md), measured in
+[`decision-delivery-20260801T060225Z.jsonl`](../bench/results/decision-delivery-20260801T060225Z.jsonl).
+
+Budget and scope are measured on separate axes, which is what the paired
+budgeted and unbudgeted arms are for. Removing the token cap takes the
+projection to 92.3%, so **the cap costs 10.6 points**; the repository-wide dump
+with the same cap removed recovers the same 2,047 pairs, so **path scoping costs
+nothing**. The remaining 170 pairs are records the trust grader withholds, which
+puts the ceiling for any injection route on this corpus at 92.3%.
+
+This measures delivery, not recovery: no agent was run, and a delivered record
+is no evidence that one read it. It is one corpus, one repository, and one query
+strategy per route. The corpus holds no expired records, so a zero
+retired-delivery figure is evidence about the supersede filter on seven records
+and none at all about expiry. It is **not** the fresh-agent study registered in
+[MEASUREMENT-PROTOCOL.md](MEASUREMENT-PROTOCOL.md), which remains unrun.
+
 ### Latency and scaling
 
 At 100,000 commits, indexed `context` p50 is 496 ms; CommitLore's own
