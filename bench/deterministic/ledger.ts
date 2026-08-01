@@ -357,12 +357,50 @@ export const reductionFor = (
   };
 };
 
+/**
+ * The history both halves of the ratio describe.
+ *
+ * Not `HEAD`. A trial run priced the write side at `HEAD` while the read side
+ * came from a delivery run three records earlier, which puts two corpora in one
+ * ratio — the exact fault this measurement's own method document warns about
+ * one paragraph after committing it. The history is therefore pinned to the
+ * commit the delivery run recorded, and a commit that no longer resolves stops
+ * the run: ADR-0018's digest fallback establishes that harness *code* is
+ * identical, which is not the same as having the *history* back.
+ */
+export const resolveHistoryRef = (repoRoot: string, commit: string): string => {
+  const kind = git(repoRoot, ['cat-file', '-t', commit], { allowed: [0, 128] });
+  if (kind.status !== 0 || kind.stdout.trim() !== 'commit') {
+    throw new Error(
+      `refusing to price a token ledger: the delivery run's harness commit ${commit} does not resolve, ` +
+        'so the write side cannot be measured over the same history the read side was',
+    );
+  }
+  const ancestor = git(repoRoot, ['merge-base', '--is-ancestor', commit, 'HEAD'], {
+    allowed: [0, 1],
+  });
+  if (ancestor.status !== 0) {
+    throw new Error(
+      `refusing to price a token ledger: ${commit} is not an ancestor of HEAD, ` +
+        'so this checkout is not a continuation of the history the read side was measured on',
+    );
+  }
+  return commit;
+};
+
 export const measureTokenLedger = (
   base: RowBase,
   repoRoot: string,
-  ref = 'HEAD',
   log: (line: string) => void = () => {},
 ): TokenLedgerRow => {
+  const deliveryRows = readDeliveryRows(repoRoot, READ_SIDE_SOURCE);
+  const first = deliveryRows[0];
+  if (first === undefined) throw new Error('unreachable: rows were checked non-empty');
+  const reads = deliveryRows.map(readRouteOf);
+  const shipped = reads.find((route) => route.route === SHIPPED_ROUTE);
+  if (shipped === undefined) throw new Error(`${READ_SIDE_SOURCE} carries no \`${SHIPPED_ROUTE}\` route`);
+
+  const ref = resolveHistoryRef(repoRoot, first.harness_commit);
   const priced = priceCaptures(repoRoot, ref, log);
   const { scaffold, captures, promptTokens: prompt } = priced;
   const scaffoldOnlyTotal = tokensFor(scaffold) * captures;
@@ -370,13 +408,6 @@ export const measureTokenLedger = (
     'core/capture-verify.js',
     'core/harvest-verify.js',
   ]);
-
-  const deliveryRows = readDeliveryRows(repoRoot, READ_SIDE_SOURCE);
-  const reads = deliveryRows.map(readRouteOf);
-  const shipped = reads.find((route) => route.route === SHIPPED_ROUTE);
-  if (shipped === undefined) throw new Error(`${READ_SIDE_SOURCE} carries no \`${SHIPPED_ROUTE}\` route`);
-  const first = deliveryRows[0];
-  if (first === undefined) throw new Error('unreachable: rows were checked non-empty');
 
   return {
     ...base,

@@ -13,6 +13,7 @@ import {
   breakEvenAgainst,
   measureTokenLedger,
   priceCaptures,
+  resolveHistoryRef,
   scanVerifyModules,
   statsOf,
   tokensFor,
@@ -97,7 +98,7 @@ let row: TokenLedgerRow;
 
 beforeAll(() => {
   historyDir = createHistory();
-  row = measureTokenLedger(BASE, REPO_ROOT, 'HEAD');
+  row = measureTokenLedger(BASE, REPO_ROOT);
 });
 
 afterAll(() => {
@@ -268,6 +269,20 @@ describe('token ledger — the measured row', () => {
     expect(row.read_source.population).toBe(READ_SIDE_POPULATION);
     expect(row.read_source.harness_commit).toMatch(/^[0-9a-f]{40}$/);
     expect(row.read_source.dist_digest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  /**
+   * The two halves of every ratio have to describe one repository state. Pricing
+   * the write side at HEAD while the read side comes from an earlier commit is
+   * the fault that threw away the first trial run, and it would come back
+   * silently — every field would still be populated and every number plausible.
+   */
+  it('prices the write side over the same commit the read side was measured on', () => {
+    expect(row.history_ref).toBe(row.read_source.harness_commit);
+  });
+
+  it('refuses to price a ledger whose read side names a commit this checkout lacks', () => {
+    expect(() => resolveHistoryRef(REPO_ROOT, '0'.repeat(40))).toThrow(/does not resolve/);
   });
 
   it('derives tokens per read as an identity on the source row', () => {

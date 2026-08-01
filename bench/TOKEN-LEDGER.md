@@ -1,6 +1,8 @@
 # The token ledger: what a record costs to write, what it saves to read
 
-- Status: **registered 2026-08-01, before any run of this measurement**
+- Status: **registered 2026-08-01, before any run of this measurement**;
+  amended the same day by the history-ref deviation recorded in §3, before the
+  run that reports it
 - Closes the gap `docs/evidence.md` records under *Not yet measured → Break-even*
 - Provenance rules: [ADR-0018](../docs/adr/ADR-0018-benchmark-provenance-after-rewrites.md)
 - Metric name in the result rows: `token_ledger`
@@ -95,8 +97,8 @@ markers the prompt emits in their place (`1 | ` and `(no diff)`), so the figure
 reported is the prompt's floor as the product would actually print it, not a
 subtraction.
 
-**W2.** For each commit in `HEAD`'s history that carries a `Record-Id:` trailer
-and has exactly one parent, the diff `capture` would have hashed is the
+**W2.** For each commit in the measured history that carries a `Record-Id:`
+trailer and has exactly one parent, the diff `capture` would have hashed is the
 difference between the parent tree and the commit tree. The harness reconstructs
 it with `git diff --no-color <sha>^ <sha>` and feeds it through the same
 `buildHarvestPrompt`. Merge commits are excluded, not skipped silently: this
@@ -117,6 +119,18 @@ transitive local import graph of the built verify entry points and counts
 references to any network client. A count of zero is reported as a measurement;
 a count above zero is a finding and the run says so rather than reporting a
 zero it no longer earns.
+
+> **Deviation, recorded 2026-08-01, before the run that reports these figures.**
+> This section first said "each commit in `HEAD`'s history". A trial run at
+> `HEAD` was thrown away without being committed, because that choice put two
+> corpora in one ratio: the write side priced the history at `HEAD` while the
+> read side came from a delivery run three records earlier, and §4 objects to
+> exactly that on the other side of the same argument. The measured history is
+> now pinned to the `harness_commit` the delivery run recorded, so both halves
+> of every ratio describe one repository state. A commit that no longer resolves
+> stops the run rather than falling back: ADR-0018's digest fallback establishes
+> that harness *code* is identical, which is not the same as having the history
+> back. Nothing else changed — same terms, same unit, same denominators.
 
 **The floor.** W3 and W4 are both non-negative. So
 
@@ -163,6 +177,10 @@ derivation carries its source's provenance with it. Remeasuring would move the
 corpus — this repository's record count grows with every commit, including the
 commits that add this document — and would leave `docs/evidence.md` citing two
 different corpora for two halves of the same ratio.
+
+That argument cuts both ways, which is what the §3 deviation is about: it is the
+read side's `harness_commit` that fixes the history, and the write side is
+measured over that same commit rather than over `HEAD`.
 
 The primary population is `authored`, the same population
 `bench/DECISION-DELIVERY.md` makes primary.

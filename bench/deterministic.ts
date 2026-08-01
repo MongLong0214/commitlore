@@ -130,7 +130,7 @@ const main = (): void => {
       ? [measureDensity(base, REPO_ROOT)]
       : ledgerOnly
       ? [
-          measureTokenLedger(base, REPO_ROOT, 'HEAD', (line) => {
+          measureTokenLedger(base, REPO_ROOT, (line) => {
             process.stdout.write(`${line}\n`);
           }),
         ]
@@ -159,7 +159,7 @@ const main = (): void => {
           process.stdout.write('deterministic bench: rationale density\n');
           const density = measureDensity(base, REPO_ROOT);
           process.stdout.write('deterministic bench: token ledger\n');
-          const ledger = measureTokenLedger(base, REPO_ROOT, 'HEAD', (line) => {
+          const ledger = measureTokenLedger(base, REPO_ROOT, (line) => {
             process.stdout.write(`${line}\n`);
           });
           return [

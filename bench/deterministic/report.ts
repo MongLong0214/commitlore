@@ -410,6 +410,8 @@ const ledgerSection = (rows: readonly TokenLedgerRow[]): string[] => {
     '',
     `Method: render \`buildHarvestPrompt\` on the built product with an empty transcript and an empty diff to get the scaffold, then once per record-bearing single-parent commit in \`git log ${row.history_ref}\` with that commit's diff reconstructed as \`git diff <sha>^ <sha>\`. No model is called.`,
     '',
+    `The history is \`${row.history_ref}\` and not \`HEAD\`: it is the commit the delivery run in 11.2 recorded, so both halves of every ratio below describe one repository state rather than two.`,
+    '',
     '| quantity | value |',
     '|---|---:|',
     `| prompt scaffold | ${group(row.prompt_scaffold_chars)} chars / ${group(row.prompt_scaffold_bytes)} bytes / **${group(row.prompt_scaffold_tokens)} tokens** |`,
