@@ -212,6 +212,15 @@ every edit. Adoption cost, from the same report: one command, and 7.4 seconds to
 index 768 commits. Nothing touched history or the working tree. The console
 output and the full report are in [docs/evidence.md](docs/evidence.md).
 
+That was a 768-commit repository. At **100,000 commits an indexed `context` query
+answers in 496 ms at p50**, and the hooks behind it cost 185.85 ms p50 for
+`commit-msg` and 102.40 ms p50 for the injection hook. Those are the numbers that
+decide whether this stays installed on a large repository, and they are measured
+rather than asserted. The same run carries the figure that looks bad: without the
+index, that query at 100,000 commits takes 86,673 ms. The index is not an
+optimisation on top of a working query — it is what makes the query possible at
+that size, which is why `init` builds one and `doctor` checks it.
+
 **Three properties no hosted chat-history product can offer**, and the reason the
 authority is Git rather than a service:
 
