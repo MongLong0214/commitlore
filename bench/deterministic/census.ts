@@ -16,6 +16,21 @@
 import { command } from './shared.ts';
 
 const LOG_FORMAT = '--format=%H%x1f%cI%x1f%P%x1f%B%x00';
+/**
+ * The same walk with the notes mirror appended as a fifth field. SPEC §1 makes
+ * `refs/notes/commitlore` an authoritative record location beside the commit
+ * message, so an answer key that reads only messages is incomplete wherever a
+ * record was attached out of band — which is every record a backfill wrote,
+ * since backfill refuses to rewrite history.
+ */
+const LOG_FORMAT_WITH_NOTES = '--format=%H%x1f%cI%x1f%P%x1f%N%x1f%B%x00';
+const NOTES_REF = 'refs/notes/commitlore';
+/**
+ * `git interpret-trailers --parse` reads its input's *last paragraph*, and a
+ * bare trailer block presented alone is read as the subject (SPEC §2.1 B8). The
+ * product prepends a synthetic subject for exactly this reason; so does this.
+ */
+const NOTE_SUBJECT = 'commitlore notes mirror';
 const TRAILER_PARSE_ARGS = [
   '-c',
   'trailer.separators=:',
@@ -76,6 +91,18 @@ interface Commit {
   readonly committedAt: string;
   readonly parents: number;
   readonly message: string;
+  /** The notes-mirror body, or `''` when notes were not read or none exists. */
+  readonly note: string;
+}
+
+export interface CensusOptions {
+  /**
+   * Fold `refs/notes/commitlore` into the answer key as well as the commit
+   * message. Off by default: every measurement registered before this option
+   * existed read messages only, and turning it on by default would silently
+   * change their denominator.
+   */
+  readonly includeNotes?: boolean;
 }
 
 /** Git's own trailer parser, so the grammar is Git's rather than a regex here. */
@@ -137,17 +164,32 @@ const countMatches = (pattern: RegExp, text: string): number => {
   return total;
 };
 
-const readCommits = (repoRoot: string, ref: string): readonly Commit[] => {
-  const raw = command('git', ['log', LOG_FORMAT, ref], { cwd: repoRoot }).stdout.split('\0');
+/**
+ * `%N` is placed *before* `%B` in the notes format on purpose. The message is
+ * recovered by joining everything after the fixed fields, so a message that
+ * happened to contain the field separator still round-trips; a note is a
+ * canonical trailer block and cannot.
+ */
+const readCommits = (
+  repoRoot: string,
+  ref: string,
+  includeNotes: boolean,
+): readonly Commit[] => {
+  const args = includeNotes
+    ? ['log', `--notes=${NOTES_REF}`, LOG_FORMAT_WITH_NOTES, ref]
+    : ['log', LOG_FORMAT, ref];
+  const raw = command('git', args, { cwd: repoRoot }).stdout.split('\0');
   raw.pop();
   return raw.map((entry) => {
     const body = entry.startsWith('\n') ? entry.slice(1) : entry;
     const [sha = '', committedAt = '', parents = '', ...rest] = body.split('\x1f');
+    const note = includeNotes ? (rest.shift() ?? '') : '';
     return {
       sha,
       committedAt,
       parents: parents.trim() === '' ? 0 : parents.trim().split(/\s+/).length,
       message: rest.join('\x1f'),
+      note,
     };
   });
 };
@@ -165,8 +207,13 @@ const changedPaths = (repoRoot: string, sha: string): readonly string[] =>
  * latest one and wins for the single-valued `Expires:`; paths accumulate across
  * every declaration.
  */
-export const buildCensus = (repoRoot: string, ref = 'HEAD'): Census => {
-  const commits = readCommits(repoRoot, ref);
+export const buildCensus = (
+  repoRoot: string,
+  ref = 'HEAD',
+  options: CensusOptions = {},
+): Census => {
+  const includeNotes = options.includeNotes ?? false;
+  const commits = readCommits(repoRoot, ref, includeNotes);
   const head = commits[0];
   if (head === undefined) throw new Error(`no commits at ${ref}`);
   const evaluatedAt = new Date(head.committedAt);
@@ -186,10 +233,17 @@ export const buildCensus = (repoRoot: string, ref = 'HEAD'): Census => {
 
   for (const commit of commits) {
     if (commit.parents > 1) mergeCommits += 1;
-    supersedesLinesScanned += countMatches(SUPERSEDES_LINE, commit.message);
-    expiresLinesScanned += countMatches(EXPIRES_LINE, commit.message);
+    // A note is a bare block, so it needs the synthetic subject B8 demands
+    // before either the block walk or the raw line scan reads it.
+    const noted = commit.note.trim() === '' ? '' : `${NOTE_SUBJECT}\n\n${commit.note}`;
+    supersedesLinesScanned += countMatches(SUPERSEDES_LINE, `${commit.message}\n${noted}`);
+    expiresLinesScanned += countMatches(EXPIRES_LINE, `${commit.message}\n${noted}`);
 
-    for (const block of recordBlocks(repoRoot, commit.message)) {
+    const blocks =
+      noted === ''
+        ? recordBlocks(repoRoot, commit.message)
+        : [...recordBlocks(repoRoot, commit.message), ...recordBlocks(repoRoot, noted)];
+    for (const block of blocks) {
       const recordId = valueOf(block, RECORD_ID_KEY);
       for (const trailer of block) {
         if (trailer.key !== SUPERSEDES_KEY) continue;
