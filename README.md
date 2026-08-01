@@ -14,7 +14,17 @@
 
 # CommitLore
 
-## A coding agent must not revive a decision the repository already reversed.
+## Stop re-reviewing the same bad idea.
+
+Your coding agent can read the code. It cannot see why your team rejected the
+obvious fix six months ago — so it proposes it again, and somebody spends the
+review explaining a decision that was already made.
+
+**A coding agent must not revive a decision the repository already reversed.**
+CommitLore records constraints, rejected alternatives, warnings and verification
+gaps in Git, then shows only the decisions that still apply, before the next edit.
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **Git-native decision authority for AI-assisted codebases.** CommitLore tracks which decisions are still in force and which have been reversed—directly in Git—so a coding agent sees only current decisions when it queries a path.
 
@@ -125,13 +135,109 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## See the difference
+
+**Without CommitLore.** A new session sees two functions with similar inputs and
+reuses one.
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+The team now has another flag, another wrapper, and another compatibility branch
+protecting a use case the function was never meant to own. The reviewer writes
+"we already rejected this" for the second time.
+
+**With CommitLore.** Before editing, the agent receives:
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+It shares the pure calculation primitives instead, and leaves the checkout policy
+entrypoint alone. The review never happens, because the decision was already
+there.
+
+## How it works
+
+1. **Capture** — the agent drafts only the decision context a diff cannot show.
+2. **Verify** — CommitLore checks that draft against the session and the staged diff.
+3. **Preserve** — the verified record lives in Git, with identity and a lifecycle.
+4. **Deliver** — before editing a path, the next agent receives only the decisions still in force.
+
+## What it looks like on a real repository
+
+From a field report on a ~768-commit Swift MCP server, one day after installing.
+The engineer had already run a full census of the codebase before installing
+CommitLore, and was working through the files that census had flagged.
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **I did not know that commit existed.** It is a merged PR from two weeks
+> earlier that had already removed eight of these sites and replaced each with
+> an accessibility-native equivalent, every one fail-closed and live-verified.
+>
+> It relocated my census. I had been treating the surviving sites as *the*
+> problem. They are the **residual** after a shipped removal campaign — the ones
+> that survived a deliberate attempt to remove them. That is a different
+> engineering problem and a different risk assessment.
+>
+> None of this was in any chat history. It was in the repository, and I got it
+> by naming a file path.
+
+The alternative was reading two weeks of merged pull requests to find it. That is
+not something an agent does spontaneously, and not something a person does before
+every edit.
+
+Adoption cost, from the same report: one command, and 7.4 seconds to index 768
+commits. Nothing touched history or the working tree.
+
+**Three properties no hosted chat-history product can offer**, and the reason the
+authority is Git rather than a service:
+
+- **Reviewable.** A decision arrives as a commit trailer in a pull request, where
+  it can be argued with before it becomes authority.
+- **Owned by the repository.** No account, no vendor, nothing to lose access to.
+- **Travels with a clone.** A new machine, a new contributor, or a new agent gets
+  the decisions with the code.
+
 ## What makes it different
 
-- **CLAUDE.md tells the agent how to work. CommitLore tells it why this code exists.**
-- **ADRs document architecture. CommitLore documents the decisions hidden inside the diff.**
-- **Not another memory database. A decision protocol built into Git.**
+| Tool | What it remembers |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | how the agent should work |
+| ADRs | large architecture decisions, as documents |
+| Chat memory / RAG | related text from the past |
+| **CommitLore** | **which decisions still apply to this code path** |
+
+Similarity search can find a related decision. CommitLore also knows whether that
+decision is still active, superseded, or expired — and shows only the first.
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
+
+## Where it pays off
+
+**Protect a module boundary.** *"`calculatePrice` owns final checkout pricing only. Do not reuse it for admin previews."*
+
+**Preserve a rejected workaround.** *"Raising the timeout hides the connection leak. Fix the cleanup path instead."*
+
+**Mark temporary compatibility code.** *"This caller is temporary and is not part of the supported contract."*
+
+**Carry a verification gap.** *"Single-user behaviour was tested. Concurrent refresh remains unverified."*
+
+Each is a sentence a diff cannot carry and a reviewer would otherwise have to say twice.
 
 ## How records get created
 
@@ -293,9 +399,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## Uninstall
+
+```bash
+commitlore uninstall
+```
+
+Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
+checkout, and the MCP entry it added to each agent config. It removes nothing it
+did not write, and names what it leaves: per-repository hooks (`commitlore hooks
+uninstall`), the agent hook (`commitlore inject uninstall-claude-hook`), and the
+Claude Code plugin (`/plugin uninstall commitlore@commitlore`). `--dry-run`
+reports without changing anything.
+
 ## Known limitations
 
-- Windows is unsupported: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - Cryptographic author verification, repository-wide record coverage, symbol anchors, and an interactive record builder are not implemented yet: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4 did not test a guard effect: its rows have no `guard_exposure`, so treatment exposure is unverifiable ([#122](https://github.com/MongLong0214/commitlore/issues/122)).
 - Guard (ruled-out alternative matching) is an experimental advisory: precision 44.8% (95% Wilson CI 32.7%–57.5%), recall 22.0% on the 417-decision corpus ([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). An empty guard result does not guarantee a proposal avoids all ruled-out alternatives — at 22% recall, a miss is the common case.

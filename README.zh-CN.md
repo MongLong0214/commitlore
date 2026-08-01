@@ -14,7 +14,15 @@
 
 # CommitLore
 
-## 编程代理不得复活仓库已经推翻的决策。
+## 不再重复评审同一个坏主意。
+
+编程代理能读代码，却看不到六个月前团队为什么否决了那个显而易见的修复 —— 于是它再次提出，
+而有人要花一次评审去解释一个早已做出的决定。
+
+**编程代理不得复活仓库已经推翻的决定。** CommitLore 把约束、被否决的替代方案、警告和验证
+缺口记录在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
 
@@ -125,6 +133,77 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 看看差别
+
+**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
+第二次写下"我们已经否决过这个了"。
+
+**有 CommitLore。** 编辑之前，代理收到：
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
+那里。
+
+## 工作方式
+
+1. **Capture** — 代理只起草 diff 无法呈现的决策上下文。
+2. **Verify** — CommitLore 将草稿与会话和暂存 diff 进行核对。
+3. **Preserve** — 通过验证的记录带着身份与生命周期留在 Git 中。
+4. **Deliver** — 下一个代理在编辑路径前，只收到**当下仍然有效的决定**。
+
+## 在真实仓库中的样子
+
+来自一份约 768 次提交的 Swift MCP 服务器现场报告，安装后第二天。工程师在安装 CommitLore
+之前已完成代码库的全面普查，当时正在处理普查标记出的文件。
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **我不知道那个提交存在。** 那是两周前合并的 PR，已经移除了其中八处，并把每一处都换成了
+> accessibility-native 的等价实现，全部 fail-closed 并经过真机验证。
+>
+> 它重新定位了我的普查。我一直把剩下的站点当作问题**本身**。不是的。它们是一次已发布的
+> 移除行动之后的**残余** — 是在一次有意的移除尝试中存活下来的那些。这是完全不同的工程
+> 问题，也是不同的风险评估。
+>
+> 这些都不在任何聊天记录里。它们在仓库里，而我只是给出了一个文件路径。
+
+替代方案是通读两周的已合并 PR。这不是代理会主动做的事，也不是人在每次编辑前会做的事。
+
+同一份报告中的接入成本：一条命令，768 次提交索引耗时 7.4 秒。不触碰历史，也不触碰工作区。
+
+**托管式聊天记录产品无法提供的三个性质**，也是把权威放在 Git 而非服务上的理由：
+
+| 工具 | 它记住什么 |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | 代理应该如何工作 |
+| ADR | 以文档形式记录大的架构决策 |
+| Chat memory / RAG | 过去的相关文本 |
+| **CommitLore** | **对这条代码路径当下仍然有效的决定** |
+
+相似度检索能找到相关的决定。CommitLore 还知道那个决定是否仍然有效、是否已被取代或过期 ——
+并且只呈现第一种。
+
 ## 有何不同
 
 - **CLAUDE.md 告诉代理如何工作。CommitLore 告诉它这段代码为何存在。**
@@ -132,6 +211,18 @@ node commitlore/dist/commitlore.mjs --version
 - **不是又一个 memory database，而是构建在 Git 中的 decision protocol。**
 
 权威来源是普通的 commit trailer 与 `refs/notes/commitlore`。index 和 report 都从这些 Git record 派生，且可以重建。
+
+## 在哪里见效
+
+**守住模块边界。** *"`calculatePrice` 只负责最终的 checkout 定价。不要复用于管理员预览。"*
+
+**保留被否决的权宜之计。** *"调高超时会掩盖连接泄漏。请修复 cleanup 路径。"*
+
+**标记临时兼容代码。** *"这个调用方是临时的，不属于受支持的契约。"*
+
+**传递验证缺口。** *"单用户行为已测试。并发刷新仍未验证。"*
+
+每一条都是 diff 无法承载的句子，否则评审者就得说第二遍。
 
 ## record 如何创建
 
@@ -293,9 +384,20 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## 卸载
+
+```bash
+commitlore uninstall
+```
+
+移除 `install.sh` 或 `install.ps1` 写入的内容 — wrapper、固定的 checkout，以及它
+添加到各 agent config 的 MCP 条目。它不会移除自己没有写入的东西，并会明确说明留下
+了什么：每个仓库的 hook（`commitlore hooks uninstall`）、agent hook
+（`commitlore inject uninstall-claude-hook`）、Claude Code plugin
+（`/plugin uninstall commitlore@commitlore`）。`--dry-run` 只报告，不做任何更改。
+
 ## 已知限制
 
-- 不支持 Windows：[#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
 - Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。

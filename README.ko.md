@@ -14,7 +14,15 @@
 
 # CommitLore
 
-## 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.
+## 같은 나쁜 아이디어를 다시 리뷰하지 않는다.
+
+코딩 에이전트는 코드를 읽을 수 있다. 하지만 6개월 전 당신 팀이 그 뻔한 수정을 왜 기각했는지는
+볼 수 없다 — 그래서 다시 제안하고, 누군가는 이미 내려진 결정을 설명하는 데 리뷰를 쓴다.
+
+**코딩 에이전트가 저장소가 이미 되돌린 결정을 되살려서는 안 된다.** CommitLore는 제약, 기각된
+대안, 경고, 검증 공백을 Git에 기록하고, 다음 편집 전에 **지금도 유효한 결정만** 보여준다.
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **AI 보조 코드베이스를 위한 Git-native 결정 권위.** CommitLore는 어떤 결정이 아직 유효하고 어떤 결정이 뒤집혔는지를 Git에서 직접 추적한다. 코딩 에이전트가 경로를 조회하면 현재 유효한 결정만 보인다.
 
@@ -125,6 +133,79 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 차이
+
+**CommitLore 없이.** 새 세션이 입력이 비슷한 함수 둘을 보고 하나를 재사용한다.
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+이제 팀에는 flag 하나, wrapper 하나, 그리고 그 함수가 애초에 맡을 생각이 없던 사용처를
+지키는 compatibility branch 하나가 더 생겼다. 리뷰어는 "이건 이미 기각했다"를 두 번째로 쓴다.
+
+**CommitLore와 함께.** 편집 전에 에이전트가 받는 것:
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+에이전트는 대신 순수 계산 primitive를 공유하고 checkout 정책 진입점은 건드리지 않는다.
+그 리뷰는 아예 일어나지 않는다. 결정이 이미 거기 있었기 때문이다.
+
+## 어떻게 동작하나
+
+1. **Capture** — 에이전트가 diff로는 알 수 없는 결정 맥락만 초안으로 쓴다.
+2. **Verify** — CommitLore가 그 초안을 세션과 staged diff에 대조한다.
+3. **Preserve** — 검증된 record가 identity와 lifecycle을 갖고 Git에 남는다.
+4. **Deliver** — 다음 에이전트는 경로를 편집하기 전에 **지금도 유효한 결정만** 받는다.
+
+## 실제 저장소에서는 이렇게 보인다
+
+커밋 약 768개인 Swift MCP 서버의 필드리포트에서, 설치 다음 날. 엔지니어는 CommitLore를
+설치하기 전에 이미 코드베이스 전수 조사를 마쳤고, 그 조사가 표시한 파일들을 작업 중이었다.
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **그 커밋이 있는 줄 몰랐다.** 2주 전 merge된 PR이고, 이미 이 사이트 여덟 곳을 제거하고
+> 각각을 accessibility-native 등가물로 교체했다 — 전부 fail-closed에 실기기 검증까지.
+>
+> 이건 내 전수 조사를 재배치했다. 나는 남아 있는 사이트들을 문제 **자체**로 다루고
+> 있었다. 아니었다. 그건 이미 출시된 제거 캠페인의 **잔여물**이다 — 의도적인 제거 시도를
+> 견디고 살아남은 것들. 완전히 다른 공학 문제이고 다른 리스크 평가다.
+>
+> 이 중 어느 것도 채팅 기록에 없었다. 저장소에 있었고, 나는 파일 경로를 대서 얻었다.
+
+대안은 2주치 merge된 PR을 읽는 것이었다. 에이전트가 자발적으로 하는 일이 아니고, 사람이
+매 편집 전에 하는 일도 아니다.
+
+같은 리포트의 도입 비용: 명령 하나, 그리고 커밋 768개 인덱싱에 7.4초. 히스토리도 작업
+트리도 건드리지 않는다.
+
+**호스팅형 채팅 기록 제품이 줄 수 없는 세 가지**, 그리고 권위를 서비스가 아니라 Git에 둔 이유:
+
+| 도구 | 기억하는 것 |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | 에이전트가 어떻게 일해야 하는가 |
+| ADR | 큰 아키텍처 결정을 문서로 |
+| Chat memory / RAG | 과거의 관련 텍스트 |
+| **CommitLore** | **이 코드 경로에 지금도 유효한 결정** |
+
+유사도 검색은 관련된 결정을 찾아줄 수 있다. CommitLore는 거기에 더해 그 결정이 아직
+유효한지, 대체됐는지, 만료됐는지를 알고 — 첫 번째 것만 보여준다.
+
 ## 무엇이 다른가
 
 - **CLAUDE.md는 에이전트에게 어떻게 일할지 알려준다. CommitLore는 이 코드가 왜 존재하는지 알려준다.**
@@ -132,6 +213,18 @@ node commitlore/dist/commitlore.mjs --version
 - **또 하나의 메모리 데이터베이스가 아니다. Git에 들어가는 결정 프로토콜이다.**
 
 권위 있는 원본은 평범한 commit trailer와 `refs/notes/commitlore`다. 인덱스와 보고서는 이 Git 기록에서 파생되며 다시 만들 수 있다.
+
+## 어디서 값을 하나
+
+**모듈 경계를 지킨다.** *"`calculatePrice`는 최종 checkout 가격만 담당한다. 관리자 미리보기에 재사용하지 않는다."*
+
+**기각된 우회책을 보존한다.** *"타임아웃을 올리면 커넥션 누수가 가려진다. cleanup 경로를 고쳐라."*
+
+**임시 호환 코드를 표시한다.** *"이 caller는 임시이며 지원 계약의 일부가 아니다."*
+
+**검증 공백을 전달한다.** *"단일 사용자 동작은 테스트했다. 동시 갱신은 미검증이다."*
+
+전부 diff가 실어 나를 수 없고, 없으면 리뷰어가 두 번 말해야 하는 문장이다.
 
 ## record가 만들어지는 방법
 
@@ -293,9 +386,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## 제거
+
+```bash
+commitlore uninstall
+```
+
+`install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
+그리고 각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
+남기는 것을 명시한다: 저장소별 hook(`commitlore hooks uninstall`), agent
+hook(`commitlore inject uninstall-claude-hook`), Claude Code
+plugin(`/plugin uninstall commitlore@commitlore`). `--dry-run`은 아무것도 바꾸지
+않고 보고만 한다.
+
 ## 알려진 제한 사항
 
-- Windows는 지원하지 않는다: [#95](https://github.com/MongLong0214/commitlore/issues/95).
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 - Guard(ruled-out alternative matching)는 실험적 참고 자료이다: precision 44.8%(95% Wilson CI 32.7%–57.5%), recall 22.0%, 417-decision corpus 기준([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). 빈 guard 결과는 제안이 모든 ruled-out alternative를 피했다는 보장이 아니다 — recall 22%에서 누락이 일반적이다.

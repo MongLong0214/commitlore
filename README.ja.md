@@ -14,7 +14,17 @@
 
 # CommitLore
 
-## コーディングエージェントはリポジトリがすでに覆した決定を復活させてはならない。
+## 同じ悪い案を二度レビューしない。
+
+コーディングエージェントはコードを読めます。しかし6か月前にチームがその明白な修正をなぜ
+却下したのかは見えません — だから再び提案し、誰かが既に下された決定を説明するために
+レビューを費やします。
+
+**コーディングエージェントがリポジトリで既に覆された決定を復活させてはならない。**
+CommitLore は制約・却下された代替案・警告・検証ギャップを Git に記録し、次の編集の前に
+**今も有効な決定だけ**を示します。
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **AI 支援コードベースのための Git-native 意思決定権威。** CommitLore は、どの決定がまだ有効でどの決定が覆されたかを Git 内で直接追跡します。コーディングエージェントがパスを問い合わせると、現在有効な決定だけが返されます。
 
@@ -125,6 +135,83 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 違いを見る
+
+**CommitLore なしの場合。** 新しいセッションが入力の似た2つの関数を見て、一方を再利用します。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+チームにはフラグが1つ、ラッパーが1つ、そしてその関数が担うつもりのなかったユースケースを
+守る互換ブランチが1つ増えます。レビュアーは「それは既に却下した」と2度目を書きます。
+
+**CommitLore ありの場合。** 編集の前に、エージェントはこれを受け取ります:
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+エージェントは代わりに純粋な計算プリミティブを共有し、checkout ポリシーの入口には触れません。
+そのレビューは起きません。決定が既にそこにあったからです。
+
+## 仕組み
+
+1. **Capture** — diff からは分からない決定コンテキストだけをエージェントが起草します。
+2. **Verify** — CommitLore がその草稿をセッションと staged diff に照合します。
+3. **Preserve** — 検証済みレコードが identity と lifecycle を持って Git に残ります。
+4. **Deliver** — 次のエージェントはパスを編集する前に、**今も有効な決定だけ**を受け取ります。
+
+## 実際のリポジトリでの見え方
+
+コミット約768個の Swift MCP サーバーのフィールドレポートより、インストール翌日。
+エンジニアは CommitLore を入れる前にコードベースの全数調査を終えており、その調査が
+印を付けたファイルを作業していた。
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **そのコミットの存在を知らなかった。** 2週間前にマージされた PR で、これらのサイトの
+> うち8か所を既に削除し、それぞれを accessibility-native な等価物に置き換えていた —
+> すべて fail-closed で実機検証済み。
+>
+> これは私の全数調査を組み替えた。残っているサイトを問題**そのもの**として扱っていたが、
+> 違った。出荷済みの削除キャンペーンの**残余**だ — 意図的な削除の試みを生き延びたもの。
+> まったく別の工学的問題であり、別のリスク評価だ。
+>
+> どれもチャット履歴にはなかった。リポジトリにあり、ファイルパスを指定して得た。
+
+代替手段は2週間分のマージ済み PR を読むことだった。エージェントが自発的にやることでは
+なく、人が編集のたびにやることでもない。
+
+同じレポートの導入コスト: コマンド1つ、コミット768個のインデックスに7.4秒。履歴も作業
+ツリーも触らない。
+
+**ホスト型のチャット履歴製品が提供できない3つの性質**、そして権威をサービスではなく Git に
+置いた理由:
+
+| ツール | 覚えているもの |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | エージェントがどう働くべきか |
+| ADR | 大きなアーキテクチャ決定を文書として |
+| Chat memory / RAG | 過去の関連テキスト |
+| **CommitLore** | **このコードパスに今も適用される決定** |
+
+類似検索は関連する決定を見つけられます。CommitLore はさらに、その決定が今も有効か、
+置き換えられたか、期限切れかを知っていて — 最初のものだけを示します。
+  ともに決定を受け取る。
+
 ## 違い
 
 - **CLAUDE.md はエージェントに作業方法を伝える。CommitLore はこのコードがなぜ存在するかを伝える。**
@@ -132,6 +219,18 @@ node commitlore/dist/commitlore.mjs --version
 - **もう一つの memory database ではない。Git に組み込まれた decision protocol です。**
 
 権威ある原本は通常の commit trailer と `refs/notes/commitlore` です。index と report はこれらの Git record から派生し、再構築できます。
+
+## どこで効くか
+
+**モジュール境界を守る。** *「`calculatePrice` は最終 checkout 価格のみを担当する。管理者プレビューに再利用しない」*
+
+**却下された回避策を残す。** *「タイムアウトを上げると接続リークが隠れる。cleanup 経路を直すこと」*
+
+**一時的な互換コードに印を付ける。** *「この caller は一時的で、サポート対象の契約には含まれない」*
+
+**検証ギャップを伝える。** *「単一ユーザーの挙動はテスト済み。同時リフレッシュは未検証」*
+
+どれも diff が運べない一文であり、無ければレビュアーが二度言うことになる文です。
 
 ## record が作られる方法
 
@@ -293,9 +392,21 @@ node ~/.commitlore/dist/commitlore.mjs init
 node ~/.commitlore/dist/commitlore.mjs context src/auth
 ```
 
+## アンインストール
+
+```bash
+commitlore uninstall
+```
+
+`install.sh` または `install.ps1` が書いたものを削除します — wrapper、固定された
+checkout、そして各 agent config に追加した MCP エントリ。自分が書いていないものは
+削除せず、残すものを明示します: リポジトリごとの hook（`commitlore hooks
+uninstall`）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
+plugin（`/plugin uninstall commitlore@commitlore`）。`--dry-run` は何も変更せずに
+報告します。
+
 ## 既知の制限事項
 
-- Windows は未対応です: [#95](https://github.com/MongLong0214/commitlore/issues/95)。
 - cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
 - M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 - Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。

@@ -367,3 +367,36 @@ describe('T-1122 the host table uses one vocabulary and claims nothing unreached
     }
   });
 });
+
+/**
+ * The gap that let two contradictions ship. `docs/COMPATIBILITY.md` is asserted
+ * against the files it describes, and each README carries a pointer to it — but
+ * nothing checked that a README does not then say the opposite further down.
+ *
+ * It happened twice. `Alpine and other musl Linux hosts are unsupported` outlived
+ * the executed install that made it false, and `Windows is unsupported` outlived
+ * the containment run that made it false. Both sat in a section the compatibility
+ * work was forbidden to edit, and both were found by reading rather than by a
+ * failing test.
+ *
+ * This asserts the direction that was missing: for every host the table calls
+ * `supported`, no README declares it unsupported.
+ */
+describe('T-1122 no README contradicts the host table', () => {
+  const hosts = (): string[][] => tableUnder(doc, '## Hosts');
+
+  it.each(README_FILES)('%s does not call a supported host unsupported', (file) => {
+    const body = readFile(join(REPO_ROOT, file));
+    for (const [host, status] of hosts()) {
+      if (status !== 'supported') continue;
+      const platform = unticked(host).split(/[,(]/)[0].trim();
+      for (const line of body.split('\n')) {
+        if (!line.toLowerCase().includes(platform.toLowerCase())) continue;
+        expect(
+          /unsupported|not supported|지원하지 않|未対応|不支持/i.test(line),
+          `${file} says "${line.trim().slice(0, 90)}" while the host table calls ${platform} supported`,
+        ).toBe(false);
+      }
+    }
+  });
+});
