@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
 
 import { collectRecords } from './stale.js';
-import { execGit } from '../core/git.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
 import { validateRecord } from '../core/schema.js';
@@ -498,6 +498,15 @@ interface ReferenceCheck {
   violations: LocatedViolation[];
 }
 
+/**
+ * Why the reference check has no verdict on a shallow clone. Deliberately
+ * names the boundary rather than the record: the record is the one thing this
+ * clone cannot say anything about.
+ */
+const SHALLOW_REFERENCE_REASON =
+  'shallow history — a Record-Id declared below the clone boundary is not visible here ' +
+  '(fix: git fetch --unshallow)';
+
 const repositoryAvailable = (cwd: string): boolean =>
   execGit(['rev-parse', '--git-dir'], { cwd }).code === 0;
 
@@ -506,7 +515,16 @@ const indexedHeadRecords = (cwd: string): StaleRecord[] => {
   try {
     const records = new Map<string, StaleRecord>();
     for (const row of queryTrailers(handle)) {
-      const identity = `${row.sha}\0${row.source}`;
+      // `block` is part of the row's identity, not decoration: the index's
+      // own unique key is `(commit_sha, source, block, seq)` and `query.ts`
+      // groups on all of it for the same reason. Folded to `(sha, source)`,
+      // every block of a multi-block commit collapses into one record, and
+      // `trailerValue` reads only the *first* `Record-Id` of that record — so
+      // block 1's identity never reaches the declared set and a `Follows:`
+      // naming it reads as dangling (bug-issue-352). Multi-block commits are
+      // what squash inheritance produces, so this is the common shape, not an
+      // exotic one.
+      const identity = `${row.sha}\u0000${row.source}\u0000${row.block}`;
       const existing = records.get(identity);
       if (existing !== undefined) {
         existing.trailers.push({ key: row.key, value: row.value });
@@ -608,13 +626,14 @@ const checkReferences = (
 
     for (const source of sources) {
       // A message may carry several record blocks (SPEC §2.4); each is its
-      // own reference-checkable record. Cross-references between two blocks
-      // declared by the *same* commit are not resolved here — `prior` below
-      // excludes every record on `source.sha`, block or not, the same way it
-      // always excluded the commit's single record. A `Follows:`/`Supersedes:`
-      // naming a sibling block's id is therefore reported as dangling; a
-      // narrower carve-out for that case is future work, not a regression
-      // this change introduces.
+      // own reference-checkable record. SPEC §2.4 closes with the rule that
+      // decides how they see each other: `Follows:` and `Supersedes:` resolve
+      // against `Record-Id`s "regardless of which block declared them; the
+      // grammar does not scope identity resolution to one block or one
+      // message". So a block's declared set is `prior` *plus its siblings* —
+      // `prior` alone excludes every record on `source.sha`, which is correct
+      // for the commit's own record and wrong for the block beside it
+      // (bug-issue-352).
       const blocks = parseRecordBlocks(source.message);
       const scan = recordsFor(source, cwd);
       if (scan.notes === 'unfetched') {
@@ -643,24 +662,24 @@ const checkReferences = (
       // carried over from `repositoryRecords` rather than rebuilt, so a
       // divergent note still collides with the message's own block exactly as
       // it did before this message could carry more than one (bug-issue-74).
-      const ownRecords: StaleRecord[] = [
-        ...blocks.map((trailers) => ({
-          trailers,
-          source: 'commit' as const,
-          ...(source.sha === undefined ? {} : { sha: source.sha }),
-        })),
-        ...repositoryRecords.filter(
-          (record) => record.sha === source.sha && record.source === 'notes',
-        ),
-      ];
+      const ownBlocks: StaleRecord[] = blocks.map((trailers) => ({
+        trailers,
+        source: 'commit' as const,
+        ...(source.sha === undefined ? {} : { sha: source.sha }),
+      }));
+      const ownNotes = repositoryRecords.filter(
+        (record) => record.sha === source.sha && record.source === 'notes',
+      );
+      const ownRecords: StaleRecord[] = [...ownBlocks, ...ownNotes];
 
-      for (const trailers of blocks) {
-        const candidate: StaleRecord = {
-          trailers,
-          source: 'commit',
-          ...(source.sha === undefined ? {} : { sha: source.sha }),
-        };
-        const dangling = findDanglingRefs(prior, [candidate]);
+      for (const [index, candidate] of ownBlocks.entries()) {
+        const trailers = candidate.trailers;
+        // The candidate's siblings, not the candidate itself: a record that
+        // names its own `Record-Id` in `Follows:` still resolves to nothing,
+        // and self-reference is a defect the truncation argument does not
+        // cover.
+        const siblings = ownBlocks.filter((_, other) => other !== index);
+        const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
         const collisions =
           recordId === undefined
@@ -682,9 +701,33 @@ const checkReferences = (
       }
     }
 
+    // A shallow clone is missing ancestors, and "no record in history declares
+    // this id" is the one reference answer that reads directly off the
+    // ancestors. So a `dangling-ref` here is not a verdict about the record —
+    // it is the boundary of the clone, and blocking a commit on it rejects a
+    // valid record for the shape of the checkout.
+    //
+    // Only that rule is withdrawn. `duplicate-id` between a message's own
+    // blocks, or against a note on the same commit, is answered from the
+    // message alone and truncation cannot touch it — and that is exactly the
+    // multi-block squash shape this command exists to catch. Withdrawing the
+    // whole class would be a skip with no cause.
+    const suppressed =
+      hasShallowHistory(cwd) && violations.some((violation) => violation.rule === 'dangling-ref');
+    const reported = suppressed
+      ? violations.filter((violation) => violation.rule !== 'dangling-ref')
+      : violations;
+
     return {
-      check: { class: 'reference', status: violations.length === 0 ? 'ok' : 'failed' },
-      violations,
+      check: {
+        class: 'reference',
+        // `not-checked` rather than `ok` when something was withheld: the
+        // green would be the part a reader carries away, and this command has
+        // no verdict to offer on the reference it could not resolve.
+        status: reported.length > 0 ? 'failed' : suppressed ? 'not-checked' : 'ok',
+        ...(suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}),
+      },
+      violations: reported,
     };
   } catch (error) {
     return {
@@ -700,9 +743,15 @@ const checkReferences = (
 
 const formatCheck = (check: ValidationCheck): string => {
   const name = check.class === 'reference' ? 'references' : check.class;
-  return check.status === 'not-checked'
-    ? `${name} not checked (${check.reason ?? 'required information unavailable'})`
-    : `${name} ${check.status}`;
+  if (check.status === 'not-checked') {
+    return `${name} not checked (${check.reason ?? 'required information unavailable'})`;
+  }
+  // A reason on a decided check names what the verdict does *not* cover, so it
+  // is printed too — a partial answer that reads as a whole one is the failure
+  // this command is least able to afford.
+  return check.reason === undefined
+    ? `${name} ${check.status}`
+    : `${name} ${check.status} (${check.reason})`;
 };
 
 /** `a1b2c3d4e5:12: enum Blast — got "wide", want "local|module|system"` */
