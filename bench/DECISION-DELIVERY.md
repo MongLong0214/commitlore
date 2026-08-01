@@ -1,6 +1,8 @@
 # Active-record delivery before the first edit
 
-- Status: **registered 2026-08-01, before any run of this measurement**
+- Status: **registered 2026-08-01, before any run of this measurement**;
+  amended the same day by the arm deviation recorded in §5, before the run that
+  reports it
 - Issue: [#343](https://github.com/MongLong0214/commitlore/issues/343)
 - Provenance rules: [ADR-0018](../docs/adr/ADR-0018-benchmark-provenance-after-rewrites.md)
 - Metric name in the result rows: `decision_delivery`
@@ -8,7 +10,9 @@
 This document fixes the metric, the corpus rule, the answer key, the arms and
 the scoring **before** the harness produced a number. The result section at the
 bottom was empty when the rest of this file was written, and every figure it
-carries names the generated file it was read from.
+carries names the generated file it was read from. An arm added later is
+recorded as a deviation with its date and its reason, in the section it changes,
+rather than folded into the original text.
 
 ---
 
@@ -139,27 +143,61 @@ Each route is what a fresh agent has in front of it before its first edit to
 `P`. Everything else — the repository, the instant, the answer key — is held
 fixed.
 
-| Route | Delivery |
-|---|---|
-| `code-only` | the working tree. Nothing is delivered. |
-| `git-log-path` | `git log --format=%B -- P`, the ordinary Git history of the file |
-| `every-record-budgeted` | `buildInjection` with `noScope` and `noLifecycle`: every record in the repository, unfiltered, at the shipped 800-token budget |
-| `every-record-unbudgeted` | the same projection with a budget large enough that nothing is cut |
-| `commitlore` | `buildInjection({ path: P })` — the shipped `PreToolUse` projection, path-scoped and lifecycle-filtered |
+| Route | Budget | Delivery |
+|---|---|---|
+| `code-only` | — | the working tree. Nothing is delivered. |
+| `git-log-path-budgeted` | 800 | `git log --format=%B -- P`, cut to the shipped budget |
+| `git-log-path` | none | `git log --format=%B -- P`, the file's ordinary Git history, entire |
+| `every-record-budgeted` | 800 | `buildInjection` with `noScope` and `noLifecycle`: every record in the repository, unfiltered |
+| `every-record-unbudgeted` | none | the same projection, with a budget large enough that nothing is cut |
+| `commitlore` | 800 | `buildInjection({ path: P })` — the shipped `PreToolUse` projection, path-scoped and lifecycle-filtered |
+| `commitlore-unbudgeted` | none | the same projection, with a budget large enough that nothing is cut |
+
+**Every delivering family appears twice, once at the shipped 800-token budget
+and once with none.** A route measured under a cap, compared against one
+measured without, differs in two ways at once — the cap and the mechanism — and
+no reader can separate them from the result afterwards. Paired rows make the
+budget axis and the scoping axis independently readable, which is the only way a
+recall gap can be attributed to either. An unbounded route is also not one
+anybody can use: a real agent's context is finite, so the budgeted rows are the
+comparison it actually faces and the unbudgeted rows are the mechanism's ceiling.
+
+An unbudgeted arm that silently truncated would be read as a fact about the
+route rather than about the constant, so both unbudgeted injection arms assert
+that the projection did not truncate and stop the run if it did.
 
 `code-only` scores zero by construction. It is measured anyway rather than
 asserted, because a floor that is stated instead of run is one more number
 nobody checked.
 
-The two `every-record` routes are one arm split by budget. ADR-0017 asks whether
-unfiltered structured memory is enough; the honest answer depends on whether the
+**Which end the budgeted Git arm is cut from, and why.** `git log` prints newest
+first. `buildInjection` orders records newest first and drops the tail when the
+budget runs out, on the argument its own source gives: the constraint recorded
+most recently is the one an agent is most likely to be about to break. Keeping a
+prefix of the log therefore cuts the same end the product cuts — oldest first.
+The trailing partial line goes with it, because a `Record-Id:` line severed
+halfway was not delivered. Cutting from the other end would be a different route
+with a different number; the choice is stated because it decides the figure.
+
+`git-log-path` and `git-log-path-budgeted` are the comparators, the role
+ADR-0017 gives ordinary Git, and both read the same `git log` bytes. The command
+is deliberately the plain one: `--follow` is available to anyone who knows to
+reach for it, and the count of gold attachments reachable only through a rename
+is reported separately so the part of any gap owed to renames is visible rather
+than absorbed into the headline.
+
+The two `every-record` routes answer ADR-0017's question about whether
+unfiltered structured memory is enough. The honest answer depends on whether the
 tokens are paid, so both are reported and neither stands alone.
 
-`git-log-path` is the primary comparator, the same role ADR-0017 gives ordinary
-Git. It is deliberately the plain command: `--follow` is available to anyone who
-knows to reach for it, and the count of gold attachments that exist only through
-a rename is reported separately so that the part of any gap owed to renames is
-visible rather than absorbed into the headline.
+> **Deviation, recorded 2026-08-01, before the run that reports these arms.**
+> `git-log-path-budgeted` and `commitlore-unbudgeted` were added after the first
+> run (§10). That run's headline compared an unbounded `git log` against an
+> 800-token projection, which measures the cap and the path filter together and
+> licenses no statement about either. The metric, the denominator, the error
+> term and the scoring are unchanged; only arms were added. Both original arms
+> are kept and re-measured, and the first run stays committed as the measurement
+> of the arms it covered.
 
 ---
 
@@ -255,6 +293,13 @@ suite's required metrics, so a complete run cannot omit it.
 
 ## 9. Result
 
+_Pending the run that reports the paired-budget arms registered in §5. The
+first run, which covered five of the seven arms, is kept in §10._
+
+---
+
+## 10. The first run, and why it is superseded
+
 One run, on this repository, at harness commit `57e4a2256ac0158f582da5f8ced566be130f9ddd`
 with dist digest `37ffd480ee146131c82b93acbefa14d6bbcabbbfb4b8234f4617ed6c4561878f`.
 Raw output:
@@ -265,7 +310,7 @@ Raw output:
 Every figure below is read from those files. Nothing here was computed by hand,
 and no figure is carried over from another benchmark.
 
-### 9.1 Corpus
+### 10.1 Corpus
 
 327 records over 518 commits (179 merges; 328 commits carry a record) —
 **320 active, 7 superseded, 0 expired** at the evaluation instant
@@ -281,7 +326,7 @@ In the primary population, 1,037 of 1,060 authored paths carry at least one
 active record. The denominator is **2,149 (path, active record) pairs**, 164 of
 them reachable only through a rename.
 
-### 9.2 The number
+### 10.2 The number
 
 | Route | Path recall | Retired records delivered | Precision | Tokens delivered |
 |---|---:|---:|---:|---:|
@@ -309,7 +354,7 @@ budget takes it to 92.1%, at 83 million delivered tokens and 7,259 retired
 records surfaced — 166 times the tokens of the path-scoped route, to deliver
 ten points more context mixed with the decisions the repository has withdrawn.
 
-### 9.3 Where the missing 17.9 points went
+### 10.3 Where the missing 17.9 points went
 
 The rows locate most of the gap without any further run.
 
@@ -340,7 +385,7 @@ is a finding about the question, not only about the tool: the phrase *the
 repository's decisions about this file* does not have a single mechanical
 meaning, and any recall figure inherits whichever one the measurer chose.
 
-### 9.4 Sensitivity to the generated-path exclusion
+### 10.4 Sensitivity to the generated-path exclusion
 
 Reading the same run over **every** tracked path, generated included: the
 denominator grows from 2,149 to 2,804 pairs, `commitlore` reads 82.0% against
@@ -348,7 +393,7 @@ denominator grows from 2,149 to 2,804 pairs, `commitlore` reads 82.0% against
 reverses nothing; it is reported so a reader does not have to take that on
 trust.
 
-### 9.5 What this run does not establish
+### 10.5 What this run does not establish
 
 Everything in §7 still holds, and three points bear repeating beside the number
 rather than below it:
