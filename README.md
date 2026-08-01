@@ -31,8 +31,6 @@ superseded or expired does not reach the agent as if it still stood.
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**Git-native decision authority for AI-assisted codebases.** CommitLore tracks which decisions are still in force and which have been reversed—directly in Git—so a coding agent sees only current decisions when it queries a path.
-
 No hosted memory service. No vendor-specific chat history. Just reviewable decision context, owned by and portable with the repository.
 
 Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
@@ -55,6 +53,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/inst
 ```
 
 Which hosts are supported, and what each install path requires: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+**Give your next agent the judgment your last one earned.**
 
 ## See it work
 
@@ -142,7 +142,7 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## See the difference
+## The code survived. The decision didn't.
 
 *Stop re-reviewing the same bad idea.*
 

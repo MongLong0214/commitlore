@@ -30,8 +30,6 @@ CommitLore는 그 엔지니어링 판단을 Git에 보존하고, 다음 편집 �
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**AI 보조 코드베이스를 위한 Git-native 결정 권위.** CommitLore는 어떤 결정이 아직 유효하고 어떤 결정이 뒤집혔는지를 Git에서 직접 추적한다. 코딩 에이전트가 경로를 조회하면 현재 유효한 결정만 보인다.
-
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
@@ -54,6 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/inst
 ```
 
 어떤 host를 지원하는지, 각 설치 경로가 무엇을 요구하는지: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+**지난 에이전트가 얻어낸 판단을, 다음 에이전트에게 물려주세요.**
 
 ## 실제로 보기
 
@@ -141,7 +141,7 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## 차이
+## 코드는 남았다. 결정은 남지 않았다.
 
 *같은 나쁜 아이디어를 다시 리뷰하지 않는다.*
 

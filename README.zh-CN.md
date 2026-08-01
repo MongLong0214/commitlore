@@ -29,8 +29,6 @@ CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只�
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
-
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
@@ -53,6 +51,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/inst
 ```
 
 支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**把上一个代理挣得的判断，交给下一个代理。**
 
 ## 看它实际运行
 
@@ -140,7 +140,7 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## 看看差别
+## 代码留了下来，决定没有。
 
 *不再重复评审同一个坏主意。*
 
