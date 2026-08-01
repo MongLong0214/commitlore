@@ -2,7 +2,9 @@
 
 - Status: Accepted (2026-07-30)
 - Issues: #193–#201, #213
-- Related: ADR-0006 (push injection); P0-3 (acceptance matrix); P1-5 (policy resolution)
+- Related: ADR-0006 (push injection); P0-3 (acceptance matrix); P1-5 (policy resolution);
+  [ADR-0028](ADR-0028-suggest-is-a-host-side-convention.md) (the phase list in §2 carries no
+  approval state, so `mode: "suggest"` in §7 is enforced by the host, not by this transaction)
 
 ## Context
 
@@ -175,6 +177,14 @@ The policy identity hash is `sha256(JSON.stringify(HARDCODED_DEFAULTS))` where
   "require_verified_evidence": true
 }
 ```
+
+`mode` is in the hash because it is part of the policy's identity, which is all
+the hash is for: it lets the hook notice that the policy changed between stage
+and commit. It does not make the mode enforceable. `suggest` names a human
+approval, and §2's phase list has nowhere to put one — no `approved`, no
+rejection, no token — so `stage` cannot refuse a record nobody was shown.
+ADR-0028 records that gap, and that the prompt is a host-side convention until
+an ADR moves it into this format.
 
 This value is deterministic and changes only when the defaults change (a code
 change) or when the user-editable policy file ships in Gate B (which replaces

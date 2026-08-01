@@ -31,7 +31,26 @@ import { execGit } from './git.js';
 // The policy itself
 // ---------------------------------------------------------------------------
 
-/** `mode` is a closed set. Adding a member is a decision, not a config change. */
+/**
+ * `mode` is a closed set. Adding a member is a decision, not a config change.
+ *
+ * `suggest` says a capture produces a candidate rather than committing one on
+ * its own, and that much holds: nothing here writes a record without a host
+ * driving prepare → verify → stage. What it does **not** say is that a human
+ * saw the candidate. The pending transaction's phases are
+ * `prepared → verified → staged → applied → consumed` (ADR-0021 §2) — there is
+ * no `approved` phase, no rejection state and no approval token — so no code
+ * path here can tell a record a user kept from one that was never shown.
+ * `stageCaptureRecord` checks the phase, the record count, HEAD, the staged
+ * diff, the staged tree and this policy's identity. It cannot check for consent,
+ * because consent is not something the transaction can hold.
+ *
+ * The prompt therefore lives in the host: `skills/commitlore-commits/SKILL.md`
+ * asks before it calls stage. A host that stages without asking violates no
+ * check in this repository and is within contract. Read `suggest` as a
+ * convention this project documents and its own skill follows, not an enforced
+ * one — ADR-0028 records why the line sits there and what moving it would cost.
+ */
 export type CaptureMode = 'suggest';
 
 export interface CapturePolicy {
