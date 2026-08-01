@@ -175,3 +175,26 @@ of 39 control rows — a §6 exclusion rate of 0.0% against the 5% threshold —
 **Timing, measured rather than planned.** 2.7 minutes per run against the pilot's
 4.0, with no harness idle between runs. The registered 1,160 rows project to
 roughly 2.2 days.
+
+### Observation, not a change — `over-turns` and the analysis set
+
+Audited alongside deviation 1: every other runner default in force was checked
+against the M5 command line. `--tasks` resolves to `bench/tasks/`, which is
+correct. `--max-turns` is deliberately not passed, so each task's own turn budget
+applies, as in M1. `--timeout-ms` and `--permission-mode` take their defaults, as
+in M1.
+
+That leaves one figure worth stating in advance of the verdict rather than
+discovering in it. On the registered fixtures, `stopped_by: "over-turns"` ran at
+22.5% in the off-design sample against **15.0%** in `t702-m1-final.jsonl`. A run
+cut off at its turn budget had less opportunity to re-propose, so `reproposed:
+false` on such a row is weaker evidence than on a completed one.
+
+**The analysis set is not being changed.** §7 keeps these rows, M1 kept them, and
+altering the rule now — after the rate is visible — is precisely the post-hoc
+choice this document exists to prevent. The rate was balanced across arms in the
+sample (15 and 15), so it dilutes rather than biases.
+
+**The verdict must report the `over-turns` share per arm** beside the 2×2 table,
+so a reader can weigh it. That requirement is registered here, before the run's
+outcome is known.
