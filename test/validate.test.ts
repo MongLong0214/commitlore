@@ -751,6 +751,53 @@ describe('validate — check classes and reference integrity', () => {
     expect(duplicateIdViolations.every((violation) => violation.value === 'r-dupxx1')).toBe(true);
     expect(result.violations.some((violation) => violation.value === 'r-uniqueb')).toBe(false);
   });
+
+  // bug-issue-365: the shape check and `checkReferences` both find the same
+  // same-message `Record-Id` collision, and the two lists are concatenated, so
+  // a two-problem message reads as a four-problem one. The count in the
+  // summary line is what a person uses to judge how much work they are in for,
+  // and `--json` is what the repair loop reads — a doubled list hands it two
+  // identical instructions for one edit.
+  it('reports a same-message duplicate once per colliding block, not once per check that found it (bug-issue-365)', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n\nRecord-Id: r-base365\n');
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(
+      messageFile,
+      [
+        'dup',
+        '',
+        'Limit: X',
+        'Record-Id: r-dup365z',
+        'Certainty: firm',
+        '',
+        'Limit: Y',
+        'Record-Id: r-dup365z',
+        'Certainty: firm',
+        '',
+      ].join('\n'),
+    );
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    // Control: both detectors must be live here, or the fixture would pass for
+    // the wrong reason — the reference half is invisible until the `unfetched`
+    // gate is past.
+    expect(result.checks[0]).toEqual({ class: 'shape', status: 'failed' });
+    expect(result.checks[1]?.status).toBe('failed');
+
+    expect(result.code).toBe(1);
+    // Two blocks collide: two problems, one per block, each carrying the line
+    // of that block's `Record-Id`.
+    expect(result.violations.map((violation) => violation.line)).toEqual([4, 8]);
+    expect(result.violations).toHaveLength(2);
+    expect(result.stderr).toContain('2 violations (SPEC §6)');
+
+    const jsonResult = runValidate({ messageFile, cwd: repo, json: true });
+    const payload = JSON.parse(jsonResult.stdout) as { violations: unknown[] };
+    expect(payload.violations).toHaveLength(2);
+    expect(new Set(payload.violations.map((violation) => JSON.stringify(violation))).size).toBe(2);
+  });
 });
 
 describe('validate — usage errors exit 2', () => {

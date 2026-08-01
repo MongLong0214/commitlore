@@ -314,12 +314,18 @@ const violationsForBlock = (source: MessageSource, trailers: Trailer[]): Located
  * `checkReferences` below already reports the identical collision through
  * `findIdCollisions`'s same-commit branch, complete with its own line
  * attribution (bug-issue-92) — running this too would report the same
- * collision twice for the same commit. A `--message-file`/stdin source — what
- * a commit-msg hook always hands `validate`, and the shape SPEC §6.1 requires
- * working from "the message alone" — never resolves an `sha`, so
- * `findIdCollisions` structurally cannot see it there (it keys same-message
- * collisions off two records sharing one `sha`); this is exactly, and only,
- * that blind spot.
+ * collision twice for the same commit.
+ *
+ * For a `--message-file`/stdin source — what a commit-msg hook always hands
+ * `validate`, and the shape SPEC §6.1 requires working from "the message
+ * alone" — this is the detector that always runs, since `checkReferences`
+ * needs a repository and answers `not-checked` on stdin, outside one, or with
+ * the notes mirror unfetched. It is not the only one that can run, though:
+ * `findIdCollisions` also groups such a message's blocks as two
+ * commit-sourced records and reports the collision, a branch that needs no
+ * shared `sha` at all. That overlap is why `runValidate` drops a reference
+ * violation identical to one already reported here (bug-issue-365), rather
+ * than either side of it standing down.
  */
 const identityCollisionViolations = (source: MessageSource): LocatedViolation[] => {
   if (source.sha !== undefined) return [];
@@ -759,6 +765,23 @@ const formatCheck = (check: ValidationCheck): string => {
     : `${name} ${check.status} (${check.reason})`;
 };
 
+/**
+ * A violation's identity as the two output surfaces see it: every field that
+ * reaches the formatted line and the `--json` object. Two violations equal
+ * under this key are one instruction printed twice, not two edits — nothing a
+ * reader or the repair loop could tell apart, let alone act on separately.
+ */
+const violationIdentity = (violation: LocatedViolation): string =>
+  JSON.stringify([
+    violation.sha ?? null,
+    violation.line ?? null,
+    violation.rule,
+    violation.key,
+    violation.value,
+    violation.got,
+    violation.want,
+  ]);
+
 /** `a1b2c3d4e5:12: enum Blast — got "wide", want "local|module|system"` */
 const formatViolation = (violation: LocatedViolation): string => {
   const parts: string[] = [];
@@ -806,7 +829,37 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   }
 
   const references = checkReferences(input, sources, cwd);
-  const violations = [...shapeViolations, ...references.violations];
+  // Shape and reference are independent detectors that overlap on one finding:
+  // a `Record-Id` repeated across a message's own blocks is caught by
+  // `identityCollisionViolations` from the message alone, and by
+  // `findIdCollisions` inside `checkReferences`, which sees those same blocks
+  // as sibling records. Concatenating the two lists reported one collision
+  // twice, counted it twice in the summary, and handed the repair loop two
+  // identical instructions for one edit (bug-issue-365).
+  //
+  // Deduped here rather than by making one of the two checks stay silent on
+  // `duplicate-id`, because neither can be the one that goes quiet. The shape
+  // half is the only half that survives the `unfetched` and shallow gates and
+  // the stdin mode that identifies no repository at all — the common local
+  // case, and the one the commit-msg hook runs. The reference half is the only
+  // half that answers for a resolved `sha` (where the shape half deliberately
+  // stands down, since `findIdCollisions` reports it there with the same line
+  // attribution), and the only half that can see a collision against a note or
+  // an earlier commit at all. The overlap is not the defect; the second copy
+  // is.
+  //
+  // Scoped to the seam between the two lists and keyed on every field that
+  // reaches the output, so the multiplicity each check produces on its own is
+  // untouched: still one `duplicate-id` per colliding block, still one
+  // `cardinality` per extra occurrence. The shape copy is the one kept —
+  // shape is the check that ran unconditionally.
+  const alreadyReported = new Set(shapeViolations.map(violationIdentity));
+  const violations = [
+    ...shapeViolations,
+    ...references.violations.filter(
+      (violation) => !alreadyReported.has(violationIdentity(violation)),
+    ),
+  ];
   const checks: ValidationCheck[] = [
     {
       class: 'shape',
