@@ -126,7 +126,7 @@ export const register = (program) => {
         // — would fail before its own action ran. The requirement is enforced in the
         // action below instead, where it applies only to the capture flow itself.
         .option('--transcript <path>', 'path to the session transcript file')
-        .option('--diff <path>', 'path to the diff file (defaults to empty)')
+        .option('--diff <path>', 'path to the diff file (defaults to the staged diff)')
         .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
         .option('--out <path>', 'write the pending nonce to a file')
         .option('--json', 'emit structured JSON output')
