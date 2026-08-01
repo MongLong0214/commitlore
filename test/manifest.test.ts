@@ -295,3 +295,49 @@ describe("plugin manifest: hooks/hooks.json's command resolves and produces outp
     expect(run.stderr).toContain('no context was injected');
   });
 });
+
+/**
+ * #334: distribution here is a `git clone` (ADR-0011), so whatever is in the
+ * tree ships. The suite above asserts that every *declared* file parses — and a
+ * file nobody declared is invisible to it, because it is not on the list being
+ * checked.
+ *
+ * `.serena/project.yml` reached v0.5.0 that way: a tool writes it into whatever
+ * directory it is pointed at, a `git add -A` in a worktree swept it in, and the
+ * released tree carried that worktree's name as somebody's project label.
+ *
+ * This does not assert "no unexpected files". The tree legitimately holds `src/`,
+ * `test/`, `bench/`, `spec/`, `docs/`, `dist/`, `skills/` and more, and a
+ * whitelist of everything would fail on every honest addition and teach people to
+ * widen it rather than read it. It asserts something narrower and checkable:
+ * **no tool-local state ships**. That state is keyed to the machine or the
+ * directory that produced it, so it is wrong for every clone by construction —
+ * which is what separates it from editor settings a repository may ship on
+ * purpose.
+ */
+describe('plugin manifest: a clean clone carries no tool-local state (#334)', () => {
+  /** Written by a tool into the directory it was pointed at, never by an author. */
+  const TOOL_STATE = [
+    '.serena',
+    '.idea',
+    '.history',
+    '.aider.chat.history.md',
+    '.claude/settings.local.json',
+  ] as const;
+
+  it.each(TOOL_STATE)('%s is not in the clone', (relPath) => {
+    expect(
+      existsSync(clonePath(relPath)),
+      `${relPath} is tool-local state keyed to the machine or directory that created it, ` +
+        'and a clone is the distribution — see #334',
+    ).toBe(false);
+  });
+
+  it('looks where the files would actually be', () => {
+    // An assertion that passes because it looks in the wrong place is the exact
+    // failure this suite is about, so the path construction is checked against a
+    // file that is genuinely there.
+    expect(existsSync(clonePath('package.json'))).toBe(true);
+    expect(existsSync(clonePath('.claude-plugin/plugin.json'))).toBe(true);
+  });
+});

@@ -33,15 +33,18 @@ function findAnchors(file: string): ReadmeAnchors {
   const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
   const lines = content.split('\n');
 
-  // Product: the hero heading — the h2 with decision-authority framing
-  // Each language has its own version but it's always the first ## heading
+  // Product: the hero heading. It names what the product carries between
+  // sessions, not a verdict on any particular idea — this tool does not decide
+  // whether a proposal is bad, it decides whether a decision still applies.
+  // "Stop re-reviewing the same bad idea" was tried here and moved into the
+  // demo: as a hero it implied a judgement `guard` cannot make at 22% recall.
   const product = lines.findIndex(
     (l) =>
       l.startsWith('## ') &&
-      (l.includes('must not revive') ||
-        l.includes('되살려서는 안 된다') ||
-        l.includes('復活させてはならない') ||
-        l.includes('不得复活')),
+      (l.includes('inherit the judgment') ||
+        l.includes('판단까지 물려주세요') ||
+        l.includes('判断も継がせましょう') ||
+        l.includes('也把判断传下去')),
   );
 
   // Local-first: "No hosted memory service." or equivalent

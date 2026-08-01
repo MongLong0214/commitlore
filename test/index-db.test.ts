@@ -619,6 +619,108 @@ describe('index-db: B3 false positives', () => {
   });
 });
 
+/**
+ * #335: on a repository with **zero** CommitLore records, `index` populated 106
+ * rows by accepting any RFC-822-shaped `key: value` line — conventional-commit
+ * subject prefixes (`ax:`, `fix:`, `docs:`), a Homebrew digest (`sha256:`),
+ * arbitrary body fields (`Tests:`, `Verified:`). `doctor` then called that
+ * healthy, and `context` — wired into the PreToolUse hook — served commit
+ * subjects to the agent as recorded decisions.
+ *
+ * `stale` reads git and reported 0 for the same repository, so two commands in
+ * one tool disagreed about whether the repository had any records at all.
+ *
+ * The denylist below answers a different question than this one. It decides
+ * which trailers to keep *inside* a record, and it is right that a project's own
+ * `Ticket:` should survive there — SPEC even requires preserving keys the core
+ * cannot interpret. What was missing is the prior question: **is this a record?**
+ * A block carrying no CommitLore key is not one, and indexing it manufactures a
+ * claim the line never made.
+ */
+describe('index-db: a block with no CommitLore key is not a record (#335)', () => {
+  it('does not index a conventional-commit subject as a trailer', () => {
+    const dir = makeRepo();
+    const sha = commit(dir, 'ax: eliminate clear-win coordinate actuations\n', {
+      'src/a.ts': 'a',
+    });
+
+    expect(scanTrailers({ sha }, { cwd: dir })).toEqual([]);
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      expect(queryTrailers(handle, { sha })).toEqual([]);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+
+  it.each([
+    ['a Homebrew digest', 'Update formula\n\nsha256: dea6fc8a1b2c3d4e5f60718293a4b5c6d7e8f901\n'],
+    ['a release note field', 'Cut 2.1.0\n\nTests: 412 passed\nCoverage: 91%\n'],
+    ['a conventional type in the body', 'Tidy\n\nfix: drop the retry\n'],
+  ])('does not index %s as a record', (_label, message) => {
+    const dir = makeRepo();
+    const sha = commit(dir, message, { 'src/a.ts': 'a' });
+    expect(scanTrailers({ sha }, { cwd: dir })).toEqual([]);
+  });
+
+  it('still keeps a project trailer that shares a block with a real record', () => {
+    // The denylist's intent survives: inside a genuine record, a key this
+    // protocol has no slot for is preserved rather than discarded, which is what
+    // SPEC asks of an implementation that meets a key it cannot interpret.
+    const dir = makeRepo();
+    const sha = commit(
+      dir,
+      'Guard the session TTL\n\nLimit: sessions expire after 24h\nTicket: PROJ-412\n',
+      { 'src/a.ts': 'a' },
+    );
+
+    const keys = scanTrailers({ sha }, { cwd: dir }).map((trailer) => trailer.key);
+    expect(keys).toContain('Limit');
+    expect(keys, 'a record keeps keys the core cannot interpret').toContain('Ticket');
+  });
+
+  it('cannot tell a release note from a record when the key is vocabulary', () => {
+    // `Verified:` is SPEC §3 vocabulary. A release note that happens to use it
+    // is indistinguishable from a record that uses it for what it means, and
+    // guessing from context is how a tool starts discarding real records. So the
+    // block is a record, both keys are kept, and this is written down rather
+    // than left to be rediscovered as a bug.
+    const dir = makeRepo();
+    const sha = commit(dir, 'Cut 2.1.0\n\nTests: 412 passed\nVerified: on staging\n', {
+      'src/a.ts': 'a',
+    });
+
+    const keys = scanTrailers({ sha }, { cwd: dir }).map((trailer) => trailer.key);
+    expect(keys).toContain('Verified');
+    expect(keys, 'a neighbouring key rides along inside a real record').toContain('Tests');
+  });
+
+  it('accepts an X- extension as a record on its own', () => {
+    // SPEC §3 gives `X-<Name>:` a slot: an organization extension, preserved and
+    // never interpreted. It is CommitLore vocabulary, so it makes a record.
+    const dir = makeRepo();
+    const sha = commit(dir, 'Wire the exporter\n\nX-Team: platform\n', { 'src/a.ts': 'a' });
+    expect(scanTrailers({ sha }, { cwd: dir }).map((t) => t.key)).toEqual(['X-Team']);
+  });
+
+  it('index and stale agree about a repository with no records', () => {
+    // The reported symptom: two commands in one tool contradicting each other.
+    const dir = makeRepo();
+    commit(dir, 'ax: one\n', { 'a.ts': 'a' });
+    commit(dir, 'fix: two\n\nsha256: abc123\n', { 'b.ts': 'b' });
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      const stats = updateIndex(handle);
+      expect(stats.trailersIndexed, 'the index found records where git has none').toBe(0);
+    } finally {
+      closeIndex(handle);
+    }
+  });
+});
+
 describe('index-db: conventional trailers are not records (bug-issue-150)', () => {
   it('drops Co-authored-by in every casing seen in the wild, case-insensitively', () => {
     const dir = makeRepo();

@@ -62,6 +62,7 @@ import {
   canonicalConventionalTrailerKey,
   isConventionalTrailerKey,
   type Trailer,
+  isCommitLoreKey,
 } from './types.js';
 
 /**
@@ -393,12 +394,28 @@ const recordExclusion = (counts: ExclusionCounts | undefined, key: string): void
  * before anything downstream asks "does this commit have a trailer block",
  * not after (bug-issue-150).
  */
-const stripConventional = (trailers: readonly Trailer[], counts?: ExclusionCounts): Trailer[] =>
-  trailers.filter((trailer) => {
+const stripConventional = (trailers: readonly Trailer[], counts?: ExclusionCounts): Trailer[] => {
+  const kept = trailers.filter((trailer) => {
     if (!isConventionalTrailerKey(trailer.key)) return true;
     recordExclusion(counts, trailer.key);
     return false;
   });
+  // A block with no key from this protocol's vocabulary is not a record, and
+  // indexing it manufactures a claim its lines never made. The denylist above
+  // cannot decide this: it answers "which trailers belong in a record", and a
+  // repository using conventional commits produced `sha256:`, `Tests:` and
+  // `fix:` rows on a repository holding zero records -- served to an agent, via
+  // `context`, as recorded decisions (#335).
+  //
+  // Applied here rather than at each call site because this runs at every point
+  // raw git output becomes a candidate record, which is exactly the boundary the
+  // question belongs on.
+  if (!kept.some((trailer) => isCommitLoreKey(trailer.key))) {
+    for (const trailer of kept) recordExclusion(counts, trailer.key);
+    return [];
+  }
+  return kept;
+};
 
 /**
  * `--name-only -z` emits a newline between the format output and the path
