@@ -78,10 +78,19 @@ const stdoutFor = (options, result, malformed) => {
     return recordsPayload(result.accepted.map((entry) => entry.record));
 };
 const harvestVerify = (options) => {
+    // The draft is resolved first -- present, readable, and actually a draft --
+    // before the other inputs are required (#329). A draft that is prose rather
+    // than the contract's JSON object was reported as a missing transcript, which
+    // sent the reader after a file they did not need yet for a draft that was
+    // never going to parse.
+    //
+    // The ordering matters more than orderings usually do. A session that emitted
+    // prose believes it staged records, and nothing contradicts that belief until
+    // somebody verifies; the first thing they hear should be what is wrong.
     const draftPath = required(options.draft, '--draft');
+    const review = parseDraft(readTextFile(draftPath, `--draft ${JSON.stringify(draftPath)}`));
     const transcriptPath = required(options.transcript, '--transcript');
     const diffPath = required(options.diff, '--diff');
-    const review = parseDraft(readTextFile(draftPath, `--draft ${JSON.stringify(draftPath)}`));
     const result = verifyDraft(review.records, {
         transcript: readTextFile(transcriptPath, `--transcript ${JSON.stringify(transcriptPath)}`),
         diff: readTextFile(diffPath, `--diff ${JSON.stringify(diffPath)}`),
