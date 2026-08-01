@@ -198,3 +198,51 @@ sample (15 and 15), so it dilutes rather than biases.
 **The verdict must report the `over-turns` share per arm** beside the 2×2 table,
 so a reader can weigh it. That requirement is registered here, before the run's
 outcome is known.
+
+### Deviation 2 — 2026-08-01: a second truncation reason, and an imbalance in it
+
+`stopped_by: "over-tokens"` appeared in the registered run and is not named
+anywhere above. It is the per-task token budget in the fixture YAML
+(`tokens: 60000`), not the invocation-wide `--max-tokens`, which stands at
+200,000,000 against roughly 3,000,000 spent at the time of writing. It is
+therefore the same kind of state as `over-turns`: a run cut off before it
+finished, on which `reproposed: false` is weaker evidence than on a completed
+one.
+
+**Observed at 71 of 1,160 rows**, monitoring §6 and §7 as those sections require:
+
+| | truncated (`over-turns` + `over-tokens`) |
+|---|---:|
+| `t702-m1-final.jsonl`, for reference | 15.0% |
+| M5 `commitlore-on` | 16.7% |
+| M5 `commitlore-off` | **31.4%** |
+
+The off-design sample reported in deviation 1 was balanced at 15 and 15. This is
+not, and the imbalance runs against the arm the hypothesis predicts will
+re-propose more. Two readings are available and this document deliberately does
+not choose between them before the run ends:
+
+1. **A confound.** Truncation suppresses re-proposal, so a control arm truncated
+   twice as often has its rate pushed down — which makes the hypothesis *harder*
+   to demonstrate, not easier. Conservative, but it is still noise in the
+   comparison.
+2. **A consequence.** The treatment arm has the records, settles sooner, and
+   spends fewer turns and tokens; the control arm searches longer and hits the
+   caps. That is not a confound at all. It is an effect, on an outcome this
+   measurement did not register.
+
+**Nothing changes.** §7's analysis set still excludes only `stopped_by: "error"`,
+and §8's stopping rule still forbids computing the table before all 1,160 rows
+land. Excluding truncated rows now — after their rate is visible and after it is
+visibly asymmetric — is the exact move this document exists to prevent, and it
+would break comparability with M1, which kept them.
+
+**The verdict must report, per arm: the `over-turns` share, the `over-tokens`
+share, and the combined truncation share**, beside the 2×2 table. §11's earlier
+obligation covered `over-turns` only; this extends it. It is registered here
+while the outcome is still unknown, which is the only condition under which such
+an obligation means anything.
+
+**What was read to produce this note:** `stopped_by`, `turns`, `tokens`,
+`accepted_records` and `guard_exposure`. Not `reproposed`, and not any
+cross-tabulation of it.
