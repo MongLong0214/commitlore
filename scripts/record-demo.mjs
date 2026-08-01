@@ -157,8 +157,14 @@ ${renderFrameText(FRAMES[FRAMES.length - 1].lines, `frame-${FRAMES.length - 1}`)
     <set attributeName="visibility" to="visible" begin="${((FRAMES.length - 1) * frameDuration).toFixed(2)}s" fill="freeze"/>
   </g>`;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${HEIGHT}" width="${WIDTH}" height="${HEIGHT}" role="img" aria-label="commitlore demo: lifecycle filtering shows only active decisions">
+  // `aria-label` on the root is not enough on its own: a reader who opens the
+  // file directly, rather than through the README's `img` tag, gets nothing to
+  // name it by. `<title>` is the element SVG defines for that, and `<desc>`
+  // carries what the animation shows to anyone who cannot watch it run.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WIDTH} ${HEIGHT}" width="${WIDTH}" height="${HEIGHT}" role="img" aria-labelledby="demo-title demo-desc">
   <!-- T-1016: deterministic animated SVG — do not edit by hand; regenerate with: node scripts/record-demo.mjs -->
+  <title id="demo-title">commitlore demo: lifecycle filtering shows only active decisions</title>
+  <desc id="demo-desc">A terminal recording. Two decisions are recorded for one path and the later supersedes the first. When an agent proposes reverting to the superseded approach, only the active record is returned.</desc>
   <rect width="100%" height="100%" rx="8" fill="#1d1f21"/>
   <!-- Title bar -->
   <rect width="100%" height="${TITLE_H}" rx="8" fill="#282a2e"/>
