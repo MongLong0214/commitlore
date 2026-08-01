@@ -30,8 +30,6 @@ CommitLore はその工学的判断を Git に保存し、次の編集の前に*
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**AI 支援コードベースのための Git-native 意思決定権威。** CommitLore は、どの決定がまだ有効でどの決定が覆されたかを Git 内で直接追跡します。コーディングエージェントがパスを問い合わせると、現在有効な決定だけが返されます。
-
 ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
 
 一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
@@ -54,6 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/inst
 ```
 
 どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**前のエージェントが得た判断を、次のエージェントに渡しましょう。**
 
 ## 実際に動かす
 
@@ -141,7 +141,7 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## 違いを見る
+## コードは残った。決定は残らなかった。
 
 *同じ悪い案を二度レビューしない。*
 
@@ -225,7 +225,6 @@ other
 
 類似検索は関連する決定を見つけられます。CommitLore はさらに、その決定が今も有効か、
 置き換えられたか、期限切れかを知っていて — 最初のものだけを示します。
-  ともに決定を受け取る。
 
 ## 違い
 
