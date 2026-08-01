@@ -15253,6 +15253,18 @@ var atomicWriteJson = (filePath, data) => {
     throw error2;
   }
 };
+var COMMIT_ID_RE = /^[0-9a-f]{40}$/;
+var resolveHead = (cwd) => {
+  const result = execGit(["rev-parse", "HEAD"], { cwd });
+  if (result.code !== 0) return null;
+  const head = result.stdout.trim();
+  return COMMIT_ID_RE.test(head) ? head : null;
+};
+var headHasMovedPast = (baseHead, head) => {
+  if (head === null) return false;
+  if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
+  return baseHead !== head;
+};
 var createPending = (opts) => {
   const nonce = randomBytes(16).toString("hex");
   const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
@@ -15381,6 +15393,16 @@ var markApplied = (nonce, recordHash, opts) => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, updated);
   return true;
+};
+var deletePending = (nonce, opts) => {
+  validateNonce(nonce);
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  try {
+    unlinkSync(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 };
 var consumePending = (nonce, commitSha, opts) => {
   validateNonce(nonce);
@@ -15695,7 +15717,9 @@ var stageCaptureRecord = (opts) => {
 import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
+var UNSTAMPED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var PROTECTED_PHASES = /* @__PURE__ */ new Set(["staged", "applied"]);
+var UNSTAMPED_PHASES = /* @__PURE__ */ new Set(["prepared", "verified"]);
 var KNOWN_PHASES = /* @__PURE__ */ new Set(["prepared", "verified", "staged", "applied", "consumed"]);
 var resolvePendingDir = (cwd) => {
   const reported = execGitOrThrow(
@@ -15728,6 +15752,7 @@ var gcPending = (cwd) => {
     return { removed, kept };
   }
   const now = Date.now();
+  const head = resolveHead(cwd);
   for (const file of files) {
     const filePath = resolve4(dir, file);
     const record2 = safeReadPending(filePath);
@@ -15749,17 +15774,17 @@ var gcPending = (cwd) => {
     }
     if (phase === "consumed" && consumed === true) {
       if (typeof consumedAt !== "string") {
-        const createdAt = record2["created_at"];
-        if (typeof createdAt !== "string") {
+        const createdAt2 = record2["created_at"];
+        if (typeof createdAt2 !== "string") {
           kept.push(file);
           continue;
         }
-        const createdMs = Date.parse(createdAt);
-        if (isNaN(createdMs)) {
+        const createdMs2 = Date.parse(createdAt2);
+        if (isNaN(createdMs2)) {
           kept.push(file);
           continue;
         }
-        if (now - createdMs > CONSUMED_RETENTION_MS) {
+        if (now - createdMs2 > CONSUMED_RETENTION_MS) {
           try {
             unlinkSync2(filePath);
             removed.push(file);
@@ -15788,23 +15813,50 @@ var gcPending = (cwd) => {
       }
       continue;
     }
-    if (typeof expiresAt !== "string" || expiresAt === "") {
-      kept.push(file);
-      continue;
-    }
-    const expiresMs = Date.parse(expiresAt);
-    if (isNaN(expiresMs)) {
-      kept.push(file);
-      continue;
-    }
-    if (now > expiresMs) {
-      try {
-        unlinkSync2(filePath);
-        removed.push(file);
-      } catch {
+    if (typeof expiresAt === "string" && expiresAt !== "") {
+      const expiresMs = Date.parse(expiresAt);
+      if (isNaN(expiresMs)) {
+        kept.push(file);
+        continue;
+      }
+      if (now > expiresMs) {
+        try {
+          unlinkSync2(filePath);
+          removed.push(file);
+        } catch {
+          kept.push(file);
+        }
+      } else {
         kept.push(file);
       }
-    } else {
+      continue;
+    }
+    if (!UNSTAMPED_PHASES.has(phase)) {
+      kept.push(file);
+      continue;
+    }
+    const createdAt = record2["created_at"];
+    if (typeof createdAt !== "string") {
+      kept.push(file);
+      continue;
+    }
+    const createdMs = Date.parse(createdAt);
+    if (isNaN(createdMs)) {
+      kept.push(file);
+      continue;
+    }
+    if (now - createdMs <= UNSTAMPED_RETENTION_MS) {
+      kept.push(file);
+      continue;
+    }
+    if (!headHasMovedPast(record2["base_head"], head)) {
+      kept.push(file);
+      continue;
+    }
+    try {
+      unlinkSync2(filePath);
+      removed.push(file);
+    } catch {
       kept.push(file);
     }
   }
@@ -28174,7 +28226,7 @@ var extractActiveDecisions = (result) => result.records.map((record2) => ({
   paths: record2.paths,
   trailers: record2.trailers.map((t) => ({ key: t.key, value: t.value }))
 }));
-var resolveHead = (cwd) => {
+var resolveHead2 = (cwd) => {
   const result = execGit(["rev-parse", "HEAD"], { cwd });
   if (result.code !== 0) {
     throw new Error(
@@ -28201,7 +28253,7 @@ var beforeChange = (opts) => {
   if (historyUnavailable) {
     head = "unavailable";
   } else {
-    head = resolveHead(cwd);
+    head = resolveHead2(cwd);
   }
   let activeDecisions = [];
   if (!historyUnavailable) {
@@ -28674,18 +28726,8 @@ var register16 = (program3) => {
 };
 
 // src/commands/pending.ts
-var headOf = (cwd) => {
-  const result = execGit(["rev-parse", "HEAD"], { cwd });
-  if (result.code !== 0) return null;
-  const head = result.stdout.trim();
-  return /^[0-9a-f]{40}$/.test(head) ? head : null;
-};
-var gcEligible = (record2) => {
-  if (record2.phase === "staged" || record2.phase === "applied") return false;
-  if (record2.phase === "consumed" && record2.consumed) return true;
-  if (record2.expires_at === null || record2.expires_at === "") return false;
-  return !Number.isNaN(Date.parse(record2.expires_at));
-};
+var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
+var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
 var summarise = (record2, head) => ({
   nonce: record2.nonce,
   phase: record2.phase,
@@ -28694,12 +28736,12 @@ var summarise = (record2, head) => ({
   created_at: record2.created_at,
   expires_at: record2.expires_at,
   base_head: record2.base_head,
-  stale: head !== null && record2.base_head !== head,
+  stale: headHasMovedPast(record2.base_head, head),
   gc_eligible: gcEligible(record2)
 });
 var runPendingList = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
-  const head = headOf(cwd);
+  const head = resolveHead(cwd);
   const transactions = [];
   const unreadable = [];
   for (const nonce of listPendingNonces(cwd)) {
@@ -28719,39 +28761,78 @@ var runPendingList = (opts) => {
   transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
   return { transactions, unreadable };
 };
-var runPendingShow = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const wanted = opts.nonce.trim().toLowerCase();
+var resolvePrefix = (cwd, prefix) => {
+  const wanted = prefix.trim().toLowerCase();
   const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
   if (candidates.length === 0) {
-    return { transaction: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
   }
   if (candidates.length > 1) {
     return {
-      transaction: null,
+      nonce: null,
       error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
     };
   }
   const [only = ""] = candidates;
+  return { nonce: only, error: null };
+};
+var runPendingShow = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { transaction: null, error: error2 };
   let record2 = null;
   try {
     record2 = readPending(only, { cwd });
-  } catch (error2) {
-    const detail = error2 instanceof Error ? error2.message : String(error2);
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
     return { transaction: null, error: `${only} could not be read: ${detail}` };
   }
   if (record2 === null) {
     return { transaction: null, error: `${only} could not be read as a transaction` };
   }
-  const head = headOf(cwd);
+  const head = resolveHead(cwd);
   return {
     transaction: {
       ...record2,
-      stale: head !== null && record2.base_head !== head,
+      stale: headHasMovedPast(record2.base_head, head),
       gc_eligible: gcEligible(record2)
     },
     error: null
   };
+};
+var runPendingRemove = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { removed: null, phase: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
+    };
+  }
+  if (record2 === null) {
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
+    };
+  }
+  if (PROTECTED_PHASES2.has(record2.phase)) {
+    return {
+      removed: null,
+      phase: record2.phase,
+      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
+    };
+  }
+  if (!deletePending(only, { cwd })) {
+    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
+  }
+  return { removed: only, phase: record2.phase, error: null };
 };
 var age = (from, now) => {
   const started = Date.parse(from);
@@ -28787,7 +28868,7 @@ var renderList = (result, now) => {
 `;
 };
 var register17 = (program3) => {
-  const pending = program3.command("pending").description("inspect capture transactions that have not reached a commit yet");
+  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
   pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
     const result = runPendingList({});
     if (options.json === true) {
@@ -28812,6 +28893,23 @@ var register17 = (program3) => {
       return;
     }
     process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
+`);
+  });
+  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingRemove({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.removed === null) process.exitCode = 1;
+      return;
+    }
+    if (result.removed === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not removed"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`removed ${result.removed} (${result.phase ?? "unknown"})
 `);
   });
 };

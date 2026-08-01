@@ -112,7 +112,10 @@ commitlore: discarded record 0 (evidence-not-found): Limit: the transcript does 
 ```
 
 `commitlore pending ls` lists transactions that have not reached a commit yet;
-`commitlore capture gc` removes expired ones.
+`commitlore capture gc` removes expired ones, and a skipped capture among them —
+24 hours after the commit it was prepared for lands without it. `commitlore
+pending rm <nonce>` removes one now instead. Neither will touch a `staged` or
+`applied` transaction: those can still become a record.
 
 ## The vocabulary
 

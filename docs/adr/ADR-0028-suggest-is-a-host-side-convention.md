@@ -103,6 +103,14 @@ and every place that describes it says so.**
   already true of every capture that stops before stage; step 4 makes it the
   common case rather than the failure case. `commitlore pending` has no `rm`.
 
+  **Amended (2026-08-01) by [#367](https://github.com/MongLong0214/commitlore/issues/367).**
+  This consequence was accepted rather than closed, and making the skip ordinary
+  made it a leak on the ordinary path. `prepared` and `verified` now age out on
+  `created_at` — 24 hours, and only once HEAD has moved past `base_head`, which
+  is the condition `stageCaptureRecord` refuses on — and `commitlore pending rm
+  <nonce>` removes one immediately. The phase vocabulary is unchanged, as is the
+  protection of `staged` and `applied`.
+
 - **The CLI's one-command form still stages without asking.** `commitlore capture
   --transcript … --draft …` composes prepare, verify and stage in one process,
   and there is no point inside it where a user can answer. The skill now says so
