@@ -796,6 +796,19 @@ conditional on* below.
 `node bench/verify.mjs <file>` validates every line and exits non-zero on any
 failure, on a malformed line, or on a file with no rows.
 
+`npm run bench:verify` — with no arguments — runs the same check over every
+`bench/results/*.jsonl`, and is the CI step. Scope is default-in: a results file
+is gated as soon as it is committed, with nothing to register. Two exemptions
+are decided per row and printed on every run, and the rule for each is stated at
+the top of `bench/verify.mjs`:
+
+- a file whose every row carries `schema_version` holds metric rows, not run
+  records, and this schema does not describe it (a file mixing the two is
+  failed, not classified);
+- rows recorded before `1073fa4` are not required to carry `harness_commit` and
+  `dist_digest`, which did not exist yet. Every other constraint still applies
+  to them, and `started_at` comes from the clock, so no new row can qualify.
+
 ## Per-turn usage
 
 `--per-turn-usage` writes a `turn_usage` object: one entry per assistant API

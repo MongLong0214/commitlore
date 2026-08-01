@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.json && npm run bundle",
     "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
     "bench:external": "npm run build && node --experimental-strip-types bench/external/run.ts",
+    "bench:verify": "node bench/verify.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
