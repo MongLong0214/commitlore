@@ -222,7 +222,14 @@ export type DeliveryRoute =
   | 'every-record-budgeted'
   | 'every-record-unbudgeted'
   | 'commitlore'
-  | 'commitlore-unbudgeted';
+  | 'commitlore-unbudgeted'
+  // The two notes-aware Git arms are not among the registered seven and are
+  // never in `DELIVERY_ROUTES`. They exist for a corpus whose records live only
+  // in `refs/notes/commitlore`, where `git log --format=%B` sees nothing at all
+  // and a 0% would be a fact about the record channel rather than about Git
+  // (bench/EXTERNAL-CORPUS.md §6.2).
+  | 'git-log-path-notes'
+  | 'git-log-path-notes-budgeted';
 
 /**
  * `authored` excludes paths the repository's own `.gitattributes` declares

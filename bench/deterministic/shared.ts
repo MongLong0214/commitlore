@@ -51,9 +51,23 @@ export const git = (
 const HARNESS_PATHS = ['bench/deterministic.ts', 'bench/deterministic'] as const;
 const GIT_OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
-export const harnessTreeDigest = (repoRoot: string, ref = 'HEAD'): string => {
+/**
+ * ADR-0018's harness identity: Git's own digest of a canonical `ls-tree`
+ * manifest over the files that produced a row.
+ *
+ * `paths` is a parameter because a harness living outside `bench/deterministic/`
+ * still has to certify what produced its rows, and a digest covering only this
+ * directory would claim the wrong manifest for it. The default is the
+ * deterministic suite's own manifest, so every existing caller digests exactly
+ * what it digested before.
+ */
+export const harnessTreeDigest = (
+  repoRoot: string,
+  ref = 'HEAD',
+  paths: readonly string[] = HARNESS_PATHS,
+): string => {
   const manifest = git(repoRoot, [
-    'ls-tree', '-r', '--full-tree', ref, '--', ...HARNESS_PATHS,
+    'ls-tree', '-r', '--full-tree', ref, '--', ...paths,
   ]).stdout;
   if (manifest === '') throw new Error(`no deterministic harness found at ${ref}`);
   return git(repoRoot, ['hash-object', '--stdin'], { input: manifest }).stdout.trim();
@@ -165,10 +179,11 @@ export const rowBase = (
   harnessCommit: string,
   distDigest: string,
   measuredAt: string,
+  harnessPaths?: readonly string[],
 ): RowBase => ({
   schema_version: 1,
   harness_commit: harnessCommit,
-  harness_digest: harnessTreeDigest(repoRoot, harnessCommit),
+  harness_digest: harnessTreeDigest(repoRoot, harnessCommit, harnessPaths),
   dist_digest: distDigest,
   measured_at: measuredAt,
   machine: machine(repoRoot),

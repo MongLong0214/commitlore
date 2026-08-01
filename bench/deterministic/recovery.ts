@@ -254,13 +254,24 @@ const everyRecordDelivery = (repoRoot: string, budget: number, mustNotTruncate: 
 const logDeliveries = (
   repoRoot: string,
   path: string,
+  args: readonly string[],
 ): { readonly full: Delivery; readonly budgeted: Delivery } => {
-  const text = command('git', ['log', '--format=%B', '--', path], { cwd: repoRoot }).stdout;
+  const text = command('git', ['log', ...args, '--', path], { cwd: repoRoot }).stdout;
   return {
     full: deliveredFromLog(text),
     budgeted: deliveredFromLog(truncateToBudget(text, DEFAULT_BUDGET_TOKENS)),
   };
 };
+
+/** The registered Git arm: the file's ordinary history, message bodies only. */
+const PLAIN_LOG_ARGS = ['--format=%B'] as const;
+/**
+ * The same command taught to print the notes mirror. The `%x0a` between the two
+ * is load-bearing: `%B` does not always end in a newline, and a note glued onto
+ * the end of a subject line would put `Record-Id:` mid-line, where a scan
+ * anchored to a line start cannot see it.
+ */
+const NOTES_LOG_ARGS = ['--notes=refs/notes/commitlore', '--format=%B%x0a%N'] as const;
 
 const ratio = (numerator: number, denominator: number): number =>
   denominator === 0 ? 0 : numerator / denominator;
@@ -377,13 +388,35 @@ export const scoreRoute = (
   };
 };
 
+/**
+ * Everything a corpus other than this repository needs, and nothing this
+ * repository's own registered run uses. Both fields default to the registered
+ * behaviour, so a call that omits this object produces byte-identical rows to
+ * one made before the object existed.
+ */
+export interface DeliveryOptions {
+  /**
+   * Fold `refs/notes/commitlore` into the answer key. Required wherever records
+   * were attached out of band, which is every record a backfill wrote.
+   */
+  readonly includeNotes?: boolean;
+  /** Which arms to score. Defaults to the seven registered in §5 of the method. */
+  readonly routes?: readonly DeliveryRoute[];
+}
+
 export const measureDecisionDelivery = (
   base: RowBase,
   repoRoot: string,
   ref = 'HEAD',
   log: (line: string) => void = () => {},
+  options: DeliveryOptions = {},
 ): readonly DecisionDeliveryRow[] => {
-  const census = buildCensus(repoRoot, ref);
+  const routes = options.routes ?? DELIVERY_ROUTES;
+  const wantsNotes =
+    routes.includes('git-log-path-notes') || routes.includes('git-log-path-notes-budgeted');
+  const census = buildCensus(repoRoot, ref, {
+    ...(options.includeNotes === undefined ? {} : { includeNotes: options.includeNotes }),
+  });
   const tracked = trackedPaths(repoRoot);
   const generated = generatedPaths(repoRoot, tracked);
   const byPath = invertPaths(census);
@@ -404,19 +437,22 @@ export const measureDecisionDelivery = (
   for (const path of tracked) {
     const gold = goldForPath(repoRoot, census, byPath, path, generated.has(path));
     if (gold.active.size === 0) continue;
-    const log0 = logDeliveries(repoRoot, path);
-    observations.push({
-      gold,
-      deliveries: new Map<DeliveryRoute, Delivery>([
-        ['code-only', EMPTY_DELIVERY],
-        ['git-log-path-budgeted', log0.budgeted],
-        ['git-log-path', log0.full],
-        ['every-record-budgeted', budgeted],
-        ['every-record-unbudgeted', unbudgeted],
-        ['commitlore', injectionDelivery(repoRoot, path)],
-        ['commitlore-unbudgeted', injectionDelivery(repoRoot, path, UNBOUNDED_BUDGET_TOKENS)],
-      ]),
-    });
+    const log0 = logDeliveries(repoRoot, path, PLAIN_LOG_ARGS);
+    const deliveries = new Map<DeliveryRoute, Delivery>([
+      ['code-only', EMPTY_DELIVERY],
+      ['git-log-path-budgeted', log0.budgeted],
+      ['git-log-path', log0.full],
+      ['every-record-budgeted', budgeted],
+      ['every-record-unbudgeted', unbudgeted],
+      ['commitlore', injectionDelivery(repoRoot, path)],
+      ['commitlore-unbudgeted', injectionDelivery(repoRoot, path, UNBOUNDED_BUDGET_TOKENS)],
+    ]);
+    if (wantsNotes) {
+      const noted = logDeliveries(repoRoot, path, NOTES_LOG_ARGS);
+      deliveries.set('git-log-path-notes', noted.full);
+      deliveries.set('git-log-path-notes-budgeted', noted.budgeted);
+    }
+    observations.push({ gold, deliveries });
     if (observations.length % 100 === 0) {
       log(`decision delivery: ${observations.length} paths measured`);
     }
@@ -430,6 +466,8 @@ export const measureDecisionDelivery = (
     'every-record-unbudgeted': UNBOUNDED_BUDGET_TOKENS,
     commitlore: DEFAULT_BUDGET_TOKENS,
     'commitlore-unbudgeted': UNBOUNDED_BUDGET_TOKENS,
+    'git-log-path-notes': null,
+    'git-log-path-notes-budgeted': DEFAULT_BUDGET_TOKENS,
   };
 
   const rows: DecisionDeliveryRow[] = [];
@@ -439,7 +477,7 @@ export const measureDecisionDelivery = (
     );
     const candidates =
       population === 'all-tracked' ? tracked.length : tracked.length - generated.size;
-    for (const route of DELIVERY_ROUTES) {
+    for (const route of routes) {
       rows.push(
         scoreRoute(
           base,
