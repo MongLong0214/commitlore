@@ -55,7 +55,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseRecordBlocks } from './trailers.js';
-import { canonicalConventionalTrailerKey, isConventionalTrailerKey, } from './types.js';
+import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
 /**
  * Resolved on first use, not at import.
  *
@@ -228,12 +228,30 @@ const recordExclusion = (counts, key) => {
  * before anything downstream asks "does this commit have a trailer block",
  * not after (bug-issue-150).
  */
-const stripConventional = (trailers, counts) => trailers.filter((trailer) => {
-    if (!isConventionalTrailerKey(trailer.key))
-        return true;
-    recordExclusion(counts, trailer.key);
-    return false;
-});
+const stripConventional = (trailers, counts) => {
+    const kept = trailers.filter((trailer) => {
+        if (!isConventionalTrailerKey(trailer.key))
+            return true;
+        recordExclusion(counts, trailer.key);
+        return false;
+    });
+    // A block with no key from this protocol's vocabulary is not a record, and
+    // indexing it manufactures a claim its lines never made. The denylist above
+    // cannot decide this: it answers "which trailers belong in a record", and a
+    // repository using conventional commits produced `sha256:`, `Tests:` and
+    // `fix:` rows on a repository holding zero records -- served to an agent, via
+    // `context`, as recorded decisions (#335).
+    //
+    // Applied here rather than at each call site because this runs at every point
+    // raw git output becomes a candidate record, which is exactly the boundary the
+    // question belongs on.
+    if (!kept.some((trailer) => isCommitLoreKey(trailer.key))) {
+        for (const trailer of kept)
+            recordExclusion(counts, trailer.key);
+        return [];
+    }
+    return kept;
+};
 /**
  * `--name-only -z` emits a newline between the format output and the path
  * list. Paths themselves are raw (that is what `-z` buys), so only that
