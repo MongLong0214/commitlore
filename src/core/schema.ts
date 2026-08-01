@@ -15,6 +15,7 @@ import type { AnySchemaObject, ErrorObject, ValidateFunction } from 'ajv/dist/20
 import type { FormatsPlugin } from 'ajv-formats';
 
 import { readInstalledFile } from './paths.js';
+import { splitRuledOut } from './trailers.js';
 import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
@@ -72,6 +73,24 @@ const FORMAT_WANT: Readonly<Record<string, string>> = {
 };
 
 const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';
+
+/**
+ * `Ruled-out:` fails its grammar two ways and the repair differs, so the
+ * `want` is chosen from the value rather than looked up by key alone. Telling
+ * an author to write `alternative | reason` when the value already holds a
+ * separator is no advice at all: the separator is there, it is just inside a
+ * code span the split cut open (SPEC §3.1, issue #372).
+ */
+const RULED_OUT_CODE_SPAN_WANT =
+  'alternative | reason — the alternative opens a code span that closes after the ' +
+  'separator, so the first "|" sits inside quoted text; there is no escape, so ' +
+  'rephrase the alternative to hold no "|"';
+
+const formatWantFor = (trailer: Trailer): string | undefined => {
+  const want = FORMAT_WANT[trailer.key];
+  if (want === undefined || trailer.key !== 'Ruled-out') return want;
+  return splitRuledOut(trailer.value).unterminatedCodeSpan ? RULED_OUT_CODE_SPAN_WANT : want;
+};
 
 interface RecordDocument {
   trailers: Trailer[];
@@ -136,7 +155,7 @@ const violationFor = (trailer: Trailer, field: string): Violation | null => {
     };
   }
 
-  const formatWant = FORMAT_WANT[trailer.key];
+  const formatWant = formatWantFor(trailer);
   if (formatWant !== undefined) {
     return {
       key: trailer.key,

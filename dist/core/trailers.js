@@ -58,6 +58,36 @@ export const parseCommitMessage = (msg) => {
         .filter((line) => line.length > 0)
         .map(parseOutputLine);
 };
+/** SPEC §3.1: `Ruled-out: alternative | reason`. */
+const RULED_OUT_SEPARATOR = '|';
+/**
+ * Splits a `Ruled-out:` value into the alternative and the reason (SPEC §3.1).
+ *
+ * The **first** `|` separates and there is no escape, so a reason may contain
+ * pipes and an alternative may not. Which end to split from was settled by
+ * counting this repository's own records rather than by intuition (issue
+ * #372): of 620 distinct `Ruled-out:` values, three carry more than one pipe,
+ * and two of the three carry it in the reason — `||` in shell prose,
+ * `.mjs|.js` in a filename alternation. Splitting on the last pipe would
+ * destroy those two to rescue the third, so the first pipe stays the
+ * separator and the ambiguity is reported instead.
+ *
+ * Reporting rather than repairing is the same disposition SPEC §6 takes on
+ * every other malformed value: a consumer that guessed would produce an
+ * alternative no author wrote, and `commitlore guard` matches on exactly that
+ * string.
+ */
+export const splitRuledOut = (value) => {
+    const at = value.indexOf(RULED_OUT_SEPARATOR);
+    const head = at === -1 ? value : value.slice(0, at);
+    return {
+        alternative: head.trim(),
+        reason: at === -1 ? '' : value.slice(at + 1).trim(),
+        malformed: at === -1,
+        ambiguous: at !== -1 && value.includes(RULED_OUT_SEPARATOR, at + 1),
+        unterminatedCodeSpan: at !== -1 && (head.match(/`/g) ?? []).length % 2 === 1,
+    };
+};
 const serializeOne = (trailer) => {
     const [first = '', ...continuations] = trailer.value.split('\n');
     const lines = [

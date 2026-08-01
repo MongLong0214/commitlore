@@ -550,6 +550,95 @@ describe('a Ruled-out: with no separator', () => {
   });
 });
 
+/**
+ * Issue #372. A `Ruled-out:` value carrying a second `|` splits somewhere the
+ * author may not have meant, and the alternative guard matches on is then a
+ * fragment. Guard cannot recover the intended split — nothing in the value
+ * says which pipe was the separator — so what it owes the caller is the fact
+ * that the split is in question, on every match it does produce.
+ */
+describe('a Ruled-out: whose value carries a second pipe (issue #372)', () => {
+  const PIPED = 'shelling out to `grep | head` for counts | it silently returns head exit status';
+  const REASON_PIPE =
+    'set +e at the top of each step | it also disables the abort for genuinely unexpected ' +
+    'failures; the || form is scoped to the one command whose failure is a measurement';
+  let ambiguous = '';
+
+  beforeAll(() => {
+    ambiguous = makeRepo([
+      {
+        id: 'ambiguous',
+        committedAt: '2026-01-05T09:00:00Z',
+        files: { 'src/count.ts': 'export const noop = (): void => {};' },
+        message:
+          `Count matches in process\n\nRuled-out: ${PIPED}\nRecord-Id: r-ggg777\n` +
+          'Provenance: authored\nCommitLore-Version: 2.0.0\n',
+      },
+      {
+        id: 'reason-pipe',
+        committedAt: '2026-01-05T10:00:00Z',
+        files: { 'src/step.ts': 'export const noop = (): void => {};' },
+        message:
+          `Scope the abort\n\nRuled-out: ${REASON_PIPE}\nRecord-Id: r-hhh888\n` +
+          'Provenance: authored\nCommitLore-Version: 2.0.0\n',
+      },
+    ]);
+  });
+
+  it('flags the truncated fragment as ambiguous rather than as a clean alternative', () => {
+    const [match] = guard({
+      proposal: 'shelling out to grep head for counts',
+      cwd: ambiguous,
+      at: NOW,
+      threshold: 0,
+    }).matches;
+    // The fragment still matches — a record that half-works beats one that
+    // silently stops working — but the caller is told the split is in doubt,
+    // which the score alone cannot say.
+    expect(match?.recordId).toBe('r-ggg777');
+    expect(match?.alternative).toBe('shelling out to `grep');
+    expect(match?.signals).toContain('malformed:ambiguous-separator');
+  });
+
+  it('still separates on the first pipe, so a reason may quote one', () => {
+    // Two of this repository's three multi-pipe records carry the extra pipe
+    // in the reason. Splitting on the last pipe would cut this alternative
+    // down to "set +e at the top of each step | it also disables ... the |".
+    const [match] = guard({
+      proposal: 'set +e at the top of each step',
+      cwd: ambiguous,
+      at: NOW,
+      threshold: 0,
+    }).matches;
+    expect(match?.recordId).toBe('r-hhh888');
+    expect(match?.alternative).toBe('set +e at the top of each step');
+    expect(match?.reason).toContain('the || form is scoped');
+    expect(match?.signals).toContain('malformed:ambiguous-separator');
+  });
+
+  it('carries the caveat into the stderr block a hook routes back to the agent', () => {
+    // The signal is only useful if it reaches the reader. An agent held to a
+    // half sentence has to be told it is half a sentence.
+    const run = runCommand(ambiguous, [
+      'guard',
+      '--proposal',
+      'shelling out to grep head for counts',
+      '--threshold',
+      '0',
+      '--at',
+      NOW.toISOString(),
+    ]);
+    expect(run.code).toBe(FLAGGED_EXIT_CODE);
+    expect(run.stderr).toContain('ruled out: shelling out to `grep');
+    expect(run.stderr).toContain('caveat:    the Ruled-out: value holds more than one "|"');
+  });
+
+  it('leaves a well-formed record\'s block at three lines', () => {
+    const run = runCommand(repo, ['guard', '--proposal', fixture('redis-named').text, ...AT]);
+    expect(run.stderr).not.toContain('caveat:');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The command layer
 // ---------------------------------------------------------------------------

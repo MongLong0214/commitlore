@@ -1154,6 +1154,57 @@ describe('index-db: notes as a second source', () => {
       closeIndex(handle);
     }
   });
+
+  /* bug-issue-351. A note survives the commit it annotates becoming
+     unreachable — `git notes list` is keyed by object name and knows nothing
+     about refs — so a record abandoned by `reset --hard`, a dropped branch or
+     a rebase was still served as active, and its `Supersedes:` retired the
+     record that is actually live. `commands/stale.ts` has always filtered
+     notes to the commits its walk saw; the index did not, which is why the two
+     disagreed on the same repository. */
+  it('does not serve a note on a commit HEAD no longer reaches (bug-issue-351)', () => {
+    const dir = makeRepo();
+    const kept = commit(
+      dir,
+      record('Bound the retry budget', [
+        'Limit: the queue drops on the third retry',
+        'Record-Id: r-old001',
+      ]),
+      { 'src/queue.ts': 'three retries' },
+    );
+    const abandoned = commit(
+      dir,
+      record('Retire the retry budget', [
+        'Limit: the queue drops on the first retry',
+        'Supersedes: r-old001',
+        'Record-Id: r-new001',
+      ]),
+      { 'src/queue.ts': 'one retry' },
+    );
+
+    execGitOrThrow(
+      [...GIT_CONFIG, 'notes', '--ref=refs/notes/commitlore', 'add', '-F', '-', abandoned],
+      {
+        cwd: dir,
+        stdin:
+          'Limit: the queue drops on the first retry\nSupersedes: r-old001\nRecord-Id: r-new001\n',
+      },
+    );
+    execGitOrThrow([...GIT_CONFIG, 'reset', '--hard', '--quiet', kept], { cwd: dir });
+
+    const handle = openIndex({ cwd: dir });
+    try {
+      updateIndex(handle);
+      const values = dumpIndex(handle).map((trailer) => trailer.value);
+      expect(values).toContain('r-old001');
+      expect(values).not.toContain('r-new001');
+      expect(queryTrailers(handle, { keys: ['Supersedes'] })).toEqual([]);
+      expect(queryTrailers(handle, { source: 'notes' })).toEqual([]);
+      expect(dumpIndex(handle)).toEqual(scanTrailers({}, { cwd: dir }));
+    } finally {
+      closeIndex(handle);
+    }
+  });
 });
 
 describe('index-db: repository shapes', () => {

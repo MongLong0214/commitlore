@@ -458,18 +458,33 @@ const readCommitRecords = (cwd, shas, excluded) => {
  * text an external tool or a hand edit can put anything into, and a mirror
  * that trusted its own source more than it trusts a commit message would be
  * the one place this bug could survive its own fix.
+ *
+ * `reachable` is the HEAD walk the caller already made, and every note outside
+ * it is dropped (bug-issue-351). A note is keyed by object name and knows
+ * nothing about refs, so it outlives the commit it annotates: `reset --hard`,
+ * an abandoned branch and a rebase all leave the object addressable and the
+ * note readable. Serving those is not a stale extra row — the abandoned
+ * record's `Supersedes:` retires the record that is still live, so one
+ * unreachable note silences a reachable one. The commit source has never had
+ * this problem because it only ever reads `rev-list HEAD`, and
+ * `commands/stale.ts` filters its notes the same way; without this the two
+ * answered differently on the same repository.
  */
-const readNoteRecords = (cwd, excluded) => {
+const readNoteRecords = (cwd, reachable, excluded) => {
     const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
     const annotated = listed
         .split('\n')
         .filter((line) => line !== '')
         .map((line) => line.split(' ')[1] ?? '')
-        .filter((sha) => sha !== '');
+        .filter((sha) => sha !== '' && reachable.has(sha));
     if (annotated.length === 0)
         return [];
     /* Notes may annotate any object. `git log` refuses a blob, so one bad note
-       would otherwise take the whole index down. */
+       would otherwise take the whole index down. A pruned object is the same
+       shape — `git gc` deletes an unreachable commit and leaves the note behind,
+       and `--batch-check` answers `missing` for it — so the reachability filter
+       above and this one agree once gc has run, and only the filter above tells
+       them apart before it. */
     const typed = execGitOrThrow(['cat-file', '--batch-check'], {
         cwd,
         stdin: `${annotated.join('\n')}\n`,
@@ -555,6 +570,15 @@ const revParseRef = (cwd, ref) => {
 const revList = (cwd, range) => execGitOrThrow(['rev-list', range], { cwd, maxBuffer: LOG_MAX_BUFFER })
     .split('\n')
     .filter((line) => line !== '');
+/**
+ * Every commit HEAD reaches — the one definition of "in this history" both
+ * record sources are filtered against (bug-issue-351). An unborn HEAD reaches
+ * nothing, which `revList` would raise on rather than answer.
+ *
+ * Callers that already hold the walk pass it directly instead of calling this;
+ * it exists for `indexNotes`, which re-reads the mirror without one.
+ */
+const reachableFromHead = (cwd) => revParse(cwd, 'HEAD') === null ? [] : revList(cwd, 'HEAD');
 // ---------------------------------------------------------------------------
 // Database lifecycle
 // ---------------------------------------------------------------------------
@@ -820,7 +844,9 @@ export const indexNotes = (handle, opts = {}, excluded) => {
     const indexed = readMeta(handle.db, 'notes_ref_sha');
     if (!(opts.force ?? false) && refSha === indexed)
         return 0;
-    const records = refSha === null ? [] : readNoteRecords(handle.cwd, excluded);
+    const records = refSha === null
+        ? []
+        : readNoteRecords(handle.cwd, new Set(reachableFromHead(handle.cwd)), excluded);
     return runInTransaction(handle.db, () => {
         deleteNoteRows(handle);
         const counts = insertRecords(handle, records);
@@ -864,7 +890,7 @@ export const rebuildIndex = (handle, opts = {}) => {
     const excluded = new Map();
     const records = readCommitRecords(handle.cwd, shas, excluded);
     const notesRef = revParseRef(handle.cwd, NOTES_REF);
-    const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, excluded);
+    const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
     const stats = {
         ...emptyStats(handle, started),
         rebuilt: true,
@@ -1138,7 +1164,7 @@ export const scanTrailers = (query = {}, opts = {}) => {
         return [];
     const head = revParse(cwd, 'HEAD');
     const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
-    const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd)];
+    const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
     const matched = toIndexedTrailers(records)
         .filter((trailer) => matchesQuery(trailer, query))
         .sort(compareTrailers);

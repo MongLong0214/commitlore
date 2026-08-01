@@ -112,6 +112,17 @@ interface TimedRecord {
  * input position, which keeps the comparator total — the alternative,
  * branching on `undefined` inside the comparator, is inconsistent and sorts
  * differently depending on how the engine happens to pair elements.
+ *
+ * That tie-break is a contract on the caller, not an implementation detail:
+ * `committedAt` comes from `%ct`, which has one-second resolution, so two
+ * commits made in the same second are equal on the only axis this orders by
+ * and input position is all that is left. **Callers must feed oldest-first.**
+ * A `git log` walk never emits a parent before its child, so reversing one
+ * yields a real topological order and "latest declaration wins" then means
+ * what it says; feeding the walk unreversed inverts it (issue #350). Where a
+ * caller has no topological order to give — the index stores none — the tie is
+ * deterministic but arbitrary, which is why {@link instantConflicts} refuses
+ * to let an arbitrary choice decide a record's content.
  */
 const chronological = (records: StaleRecord[]): TimedRecord[] => {
   let carried = Number.NEGATIVE_INFINITY;
@@ -247,11 +258,18 @@ export const foldLifecycle = (records: StaleRecord[], opts: FoldOptions): Record
 
   const ordered = chronological(records).filter((entry) => entry.at <= cutoff);
   const retired = supersessions(ordered);
+  const undecidable = undecidableExpiry(ordered);
 
   return [...declarations(ordered).values()].map((declaration) => {
     const supersededBy = retired.get(declaration.recordId);
     const expiresAt = trailerValue(declaration.trailers, EXPIRES_KEY);
-    const expiryEnd = expiryEndOf(expiresAt);
+    // An expiry the stream cannot order is not an expiry this engine may
+    // compute: the two candidate dates can be opposite answers, and `undefined`
+    // routes the record to the same `review` flag a condition-form `Expires:`
+    // gets — a question for a human, not a retirement on a coin flip.
+    const expiryEnd = undecidable.has(declaration.recordId)
+      ? undefined
+      : expiryEndOf(expiresAt);
     const expired = expiryEnd !== undefined && cutoff >= expiryEnd;
 
     const lifecycle: Lifecycle =
@@ -335,8 +353,78 @@ const groupsByRecordId = (records: StaleRecord[]): Map<string, StaleRecord[]> =>
   return groups;
 };
 
+/**
+ * The non-repeatable keys on which two commits made in the same second give
+ * one `Record-Id` different answers.
+ *
+ * `committedAt` carries `%ct`, one second of resolution, so commits inside one
+ * second are equal on the axis {@link chronological} orders by and no ordering
+ * of the stream can say which declaration is the later one. Where they agree
+ * there is nothing to decide. Where they disagree, "latest wins" has no latest
+ * to name and the two answers can be opposite — `Expires: 2026-12-31` against
+ * `Expires: 2026-01-31` is a constraint that is live all year or lapsed months
+ * ago, decided by nothing but which record the caller happened to hand over
+ * last (issue #350). Repeatable keys are excluded: they accumulate rather than
+ * replace, so every order folds to the same set.
+ *
+ * Two shas are required, so a single commit declaring one identity twice stays
+ * {@link sharesACommit}'s to report. `notes` records are excluded because a
+ * mirror always shares its commit's instant *and* its sha; a note that has
+ * drifted from its commit is already ambiguous under the payload rule below.
+ */
+const instantConflicts = (group: StaleRecord[]): Set<string> => {
+  const shas = new Map<number, Set<string>>();
+  const values = new Map<number, Map<string, Set<string>>>();
+
+  for (const record of group) {
+    if (record.source === 'notes' || record.sha === undefined) continue;
+    const at = instantOf(record);
+    if (at === undefined) continue;
+
+    let commits = shas.get(at);
+    if (commits === undefined) {
+      commits = new Set<string>();
+      shas.set(at, commits);
+    }
+    commits.add(record.sha);
+
+    let keys = values.get(at);
+    if (keys === undefined) {
+      keys = new Map<string, Set<string>>();
+      values.set(at, keys);
+    }
+    for (const trailer of record.trailers) {
+      if (trailer.key === RECORD_ID_KEY || !SINGLE_VALUED.has(trailer.key)) continue;
+      let seen = keys.get(trailer.key);
+      if (seen === undefined) {
+        seen = new Set<string>();
+        keys.set(trailer.key, seen);
+      }
+      seen.add(trailer.value);
+    }
+  }
+
+  const conflicts = new Set<string>();
+  for (const [at, keys] of values) {
+    if ((shas.get(at)?.size ?? 0) < 2) continue;
+    for (const [key, seen] of keys) if (seen.size > 1) conflicts.add(key);
+  }
+  return conflicts;
+};
+
+/** The `Record-Id`s whose `Expires:` the stream cannot order, and so cannot resolve. */
+const undecidableExpiry = (ordered: TimedRecord[]): Set<string> => {
+  const found = new Set<string>();
+  const groups = groupsByRecordId(ordered.map(({ record }) => record));
+  for (const [recordId, group] of groups) {
+    if (instantConflicts(group).has(EXPIRES_KEY)) found.add(recordId);
+  }
+  return found;
+};
+
 const hasAmbiguousGroup = (group: StaleRecord[]): boolean =>
   sharesACommit(group) ||
+  instantConflicts(group).size > 0 ||
   (group.some((record) => record.source === 'notes') &&
     new Set(group.map(payloadSignature)).size > 1);
 

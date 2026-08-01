@@ -21,41 +21,11 @@ export declare const CHAINED_SUFFIX = ".commitlore-chained";
 export declare const HOOK_NAME = "commit-msg";
 export declare const CHAINED_HOOK_NAME = "commit-msg.commitlore-chained";
 export declare const HOOK_MODE = 493;
-/**
- * The stub's text.
- *
- * `set -e` plus the explicit `|| exit $?` makes a chained hook's failure the
- * stub's failure, with its own exit code, before commitlore runs at all: a hook
- * that was already rejecting commits keeps rejecting them.
- *
- * `COMMITLORE_BIN` exists so a checkout can point the hook at a specific build
- * (a test harness, a monorepo's local bin) without the installer writing an
- * absolute path into the repository. It carries the same `.js`/`.mjs`
- * allowlist as the recorded path below: an env var is reachable from CI
- * configuration, a sourced profile, or a compromised toolchain — places a
- * reviewer does not read as executable config, so it gets no more trust than
- * `commitlore.bin` does. A value that fails the check falls through to the
- * remaining resolution steps rather than being executed.
- *
- * The recorded `commitlore.bin` gets one more check `COMMITLORE_BIN` deliberately
- * does not: it must resolve inside `commitlore.root`, also recorded at install
- * time (#71). Naming a file `.js` costs a `.git/config` editor nothing, so the
- * extension check alone does not stop a post-install edit from pointing
- * `commitlore.bin` at an attacker's own script — only its location, which the
- * installer controls and a later config edit cannot rewrite without also
- * rewriting `commitlore.root`. `COMMITLORE_BIN` is exempt on purpose: its whole
- * reason to exist is aiming the hook at a build outside the install root.
- *
- * There is no `npx` fallback on purpose. `npx --no` still queries the registry
- * when the package is not installed locally, which would put a network call on
- * every commit and make offline commits fail. The local `node_modules/.bin`
- * walk covers the same case without leaving the machine.
- *
- * Only `.js`/`.mjs` is recognized. ADR-0026 removed the compiled
- * single-executable build, and with it the arm that would exec an extensionless
- * file named `commitlore` directly. That name now belongs to the installer's own
- * wrapper, which is a shell script that execs node — so the path worth trusting is
- * the bundle it runs, and an extensionless recorded path falls through to the
- * PATH search below rather than being exec'd on the strength of its name.
- */
+/** The validation gate: it refuses when it cannot run. */
 export declare const commitMsgStub: () => string;
+/**
+ * The body the capture hooks derive from — identical to the gate's except for
+ * the ending, which lets the commit through. `prepare-commit-msg` and
+ * `post-commit` rename it (marker, chained hook, invocation) from here.
+ */
+export declare const captureHookStub: () => string;

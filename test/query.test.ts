@@ -21,6 +21,7 @@ import { Command } from 'commander';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { formatContext, register, toJson } from '../src/commands/query.js';
+import { buildReport, collectRecords } from '../src/commands/stale.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import { scanTrailers } from '../src/core/index-db.js';
@@ -706,6 +707,74 @@ describe('notes merge and dedupe', () => {
   });
 });
 
+describe('two commits in one second declaring one Record-Id (issue #350)', () => {
+  /**
+   * The reproduction from the issue: one `GIT_COMMITTER_DATE` for both
+   * commits, so `committed_ts` — `%ct`, one-second resolution — cannot order
+   * them, and the two declarations disagree about when the constraint lapses.
+   */
+  const tieRepo = (): string => {
+    const dir = makeRepo();
+    const stamp = '2026-03-01T12:00:00Z';
+    commitAt(
+      dir,
+      stamp,
+      record('Cap the drain at the vendor rate', [
+        'Limit: the vendor caps us at 5 requests per second',
+        'Record-Id: r-abc123',
+        'Certainty: firm',
+        'Expires: 2026-12-31',
+      ]),
+      { 'src/tie/drain.ts': 'one' },
+    );
+    commitAt(
+      dir,
+      stamp,
+      record('Walk the cap back to a guess', [
+        'Limit: the vendor caps us at 5 requests per second',
+        'Record-Id: r-abc123',
+        'Supersedes: r-abc123',
+        'Certainty: guess',
+        'Expires: 2026-01-31',
+      ]),
+      { 'src/tie/drain.ts': 'two' },
+    );
+    return dir;
+  };
+
+  const tieAt = new Date('2026-06-01T00:00:00Z');
+
+  it('withholds the record instead of resolving the tie by commit sha', () => {
+    const dir = tieRepo();
+    for (const noIndex of [false, true]) {
+      const result = runQuery({ cwd: dir, path: 'src/tie/drain.ts', at: tieAt, noIndex });
+      expect(recordIds(result.records)).toEqual(['r-abc123']);
+
+      const [entry] = result.records;
+      expect(entry?.identityCollision).toBe(true);
+      expect(entry?.trust).toBe('blocked');
+
+      const context = formatContext(result);
+      expect(context).not.toContain('the vendor caps us at 5 requests per second');
+      expect(context).toContain('Record content was withheld because its Record-Id collides.');
+    }
+  });
+
+  it('answers the same as stale about the same repository', () => {
+    const dir = tieRepo();
+    const report = buildReport(collectRecords({ cwd: dir, allHistory: true }), tieAt);
+    const result = runQuery({ cwd: dir, path: 'src/tie/drain.ts', at: tieAt });
+
+    // One repository, one record, one answer: neither command may claim to
+    // know which declaration is the later one.
+    expect(report.idCollisions.map((violation) => violation.value)).toEqual(['r-abc123']);
+    expect(report.records.map((entry) => entry.recordId)).toEqual(['r-abc123']);
+    expect(report.records[0]?.lifecycle).toBe('active');
+    expect(result.records[0]?.lifecycle).toBe('active');
+    expect(result.records[0]?.trust).toBe('blocked');
+  });
+});
+
 describe('two blocks in one message sharing a Record-Id (bug-issue-92)', () => {
   it('blocks both, the same way a divergent note collides with its commit', () => {
     const dir = makeRepo();
@@ -1379,5 +1448,51 @@ describe('formatting', () => {
     const text = formatContext(result);
     expect(text).toContain('(superseded)');
     expect(text).toContain('(expired)');
+  });
+});
+
+/**
+ * Issue #372. `commitlore ruled-out` printed the value verbatim, so a record
+ * whose separator landed in the wrong place read exactly like one whose
+ * separator landed in the right place. That is the surface an agent reads
+ * *after* the record is already in history, where `validate` can no longer
+ * refuse it — so it is the surface that has to say the split is in question.
+ */
+describe('ruled-out — an ambiguous separator (issue #372)', () => {
+  const dir = (() => {
+    const created = makeRepo();
+    commitAt(
+      created,
+      '2026-01-05T00:00:00Z',
+      record('Count matches in process', [
+        'Ruled-out: Passing the version through $args so irm | iex could take one | iex gives ' +
+          'a piped script no arguments',
+        'Record-Id: r-ggg777',
+      ]),
+      { 'src/install.ps1': 'install' },
+    );
+    commitAt(
+      created,
+      '2026-01-06T00:00:00Z',
+      record('Keep the writer', [
+        'Ruled-out: a background worker | it moves the failure, it does not remove it',
+        'Record-Id: r-cc3333',
+      ]),
+      { 'src/writer.ts': 'writer' },
+    );
+    return created;
+  })();
+
+  it('says where the split landed, so the reader can see it is not the intended one', () => {
+    const run = runCommand(dir, ['ruled-out', AT, PINNED]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain('Passing the version through $args so irm | iex could take one');
+    expect(run.stdout).toContain('alternative: "Passing the version through $args so irm"');
+  });
+
+  it('leaves an unambiguous value exactly as it was written', () => {
+    const run = runCommand(dir, ['ruled-out', AT, PINNED, '--', 'src/writer.ts']);
+    expect(run.stdout).toContain('a background worker | it moves the failure, it does not remove it');
+    expect(run.stdout).not.toContain('alternative:');
   });
 });

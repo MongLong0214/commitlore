@@ -165,8 +165,31 @@ export interface StaleReport {
   idCollisions: Violation[];
 }
 
+/**
+ * The order the fold is owed: oldest commit first.
+ *
+ * `collectRecords` returns what `git log` returns, newest first, and the fold
+ * breaks a same-second tie on input position — so handing it the walk as-is
+ * resolves "latest declaration wins" to the *oldest* of two commits made in
+ * one second (issue #350). A `git log` walk never emits a parent before its
+ * child, so reversing it is a real topological order and the tie-break then
+ * means what the rule says. `commands/validate.ts` has applied this same
+ * compensation on the reference-check path since bug-issue-187; this is the
+ * serving path finally getting it too.
+ *
+ * Notes stay behind the commits they mirror, where `collectRecords` puts them:
+ * a note shares its commit's instant, so its position decides whether the
+ * mirror or the message wins a non-repeatable key, and that precedence is not
+ * this fix's to change.
+ */
+const oldestFirst = (records: CollectedRecord[]): CollectedRecord[] => [
+  ...records.filter((record) => record.source !== 'notes').reverse(),
+  ...records.filter((record) => record.source === 'notes'),
+];
+
 export const buildReport = (scan: Scan, at: Date): StaleReport => {
-  const states = foldLifecycle(scan.records, { at });
+  const ordered = oldestFirst(scan.records);
+  const states = foldLifecycle(ordered, { at });
   const stale = states.filter(isStale).map((state): StaleReportRecord => {
     const record = scan.records.find(
       (candidate) =>
@@ -185,8 +208,11 @@ export const buildReport = (scan: Scan, at: Date): StaleReport => {
     notes: scan.notes,
     totalRecords: states.length,
     records: stale,
-    danglingRefs: findDanglingRefs(scan.records),
-    idCollisions: findIdCollisions(scan.records),
+    // Both read the stream in order too — `findIdCollisions` asks whether a
+    // *later* commit declared the succession, which is the same question the
+    // fold asks and must get the same order to answer it with.
+    danglingRefs: findDanglingRefs(ordered),
+    idCollisions: findIdCollisions(ordered),
   };
 };
 

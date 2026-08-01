@@ -20,12 +20,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { collectRecords } from './stale.js';
-import { execGit } from '../core/git.js';
+import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
+import { RULED_OUT_KEY } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, isSuccessionDeclared, UNIQUE_ID_WANT, } from '../core/stale.js';
-import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks } from '../core/trailers.js';
+import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks, splitRuledOut, } from '../core/trailers.js';
 import { KNOWN_KEYS, SINGLE_VALUED } from '../core/types.js';
 import { scanForSecrets, formatFindings } from '../core/secret-guard.js';
 export const CHECK_CLASS_NEEDS = {
@@ -207,12 +208,18 @@ const violationsForBlock = (source, trailers) => {
  * `checkReferences` below already reports the identical collision through
  * `findIdCollisions`'s same-commit branch, complete with its own line
  * attribution (bug-issue-92) — running this too would report the same
- * collision twice for the same commit. A `--message-file`/stdin source — what
- * a commit-msg hook always hands `validate`, and the shape SPEC §6.1 requires
- * working from "the message alone" — never resolves an `sha`, so
- * `findIdCollisions` structurally cannot see it there (it keys same-message
- * collisions off two records sharing one `sha`); this is exactly, and only,
- * that blind spot.
+ * collision twice for the same commit.
+ *
+ * For a `--message-file`/stdin source — what a commit-msg hook always hands
+ * `validate`, and the shape SPEC §6.1 requires working from "the message
+ * alone" — this is the detector that always runs, since `checkReferences`
+ * needs a repository and answers `not-checked` on stdin, outside one, or with
+ * the notes mirror unfetched. It is not the only one that can run, though:
+ * `findIdCollisions` also groups such a message's blocks as two
+ * commit-sourced records and reports the collision, a branch that needs no
+ * shared `sha` at all. That overlap is why `runValidate` drops a reference
+ * violation identical to one already reported here (bug-issue-365), rather
+ * than either side of it standing down.
  */
 const identityCollisionViolations = (source) => {
     if (source.sha !== undefined)
@@ -238,6 +245,38 @@ const identityCollisionViolations = (source) => {
         ];
     });
 };
+/**
+ * The half of issue #372 that cannot be a violation.
+ *
+ * A `Ruled-out:` value carrying a second `|` may be split in the wrong place —
+ * the alternative the record rules out is then a fragment, `commitlore guard`
+ * matches the fragment instead of the alternative, and nothing in the output
+ * says so. Refusing every such value was measured against this repository's
+ * own history first: of 620 distinct `Ruled-out:` values, three carry more
+ * than one pipe and two of those three are *correct*, their extra pipe living
+ * in the reason (`||`, `.mjs|.js`). Rejecting the class would invalidate two
+ * well-formed records to catch one broken one.
+ *
+ * So it warns, and the warning quotes the alternative the split produced —
+ * the author is the only party who can tell whether that is the one they
+ * meant, and the commit-msg hook is the last moment they can still fix it.
+ * The subset that *is* provably wrong (a code span the separator cut open) is
+ * a `format` violation and is skipped here so it is not reported twice.
+ */
+const ambiguousSeparatorWarnings = (source, trailers, lines) => trailers.flatMap((trailer, index) => {
+    if (trailer.key !== RULED_OUT_KEY)
+        return [];
+    const split = splitRuledOut(trailer.value);
+    if (!split.ambiguous || split.unterminatedCodeSpan)
+        return [];
+    const at = lines[index];
+    const where = `${source.sha?.slice(0, 10) ?? 'commit'}${at === undefined ? '' : `:${at}`}`;
+    return [
+        `commitlore: ${where}: Ruled-out: has more than one "|" and there is no escape, so the ` +
+            `first one separates: alternative ${JSON.stringify(split.alternative)}. If that is not ` +
+            'the split you meant, rephrase so only the separator is a pipe (SPEC §3.1)',
+    ];
+});
 /**
  * Validates every record block a message carries (SPEC §2.4), not only the
  * one git recognizes as the message's own last paragraph.
@@ -299,6 +338,7 @@ const inspectSource = (source) => {
     if (nonTrailerParagraph !== undefined) {
         warnings.push(`commitlore: ${source.sha?.slice(0, 10) ?? 'commit'}:${firstTrailerLine}: final paragraph does not look like a CommitLore trailer block; saw ${JSON.stringify(nonTrailerParagraph)}`);
     }
+    warnings.push(...ambiguousSeparatorWarnings(source, trailers, lines));
     return { violations, warnings };
 };
 const locateReferenceViolations = (source, trailers, violations) => {
@@ -364,13 +404,29 @@ const collectSources = (input, cwd) => {
         return readRange(input.range, cwd);
     return [{ message: (input.readStdin ?? readStdinSync)() }];
 };
+/**
+ * Why the reference check has no verdict on a shallow clone. Deliberately
+ * names the boundary rather than the record: the record is the one thing this
+ * clone cannot say anything about.
+ */
+const SHALLOW_REFERENCE_REASON = 'shallow history — a Record-Id declared below the clone boundary is not visible here ' +
+    '(fix: git fetch --unshallow)';
 const repositoryAvailable = (cwd) => execGit(['rev-parse', '--git-dir'], { cwd }).code === 0;
 const indexedHeadRecords = (cwd) => {
     const { handle } = ensureIndex({ cwd });
     try {
         const records = new Map();
         for (const row of queryTrailers(handle)) {
-            const identity = `${row.sha}\0${row.source}`;
+            // `block` is part of the row's identity, not decoration: the index's
+            // own unique key is `(commit_sha, source, block, seq)` and `query.ts`
+            // groups on all of it for the same reason. Folded to `(sha, source)`,
+            // every block of a multi-block commit collapses into one record, and
+            // `trailerValue` reads only the *first* `Record-Id` of that record — so
+            // block 1's identity never reaches the declared set and a `Follows:`
+            // naming it reads as dangling (bug-issue-352). Multi-block commits are
+            // what squash inheritance produces, so this is the common shape, not an
+            // exotic one.
+            const identity = `${row.sha}\u0000${row.source}\u0000${row.block}`;
             const existing = records.get(identity);
             if (existing !== undefined) {
                 existing.trailers.push({ key: row.key, value: row.value });
@@ -456,13 +512,14 @@ const checkReferences = (input, sources, cwd) => {
         }
         for (const source of sources) {
             // A message may carry several record blocks (SPEC §2.4); each is its
-            // own reference-checkable record. Cross-references between two blocks
-            // declared by the *same* commit are not resolved here — `prior` below
-            // excludes every record on `source.sha`, block or not, the same way it
-            // always excluded the commit's single record. A `Follows:`/`Supersedes:`
-            // naming a sibling block's id is therefore reported as dangling; a
-            // narrower carve-out for that case is future work, not a regression
-            // this change introduces.
+            // own reference-checkable record. SPEC §2.4 closes with the rule that
+            // decides how they see each other: `Follows:` and `Supersedes:` resolve
+            // against `Record-Id`s "regardless of which block declared them; the
+            // grammar does not scope identity resolution to one block or one
+            // message". So a block's declared set is `prior` *plus its siblings* —
+            // `prior` alone excludes every record on `source.sha`, which is correct
+            // for the commit's own record and wrong for the block beside it
+            // (bug-issue-352).
             const blocks = parseRecordBlocks(source.message);
             const scan = recordsFor(source, cwd);
             if (scan.notes === 'unfetched') {
@@ -488,21 +545,21 @@ const checkReferences = (input, sources, cwd) => {
             // carried over from `repositoryRecords` rather than rebuilt, so a
             // divergent note still collides with the message's own block exactly as
             // it did before this message could carry more than one (bug-issue-74).
-            const ownRecords = [
-                ...blocks.map((trailers) => ({
-                    trailers,
-                    source: 'commit',
-                    ...(source.sha === undefined ? {} : { sha: source.sha }),
-                })),
-                ...repositoryRecords.filter((record) => record.sha === source.sha && record.source === 'notes'),
-            ];
-            for (const trailers of blocks) {
-                const candidate = {
-                    trailers,
-                    source: 'commit',
-                    ...(source.sha === undefined ? {} : { sha: source.sha }),
-                };
-                const dangling = findDanglingRefs(prior, [candidate]);
+            const ownBlocks = blocks.map((trailers) => ({
+                trailers,
+                source: 'commit',
+                ...(source.sha === undefined ? {} : { sha: source.sha }),
+            }));
+            const ownNotes = repositoryRecords.filter((record) => record.sha === source.sha && record.source === 'notes');
+            const ownRecords = [...ownBlocks, ...ownNotes];
+            for (const [index, candidate] of ownBlocks.entries()) {
+                const trailers = candidate.trailers;
+                // The candidate's siblings, not the candidate itself: a record that
+                // names its own `Record-Id` in `Follows:` still resolves to nothing,
+                // and self-reference is a defect the truncation argument does not
+                // cover.
+                const siblings = ownBlocks.filter((_, other) => other !== index);
+                const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
                 const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
                 const collisions = recordId === undefined
                     ? []
@@ -517,9 +574,36 @@ const checkReferences = (input, sources, cwd) => {
                 violations.push(...locateReferenceViolations(source, trailers, [...dangling, ...collisions]));
             }
         }
+        // A shallow clone is missing ancestors, and "no record in history declares
+        // this id" is the one reference answer that reads directly off the
+        // ancestors. So a `dangling-ref` here is not a verdict about the record —
+        // it is the boundary of the clone, and blocking a commit on it rejects a
+        // valid record for the shape of the checkout.
+        //
+        // Only that rule is withdrawn. `duplicate-id` between a message's own
+        // blocks, or against a note on the same commit, is answered from the
+        // message alone and truncation cannot touch it — and that is exactly the
+        // multi-block squash shape this command exists to catch. Withdrawing the
+        // whole class would be a skip with no cause.
+        //
+        // The dangling-ref test comes first because it is free and the shallow test
+        // is not: `hasShallowHistory` spawns `git rev-parse`, and this function runs
+        // inside the commit-msg hook on every commit. The overwhelmingly common case
+        // is a clean record with nothing to explain, and it should pay nothing.
+        const suppressed = violations.some((violation) => violation.rule === 'dangling-ref') && hasShallowHistory(cwd);
+        const reported = suppressed
+            ? violations.filter((violation) => violation.rule !== 'dangling-ref')
+            : violations;
         return {
-            check: { class: 'reference', status: violations.length === 0 ? 'ok' : 'failed' },
-            violations,
+            check: {
+                class: 'reference',
+                // `not-checked` rather than `ok` when something was withheld: the
+                // green would be the part a reader carries away, and this command has
+                // no verdict to offer on the reference it could not resolve.
+                status: reported.length > 0 ? 'failed' : suppressed ? 'not-checked' : 'ok',
+                ...(suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}),
+            },
+            violations: reported,
         };
     }
     catch (error) {
@@ -535,10 +619,31 @@ const checkReferences = (input, sources, cwd) => {
 };
 const formatCheck = (check) => {
     const name = check.class === 'reference' ? 'references' : check.class;
-    return check.status === 'not-checked'
-        ? `${name} not checked (${check.reason ?? 'required information unavailable'})`
-        : `${name} ${check.status}`;
+    if (check.status === 'not-checked') {
+        return `${name} not checked (${check.reason ?? 'required information unavailable'})`;
+    }
+    // A reason on a decided check names what the verdict does *not* cover, so it
+    // is printed too — a partial answer that reads as a whole one is the failure
+    // this command is least able to afford.
+    return check.reason === undefined
+        ? `${name} ${check.status}`
+        : `${name} ${check.status} (${check.reason})`;
 };
+/**
+ * A violation's identity as the two output surfaces see it: every field that
+ * reaches the formatted line and the `--json` object. Two violations equal
+ * under this key are one instruction printed twice, not two edits — nothing a
+ * reader or the repair loop could tell apart, let alone act on separately.
+ */
+const violationIdentity = (violation) => JSON.stringify([
+    violation.sha ?? null,
+    violation.line ?? null,
+    violation.rule,
+    violation.key,
+    violation.value,
+    violation.got,
+    violation.want,
+]);
 /** `a1b2c3d4e5:12: enum Blast — got "wide", want "local|module|system"` */
 const formatViolation = (violation) => {
     const parts = [];
@@ -585,7 +690,35 @@ export const runValidate = (input = {}) => {
         return usageError(messageOf(error));
     }
     const references = checkReferences(input, sources, cwd);
-    const violations = [...shapeViolations, ...references.violations];
+    // Shape and reference are independent detectors that overlap on one finding:
+    // a `Record-Id` repeated across a message's own blocks is caught by
+    // `identityCollisionViolations` from the message alone, and by
+    // `findIdCollisions` inside `checkReferences`, which sees those same blocks
+    // as sibling records. Concatenating the two lists reported one collision
+    // twice, counted it twice in the summary, and handed the repair loop two
+    // identical instructions for one edit (bug-issue-365).
+    //
+    // Deduped here rather than by making one of the two checks stay silent on
+    // `duplicate-id`, because neither can be the one that goes quiet. The shape
+    // half is the only half that survives the `unfetched` and shallow gates and
+    // the stdin mode that identifies no repository at all — the common local
+    // case, and the one the commit-msg hook runs. The reference half is the only
+    // half that answers for a resolved `sha` (where the shape half deliberately
+    // stands down, since `findIdCollisions` reports it there with the same line
+    // attribution), and the only half that can see a collision against a note or
+    // an earlier commit at all. The overlap is not the defect; the second copy
+    // is.
+    //
+    // Scoped to the seam between the two lists and keyed on every field that
+    // reaches the output, so the multiplicity each check produces on its own is
+    // untouched: still one `duplicate-id` per colliding block, still one
+    // `cardinality` per extra occurrence. The shape copy is the one kept —
+    // shape is the check that ran unconditionally.
+    const alreadyReported = new Set(shapeViolations.map(violationIdentity));
+    const violations = [
+        ...shapeViolations,
+        ...references.violations.filter((violation) => !alreadyReported.has(violationIdentity(violation))),
+    ];
     const checks = [
         {
             class: 'shape',

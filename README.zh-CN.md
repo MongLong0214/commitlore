@@ -29,8 +29,6 @@ CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只�
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
-
 没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
@@ -42,15 +40,19 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 /plugin install commitlore@commitlore
 ```
 
+插件所含仅此而已：MCP 服务器、编辑前钩子与技能。它不会把 `commitlore` 放到 `PATH` 上，因此下面的 `commitlore …` 命令来自 `install.sh` / `install.ps1`，还需要那一步安装。
+
 两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
 
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh | sh
 ```
 
 支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**把上一个代理挣得的判断，交给下一个代理。**
 
 ## 看它实际运行
 
@@ -76,21 +78,13 @@ warnings
   r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
 ```
 
-<details>
-<summary>复现完全相同的 PreToolUse hook path</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
-```
-
-</details>
+如何原样复现这条 `PreToolUse` hook path，以及其余全部命令：[docs/cli.md](docs/cli.md)。
 
 ## 检索能找到记录。路径范围会排除已经推翻的决策。
 
 漏掉一条记录，模型损失的是上下文；交给它一项已经推翻的决策，损失的是正确性。在这项[检索测量](bench/retrieval/result.md)中，从 0 到 10,000 条干扰记录的每个规模，BM25、embedding top-k、hybrid RRF 与带路径过滤的 embedding 都各返回了一条已被替代的记录。带生命周期的 CommitLore 路径范围返回零条过时记录，并返回两条当前记录 (2/2)。
 
-召回率是辅助结果：两种方式的检索大体找到相同的记录，但只有一条路由知道哪些仍然有效。在没有已被替代记录的 #166 语料库中，embedding 检索与路径范围同为 2/2。决策被推翻时优势才会出现——而这正是本产品存在的情形。
+召回率是辅助结果：两种方式的检索大体找到相同的记录，但只有一条路由知道哪些仍然有效。决策被推翻时优势才会出现——而这正是本产品存在的情形。
 
 独立的 #167 暴露运行仍然重要：10,002 条记录中只有 2 条到达模型。
 
@@ -100,18 +94,11 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 | top-k 词法检索 | 2 | 1/2 | 190 |
 | CommitLore 路径范围 | 2 | 2/2 | 335 |
 
-这项测量是在固定的两条记录输出预算下进行的暴露与召回率测量，不测量令牌成本、计费成本、准确率或代理行为。它只涉及一个语料库、一个查询和一个固定的 embedding 模型。
-
-然后在每个需要验证 hook 与本地 index 的仓库运行 `commitlore init`。安装程序会检测受支持的编程代理，并在可以安全处理的地方注册本地 MCP server。
-
-## init 之后会发生什么
-
-- 照常提交。绝大多数提交没有 record。
-- 如果已有 record，commit-msg hook 会验证它；不会创建 record。
-- 代理通过 MCP 查询决策上下文，或从 `PreToolUse` hook 接收它。
-- 更改 path 前，它们会看到 active limit、ruled-out alternative、warning 和 verification gap。
+这项测量是在固定的两条记录输出预算下进行的暴露与召回率测量，不测量令牌成本、计费成本、准确率或代理行为。它只涉及一个语料库、一个查询和一个固定的 embedding 模型。召回率打平的地方，以及此外还测量了什么、没测量什么：[docs/evidence.md](docs/evidence.md)。
 
 ## 在仓库中试用
+
+然后在每个需要验证 hook 与本地 index 的仓库运行 `commitlore init`。安装程序会检测受支持的编程代理，并在可以安全处理的地方注册本地 MCP server。
 
 ```bash
 cd your-repository
@@ -119,7 +106,14 @@ commitlore init
 commitlore context .
 ```
 
-然后继续通过编程代理工作。若某项更改包含 diff 无法保存的决策上下文，请让代理在提交中加入 CommitLore record。
+在那之后：
+
+- 照常提交。绝大多数提交没有 record。
+- 如果已有 record，commit-msg hook 会验证它；不会创建 record。
+- 代理通过 MCP 查询决策上下文，或从 `PreToolUse` hook 接收它。
+- 更改 path 前，它们会看到 active limit、ruled-out alternative、warning 和 verification gap。
+
+继续通过编程代理工作。若某项更改包含 diff 无法保存的决策上下文，请让代理在提交中加入 CommitLore record。
 
 <details>
 <summary>想检查或固定安装版本？</summary>
@@ -128,17 +122,17 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/install.sh
-sh install.sh v0.5.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh
+sh install.sh v0.6.0
 
 # 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v0.5.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.6.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
 
-## 看看差别
+## 代码留了下来，决定没有。
 
 *不再重复评审同一个坏主意。*
 
@@ -155,13 +149,18 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 **有 CommitLore。** 编辑之前，代理收到：
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
+信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
 
 它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
 那里。
@@ -175,30 +174,17 @@ Do not retry without new evidence
 
 ## 在真实仓库中的样子
 
-来自一份约 768 次提交的 Swift MCP 服务器现场报告，安装后第二天。工程师在安装 CommitLore
-之前已完成代码库的全面普查，当时正在处理普查标记出的文件。
-
-```
-$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
-context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
-
-other
-  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
-                        with live-verified AX paths
-```
+来自一份约 768 次提交的 Swift MCP 服务器现场报告，安装后第二天。只给出一个文件路径，
+就浮出了一个工程师并不知道其存在的已合并 PR，而它改变了留存代码的含义。
 
 > **我不知道那个提交存在。** 那是两周前合并的 PR，已经移除了其中八处，并把每一处都换成了
 > accessibility-native 的等价实现，全部 fail-closed 并经过真机验证。
 >
-> 它重新定位了我的普查。我一直把剩下的站点当作问题**本身**。不是的。它们是一次已发布的
-> 移除行动之后的**残余** — 是在一次有意的移除尝试中存活下来的那些。这是完全不同的工程
-> 问题，也是不同的风险评估。
->
 > 这些都不在任何聊天记录里。它们在仓库里，而我只是给出了一个文件路径。
 
 替代方案是通读两周的已合并 PR。这不是代理会主动做的事，也不是人在每次编辑前会做的事。
-
 同一份报告中的接入成本：一条命令，768 次提交索引耗时 7.4 秒。不触碰历史，也不触碰工作区。
+控制台输出与报告全文见 [docs/evidence.md](docs/evidence.md)。
 
 **托管式聊天记录产品无法提供的三个性质**，也是把权威放在 Git 而非服务上的理由：
 
@@ -236,38 +222,15 @@ other
 
 不必为每次提交手写 trailer。绝大多数提交都不应带 record。只在 diff 无法还原的决策中添加 record：外部限制、排除的方案、warning 或 verification gap。
 
-### 通过编程代理
-
 让代理照常提交，只保留 diff 无法解释的决策上下文：
 
 > 提交这项更改。只有当 diff 无法还原重要限制、排除的方案、warning 或 verification gap 时，才添加 CommitLore record。
 
-绝大多数提交仍不应带 record。代理说明位于 `skills/commitlore-commits/`，commit hook 会验证代理添加的任何 record。
-
-### 高级路径：harvest
-
-`commitlore harvest` 从 session transcript 和 staged diff 构建 prompt contract；`commitlore harvest-verify` 据此检查 draft。它们支持起草，而不会自动提交。interactive record builder 尚未实现。
-
-### 手写
-
-作为逃生出口，人可以手写普通 Git trailer。commit-msg hook 只验证已经存在的 record；它不会凭空创建或静默添加 record。
-
-## 最小 record
-
-record 可以很小。只包含否则会丢失的上下文：
-
-```text
-Fix expired-token refresh
-
-Ruled-out: Extend token TTL to 24h | security policy violation
-Warn: Do not narrow the 4xx handler without verifying upstream behavior
-```
-
-绝大多数 record 不需要所有 protocol field。决策需要时，可以使用 identity、lifecycle、risk、provenance 和 verification field。
+代理说明位于 `skills/commitlore-commits/`，commit-msg hook 只验证代理添加的 record，不会凭空创建或静默添加。`harvest` 路径、`capture` 事务，以及手写 trailer 这条逃生出口，都在 [docs/capture.md](docs/capture.md)。
 
 ## 完整 record
 
-这个示例也是 conformance fixture。Git trailer parser 会在所有翻译版 README 中以相同方式读取下面的 code block。
+record 可以比这小得多，绝大多数只需要几个 field。这个示例用上全部词汇，是因为它同时也是 conformance fixture —— Git trailer parser 会在所有翻译版 README 中以相同方式读取下面的 code block。
 
 ```text
 Prevent silent session drops during long-running operations
@@ -296,7 +259,7 @@ CommitLore-Version: 2.0.0
 |---|---|
 | `Limit:` | External condition that constrained the decision |
 | `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` |
+| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
 | `Certainty:` | `firm` \| `tentative` \| `guess` |
 | `Blast:` | `local` \| `module` \| `system` |
 | `Undo:` | `easy` \| `costly` \| `permanent` |
@@ -308,13 +271,7 @@ CommitLore-Version: 2.0.0
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
-用 `commitlore context <path>` 读取 path 的历史，或直接使用 Git：
-
-```bash
-git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
-```
-
-请使用 Git trailer parser，而不是 text search：正文里的 `Key:` 不一定是 trailer。
+用 `commitlore context <path>` 读取 path 的历史。更小的示例，以及只用 Git 读取 record 的方法，在 [docs/protocol.md](docs/protocol.md)；规范定义在 [SPEC §3](spec/SPEC.md)。
 
 ## 仓库能够证明什么
 
@@ -329,13 +286,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 已记录 112 次实验，但 M4 没有逐次运行的 `guard_exposure` 记录。无法验证 treatment 是否存在，因此它没有检验、支持或反驳 agent behavior 的主张。上面更窄的产品主张基于可独立验证的行为。关于干净的数据集和撤回，请见 [M4 verdict](bench/VERDICT-M4.md)。
 
-### 延迟、成本与盈亏平衡
-
-在 100,000 次提交时，已建立索引的 `context` 的 p50 为 496 ms；CommitLore 自身的 `--no-index` 后备路径为 86,673 ms。这一内部后备路径差距在 1k 时为 4.8×、10k 时为 36×、100k 时为 175×（[完整的确定性运行](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)）。这是扩展形态，不是产品与替代方案的比较结果。
-
-guard 每次运行的成本是注入的 context 加上测得的 hook overhead：commit-msg 的 p50 为 185.85 ms，injection hook 的 p50 为 102.40 ms（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
-
-要重新给出盈亏平衡数值，需要一份逐轮记录、由提供商报告的令牌用量账本，以及为仓库已经否决的替代方案所花工作的观测成本。
+哪些已被测量——检索、暴露、延迟与扩展、hook overhead——以及哪些尚未被测量——盈亏平衡，以及对代理行为的任何影响——都写在 [docs/evidence.md](docs/evidence.md)。
 
 <details>
 <summary>完整 benchmark 记录（112 次实验）</summary>
@@ -382,16 +333,6 @@ guard 每次运行的成本是注入的 context 加上测得的 hook overhead：
 
 </details>
 
-## 从 source 安装
-
-要检查或运行 source distribution，请使用：
-
-```bash
-git clone https://github.com/MongLong0214/commitlore ~/.commitlore
-node ~/.commitlore/dist/commitlore.mjs init
-node ~/.commitlore/dist/commitlore.mjs context src/auth
-```
-
 ## 卸载
 
 ```bash
@@ -400,9 +341,18 @@ commitlore uninstall
 
 移除 `install.sh` 或 `install.ps1` 写入的内容 — wrapper、固定的 checkout，以及它
 添加到各 agent config 的 MCP 条目。它不会移除自己没有写入的东西，并会明确说明留下
-了什么：每个仓库的 hook（`commitlore hooks uninstall`）、agent hook
-（`commitlore inject uninstall-claude-hook`）、Claude Code plugin
-（`/plugin uninstall commitlore@commitlore`）。`--dry-run` 只报告，不做任何更改。
+了什么：各仓库的 hook、agent hook、Claude Code plugin。`--dry-run` 只报告，不做任何
+更改。它们各自由什么移除，以及如何改从 source 检出运行，见
+[docs/install.md](docs/install.md)。
+
+## 文档
+
+- [docs/install.md](docs/install.md) — 各条安装路径、各自写入什么、如何撤销
+- [docs/cli.md](docs/cli.md) — 每条命令及其参数
+- [docs/capture.md](docs/capture.md) — record 是怎么写出来的
+- [docs/protocol.md](docs/protocol.md) — record 格式，以及只用 Git 读取的方法
+- [docs/evidence.md](docs/evidence.md) — 哪些已被测量，哪些没有
+- [spec/SPEC.md](spec/SPEC.md) — 规范协议
 
 ## 已知限制
 

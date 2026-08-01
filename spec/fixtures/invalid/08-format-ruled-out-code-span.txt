@@ -1,0 +1,3 @@
+Count matches without a subprocess
+
+Ruled-out: shelling out to `grep | head` for counts | it silently returns head exit status

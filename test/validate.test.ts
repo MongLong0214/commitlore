@@ -477,6 +477,125 @@ describe('validate — check classes and reference integrity', () => {
     expect(result.violations).toEqual([]);
   });
 
+  // bug-issue-352(a): a shallow clone cannot see the ancestor that declares the
+  // referenced id, and reporting `dangling-ref` there blocks a commit whose
+  // record is not invalid — the history is truncated. `action/lint/lint.mjs`
+  // refuses to report green over a shallow checkout for the mirror-image
+  // reason; the local hook must equally refuse to report red.
+  it('does not report a reference to an ancestor below the shallow boundary as dangling (bug-issue-352)', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'commitlore-validate-shallow-'));
+    expect(parent.startsWith(tmpdir())).toBe(true);
+    temporaryDirectories.push(parent);
+
+    const origin = join(parent, 'origin');
+    createTestRepo({ path: origin, env: GIT_ENV });
+    commit(origin, 'old.txt', 'Old decision\n\nLimit: one runner\nRecord-Id: r-old352\n');
+    commit(origin, 'tip.txt', 'Tip\n\nLimit: two runners\nRecord-Id: r-tip352\n');
+
+    const message = 'Retire it\n\nSupersedes: r-old352\nRecord-Id: r-new352\n';
+
+    // The notes refspec is configured, so the `unfetched` gate does not fire
+    // and the reference check genuinely runs — otherwise this fixture would
+    // pass for the wrong reason.
+    const shallow = join(parent, 'shallow');
+    createTestRepo({ path: shallow, source: `file://${origin}`, depth: 1, env: GIT_ENV });
+    execFileSync(
+      'git',
+      ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
+      { cwd: shallow, env: GIT_ENV },
+    );
+    const shallowMessage = join(shallow, 'message.txt');
+    writeFileSync(shallowMessage, message);
+
+    // Control: the same message against the same origin, cloned whole, is a
+    // valid record. Only the truncation makes it look dangling.
+    const full = join(parent, 'full');
+    createTestRepo({ path: full, source: `file://${origin}`, env: GIT_ENV });
+    execFileSync(
+      'git',
+      ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
+      { cwd: full, env: GIT_ENV },
+    );
+    const fullMessage = join(full, 'message.txt');
+    writeFileSync(fullMessage, message);
+
+    const fullResult = runValidate({ messageFile: fullMessage, cwd: full });
+    expect(fullResult.code).toBe(0);
+    expect(fullResult.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+
+    const result = runValidate({ messageFile: shallowMessage, cwd: shallow });
+
+    expect(result.violations.filter((violation) => violation.rule === 'dangling-ref')).toEqual([]);
+    expect(result.code).toBe(0);
+    // Skipped, and said so — never a silent pass.
+    expect(result.checks[1]).toEqual({
+      class: 'reference',
+      status: 'not-checked',
+      reason:
+        'shallow history — a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)',
+    });
+    expect(result.stdout).toContain('shallow history');
+  });
+
+  // bug-issue-352(b): `Follows:`/`Supersedes:` resolve against `Record-Id`s
+  // "regardless of which block declared them" (SPEC §2.4), and a multi-block
+  // message is what this project's own squash inheritance and GitHub's squash
+  // button both produce.
+  it('resolves a Follows: to an earlier block of the same message (bug-issue-352)', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n\nRecord-Id: r-base352\n');
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(
+      messageFile,
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-blocka352',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Follows: r-blocka352',
+        'Record-Id: r-blockb352',
+        '',
+      ].join('\n'),
+    );
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    expect(result.violations).toEqual([]);
+    expect(result.code).toBe(0);
+    expect(result.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+  });
+
+  // bug-issue-352(b), the indexed half: the index's identity is
+  // `(commit_sha, source, block, seq)`, and flattening it to `(sha, source)`
+  // hides every block after the first from the declared set.
+  it('resolves a Follows: to a Record-Id declared in a later block of a commit in history (bug-issue-352)', () => {
+    const repo = makeRepo();
+    commit(
+      repo,
+      'squash.txt',
+      [
+        'squash: bring in the branch',
+        '',
+        'Limit: the vendor caps us at 3 concurrent workers',
+        'Record-Id: r-hista352',
+        '',
+        'Warn: do not raise the retry ceiling',
+        'Record-Id: r-histb352',
+        '',
+      ].join('\n'),
+    );
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(messageFile, 'Follow up\n\nFollows: r-histb352\nRecord-Id: r-next352\n');
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    expect(result.violations).toEqual([]);
+    expect(result.code).toBe(0);
+    expect(result.checks[1]).toEqual({ class: 'reference', status: 'ok' });
+  });
+
   // bug-issue-187: --range must honour a Supersedes: declaration that comes
   // later in the range than the colliding commits, the same way stale does.
   it('accepts a cross-commit duplicate when a later commit in the range declares Supersedes (bug-issue-187)', () => {
@@ -632,6 +751,53 @@ describe('validate — check classes and reference integrity', () => {
     expect(duplicateIdViolations.every((violation) => violation.value === 'r-dupxx1')).toBe(true);
     expect(result.violations.some((violation) => violation.value === 'r-uniqueb')).toBe(false);
   });
+
+  // bug-issue-365: the shape check and `checkReferences` both find the same
+  // same-message `Record-Id` collision, and the two lists are concatenated, so
+  // a two-problem message reads as a four-problem one. The count in the
+  // summary line is what a person uses to judge how much work they are in for,
+  // and `--json` is what the repair loop reads — a doubled list hands it two
+  // identical instructions for one edit.
+  it('reports a same-message duplicate once per colliding block, not once per check that found it (bug-issue-365)', () => {
+    const repo = makeRepo();
+    commit(repo, 'base.txt', 'Base\n\nRecord-Id: r-base365\n');
+    const messageFile = join(repo, '.git', 'COMMIT_EDITMSG');
+    writeFileSync(
+      messageFile,
+      [
+        'dup',
+        '',
+        'Limit: X',
+        'Record-Id: r-dup365z',
+        'Certainty: firm',
+        '',
+        'Limit: Y',
+        'Record-Id: r-dup365z',
+        'Certainty: firm',
+        '',
+      ].join('\n'),
+    );
+
+    const result = runValidate({ messageFile, cwd: repo });
+
+    // Control: both detectors must be live here, or the fixture would pass for
+    // the wrong reason — the reference half is invisible until the `unfetched`
+    // gate is past.
+    expect(result.checks[0]).toEqual({ class: 'shape', status: 'failed' });
+    expect(result.checks[1]?.status).toBe('failed');
+
+    expect(result.code).toBe(1);
+    // Two blocks collide: two problems, one per block, each carrying the line
+    // of that block's `Record-Id`.
+    expect(result.violations.map((violation) => violation.line)).toEqual([4, 8]);
+    expect(result.violations).toHaveLength(2);
+    expect(result.stderr).toContain('2 violations (SPEC §6)');
+
+    const jsonResult = runValidate({ messageFile, cwd: repo, json: true });
+    const payload = JSON.parse(jsonResult.stdout) as { violations: unknown[] };
+    expect(payload.violations).toHaveLength(2);
+    expect(new Set(payload.violations.map((violation) => JSON.stringify(violation))).size).toBe(2);
+  });
 });
 
 describe('validate — usage errors exit 2', () => {
@@ -771,5 +937,83 @@ describe('validate — line numbers', () => {
       // The cardinality rule names the occurrence, so that one is locatable.
       ['cardinality', 4],
     ]);
+  });
+});
+
+/**
+ * Issue #372. `Ruled-out:` has one delimiter and no escape, so a value with a
+ * second `|` splits somewhere the author may not have meant. The record then
+ * cannot match the thing it rules out, and until now `validate` said
+ * `shape ok` about it.
+ *
+ * The two halves are reported differently on purpose, and the boundary was
+ * drawn by counting this repository's own records. 620 distinct `Ruled-out:`
+ * values, three with more than one pipe, two of those three correct — a `||`
+ * in a reason, an `.mjs|.js` alternation. Rejecting every multi-pipe value
+ * would invalidate two correct records to catch one broken one, so that half
+ * warns. An alternative whose code span the separator cut open is not a
+ * judgement call — the span opened before the pipe and closed after it, so the
+ * pipe was inside quoted text — and that half is refused.
+ */
+describe('validate — Ruled-out: separator ambiguity (issue #372)', () => {
+  const message = (value: string): string =>
+    `feat: pipes\n\nBody.\n\nRecord-Id: r-ggg777\nRuled-out: ${value}\nCertainty: firm\n` +
+    'CommitLore-Version: 1.0.0\n';
+
+  it('refuses an alternative whose code span the separator cut open', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message('shelling out to `grep | head` for counts | it silently returns head exit status'),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(1);
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({ key: 'Ruled-out', rule: 'format' }),
+    );
+    // The repair loop reads `want`, so it has to name the actual defect. A
+    // record that already carries a separator is told nothing at all by
+    // "alternative | reason".
+    expect(result.violations[0]?.want).toContain('code span');
+    expect(result.stdout).toContain('code span');
+  });
+
+  it('warns, without refusing, when the value merely carries a second pipe', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message(
+          'Passing the version through $args so irm | iex could take one | iex gives a piped ' +
+            'script no arguments',
+        ),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toContain('more than one "|"');
+    // The warning has to say where the split landed, or the author cannot tell
+    // whether it is the one they meant.
+    expect(result.stderr).toContain('Passing the version through $args so irm');
+  });
+
+  it('leaves a reason that quotes a pipe warned but valid', () => {
+    const result = runValidate({
+      readStdin: () =>
+        message(
+          'set +e at the top of each step | it also disables the abort for genuinely ' +
+            'unexpected failures; the || form is scoped to the one command',
+        ),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.violations).toEqual([]);
+    expect(result.stderr).toContain('more than one "|"');
+  });
+
+  it('says nothing about a value with exactly one pipe', () => {
+    const result = runValidate({
+      readStdin: () => message('shared Redis cache | ops refuses another stateful dependency'),
+      cwd: tmpdir(),
+    });
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
   });
 });

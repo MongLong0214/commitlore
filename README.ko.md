@@ -30,8 +30,6 @@ CommitLore는 그 엔지니어링 판단을 Git에 보존하고, 다음 편집 �
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-**AI 보조 코드베이스를 위한 Git-native 결정 권위.** CommitLore는 어떤 결정이 아직 유효하고 어떤 결정이 뒤집혔는지를 Git에서 직접 추적한다. 코딩 에이전트가 경로를 조회하면 현재 유효한 결정만 보인다.
-
 호스팅 메모리 서비스도, 벤더 전용 채팅 기록도 없다. 저장소가 소유하고 함께 이동하는, 검토 가능한 결정 맥락만 있다.
 
 한 번 설치한다. 코딩 에이전트가 계속 가져갈 가치가 있는 결정을 기록할 수 있고, CommitLore는 이를 검증해 Git에 보존한다.
@@ -43,15 +41,19 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 /plugin install commitlore@commitlore
 ```
 
+플러그인이 담는 것은 여기까지다: MCP 서버, 편집 전 훅, 스킬. `commitlore`를 `PATH`에 올리지는 않으므로, 아래의 `commitlore …` 명령은 `install.sh` / `install.ps1`에서 오고 그 설치까지 필요하다.
+
 두 경로 모두의 전제 조건: Node.js 22+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh | sh
 ```
 
 어떤 host를 지원하는지, 각 설치 경로가 무엇을 요구하는지: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+**지난 에이전트가 얻어낸 판단을, 다음 에이전트에게 물려주세요.**
 
 ## 실제로 보기
 
@@ -77,21 +79,13 @@ warnings
   r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
 ```
 
-<details>
-<summary>정확한 PreToolUse hook path 재현하기</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
-```
-
-</details>
+이 PreToolUse hook path를 그대로 재현하는 방법과 나머지 모든 명령은 [docs/cli.md](docs/cli.md)에 있다.
 
 ## 검색은 레코드를 찾을 수 있습니다. 경로 범위는 뒤집힌 결정을 걸러냅니다.
 
 레코드 하나를 놓치면 모델은 맥락을 잃습니다. 이미 뒤집힌 결정을 건네면 정확성을 잃습니다. 이 [검색 측정](bench/retrieval/result.md)에서 방해 레코드가 0개부터 10,000개까지인 모든 크기에서 BM25, 임베딩 top-k, 하이브리드 RRF, 경로 필터를 적용한 임베딩은 각각 대체되어 폐기된 레코드 하나를 반환했습니다. 수명 주기를 적용한 CommitLore 경로 범위는 오래된 레코드를 0개 반환하고 현재 레코드 둘(2/2)을 모두 반환했습니다.
 
-재현율은 보조 결과입니다. 검색은 대체로 어느 쪽이든 같은 레코드를 찾지만, 현재 유효한 결정을 아는 경로는 하나뿐입니다. 대체되어 폐기된 레코드가 없던 #166의 코퍼스에서는 임베딩 검색이 경로 범위와 같은 2/2를 기록했습니다. 결정이 뒤집혔을 때 차이가 나타나며, 바로 이 경우를 위해 이 제품이 존재합니다.
+재현율은 보조 결과입니다. 검색은 대체로 어느 쪽이든 같은 레코드를 찾지만, 현재 유효한 결정을 아는 경로는 하나뿐입니다. 결정이 뒤집혔을 때 차이가 나타나며, 바로 이 경우를 위해 이 제품이 존재합니다.
 
 별도의 #167 노출 실행도 중요합니다. 10,002개 레코드 중 모델에 닿은 것은 2개뿐입니다.
 
@@ -101,18 +95,11 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 | top-k 어휘 검색 | 2 | 1/2 | 190 |
 | CommitLore 경로 범위 | 2 | 2/2 | 335 |
 
-이는 고정된 두 레코드 출력 예산에서 노출과 재현율을 측정한 것이며, 토큰 비용, 청구 비용, 정확도 또는 에이전트 행동을 측정하지 않습니다. 코퍼스 하나, 쿼리 하나, 고정된 임베딩 모델 하나의 결과입니다.
-
-검증 훅과 로컬 인덱스를 쓸 각 저장소에서 이어서 `commitlore init`을 실행한다. 설치기는 지원되는 코딩 에이전트를 감지하고, 안전하게 가능한 곳에 로컬 MCP 서버를 등록한다.
-
-## init 뒤에 일어나는 일
-
-- 평소처럼 커밋한다. 대부분의 커밋에는 record가 없다.
-- record가 있으면 commit-msg hook이 검증한다. record를 만들지는 않는다.
-- 에이전트는 MCP로 결정 맥락을 조회하거나 `PreToolUse` hook으로 받는다.
-- path를 바꾸기 전에 active limit, ruled-out alternative, warning, verification gap을 본다.
+이는 고정된 두 레코드 출력 예산에서 노출과 재현율을 측정한 것이며, 토큰 비용, 청구 비용, 정확도 또는 에이전트 행동을 측정하지 않습니다. 코퍼스 하나, 쿼리 하나, 고정된 임베딩 모델 하나의 결과입니다. 재현율이 동률인 지점과 그 밖에 무엇이 측정됐고 무엇이 측정되지 않았는지는 [docs/evidence.md](docs/evidence.md)에 있습니다.
 
 ## 저장소에서 사용해 보기
+
+검증 훅과 로컬 인덱스를 쓸 각 저장소에서 이어서 `commitlore init`을 실행한다. 설치기는 지원되는 코딩 에이전트를 감지하고, 안전하게 가능한 곳에 로컬 MCP 서버를 등록한다.
 
 ```bash
 cd your-repository
@@ -120,7 +107,14 @@ commitlore init
 commitlore context .
 ```
 
-그다음에도 코딩 에이전트와 계속 작업한다. 변경에 diff가 보존할 수 없는 결정 맥락이 있으면, 에이전트에게 커밋에 CommitLore record를 넣어 달라고 요청한다.
+그다음에는:
+
+- 평소처럼 커밋한다. 대부분의 커밋에는 record가 없다.
+- record가 있으면 commit-msg hook이 검증한다. record를 만들지는 않는다.
+- 에이전트는 MCP로 결정 맥락을 조회하거나 `PreToolUse` hook으로 받는다.
+- path를 바꾸기 전에 active limit, ruled-out alternative, warning, verification gap을 본다.
+
+코딩 에이전트와 계속 작업한다. 변경에 diff가 보존할 수 없는 결정 맥락이 있으면, 에이전트에게 커밋에 CommitLore record를 넣어 달라고 요청한다.
 
 <details>
 <summary>설치 내용을 살펴보거나 버전을 고정하고 싶나요?</summary>
@@ -129,17 +123,17 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.5.1/install.sh
-sh install.sh v0.5.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh
+sh install.sh v0.6.0
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v0.5.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.6.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
 
-## 차이
+## 코드는 남았다. 결정은 남지 않았다.
 
 *같은 나쁜 아이디어를 다시 리뷰하지 않는다.*
 
@@ -156,13 +150,19 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 **CommitLore와 함께.** 편집 전에 에이전트가 받는 것:
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]`이 실제로 일을 한다: 이 record는 저장소의 신뢰된 작성자가 쓴 것이 아니므로,
+에이전트는 이것을 명령이 아니라 정보로 다루라고 안내받는다. 신뢰된 작성자가 남긴
+record는 `[directive]`로 렌더된다.
 
 에이전트는 대신 순수 계산 primitive를 공유하고 checkout 정책 진입점은 건드리지 않는다.
 그 리뷰는 아예 일어나지 않는다. 결정이 이미 거기 있었기 때문이다.
@@ -176,32 +176,18 @@ Do not retry without new evidence
 
 ## 실제 저장소에서는 이렇게 보인다
 
-커밋 약 768개인 Swift MCP 서버의 필드리포트에서, 설치 다음 날. 엔지니어는 CommitLore를
-설치하기 전에 이미 코드베이스 전수 조사를 마쳤고, 그 조사가 표시한 파일들을 작업 중이었다.
-
-```
-$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
-context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
-
-other
-  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
-                        with live-verified AX paths
-```
+커밋 약 768개인 Swift MCP 서버의 필드리포트에서, 설치 다음 날. 파일 경로 하나를 댔더니
+엔지니어가 존재조차 몰랐던 merge된 PR이 나왔고, 남아 있던 코드의 의미가 달라졌다.
 
 > **그 커밋이 있는 줄 몰랐다.** 2주 전 merge된 PR이고, 이미 이 사이트 여덟 곳을 제거하고
 > 각각을 accessibility-native 등가물로 교체했다 — 전부 fail-closed에 실기기 검증까지.
 >
-> 이건 내 전수 조사를 재배치했다. 나는 남아 있는 사이트들을 문제 **자체**로 다루고
-> 있었다. 아니었다. 그건 이미 출시된 제거 캠페인의 **잔여물**이다 — 의도적인 제거 시도를
-> 견디고 살아남은 것들. 완전히 다른 공학 문제이고 다른 리스크 평가다.
->
 > 이 중 어느 것도 채팅 기록에 없었다. 저장소에 있었고, 나는 파일 경로를 대서 얻었다.
 
 대안은 2주치 merge된 PR을 읽는 것이었다. 에이전트가 자발적으로 하는 일이 아니고, 사람이
-매 편집 전에 하는 일도 아니다.
-
-같은 리포트의 도입 비용: 명령 하나, 그리고 커밋 768개 인덱싱에 7.4초. 히스토리도 작업
-트리도 건드리지 않는다.
+매 편집 전에 하는 일도 아니다. 같은 리포트의 도입 비용: 명령 하나, 그리고 커밋 768개
+인덱싱에 7.4초. 히스토리도 작업 트리도 건드리지 않는다. 콘솔 출력과 리포트 전문은
+[docs/evidence.md](docs/evidence.md)에 있다.
 
 **호스팅형 채팅 기록 제품이 줄 수 없는 세 가지**, 그리고 권위를 서비스가 아니라 Git에 둔 이유:
 
@@ -239,38 +225,15 @@ other
 
 모든 커밋에 trailer를 손으로 쓸 필요는 없다. 대부분의 커밋에는 record가 없어야 한다. 외부 제약, 제외한 대안, 경고, 검증 공백처럼 diff만으로 복구할 수 없는 결정에만 record를 추가한다.
 
-### 코딩 에이전트를 통해
-
 에이전트에게 평소대로 커밋하고 diff로 설명할 수 없는 결정 맥락만 보존하도록 요청한다.
 
 > 이 변경을 커밋해. diff로 중요한 제약, 제외한 대안, 경고 또는 검증 공백을 복구할 수 없을 때만 CommitLore record를 추가해.
 
-대부분의 커밋에는 여전히 record가 없어야 한다. 에이전트 지침은 `skills/commitlore-commits/`에 있고, commit hook은 에이전트가 추가한 record를 검증한다.
-
-### 고급 경로: harvest
-
-`commitlore harvest`는 session transcript와 staged diff에서 prompt contract를 만들고, `commitlore harvest-verify`는 그에 맞는 draft를 검증한다. 둘은 draft를 돕지만 자동 커밋하지 않는다. interactive record builder는 구현되지 않았다.
-
-### 직접 작성
-
-탈출구로 사람이 평범한 Git trailer를 직접 쓸 수 있다. commit-msg hook은 이미 있는 record를 검증할 뿐이며, record를 발명하거나 조용히 추가하지 않는다.
-
-## 최소 record
-
-record는 작을 수 있다. 그렇지 않으면 잃게 될 맥락만 넣는다.
-
-```text
-Fix expired-token refresh
-
-Ruled-out: Extend token TTL to 24h | security policy violation
-Warn: Do not narrow the 4xx handler without verifying upstream behavior
-```
-
-대부분의 record에는 모든 protocol field가 필요하지 않다. 결정에 필요할 때 identity, lifecycle, risk, provenance, verification field를 사용할 수 있다.
+에이전트 지침은 `skills/commitlore-commits/`에 있고, commit-msg hook은 에이전트가 추가한 record를 검증할 뿐 record를 발명하거나 조용히 추가하지 않는다. `harvest` 경로, `capture` 트랜잭션, 그리고 사람이 trailer를 직접 쓰는 탈출구는 모두 [docs/capture.md](docs/capture.md)에 있다.
 
 ## 완전한 record
 
-이 예시는 conformance fixture이기도 하다. Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
+record는 이보다 훨씬 작을 수 있고, 대부분은 몇 개 field면 충분하다. 이 예시가 어휘 전체를 쓰는 이유는 conformance fixture이기도 하기 때문이다 — Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
 
 ```text
 Prevent silent session drops during long-running operations
@@ -299,7 +262,7 @@ CommitLore-Version: 2.0.0
 |---|---|
 | `Limit:` | External condition that constrained the decision |
 | `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` |
+| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
 | `Certainty:` | `firm` \| `tentative` \| `guess` |
 | `Blast:` | `local` \| `module` \| `system` |
 | `Undo:` | `easy` \| `costly` \| `permanent` |
@@ -311,13 +274,7 @@ CommitLore-Version: 2.0.0
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
-경로의 이력을 `commitlore context <path>`로 읽거나 Git을 직접 쓴다.
-
-```bash
-git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
-```
-
-텍스트 검색 대신 Git trailer parser를 쓴다. 본문에 있는 `Key:`는 trailer가 아닐 수 있다.
+경로의 이력은 `commitlore context <path>`로 읽는다. 더 작은 예시와 Git만으로 record를 읽는 방법은 [docs/protocol.md](docs/protocol.md)에, 규범적 정의는 [SPEC §3](spec/SPEC.md)에 있다.
 
 ## 저장소가 증명하는 것
 
@@ -332,13 +289,7 @@ git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
 
 112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
 
-### 지연 시간, 비용과 손익분기점
-
-100,000개 커밋에서 색인된 `context`의 p50은 496 ms이고 CommitLore 자체의 `--no-index` 대체 경로는 86,673 ms다. 이 내부 대체 경로 간격은 1k에서 4.8×, 10k에서 36×, 100k에서 175×로 커진다([전체 결정론적 실행](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)). 이는 확장 양상이며 제품과 대안을 비교한 결과가 아니다.
-
-guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 hook 오버헤드다. commit-msg는 p50 185.85 ms, injection hook은 p50 102.40 ms다([deterministic measurements](bench/results/deterministic-20260727T174801Z.md)).
-
-손익분기 수치를 다시 제시하려면 제공업체가 보고한 턴별 토큰 사용량 원장과 저장소가 이미 배제한 대안에 쓴 작업의 관측된 비용이 필요하다.
+무엇이 측정됐는지 — 검색, 노출, 지연 시간과 확장, hook 오버헤드 — 그리고 무엇이 측정되지 않았는지 — 손익분기, 그리고 에이전트 행동에 대한 효과 — 는 [docs/evidence.md](docs/evidence.md)에 정리돼 있다.
 
 <details>
 <summary>전체 benchmark 기록 (112회 실험)</summary>
@@ -385,16 +336,6 @@ guard가 한 번 실행될 때 드는 비용은 주입된 context와 측정된 h
 
 </details>
 
-## 소스에서 설치
-
-소스 배포를 살펴보거나 실행하려면 다음을 쓴다.
-
-```bash
-git clone https://github.com/MongLong0214/commitlore ~/.commitlore
-node ~/.commitlore/dist/commitlore.mjs init
-node ~/.commitlore/dist/commitlore.mjs context src/auth
-```
-
 ## 제거
 
 ```bash
@@ -403,10 +344,18 @@ commitlore uninstall
 
 `install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
 그리고 각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
-남기는 것을 명시한다: 저장소별 hook(`commitlore hooks uninstall`), agent
-hook(`commitlore inject uninstall-claude-hook`), Claude Code
-plugin(`/plugin uninstall commitlore@commitlore`). `--dry-run`은 아무것도 바꾸지
-않고 보고만 한다.
+남기는 것을 명시한다: 저장소별 hook, agent hook, Claude Code plugin.
+`--dry-run`은 아무것도 바꾸지 않고 보고만 한다. 각각을 무엇이 제거하는지, 그리고
+소스 체크아웃에서 실행하는 방법은 [docs/install.md](docs/install.md)에 있다.
+
+## 문서
+
+- [docs/install.md](docs/install.md) — 설치 경로, 각 경로가 쓰는 것, 되돌리는 방법
+- [docs/cli.md](docs/cli.md) — 모든 명령과 플래그
+- [docs/capture.md](docs/capture.md) — record가 쓰이는 과정
+- [docs/protocol.md](docs/protocol.md) — record 형식과 Git만으로 읽는 방법
+- [docs/evidence.md](docs/evidence.md) — 무엇이 측정됐고 무엇이 아닌지
+- [spec/SPEC.md](spec/SPEC.md) — 규범 프로토콜
 
 ## 알려진 제한 사항
 

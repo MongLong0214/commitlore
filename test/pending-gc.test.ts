@@ -47,6 +47,12 @@ const pastIso = (minutesAgo: number): string =>
 const futureIso = (minutesAhead: number): string =>
   new Date(Date.now() + minutesAhead * 60_000).toISOString();
 
+const headOf = (repo: string): string =>
+  execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+
+/** A well-formed commit id that is not this repository's HEAD. */
+const OTHER_HEAD = 'deadbeef'.repeat(5);
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -251,7 +257,7 @@ describe('pending-gc', () => {
     expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
   });
 
-  it('gc keeps a file with null expires_at (still in prepared/verified phase)', () => {
+  it('gc keeps a file with null expires_at inside the retention window', () => {
     const repo = makeRepo();
     const dir = pendingDir(repo);
     const nonce = '6'.repeat(32);
@@ -262,10 +268,12 @@ describe('pending-gc', () => {
       expires_at: null,
       phase: 'prepared',
       consumed: false,
+      base_head: OTHER_HEAD,
     });
 
     const result = gcPending(repo);
-    // expires_at is null means it hasn't been staged yet — cannot determine expiry
+    // Two hours old: unstageable, but well short of the 24h window, so the
+    // file a capture is still working with is not pulled out from under it.
     expect(result.kept).toContain(`${nonce}.json`);
     expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
   });
@@ -361,5 +369,116 @@ describe('pending-gc', () => {
     // This file MUST be removed — a mutation that over-protects would fail here
     expect(result.removed).toContain(`${nonce}.json`);
     expect(existsSync(join(dir, `${nonce}.json`))).toBe(false);
+  });
+});
+
+/**
+ * #367: `expires_at` is stamped at stage time, so a transaction that never
+ * reaches `staged` carries `expires_at: null` for ever and the expiry rule above
+ * can never fire on it. Since #341 made skipping the ordinary outcome, that is
+ * the common path, and every skip left a file behind permanently.
+ *
+ * These transactions age out on `created_at` instead — but only once HEAD has
+ * moved past `base_head`, which is the condition `stageCaptureRecord` itself
+ * refuses on. Both must hold, so gc still never collects anything that could
+ * still be staged and finalised.
+ */
+describe('#367 a transaction that can never be stamped with an expiry', () => {
+  it.each(['prepared', 'verified'])(
+    'collects an aged %s transaction that HEAD has moved past',
+    (phase) => {
+      const repo = makeRepo();
+      const dir = pendingDir(repo);
+      const nonce = 'c1'.repeat(16);
+      writePending(dir, nonce, {
+        version: 1,
+        nonce,
+        created_at: pastIso(60 * 25),
+        expires_at: null,
+        phase,
+        consumed: false,
+        base_head: OTHER_HEAD,
+      });
+
+      const result = gcPending(repo);
+      expect(result.removed).toContain(`${nonce}.json`);
+      expect(existsSync(join(dir, `${nonce}.json`))).toBe(false);
+    },
+  );
+
+  it('keeps a fresh unstageable transaction: the window has not elapsed', () => {
+    const repo = makeRepo();
+    const dir = pendingDir(repo);
+    const nonce = 'c2'.repeat(16);
+    writePending(dir, nonce, {
+      version: 1,
+      nonce,
+      created_at: pastIso(5),
+      expires_at: null,
+      phase: 'verified',
+      consumed: false,
+      base_head: OTHER_HEAD,
+    });
+
+    const result = gcPending(repo);
+    expect(result.kept).toContain(`${nonce}.json`);
+    expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
+  });
+
+  it('ORACLE: keeps an aged transaction whose base is still HEAD — it can still be staged', () => {
+    const repo = makeRepo();
+    const dir = pendingDir(repo);
+    const nonce = 'c3'.repeat(16);
+    writePending(dir, nonce, {
+      version: 1,
+      nonce,
+      created_at: pastIso(60 * 25),
+      expires_at: null,
+      phase: 'verified',
+      consumed: false,
+      base_head: headOf(repo),
+    });
+
+    const result = gcPending(repo);
+    expect(result.removed).not.toContain(`${nonce}.json`);
+    expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
+  });
+
+  it('ORACLE: keeps an aged staged transaction with no expiry — protection is unchanged', () => {
+    const repo = makeRepo();
+    const dir = pendingDir(repo);
+    const nonce = 'c4'.repeat(16);
+    writePending(dir, nonce, {
+      version: 1,
+      nonce,
+      created_at: pastIso(60 * 25),
+      expires_at: null,
+      phase: 'staged',
+      consumed: false,
+      base_head: OTHER_HEAD,
+    });
+
+    const result = gcPending(repo);
+    expect(result.removed).not.toContain(`${nonce}.json`);
+    expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
+  });
+
+  it('ORACLE: keeps an aged transaction with no recorded base — undeterminable', () => {
+    const repo = makeRepo();
+    const dir = pendingDir(repo);
+    const nonce = 'c5'.repeat(16);
+    writePending(dir, nonce, {
+      version: 1,
+      nonce,
+      created_at: pastIso(60 * 25),
+      expires_at: null,
+      phase: 'prepared',
+      consumed: false,
+      // No base_head — whether it could still be staged cannot be determined
+    });
+
+    const result = gcPending(repo);
+    expect(result.removed).not.toContain(`${nonce}.json`);
+    expect(existsSync(join(dir, `${nonce}.json`))).toBe(true);
   });
 });

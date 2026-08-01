@@ -73,3 +73,40 @@ describe('#303 user-facing text names only packages the manifest carries', () =>
     expect(manifest.dependencies ?? {}).toEqual({});
   });
 });
+
+/**
+ * #359: the same failure mode, one step further in. `--diff` was documented as
+ * defaulting to empty. It once did, and that was the defect: prepare hashes
+ * `git diff --cached`, an empty diff never matched it, and every record came
+ * back `source-mismatch`. Line 97 was rewritten to default to the staged diff;
+ * the help string it contradicts was left behind.
+ *
+ * Nothing caught it because nothing read the string. A caller does, and
+ * concludes they must pass `--diff` for verification to see anything — the
+ * opposite of the truth.
+ */
+describe('#359 capture --diff documents the default it actually has', () => {
+  const captureSource = readFileSync(join(REPO_ROOT, 'src/commands/capture.ts'), 'utf8');
+  const diffOption = captureSource
+    .split('\n')
+    .find((line) => line.includes(".option('--diff <path>'"));
+
+  it('the option line exists to be checked', () => {
+    expect(diffOption).toBeDefined();
+  });
+
+  it('does not tell the caller the default is empty', () => {
+    expect(diffOption).not.toMatch(/defaults? to empty/i);
+  });
+
+  it('names the staged diff, which is what omitting the flag uses', () => {
+    expect(diffOption).toMatch(/staged/i);
+  });
+
+  // Teeth: the sentence above is only worth asserting while the code still
+  // behaves that way. If the default ever moves off the staged diff, this fails
+  // and the help text has to be re-decided rather than quietly drifting again.
+  it('omitting --diff genuinely reads the staged diff', () => {
+    expect(captureSource).toContain("execGitOrThrow(['diff', '--cached']");
+  });
+});

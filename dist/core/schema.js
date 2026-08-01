@@ -8,6 +8,7 @@
  */
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { readInstalledFile } from './paths.js';
+import { splitRuledOut } from './trailers.js';
 import { BLAST_VALUES, CERTAINTY_VALUES, EXTENSION_KEY_RE, KNOWN_KEYS, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
  * Static import so a bundler can follow it.
@@ -50,6 +51,22 @@ const FORMAT_WANT = {
     'CommitLore-Version': 'semver',
 };
 const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';
+/**
+ * `Ruled-out:` fails its grammar two ways and the repair differs, so the
+ * `want` is chosen from the value rather than looked up by key alone. Telling
+ * an author to write `alternative | reason` when the value already holds a
+ * separator is no advice at all: the separator is there, it is just inside a
+ * code span the split cut open (SPEC §3.1, issue #372).
+ */
+const RULED_OUT_CODE_SPAN_WANT = 'alternative | reason — the alternative opens a code span that closes after the ' +
+    'separator, so the first "|" sits inside quoted text; there is no escape, so ' +
+    'rephrase the alternative to hold no "|"';
+const formatWantFor = (trailer) => {
+    const want = FORMAT_WANT[trailer.key];
+    if (want === undefined || trailer.key !== 'Ruled-out')
+        return want;
+    return splitRuledOut(trailer.value).unterminatedCodeSpan ? RULED_OUT_CODE_SPAN_WANT : want;
+};
 let compiled = null;
 const getValidator = () => {
     if (compiled === null) {
@@ -104,7 +121,7 @@ const violationFor = (trailer, field) => {
             want: enumWant,
         };
     }
-    const formatWant = FORMAT_WANT[trailer.key];
+    const formatWant = formatWantFor(trailer);
     if (formatWant !== undefined) {
         return {
             key: trailer.key,

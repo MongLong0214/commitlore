@@ -5,6 +5,11 @@ description: Use when a git repository needs CommitLore wired up for the first t
 
 # CommitLore setup
 
+Every command below is the `commitlore` CLI, which arrives with `install.sh` /
+`install.ps1`. The Claude Code plugin ships the MCP server, the pre-edit hook
+and these skills, and puts nothing on `PATH` — where `commitlore` is not found,
+`node <plugin-checkout>/dist/commitlore.mjs` takes the same arguments.
+
 **Shortcut for a repository that just needs wiring up, nothing broken to diagnose:**
 `commitlore init` runs steps 2-4 below (`hooks install`, `index --rebuild`, then
 `doctor --fix` as a final check) in one command, reports what it did and what it
@@ -67,8 +72,9 @@ commit-msg hook already installed: /path/to/repo/.git/hooks/commit-msg (unchange
 
 `commitlore hooks status` reports what's currently installed without changing
 anything (`commit-msg: installed (commitlore)` or `commit-msg: not
-installed`). `commitlore hooks uninstall` removes commitlore's hook and
-restores whatever it replaced.
+installed`). `commitlore hooks uninstall` removes every hook commitlore
+installed — `commit-msg`, and the `prepare-commit-msg` and `post-commit` hooks
+`init` adds — and restores whatever they replaced.
 
 ## 3. Fix the notes fetch refspec
 

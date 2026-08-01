@@ -16,7 +16,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runDoctor } from '../src/commands/doctor.js';
 import { execGit } from '../src/core/git.js';
-import { NOTES_REF, listRecordShas, readRecord, writeRecord } from '../src/core/notes.js';
+import { NOTES_REF, listRecordShas, notesAvailability, readRecord, writeRecord } from '../src/core/notes.js';
 import { serializeTrailers } from '../src/core/trailers.js';
 import type { Trailer } from '../src/core/types.js';
 import { createTestRepo } from './git-fixtures.js';

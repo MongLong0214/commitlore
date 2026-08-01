@@ -44,6 +44,26 @@ export interface PendingRecord {
 export declare class PendingFormatError extends Error {
     constructor(message: string);
 }
+/**
+ * The current commit, or null when there is not one to read (unborn branch,
+ * broken repository). Never throws: both callers treat "cannot tell" as an
+ * answer rather than a failure.
+ */
+export declare const resolveHead: (cwd: string) => string | null;
+/**
+ * Whether HEAD has left this transaction's base behind.
+ *
+ * This is the point of no return for anything before `staged`:
+ * `stageCaptureRecord` refuses outright when `base_head` is not the current
+ * HEAD, so once this is true no amount of waiting can advance the transaction.
+ * `pending ls` reports it as `stale` and gc uses it to decide what can never be
+ * finalised — deliberately the same function, so the listing and the collector
+ * cannot drift into disagreeing about the same file.
+ *
+ * Undeterminable input answers `false`: no readable HEAD, or no well-formed
+ * recorded base, means the caller must fail closed rather than guess.
+ */
+export declare const headHasMovedPast: (baseHead: unknown, head: string | null) => boolean;
 export interface CreatePendingOptions {
     cwd: string;
     source_hashes: {
@@ -110,6 +130,19 @@ export interface MarkAppliedOptions {
  * Only succeeds if phase is 'staged'.
  */
 export declare const markApplied: (nonce: string, recordHash: string, opts: MarkAppliedOptions) => boolean;
+export interface DeletePendingOptions {
+    cwd: string;
+}
+/**
+ * Deletes a pending transaction file outright.
+ *
+ * Returns false when there was nothing to delete. This store deliberately holds
+ * no opinion on *whether* a given transaction may be deleted — the phase policy
+ * lives with the caller that has the user in front of it (`pending rm`), and gc
+ * keeps its own. Adding a second copy of that policy here is how the two would
+ * come to disagree.
+ */
+export declare const deletePending: (nonce: string, opts: DeletePendingOptions) => boolean;
 export interface ConsumePendingOptions {
     cwd: string;
 }

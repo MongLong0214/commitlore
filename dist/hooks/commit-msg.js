@@ -22,6 +22,40 @@ export const HOOK_NAME = 'commit-msg';
 export const CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
 export const HOOK_MODE = 0o755;
 /**
+ * What the gate does once all four resolution routes have come up empty.
+ *
+ * This ending is the one part of the stub that is a policy rather than a
+ * mechanism, which is why it is a parameter and not something the two derived
+ * hooks inherit on their way past. They carried this `exit 1` for a job that is
+ * not theirs, and a repository whose CLI had moved could not accept a commit
+ * (#354).
+ */
+const UNRESOLVED_GATE = [
+    '# Passing silently here would report a clean record for a message nothing',
+    '# ever read.',
+    'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+    'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
+    'exit 1',
+];
+/**
+ * The same situation in a hook that is not the validation gate.
+ *
+ * Nothing here has been checked and found wanting — the checker is absent. A
+ * hook that captures a record has no verdict to withhold, so refusing would
+ * abort the commit over a tool that merely moved, and the remedy it names is
+ * the tool that is missing. It says what it did not do and gets out of the way.
+ *
+ * The prescribed command is `init`, not `hooks install`: `hooks install` writes
+ * the gate only, so it is not the command that puts *this* file back.
+ */
+const UNRESOLVED_CAPTURE = [
+    '# Not the validation gate: nothing was checked and rejected here, the',
+    '# checker is absent. Refusing would block a commit over a missing tool.',
+    'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+    'echo "  this hook did nothing; the commit was not blocked. Re-run: <path-to>/commitlore init" >&2',
+    'exit 0',
+];
+/**
  * The stub's text.
  *
  * `set -e` plus the explicit `|| exit $?` makes a chained hook's failure the
@@ -57,8 +91,14 @@ export const HOOK_MODE = 0o755;
  * wrapper, which is a shell script that execs node — so the path worth trusting is
  * the bundle it runs, and an extensionless recorded path falls through to the
  * PATH search below rather than being exec'd on the strength of its name.
+ *
+ * Everything above the ending is shared with the two hooks derived from it, so
+ * the ending is a parameter rather than something a third `replaceAll` rewrites
+ * on the way past. A replacement that turned `exit 1` into `exit 0` would also
+ * silently rewrite any *future* `exit 1` added to the body above — which is the
+ * shape of the defect being fixed here, not a fix for it.
  */
-export const commitMsgStub = () => [
+const stubText = (unresolved) => [
     '#!/bin/sh',
     HOOK_MARKER,
     '# Installed by `commitlore hooks install`.',
@@ -176,11 +216,15 @@ export const commitMsgStub = () => [
     '  dir=$parent',
     'done',
     '',
-    '# Passing silently here would report a clean record for a message nothing',
-    '# ever read.',
-    'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
-    'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
-    'exit 1',
+    ...unresolved,
     '',
 ].join('\n');
+/** The validation gate: it refuses when it cannot run. */
+export const commitMsgStub = () => stubText(UNRESOLVED_GATE);
+/**
+ * The body the capture hooks derive from — identical to the gate's except for
+ * the ending, which lets the commit through. `prepare-commit-msg` and
+ * `post-commit` rename it (marker, chained hook, invocation) from here.
+ */
+export const captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
 //# sourceMappingURL=commit-msg.js.map

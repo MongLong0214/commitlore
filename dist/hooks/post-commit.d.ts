@@ -23,7 +23,13 @@ export interface PostCommitHookResult {
 }
 /**
  * Generate the post-commit hook stub.
- * Same structure as commit-msg but for the post-commit hook.
+ *
+ * The gate's resolution chain with the ending that does not refuse (#354). Git
+ * ignores this hook's exit code, so this is not the change that unblocks a
+ * commit — `prepare-commit-msg` is. It is here because a hook that runs after
+ * the commit already exists has nothing left to refuse, and because whatever
+ * does read a status from it — a wrapper, a hook runner, this project's own
+ * tests — would otherwise read a refusal nobody made.
  */
 export declare const postCommitStub: () => string;
 /**

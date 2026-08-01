@@ -113,5 +113,14 @@ export declare const coversNotes: (refspec: string) => boolean;
  * Reads git config only — no network, no fetch. A repository with no remote at
  * all reports `absent`: there is nowhere for unseen records to be, so an empty
  * answer is a true empty.
+ *
+ * A configured refspec that has never been fetched through is indistinguishable
+ * here from one that was fetched and found nothing, and the difference matters:
+ * `doctor --fix` writes the refspec and fetches nothing, so the state it leaves
+ * looks exactly like an upstream with no records. Reporting `unfetched` for both
+ * was tried and rejected — it fires on every repository whose refspec was added
+ * after cloning, and `incomplete` changes `guard`'s exit code. The honest fix
+ * lives in `doctor`, which now says a fetch is still owed instead of letting
+ * `ok` read as repaired.
  */
 export declare const notesAvailability: (opts?: NotesOptions) => NotesAvailability;
