@@ -219,10 +219,20 @@ record는 `[directive]`로 렌더된다.
 | `CLAUDE.md` / `AGENTS.md` | 에이전트가 어떻게 일해야 하는가 |
 | ADR | 큰 아키텍처 결정을 문서로 |
 | Chat memory / RAG | 과거의 관련 텍스트 |
+| [Lore](https://arxiv.org/abs/2603.15566) | 같은 발상, 먼저 발표됨 — git trailer에 담은 결정 레코드 |
 | **CommitLore** | **이 코드 경로에 지금도 유효한 결정** |
 
 유사도 검색은 관련된 결정을 찾아줄 수 있다. CommitLore는 거기에 더해 그 결정이 아직
 유효한지, 대체됐는지, 만료됐는지를 알고 — 첫 번째 것만 보여준다.
+
+**세 번째 행에 대하여.** [Lore](https://arxiv.org/abs/2603.15566)(2026년 3월)는 이
+저장소가 생기기 넉 달 전에 native git trailer에 결정 레코드를 담는 방식을 제안했고, 그
+어휘는 이쪽과 거의 일대일로 대응한다. **프로토콜 발상은 여기서 새로운 것이 아니며**,
+아니라고 말해봐야 논문을 읽는 사람 앞에서 버티지 못한다. Lore에 대응물이 없는 것은
+lifecycle — `Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참으로 만드는 필터링 —
+과 신뢰 등급이고, 논문 자신은 "empirical validation path를 *제시한다*"고 쓴다. 실행하지는
+않는다. 그 검증을 실패한 부분까지 포함해 가진 것이 이 프로젝트가 논문보다 가진 것이다
+([ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)).
 
 ## 무엇이 다른가
 
