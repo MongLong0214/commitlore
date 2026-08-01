@@ -63,6 +63,11 @@
       "type": "boolean",
       "description": "detect.reproposed_if matched the agent's transcript, diff or commits."
     },
+    "reproposal_matches": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many detect.reproposed_if clauses matched. Narrows `reproposed` to a count and inherits its conflation: a correct refusal that names the rejected alternative matches too. Optional so rows written before the count existed still validate."
+    },
     "violations": {
       "type": "integer",
       "minimum": 0,
@@ -158,6 +163,110 @@
       "type": "integer",
       "minimum": 0,
       "description": "CPAA denominator: records present in the repository this run started from, counted after seeding and before the agent ran. The control arm strips the trailer block, so it reports 0 — which is why metrics.ts reports CPAA as undefined rather than dividing by it. metrics.ts uses a row only when it carries all three of harvest_tokens, verify_tokens and accepted_records; a denominator with no numerator would price accepted records at zero."
+    },
+    "rejected_path_edit_hunks": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Diff hunks whose added code matches detect.reproposed_if — editing toward the rejected alternative rather than mentioning it (bug #141)."
+    },
+    "rejected_path_lines_changed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Added and removed lines inside the hunks counted by rejected_path_edit_hunks."
+    },
+    "rejected_path_dependency_additions": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Added lines in a recognized dependency manifest that match detect.reproposed_if — installing the rejected package, not discussing it."
+    },
+    "rejected_path_first_edit": {
+      "enum": [0, 1],
+      "description": "1 if any rejected-path edit survived to the final diff. Scoped to what persisted: an attempt written and then reverted leaves no trace in the diff this harness reads."
+    },
+    "turn_usage": {
+      "type": "object",
+      "description": "Provider-reported token usage per assistant API call, written only when the runner ran with --per-turn-usage and the installed CLI emitted the events. Absent means not instrumented, never zero. The row's `tokens` field is unaffected: it stays the session total under its own field selection, so a row carrying a ledger is comparable with every row that does not.",
+      "additionalProperties": false,
+      "required": ["turns", "turn_total", "session_total", "reconciled", "unparsed_lines"],
+      "properties": {
+        "turns": {
+          "type": "array",
+          "description": "One entry per assistant API call, in emission order.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "message_id",
+              "model",
+              "parent_tool_use_id",
+              "input_tokens",
+              "output_tokens",
+              "cache_creation_input_tokens",
+              "cache_read_input_tokens",
+              "thinking_tokens",
+              "stop_reason",
+              "content_blocks"
+            ],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "message_id": { "type": "string" },
+              "model": { "type": "string" },
+              "parent_tool_use_id": {
+                "type": ["string", "null"],
+                "description": "Non-null when a subagent produced the turn. Subagent turns are recorded rather than merged, so the ledger totals the session it claims to total."
+              },
+              "input_tokens": { "type": "integer", "minimum": 0 },
+              "output_tokens": { "type": "integer", "minimum": 0 },
+              "cache_creation_input_tokens": { "type": "integer", "minimum": 0 },
+              "cache_read_input_tokens": { "type": "integer", "minimum": 0 },
+              "thinking_tokens": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Part of output_tokens, not additional to it. 0 when the provider reported no breakdown."
+              },
+              "stop_reason": { "type": ["string", "null"] },
+              "content_blocks": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Content block kinds in emission order, e.g. [\"thinking\",\"tool_use\"]. Says that a turn called a tool, not which tool or on what."
+              }
+            }
+          }
+        },
+        "turn_total": { "$ref": "#/$defs/usageTotals" },
+        "session_total": {
+          "allOf": [{ "$ref": "#/$defs/usageTotals" }],
+          "description": "The total the CLI states for itself in its final result event, carried so the sum above can be audited against it rather than trusted."
+        },
+        "reconciled": {
+          "type": "boolean",
+          "description": "turn_total equals session_total field for field. False means the parser missed or duplicated a turn and no figure derived from this ledger should be used."
+        },
+        "unparsed_lines": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stdout lines that were not valid JSON. Non-zero means a truncated or interleaved stream."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "usageTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens"
+      ],
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "cache_creation_input_tokens": { "type": "integer", "minimum": 0 },
+        "cache_read_input_tokens": { "type": "integer", "minimum": 0 }
+      }
     }
   }
 }

@@ -2,7 +2,8 @@
 
 - Status: **registered 2026-08-01, before any run of this measurement**;
   amended the same day by the history-ref deviation recorded in §3, before the
-  run that reports it
+  run that reports it; amended again 2026-08-02 by §5.1, *after* the run,
+  appended rather than edited in, and changing no figure in §9
 - Closes the gap `docs/evidence.md` records under *Not yet measured → Break-even*
 - Provenance rules: [ADR-0018](../docs/adr/ADR-0018-benchmark-provenance-after-rewrites.md)
 - Metric name in the result rows: `token_ledger`
@@ -255,6 +256,77 @@ and this measurement does not build it.
 billed as fresh input or as a cache read is a provider-side property this
 harness cannot see. It is why §3 reports two accountings instead of one.
 
+### 5.1 Amendment, 2026-08-02: half of blocker B is closed
+
+Appended rather than edited in place. §5 above is pre-registration — it was
+written before the run in §9 and it is the reason that run's figures can be
+read as a floor rather than as a total. Rewriting it now would remove the
+evidence that the floor was declared in advance. What follows is what changed
+after the fact, and nothing above this heading has been altered.
+
+Blocker B named two obstacles in one paragraph, and they had different
+lifetimes. The ordinary one — W4 needs a model call — still stands. The sharp
+one — *the harness could not attribute the answer to the drafting turn even if
+a call were made* — no longer does.
+
+**What the CLI actually emits.** The installed `claude` CLI (2.1.220) was run
+twice and its raw stdout kept; both captures are committed as
+`test/fixtures/claude-stream/*.jsonl` so this paragraph can be checked rather
+than believed.
+
+- `--output-format stream-json` emits an `assistant` event **per content
+  block**, each carrying the same `message.usage` and the same `message.id`.
+  Summing them double-counts every turn.
+- On those events, `input_tokens` and both cache fields are already final and
+  reconcile exactly with the session total. `output_tokens` does not: it is the
+  `message_start` snapshot. In one probe three turns reported 4, 1 and 1
+  against real outputs of 157, 193 and 36 — a session total of 6 against 403.
+  Nothing on the event marks it provisional while its neighbours are not, which
+  makes it the kind of field a parser reads confidently and gets wrong by two
+  orders of magnitude.
+- The turn's real output arrives on the `message_delta` event, and that event
+  is emitted **only** under `--include-partial-messages`. It also breaks out
+  `output_tokens_details.thinking_tokens`.
+
+So the term W4 needs — the tokens a model *emits* — is precisely the one term
+`stream-json` alone reports wrongly. That is the finding, and it is why the
+driver passes `--include-partial-messages` rather than the format flag alone.
+
+**What is now measurable.** `bench/runner.ts --per-turn-usage` writes a
+`turn_usage` object on the row: one entry per assistant API call, with its four
+usage fields, its thinking tokens, its stop reason, its model and the kinds of
+its content blocks. Each ledger carries its own audit — `turn_total`,
+`session_total`, and a `reconciled` boolean that is true only when the turns
+sum to the total the CLI states for itself, field for field. On the probe run
+all four fields reconciled exactly (26 / 386 / 307 / 72,845).
+
+An answer can therefore be attributed to the turn that produced it. If a
+harvest were run as one headless invocation, W4 would be that invocation's
+answering turn's `output_tokens`, read from the row and checkable against the
+session total on the same row.
+
+**What remains blocked, and why the term stays on the list.**
+
+1. **W4 is still unmeasured.** No bench arm runs `capture` against a run's own
+   transcript and diff, so no drafting turn has been priced. The instrument
+   exists; the measurement has not been made. Every figure in §9 was produced
+   without a model call and none of it changes.
+2. **Blocker A is untouched.** W3 remains unrecoverable for this corpus. A
+   per-turn ledger records what a session spent; it cannot recover a transcript
+   that was never retained.
+3. **Blocker C is untouched.** The ledger reports cache creation and cache
+   reads as separate counts, which is more than the session total gave, but a
+   count is not a rate. §3 still reports two accountings.
+4. **The unit changes if this is ever used.** Everything in §2 and §9 is in the
+   product's own `⌈chars / 4⌉` proxy. `turn_usage` carries the *provider's*
+   tokenizer. Mixing them in one ratio would silently compare two units, so a
+   future W4 figure must be reported beside the floor rather than added into
+   it, until both sides are on one tokenizer.
+
+The row constant in `bench/deterministic/ledger.ts` was narrowed to match:
+future rows say the attribution half is closed and the model call is not. The
+committed row in §9 keeps the text it was written with.
+
 ---
 
 ## 6. Break-even, and when it does not exist
@@ -481,7 +553,8 @@ Everything in §5 and §7 holds. Four points bear repeating beside the number:
   both are non-negative. A mean of 10,064 tokens per capture is a lower bound on
   the mean, not the price of writing a record.
 - **The drafting turn is still unmeasured and the blocker is named.** §5,
-  blocker B. No figure here should be read as evidence about it.
+  blocker B, as amended by §5.1: the attribution instrument now exists, the
+  model call has still not been made, and no figure here is evidence about it.
 - **One corpus, one repository, and the write side is dominated by what that
   repository commits.** Its mean capture is 3.8× its median because a few
   commits staged this benchmark's own machine-generated output. Another

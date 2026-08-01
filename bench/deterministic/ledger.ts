@@ -46,10 +46,18 @@ export const SHIPPED_ROUTE: DeliveryRoute = 'commitlore';
 /**
  * The write terms this measurement does not carry, named on the row so a
  * consumer of the JSONL cannot mistake the floor for a total.
+ *
+ * The drafting-output entry was narrowed on 2026-08-02. It used to give two
+ * reasons W4 was missing — no model call, and no way to attribute an answer to
+ * the turn that produced it. The second is no longer true: the driver's
+ * `--per-turn-usage` mode records provider-reported usage per turn and
+ * reconciles it against the session total. The first still is, so the term is
+ * still on this list and the floor is still a floor. Committed rows keep the
+ * text they were written with; the change applies to rows written from here on.
  */
 export const UNMEASURED_WRITE_TERMS: readonly string[] = [
   'session-transcript: buildHarvestPrompt numbers the transcript into the prompt; the sessions that produced this corpus were never retained, so the term is unrecoverable for these records rather than merely unmeasured',
-  'drafting-output: the tokens a model emits answering the harvest prompt. Needs a model call, and the driver reads one session-total usage object rather than a per-turn ledger, so it could not attribute an answer to that turn even if a call were made',
+  'drafting-output: the tokens a model emits answering the harvest prompt. Still needs a model call, and no bench arm runs `capture` against a run of its own, so this ledger prices no drafting turn. The attribution half of the blocker is closed — the driver records provider-reported usage per turn under `--per-turn-usage`, audited against the session total — so an answer would now be attributable to the turn that produced it',
   'billing-rate: whether the prompt is charged as fresh input or as a cache read is a provider property this harness never observes',
 ];
 
