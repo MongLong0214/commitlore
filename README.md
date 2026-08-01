@@ -14,15 +14,20 @@
 
 # CommitLore
 
-## Stop re-reviewing the same bad idea.
+## Your agents inherit the code.
+## Make them inherit the judgment.
 
-Your coding agent can read the code. It cannot see why your team rejected the
-obvious fix six months ago — so it proposes it again, and somebody spends the
-review explaining a decision that was already made.
+**The Git-native decision layer for coding agents.**
 
-**A coding agent must not revive a decision the repository already reversed.**
-CommitLore records constraints, rejected alternatives, warnings and verification
-gaps in Git, then shows only the decisions that still apply, before the next edit.
+Every fresh agent can read the implementation. None of them can recover the
+constraints, the alternatives your team rejected, the warnings, or the
+verification gaps — those disappear when the session that held them ends.
+
+CommitLore preserves that engineering judgment in Git, and surfaces only the
+decisions still in force before the next edit. A decision that was later
+superseded or expired does not reach the agent as if it still stood.
+
+**Repository-owned · Lifecycle-aware · Evidence-verified · Agent-independent**
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
@@ -136,6 +141,9 @@ node commitlore/dist/commitlore.mjs --version
 </details>
 
 ## See the difference
+
+*Stop re-reviewing the same bad idea.*
+
 
 **Without CommitLore.** A new session sees two functions with similar inputs and
 reuses one.
