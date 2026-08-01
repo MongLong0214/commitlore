@@ -865,6 +865,17 @@ Two things would close it, in order of size:
    grows a model. The field is written only when the step actually ran, because
    a measured zero and an absent field are different claims.
 
+**What `token_ledger` closed, and what it did not.** The deterministic
+half of item 1 is now measured: `bench/deterministic/ledger.ts` prices the
+generated harvest prompt — the scaffold plus the staged diff — once per
+record-bearing commit in this repository's own history, with no model call, and
+turns item 2's "structurally 0" into a scan of the built verify module graph
+rather than an assertion. The method is `bench/TOKEN-LEDGER.md`. What it did not
+close is the model's drafting turn, and the blocker there is named rather than
+estimated: `drivers/claude-headless.ts` reads one session-total `usage` object
+out of `--output-format json`, so there is no per-turn ledger to attribute an
+answer to that turn even if a call were made.
+
 ### Significance
 
 `bench/stats.ts` implements a two-tailed Fisher exact test, chosen in ADR-0007

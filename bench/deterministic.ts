@@ -7,6 +7,7 @@ import { digestDistTree } from './hooks-settings.ts';
 import { measureCaptureCost } from './deterministic/capture.ts';
 import { measureDensity } from './deterministic/density.ts';
 import { measureHookOverhead } from './deterministic/hooks.ts';
+import { measureTokenLedger } from './deterministic/ledger.ts';
 import { measureNoiseExposure } from './deterministic/noise.ts';
 import { measureGuardQuality, measureInjectionDetection } from './deterministic/quality.ts';
 import { measureDecisionDelivery } from './deterministic/recovery.ts';
@@ -37,6 +38,7 @@ const REQUIRED_METRICS: ReadonlySet<DeterministicRow['metric']> = new Set([
   'noise_exposure',
   'decision_delivery',
   'rationale_density',
+  'token_ledger',
 ]);
 
 const stamp = (instant: string): string =>
@@ -73,16 +75,22 @@ const main = (): void => {
   const testMode = process.env['NODE_ENV'] === 'test';
   const densityOnly = process.env['COMMITLORE_DETERMINISTIC_DENSITY_ONLY'] === '1';
   const recoveryOnly = process.env['COMMITLORE_DETERMINISTIC_RECOVERY_ONLY'] === '1';
-  if (densityOnly && recoveryOnly) {
-    throw new Error('COMMITLORE_DETERMINISTIC_DENSITY_ONLY and _RECOVERY_ONLY are mutually exclusive');
+  const ledgerOnly = process.env['COMMITLORE_DETERMINISTIC_LEDGER_ONLY'] === '1';
+  const selected = [densityOnly, recoveryOnly, ledgerOnly].filter(Boolean).length;
+  if (selected > 1) {
+    throw new Error(
+      'COMMITLORE_DETERMINISTIC_DENSITY_ONLY, _RECOVERY_ONLY and _LEDGER_ONLY are mutually exclusive',
+    );
   }
-  // Both single-metric modes read this repository's own history rather than a
-  // synthetic fixture, so neither produces a complete dataset. They part
-  // company over the concurrency refusal: r-densitymerge135 exempted density,
-  // which is seconds of `git log`, while delivery spends minutes projecting
-  // every path through the index and would contend with a wall-clock arm the
-  // same record forbids contending with.
-  const singleMetric = densityOnly || recoveryOnly;
+  // Every single-metric mode reads this repository's own history rather than a
+  // synthetic fixture, so none produces a complete dataset. They part company
+  // over the concurrency refusal: r-densitymerge135 exempted density, which is
+  // seconds of `git log`, while delivery spends minutes projecting every path
+  // through the index and would contend with a wall-clock arm the same record
+  // forbids contending with. The ledger reports no timing at all -- it counts
+  // characters -- so a neighbouring process cannot move a figure in it, and it
+  // is exempted for the reason density is.
+  const singleMetric = densityOnly || recoveryOnly || ledgerOnly;
   const testOnlyOverride = [
     'COMMITLORE_DETERMINISTIC_SIZES',
     'COMMITLORE_DETERMINISTIC_RUNS',
@@ -110,7 +118,7 @@ const main = (): void => {
     process.env['COMMITLORE_DETERMINISTIC_OUTPUT_DIR'] ?? join('bench', 'results'),
   );
   assertCleanCheckout(REPO_ROOT);
-  if (!densityOnly) assertNoConcurrentDeterministicBench();
+  if (!densityOnly && !ledgerOnly) assertNoConcurrentDeterministicBench();
   const measuredAt = new Date().toISOString();
   const harnessCommit = git(REPO_ROOT, ['rev-parse', 'HEAD']).stdout.trim();
   const distDigest = digestDistTree();
@@ -120,6 +128,12 @@ const main = (): void => {
   try {
     const rows: readonly DeterministicRow[] = densityOnly
       ? [measureDensity(base, REPO_ROOT)]
+      : ledgerOnly
+      ? [
+          measureTokenLedger(base, REPO_ROOT, 'HEAD', (line) => {
+            process.stdout.write(`${line}\n`);
+          }),
+        ]
       : recoveryOnly
       ? measureDecisionDelivery(base, REPO_ROOT, 'HEAD', (line) => {
           process.stdout.write(`${line}\n`);
@@ -144,6 +158,10 @@ const main = (): void => {
           });
           process.stdout.write('deterministic bench: rationale density\n');
           const density = measureDensity(base, REPO_ROOT);
+          process.stdout.write('deterministic bench: token ledger\n');
+          const ledger = measureTokenLedger(base, REPO_ROOT, 'HEAD', (line) => {
+            process.stdout.write(`${line}\n`);
+          });
           return [
             ...scale.latency,
             ...survival,
@@ -155,6 +173,7 @@ const main = (): void => {
             ...exposure,
             ...delivery,
             density,
+            ledger,
           ];
         })();
 
@@ -173,8 +192,10 @@ const main = (): void => {
     mkdirSync(outputDir, { recursive: true });
     // A single-metric run is not a deterministic dataset and must not be read as
     // one, so it does not borrow the name. `decision-delivery-*` is what
-    // bench/DECISION-DELIVERY.md cites.
-    const baseName = `${recoveryOnly ? 'decision-delivery' : 'deterministic'}-${stamp(measuredAt)}`;
+    // bench/DECISION-DELIVERY.md cites and `token-ledger-*` is what
+    // bench/TOKEN-LEDGER.md cites.
+    const prefix = recoveryOnly ? 'decision-delivery' : ledgerOnly ? 'token-ledger' : 'deterministic';
+    const baseName = `${prefix}-${stamp(measuredAt)}`;
     const jsonlPath = join(outputDir, `${baseName}.jsonl`);
     const reportPath = join(outputDir, `${baseName}.md`);
     writeFileSync(jsonlPath, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`);

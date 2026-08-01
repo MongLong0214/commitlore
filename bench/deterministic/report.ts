@@ -4,15 +4,18 @@ import { renderEconomicCase } from './economics.ts';
 import type {
   CaptureCostRow,
   DecisionDeliveryRow,
+  DeliveryRoute,
   DensityRow,
   DeterministicRow,
   GuardQualityRow,
   HookOverheadRow,
   IndexCostRow,
   InjectionDetectionRow,
+  LedgerBreakEven,
   NoiseExposureRow,
   QueryLatencyRow,
   SurvivalRow,
+  TokenLedgerRow,
 } from './types.ts';
 
 export const ADDRESSABILITY_STATEMENT =
@@ -372,6 +375,114 @@ const densitySection = (rows: readonly DensityRow[]): string[] => {
   ];
 };
 
+export const LEDGER_SCOPE_SENTENCE =
+  "This section is arithmetic on two measured token counts. The write side is a floor — the session transcript and the model's drafting output are both omitted and both non-negative — so every break-even below is a lower bound on the true one, never an estimate of it. The method is registered in `bench/TOKEN-LEDGER.md`.";
+
+const group = (value: number): string => Math.round(value).toLocaleString('en-US');
+
+const recallOf = (row: TokenLedgerRow, route: DeliveryRoute): string =>
+  percent(row.reads.find((entry) => entry.route === route)?.path_recall ?? 0);
+
+const breakEvenRow = (row: TokenLedgerRow, entry: LedgerBreakEven): string =>
+  `| \`${entry.comparator}\` | ${fixed(entry.comparator_tokens_per_read, 1)} | ` +
+  `${fixed(entry.saving_tokens_per_read, 1)} | ` +
+  `${entry.reduction_against_comparator === null ? '—' : percent(entry.reduction_against_comparator)} | ` +
+  (entry.exists
+    ? `${group(entry.reads_with_diff ?? 0)} / ${group(entry.reads_scaffold_only ?? 0)} | ` +
+      `${fixed(entry.passes_with_diff ?? 0, 1)} / ${fixed(entry.passes_scaffold_only ?? 0, 1)} | `
+    : '**none** | — | ') +
+  `${recallOf(row, entry.comparator)} |`;
+
+const ledgerSection = (rows: readonly TokenLedgerRow[]): string[] => {
+  const row = rows[0];
+  if (row === undefined) return [];
+  const source = row.read_source;
+  const shipped = row.reads.find((route) => route.route === source.shipped_route);
+  if (shipped === undefined) throw new Error('token ledger row carries no shipped route');
+  return [
+    '## 11. Token ledger: what a record costs to write, what it saves to read',
+    '',
+    LEDGER_SCOPE_SENTENCE,
+    '',
+    `Unit: tokens under the product's own \`CHARS_PER_TOKEN\` constant (\`ceil(characters / ${row.chars_per_token})\`), the same unit \`delivered_tokens\` uses, so the two sides of every ratio share a unit. It is a byte-derived proxy, not a provider tokenizer and not a bill.`,
+    '',
+    '### 11.1 Write side — the two terms measurable with no model call',
+    '',
+    `Method: render \`buildHarvestPrompt\` on the built product with an empty transcript and an empty diff to get the scaffold, then once per record-bearing single-parent commit in \`git log ${row.history_ref}\` with that commit's diff reconstructed as \`git diff <sha>^ <sha>\`. No model is called.`,
+    '',
+    '| quantity | value |',
+    '|---|---:|',
+    `| prompt scaffold | ${group(row.prompt_scaffold_chars)} chars / ${group(row.prompt_scaffold_bytes)} bytes / **${group(row.prompt_scaffold_tokens)} tokens** |`,
+    `| commits examined | ${group(row.commits_examined)} (${group(row.merge_commits)} merges) |`,
+    `| captures priced | ${group(row.captures_measured)}, carrying ${group(row.records_on_measured_captures)} record block(s) |`,
+    `| records excluded | ${group(row.records_on_merge_commits)} on merge commits, ${group(row.records_on_root_commits)} on a root commit |`,
+    `| staged-diff tokens | mean ${group(row.diff_tokens.mean)}, p50 ${group(row.diff_tokens.p50)}, p95 ${group(row.diff_tokens.p95)}, max ${group(row.diff_tokens.max)} |`,
+    `| prompt tokens per capture | mean ${group(row.prompt_tokens.mean)}, p50 ${group(row.prompt_tokens.p50)}, p95 ${group(row.prompt_tokens.p95)}, max ${group(row.prompt_tokens.max)} |`,
+    `| **write floor, with the diff term** | **${group(row.write_floor_tokens_with_diff)} tokens** over ${group(row.captures_measured)} captures |`,
+    `| **write floor, scaffold only** | **${group(row.write_floor_tokens_scaffold_only)} tokens** over the same captures |`,
+    `| verification | ${row.verify_model_tokens} model tokens in ${row.verify_model_calls} model call(s) |`,
+    '',
+    `The staged-diff distribution is reported in full because its mean (${group(row.diff_tokens.mean)}) is ${fixed(row.diff_tokens.mean / Math.max(row.diff_tokens.p50, 1), 1)}x its median (${group(row.diff_tokens.p50)}): a few very large commits carry the total, and a reader who takes the mean for a typical capture will be wrong about most of them.`,
+    '',
+    row.verify_network_references === 0
+      ? `Verification's zero is measured, not assumed: ${row.verify_modules_scanned} built module(s) reachable from \`dist/core/capture-verify.js\` and \`dist/core/harvest-verify.js\` were scanned for a network client and ${row.verify_network_references} were found. The shipped verifier is local code, so it spends no model tokens by construction.`
+      : `**Verification's zero is withdrawn.** ${row.verify_network_references} network reference(s) were found across ${row.verify_modules_scanned} built module(s) reachable from the verify entry points, so the claim that verification calls no model is no longer earned by this scan.`,
+    '',
+    'Three write terms are not here, and none of them can be negative:',
+    '',
+    ...row.unmeasured_write_terms.map((term) => `- ${term}`),
+    '',
+    '### 11.2 Read side — the same run, restated per read',
+    '',
+    `Source: \`${source.file}\`, population \`${source.population}\`, measured at ${source.measured_at} from harness commit \`${source.harness_commit}\` and dist digest \`${source.dist_digest}\`. Nothing was remeasured. One read is one first edit to one path, the event the shipped \`PreToolUse\` hook fires on, and that run built exactly one delivery per evaluation path — so \`delivered_tokens / evaluation_paths\` is an identity on its rows rather than a new estimate.`,
+    '',
+    '| route | budget | delivered tokens | reads | **tokens per read** | path recall |',
+    '|---|---:|---:|---:|---:|---:|',
+    ...row.reads.map(
+      (route) =>
+        `| \`${route.route}\` | ${route.budget_tokens === null ? '—' : group(route.budget_tokens)} | ` +
+        `${group(route.delivered_tokens)} | ${group(route.evaluation_paths)} | ` +
+        `**${fixed(route.tokens_per_read, 1)}** | ${percent(route.path_recall)} |`,
+    ),
+    '',
+    '### 11.3 Delivered-token reduction, each with its denominator',
+    '',
+    'Every pair below was fixed before the run. A percentage whose denominator is somewhere else is the figure this market publishes, so the denominator route, its token count and its recall are on the same line as the number.',
+    '',
+    '| subject | denominator | subject / denominator tokens per read | reduction | ratio | subject / denominator recall | recovered pairs |',
+    '|---|---|---:|---:|---:|---:|---:|',
+    ...row.reductions.map(
+      (entry) =>
+        `| \`${entry.subject}\` | \`${entry.denominator}\` | ` +
+        `${fixed(entry.subject_tokens_per_read, 1)} / ${fixed(entry.denominator_tokens_per_read, 1)} | ` +
+        `${entry.reduction === null ? '—' : percent(entry.reduction)} | ` +
+        `${entry.ratio === null ? '—' : `${fixed(entry.ratio, 1)}x`} | ` +
+        `${percent(entry.subject_recall)} / ${percent(entry.denominator_recall)} | ` +
+        `${group(entry.subject_recovered)} / ${group(entry.denominator_recovered)}` +
+        `${entry.equal_recovered_count ? ' (equal)' : ''} |`,
+    ),
+    '',
+    ...row.reductions.map((entry) => `- \`${entry.subject}\` vs \`${entry.denominator}\` — ${entry.note}`),
+    '',
+    'An "(equal)" recovered column means the two routes recovered the same **count** of gold pairs. The delivery row records counts and not sets, so it is not evidence that the two recovered the same records, and it is not written as if it were.',
+    '',
+    'A dash in the reduction column is a division by zero, not a missing measurement: a route that delivers nothing has no denominator, and the shipped route costs more than it rather than less. That row is in the table because a token-reduction figure that quietly omits the case where the product is the expensive option is the figure this market publishes.',
+    '',
+    '### 11.4 Break-even, and where none exists',
+    '',
+    "Break-even is the write floor divided by the per-read saving against a named comparator: how many path-scoped reads this repository must serve before the read-side difference covers what its record set cost to write. The comparator's own recall is in the last column, because a token column read alone is the thing this market does.",
+    '',
+    '| comparator | its tokens/read | saving/read | reduction | break-even reads (with diff / scaffold only) | full passes | its recall |',
+    '|---|---:|---:|---:|---:|---:|---:|',
+    ...row.break_even.map((entry) => breakEvenRow(row, entry)),
+    '',
+    `The shipped route costs ${fixed(shipped.tokens_per_read, 1)} tokens per read at ${percent(shipped.path_recall)} path recall. A row reading **none** is a comparator that delivers no more tokens than that, so there is no saving for a write cost to amortize against and no read count produces one; the reason is on the JSONL row in \`undefined_because\`. Against a route that reads no history at all, CommitLore is a net token cost forever, and what it offers there is recall, not tokens.`,
+    '',
+    "Both break-even columns are floors. `with diff` charges the staged diff as fresh prompt input; `scaffold only` charges it at nothing, on the assumption it is already in the session's cached prefix. Neither is privileged and the truth is between them — issue #138's lesson was that a break-even which does not say what it counted is underspecified, and that publishing both readings is the fix rather than choosing the flattering one.",
+    '',
+  ];
+};
+
 export const renderDeterministicReport = (rows: readonly DeterministicRow[]): string => {
   assertSingleProvenance(rows);
   const first = rows[0];
@@ -394,7 +505,9 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
       ? DENSITY_SCOPE_SENTENCE
       : rows.every((row) => row.metric === 'decision_delivery')
         ? DELIVERY_SCOPE_SENTENCE
-        : SCOPE_SENTENCE,
+        : rows.every((row) => row.metric === 'token_ledger')
+          ? LEDGER_SCOPE_SENTENCE
+          : SCOPE_SENTENCE,
     '',
     ...latencySection(rows.filter((row): row is QueryLatencyRow => row.metric === 'query_latency')),
     ...survivalSection(rows.filter((row): row is SurvivalRow => row.metric === 'record_survival')),
@@ -410,6 +523,7 @@ export const renderDeterministicReport = (rows: readonly DeterministicRow[]): st
       rows.filter((row): row is DecisionDeliveryRow => row.metric === 'decision_delivery'),
     ),
     ...densitySection(rows.filter((row): row is DensityRow => row.metric === 'rationale_density')),
+    ...ledgerSection(rows.filter((row): row is TokenLedgerRow => row.metric === 'token_ledger')),
     ...(metrics.size === 1 ? [] : renderEconomicCase()),
   ];
   return `${lines.join('\n').trim()}\n`;
