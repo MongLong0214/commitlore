@@ -84,6 +84,19 @@ Reproducing that exact `PreToolUse` hook path, and every other command: [docs/cl
 
 ## Retrieval can find records. Path scope keeps reversed decisions out.
 
+Before an agent's first edit, how much of a repository's still-active decision set actually reaches it? On this repository, at the 800-token budget the hook ships with:
+
+| route | budget | active decisions delivered | reversed ones delivered | tokens |
+|---|---:|---:|---:|---:|
+| the code alone | — | 0.0% | 0 | 0 |
+| `git log` for the path | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore path scope** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore, cap removed | none | 92.3% | 0 | 741,429 |
+
+With the cap removed, path scope recovers exactly what a whole-repository dump recovers — 2,047 of 2,217 — for a fraction of its 92,175,612 tokens and none of its 7,322 reversed records. The scope costs nothing. The cap costs 10.6 points. The remaining 170 are records the trust grader withholds.
+
+**This measures delivery, not effect.** No agent ran, so it bounds what one could recover, not what one does — and a retrieval number can climb while the outcome it is meant to predict falls. SWE-bench measured BM25 recall rising from 29.58 to 51.06 across its context budgets and reported that "even when increasing the maximum context size for BM25 would increase recall with respect to the oracle files, performance drops … as models are simply ineffective at localizing problematic code" ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). One corpus, one repository. Seven superseded records and no expired ones, so zero-reversed-delivered says nothing yet about expiry. Method and full tables: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
+
 Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
 
 Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. The advantage appears when decisions have been reversed—the case this product exists for.
