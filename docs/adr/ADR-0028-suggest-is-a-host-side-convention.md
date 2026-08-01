@@ -1,6 +1,6 @@
 # ADR-0028 — `mode: suggest` is a host-side convention, and the core does not pretend otherwise
 
-Status: accepted · Closes [#341](https://github.com/MongLong0214/commitlore/issues/341)
+Status: Accepted (2026-08-01) · Closes [#341](https://github.com/MongLong0214/commitlore/issues/341)
 
 - Related: [ADR-0021](ADR-0021-capture-pending-transaction.md) (the pending format and
   phase vocabulary this decision declines to change)
