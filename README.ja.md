@@ -79,21 +79,13 @@ warnings
   r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
 ```
 
-<details>
-<summary>正確な PreToolUse hook path を再現する</summary>
-
-```bash
-printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
-  | node dist/commitlore.mjs inject --hook-input --budget 5000
-```
-
-</details>
+この `PreToolUse` hook path をそのまま再現する方法と、その他すべてのコマンドは [docs/cli.md](docs/cli.md) にあります。
 
 ## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
 
 レコードを一つ取り逃がせば、モデルはコンテキストを失います。すでに覆された意思決定を渡せば、正しさを損ないます。この[検索測定](bench/retrieval/result.md)では、ノイズが 0 件から 10,000 件までのすべてのサイズで、BM25、embedding top-k、hybrid RRF、パスフィルター付き embedding がそれぞれ廃止済みのレコードを一つ返しました。lifecycle を伴う CommitLore のパス範囲は古いレコードをゼロにし、現在の二つのレコード (2/2) を返しました。
 
-再現率は補助的な結果です。検索はおおむねどちらでも同じレコードを見つけますが、どの意思決定がまだ有効かを知るルートは一つだけです。廃止済みのレコードがない #166 のコーパスでは、embedding 検索はパス範囲と同じ 2/2 でした。意思決定が覆されたときに違いが現れます。これはまさにこの製品が存在するケースです。
+再現率は補助的な結果です。検索はおおむねどちらでも同じレコードを見つけますが、どの意思決定がまだ有効かを知るルートは一つだけです。意思決定が覆されたときに違いが現れます。これはまさにこの製品が存在するケースです。
 
 別の #167 の露出実行も重要です。10,002 件のうちモデルに届いたレコードは 2 件だけでした。
 
@@ -103,18 +95,11 @@ printf '%s\n' '{"tool_name":"Edit","tool_input":{"file_path":"install.sh"}}' \
 | top-k 語彙検索 | 2 | 1/2 | 190 |
 | CommitLore パス範囲 | 2 | 2/2 | 335 |
 
-これは固定した 2 レコードの出力予算における露出と再現率の測定であり、トークンコスト、請求コスト、正確さ、エージェントの振る舞いを測るものではありません。これは一つのコーパス、一つのクエリ、一つの固定された embedding モデルによる結果です。
-
-検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
-
-## init の後に起きること
-
-- 普段どおりコミットします。ほとんどのコミットには record がありません。
-- record がある場合、commit-msg hook が検証します。record を作成することはありません。
-- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
-- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+これは固定した 2 レコードの出力予算における露出と再現率の測定であり、トークンコスト、請求コスト、正確さ、エージェントの振る舞いを測るものではありません。これは一つのコーパス、一つのクエリ、一つの固定された embedding モデルによる結果です。再現率が並ぶ地点と、ほかに何が測定され何が測定されていないかは [docs/evidence.md](docs/evidence.md) にあります。
 
 ## リポジトリで試す
+
+検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
 
 ```bash
 cd your-repository
@@ -122,7 +107,14 @@ commitlore init
 commitlore context .
 ```
 
-その後もコーディングエージェントと作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
+そのあとは:
+
+- 普段どおりコミットします。ほとんどのコミットには record がありません。
+- record がある場合、commit-msg hook が検証します。record を作成することはありません。
+- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
+- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+
+コーディングエージェントとの作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
 
 <details>
 <summary>インストールを確認または固定したいですか？</summary>
@@ -185,33 +177,19 @@ Ruled-out
 ## 実際のリポジトリでの見え方
 
 コミット約768個の Swift MCP サーバーのフィールドレポートより、インストール翌日。
-エンジニアは CommitLore を入れる前にコードベースの全数調査を終えており、その調査が
-印を付けたファイルを作業していた。
-
-```
-$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
-context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
-
-other
-  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
-                        with live-verified AX paths
-```
+ファイルパスを一つ指定しただけで、エンジニアが存在を知らなかったマージ済み PR が現れ、
+残っていたコードの意味が変わった。
 
 > **そのコミットの存在を知らなかった。** 2週間前にマージされた PR で、これらのサイトの
 > うち8か所を既に削除し、それぞれを accessibility-native な等価物に置き換えていた —
 > すべて fail-closed で実機検証済み。
 >
-> これは私の全数調査を組み替えた。残っているサイトを問題**そのもの**として扱っていたが、
-> 違った。出荷済みの削除キャンペーンの**残余**だ — 意図的な削除の試みを生き延びたもの。
-> まったく別の工学的問題であり、別のリスク評価だ。
->
 > どれもチャット履歴にはなかった。リポジトリにあり、ファイルパスを指定して得た。
 
 代替手段は2週間分のマージ済み PR を読むことだった。エージェントが自発的にやることでは
-なく、人が編集のたびにやることでもない。
-
-同じレポートの導入コスト: コマンド1つ、コミット768個のインデックスに7.4秒。履歴も作業
-ツリーも触らない。
+なく、人が編集のたびにやることでもない。同じレポートの導入コスト: コマンド1つ、コミット
+768個のインデックスに7.4秒。履歴も作業ツリーも触らない。コンソール出力とレポート全文は
+[docs/evidence.md](docs/evidence.md) にあります。
 
 **ホスト型のチャット履歴製品が提供できない3つの性質**、そして権威をサービスではなく Git に
 置いた理由:
@@ -250,38 +228,15 @@ other
 
 すべてのコミットに trailer を手書きする必要はありません。ほとんどのコミットには record がないべきです。外部制約、除外した代案、warning、verification gap のように、diff だけでは復元できない意思決定にだけ record を追加します。
 
-### コーディングエージェント経由
-
 エージェントには、普段どおりコミットし、diff では説明できない意思決定コンテキストだけを残すよう頼みます。
 
 > この変更をコミットしてください。diff で重要な制約、除外した代案、warning、または verification gap を復元できない場合にだけ、CommitLore record を追加してください。
 
-ほとんどのコミットには、やはり record は不要です。エージェント向けの指針は `skills/commitlore-commits/` にあり、commit hook はエージェントが追加した record を検証します。
-
-### 高度な経路: harvest
-
-`commitlore harvest` は session transcript と staged diff から prompt contract を作り、`commitlore harvest-verify` はそれに対する draft を検証します。これらは draft を支援しますが、自動でコミットしません。interactive record builder は未実装です。
-
-### 手書き
-
-逃げ道として、人は通常の Git trailer を手書きできます。commit-msg hook はすでにある record を検証するだけで、record を発明したり黙って追加したりしません。
-
-## 最小の record
-
-record は小さくできます。失われるものだけを入れてください。
-
-```text
-Fix expired-token refresh
-
-Ruled-out: Extend token TTL to 24h | security policy violation
-Warn: Do not narrow the 4xx handler without verifying upstream behavior
-```
-
-ほとんどの record に protocol field のすべては不要です。意思決定が必要とするときは、identity、lifecycle、risk、provenance、verification field を使えます。
+エージェント向けの指針は `skills/commitlore-commits/` にあり、commit-msg hook はエージェントが追加した record を検証するだけで、record を発明したり黙って追加したりしません。`harvest` の経路、`capture` トランザクション、そして人が trailer を手書きする逃げ道は、いずれも [docs/capture.md](docs/capture.md) にあります。
 
 ## 完全な record
 
-この例は conformance fixture でもあります。Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
+record はこれよりずっと小さくできますし、ほとんどは数個の field で足ります。この例が語彙のすべてを使うのは、conformance fixture でもあるからです — Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
 
 ```text
 Prevent silent session drops during long-running operations
@@ -322,13 +277,7 @@ CommitLore-Version: 2.0.0
 | `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
-path の履歴は `commitlore context <path>` で読み、Git を直接使うこともできます。
-
-```bash
-git log --follow --format='%h %(trailers:key=Limit,valueonly)' -- src/auth/
-```
-
-text search ではなく Git trailer parser を使います。本文の `Key:` は trailer とは限りません。
+path の履歴は `commitlore context <path>` で読みます。より小さな例と、Git だけで record を読む方法は [docs/protocol.md](docs/protocol.md) に、規範的な定義は [SPEC §3](spec/SPEC.md) にあります。
 
 ## リポジトリが証明すること
 
@@ -343,13 +292,7 @@ text search ではなく Git trailer parser を使います。本文の `Key:` �
 
 112 回の実験は記録されましたが、M4 には run ごとの `guard_exposure` 記録がありません。treatment があったか検証できないため、agent behavior の主張を検証も支持も反証もしていません。上記のより狭い製品上の主張は独立して検証可能な動作に基づきます。クリーンなデータセットと撤回については [M4 verdict](bench/VERDICT-M4.md) を読んでください。
 
-### レイテンシ、コスト、損益分岐
-
-100,000 コミットではインデックス付き `context` の p50 は 496 ms、CommitLore 自身の `--no-index` フォールバックは 86,673 ms です。この内部フォールバックの差は 1k で 4.8×、10k で 36×、100k で 175×へと大きくなります（[完全な決定論的実行](https://github.com/MongLong0214/commitlore/blob/2fade893f25917fce1ffb497aab96b1eb271a185/bench/results/deterministic-20260729T032652Z.md)）。これは規模に対する形であり、製品と代替手段の比較結果ではありません。
-
-guard が一回実行されるコストは、注入される context と測定した hook overhead です。commit-msg は p50 185.85 ms、injection hook は p50 102.40 ms です（[deterministic measurements](bench/results/deterministic-20260727T174801Z.md)）。
-
-損益分岐の数値を再び示すには、プロバイダー報告のターンごとのトークン使用量台帳と、リポジトリがすでに却下した代案に費やした作業の観測済みコストが必要です。
+何が測定されたか — 検索、露出、レイテンシと規模、hook overhead — そして何が測定されていないか — 損益分岐、そしてエージェントの振る舞いへの効果 — は [docs/evidence.md](docs/evidence.md) にまとめてあります。
 
 <details>
 <summary>完全な benchmark record（112 回の実験）</summary>
@@ -396,16 +339,6 @@ guard が一回実行されるコストは、注入される context と測定�
 
 </details>
 
-## source からインストール
-
-source distribution を確認または実行するには次を使います。
-
-```bash
-git clone https://github.com/MongLong0214/commitlore ~/.commitlore
-node ~/.commitlore/dist/commitlore.mjs init
-node ~/.commitlore/dist/commitlore.mjs context src/auth
-```
-
 ## アンインストール
 
 ```bash
@@ -414,10 +347,18 @@ commitlore uninstall
 
 `install.sh` または `install.ps1` が書いたものを削除します — wrapper、固定された
 checkout、そして各 agent config に追加した MCP エントリ。自分が書いていないものは
-削除せず、残すものを明示します: リポジトリごとの hook（`commit-msg`・
-`prepare-commit-msg`・`post-commit` の三つとも `commitlore hooks uninstall` が外します）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
-plugin（`/plugin uninstall commitlore@commitlore`）。`--dry-run` は何も変更せずに
-報告します。
+削除せず、残すものを明示します: リポジトリごとの hook、agent hook、Claude Code
+plugin。`--dry-run` は何も変更せずに報告します。それぞれを何が外すか、そして source
+チェックアウトから実行する方法は [docs/install.md](docs/install.md) にあります。
+
+## ドキュメント
+
+- [docs/install.md](docs/install.md) — インストール経路、各経路が書くもの、取り消し方
+- [docs/cli.md](docs/cli.md) — すべてのコマンドとフラグ
+- [docs/capture.md](docs/capture.md) — record が書かれるまで
+- [docs/protocol.md](docs/protocol.md) — record の形式と、Git だけで読む方法
+- [docs/evidence.md](docs/evidence.md) — 何が測定され、何が測定されていないか
+- [spec/SPEC.md](spec/SPEC.md) — 規範プロトコル
 
 ## 既知の制限事項
 
