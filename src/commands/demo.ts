@@ -46,6 +46,14 @@ const checkPlatform = (override?: string): string | null => {
 
 export interface DemoOptions {
   cwd?: string;
+  /**
+   * Directory the temporary repository is created under. Defaults to the
+   * process-wide temp dir, which is what the CLI uses. A caller that needs to
+   * assert the temporary directory was removed passes a root it owns: read
+   * against the shared tmpdir, that assertion answers for every process on the
+   * machine, not for this call (#364).
+   */
+  tmpRoot?: string;
   /** For testing: override the detected platform. */
   platformOverride?: string;
   /** For testing: throw mid-execution to verify cleanup. */
@@ -114,7 +122,7 @@ export const runDemo = async (opts: DemoOptions = {}): Promise<DemoResult> => {
 
   try {
     // Create temporary directory with a recognizable prefix for testing
-    tmpDir = mkdtempSync(join(tmpdir(), 'commitlore-demo-'));
+    tmpDir = mkdtempSync(join(opts.tmpRoot ?? tmpdir(), 'commitlore-demo-'));
 
     // Verify we are NOT operating on the user's repository
     const userCwd = resolve(opts.cwd ?? process.cwd());

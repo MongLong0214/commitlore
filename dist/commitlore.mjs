@@ -18030,7 +18030,7 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join6(tmpdir(), "commitlore-demo-"));
+    tmpDir = mkdtempSync(join6(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
     const userCwd = resolve10(opts.cwd ?? process.cwd());
     const tmpResolved = resolve10(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
