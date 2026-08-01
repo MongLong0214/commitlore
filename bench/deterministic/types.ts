@@ -207,6 +207,81 @@ export interface DensityRow extends BaseRow {
   readonly structured_trailer_line_share: number;
 }
 
+/** The information a fresh agent has in front of it before its first edit. */
+export type DeliveryRoute =
+  | 'code-only'
+  | 'git-log-path'
+  | 'every-record-budgeted'
+  | 'every-record-unbudgeted'
+  | 'commitlore';
+
+/**
+ * `authored` excludes paths the repository's own `.gitattributes` declares
+ * generated; `all-tracked` keeps them. The second exists so the exclusion is a
+ * reported sensitivity rather than a silent choice.
+ */
+export type DeliveryPopulation = 'authored' | 'all-tracked';
+
+/** Corpus facts, identical across routes and populations of one run. */
+export interface DeliveryCensus {
+  readonly commits_examined: number;
+  readonly merge_commits: number;
+  readonly record_bearing_commits: number;
+  readonly records: number;
+  readonly active_records: number;
+  readonly superseded_records: number;
+  readonly expired_records: number;
+  /** Records whose declaring commits changed no path — a merge changes none. */
+  readonly records_without_paths: number;
+  /** Retirements the block walk resolved, against a raw line scan of the same messages. */
+  readonly supersedes_trailers_parsed: number;
+  readonly supersedes_lines_scanned: number;
+  readonly expires_trailers_parsed: number;
+  readonly expires_lines_scanned: number;
+  readonly tracked_paths: number;
+  readonly generated_paths: number;
+}
+
+export interface DecisionDeliveryRow extends BaseRow {
+  readonly metric: 'decision_delivery';
+  readonly history_ref: string;
+  /** HEAD's committer instant; the lifecycle fold and the projections share it. */
+  readonly evaluated_at: string;
+  readonly census: DeliveryCensus;
+  readonly population: DeliveryPopulation;
+  /** Tracked paths this population admits, before the active-record filter. */
+  readonly candidate_paths: number;
+  readonly paths_without_active_record: number;
+  readonly evaluation_paths: number;
+  /** The primary denominator: active records summed over the evaluation paths. */
+  readonly path_active_total: number;
+  /** Gold (path, record) pairs reachable only through a rename. */
+  readonly rename_only_attachments: number;
+  readonly repo_active_total: number;
+  readonly route: DeliveryRoute;
+  /** The injection budget in effect, or null for a route that has none. */
+  readonly budget_tokens: number | null;
+  readonly delivered_total: number;
+  readonly recovered: number;
+  readonly path_recall: number;
+  readonly macro_path_recall: number;
+  readonly repo_recall: number;
+  readonly precision: number;
+  readonly superseded_delivered: number;
+  readonly expired_delivered: number;
+  readonly stale_delivered: number;
+  readonly stale_share: number;
+  readonly off_path_delivered: number;
+  /** Delivered ids the census does not know. A parser disagreement shows up here. */
+  readonly unknown_delivered: number;
+  /** Delivered lines whose record declared no id, so nothing can be scored against them. */
+  readonly unidentified_delivered: number;
+  readonly withheld_records: number;
+  readonly delivered_tokens: number;
+  readonly paths_complete: number;
+  readonly paths_zero: number;
+}
+
 export type DeterministicRow =
   | QueryLatencyRow
   | IndexCostRow
@@ -216,6 +291,7 @@ export type DeterministicRow =
   | HookOverheadRow
   | CaptureCostRow
   | NoiseExposureRow
+  | DecisionDeliveryRow
   | DensityRow;
 
 export type RowBase = Pick<

@@ -2,7 +2,7 @@ const SOURCE = 'bench/results/deterministic-20260729T032652Z.md';
 
 /** The measured cost boundary; avoided rejected-path work has not been measured. */
 export const renderEconomicCase = (): readonly string[] => [
-  '## 10. Economic case: measured costs, unmeasured benefit',
+  '## 11. Economic case: measured costs, unmeasured benefit',
   '',
   `Source: \`${SOURCE}\`. These are deterministic measurements, not a benefit estimate.`,
   '',

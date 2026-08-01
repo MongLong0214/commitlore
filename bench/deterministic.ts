@@ -9,6 +9,7 @@ import { measureDensity } from './deterministic/density.ts';
 import { measureHookOverhead } from './deterministic/hooks.ts';
 import { measureNoiseExposure } from './deterministic/noise.ts';
 import { measureGuardQuality, measureInjectionDetection } from './deterministic/quality.ts';
+import { measureDecisionDelivery } from './deterministic/recovery.ts';
 import {
   assertSingleProvenance,
   writeDeterministicReport,
@@ -34,6 +35,7 @@ const REQUIRED_METRICS: ReadonlySet<DeterministicRow['metric']> = new Set([
   'capture_cost',
   'index_cost',
   'noise_exposure',
+  'decision_delivery',
   'rationale_density',
 ]);
 
@@ -70,6 +72,17 @@ const assertNoConcurrentDeterministicBench = (): void => {
 const main = (): void => {
   const testMode = process.env['NODE_ENV'] === 'test';
   const densityOnly = process.env['COMMITLORE_DETERMINISTIC_DENSITY_ONLY'] === '1';
+  const recoveryOnly = process.env['COMMITLORE_DETERMINISTIC_RECOVERY_ONLY'] === '1';
+  if (densityOnly && recoveryOnly) {
+    throw new Error('COMMITLORE_DETERMINISTIC_DENSITY_ONLY and _RECOVERY_ONLY are mutually exclusive');
+  }
+  // Both single-metric modes read this repository's own history rather than a
+  // synthetic fixture, so neither produces a complete dataset. They part
+  // company over the concurrency refusal: r-densitymerge135 exempted density,
+  // which is seconds of `git log`, while delivery spends minutes projecting
+  // every path through the index and would contend with a wall-clock arm the
+  // same record forbids contending with.
+  const singleMetric = densityOnly || recoveryOnly;
   const testOnlyOverride = [
     'COMMITLORE_DETERMINISTIC_SIZES',
     'COMMITLORE_DETERMINISTIC_RUNS',
@@ -107,6 +120,10 @@ const main = (): void => {
   try {
     const rows: readonly DeterministicRow[] = densityOnly
       ? [measureDensity(base, REPO_ROOT)]
+      : recoveryOnly
+      ? measureDecisionDelivery(base, REPO_ROOT, 'HEAD', (line) => {
+          process.stdout.write(`${line}\n`);
+        })
       : (() => {
           process.stdout.write(`deterministic bench: query latency and index cost (${sizes.join(', ')} commits)\n`);
           const scale = measureScale(base, REPO_ROOT, scratch, sizes, runs);
@@ -121,6 +138,10 @@ const main = (): void => {
           const capture = measureCaptureCost(base, REPO_ROOT, runs);
           process.stdout.write('deterministic bench: irrelevant decision-context exposure\n');
           const exposure = measureNoiseExposure(base);
+          process.stdout.write('deterministic bench: active-record delivery before the first edit\n');
+          const delivery = measureDecisionDelivery(base, REPO_ROOT, 'HEAD', (line) => {
+            process.stdout.write(`${line}\n`);
+          });
           process.stdout.write('deterministic bench: rationale density\n');
           const density = measureDensity(base, REPO_ROOT);
           return [
@@ -132,12 +153,13 @@ const main = (): void => {
             capture,
             ...scale.index,
             ...exposure,
+            ...delivery,
             density,
           ];
         })();
 
     assertSingleProvenance(rows);
-    if (!densityOnly) assertComplete(rows);
+    if (!singleMetric) assertComplete(rows);
     const currentCommit = git(REPO_ROOT, ['rev-parse', 'HEAD']).stdout.trim();
     const currentDigest = digestDistTree();
     if (currentCommit !== harnessCommit || currentDigest !== distDigest) {
@@ -149,7 +171,10 @@ const main = (): void => {
     assertCleanCheckout(REPO_ROOT);
 
     mkdirSync(outputDir, { recursive: true });
-    const baseName = `deterministic-${stamp(measuredAt)}`;
+    // A single-metric run is not a deterministic dataset and must not be read as
+    // one, so it does not borrow the name. `decision-delivery-*` is what
+    // bench/DECISION-DELIVERY.md cites.
+    const baseName = `${recoveryOnly ? 'decision-delivery' : 'deterministic'}-${stamp(measuredAt)}`;
     const jsonlPath = join(outputDir, `${baseName}.jsonl`);
     const reportPath = join(outputDir, `${baseName}.md`);
     writeFileSync(jsonlPath, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`);
