@@ -12941,10 +12941,7 @@ var coversNotes = (refspec) => {
 var notesAvailability = (opts = {}) => {
   const ref = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions(opts));
   if (ref.code === 0) return "present";
-  const remotes = listRemotes(opts);
-  if (remotes.length === 0) return "absent";
-  const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-  return uncovered.length > 0 ? "unfetched" : "absent";
+  return listRemotes(opts).length === 0 ? "absent" : "unfetched";
 };
 
 // src/core/backfill.ts

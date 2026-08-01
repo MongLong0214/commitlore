@@ -16,7 +16,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runDoctor } from '../src/commands/doctor.js';
 import { execGit } from '../src/core/git.js';
-import { NOTES_REF, listRecordShas, readRecord, writeRecord } from '../src/core/notes.js';
+import { NOTES_REF, listRecordShas, notesAvailability, readRecord, writeRecord } from '../src/core/notes.js';
 import { serializeTrailers } from '../src/core/trailers.js';
 import type { Trailer } from '../src/core/types.js';
 import { createTestRepo } from './git-fixtures.js';
@@ -206,4 +206,34 @@ describe('notes mirror', () => {
     },
     30_000,
   );
+});
+
+/**
+ * `doctor --fix` writes the notes refspec and fetches nothing. Availability used
+ * to depend on that refspec, so the remedy this tool prescribes flipped an
+ * honest `unfetched` to a confident `absent` while the upstream records stayed
+ * exactly as invisible — the warning went away and the cause did not.
+ *
+ * That matters more than an ordinary wrong answer. `absent` means an empty
+ * result is a true empty, and an agent reads a true empty as "nothing was ruled
+ * out and nothing is off limits."
+ */
+describe('notesAvailability does not trust a refspec nobody has fetched', () => {
+  it('stays unfetched after the refspec is configured but before a fetch', () => {
+    const upstream = initBare('upstream-refspec');
+    const work = clone(upstream, 'work-refspec');
+
+    // Exactly what `doctor --fix` does: configure, do not fetch.
+    git(work, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+
+    expect(
+      notesAvailability({ cwd: work }),
+      'a configured refspec is not a fetch, and an empty answer here is still unknown',
+    ).toBe('unfetched');
+  });
+
+  it('is absent only when there is no remote for records to be hiding on', () => {
+    const solo = initRepo('solo-no-remote');
+    expect(notesAvailability({ cwd: solo })).toBe('absent');
+  });
 });

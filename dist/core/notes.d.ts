@@ -113,5 +113,18 @@ export declare const coversNotes: (refspec: string) => boolean;
  * Reads git config only — no network, no fetch. A repository with no remote at
  * all reports `absent`: there is nowhere for unseen records to be, so an empty
  * answer is a true empty.
+ *
+ * A remote plus no local notes ref is `unfetched`, and the refspec does not
+ * change that. It used to: a repository whose refspec covered notes but had
+ * never fetched them reported `absent`, which is the state `doctor --fix`
+ * creates — it writes the refspec and fetches nothing. So the remedy this tool
+ * prescribes turned an honest "records may exist upstream" into a confident
+ * "this repository has none", while the records stayed exactly as invisible.
+ * The warning disappeared and the cause did not, which is the failure shape
+ * #296 already cost this project once.
+ *
+ * Whether a refspec covers notes is still worth reporting — it decides whether
+ * a fetch would help — but it is a separate question from whether an empty
+ * answer can be trusted, and only the second one belongs here.
  */
 export declare const notesAvailability: (opts?: NotesOptions) => NotesAvailability;
