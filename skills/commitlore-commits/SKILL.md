@@ -56,17 +56,45 @@ where `draft` is that JSON as a string and `diff` is the same `git diff
 proposes the alternative rather than turning it down), `canonical-duplicate`. A
 refused record is discarded and logged, never silently corrected.
 
-**4. Stage.** `commitlore_stage_capture { nonce }` → `{ "staged": true,
-"nonce": "..." }`, or `{ "staged": false, "reason": "..." }` when verification
-came back empty. Staging is what stamps `expires_at`.
+**4. Ask.** Verification proves the quotes are real, not that the record is
+worth keeping. Show what came back `accepted` and stage only what the user keeps:
 
-**5. Commit.** `git commit` as usual, message body only — the hook appends the
+```
+One decision worth keeping from this work:
+
+  Ruled-out: pgbouncer in transaction mode | one more process to operate
+    for a service that opens four connections
+
+  keep, or skip?
+```
+
+One prompt per commit, and the default policy allows one record in it. **Skip is
+completely ordinary** — most commits carry nothing, and a skipped candidate is
+this pipeline working rather than failing; drop it without comment and do not
+re-ask or re-word it back. On a trivial commit there is nothing to show and no
+prompt to make: silence there is correct. To change wording, prepare again —
+`verify` runs once per nonce, so an edited draft needs a new one.
+
+Nothing enforces this step. `stage` takes a verified nonce and has no way to ask
+whether a human ever saw the record; `mode: "suggest"` in the capture policy is a
+convention for hosts like this skill, not a check the core performs (ADR-0028).
+This prompt is the only thing between a drafted record and a commit.
+
+**5. Stage.** `commitlore_stage_capture { nonce }` → `{ "staged": true,
+"nonce": "..." }`, or `{ "staged": false, "reason": "..." }` when verification
+came back empty. Staging is what stamps `expires_at`. On a skip, call nothing:
+an unstaged transaction is inert and never reaches a commit.
+
+**6. Commit.** `git commit` as usual, message body only — the hook appends the
 trailer block itself, so do not write trailers by hand or paste the draft in. It
 applies the record only while all five hold: HEAD unchanged, staged diff
 unchanged, under five minutes since staging, record unconsumed, capture policy
 unchanged. Break one and the commit proceeds carrying no record.
 
-The CLI runs steps 1, 3 and 4 in a single command:
+The CLI runs steps 1, 3 and 5 in one process. There is no point inside it where
+a user can answer, so it stages without asking — reach for it only when the user
+has already agreed to record this one, and otherwise keep the MCP tools, where
+step 4 fits between verify and stage:
 
 ```
 commitlore capture --transcript session.txt --draft draft.json

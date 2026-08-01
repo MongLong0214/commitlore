@@ -1,6 +1,6 @@
 # ADR-0027 — Entropy review is a different product, and this one does not become it
 
-Status: accepted · Closes [#342](https://github.com/MongLong0214/commitlore/issues/342)
+Status: Accepted (2026-08-01) · Closes [#342](https://github.com/MongLong0214/commitlore/issues/342)
 
 ## Context
 
