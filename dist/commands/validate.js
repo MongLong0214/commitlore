@@ -545,7 +545,12 @@ const checkReferences = (input, sources, cwd) => {
         // message alone and truncation cannot touch it — and that is exactly the
         // multi-block squash shape this command exists to catch. Withdrawing the
         // whole class would be a skip with no cause.
-        const suppressed = hasShallowHistory(cwd) && violations.some((violation) => violation.rule === 'dangling-ref');
+        //
+        // The dangling-ref test comes first because it is free and the shallow test
+        // is not: `hasShallowHistory` spawns `git rev-parse`, and this function runs
+        // inside the commit-msg hook on every commit. The overwhelmingly common case
+        // is a clean record with nothing to explain, and it should pay nothing.
+        const suppressed = violations.some((violation) => violation.rule === 'dangling-ref') && hasShallowHistory(cwd);
         const reported = suppressed
             ? violations.filter((violation) => violation.rule !== 'dangling-ref')
             : violations;

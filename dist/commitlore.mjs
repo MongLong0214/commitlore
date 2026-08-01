@@ -29337,7 +29337,7 @@ var checkReferences = (input, sources, cwd) => {
         );
       }
     }
-    const suppressed = hasShallowHistory(cwd) && violations.some((violation) => violation.rule === "dangling-ref");
+    const suppressed = violations.some((violation) => violation.rule === "dangling-ref") && hasShallowHistory(cwd);
     const reported = suppressed ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
     return {
       check: {
