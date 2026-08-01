@@ -10,6 +10,10 @@
  *   "ours" is a fact about the file, not a guess.
  * - `uninstall` restores exactly what was moved aside, and refuses to touch a
  *   hook it did not install.
+ * - `uninstall` accounts for every hook commitlore writes, not only the one
+ *   `install` writes here. `init` also installs `prepare-commit-msg` and
+ *   `post-commit`, and this is the only command that removes any of them, so a
+ *   hook it walked past would have no removal path at all (#354).
  *
  * The hooks directory comes from `git rev-parse --git-path hooks`, never from a
  * hardcoded `.git/hooks`: with a linked worktree `.git` is a file, and

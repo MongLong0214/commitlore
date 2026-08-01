@@ -72,8 +72,9 @@ commit-msg hook already installed: /path/to/repo/.git/hooks/commit-msg (unchange
 
 `commitlore hooks status` reports what's currently installed without changing
 anything (`commit-msg: installed (commitlore)` or `commit-msg: not
-installed`). `commitlore hooks uninstall` removes commitlore's hook and
-restores whatever it replaced.
+installed`). `commitlore hooks uninstall` removes every hook commitlore
+installed — `commit-msg`, and the `prepare-commit-msg` and `post-commit` hooks
+`init` adds — and restores whatever they replaced.
 
 ## 3. Fix the notes fetch refspec
 

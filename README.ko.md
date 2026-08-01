@@ -411,8 +411,8 @@ commitlore uninstall
 
 `install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
 그리고 각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
-남기는 것을 명시한다: `commit-msg` hook(`commitlore hooks uninstall` — 이 명령은 그 하나만 제거하고,
-`init`이 함께 설치하는 `prepare-commit-msg`·`post-commit`은 남긴다), agent
+남기는 것을 명시한다: 저장소별 hook — `commit-msg`, `prepare-commit-msg`,
+`post-commit` 세 개 모두 `commitlore hooks uninstall`이 제거한다 —, agent
 hook(`commitlore inject uninstall-claude-hook`), Claude Code
 plugin(`/plugin uninstall commitlore@commitlore`). `--dry-run`은 아무것도 바꾸지
 않고 보고만 한다.

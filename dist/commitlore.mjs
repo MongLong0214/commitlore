@@ -16556,7 +16556,21 @@ var CHAINED_SUFFIX = ".commitlore-chained";
 var HOOK_NAME = "commit-msg";
 var CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
 var HOOK_MODE = 493;
-var commitMsgStub = () => [
+var UNRESOLVED_GATE = [
+  "# Passing silently here would report a clean record for a message nothing",
+  "# ever read.",
+  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+  'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
+  "exit 1"
+];
+var UNRESOLVED_CAPTURE = [
+  "# Not the validation gate: nothing was checked and rejected here, the",
+  "# checker is absent. Refusing would block a commit over a missing tool.",
+  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+  'echo "  this hook did nothing; the commit was not blocked. Re-run: <path-to>/commitlore init" >&2',
+  "exit 0"
+];
+var stubText = (unresolved) => [
   "#!/bin/sh",
   HOOK_MARKER,
   "# Installed by `commitlore hooks install`.",
@@ -16674,13 +16688,11 @@ var commitMsgStub = () => [
   "  dir=$parent",
   "done",
   "",
-  "# Passing silently here would report a clean record for a message nothing",
-  "# ever read.",
-  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
-  'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
-  "exit 1",
+  ...unresolved,
   ""
 ].join("\n");
+var commitMsgStub = () => stubText(UNRESOLVED_GATE);
+var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
 
 // src/commands/doctor.ts
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
@@ -17218,218 +17230,179 @@ var register3 = (program3) => {
 };
 
 // src/commands/hooks.ts
-import { randomBytes as randomBytes4 } from "node:crypto";
+import { randomBytes as randomBytes6 } from "node:crypto";
 import {
-  chmodSync,
-  existsSync as existsSync8,
-  mkdirSync as mkdirSync4,
-  readFileSync as readFileSync9,
+  chmodSync as chmodSync3,
+  existsSync as existsSync10,
+  mkdirSync as mkdirSync6,
+  readFileSync as readFileSync11,
   realpathSync as realpathSync2,
-  renameSync as renameSync3,
+  renameSync as renameSync5,
   statSync as statSync3,
   unlinkSync as unlinkSync4,
-  writeFileSync as writeFileSync5
+  writeFileSync as writeFileSync7
 } from "node:fs";
-import { join as join5, resolve as resolve7 } from "node:path";
-var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
-var failure2 = (message) => ({
-  code: 2,
-  stdout: "",
-  stderr: `commitlore: ${message}
-`
-});
-var success2 = (status, lines) => ({
-  code: 0,
-  stdout: `${lines.join("\n")}
-`,
-  stderr: "",
-  status
-});
-var resolveHooksDir = (cwd) => {
-  const result = execGit(["rev-parse", "--git-path", "hooks"], { cwd });
-  if (result.code !== 0) {
-    throw new Error(`not a git repository (${firstLine2(result.stderr)})`);
+import { join as join5, resolve as resolve9 } from "node:path";
+
+// src/hooks/post-commit.ts
+import { createHash as createHash5, randomBytes as randomBytes4 } from "node:crypto";
+import { chmodSync, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync9, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { resolve as resolve7 } from "node:path";
+var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
+var POST_COMMIT_HOOK_NAME = "post-commit";
+var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
+var hookSuccess = (line) => ({ code: 0, stdout: `${line}
+`, stderr: "" });
+var hookFailure = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
+` });
+var postCommitStub = () => captureHookStub().replaceAll("commit-msg", POST_COMMIT_HOOK_NAME).replaceAll('validate --message-file "$1"', "post-commit");
+var writePostCommitHook = (path2) => {
+  const temporary = `${path2}.tmp-${process.pid}-${randomBytes4(4).toString("hex")}`;
+  writeFileSync5(temporary, postCommitStub(), { mode: HOOK_MODE });
+  chmodSync(temporary, HOOK_MODE);
+  renameSync3(temporary, path2);
+};
+var installPostCommitHook = (cwd = process.cwd()) => {
+  let hookPath;
+  try {
+    const result = execGit(["rev-parse", "--git-path", `hooks/${POST_COMMIT_HOOK_NAME}`], { cwd });
+    if (result.code !== 0) return hookFailure(result.stderr.trim() || "not a git repository");
+    hookPath = resolve7(cwd, result.stdout.trim());
+    mkdirSync4(resolve7(hookPath, ".."), { recursive: true });
+  } catch (error2) {
+    return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
+  try {
+    if (existsSync8(hookPath)) {
+      const current = readFileSync9(hookPath, "utf8");
+      if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
+        return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
+      }
+      if (current === postCommitStub()) {
+        return hookSuccess(`${POST_COMMIT_HOOK_NAME} hook already installed: ${hookPath} (unchanged)`);
+      }
+      writePostCommitHook(hookPath);
+      return hookSuccess(`updated ${POST_COMMIT_HOOK_NAME} hook: ${hookPath}`);
+    }
+    writePostCommitHook(hookPath);
+    return hookSuccess(`installed ${POST_COMMIT_HOOK_NAME} hook: ${hookPath}`);
+  } catch (error2) {
+    return hookFailure(
+      `could not install the ${POST_COMMIT_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`
+    );
+  }
+};
+var resolvePendingDir2 = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
+  if (result.code !== 0) return null;
   return resolve7(cwd, result.stdout.trim());
 };
-var isExecutable = (path2) => {
+var readPendingFile = (filePath) => {
   try {
-    return (statSync3(path2).mode & 73) !== 0;
+    const content = readFileSync9(filePath, "utf8");
+    const parsed = JSON.parse(content);
+    if (parsed["version"] !== 1) return null;
+    return parsed;
   } catch {
-    return false;
+    return null;
   }
 };
-var readHookState = (hookPath) => {
-  if (!existsSync8(hookPath)) return "absent";
-  let contents;
-  try {
-    contents = readFileSync9(hookPath, "utf8");
-  } catch {
-    return "foreign";
+var buildCanonicalTrailerBlock = (records) => {
+  const blocks = [];
+  for (const rec of records) {
+    if (typeof rec !== "object" || rec === null) continue;
+    const r = rec;
+    if (!Array.isArray(r.trailers)) continue;
+    const trailers = r.trailers;
+    const serialized = serializeTrailers(trailers);
+    if (serialized) blocks.push(serialized);
   }
-  if (!contents.includes(HOOK_MARKER)) return "foreign";
-  return contents === commitMsgStub() ? "installed" : "outdated";
+  return blocks.join("\n");
 };
-var readHookStatus = (cwd = process.cwd()) => {
-  const hooksDir = resolveHooksDir(cwd);
-  const hookPath = join5(hooksDir, HOOK_NAME);
-  const chainedPath = join5(hooksDir, CHAINED_HOOK_NAME);
-  return {
-    hooksDir,
-    hookPath,
-    state: readHookState(hookPath),
-    chainedPath,
-    chained: existsSync8(chainedPath),
-    chainedExecutable: isExecutable(chainedPath),
-    recordedTarget: readRecordedHookTarget(cwd)
-  };
+var extractRecordIds = (records) => {
+  const ids = [];
+  for (const rec of records) {
+    if (typeof rec !== "object" || rec === null) continue;
+    const r = rec;
+    if (!Array.isArray(r.trailers)) continue;
+    for (const t of r.trailers) {
+      if (t.key === "Record-Id") ids.push(t.value);
+    }
+  }
+  return ids;
 };
-var writeStub = (hookPath) => {
-  const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes4(4).toString("hex")}`;
-  writeFileSync5(temporary, commitMsgStub(), { mode: HOOK_MODE });
-  chmodSync(temporary, HOOK_MODE);
-  renameSync3(temporary, hookPath);
+var allRecordIdsPresent = (commitMessage, records) => {
+  const ids = extractRecordIds(records);
+  if (ids.length === 0) return false;
+  return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
-var resolveEntryForRecord = (entry, cwd) => {
-  if (entry === void 0 || entry === "") return null;
-  const existingFile = (candidate) => {
+var runPostCommitFinaliser = (cwd) => {
+  const pendingDirPath = resolvePendingDir2(cwd);
+  if (!pendingDirPath || !existsSync8(pendingDirPath)) return;
+  let files;
+  try {
+    files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+  } catch {
+    return;
+  }
+  if (files.length === 0) return;
+  const headResult = execGit(["rev-parse", "HEAD"], { cwd });
+  if (headResult.code !== 0) return;
+  const headSha2 = headResult.stdout.trim();
+  const parentResult = execGit(["rev-parse", "HEAD^"], { cwd });
+  if (parentResult.code !== 0) return;
+  const firstParent = parentResult.stdout.trim();
+  const treeResult = execGit(["rev-parse", "HEAD^{tree}"], { cwd });
+  if (treeResult.code !== 0) return;
+  const committedTree = treeResult.stdout.trim();
+  const msgResult = execGit(["log", "-1", "--format=%B", "HEAD"], { cwd });
+  if (msgResult.code !== 0) return;
+  const commitMessage = msgResult.stdout;
+  for (const file of files) {
+    const filePath = resolve7(pendingDirPath, file);
+    const pending = readPendingFile(filePath);
+    if (!pending) continue;
+    if (pending.phase !== "applied") continue;
+    if (pending.consumed) continue;
+    if (pending.base_head !== firstParent) continue;
+    if (pending.staged_tree_oid !== committedTree) continue;
+    if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
+    const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
+    const expectedHash = createHash5("sha256").update(canonicalBlock).digest("hex");
+    if (pending.applied_record_hash !== expectedHash) continue;
     try {
-      return statSync3(candidate).isFile() ? candidate : null;
-    } catch {
-      return null;
+      consumePending(pending.nonce, headSha2, { cwd });
+    } catch (error2) {
+      process.stderr.write(
+        `commitlore: post-commit finalisation error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
-  };
-  if (entry.includes("/")) return existingFile(resolve7(cwd, entry));
-  for (const dir of (process.env["PATH"] ?? "").split(":")) {
-    if (dir === "") continue;
-    const found = existingFile(resolve7(dir, entry));
-    if (found !== null) return found;
+    return;
   }
-  return null;
-};
-var recordBinPath = (cwd) => {
-  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-  if (resolvedEntry === null) return;
-  execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
-  execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
-  try {
-    execGit(["config", "--local", "commitlore.root", realpathSync2(PACKAGE_ROOT)], { cwd });
-  } catch {
-  }
-};
-var describeChained = (status) => {
-  if (!status.chained) return [];
-  const note = status.chainedExecutable ? "runs before commitlore" : "not executable \u2014 git would not have run it either, so the stub skips it";
-  return [`preserved hook: ${status.chainedPath} (${note})`];
-};
-var installHook = (input = {}) => {
-  const cwd = input.cwd ?? process.cwd();
-  let before;
-  try {
-    mkdirSync4(resolveHooksDir(cwd), { recursive: true });
-    before = readHookStatus(cwd);
-  } catch (error2) {
-    return failure2(messageOf3(error2));
-  }
-  try {
-    if (before.state === "foreign") {
-      if (before.chained && input.force !== true) {
-        return failure2(
-          `${before.hookPath} is not a commitlore hook and ${before.chainedPath} already exists \u2014 move one aside, or pass --force to replace the preserved hook`
-        );
-      }
-      renameSync3(before.hookPath, before.chainedPath);
-    }
-    writeStub(before.hookPath);
-    recordBinPath(cwd);
-  } catch (error2) {
-    return failure2(`could not install the ${HOOK_NAME} hook: ${messageOf3(error2)}`);
-  }
-  const after = readHookStatus(cwd);
-  const headline = {
-    absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
-    foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
-    outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (unchanged)`
-  }[before.state];
-  return success2(after, [headline, ...describeChained(after)]);
-};
-var uninstallHook = (input = {}) => {
-  const cwd = input.cwd ?? process.cwd();
-  let before;
-  try {
-    before = readHookStatus(cwd);
-  } catch (error2) {
-    return failure2(messageOf3(error2));
-  }
-  if (before.state === "absent") {
-    return success2(before, [`no ${HOOK_NAME} hook to remove: ${before.hookPath}`]);
-  }
-  if (before.state === "foreign") {
-    return success2(before, [
-      `${before.hookPath} was not installed by commitlore \u2014 left in place`,
-      ...describeChained(before)
-    ]);
-  }
-  try {
-    unlinkSync4(before.hookPath);
-    if (before.chained) renameSync3(before.chainedPath, before.hookPath);
-  } catch (error2) {
-    return failure2(`could not remove the ${HOOK_NAME} hook: ${messageOf3(error2)}`);
-  }
-  const restored = before.chained ? [`restored the previous hook: ${before.hookPath}`] : [];
-  return success2(readHookStatus(cwd), [`removed ${HOOK_NAME} hook: ${before.hookPath}`, ...restored]);
-};
-var hookStatus = (input = {}) => {
-  let status;
-  try {
-    status = readHookStatus(input.cwd ?? process.cwd());
-  } catch (error2) {
-    return failure2(messageOf3(error2));
-  }
-  const state = {
-    absent: "not installed",
-    installed: "installed (commitlore)",
-    outdated: "installed (commitlore), stub is out of date \u2014 run `commitlore hooks install`",
-    foreign: "present, not installed by commitlore"
-  }[status.state];
-  const targetWarning = status.state === "installed" && status.recordedTarget.problems.length > 0 ? ", recorded target warning \u2014 run `commitlore hooks install`" : "";
-  return success2(status, [
-    `hooks dir: ${status.hooksDir}`,
-    `${HOOK_NAME}: ${state}${targetWarning}`,
-    ...describeRecordedHookTarget(status.recordedTarget),
-    ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
-    ...describeChained(status)
-  ]);
-};
-var emit = (result) => {
-  if (result.stdout !== "") process.stdout.write(result.stdout);
-  if (result.stderr !== "") process.stderr.write(result.stderr);
-  if (result.code !== 0) process.exitCode = result.code;
 };
 var register4 = (program3) => {
-  const hooks = program3.command("hooks").description(`manage the git ${HOOK_NAME} hook that runs commitlore validate`);
-  hooks.command("install").description("install the commit-msg hook, preserving and chaining any existing one").option("--force", "replace an already preserved hook when a foreign hook is in the way").addHelpText("after", "\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC \xA710).").action((flags) => {
-    emit(installHook(flags.force === void 0 ? {} : { force: flags.force }));
-  });
-  hooks.command("uninstall").description("remove the commit-msg hook and restore the one it replaced").addHelpText("after", "\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC \xA710).").action(() => {
-    emit(uninstallHook());
-  });
-  hooks.command("status").description("report what is installed in the hooks directory").addHelpText("after", "\nExit codes: 0 reported, 2 could not run -- no repository (SPEC \xA710).").action(() => {
-    emit(hookStatus());
+  program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
+    try {
+      runPostCommitFinaliser(process.cwd());
+    } catch (error2) {
+      process.stderr.write(
+        `commitlore: post-commit error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
+    }
   });
 };
 
 // src/hooks/prepare-commit-msg.ts
-import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { createHash as createHash6, randomBytes as randomBytes5 } from "node:crypto";
+import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync4, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
 var PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_NAME}${CHAINED_SUFFIX}`;
 var RECORD_KEYS = new Set(KNOWN_KEYS);
-var prepareCommitMsgStub = () => commitMsgStub().replaceAll("commit-msg", PREPARE_COMMIT_MSG_HOOK_NAME).replaceAll('validate --message-file "$1"', 'prepare-commit-msg "$@"');
+var prepareCommitMsgStub = () => captureHookStub().replaceAll("commit-msg", PREPARE_COMMIT_MSG_HOOK_NAME).replaceAll('validate --message-file "$1"', 'prepare-commit-msg "$@"');
 var isRecordBlock = (trailers) => trailers.some((trailer) => RECORD_KEYS.has(trailer.key));
 var squashMessagePath = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "SQUASH_MSG"], { cwd });
@@ -17471,9 +17444,9 @@ var prepareHookPath = (cwd) => {
   if (result.code !== 0) throw new Error(result.stderr.trim() || "not a git repository");
   return resolve8(cwd, result.stdout.trim());
 };
-var hookSuccess = (line) => ({ code: 0, stdout: `${line}
+var hookSuccess2 = (line) => ({ code: 0, stdout: `${line}
 `, stderr: "" });
-var hookFailure = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
+var hookFailure2 = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
 ` });
 var writePrepareHook = (path2) => {
   const temporary = `${path2}.tmp-${process.pid}-${randomBytes5(4).toString("hex")}`;
@@ -17487,32 +17460,32 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     path2 = prepareHookPath(cwd);
     mkdirSync5(resolve8(path2, ".."), { recursive: true });
   } catch (error2) {
-    return hookFailure(error2 instanceof Error ? error2.message : String(error2));
+    return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
     if (existsSync9(path2)) {
       const current = readFileSync10(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
-        return hookFailure(`${path2} is not a commitlore hook \u2014 left in place`);
+        return hookFailure2(`${path2} is not a commitlore hook \u2014 left in place`);
       }
       if (current === prepareCommitMsgStub()) {
-        return hookSuccess(`${PREPARE_COMMIT_MSG_HOOK_NAME} hook already installed: ${path2} (unchanged)`);
+        return hookSuccess2(`${PREPARE_COMMIT_MSG_HOOK_NAME} hook already installed: ${path2} (unchanged)`);
       }
       writePrepareHook(path2);
-      return hookSuccess(`updated ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+      return hookSuccess2(`updated ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
     }
     writePrepareHook(path2);
-    return hookSuccess(`installed ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
+    return hookSuccess2(`installed ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${path2}`);
   } catch (error2) {
-    return hookFailure(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    return hookFailure2(`could not install the ${PREPARE_COMMIT_MSG_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`);
   }
 };
-var resolvePendingDir2 = (cwd) => {
+var resolvePendingDir3 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
   return resolve8(cwd, result.stdout.trim());
 };
-var readPendingFile = (filePath) => {
+var readPendingFile2 = (filePath) => {
   try {
     const content = readFileSync10(filePath, "utf8");
     const parsed = JSON.parse(content);
@@ -17548,11 +17521,11 @@ var messageContainsRecordId = (message, records) => {
   return false;
 };
 var applyCaptureRecord = (messageFile, cwd) => {
-  const pendingDirPath = resolvePendingDir2(cwd);
+  const pendingDirPath = resolvePendingDir3(cwd);
   if (!pendingDirPath || !existsSync9(pendingDirPath)) return;
   let files;
   try {
-    files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+    files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
   } catch {
     return;
   }
@@ -17562,7 +17535,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const currentHead = headResult.stdout.trim();
   const diffResult = execGit(["diff", "--cached"], { cwd });
   if (diffResult.code !== 0) return;
-  const currentDiffHash = createHash5("sha256").update(diffResult.stdout).digest("hex");
+  const currentDiffHash = createHash6("sha256").update(diffResult.stdout).digest("hex");
   const currentPolicyHash = resolvePolicy(cwd).identityHash;
   const now = Date.now();
   let currentMessage;
@@ -17573,7 +17546,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   }
   for (const file of files) {
     const filePath = resolve8(pendingDirPath, file);
-    const pending = readPendingFile(filePath);
+    const pending = readPendingFile2(filePath);
     if (!pending) continue;
     if (pending.phase !== "staged" && pending.phase !== "applied") continue;
     if (pending.consumed) continue;
@@ -17587,7 +17560,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     if (!trailerBlock) return;
     const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
     writeFileSync6(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-    const recordHash = createHash5("sha256").update(trailerBlock).digest("hex");
+    const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
     try {
       markApplied(pending.nonce, recordHash, { cwd });
     } catch {
@@ -17609,153 +17582,237 @@ var register5 = (program3) => {
   });
 };
 
-// src/hooks/post-commit.ts
-import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync11, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
-import { resolve as resolve9 } from "node:path";
-var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
-var POST_COMMIT_HOOK_NAME = "post-commit";
-var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
-var hookSuccess2 = (line) => ({ code: 0, stdout: `${line}
-`, stderr: "" });
-var hookFailure2 = (line) => ({ code: 2, stdout: "", stderr: `commitlore: ${line}
-` });
-var postCommitStub = () => commitMsgStub().replaceAll("commit-msg", POST_COMMIT_HOOK_NAME).replaceAll('validate --message-file "$1"', "post-commit");
-var writePostCommitHook = (path2) => {
-  const temporary = `${path2}.tmp-${process.pid}-${randomBytes6(4).toString("hex")}`;
-  writeFileSync7(temporary, postCommitStub(), { mode: HOOK_MODE });
-  chmodSync3(temporary, HOOK_MODE);
-  renameSync5(temporary, path2);
-};
-var installPostCommitHook = (cwd = process.cwd()) => {
-  let hookPath;
-  try {
-    const result = execGit(["rev-parse", "--git-path", `hooks/${POST_COMMIT_HOOK_NAME}`], { cwd });
-    if (result.code !== 0) return hookFailure2(result.stderr.trim() || "not a git repository");
-    hookPath = resolve9(cwd, result.stdout.trim());
-    mkdirSync6(resolve9(hookPath, ".."), { recursive: true });
-  } catch (error2) {
-    return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
+// src/commands/hooks.ts
+var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var failure2 = (message) => ({
+  code: 2,
+  stdout: "",
+  stderr: `commitlore: ${message}
+`
+});
+var success2 = (status, lines) => ({
+  code: 0,
+  stdout: `${lines.join("\n")}
+`,
+  stderr: "",
+  status
+});
+var resolveHooksDir = (cwd) => {
+  const result = execGit(["rev-parse", "--git-path", "hooks"], { cwd });
+  if (result.code !== 0) {
+    throw new Error(`not a git repository (${firstLine2(result.stderr)})`);
   }
-  try {
-    if (existsSync10(hookPath)) {
-      const current = readFileSync11(hookPath, "utf8");
-      if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
-        return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
-      }
-      if (current === postCommitStub()) {
-        return hookSuccess2(`${POST_COMMIT_HOOK_NAME} hook already installed: ${hookPath} (unchanged)`);
-      }
-      writePostCommitHook(hookPath);
-      return hookSuccess2(`updated ${POST_COMMIT_HOOK_NAME} hook: ${hookPath}`);
-    }
-    writePostCommitHook(hookPath);
-    return hookSuccess2(`installed ${POST_COMMIT_HOOK_NAME} hook: ${hookPath}`);
-  } catch (error2) {
-    return hookFailure2(
-      `could not install the ${POST_COMMIT_HOOK_NAME} hook: ${error2 instanceof Error ? error2.message : String(error2)}`
-    );
-  }
-};
-var resolvePendingDir3 = (cwd) => {
-  const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
-  if (result.code !== 0) return null;
   return resolve9(cwd, result.stdout.trim());
 };
-var readPendingFile2 = (filePath) => {
+var isExecutable = (path2) => {
   try {
-    const content = readFileSync11(filePath, "utf8");
-    const parsed = JSON.parse(content);
-    if (parsed["version"] !== 1) return null;
-    return parsed;
+    return (statSync3(path2).mode & 73) !== 0;
   } catch {
-    return null;
+    return false;
   }
 };
-var buildCanonicalTrailerBlock = (records) => {
-  const blocks = [];
-  for (const rec of records) {
-    if (typeof rec !== "object" || rec === null) continue;
-    const r = rec;
-    if (!Array.isArray(r.trailers)) continue;
-    const trailers = r.trailers;
-    const serialized = serializeTrailers(trailers);
-    if (serialized) blocks.push(serialized);
-  }
-  return blocks.join("\n");
-};
-var extractRecordIds = (records) => {
-  const ids = [];
-  for (const rec of records) {
-    if (typeof rec !== "object" || rec === null) continue;
-    const r = rec;
-    if (!Array.isArray(r.trailers)) continue;
-    for (const t of r.trailers) {
-      if (t.key === "Record-Id") ids.push(t.value);
-    }
-  }
-  return ids;
-};
-var allRecordIdsPresent = (commitMessage, records) => {
-  const ids = extractRecordIds(records);
-  if (ids.length === 0) return false;
-  return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
-};
-var runPostCommitFinaliser = (cwd) => {
-  const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync10(pendingDirPath)) return;
-  let files;
+var readHookState = (hookPath) => {
+  if (!existsSync10(hookPath)) return "absent";
+  let contents;
   try {
-    files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
+    contents = readFileSync11(hookPath, "utf8");
   } catch {
-    return;
+    return "foreign";
   }
-  if (files.length === 0) return;
-  const headResult = execGit(["rev-parse", "HEAD"], { cwd });
-  if (headResult.code !== 0) return;
-  const headSha2 = headResult.stdout.trim();
-  const parentResult = execGit(["rev-parse", "HEAD^"], { cwd });
-  if (parentResult.code !== 0) return;
-  const firstParent = parentResult.stdout.trim();
-  const treeResult = execGit(["rev-parse", "HEAD^{tree}"], { cwd });
-  if (treeResult.code !== 0) return;
-  const committedTree = treeResult.stdout.trim();
-  const msgResult = execGit(["log", "-1", "--format=%B", "HEAD"], { cwd });
-  if (msgResult.code !== 0) return;
-  const commitMessage = msgResult.stdout;
-  for (const file of files) {
-    const filePath = resolve9(pendingDirPath, file);
-    const pending = readPendingFile2(filePath);
-    if (!pending) continue;
-    if (pending.phase !== "applied") continue;
-    if (pending.consumed) continue;
-    if (pending.base_head !== firstParent) continue;
-    if (pending.staged_tree_oid !== committedTree) continue;
-    if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
-    const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
-    const expectedHash = createHash6("sha256").update(canonicalBlock).digest("hex");
-    if (pending.applied_record_hash !== expectedHash) continue;
+  if (!contents.includes(HOOK_MARKER)) return "foreign";
+  return contents === commitMsgStub() ? "installed" : "outdated";
+};
+var readHookStatus = (cwd = process.cwd()) => {
+  const hooksDir = resolveHooksDir(cwd);
+  const hookPath = join5(hooksDir, HOOK_NAME);
+  const chainedPath = join5(hooksDir, CHAINED_HOOK_NAME);
+  return {
+    hooksDir,
+    hookPath,
+    state: readHookState(hookPath),
+    chainedPath,
+    chained: existsSync10(chainedPath),
+    chainedExecutable: isExecutable(chainedPath),
+    recordedTarget: readRecordedHookTarget(cwd)
+  };
+};
+var writeStub = (hookPath) => {
+  const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes6(4).toString("hex")}`;
+  writeFileSync7(temporary, commitMsgStub(), { mode: HOOK_MODE });
+  chmodSync3(temporary, HOOK_MODE);
+  renameSync5(temporary, hookPath);
+};
+var resolveEntryForRecord = (entry, cwd) => {
+  if (entry === void 0 || entry === "") return null;
+  const existingFile = (candidate) => {
     try {
-      consumePending(pending.nonce, headSha2, { cwd });
-    } catch (error2) {
-      process.stderr.write(
-        `commitlore: post-commit finalisation error: ${error2 instanceof Error ? error2.message : String(error2)}
-`
-      );
+      return statSync3(candidate).isFile() ? candidate : null;
+    } catch {
+      return null;
     }
-    return;
+  };
+  if (entry.includes("/")) return existingFile(resolve9(cwd, entry));
+  for (const dir of (process.env["PATH"] ?? "").split(":")) {
+    if (dir === "") continue;
+    const found = existingFile(resolve9(dir, entry));
+    if (found !== null) return found;
   }
+  return null;
+};
+var recordBinPath = (cwd) => {
+  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
+  if (resolvedEntry === null) return;
+  execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
+  execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
+  try {
+    execGit(["config", "--local", "commitlore.root", realpathSync2(PACKAGE_ROOT)], { cwd });
+  } catch {
+  }
+};
+var describeChained = (status) => {
+  if (!status.chained) return [];
+  const note = status.chainedExecutable ? "runs before commitlore" : "not executable \u2014 git would not have run it either, so the stub skips it";
+  return [`preserved hook: ${status.chainedPath} (${note})`];
+};
+var installHook = (input = {}) => {
+  const cwd = input.cwd ?? process.cwd();
+  let before;
+  try {
+    mkdirSync6(resolveHooksDir(cwd), { recursive: true });
+    before = readHookStatus(cwd);
+  } catch (error2) {
+    return failure2(messageOf3(error2));
+  }
+  try {
+    if (before.state === "foreign") {
+      if (before.chained && input.force !== true) {
+        return failure2(
+          `${before.hookPath} is not a commitlore hook and ${before.chainedPath} already exists \u2014 move one aside, or pass --force to replace the preserved hook`
+        );
+      }
+      renameSync5(before.hookPath, before.chainedPath);
+    }
+    writeStub(before.hookPath);
+    recordBinPath(cwd);
+  } catch (error2) {
+    return failure2(`could not install the ${HOOK_NAME} hook: ${messageOf3(error2)}`);
+  }
+  const after = readHookStatus(cwd);
+  const headline = {
+    absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
+    foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
+    outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
+    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (unchanged)`
+  }[before.state];
+  return success2(after, [headline, ...describeChained(after)]);
+};
+var CAPTURE_HOOKS = [
+  {
+    name: PREPARE_COMMIT_MSG_HOOK_NAME,
+    marker: PREPARE_COMMIT_MSG_HOOK_MARKER,
+    chainedName: PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME
+  },
+  {
+    name: POST_COMMIT_HOOK_NAME,
+    marker: POST_COMMIT_HOOK_MARKER,
+    chainedName: POST_COMMIT_CHAINED_HOOK_NAME
+  }
+];
+var removeCaptureHook = (hooksDir, hook) => {
+  const hookPath = join5(hooksDir, hook.name);
+  const chainedPath = join5(hooksDir, hook.chainedName);
+  if (!existsSync10(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+  let contents;
+  try {
+    contents = readFileSync11(hookPath, "utf8");
+  } catch {
+    return [`${hookPath} was not installed by commitlore \u2014 left in place`];
+  }
+  if (!contents.includes(hook.marker)) {
+    return [`${hookPath} was not installed by commitlore \u2014 left in place`];
+  }
+  unlinkSync4(hookPath);
+  if (!existsSync10(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  renameSync5(chainedPath, hookPath);
+  return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
+};
+var uninstallHook = (input = {}) => {
+  const cwd = input.cwd ?? process.cwd();
+  let before;
+  try {
+    before = readHookStatus(cwd);
+  } catch (error2) {
+    return failure2(messageOf3(error2));
+  }
+  const lines = [];
+  if (before.state === "absent") {
+    lines.push(`no ${HOOK_NAME} hook to remove: ${before.hookPath}`);
+  } else if (before.state === "foreign") {
+    lines.push(
+      `${before.hookPath} was not installed by commitlore \u2014 left in place`,
+      ...describeChained(before)
+    );
+  } else {
+    try {
+      unlinkSync4(before.hookPath);
+      if (before.chained) renameSync5(before.chainedPath, before.hookPath);
+    } catch (error2) {
+      return failure2(`could not remove the ${HOOK_NAME} hook: ${messageOf3(error2)}`);
+    }
+    lines.push(`removed ${HOOK_NAME} hook: ${before.hookPath}`);
+    if (before.chained) lines.push(`restored the previous hook: ${before.hookPath}`);
+  }
+  for (const hook of CAPTURE_HOOKS) {
+    try {
+      lines.push(...removeCaptureHook(before.hooksDir, hook));
+    } catch (error2) {
+      return failure2(`could not remove the ${hook.name} hook: ${messageOf3(error2)}`);
+    }
+  }
+  return success2(readHookStatus(cwd), lines);
+};
+var hookStatus = (input = {}) => {
+  let status;
+  try {
+    status = readHookStatus(input.cwd ?? process.cwd());
+  } catch (error2) {
+    return failure2(messageOf3(error2));
+  }
+  const state = {
+    absent: "not installed",
+    installed: "installed (commitlore)",
+    outdated: "installed (commitlore), stub is out of date \u2014 run `commitlore hooks install`",
+    foreign: "present, not installed by commitlore"
+  }[status.state];
+  const targetWarning = status.state === "installed" && status.recordedTarget.problems.length > 0 ? ", recorded target warning \u2014 run `commitlore hooks install`" : "";
+  return success2(status, [
+    `hooks dir: ${status.hooksDir}`,
+    `${HOOK_NAME}: ${state}${targetWarning}`,
+    ...describeRecordedHookTarget(status.recordedTarget),
+    ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
+    ...describeChained(status)
+  ]);
+};
+var emit = (result) => {
+  if (result.stdout !== "") process.stdout.write(result.stdout);
+  if (result.stderr !== "") process.stderr.write(result.stderr);
+  if (result.code !== 0) process.exitCode = result.code;
 };
 var register6 = (program3) => {
-  program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
-    try {
-      runPostCommitFinaliser(process.cwd());
-    } catch (error2) {
-      process.stderr.write(
-        `commitlore: post-commit error: ${error2 instanceof Error ? error2.message : String(error2)}
-`
-      );
-    }
+  const hooks = program3.command("hooks").description(
+    `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`
+  );
+  hooks.command("install").description("install the commit-msg hook, preserving and chaining any existing one").option("--force", "replace an already preserved hook when a foreign hook is in the way").addHelpText("after", "\nExit codes: 0 installed (or already installed), 2 could not run -- no repository, or the hook could not be written (SPEC \xA710).").action((flags) => {
+    emit(installHook(flags.force === void 0 ? {} : { force: flags.force }));
+  });
+  hooks.command("uninstall").description(
+    "remove every commitlore hook \u2014 commit-msg, prepare-commit-msg, post-commit \u2014 and restore any they replaced"
+  ).addHelpText("after", "\nExit codes: 0 removed (or nothing to remove), 2 could not run -- no repository, or the hook could not be removed (SPEC \xA710).").action(() => {
+    emit(uninstallHook());
+  });
+  hooks.command("status").description("report what is installed in the hooks directory").addHelpText("after", "\nExit codes: 0 reported, 2 could not run -- no repository (SPEC \xA710).").action(() => {
+    emit(hookStatus());
   });
 };
 
@@ -29675,7 +29732,7 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 });
 register19(program2);
 registerUninstall(program2);
-register4(program2);
+register6(program2);
 register12(program2);
 register14(program2);
 register15(program2);
@@ -29685,7 +29742,7 @@ register9(program2);
 register11(program2);
 register18(program2);
 register5(program2);
-register6(program2);
+register4(program2);
 register10(program2);
 register13(program2);
 register(program2);

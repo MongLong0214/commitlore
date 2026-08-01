@@ -414,8 +414,8 @@ commitlore uninstall
 
 `install.sh` または `install.ps1` が書いたものを削除します — wrapper、固定された
 checkout、そして各 agent config に追加した MCP エントリ。自分が書いていないものは
-削除せず、残すものを明示します: `commit-msg` hook（`commitlore hooks uninstall` — このコマンドが外すのはそれ一つで、
-`init` が併せて入れる `prepare-commit-msg`・`post-commit` は残ります）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
+削除せず、残すものを明示します: リポジトリごとの hook（`commit-msg`・
+`prepare-commit-msg`・`post-commit` の三つとも `commitlore hooks uninstall` が外します）、agent hook（`commitlore inject uninstall-claude-hook`）、Claude Code
 plugin（`/plugin uninstall commitlore@commitlore`）。`--dry-run` は何も変更せずに
 報告します。
 
