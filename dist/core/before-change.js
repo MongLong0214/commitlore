@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { execGit, hasShallowHistory, historyAvailability } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
 import { notesAvailability } from './notes.js';
+import { withholdBlocked } from '../commands/query.js';
 import { runQuery } from './query.js';
 // ---------------------------------------------------------------------------
 // Implementation
@@ -113,10 +114,16 @@ export const beforeChange = (opts) => {
     // Query active decisions for this path
     let activeDecisions = [];
     if (!historyUnavailable) {
-        const queryResult = runQuery({
+        // Withheld here, not in the caller. A record graded `blocked` matched an
+        // injection pattern, and this tool's own MCP instructions tell the model
+        // that `blocked` means the content was withheld. Returning the trailers
+        // anyway made this the one surface that labelled a payload and then handed
+        // it over -- `inject` and `commitlore_query` both strip it, and the model
+        // reading this tool has no way to know the three routes disagreed.
+        const queryResult = withholdBlocked(runQuery({
             cwd,
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
-        });
+        }));
         activeDecisions = extractActiveDecisions(queryResult);
     }
     // Run guard if a proposal was supplied

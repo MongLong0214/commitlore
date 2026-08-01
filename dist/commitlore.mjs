@@ -28090,10 +28090,12 @@ var beforeChange = (opts) => {
   }
   let activeDecisions = [];
   if (!historyUnavailable) {
-    const queryResult = runQuery({
-      cwd,
-      ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
-    });
+    const queryResult = withholdBlocked(
+      runQuery({
+        cwd,
+        ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+      })
+    );
     activeDecisions = extractActiveDecisions(queryResult);
   }
   let matches = [];
