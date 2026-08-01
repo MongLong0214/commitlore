@@ -78,7 +78,7 @@ export const runDemo = async (opts = {}) => {
     process.prependOnceListener('SIGTERM', onSignal);
     try {
         // Create temporary directory with a recognizable prefix for testing
-        tmpDir = mkdtempSync(join(tmpdir(), 'commitlore-demo-'));
+        tmpDir = mkdtempSync(join(opts.tmpRoot ?? tmpdir(), 'commitlore-demo-'));
         // Verify we are NOT operating on the user's repository
         const userCwd = resolve(opts.cwd ?? process.cwd());
         const tmpResolved = resolve(tmpDir);
