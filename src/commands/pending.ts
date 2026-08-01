@@ -12,16 +12,24 @@
  *
  * - `stale` — `base_head` no longer matches `HEAD`. The transaction will not apply
  *   to the commit being written, and at commit time that is a silent no-op.
- * - `gc_eligible` — whether `capture gc` would ever remove this file. A
- *   non-consumed transaction is collected only when `expires_at` parses, and
- *   `expires_at` is stamped at stage time, so a `verified` transaction that was
- *   never staged is kept indefinitely. That is reported, not changed: altering the
- *   collection rule is a separate decision from being able to see it.
+ * - `gc_eligible` — whether `capture gc` would ever remove this file. Since #367
+ *   that is a question about the phase alone: `staged` and `applied` are
+ *   protected outright, and everything else is collected once its window has
+ *   elapsed. The `stale` column says whether the wait has started.
+ *
+ * `rm` exists for the third question these two raised and could not answer: a
+ * file the user simply wants gone now, without waiting out a retention window.
  */
 import type { Command } from 'commander';
 
-import { execGit } from '../core/git.js';
-import { listPendingNonces, readPending, type PendingRecord } from '../core/pending.js';
+import {
+  deletePending,
+  headHasMovedPast,
+  listPendingNonces,
+  readPending,
+  resolveHead,
+  type PendingRecord,
+} from '../core/pending.js';
 
 /** One row of `pending ls`: the fields worth scanning, plus the two derived ones. */
 export interface PendingSummary {
@@ -50,26 +58,32 @@ export interface PendingShowResult {
   error: string | null;
 }
 
-const headOf = (cwd: string): string | null => {
-  const result = execGit(['rev-parse', 'HEAD'], { cwd });
-  if (result.code !== 0) return null;
-  const head = result.stdout.trim();
-  return /^[0-9a-f]{40}$/.test(head) ? head : null;
-};
+export interface PendingRemoveResult {
+  /** The nonce that was removed, or null when nothing was. */
+  removed: string | null;
+  /** The phase it was in, when that could be read — the reason for a refusal. */
+  phase: PendingRecord['phase'] | null;
+  /** Why nothing was removed, in the words a caller can act on. */
+  error: string | null;
+}
+
+/**
+ * The two phases the post-commit hook can still turn into a record. `gcPending`
+ * refuses to collect them and `rm` refuses to delete them, for that one reason —
+ * so the set is written once here rather than twice with the same comment.
+ */
+const PROTECTED_PHASES = new Set<PendingRecord['phase']>(['staged', 'applied']);
 
 /**
  * Whether `capture gc` could ever collect this transaction.
  *
- * Mirrors `gcPending`'s rule rather than restating it loosely: a `staged` or
- * `applied` transaction is protected, a `consumed` one ages out on its retention
- * window, and anything else needs a parseable `expires_at`.
+ * Mirrors `gcPending`'s rule rather than restating it loosely: the protected two
+ * are never collected, a `consumed` one ages out on its retention window, and
+ * since #367 a `prepared` or `verified` one ages out on `created_at` once HEAD
+ * has moved past its base. A stamped `expires_at` still decides where one
+ * exists, but its absence is no longer a life sentence.
  */
-const gcEligible = (record: PendingRecord): boolean => {
-  if (record.phase === 'staged' || record.phase === 'applied') return false;
-  if (record.phase === 'consumed' && record.consumed) return true;
-  if (record.expires_at === null || record.expires_at === '') return false;
-  return !Number.isNaN(Date.parse(record.expires_at));
-};
+const gcEligible = (record: PendingRecord): boolean => !PROTECTED_PHASES.has(record.phase);
 
 const summarise = (record: PendingRecord, head: string | null): PendingSummary => ({
   nonce: record.nonce,
@@ -79,13 +93,13 @@ const summarise = (record: PendingRecord, head: string | null): PendingSummary =
   created_at: record.created_at,
   expires_at: record.expires_at,
   base_head: record.base_head,
-  stale: head !== null && record.base_head !== head,
+  stale: headHasMovedPast(record.base_head, head),
   gc_eligible: gcEligible(record),
 });
 
 export const runPendingList = (opts: { cwd?: string }): PendingListResult => {
   const cwd = opts.cwd ?? process.cwd();
-  const head = headOf(cwd);
+  const head = resolveHead(cwd);
   const transactions: PendingSummary[] = [];
   const unreadable: string[] = [];
 
@@ -110,24 +124,35 @@ export const runPendingList = (opts: { cwd?: string }): PendingListResult => {
   return { transactions, unreadable };
 };
 
-export const runPendingShow = (opts: { cwd?: string; nonce: string }): PendingShowResult => {
-  const cwd = opts.cwd ?? process.cwd();
-  const wanted = opts.nonce.trim().toLowerCase();
+/**
+ * The single transaction a nonce prefix names, or why it names none. Shared by
+ * `show` and `rm` so that "enough of the nonce" means the same thing to a
+ * command that prints and a command that deletes.
+ */
+const resolvePrefix = (cwd: string, prefix: string): { nonce: string | null; error: string | null } => {
+  const wanted = prefix.trim().toLowerCase();
   const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
 
   if (candidates.length === 0) {
-    return { transaction: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
   }
   if (candidates.length > 1) {
     return {
-      transaction: null,
+      nonce: null,
       error:
         `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions ` +
         `(${candidates.map((nonce) => nonce.slice(0, 8)).join(', ')}); give more of the nonce`,
     };
   }
-
   const [only = ''] = candidates;
+  return { nonce: only, error: null };
+};
+
+export const runPendingShow = (opts: { cwd?: string; nonce: string }): PendingShowResult => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { transaction: null, error };
+
   let record: PendingRecord | null = null;
   try {
     record = readPending(only, { cwd });
@@ -139,15 +164,66 @@ export const runPendingShow = (opts: { cwd?: string; nonce: string }): PendingSh
     return { transaction: null, error: `${only} could not be read as a transaction` };
   }
 
-  const head = headOf(cwd);
+  const head = resolveHead(cwd);
   return {
     transaction: {
       ...record,
-      stale: head !== null && record.base_head !== head,
+      stale: headHasMovedPast(record.base_head, head),
       gc_eligible: gcEligible(record),
     },
     error: null,
   };
+};
+
+/**
+ * `pending rm` — delete one transaction file now, rather than waiting out a
+ * retention window.
+ *
+ * Refuses `staged` and `applied`. Those are the two phases the post-commit hook
+ * can still finalise, which is why gc will not touch them either (#367 changed
+ * neither); deleting one loses a record the user is in the middle of writing,
+ * and there is no way to tell that from a file they are tired of seeing. It
+ * refuses a file it cannot read for the same reason inverted: an unknown phase
+ * might be one of those two.
+ */
+export const runPendingRemove = (opts: { cwd?: string; nonce: string }): PendingRemoveResult => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { removed: null, phase: null, error };
+
+  let record: PendingRecord | null = null;
+  try {
+    record = readPending(only, { cwd });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`,
+    };
+  }
+  if (record === null) {
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`,
+    };
+  }
+
+  if (PROTECTED_PHASES.has(record.phase)) {
+    return {
+      removed: null,
+      phase: record.phase,
+      error:
+        `${only} is ${record.phase}: the post-commit hook may still finalise it into a record, ` +
+        `and removing it now would lose that. It is collected once the commit it belongs to lands.`,
+    };
+  }
+
+  if (!deletePending(only, { cwd })) {
+    return { removed: null, phase: record.phase, error: `${only} could not be removed` };
+  }
+  return { removed: only, phase: record.phase, error: null };
 };
 
 /** Age in whole hours or minutes, whichever reads better at this magnitude. */
@@ -190,7 +266,7 @@ const renderList = (result: PendingListResult, now: number): string => {
 export const register = (program: Command): void => {
   const pending = program
     .command('pending')
-    .description('inspect capture transactions that have not reached a commit yet');
+    .description('inspect or remove capture transactions that have not reached a commit yet');
 
   pending
     .command('ls')
@@ -223,5 +299,25 @@ export const register = (program: Command): void => {
         return;
       }
       process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}\n`);
+    });
+
+  pending
+    .command('rm')
+    .argument('<nonce>', 'the transaction nonce, or enough of its start to be unambiguous')
+    .description('delete one capture transaction; refuses a staged or applied one')
+    .option('--json', 'emit structured JSON output')
+    .action((nonce: string, options: { json?: boolean }) => {
+      const result = runPendingRemove({ nonce });
+      if (options.json === true) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        if (result.removed === null) process.exitCode = 1;
+        return;
+      }
+      if (result.removed === null) {
+        process.stderr.write(`commitlore pending: ${result.error ?? 'not removed'}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      process.stdout.write(`removed ${result.removed} (${result.phase ?? 'unknown'})\n`);
     });
 };
