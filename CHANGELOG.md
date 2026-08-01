@@ -4,6 +4,115 @@
 
 Nothing yet.
 
+## 0.6.0 — 2026-08-01
+
+Minor rather than patch: two changes move behaviour a caller can observe, and one
+narrows what `validate` accepts.
+
+### Upgrade reasons
+
+- **A note on a commit the history no longer reaches was served as active, and
+  its `Supersedes:` retired the record that is live.** A git note is keyed by
+  object name and knows nothing about refs, so it outlives the commit it
+  annotates — `reset --hard`, an abandoned branch and a rebase all leave the
+  object addressable and the note readable. The abandoned record then silenced a
+  reachable one. Notes are now filtered against the same `rev-list HEAD` walk the
+  commit source has always used (#351).
+- **Two commits in one second made `context` and `stale` answer differently about
+  one record.** `committed_ts` is `%ct`, second resolution, and the tie broke on
+  input array position — which on the index path was decided by `commit_sha ASC`,
+  effectively at random. Both serving paths now fold oldest-first. Where two
+  same-second declarations of one `Record-Id` genuinely disagree, the record is
+  reported for review with its content withheld rather than resolved by a guess;
+  agreeing declarations are untouched (#350).
+- **`commitlore hooks uninstall` removed one of the three hooks `init` installs,
+  and the two left behind blocked every commit.** `prepare-commit-msg` and
+  `post-commit` inherited the validation gate's `exit 1` by string replacement,
+  so once the CLI they were installed with had moved, a repository could not
+  accept a commit at all. The gate still fails closed — that is its job — and the
+  two capture hooks now say they did nothing and get out of the way. The gate's
+  own stub is byte-for-byte unchanged (#354).
+- **The commit-msg hook refused valid records in a shallow clone and on
+  multi-block messages.** A `dangling-ref` in a truncated clone is a fact about
+  the checkout, not the record; it is now reported as `not checked` with the
+  boundary named, and every other reference rule still refuses. Separately, the
+  identity used to group indexed records omitted `block`, so a `Follows:` naming
+  a sibling block — the shape squash inheritance produces — read as dangling
+  (#352).
+- **A capture that was never staged leaked its pending file permanently.**
+  `expires_at` is stamped at stage, so a `prepared` or `verified` transaction had
+  none and garbage collection failed closed on it forever. Collection is now
+  gated on age **and** on HEAD having moved past `base_head` — the condition
+  staging already refuses on — so a collected transaction provably had no path to
+  a record. `commitlore pending rm <nonce>` removes one now (#367).
+- **`validate` reported every `duplicate-id` twice and counted it twice.** The
+  shape check and the reference check found it independently and neither knew the
+  other had. A message with two problems reported four, and the repair loop was
+  handed two identical instructions for one edit (#365).
+
+### Behaviour that changes
+
+- `Ruled-out:` splits on the first `|`, and an alternative containing a pipe was
+  silently truncated — so the record could not match the thing it ruled out,
+  while `validate` said `shape ok`. Counted over this repository's history,
+  splitting on the *last* pipe would break two correct records to fix one, and
+  refusing every multi-pipe value would invalidate all three. So only the
+  provable case is refused: an odd backtick count before the first `|`, where the
+  code span crosses the separator. Every other multi-pipe value is warned about
+  with the split quoted back, and already-written records are annotated on read.
+  **This is a narrowing — no record that conformed to 0.5.1 stops conforming**
+  (#372).
+- `mode: "suggest"` is documented as what it is: a host-side convention the core
+  cannot enforce. There is no approval phase in the capture transaction, so
+  nothing can refuse to stage a record a human never saw. The commit skill now
+  asks before staging, and says plainly that nothing enforces the step
+  ([ADR-0028](docs/adr/ADR-0028-suggest-is-a-host-side-convention.md), #341).
+
+### Measured
+
+`bench/DECISION-DELIVERY.md` asks how much of a repository's active decision set
+a route delivers before the first edit. On this repository, at the shipping
+800-token budget: **81.7% of path-attached active records, with zero retired
+records delivered.** Ordinary `git log` for the same path at the same budget
+reaches 42.0%, delivers 7 retired records, and spends more tokens.
+
+Unbounded, the scoped projection and a whole-repository dump recover the
+identical 2,047 of 2,217 pairs — so **path scoping costs nothing**, for 741,429
+tokens against 92,175,612 and 0 retired records against 7,322. The remaining 170
+pairs are the ceiling the trust grader sets, not the scope: they are exactly the
+records graded `blocked`.
+
+This is **delivery, not recovery** — no agent ran, so it bounds what one could
+recover. One corpus, one repository. The error term is half-exercised: 7
+superseded records and no expired ones, so "zero retired delivered" says nothing
+about expiry. It does not discharge ADR-0017's registered study, which is still
+unrun.
+
+### Also
+
+- The Claude Code plugin ships the MCP server, the pre-edit hook and the skills,
+  and puts no `commitlore` on `PATH`. The README said otherwise by omission and
+  then told the reader to run `commitlore init` (#353).
+- The commit skill taught the manual `harvest` path; it now teaches the verified
+  capture pipeline, with hand-written trailers as the stated fallback (#340).
+- `capture --help` said `--diff` defaults to empty. It defaults to the staged
+  diff, and has since the empty default was fixed as a defect (#359).
+- The README moved its reference material into `docs/` — protocol, capture,
+  evidence, install and CLI — and links to it. Three blocks stay because CI pins
+  them there: the complete record example, the vocabulary table and the
+  benchmark block (#344).
+- Two demo tests scanned the process-wide temp directory, so a concurrent worker
+  turned them red. They now assert against a directory they own (#364).
+
+### What this release does not change
+
+The capture transaction's phases, its file format, and the identity-hash inputs
+ADR-0021 fixed. Adding an approval phase was priced and deliberately not built.
+
+`guard` remains an experimental advisory at precision 44.8% and recall 22.0%. An
+empty guard result still does not mean a proposal avoids every ruled-out
+alternative.
+
 ## 0.5.1 — 2026-08-01
 
 ### Upgrade reasons
