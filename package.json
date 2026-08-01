@@ -1,6 +1,6 @@
 {
   "name": "commitlore",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Git-native, lifecycle-aware decision memory for coding agents",
   "license": "MIT",
   "private": true,

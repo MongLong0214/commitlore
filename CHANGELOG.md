@@ -4,6 +4,38 @@
 
 Nothing yet.
 
+## 0.5.1 — 2026-08-01
+
+### Upgrade reasons
+
+- **On a repository with no records, the index invented them, and `context` fed
+  them to the agent.** Any RFC-822-shaped `key: value` line was ingested as a
+  trailer — conventional-commit prefixes (`ax:`, `fix:`, `docs:`), a Homebrew
+  digest (`sha256:`), arbitrary body fields. One report had 106 rows on a
+  repository with zero records. `context` is wired into the pre-edit hook, so
+  what an agent received before editing was a commit subject presented as a
+  recorded decision, and `doctor` called that state healthy while `stale` — which
+  reads git — correctly reported nothing. A block carrying no key from the
+  protocol's vocabulary is not a record now, and the two commands agree (#335).
+- **`harvest-verify` says the draft is not a draft before asking for a
+  transcript.** A draft that was prose rather than the contract's JSON object
+  came back as `missing --transcript`, which sent the reader after a file they
+  did not need for a draft that was never going to parse. The draft is checked
+  first (#329).
+- A tool's local config, `.serena/`, was committed into 0.5.0 by a `git add -A`
+  and shipped carrying the name of the worktree it came from. Removed, ignored,
+  and a test now notices a file that ships but was never declared (#334).
+
+### What this release does not change
+
+`Verified:` is protocol vocabulary. A release note that happens to use it as a
+field is indistinguishable from a record that uses it for what it means, so a
+block containing one is still a record. Guessing from surrounding context is how
+a tool starts discarding records somebody wrote on purpose.
+
+Nothing here changes the Windows repair path from 0.5.0: a repository whose hook
+was installed before that release still needs `commitlore hooks install` re-run.
+
 ## 0.5.0 — 2026-08-01
 
 Windows works, and this is the release that can say so from a run rather than
