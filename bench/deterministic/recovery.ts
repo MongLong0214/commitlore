@@ -32,10 +32,12 @@ import type {
 
 export const DELIVERY_ROUTES: readonly DeliveryRoute[] = [
   'code-only',
+  'git-log-path-budgeted',
   'git-log-path',
   'every-record-budgeted',
   'every-record-unbudgeted',
   'commitlore',
+  'commitlore-unbudgeted',
 ];
 
 export const DELIVERY_POPULATIONS: readonly DeliveryPopulation[] = ['authored', 'all-tracked'];
@@ -100,6 +102,30 @@ export const deliveredFromLog = (text: string): Delivery => ({
   withheld: 0,
   tokens: tokens(text),
 });
+
+/**
+ * Cuts `git log` output to the same token budget the projection gets, from the
+ * same end.
+ *
+ * `git log` prints newest first; `buildInjection` orders records newest first
+ * and drops the tail when the budget runs out. Keeping a prefix of the log
+ * therefore keeps the newest commits and discards the oldest — the direction
+ * the product cuts, for the reason `inject.ts` gives: the constraint recorded
+ * most recently is the one an agent is most likely to be about to break.
+ * Cutting from the other end would be a different route with a different
+ * number, so the choice is stated rather than assumed.
+ *
+ * The trailing partial line goes with the cut. A `Record-Id:` line severed
+ * halfway was not delivered, and the anchored scan would otherwise match it
+ * against the end of the string.
+ */
+export const truncateToBudget = (text: string, budgetTokens: number): string => {
+  const limit = budgetTokens * CHARS_PER_TOKEN;
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const lastBreak = cut.lastIndexOf('\n');
+  return lastBreak === -1 ? '' : cut.slice(0, lastBreak + 1);
+};
 
 const trackedPaths = (repoRoot: string): readonly string[] =>
   command('git', ['ls-files', '-z'], { cwd: repoRoot })
@@ -177,6 +203,22 @@ interface PathObservation {
   readonly deliveries: ReadonlyMap<DeliveryRoute, Delivery>;
 }
 
+/**
+ * A silent truncation on an unbudgeted arm would be read as a property of the
+ * route rather than of the constant, so it stops the run instead.
+ */
+const assertNotTruncated = (
+  arm: string,
+  budget: number,
+  truncatedAt: string | undefined,
+): void => {
+  if (truncatedAt === undefined) return;
+  throw new Error(
+    `the unbudgeted ${arm} arm truncated at ${truncatedAt}; ` +
+      `raise UNBOUNDED_BUDGET_TOKENS above ${budget}`,
+  );
+};
+
 const injectionDelivery = (
   repoRoot: string,
   path: string,
@@ -187,6 +229,9 @@ const injectionDelivery = (
     path,
     ...(budget === undefined ? {} : { budget }),
   });
+  if (budget === UNBOUNDED_BUDGET_TOKENS) {
+    assertNotTruncated('commitlore', budget, projection.truncatedAt);
+  }
   return deliveredFromInjection(projection.text, projection.withheld);
 };
 
@@ -197,19 +242,25 @@ const everyRecordDelivery = (repoRoot: string, budget: number, mustNotTruncate: 
     budget,
     ablation: { noScope: true, noLifecycle: true },
   });
-  if (mustNotTruncate && projection.truncatedAt !== undefined) {
-    throw new Error(
-      `the unbudgeted every-record arm truncated at ${projection.truncatedAt}; ` +
-        `raise UNBOUNDED_BUDGET_TOKENS above ${budget}`,
-    );
-  }
+  if (mustNotTruncate) assertNotTruncated('every-record', budget, projection.truncatedAt);
   return deliveredFromInjection(projection.text, projection.withheld);
 };
 
-const logDelivery = (repoRoot: string, path: string): Delivery =>
-  deliveredFromLog(
-    command('git', ['log', '--format=%B', '--', path], { cwd: repoRoot }).stdout,
-  );
+/**
+ * Both git arms read one `git log`. Running the command twice would double the
+ * run for two views of the same bytes, and the budgeted arm has to be the same
+ * text the unbudgeted one saw or the pair stops being a controlled comparison.
+ */
+const logDeliveries = (
+  repoRoot: string,
+  path: string,
+): { readonly full: Delivery; readonly budgeted: Delivery } => {
+  const text = command('git', ['log', '--format=%B', '--', path], { cwd: repoRoot }).stdout;
+  return {
+    full: deliveredFromLog(text),
+    budgeted: deliveredFromLog(truncateToBudget(text, DEFAULT_BUDGET_TOKENS)),
+  };
+};
 
 const ratio = (numerator: number, denominator: number): number =>
   denominator === 0 ? 0 : numerator / denominator;
@@ -353,14 +404,17 @@ export const measureDecisionDelivery = (
   for (const path of tracked) {
     const gold = goldForPath(repoRoot, census, byPath, path, generated.has(path));
     if (gold.active.size === 0) continue;
+    const log0 = logDeliveries(repoRoot, path);
     observations.push({
       gold,
       deliveries: new Map<DeliveryRoute, Delivery>([
         ['code-only', EMPTY_DELIVERY],
-        ['git-log-path', logDelivery(repoRoot, path)],
+        ['git-log-path-budgeted', log0.budgeted],
+        ['git-log-path', log0.full],
         ['every-record-budgeted', budgeted],
         ['every-record-unbudgeted', unbudgeted],
         ['commitlore', injectionDelivery(repoRoot, path)],
+        ['commitlore-unbudgeted', injectionDelivery(repoRoot, path, UNBOUNDED_BUDGET_TOKENS)],
       ]),
     });
     if (observations.length % 100 === 0) {
@@ -370,10 +424,12 @@ export const measureDecisionDelivery = (
 
   const budgets: { readonly [Route in DeliveryRoute]: number | null } = {
     'code-only': null,
+    'git-log-path-budgeted': DEFAULT_BUDGET_TOKENS,
     'git-log-path': null,
     'every-record-budgeted': DEFAULT_BUDGET_TOKENS,
     'every-record-unbudgeted': UNBOUNDED_BUDGET_TOKENS,
     commitlore: DEFAULT_BUDGET_TOKENS,
+    'commitlore-unbudgeted': UNBOUNDED_BUDGET_TOKENS,
   };
 
   const rows: DecisionDeliveryRow[] = [];

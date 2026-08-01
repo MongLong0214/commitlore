@@ -340,6 +340,8 @@ const deliverySection = (rows: readonly DecisionDeliveryRow[]): string[] => {
     }),
     'Path recall is the primary figure and its denominator is the active records attached to the path being edited. Repo-wide recall uses every active record in the repository as the denominator for every path; it is reported so the denominator choice is auditable, not because it is the right question to ask of a path-scoped route.',
     '',
+    'Read the table down the budget column before reading it down the recall column. Each delivering family appears twice, once at the shipped 800-token budget and once with none, because a budgeted route compared against an unbudgeted one measures the cap and the mechanism at the same time and cannot separate them afterwards. `git-log-path-budgeted` truncates the same `git log` bytes `git-log-path` reads, keeping the newest commits and dropping the oldest — the end `buildInjection` cuts from, for the reason it gives.',
+    '',
     'The stale column is the error term the issue asks for: a record the repository has retired and a route surfaced anyway.',
     '',
   ];

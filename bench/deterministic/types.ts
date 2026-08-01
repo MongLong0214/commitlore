@@ -207,13 +207,22 @@ export interface DensityRow extends BaseRow {
   readonly structured_trailer_line_share: number;
 }
 
-/** The information a fresh agent has in front of it before its first edit. */
+/**
+ * The information a fresh agent has in front of it before its first edit.
+ *
+ * Every delivering family appears twice, once at the shipped token budget and
+ * once with none. Comparing a budgeted route against an unbudgeted one
+ * confounds the cap with the mechanism, and no reader can separate them
+ * afterwards; `budget_tokens` on the row says which of the two a figure is.
+ */
 export type DeliveryRoute =
   | 'code-only'
+  | 'git-log-path-budgeted'
   | 'git-log-path'
   | 'every-record-budgeted'
   | 'every-record-unbudgeted'
-  | 'commitlore';
+  | 'commitlore'
+  | 'commitlore-unbudgeted';
 
 /**
  * `authored` excludes paths the repository's own `.gitattributes` declares

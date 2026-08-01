@@ -8,10 +8,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildCensus, expiryEnd, recordBlocks } from '../bench/deterministic/census.ts';
 import {
   DELIVERY_ROUTES,
+  UNBOUNDED_BUDGET_TOKENS,
   deliveredFromInjection,
   deliveredFromLog,
   measureDecisionDelivery,
+  truncateToBudget,
 } from '../bench/deterministic/recovery.ts';
+import { CHARS_PER_TOKEN } from '../dist/core/inject.js';
 import { DELIVERY_SCOPE_SENTENCE, renderDeterministicReport } from '../bench/deterministic/report.ts';
 import type { DecisionDeliveryRow, RowBase } from '../bench/deterministic/types.ts';
 import { createTestRepo } from './git-fixtures.ts';
@@ -190,6 +193,16 @@ describe('delivery parsing', () => {
     );
     expect([...delivery.ids]).toEqual(['r-declared']);
   });
+
+  it('cuts the log at the newest end and drops the line the cut severed', () => {
+    const text = ['Record-Id: r-newest1', 'Record-Id: r-middle1', 'Record-Id: r-oldest1', ''].join('\n');
+    // Two lines fit in this budget; the third is cut, and the partial line it
+    // leaves behind must not be scored as delivered.
+    const budget = Math.ceil('Record-Id: r-newest1\nRecord-Id: r-middle1\nRecord-'.length / CHARS_PER_TOKEN);
+    const kept = truncateToBudget(text, budget);
+    expect([...deliveredFromLog(kept).ids]).toEqual(['r-newest1', 'r-middle1']);
+    expect(truncateToBudget(text, 10_000)).toBe(text);
+  });
 });
 
 describe('decision delivery on a repository with a real supersede history', () => {
@@ -272,6 +285,31 @@ describe('decision delivery on a repository with a real supersede history', () =
   it('scores no id the census does not know', () => {
     for (const route of DELIVERY_ROUTES) {
       expect(routeRow(fixture.rows, route).unknown_delivered).toBe(0);
+    }
+  });
+
+  it('pairs every delivering family at the shipped budget and at none', () => {
+    const budgets = Object.fromEntries(
+      DELIVERY_ROUTES.map((route) => [route, routeRow(fixture.rows, route).budget_tokens]),
+    );
+    expect(budgets['git-log-path-budgeted']).toBe(800);
+    expect(budgets['git-log-path']).toBeNull();
+    expect(budgets['every-record-budgeted']).toBe(800);
+    expect(budgets['every-record-unbudgeted']).toBe(UNBOUNDED_BUDGET_TOKENS);
+    expect(budgets['commitlore']).toBe(800);
+    expect(budgets['commitlore-unbudgeted']).toBe(UNBOUNDED_BUDGET_TOKENS);
+  });
+
+  it('never lets a budgeted arm reach past its unbudgeted twin', () => {
+    for (const [capped, uncapped] of [
+      ['git-log-path-budgeted', 'git-log-path'],
+      ['every-record-budgeted', 'every-record-unbudgeted'],
+      ['commitlore', 'commitlore-unbudgeted'],
+    ] as const) {
+      const under = routeRow(fixture.rows, capped);
+      const over = routeRow(fixture.rows, uncapped);
+      expect(under.recovered).toBeLessThanOrEqual(over.recovered);
+      expect(under.delivered_tokens).toBeLessThanOrEqual(over.delivered_tokens);
     }
   });
 
