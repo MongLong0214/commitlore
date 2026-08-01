@@ -33,17 +33,18 @@ function findAnchors(file: string): ReadmeAnchors {
   const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
   const lines = content.split('\n');
 
-  // Product: the hero heading. It states the failure a reader recognises before
-  // it states the mechanism — a visitor who does not get past the first screen
-  // should still know what this prevents. The precise claim ("must not revive a
-  // decision the repository already reversed") follows as prose beneath it.
+  // Product: the hero heading. It names what the product carries between
+  // sessions, not a verdict on any particular idea — this tool does not decide
+  // whether a proposal is bad, it decides whether a decision still applies.
+  // "Stop re-reviewing the same bad idea" was tried here and moved into the
+  // demo: as a hero it implied a judgement `guard` cannot make at 22% recall.
   const product = lines.findIndex(
     (l) =>
       l.startsWith('## ') &&
-      (l.includes('Stop re-reviewing') ||
-        l.includes('같은 나쁜 아이디어를') ||
-        l.includes('同じ悪い案を') ||
-        l.includes('同一个坏主意')),
+      (l.includes('inherit the judgment') ||
+        l.includes('판단까지 물려주세요') ||
+        l.includes('判断も継がせましょう') ||
+        l.includes('也把判断传下去')),
   );
 
   // Local-first: "No hosted memory service." or equivalent
