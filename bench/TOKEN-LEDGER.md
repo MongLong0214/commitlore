@@ -43,7 +43,7 @@ also why this document does not reopen #138's question: nothing here prices a
 prevented re-proposal.
 
 The two break-evens are not interchangeable and neither supersedes the other.
-Section 11 of the deterministic report still carries the re-proposal threshold
+Section 12 of the deterministic report still carries the re-proposal threshold
 with its denominator deliberately unsupplied.
 
 ---
@@ -221,12 +221,12 @@ never as the same set.
 ## 5. What is missing, named exactly
 
 **Blocker A — the session transcript (W3).** `buildHarvestPrompt` numbers the
-transcript into the prompt. For the 300-odd records already in this repository
-the sessions that produced them were never retained, so the term cannot be
-recovered retrospectively at any price. It is not merely unmeasured; it is
-unrecoverable for this corpus. Measuring it forward requires recording the
-transcript length at capture time, which the product does not do and which this
-measurement does not add.
+transcript into the prompt. For the records already in this repository the
+sessions that produced them were never retained, so the term cannot be recovered
+retrospectively at any price. It is not merely unmeasured; it is unrecoverable
+for this corpus. Measuring it forward requires recording the transcript length
+at capture time, which the product does not do and which this measurement does
+not add.
 
 **Blocker B — the drafting turn (W4).** The number of tokens a model emits
 answering the harvest prompt is a property of the model and the change, and
@@ -279,8 +279,10 @@ that reads no history at all — spends zero tokens, so against it CommitLore is
 net token cost forever. That row is the most important one in the table and it
 is reported first-class, because a reader who does not run `git log` before
 edits is not a reader this arithmetic can promise anything to. What CommitLore
-offers *that* reader is 81.7% of the active decision set against 0%, which is a
-recall argument, not a token argument.
+offers *that* reader is the delivery run's already-published path recall against
+`code-only`'s zero — a recall argument, not a token argument. (That figure is
+cited from `bench/DECISION-DELIVERY.md`, not produced here; this section was
+written before this measurement ran and carries no result of its own.)
 
 **A break-even against a route with different recall is not an iso-quality
 comparison**, and the recall of both sides is carried in the same table so a
@@ -326,5 +328,164 @@ suite's required metrics, so a complete run cannot omit it.
 
 ## 9. Result
 
-*Empty at registration. Filled from the generated file named here, and from
-nothing else.*
+One run, at harness commit `8665be34564683362b419d7dd15cd4322793e4c5` with
+harness digest `9c91253e4cb06a0c07076620ecdad01ebf7c13f9` and dist digest
+`f54cda4795ccc1083e00aa38d8637a2e6f22466ef20213fa7d127c7fd301d1d2`, over the
+history `b3f569210554aab815a48c21ddef90dce029ba98`. Raw output:
+
+- [`bench/results/token-ledger-20260801T122953Z.jsonl`](results/token-ledger-20260801T122953Z.jsonl) — one row;
+- [`bench/results/token-ledger-20260801T122953Z.md`](results/token-ledger-20260801T122953Z.md) — the generated report, all four tables in full.
+
+Every figure below is read from those files. Nothing was computed by hand and no
+figure is carried over from another benchmark.
+
+### 9.1 The write side, and the check that it is the right corpus
+
+| | |
+|---|---:|
+| prompt scaffold, as the product prints it | 4,788 chars / 4,802 bytes / **1,197 tokens** |
+| commits walked | 549 (192 merges) |
+| captures priced | **343** |
+| record blocks on them | 343 |
+| record blocks excluded, on merge commits | 3 |
+| record blocks excluded, on a root commit | 0 |
+| staged-diff tokens | mean 8,869, p50 **2,342**, p95 28,391, max 260,276 |
+| prompt tokens per capture | mean 10,064, p50 **3,537**, min 1,197, max 261,471 |
+| **write floor, with the diff term** | **3,451,848 tokens** |
+| **write floor, scaffold only** | **410,571 tokens** |
+| verification | **0 model tokens in 0 model calls** |
+
+343 + 3 = 346, which is exactly the `record_bearing_commits` the delivery run's
+own census reports for the same commit. Two independent walks of the same
+history agree on how many commits carry a record, which is the only free
+cross-check this measurement gets and it passes.
+
+**Three merge commits do carry a record**, against §3's stated assumption that
+this repository's `--no-ff` merges carry none. The count was reported so the
+assumption would be checked rather than assumed, and it is wrong by three — all
+three are `Merge dev into <branch>` integrations whose record documents the
+conflict resolution, which is a use of a merge record rather than an accident.
+Those three are excluded from the write floor, because a merge has no single
+parent to reconstruct a staged diff against. The exclusion makes the floor
+smaller by whatever they cost, and therefore leaves it a floor. The delivery run
+saw the same thing from its own side: six of its records sit on commits that
+changed no path.
+
+The diff term dominates and it is badly behaved: its mean is 3.8× its median.
+A median capture costs 3,537 prompt tokens; the mean is 10,064 because a handful
+run to 261,471. The five most expensive captures all staged this benchmark's own
+committed output — result JSONL, runner logs, agent transcripts — which is
+machine-generated text that a harvest prompt then re-renders in full. **A
+repository's break-even is a function of what it commits**, and the mean is the
+wrong number to carry away from this table.
+
+Verification's zero is a measurement: 14 built modules reachable from
+`dist/core/capture-verify.js` and `dist/core/harvest-verify.js` were scanned and
+0 carried a network client.
+
+### 9.2 The read side, per read
+
+| Route | Budget | Tokens per read | Path recall |
+|---|---:|---:|---:|
+| `code-only` | — | 0.0 | 0.0% |
+| `git-log-path-budgeted` | 800 | 643.5 | 42.0% |
+| `git-log-path` | none | 1,292.0 | 94.4% |
+| `every-record-budgeted` | 800 | 749.0 | 2.2% |
+| `every-record-unbudgeted` | none | 88,122.0 | 92.3% |
+| **`commitlore`** | 800 | **488.9** | 81.7% |
+| `commitlore-unbudgeted` | none | 708.8 | 92.3% |
+
+### 9.3 Token reduction, with the denominator on every line
+
+| Subject | Denominator | Reduction | Ratio | Recall, subject / denominator |
+|---|---|---:|---:|---:|
+| `commitlore` | `git-log-path-budgeted` | **24.0%** | 1.3× | 81.7% / 42.0% |
+| `commitlore` | `git-log-path` | 62.2% | 2.6× | 81.7% / **94.4%** |
+| `commitlore` | `every-record-unbudgeted` | 99.4% | 180.2× | 81.7% / 92.3% |
+| **`commitlore-unbudgeted`** | **`every-record-unbudgeted`** | **99.2%** | **124.3×** | **92.3% / 92.3%** |
+| `commitlore` | `code-only` | **undefined** | — | 81.7% / 0.0% |
+
+**The defensible headline is the fourth row, and it is 99.2%.** Both sides are
+the same projection with the budget removed, both recovered 2,047 of the 2,217
+gold pairs, and the scoped one spends 708.8 tokens per read against 88,122.0.
+That is the reduction attributable to path scoping with recovery held equal —
+equal in *count*; the delivery row records counts and not sets, so it is not a
+claim that the same records came back.
+
+The first row is the one an agent actually faces: at the same 800-token budget
+the shipped route spends **24.0% fewer tokens and recovers 39.7 points more**.
+Cheaper and better is not a trade-off and needs no denominator argument.
+
+The second row is a trade and is published as one: against an unbounded
+`git log` the projection is 62.2% cheaper and **12.7 points worse**.
+
+The last row has no number and that is the finding. Against an agent that reads
+no history, CommitLore's read side is a *cost* of 488.9 tokens per read, and a
+percentage reduction cannot be computed against zero. What it buys there is
+81.7% of the active decision set against 0%.
+
+### 9.4 Break-even
+
+| Comparator | Saving per read | Break-even reads, with diff / scaffold only | Full passes |
+|---|---:|---:|---:|
+| `code-only` | −488.9 | **none exists** | — |
+| `git-log-path-budgeted` | 154.6 | **≥ 22,326** / ≥ 2,656 | 21.3 / 2.5 |
+| `git-log-path` | 803.0 | ≥ 4,299 / ≥ 511 | 4.1 / 0.5 |
+| `every-record-budgeted` | 260.1 | ≥ 13,272 / ≥ 1,579 | 12.7 / 1.5 |
+| `every-record-unbudgeted` | 87,633.1 | **≥ 39** / ≥ 5 | 0.0 / 0.0 |
+| `commitlore-unbudgeted` | 219.9 | ≥ 15,697 / ≥ 1,867 | 15.0 / 1.8 |
+
+**The break-even that can be stated, in one sentence with its assumptions on the
+face of it:** against an agent that runs `git log -- <path>` and truncates it to
+the same 800 tokens, this repository's 343 captures pay for themselves after
+**at least 22,326 path-scoped reads** — 21.3 passes over all 1,046 evaluated
+paths — if the staged diff is charged as fresh prompt input, or **at least
+2,656** if it is charged at nothing. Every one of those is a floor: the session
+transcript and the model's drafting output are both omitted and both
+non-negative, so the true figure is larger.
+
+Two readings follow and they point opposite ways:
+
+- **Against a naive whole-repository dump, break-even arrives almost
+  immediately — 39 reads.** That is a real number about an unreal baseline: no
+  agent has 92 million tokens of context, so the route it beats is one nobody
+  runs.
+- **Against the realistic comparator it is 22,326 reads**, and whether a
+  repository reaches that depends on how much editing it sees, which this
+  measurement does not know and does not guess.
+
+What does not depend on that guess is the shape of the two columns. At the same
+budget the token saving is **154.6 per read** and the recall difference is
+**39.7 points**. One of those is small and the other is not. So on this corpus
+**the case for CommitLore rests on recall rather than on tokens**, and the
+token-reduction percentage — the figure this market runs on — is the weaker half
+of the answer. This measurement was run to find out which, and that is what it
+found.
+
+`code-only` has no break-even at any read count and never will: a comparator
+that spends nothing offers nothing to amortize against.
+
+Two rows in that table are not routes anyone would choose and are there for
+completeness. `every-record-budgeted` costs more and recovers 2.2%, so a
+break-even against it prices the shipped route against a strictly worse option.
+`commitlore-unbudgeted` is not an alternative at all — it is the shipped route
+with the cap removed — and its row reads as what the 800-token cap buys: 219.9
+tokens per read saved, at the cost of the 10.6 recall points
+`bench/DECISION-DELIVERY.md` §9.3 attributes to the cap.
+
+### 9.5 What this run does not establish
+
+Everything in §5 and §7 holds. Four points bear repeating beside the number:
+
+- **The write side is a floor, not a cost.** Two of four terms are missing and
+  both are non-negative. A mean of 10,064 tokens per capture is a lower bound on
+  the mean, not the price of writing a record.
+- **The drafting turn is still unmeasured and the blocker is named.** §5,
+  blocker B. No figure here should be read as evidence about it.
+- **One corpus, one repository, and the write side is dominated by what that
+  repository commits.** Its mean capture is 3.8× its median because a few
+  commits staged this benchmark's own machine-generated output. Another
+  repository's ledger will differ by more than a little.
+- **Break-even in reads assumes reads are distributed like the delivery run's
+  per-path average.** Real editing concentrates on a few files. This is the
+  limit in §7 and it applies to every figure in §9.4.

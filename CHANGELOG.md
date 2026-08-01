@@ -2,7 +2,27 @@
 
 ## Unreleased
 
-Nothing yet.
+`bench/TOKEN-LEDGER.md` prices what a record costs to write against what the
+projection saves to read, and closes the gap `docs/evidence.md` carried under
+*Break-even*. The two write-side terms obtainable with no model call are
+measured — the generated harvest prompt's scaffold at 1,197 tokens, and each
+commit's staged diff, which takes a median capture to 3,537 tokens — and
+verification's zero is now a scan of the built verify module graph rather than
+an assertion. The read side is the committed delivery run restated per read.
+
+Both halves are floors, so the break-even they produce is a lower bound: against
+an agent that runs `git log -- <path>` at the same 800-token budget, this
+repository's records pay for themselves after at least 22,326 path-scoped reads.
+Against an agent that reads no history there is no break-even at any read count,
+and that row is published rather than omitted. At the same budget the saving is
+154.6 tokens per read and the recall difference is 39.7 points, so on this
+corpus the case rests on recall rather than on tokens — the token-reduction
+percentage is the weaker half of the answer.
+
+What remains unmeasured is named rather than estimated: the tokens a model
+spends drafting a record. The driver reads one session-total `usage` object out
+of `--output-format json`, so there is no per-turn ledger to attribute an answer
+to that turn even if a call were made.
 
 ## 0.6.0 — 2026-08-01
 
