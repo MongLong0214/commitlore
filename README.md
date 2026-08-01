@@ -14,7 +14,17 @@
 
 # CommitLore
 
-## A coding agent must not revive a decision the repository already reversed.
+## Stop re-reviewing the same bad idea.
+
+Your coding agent can read the code. It cannot see why your team rejected the
+obvious fix six months ago — so it proposes it again, and somebody spends the
+review explaining a decision that was already made.
+
+**A coding agent must not revive a decision the repository already reversed.**
+CommitLore records constraints, rejected alternatives, warnings and verification
+gaps in Git, then shows only the decisions that still apply, before the next edit.
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **Git-native decision authority for AI-assisted codebases.** CommitLore tracks which decisions are still in force and which have been reversed—directly in Git—so a coding agent sees only current decisions when it queries a path.
 
@@ -125,6 +135,41 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## See the difference
+
+**Without CommitLore.** A new session sees two functions with similar inputs and
+reuses one.
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+The team now has another flag, another wrapper, and another compatibility branch
+protecting a use case the function was never meant to own. The reviewer writes
+"we already rejected this" for the second time.
+
+**With CommitLore.** Before editing, the agent receives:
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+It shares the pure calculation primitives instead, and leaves the checkout policy
+entrypoint alone. The review never happens, because the decision was already
+there.
+
+## How it works
+
+1. **Capture** — the agent drafts only the decision context a diff cannot show.
+2. **Verify** — CommitLore checks that draft against the session and the staged diff.
+3. **Preserve** — the verified record lives in Git, with identity and a lifecycle.
+4. **Deliver** — before editing a path, the next agent receives only the decisions still in force.
+
 ## What it looks like on a real repository
 
 From a field report on a ~768-commit Swift MCP server, one day after installing.
@@ -170,11 +215,29 @@ authority is Git rather than a service:
 
 ## What makes it different
 
-- **CLAUDE.md tells the agent how to work. CommitLore tells it why this code exists.**
-- **ADRs document architecture. CommitLore documents the decisions hidden inside the diff.**
-- **Not another memory database. A decision protocol built into Git.**
+| Tool | What it remembers |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | how the agent should work |
+| ADRs | large architecture decisions, as documents |
+| Chat memory / RAG | related text from the past |
+| **CommitLore** | **which decisions still apply to this code path** |
+
+Similarity search can find a related decision. CommitLore also knows whether that
+decision is still active, superseded, or expired — and shows only the first.
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
+
+## Where it pays off
+
+**Protect a module boundary.** *"`calculatePrice` owns final checkout pricing only. Do not reuse it for admin previews."*
+
+**Preserve a rejected workaround.** *"Raising the timeout hides the connection leak. Fix the cleanup path instead."*
+
+**Mark temporary compatibility code.** *"This caller is temporary and is not part of the supported contract."*
+
+**Carry a verification gap.** *"Single-user behaviour was tested. Concurrent refresh remains unverified."*
+
+Each is a sentence a diff cannot carry and a reviewer would otherwise have to say twice.
 
 ## How records get created
 

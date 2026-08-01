@@ -14,7 +14,15 @@
 
 # CommitLore
 
-## 编程代理不得复活仓库已经推翻的决策。
+## 不再重复评审同一个坏主意。
+
+编程代理能读代码，却看不到六个月前团队为什么否决了那个显而易见的修复 —— 于是它再次提出，
+而有人要花一次评审去解释一个早已做出的决定。
+
+**编程代理不得复活仓库已经推翻的决定。** CommitLore 把约束、被否决的替代方案、警告和验证
+缺口记录在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 **面向 AI 辅助代码库的 Git-native 决策权威。** CommitLore 在 Git 中直接追踪哪些决策仍然有效、哪些已被推翻。编程代理查询路径时，只能看到当前有效的决策。
 
@@ -125,6 +133,38 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 看看差别
+
+**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
+第二次写下"我们已经否决过这个了"。
+
+**有 CommitLore。** 编辑之前，代理收到：
+
+```
+Must respect
+  calculatePrice owns final checkout pricing only.
+
+Do not retry without new evidence
+  Reusing it for admin quotes was rejected — eligibility and rounding
+  semantics differ between the two flows.
+```
+
+它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
+那里。
+
+## 工作方式
+
+1. **Capture** — 代理只起草 diff 无法呈现的决策上下文。
+2. **Verify** — CommitLore 将草稿与会话和暂存 diff 进行核对。
+3. **Preserve** — 通过验证的记录带着身份与生命周期留在 Git 中。
+4. **Deliver** — 下一个代理在编辑路径前，只收到**当下仍然有效的决定**。
+
 ## 在真实仓库中的样子
 
 来自一份约 768 次提交的 Swift MCP 服务器现场报告，安装后第二天。工程师在安装 CommitLore
@@ -154,9 +194,15 @@ other
 
 **托管式聊天记录产品无法提供的三个性质**，也是把权威放在 Git 而非服务上的理由：
 
-- **可评审。** 决定以 PR 中的提交 trailer 形式到达，在成为权威之前可以被反驳。
-- **由仓库拥有。** 没有账号，没有厂商，也没有会失去访问权的对象。
-- **随 clone 移动。** 新机器、新贡献者、新代理都会随代码一起拿到这些决定。
+| 工具 | 它记住什么 |
+|---|---|
+| `CLAUDE.md` / `AGENTS.md` | 代理应该如何工作 |
+| ADR | 以文档形式记录大的架构决策 |
+| Chat memory / RAG | 过去的相关文本 |
+| **CommitLore** | **对这条代码路径当下仍然有效的决定** |
+
+相似度检索能找到相关的决定。CommitLore 还知道那个决定是否仍然有效、是否已被取代或过期 ——
+并且只呈现第一种。
 
 ## 有何不同
 
@@ -165,6 +211,18 @@ other
 - **不是又一个 memory database，而是构建在 Git 中的 decision protocol。**
 
 权威来源是普通的 commit trailer 与 `refs/notes/commitlore`。index 和 report 都从这些 Git record 派生，且可以重建。
+
+## 在哪里见效
+
+**守住模块边界。** *"`calculatePrice` 只负责最终的 checkout 定价。不要复用于管理员预览。"*
+
+**保留被否决的权宜之计。** *"调高超时会掩盖连接泄漏。请修复 cleanup 路径。"*
+
+**标记临时兼容代码。** *"这个调用方是临时的，不属于受支持的契约。"*
+
+**传递验证缺口。** *"单用户行为已测试。并发刷新仍未验证。"*
+
+每一条都是 diff 无法承载的句子，否则评审者就得说第二遍。
 
 ## record 如何创建
 

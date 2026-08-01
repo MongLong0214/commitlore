@@ -1,7 +1,7 @@
 {
   "name": "commitlore",
   "version": "0.5.0",
-  "description": "Git commit trailers as institutional memory for AI coding agents",
+  "description": "Git-native, lifecycle-aware decision memory for coding agents",
   "license": "MIT",
   "private": true,
   "type": "module",

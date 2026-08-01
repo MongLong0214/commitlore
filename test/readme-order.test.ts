@@ -33,15 +33,17 @@ function findAnchors(file: string): ReadmeAnchors {
   const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
   const lines = content.split('\n');
 
-  // Product: the hero heading — the h2 with decision-authority framing
-  // Each language has its own version but it's always the first ## heading
+  // Product: the hero heading. It states the failure a reader recognises before
+  // it states the mechanism — a visitor who does not get past the first screen
+  // should still know what this prevents. The precise claim ("must not revive a
+  // decision the repository already reversed") follows as prose beneath it.
   const product = lines.findIndex(
     (l) =>
       l.startsWith('## ') &&
-      (l.includes('must not revive') ||
-        l.includes('되살려서는 안 된다') ||
-        l.includes('復活させてはならない') ||
-        l.includes('不得复活')),
+      (l.includes('Stop re-reviewing') ||
+        l.includes('같은 나쁜 아이디어를') ||
+        l.includes('同じ悪い案を') ||
+        l.includes('同一个坏主意')),
   );
 
   // Local-first: "No hosted memory service." or equivalent
