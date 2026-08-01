@@ -134,3 +134,67 @@ is the reason for the stopping rule in §8.
   the mechanism.
 - It is not a benchmark anyone else reports. No third party has published a
   number on this instrument, and a sceptic should discount it accordingly.
+
+---
+
+## 11. Deviations
+
+Recorded as they happen, with dates. A deviation that is not written down is
+indistinguishable from a design that was always this way.
+
+### Deviation 1 — 2026-08-01: the first launch ran 20 tasks, not the registered 10
+
+`bench/runner.ts --task` defaults to every task in `bench/tasks/`, and the first
+launch omitted it. `bench/tasks/` holds the ten `reproposal-*` fixtures this
+document registers **and** ten `qualification-gitseed-*` fixtures, which are
+harness qualification cases and are not part of any hypothesis here. The run was
+producing all twenty.
+
+**Detected** 3.6 hours in, at 80 rows, during a §6 precondition check.
+
+**Action.** The run was stopped and restarted with `--task` naming the ten
+registered fixtures explicitly. The shard script now passes them and carries a
+comment saying why, so the default cannot silently reassert itself.
+
+**The 80 rows are kept**, at `bench/results/m5-off-design-20-tasks.jsonl`, and are
+**not** part of the analysis set and not citable as a result. They are the record
+that this happened.
+
+**No outcome was examined before the restart.** What was checked is what §6 and §7
+require to be monitored — exposure completeness, the arm-correctness of
+`accepted_records`, `stopped_by` balance, and that the model is recorded. The 2×2
+table of §3 was not computed, and the restart's cause has nothing to do with
+results: the invocation did not match the registered task set.
+
+For the record, since it bears on whether the preconditions are satisfiable at
+all, those 80 rows showed `guard_exposure.complete` on 79 of 79 scored rows,
+`accepted_records > 0` on 40 of 40 treatment rows, `accepted_records === 0` on 39
+of 39 control rows — a §6 exclusion rate of 0.0% against the 5% threshold — and
+`over-turns` balanced at 15 in each arm.
+
+**Timing, measured rather than planned.** 2.7 minutes per run against the pilot's
+4.0, with no harness idle between runs. The registered 1,160 rows project to
+roughly 2.2 days.
+
+### Observation, not a change — `over-turns` and the analysis set
+
+Audited alongside deviation 1: every other runner default in force was checked
+against the M5 command line. `--tasks` resolves to `bench/tasks/`, which is
+correct. `--max-turns` is deliberately not passed, so each task's own turn budget
+applies, as in M1. `--timeout-ms` and `--permission-mode` take their defaults, as
+in M1.
+
+That leaves one figure worth stating in advance of the verdict rather than
+discovering in it. On the registered fixtures, `stopped_by: "over-turns"` ran at
+22.5% in the off-design sample against **15.0%** in `t702-m1-final.jsonl`. A run
+cut off at its turn budget had less opportunity to re-propose, so `reproposed:
+false` on such a row is weaker evidence than on a completed one.
+
+**The analysis set is not being changed.** §7 keeps these rows, M1 kept them, and
+altering the rule now — after the rate is visible — is precisely the post-hoc
+choice this document exists to prevent. The rate was balanced across arms in the
+sample (15 and 15), so it dilutes rather than biases.
+
+**The verdict must report the `over-turns` share per arm** beside the 2×2 table,
+so a reader can weigh it. That requirement is registered here, before the run's
+outcome is known.
