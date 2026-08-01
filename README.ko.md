@@ -125,6 +125,41 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 실제 저장소에서는 이렇게 보인다
+
+커밋 약 768개인 Swift MCP 서버의 필드리포트에서, 설치 다음 날. 엔지니어는 CommitLore를
+설치하기 전에 이미 코드베이스 전수 조사를 마쳤고, 그 조사가 표시한 파일들을 작업 중이었다.
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **그 커밋이 있는 줄 몰랐다.** 2주 전 merge된 PR이고, 이미 이 사이트 여덟 곳을 제거하고
+> 각각을 accessibility-native 등가물로 교체했다 — 전부 fail-closed에 실기기 검증까지.
+>
+> 이건 내 전수 조사를 재배치했다. 나는 남아 있는 사이트들을 문제 **자체**로 다루고
+> 있었다. 아니었다. 그건 이미 출시된 제거 캠페인의 **잔여물**이다 — 의도적인 제거 시도를
+> 견디고 살아남은 것들. 완전히 다른 공학 문제이고 다른 리스크 평가다.
+>
+> 이 중 어느 것도 채팅 기록에 없었다. 저장소에 있었고, 나는 파일 경로를 대서 얻었다.
+
+대안은 2주치 merge된 PR을 읽는 것이었다. 에이전트가 자발적으로 하는 일이 아니고, 사람이
+매 편집 전에 하는 일도 아니다.
+
+같은 리포트의 도입 비용: 명령 하나, 그리고 커밋 768개 인덱싱에 7.4초. 히스토리도 작업
+트리도 건드리지 않는다.
+
+**호스팅형 채팅 기록 제품이 줄 수 없는 세 가지**, 그리고 권위를 서비스가 아니라 Git에 둔 이유:
+
+- **리뷰 가능하다.** 결정은 PR의 커밋 trailer로 도착하고, 권위가 되기 전에 반박할 수 있다.
+- **저장소가 소유한다.** 계정도, 벤더도, 접근을 잃을 대상도 없다.
+- **clone과 함께 이동한다.** 새 머신, 새 기여자, 새 에이전트가 코드와 함께 결정을 받는다.
+
 ## 무엇이 다른가
 
 - **CLAUDE.md는 에이전트에게 어떻게 일할지 알려준다. CommitLore는 이 코드가 왜 존재하는지 알려준다.**

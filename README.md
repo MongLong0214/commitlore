@@ -125,6 +125,49 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## What it looks like on a real repository
+
+From a field report on a ~768-commit Swift MCP server, one day after installing.
+The engineer had already run a full census of the codebase before installing
+CommitLore, and was working through the files that census had flagged.
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **I did not know that commit existed.** It is a merged PR from two weeks
+> earlier that had already removed eight of these sites and replaced each with
+> an accessibility-native equivalent, every one fail-closed and live-verified.
+>
+> It relocated my census. I had been treating the surviving sites as *the*
+> problem. They are the **residual** after a shipped removal campaign — the ones
+> that survived a deliberate attempt to remove them. That is a different
+> engineering problem and a different risk assessment.
+>
+> None of this was in any chat history. It was in the repository, and I got it
+> by naming a file path.
+
+The alternative was reading two weeks of merged pull requests to find it. That is
+not something an agent does spontaneously, and not something a person does before
+every edit.
+
+Adoption cost, from the same report: one command, and 7.4 seconds to index 768
+commits. Nothing touched history or the working tree.
+
+**Three properties no hosted chat-history product can offer**, and the reason the
+authority is Git rather than a service:
+
+- **Reviewable.** A decision arrives as a commit trailer in a pull request, where
+  it can be argued with before it becomes authority.
+- **Owned by the repository.** No account, no vendor, nothing to lose access to.
+- **Travels with a clone.** A new machine, a new contributor, or a new agent gets
+  the decisions with the code.
+
 ## What makes it different
 
 - **CLAUDE.md tells the agent how to work. CommitLore tells it why this code exists.**

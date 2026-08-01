@@ -125,6 +125,39 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 在真实仓库中的样子
+
+来自一份约 768 次提交的 Swift MCP 服务器现场报告，安装后第二天。工程师在安装 CommitLore
+之前已完成代码库的全面普查，当时正在处理普查标记出的文件。
+
+```
+$ commitlore context Sources/LogicProMCP/Accessibility/LibraryAccessor.swift
+context for … — 0 limits, 0 ruled-out, 0 warnings, 2 other in 2 records
+
+other
+  -  01ff2705  [claim]  ax: eliminate clear-win coordinate actuations (8 sites)
+                        with live-verified AX paths
+```
+
+> **我不知道那个提交存在。** 那是两周前合并的 PR，已经移除了其中八处，并把每一处都换成了
+> accessibility-native 的等价实现，全部 fail-closed 并经过真机验证。
+>
+> 它重新定位了我的普查。我一直把剩下的站点当作问题**本身**。不是的。它们是一次已发布的
+> 移除行动之后的**残余** — 是在一次有意的移除尝试中存活下来的那些。这是完全不同的工程
+> 问题，也是不同的风险评估。
+>
+> 这些都不在任何聊天记录里。它们在仓库里，而我只是给出了一个文件路径。
+
+替代方案是通读两周的已合并 PR。这不是代理会主动做的事，也不是人在每次编辑前会做的事。
+
+同一份报告中的接入成本：一条命令，768 次提交索引耗时 7.4 秒。不触碰历史，也不触碰工作区。
+
+**托管式聊天记录产品无法提供的三个性质**，也是把权威放在 Git 而非服务上的理由：
+
+- **可评审。** 决定以 PR 中的提交 trailer 形式到达，在成为权威之前可以被反驳。
+- **由仓库拥有。** 没有账号，没有厂商，也没有会失去访问权的对象。
+- **随 clone 移动。** 新机器、新贡献者、新代理都会随代码一起拿到这些决定。
+
 ## 有何不同
 
 - **CLAUDE.md 告诉代理如何工作。CommitLore 告诉它这段代码为何存在。**
