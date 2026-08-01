@@ -42,6 +42,8 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 /plugin install commitlore@commitlore
 ```
 
+插件所含仅此而已：MCP 服务器、编辑前钩子与技能。它不会把 `commitlore` 放到 `PATH` 上，因此下面的 `commitlore …` 命令来自 `install.sh` / `install.ps1`，还需要那一步安装。
+
 两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
 
 **其他编程代理** — 安装 CLI:

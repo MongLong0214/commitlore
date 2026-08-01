@@ -44,6 +44,8 @@ Install once. Your coding agent can record the decisions worth carrying forward,
 /plugin install commitlore@commitlore
 ```
 
+That is the whole plugin: the MCP server, the pre-edit hook and the skills. It puts no `commitlore` on `PATH`, so the `commitlore …` commands below come from `install.sh` / `install.ps1` and need that install as well.
+
 Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
