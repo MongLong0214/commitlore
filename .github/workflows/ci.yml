@@ -88,6 +88,19 @@ jobs:
           COMMITLORE_PERF_LARGE: "1"
         run: npx vitest run test/index-perf.test.ts --reporter=basic
 
+      # #392: bench/verify.mjs existed for weeks with no npm script and no step
+      # here, so the result schema drifted five fields behind the runner and a
+      # committed matrix sat in the tree failing the gate for two days. It runs
+      # before the README check on purpose -- that step regenerates published
+      # figures out of these same rows, and there is no point trusting a number
+      # derived from a row whose shape was never checked.
+      #
+      # No file list: the gate reads bench/results/*.jsonl and decides scope
+      # from the rows. Its own header states the two exemptions and why; the
+      # step output names them per file on every run.
+      - name: Benchmark rows match the result schema
+        run: npm run bench:verify
+
       # Every measured figure in the README is regenerated from bench/results/
       # through bench/report.ts and compared byte for byte, and a short list of
       # statistics is refused outside the generated block. A rate somebody typed,
