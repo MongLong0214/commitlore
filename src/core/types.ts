@@ -56,6 +56,23 @@ export const INJECT_OMITTED_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether a key belongs to this protocol's vocabulary — SPEC §3's fifteen keys,
+ * or an `X-<Name>:` organization extension, which §3 gives a slot of its own.
+ *
+ * This answers a question {@link CONVENTIONAL_TRAILER_KEYS} does not. That set
+ * decides which trailers to drop *inside* a record, and it is deliberately a
+ * denylist so a project's own `Ticket:` survives alongside a `Limit:`. But a
+ * block carrying no key from this vocabulary is not a record at all, and
+ * treating it as one manufactures a claim its lines never made: on a repository
+ * using conventional commits and holding zero records, `sha256:`, `Tests:` and
+ * `fix:` were indexed and served to an agent as recorded decisions (#335).
+ *
+ * Case-sensitive, because SPEC §3's key match is. `limit:` is not `Limit:`.
+ */
+export const isCommitLoreKey = (key: string): boolean =>
+  (KNOWN_KEYS as readonly string[]).includes(key) || /^X-./.test(key);
+
+/**
  * Trailers whose meaning was already fixed by git or code-review tooling
  * before this protocol existed, and which assert nothing SPEC §3 gives a
  * vocabulary slot to. `Co-authored-by:` says who touched a commit, not why

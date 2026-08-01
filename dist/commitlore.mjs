@@ -11223,6 +11223,7 @@ var INJECT_OMITTED_KEYS = /* @__PURE__ */ new Set([
   "Evidence",
   "CommitLore-Version"
 ]);
+var isCommitLoreKey = (key) => KNOWN_KEYS.includes(key) || /^X-./.test(key);
 var CONVENTIONAL_TRAILER_LIST = [
   "Co-authored-by",
   "Signed-off-by",
@@ -12170,11 +12171,18 @@ var recordExclusion = (counts, key) => {
   const canonical2 = canonicalConventionalTrailerKey(key);
   counts.set(canonical2, (counts.get(canonical2) ?? 0) + 1);
 };
-var stripConventional = (trailers, counts) => trailers.filter((trailer) => {
-  if (!isConventionalTrailerKey(trailer.key)) return true;
-  recordExclusion(counts, trailer.key);
-  return false;
-});
+var stripConventional = (trailers, counts) => {
+  const kept = trailers.filter((trailer) => {
+    if (!isConventionalTrailerKey(trailer.key)) return true;
+    recordExclusion(counts, trailer.key);
+    return false;
+  });
+  if (!kept.some((trailer) => isCommitLoreKey(trailer.key))) {
+    for (const trailer of kept) recordExclusion(counts, trailer.key);
+    return [];
+  }
+  return kept;
+};
 var parsePathFields = (fields) => {
   const paths = [];
   for (const field of fields) {

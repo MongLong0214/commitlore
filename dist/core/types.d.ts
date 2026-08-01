@@ -8,6 +8,21 @@ export declare const SINGLE_VALUED: ReadonlySet<string>;
 export declare const STRUCTURAL_TRAILER_KEYS: ReadonlySet<string>;
 /** Keys omitted from the injection projection because they do not repay their token cost. */
 export declare const INJECT_OMITTED_KEYS: ReadonlySet<string>;
+/**
+ * Whether a key belongs to this protocol's vocabulary — SPEC §3's fifteen keys,
+ * or an `X-<Name>:` organization extension, which §3 gives a slot of its own.
+ *
+ * This answers a question {@link CONVENTIONAL_TRAILER_KEYS} does not. That set
+ * decides which trailers to drop *inside* a record, and it is deliberately a
+ * denylist so a project's own `Ticket:` survives alongside a `Limit:`. But a
+ * block carrying no key from this vocabulary is not a record at all, and
+ * treating it as one manufactures a claim its lines never made: on a repository
+ * using conventional commits and holding zero records, `sha256:`, `Tests:` and
+ * `fix:` were indexed and served to an agent as recorded decisions (#335).
+ *
+ * Case-sensitive, because SPEC §3's key match is. `limit:` is not `Limit:`.
+ */
+export declare const isCommitLoreKey: (key: string) => boolean;
 export declare const CONVENTIONAL_TRAILER_KEYS: ReadonlySet<string>;
 /** Whether `key` names a reserved trailer from {@link CONVENTIONAL_TRAILER_KEYS}, case-insensitively. */
 export declare const isConventionalTrailerKey: (key: string) => boolean;
