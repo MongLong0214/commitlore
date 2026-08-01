@@ -29425,6 +29425,15 @@ var formatCheck = (check2) => {
   }
   return check2.reason === void 0 ? `${name} ${check2.status}` : `${name} ${check2.status} (${check2.reason})`;
 };
+var violationIdentity = (violation) => JSON.stringify([
+  violation.sha ?? null,
+  violation.line ?? null,
+  violation.rule,
+  violation.key,
+  violation.value,
+  violation.got,
+  violation.want
+]);
 var formatViolation = (violation) => {
   const parts = [];
   if (violation.sha !== void 0) parts.push(violation.sha.slice(0, 10));
@@ -29458,7 +29467,13 @@ var runValidate = (input = {}) => {
     return usageError2(messageOf6(error2));
   }
   const references = checkReferences(input, sources, cwd);
-  const violations = [...shapeViolations, ...references.violations];
+  const alreadyReported = new Set(shapeViolations.map(violationIdentity));
+  const violations = [
+    ...shapeViolations,
+    ...references.violations.filter(
+      (violation) => !alreadyReported.has(violationIdentity(violation))
+    )
+  ];
   const checks = [
     {
       class: "shape",
