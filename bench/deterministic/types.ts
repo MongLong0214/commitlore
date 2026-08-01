@@ -291,6 +291,139 @@ export interface DecisionDeliveryRow extends BaseRow {
   readonly paths_zero: number;
 }
 
+/** A distribution reported in full, because a mean over a skewed sample hides it. */
+export interface LedgerStats {
+  readonly count: number;
+  readonly total: number;
+  readonly mean: number;
+  readonly p50: number;
+  readonly p95: number;
+  readonly min: number;
+  readonly max: number;
+}
+
+/** One delivery route's cost restated per read, derived from a committed run. */
+export interface LedgerReadRoute {
+  readonly route: DeliveryRoute;
+  readonly budget_tokens: number | null;
+  readonly evaluation_paths: number;
+  readonly delivered_tokens: number;
+  /** `delivered_tokens / evaluation_paths` — an identity on the source row. */
+  readonly tokens_per_read: number;
+  readonly path_recall: number;
+  readonly recovered: number;
+  readonly path_active_total: number;
+}
+
+/**
+ * Break-even against one comparator, under both accountings of the write side.
+ *
+ * `null` on every read count and `exists: false` when the comparator delivers
+ * no more tokens than the shipped route: there is then no saving to amortize a
+ * write cost against, and no quantity of reads produces one. That is recorded
+ * as a named refusal rather than as a negative or an enormous number.
+ */
+export interface LedgerBreakEven {
+  readonly comparator: DeliveryRoute;
+  readonly comparator_tokens_per_read: number;
+  readonly shipped_tokens_per_read: number;
+  readonly saving_tokens_per_read: number;
+  readonly exists: boolean;
+  readonly undefined_because: string | null;
+  readonly reads_with_diff: number | null;
+  readonly reads_scaffold_only: number | null;
+  readonly passes_with_diff: number | null;
+  readonly passes_scaffold_only: number | null;
+  /**
+   * Delivered-token reduction against this comparator, as a proportion of the
+   * comparator. Negative when the shipped route costs more, which is the
+   * honest reading against a route that delivers nothing.
+   */
+  readonly reduction_against_comparator: number | null;
+}
+
+/**
+ * A delivered-token reduction with its denominator named on the same object.
+ *
+ * A percentage whose denominator is elsewhere is the figure this market
+ * publishes and this project should not, so the denominator route, its token
+ * count and its recall all travel with the number.
+ */
+export interface LedgerReduction {
+  readonly subject: DeliveryRoute;
+  readonly denominator: DeliveryRoute;
+  readonly subject_tokens_per_read: number;
+  readonly denominator_tokens_per_read: number;
+  /** `1 − subject/denominator`. Negative when the subject costs more. */
+  readonly reduction: number | null;
+  /** How many times the denominator's per-read cost the subject's goes into. */
+  readonly ratio: number | null;
+  readonly subject_recall: number;
+  readonly denominator_recall: number;
+  readonly subject_recovered: number;
+  readonly denominator_recovered: number;
+  /**
+   * Whether the two routes recovered the same **count** of gold pairs. The
+   * delivery row records counts, not sets, so this is not set identity and is
+   * not named as if it were.
+   */
+  readonly equal_recovered_count: boolean;
+  /** Why this pair is worth reading, registered before the run. */
+  readonly note: string;
+}
+
+/** Provenance of the committed delivery run the read side is derived from. */
+export interface LedgerReadSource {
+  readonly file: string;
+  readonly harness_commit: string;
+  readonly harness_digest: string | null;
+  readonly dist_digest: string;
+  readonly measured_at: string;
+  readonly population: DeliveryPopulation;
+  readonly shipped_route: DeliveryRoute;
+}
+
+export interface TokenLedgerRow extends BaseRow {
+  readonly metric: 'token_ledger';
+  readonly history_ref: string;
+  /** The product's own constant, so both sides of the ratio share a unit. */
+  readonly chars_per_token: number;
+
+  // --- write side, measured with no model call -----------------------------
+  /** `buildHarvestPrompt` with an empty transcript and an empty diff. */
+  readonly prompt_scaffold_chars: number;
+  readonly prompt_scaffold_bytes: number;
+  readonly prompt_scaffold_tokens: number;
+  readonly commits_examined: number;
+  readonly merge_commits: number;
+  /** Record-bearing single-parent commits: one capture each. */
+  readonly captures_measured: number;
+  readonly records_on_measured_captures: number;
+  /** Record-bearing commits excluded for having no single parent, counted by reason. */
+  readonly records_on_merge_commits: number;
+  readonly records_on_root_commits: number;
+  readonly diff_tokens: LedgerStats;
+  readonly prompt_tokens: LedgerStats;
+  readonly write_floor_tokens_with_diff: number;
+  readonly write_floor_tokens_scaffold_only: number;
+  readonly write_floor_tokens_per_capture_with_diff: number;
+  readonly write_floor_tokens_per_record_with_diff: number;
+  /** Model tokens verification spends. Measured, not assumed — see the two fields below. */
+  readonly verify_model_tokens: number;
+  readonly verify_model_calls: number;
+  /** Built modules reachable from the verify entry points, and network hits in them. */
+  readonly verify_modules_scanned: number;
+  readonly verify_network_references: number;
+  /** The write terms this run did not measure, named on the row itself. */
+  readonly unmeasured_write_terms: readonly string[];
+
+  // --- read side, derived from a committed decision_delivery run -----------
+  readonly read_source: LedgerReadSource;
+  readonly reads: readonly LedgerReadRoute[];
+  readonly reductions: readonly LedgerReduction[];
+  readonly break_even: readonly LedgerBreakEven[];
+}
+
 export type DeterministicRow =
   | QueryLatencyRow
   | IndexCostRow
@@ -301,6 +434,7 @@ export type DeterministicRow =
   | CaptureCostRow
   | NoiseExposureRow
   | DecisionDeliveryRow
+  | TokenLedgerRow
   | DensityRow;
 
 export type RowBase = Pick<

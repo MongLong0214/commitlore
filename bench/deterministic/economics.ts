@@ -2,7 +2,7 @@ const SOURCE = 'bench/results/deterministic-20260729T032652Z.md';
 
 /** The measured cost boundary; avoided rejected-path work has not been measured. */
 export const renderEconomicCase = (): readonly string[] => [
-  '## 11. Economic case: measured costs, unmeasured benefit',
+  '## 12. Economic case: measured costs, unmeasured benefit',
   '',
   `Source: \`${SOURCE}\`. These are deterministic measurements, not a benefit estimate.`,
   '',
@@ -14,6 +14,8 @@ export const renderEconomicCase = (): readonly string[] => [
   '',
   'Threshold form, in a cost unit you choose: **prevented re-proposals required = measured cost / your estimate of work saved by one prevented re-proposal**. The measured numerator is the applicable capture, hook, or query cost above. The denominator is intentionally not supplied.',
   '',
-  'That benefit term is unmeasured: this project has not observed a re-proposal being prevented. Issue #141 added rejected-path counters to make the work observable, but no run has used them. No computed break-even value is published.',
+  'That benefit term is unmeasured: this project has not observed a re-proposal being prevented. Issue #141 added rejected-path counters to make the work observable, but no run has used them. No computed break-even value is published for this threshold.',
+  '',
+  'Section 11 does publish a break-even, and it is not this one. Its benefit term is the measured difference in delivered tokens between two information routes, not the value of a prevented re-proposal, and its numerator is a floor rather than a total. The two are not interchangeable and neither supersedes the other.',
   '',
 ];

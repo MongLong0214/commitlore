@@ -61,6 +61,64 @@ retired-delivery figure is evidence about the supersede filter on seven records
 and none at all about expiry. It is **not** the fresh-agent study registered in
 [MEASUREMENT-PROTOCOL.md](MEASUREMENT-PROTOCOL.md), which remains unrun.
 
+### What a record costs to write, and how many reads pay for it
+
+Two of the four terms on the write side are measurable with no model call, and
+both are now measured on this repository's own history at the same commit the
+delivery run above used. The generated harvest prompt's scaffold is **1,197
+tokens**; adding each commit's staged diff takes a median capture to **3,537**
+and the mean to 10,064 — the mean is 3.8× the median because a handful of
+commits staged this benchmark's own machine-generated output, which a harvest
+prompt then re-renders in full. Over 343 captures that is a **write floor of 3,451,848
+tokens**, or 410,571 counting the scaffold alone. Verification adds **0 model
+tokens**, checked by scanning the 14 built modules reachable from the verify
+entry points rather than asserted. Method and full tables:
+[token ledger](../bench/TOKEN-LEDGER.md), measured in
+[`token-ledger-20260801T122953Z.jsonl`](../bench/results/token-ledger-20260801T122953Z.jsonl).
+
+Restating the delivery run per read — one read is one first edit to one path —
+the shipped projection costs **488.9 tokens** against `git log`'s 643.5 at the
+same budget and 88,122.0 for the repository-wide dump. So:
+
+| Projection | Denominator | Reduction | Recall, projection / denominator |
+|---|---|---:|---:|
+| shipped, 800-token budget | `git log -- <path>`, same budget | **24.0%** | 81.7% / 42.0% |
+| shipped, 800-token budget | `git log -- <path>`, unbounded | 62.2% | 81.7% / 94.4% |
+| shipped, 800-token budget | whole-repository dump, unbounded | 99.4% | 81.7% / 92.3% |
+| **budget removed** | whole-repository dump, unbounded | **99.2%** | **92.3% / 92.3%** |
+| shipped, 800-token budget | reading no history at all | **undefined** | 81.7% / 0.0% |
+
+The fourth row is the one to quote and the fifth is the one not to hide. The
+fourth is the only pair here whose two sides recover the same amount — 2,047
+gold pairs each, so the percentage is not paid for with recall. It is the same
+projection on both sides with the budget removed, which makes 99.2% the
+reduction attributable to path scoping alone, at 124.3× fewer tokens. Equal in
+*count*: the delivery row records counts and not sets, so it is not a claim that
+the same 2,047 records came back.
+
+The fifth row has no percentage because its denominator is zero. Against an
+agent that reads no history the projection is a token *cost* of 488.9 per read,
+and what it buys is 81.7% of the active decision set against 0%.
+
+**Break-even, with its assumptions on the face of it.** Against an agent that
+runs `git log -- <path>` and truncates it to the same 800 tokens, the saving is
+154.6 tokens per read, so this repository's records pay for themselves after **at
+least 22,326 path-scoped reads** — 21.3 passes over all 1,046 evaluated paths —
+or at least 2,656 if the staged diff is charged at nothing on the assumption it
+is already cached. Against the whole-repository dump it is at least 39 reads.
+Against reading no history, **no break-even exists at any read count**.
+
+Every one of those is a floor, because the write side omits two non-negative
+terms (below), so the true break-even is further away rather than nearer.
+
+What the arithmetic settles does not depend on guessing how much editing a
+repository sees. At the same budget the saving is **154.6 tokens per read** and
+the recall difference is **39.7 points**. One of those is small and the other is
+not, so on this corpus **the case for the product rests on recall, not on
+tokens** — and the token-reduction percentage, which is the number this market
+runs on, is the weaker half of the answer. That is what this measurement was run
+to find out, and publishing it is the point of having run it.
+
 ### Latency and scaling
 
 At 100,000 commits, indexed `context` p50 is 496 ms; CommitLore's own
@@ -129,11 +187,36 @@ The matrix is only powered to detect a large effect, so a non-significant result
 from it is a statement about the sample size rather than about CommitLore. The
 power table is in [`bench/README.md`](../bench/README.md).
 
-### Break-even
+### What the drafting turn costs
 
-A break-even figure would require a per-turn ledger of provider-reported token
-usage and an observed cost for work spent on an alternative the repository had
-already rejected. Neither has been collected, so no such figure is published.
+The write side of a record has four terms. Two are now measured (above); one is
+zero by construction and checked; the fourth needs a model call and is **not**
+measured. The blocker is precise: `bench/drivers/claude-headless.ts` runs
+`claude --output-format json` and reads one `usage` object out of the final
+result, which is a **session total with no per-turn breakdown**, and the harvest
+pipeline never runs inside a bench run at all — `bench/runner.ts` seeds records
+from task YAML, which is why every CPAA the harness has printed reads *not
+instrumented*.
+
+Closing it needs two things and neither is a wiring job: `--output-format
+stream-json` (or an equivalent per-turn capture) in the driver, and a bench arm
+that runs `capture` against each run's own transcript and diff, at one model
+call per run. A third term, the session transcript the prompt numbers into
+itself, is not merely unmeasured for the existing records — those sessions were
+never retained, so it is unrecoverable at any price and only a forward-looking
+instrument could see it.
+
+Until then no figure is published for what a model spends drafting a record, and
+nothing here is estimated in its place.
+
+This section used to say that break-even itself was unmeasured. One break-even
+is now published, above, and one still is not, and the difference is the
+denominator. The published one divides a measured write floor by a measured
+difference in delivered tokens between two routes. The unpublished one divides a
+measured cost by *the value of a prevented re-proposal* — a quantity this
+project has never observed, which is why the earlier figure carrying it was
+withdrawn rather than annotated. Section 12 of the deterministic report still
+states that threshold with its denominator deliberately unsupplied.
 
 ### How reliable the guard is as a signal
 
