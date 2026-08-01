@@ -159,13 +159,19 @@ protecting a use case the function was never meant to own. The reviewer writes
 **With CommitLore.** Before editing, the agent receives:
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]` is doing real work: this record was not written by a trusted author of
+the repository, so the agent is told to treat it as information rather than as an
+order. A record that *was* signed by a trusted author renders as `[directive]`.
 
 It shares the pure calculation primitives instead, and leaves the checkout policy
 entrypoint alone. The review never happens, because the decision was already
@@ -415,8 +421,9 @@ commitlore uninstall
 
 Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
 checkout, and the MCP entry it added to each agent config. It removes nothing it
-did not write, and names what it leaves: per-repository hooks (`commitlore hooks
-uninstall`), the agent hook (`commitlore inject uninstall-claude-hook`), and the
+did not write, and names what it leaves: the `commit-msg` hook (`commitlore hooks
+uninstall` — note it removes that one, not the `prepare-commit-msg` and
+`post-commit` hooks `init` also installs), the agent hook (`commitlore inject uninstall-claude-hook`), and the
 Claude Code plugin (`/plugin uninstall commitlore@commitlore`). `--dry-run`
 reports without changing anything.
 

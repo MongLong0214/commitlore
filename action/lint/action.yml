@@ -54,8 +54,10 @@ inputs:
     description: >-
       Path to a built `cli.js` to run instead of the published package. Set
       this to lint a pull request with the build in that pull request.
-    required: false
-    default: ''
+    # Required. There is no published npm package to fall back to:
+    # this package is private, so the name on the public registry is
+    # unclaimed and an `npx` fallback would run whoever registers it.
+    required: true
 
 outputs:
   violations:

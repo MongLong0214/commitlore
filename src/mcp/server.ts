@@ -287,7 +287,13 @@ const TOOLS: readonly Tool[] = [
     description:
       'Check a proposal against the Ruled-out records for a path before acting on it. ' +
       'Returns every record whose alternative matches, with the reason it was rejected. ' +
-      'An empty `matched` array means the check ran and found nothing — it is a verdict, not an absence.',
+      // The same disclosure `commitlore_guard` carries, because the two run the
+      // same matcher. This tool shipped the sentence ADR-0020 §3 ordered removed
+      // -- "a verdict, not an absence" -- which tells a model that silence here
+      // is a safety result. At 22% recall it is not: a miss is the common case,
+      // and this is the surface the model actually reads before it edits.
+      'Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. ' +
+      'An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.',
     inputSchema: {
       type: 'object',
       properties: {

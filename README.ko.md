@@ -156,13 +156,19 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 **CommitLore와 함께.** 편집 전에 에이전트가 받는 것:
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]`이 실제로 일을 한다: 이 record는 저장소의 신뢰된 작성자가 쓴 것이 아니므로,
+에이전트는 이것을 명령이 아니라 정보로 다루라고 안내받는다. 신뢰된 작성자가 남긴
+record는 `[directive]`로 렌더된다.
 
 에이전트는 대신 순수 계산 primitive를 공유하고 checkout 정책 진입점은 건드리지 않는다.
 그 리뷰는 아예 일어나지 않는다. 결정이 이미 거기 있었기 때문이다.
@@ -403,7 +409,8 @@ commitlore uninstall
 
 `install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
 그리고 각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
-남기는 것을 명시한다: 저장소별 hook(`commitlore hooks uninstall`), agent
+남기는 것을 명시한다: `commit-msg` hook(`commitlore hooks uninstall` — 이 명령은 그 하나만 제거하고,
+`init`이 함께 설치하는 `prepare-commit-msg`·`post-commit`은 남긴다), agent
 hook(`commitlore inject uninstall-claude-hook`), Claude Code
 plugin(`/plugin uninstall commitlore@commitlore`). `--dry-run`은 아무것도 바꾸지
 않고 보고만 한다.

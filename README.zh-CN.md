@@ -155,13 +155,18 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 **有 CommitLore。** 编辑之前，代理收到：
 
 ```
-Must respect
-  calculatePrice owns final checkout pricing only.
+commitlore: active records for src/pricing.ts
 
-Do not retry without new evidence
-  Reusing it for admin quotes was rejected — eligibility and rounding
-  semantics differ between the two flows.
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
 ```
+
+`[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
+信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
 
 它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
 那里。
@@ -400,7 +405,8 @@ commitlore uninstall
 
 移除 `install.sh` 或 `install.ps1` 写入的内容 — wrapper、固定的 checkout，以及它
 添加到各 agent config 的 MCP 条目。它不会移除自己没有写入的东西，并会明确说明留下
-了什么：每个仓库的 hook（`commitlore hooks uninstall`）、agent hook
+了什么：`commit-msg` hook（`commitlore hooks uninstall` —— 该命令只移除这一个，
+`init` 一并安装的 `prepare-commit-msg`、`post-commit` 会保留）、agent hook
 （`commitlore inject uninstall-claude-hook`）、Claude Code plugin
 （`/plugin uninstall commitlore@commitlore`）。`--dry-run` 只报告，不做任何更改。
 

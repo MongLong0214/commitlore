@@ -74,6 +74,16 @@ const WORKSPACE = process.env.COMMITLORE_WORKSPACE || process.cwd();
 
 const CLI_PATH = (process.env.COMMITLORE_CLI ?? '').trim();
 
+// Required, because there is no fallback: see the note on the runner below.
+if (CLI_PATH === '') {
+  console.error(
+    'commitlore: cli-path is required. Point it at a built dist/commitlore.mjs — ' +
+      'for example, check this repository out at a tag and pass that path. ' +
+      'There is no published npm package to fall back to.',
+  );
+  process.exit(1);
+}
+
 const TOKEN = (process.env.COMMITLORE_TOKEN ?? '').trim();
 
 const PUSH_ENABLED = (process.env.COMMITLORE_PUSH ?? 'true').trim() !== 'false';
@@ -137,24 +147,22 @@ const gitOrDie = (args, what) => {
   return result.stdout;
 };
 
-/** `npx` resolves to a shim on Windows. Spawning without a shell is not negotiable. */
-const npxBinary = () => (process.platform === 'win32' ? 'npx.cmd' : 'npx');
-
 /**
- * Runs the CLI the caller pointed at, or the published package.
+ * Runs the CLI the caller pointed at.
  *
- * `cli-path` exists so a repository can inherit with the build in the
- * repository -- this repository's own demo workflow does exactly that.
+ * There is no fallback, and there was never a working one. The removed branch
+ * ran `npx --yes commitlore`, but this package is `"private": true` and has
+ * never been published (ADR-0011: distribution is a git clone, not a registry),
+ * so `commitlore` on npm is an **unclaimed name**. The fallback could not
+ * succeed legitimately and could succeed for whoever registered it first --
+ * inside a workflow holding the caller's token and a checked-out workspace
+ * whose `.git/config` carries an authorization header.
+ *
+ * `cli-path` is required now. An action that cannot find its CLI must say so,
+ * not reach for a name on a public registry.
  */
 const runCommitlore = (args) =>
-  CLI_PATH === ''
-    ? spawnSync(npxBinary(), ['--yes', 'commitlore', ...args], {
-        cwd: WORKSPACE,
-        encoding: 'utf8',
-        shell: false,
-        maxBuffer: 64 * 1024 * 1024,
-      })
-    : spawnSync(process.execPath, [CLI_PATH, ...args], {
+  spawnSync(process.execPath, [CLI_PATH, ...args], {
         cwd: WORKSPACE,
         encoding: 'utf8',
         shell: false,

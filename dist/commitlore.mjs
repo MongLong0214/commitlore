@@ -16744,8 +16744,8 @@ var checkRefspec = (opts) => {
     "notes-refspec",
     title,
     "ok",
-    `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF2}`,
-    null,
+    fixed ? `${NOTES_REF2} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF2}`,
+    fixed ? `git fetch ${remotes[0] ?? "origin"}` : null,
     fixed
   );
 };
@@ -28090,10 +28090,12 @@ var beforeChange = (opts) => {
   }
   let activeDecisions = [];
   if (!historyUnavailable) {
-    const queryResult = runQuery({
-      cwd,
-      ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
-    });
+    const queryResult = withholdBlocked(
+      runQuery({
+        cwd,
+        ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+      })
+    );
     activeDecisions = extractActiveDecisions(queryResult);
   }
   let matches = [];
@@ -28247,7 +28249,7 @@ var TOOLS = [
   },
   {
     name: BEFORE_CHANGE_TOOL,
-    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. An empty `matched` array means the check ran and found nothing \u2014 it is a verdict, not an absence.",
+    description: "Check a proposal against the Ruled-out records for a path before acting on it. Returns every record whose alternative matches, with the reason it was rejected. Experimental advisory: precision 44.8%, recall 22.0% on the 417-decision corpus. An empty `matched` array does not guarantee the proposal avoids every ruled-out alternative.",
     inputSchema: {
       type: "object",
       properties: {
