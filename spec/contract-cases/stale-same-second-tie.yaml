@@ -1,0 +1,66 @@
+route: stale-engine
+cases:
+  - id: stale-same-second-tie-agreeing-declarations-fold
+    description: >
+      Two commits share one committer second — `committed_at` has second resolution, so nothing
+      orders them — but they agree on every non-repeatable key, so every order folds to the same
+      record. A rebase collapses committer dates across a whole batch, and this is the shape it
+      produces most often: the fold must still merge the two into one record, keeping both
+      commits' context, rather than treating a same-second re-declaration as a problem
+      (issue #350).
+    given:
+      - sha: c1
+        committed_at: "2026-03-01T12:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-s1t2u3}
+          - {key: Limit, value: the vendor caps us at 5 requests per second}
+          - {key: Blast, value: module}
+      - sha: c2
+        committed_at: "2026-03-01T12:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-s1t2u3}
+          - {key: Supersedes, value: r-s1t2u3}
+          - {key: Blast, value: module}
+          - {key: Warn, value: the retry guard is load bearing}
+    when:
+      route: stale-engine
+      at: "2026-06-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-s1t2u3
+          lifecycle: active
+          resolved_trailers:
+            - {key: Limit, value: the vendor caps us at 5 requests per second}
+            - {key: Blast, value: module}
+            - {key: Supersedes, value: r-s1t2u3}
+            - {key: Warn, value: the retry guard is load bearing}
+
+  - id: stale-same-second-tie-undecidable-expiry-asks-a-human
+    description: >
+      The same tie, but the two declarations disagree on `Expires:`: one says the constraint runs
+      to the end of the year, the other says it lapsed in January. No ordering of a one-second tie
+      can say which is later, so the engine declines to retire the record and flags it for review
+      — the treatment a condition-form `Expires:` (SPEC §3.2) already gets. Silently picking one
+      is how an agent is handed a constraint that lapsed months ago (issue #350).
+    given:
+      - sha: c1
+        committed_at: "2026-03-01T12:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x6}
+          - {key: Limit, value: the vendor caps us at 5 requests per second}
+          - {key: Expires, value: "2026-12-31"}
+      - sha: c2
+        committed_at: "2026-03-01T12:00:00Z"
+        trailers:
+          - {key: Record-Id, value: r-v4w5x6}
+          - {key: Supersedes, value: r-v4w5x6}
+          - {key: Limit, value: the vendor caps us at 5 requests per second}
+          - {key: Expires, value: "2026-01-31"}
+    when:
+      route: stale-engine
+      at: "2026-06-01T00:00:00Z"
+    expect:
+      records:
+        - record_id: r-v4w5x6
+          lifecycle: active
+          review: true

@@ -13636,10 +13636,11 @@ var foldLifecycle = (records, opts) => {
   if (Number.isNaN(cutoff)) throw new Error("foldLifecycle: opts.at is not a valid Date");
   const ordered = chronological(records).filter((entry) => entry.at <= cutoff);
   const retired = supersessions(ordered);
+  const undecidable = undecidableExpiry(ordered);
   return [...declarations(ordered).values()].map((declaration) => {
     const supersededBy = retired.get(declaration.recordId);
     const expiresAt = trailerValue(declaration.trailers, EXPIRES_KEY);
-    const expiryEnd = expiryEndOf(expiresAt);
+    const expiryEnd = undecidable.has(declaration.recordId) ? void 0 : expiryEndOf(expiresAt);
     const expired = expiryEnd !== void 0 && cutoff >= expiryEnd;
     const lifecycle = supersededBy !== void 0 ? "superseded" : expired ? "expired" : "active";
     const review = lifecycle === "active" && expiresAt !== void 0 && expiryEnd === void 0;
@@ -13689,7 +13690,50 @@ var groupsByRecordId = (records) => {
   }
   return groups;
 };
-var hasAmbiguousGroup = (group) => sharesACommit(group) || group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1;
+var instantConflicts = (group) => {
+  const shas = /* @__PURE__ */ new Map();
+  const values = /* @__PURE__ */ new Map();
+  for (const record2 of group) {
+    if (record2.source === "notes" || record2.sha === void 0) continue;
+    const at = instantOf(record2);
+    if (at === void 0) continue;
+    let commits = shas.get(at);
+    if (commits === void 0) {
+      commits = /* @__PURE__ */ new Set();
+      shas.set(at, commits);
+    }
+    commits.add(record2.sha);
+    let keys = values.get(at);
+    if (keys === void 0) {
+      keys = /* @__PURE__ */ new Map();
+      values.set(at, keys);
+    }
+    for (const trailer of record2.trailers) {
+      if (trailer.key === RECORD_ID_KEY2 || !SINGLE_VALUED.has(trailer.key)) continue;
+      let seen = keys.get(trailer.key);
+      if (seen === void 0) {
+        seen = /* @__PURE__ */ new Set();
+        keys.set(trailer.key, seen);
+      }
+      seen.add(trailer.value);
+    }
+  }
+  const conflicts = /* @__PURE__ */ new Set();
+  for (const [at, keys] of values) {
+    if ((shas.get(at)?.size ?? 0) < 2) continue;
+    for (const [key, seen] of keys) if (seen.size > 1) conflicts.add(key);
+  }
+  return conflicts;
+};
+var undecidableExpiry = (ordered) => {
+  const found = /* @__PURE__ */ new Set();
+  const groups = groupsByRecordId(ordered.map(({ record: record2 }) => record2));
+  for (const [recordId, group] of groups) {
+    if (instantConflicts(group).has(EXPIRES_KEY)) found.add(recordId);
+  }
+  return found;
+};
+var hasAmbiguousGroup = (group) => sharesACommit(group) || instantConflicts(group).size > 0 || group.some((record2) => record2.source === "notes") && new Set(group.map(payloadSignature)).size > 1;
 var hasAmbiguousIdCollision = (records) => [...groupsByRecordId(records).values()].some(hasAmbiguousGroup);
 var hasDeclaredSuccession = (recordId, ordered) => {
   let declarations2 = 0;
@@ -14399,8 +14443,14 @@ var withIdentity = (record2) => {
   const rest = record2.trailers.filter((trailer) => trailer.key !== RECORD_ID_KEY3);
   return [{ key: RECORD_ID_KEY3, value: identity }, ...rest];
 };
+var oldestFirst = (a, b) => {
+  if (a.committedTs !== b.committedTs) return a.committedTs - b.committedTs;
+  if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
+  if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+  return a.block - b.block;
+};
 var foldStates = (source, at, cutoff) => {
-  const records = groupByCommit(source.fetch({ keys: LIFECYCLE_KEYS }));
+  const records = groupByCommit(source.fetch({ keys: LIFECYCLE_KEYS })).sort(oldestFirst);
   const stream = records.filter((record2) => {
     const instant = instantOf2(record2);
     return instant === void 0 || instant <= cutoff;
@@ -14464,12 +14514,6 @@ var gradeMerged = (merged, cwd, at, trustedAuthors) => {
       record2.matchedTrailerKeys = resolved.matchedTrailerKeys;
     }
   }
-};
-var oldestFirst = (a, b) => {
-  if (a.committedTs !== b.committedTs) return a.committedTs - b.committedTs;
-  if (a.sha !== b.sha) return a.sha < b.sha ? -1 : 1;
-  if (a.source !== b.source) return a.source < b.source ? -1 : 1;
-  return a.block - b.block;
 };
 var mergeByIdentity = (records, states) => {
   const groups = /* @__PURE__ */ new Map();
@@ -27735,7 +27779,12 @@ var withholdBlocked = (result) => {
         `withheld the content of ${injectionBlocked.length} record(s) graded blocked: a ${source} matching an injection pattern is reported, never quoted (SPEC \xA77)`
       ],
       ...collisions.length === 0 ? [] : [
-        `withheld the content of ${collisions.length} record(s) whose Record-Id collides with a divergent note`
+        // Not "a divergent note": a Record-Id also collides when one
+        // message declares it twice (bug-issue-92) and when two commits
+        // made in the same second declare it with different values
+        // (issue #350). Naming only the first cause sends a reader
+        // hunting for a note that is not there.
+        `withheld the content of ${collisions.length} record(s) whose Record-Id is declared more than once with no way to tell which declaration is current`
       ]
     ]
   };
@@ -27995,8 +28044,13 @@ var collectRecords = (opts = {}) => {
     notes
   };
 };
+var oldestFirst2 = (records) => [
+  ...records.filter((record2) => record2.source !== "notes").reverse(),
+  ...records.filter((record2) => record2.source === "notes")
+];
 var buildReport = (scan2, at) => {
-  const states = foldLifecycle(scan2.records, { at });
+  const ordered = oldestFirst2(scan2.records);
+  const states = foldLifecycle(ordered, { at });
   const stale = states.filter(isStale).map((state) => {
     const record2 = scan2.records.find(
       (candidate) => candidate.sha === state.sha && candidate.trailers.some(
@@ -28013,8 +28067,11 @@ var buildReport = (scan2, at) => {
     notes: scan2.notes,
     totalRecords: states.length,
     records: stale,
-    danglingRefs: findDanglingRefs(scan2.records),
-    idCollisions: findIdCollisions(scan2.records)
+    // Both read the stream in order too — `findIdCollisions` asks whether a
+    // *later* commit declared the succession, which is the same question the
+    // fold asks and must get the same order to answer it with.
+    danglingRefs: findDanglingRefs(ordered),
+    idCollisions: findIdCollisions(ordered)
   };
 };
 var shortSha5 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;

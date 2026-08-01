@@ -116,7 +116,13 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
       ...(collisions.length === 0
         ? []
         : [
-            `withheld the content of ${collisions.length} record(s) whose Record-Id collides with a divergent note`,
+            // Not "a divergent note": a Record-Id also collides when one
+            // message declares it twice (bug-issue-92) and when two commits
+            // made in the same second declare it with different values
+            // (issue #350). Naming only the first cause sends a reader
+            // hunting for a note that is not there.
+            `withheld the content of ${collisions.length} record(s) whose Record-Id is declared ` +
+              'more than once with no way to tell which declaration is current',
           ]),
     ],
   };
