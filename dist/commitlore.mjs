@@ -12305,9 +12305,9 @@ var readCommitRecords = (cwd, shas, excluded) => {
   }
   return records;
 };
-var readNoteRecords = (cwd, excluded) => {
+var readNoteRecords = (cwd, reachable, excluded) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
-  const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "");
+  const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
   if (annotated.length === 0) return [];
   const typed = execGitOrThrow(["cat-file", "--batch-check"], {
     cwd,
@@ -12384,6 +12384,7 @@ var revParseRef = (cwd, ref) => {
   return sha === "" ? null : sha;
 };
 var revList = (cwd, range) => execGitOrThrow(["rev-list", range], { cwd, maxBuffer: LOG_MAX_BUFFER }).split("\n").filter((line) => line !== "");
+var reachableFromHead = (cwd) => revParse(cwd, "HEAD") === null ? [] : revList(cwd, "HEAD");
 var tableExists = (db, name) => db.prepare(
   `SELECT count(*) AS n FROM sqlite_master WHERE type IN ('table','view') AND name = ?`
 ).get(name)?.n === 1;
@@ -12580,7 +12581,7 @@ var indexNotes = (handle, opts = {}, excluded) => {
   const refSha = revParseRef(handle.cwd, NOTES_REF);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
-  const records = refSha === null ? [] : readNoteRecords(handle.cwd, excluded);
+  const records = refSha === null ? [] : readNoteRecords(handle.cwd, new Set(reachableFromHead(handle.cwd)), excluded);
   return runInTransaction(handle.db, () => {
     deleteNoteRows(handle);
     const counts = insertRecords(handle, records);
@@ -12617,7 +12618,7 @@ var rebuildIndex = (handle, opts = {}) => {
   const excluded = /* @__PURE__ */ new Map();
   const records = readCommitRecords(handle.cwd, shas, excluded);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, excluded);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
@@ -12836,7 +12837,7 @@ var scanTrailers = (query = {}, opts = {}) => {
   if (historyAvailability(cwd) === "unavailable") return [];
   const head = revParse(cwd, "HEAD");
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
-  const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd)];
+  const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
   const matched = toIndexedTrailers(records).filter((trailer) => matchesQuery(trailer, query)).sort(compareTrailers);
   return query.limit === void 0 ? matched : matched.slice(0, query.limit);
 };
