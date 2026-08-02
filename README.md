@@ -19,9 +19,10 @@
 
 **The Git-native decision layer for coding agents.**
 
-Every fresh agent can read the implementation. None of them can recover the
+Every fresh agent inherits the implementation. None of them inherit the
 constraints, the alternatives your team rejected, the warnings, or the
-verification gaps — those disappear when the session that held them ends.
+verification gaps — those do not travel with the code unless something carries
+them.
 
 CommitLore preserves that engineering judgment in Git, and surfaces only the
 decisions still in force before the next edit. A decision that was later
@@ -62,7 +63,7 @@ Which hosts are supported, and what each install path requires: [docs/COMPATIBIL
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
 </p>
 
-**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
+**A fresh agent. Zero chat history. It is still handed why the obvious fix was rejected.** Query a path before changing it:
 
 ```bash
 commitlore context install.sh
@@ -182,9 +183,10 @@ Ruled-out
 the repository, so the agent is told to treat it as information rather than as an
 order. A record that *was* signed by a trusted author renders as `[directive]`.
 
-It shares the pure calculation primitives instead, and leaves the checkout policy
-entrypoint alone. The review never happens, because the decision was already
-there.
+The module boundary is in front of the agent before it proposes the change,
+rather than in a review comment after. Whether it acts on that is an
+agent-behaviour question this project has not answered — see the measurement
+below, and [what it does not show](docs/evidence.md).
 
 ## How it works
 

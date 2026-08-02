@@ -19,8 +19,8 @@
 
 **面向编程代理的 Git 原生 decision layer。**
 
-每个新代理都能读懂实现。但它无法还原约束、团队否决过的替代方案、警告，以及验证缺口 ——
-承载这些的会话一结束，它们就消失了。
+每个新代理都继承了实现。但它不会继承约束、团队否决过的替代方案、警告，以及验证缺口 ——
+除非有什么东西把它们带上，否则这些并不随代码一起走。
 
 CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
 后来被取代或已过期的决定，不会以仍然成立的样子送到代理面前。
@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/inst
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
 </p>
 
-**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
+**一个全新的代理，没有聊天历史。它仍被交到手上：为什么那个显而易见的修复被排除了。** 在改动前查询 path：
 
 ```bash
 commitlore context install.sh
@@ -177,8 +177,8 @@ Ruled-out
 `[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
 信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
 
-它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
-那里。
+模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。它是否照做，是
+本项目尚未回答的代理行为问题 —— 见下面的测量，以及[未被测量的部分](docs/evidence.md)。
 
 ## 工作方式
 
