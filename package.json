@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs"
+    "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
+    "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts"
   },
   "keywords": [
     "git",
