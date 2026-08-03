@@ -11090,10 +11090,6 @@ function useColor() {
 // node_modules/commander/index.js
 var program = new Command();
 
-// src/core/backfill.ts
-import { spawnSync as spawnSync2 } from "node:child_process";
-import { readFileSync as readFileSync2 } from "node:fs";
-
 // src/core/git.ts
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -11143,38 +11139,6 @@ var SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may
 var hasShallowHistory = (cwd) => {
   const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
   return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
-};
-
-// src/core/schema.ts
-var import__ = __toESM(require__(), 1);
-
-// src/core/paths.ts
-import { existsSync as existsSync2, readFileSync } from "node:fs";
-import { dirname, join, parse } from "node:path";
-import { fileURLToPath } from "node:url";
-var findPackageRoot = (startDir) => {
-  const { root } = parse(startDir);
-  let dir = startDir;
-  for (; ; ) {
-    if (existsSync2(join(dir, "package.json"))) return dir;
-    if (dir === root) {
-      throw new Error(
-        `could not find package.json above ${startDir} \u2014 this installation is incomplete`
-      );
-    }
-    dir = dirname(dir);
-  }
-};
-var PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
-var installedPath = (...segments) => join(PACKAGE_ROOT, ...segments);
-var readInstalledFile = (...segments) => readFileSync(installedPath(...segments), "utf8");
-var cachedVersion = null;
-var packageVersion = () => {
-  if (cachedVersion !== null) return cachedVersion;
-  const raw = readInstalledFile("package.json");
-  const parsed = JSON.parse(raw);
-  cachedVersion = typeof parsed.version === "string" ? parsed.version : "0.0.0-unknown";
-  return cachedVersion;
 };
 
 // src/core/types.ts
@@ -11347,6 +11311,138 @@ var labelRecordBlocks = (message) => {
       trailers
     };
   });
+};
+
+// src/core/notes.ts
+var NOTES_REF = "refs/notes/commitlore";
+var NOTES_REFSPEC = "+refs/notes/*:refs/notes/*";
+var REF_ARG = `--ref=${NOTES_REF}`;
+var NO_NOTE_EXIT = 1;
+var SYNTHETIC_SUBJECT = "commitlore notes mirror";
+var gitOptions = (opts, stdin) => ({
+  ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
+  ...stdin === void 0 ? {} : { stdin }
+});
+var resolveObject = (sha, opts) => execGitOrThrow(
+  ["rev-parse", "--verify", "--end-of-options", `${sha}^{object}`],
+  gitOptions(opts)
+).trim();
+var writeBody = (sha, body, opts) => {
+  if (body === "") {
+    throw new Error(
+      `refusing to write an empty record to ${NOTES_REF} for ${sha}: an empty note body deletes the note`
+    );
+  }
+  const object3 = resolveObject(sha, opts);
+  const args = ["notes", REF_ARG, "add"];
+  if (opts.force === true) args.push("--force");
+  args.push("--file", "-", "--end-of-options", object3);
+  const result = execGit(args, gitOptions(opts, body));
+  if (result.code !== 0) {
+    throw Object.assign(
+      new Error(
+        `failed to write the record for ${object3} to ${NOTES_REF} (exit ${result.code}): ${result.stderr.trim()}`
+      ),
+      { code: result.code, stderr: result.stderr }
+    );
+  }
+};
+var writeRecord = (sha, trailers, opts = {}) => writeBody(sha, serializeTrailers(trailers), opts);
+var writeRecordBlocks = (sha, blocks, opts = {}) => writeBody(sha, blocks.map(serializeTrailers).join("\n"), opts);
+var showNote = (sha, opts) => {
+  const object3 = resolveObject(sha, opts);
+  const result = execGit(
+    ["notes", REF_ARG, "show", "--end-of-options", object3],
+    gitOptions(opts)
+  );
+  if (result.code === NO_NOTE_EXIT) return null;
+  if (result.code !== 0) {
+    throw Object.assign(
+      new Error(
+        `failed to read the record for ${object3} from ${NOTES_REF} (exit ${result.code}): ${result.stderr.trim()}`
+      ),
+      { code: result.code, stderr: result.stderr }
+    );
+  }
+  return result.stdout;
+};
+var readRecord = (sha, opts = {}) => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseCommitMessage(`${SYNTHETIC_SUBJECT}
+
+${note}`);
+};
+var readRecordBlocks = (sha, opts = {}) => {
+  const note = showNote(sha, opts);
+  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}
+
+${note}`);
+};
+var listRecordShas = (opts = {}) => {
+  const stdout = execGitOrThrow(["notes", REF_ARG, "list"], gitOptions(opts));
+  return stdout.split("\n").filter((line) => line.length > 0).map((line) => {
+    const [, object3 = ""] = line.split(" ");
+    return object3;
+  }).filter((object3) => object3.length > 0);
+};
+var listRemotes = (opts) => {
+  const result = execGit(["remote"], gitOptions(opts));
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").filter((line) => line.length > 0);
+};
+var fetchRefspecs = (remote, opts) => {
+  const result = execGit(["config", "--get-all", `remote.${remote}.fetch`], gitOptions(opts));
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").filter((line) => line.length > 0);
+};
+var coversNotes = (refspec) => {
+  const [, destination = ""] = refspec.replace(/^\+/, "").split(":");
+  if (destination === NOTES_REF) return true;
+  return destination.endsWith("/*") && NOTES_REF.startsWith(destination.slice(0, -1));
+};
+var notesAvailability = (opts = {}) => {
+  const ref = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions(opts));
+  if (ref.code === 0) return "present";
+  const remotes = listRemotes(opts);
+  if (remotes.length === 0) return "absent";
+  const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+  return uncovered.length > 0 ? "unfetched" : "absent";
+};
+
+// src/core/backfill.ts
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { readFileSync as readFileSync2 } from "node:fs";
+
+// src/core/schema.ts
+var import__ = __toESM(require__(), 1);
+
+// src/core/paths.ts
+import { existsSync as existsSync2, readFileSync } from "node:fs";
+import { dirname, join, parse } from "node:path";
+import { fileURLToPath } from "node:url";
+var findPackageRoot = (startDir) => {
+  const { root } = parse(startDir);
+  let dir = startDir;
+  for (; ; ) {
+    if (existsSync2(join(dir, "package.json"))) return dir;
+    if (dir === root) {
+      throw new Error(
+        `could not find package.json above ${startDir} \u2014 this installation is incomplete`
+      );
+    }
+    dir = dirname(dir);
+  }
+};
+var PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+var installedPath = (...segments) => join(PACKAGE_ROOT, ...segments);
+var readInstalledFile = (...segments) => readFileSync(installedPath(...segments), "utf8");
+var cachedVersion = null;
+var packageVersion = () => {
+  if (cachedVersion !== null) return cachedVersion;
+  const raw = readInstalledFile("package.json");
+  const parsed = JSON.parse(raw);
+  cachedVersion = typeof parsed.version === "string" ? parsed.version : "0.0.0-unknown";
+  return cachedVersion;
 };
 
 // src/core/schema.ts
@@ -12110,7 +12206,7 @@ var loadDatabaseCtor = () => {
   }
 };
 var SCHEMA_VERSION = 2;
-var NOTES_REF = "refs/notes/commitlore";
+var NOTES_REF2 = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
 var GIT_NO_SUCH_REF2 = 1;
@@ -12322,7 +12418,7 @@ var readCommitRecords = (cwd, shas, excluded) => {
   return records;
 };
 var readNoteRecords = (cwd, reachable, excluded) => {
-  const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF}`, "list"], { cwd });
+  const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF2}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line) => line !== "").map((line) => line.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
   if (annotated.length === 0) return [];
   const typed = execGitOrThrow(["cat-file", "--batch-check"], {
@@ -12335,7 +12431,7 @@ var readNoteRecords = (cwd, reachable, excluded) => {
   const records = [];
   for (const batch of chunked(commits, LOG_BATCH)) {
     const result = gitLogByShas(cwd, batch, "%x01%H%x00%ct%x00%cI%x00%N%x00", [
-      `--notes=${NOTES_REF}`
+      `--notes=${NOTES_REF2}`
     ]);
     if (result.code !== 0) {
       throw Object.assign(new Error(`git log --notes failed: ${result.stderr.trim()}`), {
@@ -12594,7 +12690,7 @@ var deleteNoteRows = (handle) => {
   });
 };
 var indexNotes = (handle, opts = {}, excluded) => {
-  const refSha = revParseRef(handle.cwd, NOTES_REF);
+  const refSha = revParseRef(handle.cwd, NOTES_REF2);
   const indexed = readMeta(handle.db, "notes_ref_sha");
   if (!(opts.force ?? false) && refSha === indexed) return 0;
   const records = refSha === null ? [] : readNoteRecords(handle.cwd, new Set(reachableFromHead(handle.cwd)), excluded);
@@ -12633,7 +12729,7 @@ var rebuildIndex = (handle, opts = {}) => {
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
   const excluded = /* @__PURE__ */ new Map();
   const records = readCommitRecords(handle.cwd, shas, excluded);
-  const notesRef = revParseRef(handle.cwd, NOTES_REF);
+  const notesRef = revParseRef(handle.cwd, NOTES_REF2);
   const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
   const stats = {
     ...emptyStats(handle, started),
@@ -12867,102 +12963,6 @@ var indexInfo = (handle) => ({
   commits: handle.db.prepare("SELECT count(DISTINCT commit_sha) AS n FROM trailers").get()?.n ?? 0,
   paths: handle.db.prepare("SELECT count(*) AS n FROM commit_paths").get()?.n ?? 0
 });
-
-// src/core/notes.ts
-var NOTES_REF2 = "refs/notes/commitlore";
-var NOTES_REFSPEC = "+refs/notes/*:refs/notes/*";
-var REF_ARG = `--ref=${NOTES_REF2}`;
-var NO_NOTE_EXIT = 1;
-var SYNTHETIC_SUBJECT = "commitlore notes mirror";
-var gitOptions = (opts, stdin) => ({
-  ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
-  ...stdin === void 0 ? {} : { stdin }
-});
-var resolveObject = (sha, opts) => execGitOrThrow(
-  ["rev-parse", "--verify", "--end-of-options", `${sha}^{object}`],
-  gitOptions(opts)
-).trim();
-var writeBody = (sha, body, opts) => {
-  if (body === "") {
-    throw new Error(
-      `refusing to write an empty record to ${NOTES_REF2} for ${sha}: an empty note body deletes the note`
-    );
-  }
-  const object3 = resolveObject(sha, opts);
-  const args = ["notes", REF_ARG, "add"];
-  if (opts.force === true) args.push("--force");
-  args.push("--file", "-", "--end-of-options", object3);
-  const result = execGit(args, gitOptions(opts, body));
-  if (result.code !== 0) {
-    throw Object.assign(
-      new Error(
-        `failed to write the record for ${object3} to ${NOTES_REF2} (exit ${result.code}): ${result.stderr.trim()}`
-      ),
-      { code: result.code, stderr: result.stderr }
-    );
-  }
-};
-var writeRecord = (sha, trailers, opts = {}) => writeBody(sha, serializeTrailers(trailers), opts);
-var writeRecordBlocks = (sha, blocks, opts = {}) => writeBody(sha, blocks.map(serializeTrailers).join("\n"), opts);
-var showNote = (sha, opts) => {
-  const object3 = resolveObject(sha, opts);
-  const result = execGit(
-    ["notes", REF_ARG, "show", "--end-of-options", object3],
-    gitOptions(opts)
-  );
-  if (result.code === NO_NOTE_EXIT) return null;
-  if (result.code !== 0) {
-    throw Object.assign(
-      new Error(
-        `failed to read the record for ${object3} from ${NOTES_REF2} (exit ${result.code}): ${result.stderr.trim()}`
-      ),
-      { code: result.code, stderr: result.stderr }
-    );
-  }
-  return result.stdout;
-};
-var readRecord = (sha, opts = {}) => {
-  const note = showNote(sha, opts);
-  return note === null ? [] : parseCommitMessage(`${SYNTHETIC_SUBJECT}
-
-${note}`);
-};
-var readRecordBlocks = (sha, opts = {}) => {
-  const note = showNote(sha, opts);
-  return note === null ? [] : parseRecordBlocks(`${SYNTHETIC_SUBJECT}
-
-${note}`);
-};
-var listRecordShas = (opts = {}) => {
-  const stdout = execGitOrThrow(["notes", REF_ARG, "list"], gitOptions(opts));
-  return stdout.split("\n").filter((line) => line.length > 0).map((line) => {
-    const [, object3 = ""] = line.split(" ");
-    return object3;
-  }).filter((object3) => object3.length > 0);
-};
-var listRemotes = (opts) => {
-  const result = execGit(["remote"], gitOptions(opts));
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").filter((line) => line.length > 0);
-};
-var fetchRefspecs = (remote, opts) => {
-  const result = execGit(["config", "--get-all", `remote.${remote}.fetch`], gitOptions(opts));
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").filter((line) => line.length > 0);
-};
-var coversNotes = (refspec) => {
-  const [, destination = ""] = refspec.replace(/^\+/, "").split(":");
-  if (destination === NOTES_REF2) return true;
-  return destination.endsWith("/*") && NOTES_REF2.startsWith(destination.slice(0, -1));
-};
-var notesAvailability = (opts = {}) => {
-  const ref = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions(opts));
-  if (ref.code === 0) return "present";
-  const remotes = listRemotes(opts);
-  if (remotes.length === 0) return "absent";
-  const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-  return uncovered.length > 0 ? "unfetched" : "absent";
-};
 
 // src/core/backfill.ts
 var DEFAULT_LIMIT = 50;
@@ -13527,24 +13527,42 @@ var jsonPayload = (result) => `${JSON.stringify(
   2
 )}
 `;
-var present = (result, json) => {
+var present = (result, json, incomplete = null) => {
+  const caveat = incomplete === null ? "" : `${PREFIX} the notes mirror is ${incomplete}, so "no record" below means "none this clone can see" \u2014 counts of note trailers and of targets are both drawn from an index that could not read it. fix: commitlore doctor --fix, then git fetch
+`;
   const detail = [
     ...result.report.discarded.map(discardLine),
     ...result.report.skipped.map(skipLine)
   ].join("");
-  if (json) return { stdout: jsonPayload(result), stderr: detail, exitCode: 0 };
+  if (json) return { stdout: jsonPayload(result), stderr: caveat + detail, exitCode: 0 };
   if (result.report.mode === "prompt-only") {
     return {
       stdout: promptPayload(result),
-      stderr: `${detail}${summary(result.report)}`,
+      stderr: `${caveat}${detail}${summary(result.report)}`,
       exitCode: 0
     };
   }
-  return { stdout: summary(result.report), stderr: detail, exitCode: 0 };
+  return { stdout: summary(result.report), stderr: caveat + detail, exitCode: 0 };
+};
+var NOT_COMPLETE = /* @__PURE__ */ new Set(["unfetched", "diverged", "shallow"]);
+var incompleteMirror = (options) => {
+  const state = notesAvailability(options.cwd === void 0 ? {} : { cwd: options.cwd });
+  return NOT_COMPLETE.has(state) ? state : null;
 };
 var runBackfill = (options) => {
+  const incomplete = incompleteMirror(options);
+  const writes = options.draft !== void 0 && options.dryRun !== true;
+  if (incomplete !== null && writes) {
+    return {
+      stdout: "",
+      stderr: `${PREFIX} the notes mirror is ${incomplete}, so a record that already exists upstream reads here as a commit with none. Reconstructing now can write a second record for one decision.
+${PREFIX} fix: commitlore doctor --fix, then git fetch, then rerun
+`,
+      exitCode: 2
+    };
+  }
   try {
-    return present(backfill(toBackfillOptions(options)), options.json === true);
+    return present(backfill(toBackfillOptions(options)), options.json === true, incomplete);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     return { stdout: "", stderr: `${PREFIX} ${detail}
@@ -14633,7 +14651,7 @@ var runQuery = (opts = {}) => {
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
       diagnostics.push(
-        `the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF2} by default). fix: commitlore doctor --fix, then git fetch`
+        `the notes mirror has not been fetched here, so this answer may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF} by default). fix: commitlore doctor --fix, then git fetch`
       );
     }
     return {
@@ -16833,7 +16851,7 @@ var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
 
 // src/commands/doctor.ts
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
-var EXACT_NOTES_REFSPEC = `+${NOTES_REF2}:${NOTES_REF2}`;
+var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var check = (id, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail") => ({ id, title, status, needsAttention, detail, fix, fixed });
@@ -16875,7 +16893,7 @@ var checkRefspec = (opts) => {
       "notes-refspec",
       title,
       "warn",
-      `${missing.join(", ")} does not fetch ${NOTES_REF2}, so records pushed by others stay invisible here`,
+      `${missing.join(", ")} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
       missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n")
     );
   }
@@ -16894,7 +16912,7 @@ var checkRefspec = (opts) => {
     "notes-refspec",
     title,
     "ok",
-    fixed ? `${NOTES_REF2} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF2}`,
+    fixed ? `${NOTES_REF} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
     fixed ? `git fetch ${remotes[0] ?? "origin"}` : null,
     fixed
   );
@@ -16903,8 +16921,8 @@ var checkPush = (opts) => {
   const title = "notes push";
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? "origin";
-  const command = `git push ${remote} ${NOTES_REF2}`;
-  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF2], gitOptions3(opts));
+  const command = `git push ${remote} ${NOTES_REF}`;
+  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions3(opts));
   if (local.code !== 0) {
     return check(
       "notes-push",
@@ -16913,7 +16931,7 @@ var checkPush = (opts) => {
       `no local mirror yet \u2014 nothing to push (${command}, once there is)`
     );
   }
-  const advertised = execGit(["ls-remote", remote, NOTES_REF2], gitOptions3(opts));
+  const advertised = execGit(["ls-remote", remote, NOTES_REF], gitOptions3(opts));
   if (advertised.code !== 0) {
     return check(
       "notes-push",
@@ -16924,13 +16942,13 @@ var checkPush = (opts) => {
     );
   }
   if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
-    return check("notes-push", title, "ok", `${remote} has the current ${NOTES_REF2}`);
+    return check("notes-push", title, "ok", `${remote} has the current ${NOTES_REF}`);
   }
   return check(
     "notes-push",
     title,
     "warn",
-    `this clone has local records in ${NOTES_REF2}; no command pushes them for you`,
+    `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
     command
   );
 };
@@ -18649,7 +18667,7 @@ var plural = (count2, unit) => `${count2} ${unit}${count2 === 1 ? "" : "s"}`;
 var reportUnfetchedNotes = (subject) => {
   if (notesAvailability() !== "unfetched") return;
   process.stderr.write(
-    `commitlore: the notes mirror has not been fetched here, so ${subject} covers the commit messages alone and may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF2} by default). fix: commitlore doctor --fix, then git fetch, then rerun
+    `commitlore: the notes mirror has not been fetched here, so ${subject} covers the commit messages alone and may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF} by default). fix: commitlore doctor --fix, then git fetch, then rerun
 `
   );
 };

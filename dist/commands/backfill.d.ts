@@ -36,10 +36,5 @@ export interface BackfillOutcome {
     exitCode: number;
 }
 export declare const toBackfillOptions: (options: BackfillCommandOptions) => BackfillOptions;
-/**
- * Runs the command and reports what it would print. A failure comes back as an
- * outcome rather than an exception: the one thing a user of a cold-start command
- * should never see is a stack trace telling them nothing they can act on.
- */
 export declare const runBackfill: (options: BackfillCommandOptions) => BackfillOutcome;
 export declare const register: (program: Command) => void;
