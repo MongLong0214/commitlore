@@ -32,6 +32,7 @@
 import { formatReport, runDoctor } from './doctor.js';
 import { installHook } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
@@ -163,9 +164,10 @@ const runClaudeHookStep = (opts) => {
  * leaves behind, not the state it started from.
  */
 export const runInit = (opts = {}) => {
+    const notesBefore = notesAvailability(cwdOption(opts));
     const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
-    return { steps, exitCode: exitCode };
+    return { steps, notesBefore, exitCode: exitCode };
 };
 /** User-facing step labels — no internal command names. */
 const STEP_LABEL = {
@@ -198,6 +200,16 @@ export const formatInitReport = (report) => {
         }
         lines.push('');
         lines.push('init: ready');
+        // #402: every step succeeded and the index is still missing whatever the
+        // team kept in notes, because `git fetch` does not carry
+        // `refs/notes/commitlore`. That is the default state of a fresh clone, and
+        // this is the one screen most users will read. The clean run has a line to
+        // spare inside the ≤6 the output contract allows, and a `ready` that is not
+        // ready costs more than the line does. The state is `notesAvailability`'s,
+        // so this reports rather than checks.
+        if (report.notesBefore === 'unfetched') {
+            lines.push('note: the notes mirror has not been fetched, so the index covers commit messages alone — run: git fetch');
+        }
     }
     else {
         // At least one step needs attention or could not run.
