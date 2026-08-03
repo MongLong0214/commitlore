@@ -782,3 +782,56 @@ describe('backfill leaves history alone', () => {
     );
   });
 });
+
+/**
+ * #403, and the PRD's Phase 0 acceptance: fail closed when the notes mirror was
+ * not read.
+ *
+ * `backfill` picks its targets from the index — "commits with no record". A
+ * commit whose record lives only in an unfetched note reads here as having
+ * none, so it is eligible for reconstruction, and writing then produces a second
+ * record for one decision. The read-only modes still run, because they are how a
+ * user diagnoses this; only the writing mode refuses, because only it can create
+ * the duplicate.
+ */
+describe('#403 backfill fails closed on a mirror it could not read', () => {
+  const unfetchedClone = (): string => {
+    const origin = initRepo('b403-origin');
+    commit(origin, 'a.txt', 'a\n', 'seed');
+    git(origin, [
+      'notes',
+      '--ref=commitlore',
+      'add',
+      '-m',
+      'Limit: only in the note\nRecord-Id: r-note403\nCertainty: firm',
+      'HEAD',
+    ]);
+    const clone = tempDir('b403-clone');
+    git(clone, ['clone', '--quiet', `file://${origin}`, '.']);
+    return clone;
+  };
+
+  it('refuses to write, naming the duplicate it would create', () => {
+    const cwd = unfetchedClone();
+    const draft = join(cwd, 'draft.json');
+    writeFileSync(draft, JSON.stringify({ commits: [] }));
+    const outcome = runBackfill({ cwd, draft });
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr).toContain('a second record for one decision');
+    expect(outcome.stderr).toContain('git fetch');
+  });
+
+  it('still runs the read-only modes — they are how this is diagnosed', () => {
+    const cwd = unfetchedClone();
+    const outcome = runBackfill({ cwd });
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stderr).toContain('none this clone can see');
+  });
+
+  it('a dry run is not a write, so it is not refused', () => {
+    const cwd = unfetchedClone();
+    const draft = join(cwd, 'draft.json');
+    writeFileSync(draft, JSON.stringify({ commits: [] }));
+    expect(runBackfill({ cwd, draft, dryRun: true }).exitCode).toBe(0);
+  });
+});
