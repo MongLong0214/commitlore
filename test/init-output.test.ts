@@ -135,3 +135,43 @@ describe('formatInitReport — result-oriented default output', () => {
     expect(output).toMatch(/doctor|check/i);
   });
 });
+
+/**
+ * #402: `init` reported `ready` on a fresh clone whose `refs/notes/commitlore`
+ * had never been fetched, and said nothing about it. That is the default state
+ * of a clone — `git fetch` does not carry the ref — and `init` is the one screen
+ * most users read.
+ *
+ * The subtle part, and the reason a naive fix does not work: `init`'s own doctor
+ * step writes the notes refspec, which moves the state from `unfetched` to
+ * `absent` before the report is formatted. So the state has to be captured
+ * before any step runs. These pin both halves — that the line appears from the
+ * captured state, and that it does not appear otherwise.
+ */
+describe('#402 init names an unfetched notes mirror', () => {
+  const withNotes = (notesBefore: InitReport['notesBefore']): InitReport => ({
+    ...cleanReport,
+    notesBefore,
+  });
+
+  it('says so when the mirror was unfetched before the run', () => {
+    const output = formatInitReport(withNotes('unfetched'));
+    expect(output).toContain('has not been fetched');
+    expect(output).toContain('git fetch');
+  });
+
+  it('still fits the six-line contract with the line present', () => {
+    const output = formatInitReport(withNotes('unfetched'));
+    expect(output.split('\n').filter(Boolean).length).toBeLessThanOrEqual(6);
+  });
+
+  it('stays quiet on every other state, so the line is not a permanent fixture', () => {
+    for (const state of ['present', 'absent', 'unavailable'] as const) {
+      expect(formatInitReport(withNotes(state))).not.toContain('has not been fetched');
+    }
+  });
+
+  it('still reports ready — an unfetched mirror is not an init failure', () => {
+    expect(formatInitReport(withNotes('unfetched'))).toContain('init: ready');
+  });
+});

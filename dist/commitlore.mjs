@@ -18042,9 +18042,10 @@ var runClaudeHookStep = (opts) => {
   };
 };
 var runInit = (opts = {}) => {
+  const notesBefore = notesAvailability(cwdOption(opts));
   const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
-  return { steps, exitCode };
+  return { steps, notesBefore, exitCode };
 };
 var STEP_LABEL = {
   hooks: "Hooks",
@@ -18069,6 +18070,11 @@ var formatInitReport = (report) => {
     }
     lines.push("");
     lines.push("init: ready");
+    if (report.notesBefore === "unfetched") {
+      lines.push(
+        "note: the notes mirror has not been fetched, so the index covers commit messages alone \u2014 run: git fetch"
+      );
+    }
   } else {
     for (const step of report.steps) {
       if (step.code === 0) {

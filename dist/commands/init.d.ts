@@ -33,6 +33,7 @@ import type { Command } from 'commander';
 import { type DoctorReport } from './doctor.js';
 import { type HookResult } from './hooks.js';
 import { type IndexStats } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { type PostCommitHookResult } from '../hooks/post-commit.js';
@@ -58,6 +59,17 @@ interface IndexStepDetail {
 }
 export interface InitReport {
     steps: InitStep[];
+    /**
+     * `notesAvailability()` as it stood **before** any step ran (#402).
+     *
+     * It has to be captured first because `init`'s own doctor step writes the
+     * notes refspec, which moves the state from `unfetched` to `absent` before
+     * the report is formatted. Reading it at format time therefore always misses
+     * the case the user is in: a fresh clone where `git fetch` did not carry
+     * `refs/notes/commitlore`, which after `init` becomes a correct refspec over
+     * an index that still has none of the records kept in notes.
+     */
+    notesBefore: ReturnType<typeof notesAvailability>;
     /** Worst of the three step codes — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
     exitCode: 0 | 1 | 2;
 }

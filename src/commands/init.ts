@@ -35,6 +35,7 @@ import type { Command } from 'commander';
 import { formatReport, runDoctor, type DoctorReport } from './doctor.js';
 import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
@@ -65,6 +66,17 @@ interface IndexStepDetail {
 
 export interface InitReport {
   steps: InitStep[];
+  /**
+   * `notesAvailability()` as it stood **before** any step ran (#402).
+   *
+   * It has to be captured first because `init`'s own doctor step writes the
+   * notes refspec, which moves the state from `unfetched` to `absent` before
+   * the report is formatted. Reading it at format time therefore always misses
+   * the case the user is in: a fresh clone where `git fetch` did not carry
+   * `refs/notes/commitlore`, which after `init` becomes a correct refspec over
+   * an index that still has none of the records kept in notes.
+   */
+  notesBefore: ReturnType<typeof notesAvailability>;
   /** Worst of the three step codes — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
   exitCode: 0 | 1 | 2;
 }
@@ -209,9 +221,10 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
  * leaves behind, not the state it started from.
  */
 export const runInit = (opts: InitOptions = {}): InitReport => {
+  const notesBefore = notesAvailability(cwdOption(opts));
   const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
-  return { steps, exitCode: exitCode as 0 | 1 | 2 };
+  return { steps, notesBefore, exitCode: exitCode as 0 | 1 | 2 };
 };
 
 /** User-facing step labels — no internal command names. */
@@ -250,6 +263,18 @@ export const formatInitReport = (report: InitReport): string => {
     }
     lines.push('');
     lines.push('init: ready');
+    // #402: every step succeeded and the index is still missing whatever the
+    // team kept in notes, because `git fetch` does not carry
+    // `refs/notes/commitlore`. That is the default state of a fresh clone, and
+    // this is the one screen most users will read. The clean run has a line to
+    // spare inside the ≤6 the output contract allows, and a `ready` that is not
+    // ready costs more than the line does. The state is `notesAvailability`'s,
+    // so this reports rather than checks.
+    if (report.notesBefore === 'unfetched') {
+      lines.push(
+        'note: the notes mirror has not been fetched, so the index covers commit messages alone — run: git fetch',
+      );
+    }
   } else {
     // At least one step needs attention or could not run.
     for (const step of report.steps) {
