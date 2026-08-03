@@ -11,12 +11,38 @@
  * repository rather than only in tests.
  */
 import { closeIndex, ensureIndex, indexInfo, openIndex, rebuildIndex, scanTrailers, } from '../core/index-db.js';
+import { NOTES_REF, notesAvailability } from '../core/notes.js';
 /** Every failure here is a usage error or a missing dependency, never a finding (SPEC §10). */
 const fail = (message) => {
     process.stderr.write(`commitlore: ${message}\n`);
     process.exitCode = 2;
 };
 const plural = (count, unit) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+/**
+ * Records come from two places, and this command can only ever read one of them
+ * locally. `rebuild` is what a user runs *because* they suspect the index is
+ * wrong, so reporting a clean count over a mirror that was never fetched is the
+ * least useful moment to leave that unsaid — the same defect `r-fetchowed` fixed
+ * one command over, where `doctor --fix` printed `ok` for configuration it had
+ * not fetched through.
+ *
+ * The state is `notesAvailability`'s, so this is a report and not a new check.
+ * The exit code deliberately does not follow `context`, which exits 3 on the
+ * same state: 3 there marks an *answer* drawn from an incomplete store, and this
+ * command's contract is 0 built, 2 could not run. The index it wrote is the one
+ * git can support, which is a build that succeeded — moving the code would make
+ * every unfetched clone's `init` and CI step fail over a cache that is correct.
+ *
+ * Like every other diagnostic it goes to stderr, so `--json` stays parseable
+ * while the caller still hears it.
+ */
+const reportUnfetchedNotes = (subject) => {
+    if (notesAvailability() !== 'unfetched')
+        return;
+    process.stderr.write(`commitlore: the notes mirror has not been fetched here, so ${subject} covers the commit ` +
+        `messages alone and may be missing records that exist upstream (git fetch does not fetch ` +
+        `${NOTES_REF} by default). fix: commitlore doctor --fix, then git fetch, then rerun\n`);
+};
 const runScan = (options) => {
     const started = Date.now();
     const trailers = scanTrailers();
@@ -102,9 +128,11 @@ export const register = (program) => {
                     fail('--rebuild and --no-index ask for opposite things');
                     return;
                 }
+                reportUnfetchedNotes('this scan');
                 runScan(options);
                 return;
             }
+            reportUnfetchedNotes('this index');
             runIndex(options);
         }
         catch (error) {

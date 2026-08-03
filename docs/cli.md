@@ -90,6 +90,8 @@ them; you do not.
 ## The index is derived
 
 `.git/commitlore/index.db` is a cache. The authority is the commit trailers and
-`refs/notes/commitlore`, so `commitlore index --rebuild` can always reconstruct
-it, and `--no-index` answers the same questions from Git alone — more slowly.
-The gap between the two at scale is measured in [evidence.md](evidence.md).
+`refs/notes/commitlore`, so `commitlore index --rebuild` reconstructs it from
+whatever Git holds here — and says so on stderr when `refs/notes/commitlore` was
+never fetched, because then it rebuilds from one source of the two. `--no-index`
+answers the same questions from Git alone — more slowly. The gap between the two
+at scale is measured in [evidence.md](evidence.md).

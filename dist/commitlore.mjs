@@ -18640,6 +18640,13 @@ var fail = (message) => {
   process.exitCode = 2;
 };
 var plural = (count2, unit) => `${count2} ${unit}${count2 === 1 ? "" : "s"}`;
+var reportUnfetchedNotes = (subject) => {
+  if (notesAvailability() !== "unfetched") return;
+  process.stderr.write(
+    `commitlore: the notes mirror has not been fetched here, so ${subject} covers the commit messages alone and may be missing records that exist upstream (git fetch does not fetch ${NOTES_REF2} by default). fix: commitlore doctor --fix, then git fetch, then rerun
+`
+  );
+};
 var runScan = (options) => {
   const started = Date.now();
   const trailers = scanTrailers();
@@ -18710,9 +18717,11 @@ var register12 = (program3) => {
           fail("--rebuild and --no-index ask for opposite things");
           return;
         }
+        reportUnfetchedNotes("this scan");
         runScan(options);
         return;
       }
+      reportUnfetchedNotes("this index");
       runIndex(options);
     } catch (error2) {
       fail(error2 instanceof Error ? error2.message : String(error2));
