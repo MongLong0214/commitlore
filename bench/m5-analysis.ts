@@ -20,7 +20,7 @@
  *   node --experimental-strip-types bench/m5-analysis.ts --validate
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { fisherExactTwoTailed, rateDifference, wilsonInterval } from "./stats.ts";
@@ -34,6 +34,37 @@ type Arm = (typeof ARMS)[number];
 /** §11 deviation 2: both are truncation, and the verdict reports each. */
 const TRUNCATED = new Set(["over-turns", "over-tokens"]);
 
+/**
+ * The shards that constitute the registered run, named rather than discovered.
+ *
+ * This read the directory and took every `.jsonl` in it, which is 22 files and
+ * 1,835 rows: M1, an invalidated M3, the withdrawn M4, a superseded pilot, the
+ * off-design 20-task run deviation 1 calls "not citable", ablation arms and
+ * metric rows. 1,835 clears `REGISTERED_ROWS`, so §8's refusal would have
+ * passed on the strength of the contamination and a 2x2 would have been
+ * computed over all of it — the guard written to enforce the pre-registration
+ * breaking it.
+ *
+ * So the analysis set is a list, and it is the one deviations 3 and 4 fix:
+ * seeds 21-54 survive from the original run, seeds 1-20 and 55-58 are re-runs
+ * against the same pinned harness.
+ *
+ * `m5-seeds-51-58.jsonl` is in the list and carries both: seeds 51-54, which
+ * are clean, and seeds 55-58, which the re-run replaces whole. `supersede`
+ * below drops the latter rather than a derived file doing it, so the original
+ * artifact stays the only copy and the supersession is a reviewable rule
+ * instead of an edit nobody can see.
+ */
+const REGISTERED_SHARDS = [
+  "bench/results/m5-seeds-21-30.jsonl",
+  "bench/results/m5-seeds-31-40.jsonl",
+  "bench/results/m5-seeds-41-50.jsonl",
+  "bench/results/m5-seeds-51-58.jsonl",
+  "bench/results/m5-seeds-1-10-rerun.jsonl",
+  "bench/results/m5-seeds-11-20-rerun.jsonl",
+  "bench/results/m5-seeds-55-58-rerun.jsonl",
+] as const;
+
 interface Row {
   readonly task: string;
   readonly cond: string;
@@ -43,24 +74,73 @@ interface Row {
   readonly stopped_by?: string;
   readonly accepted_records?: number;
   readonly guard_exposure?: { complete?: boolean } | null;
+  readonly run_id?: string;
+  readonly started_at?: string;
+  /** Set by `readRows`, not by the harness: which file the row came from. */
+  shard?: string;
 }
 
-const readRows = (targets: string[]): Row[] => {
-  const files: string[] = [];
-  for (const target of targets) {
-    if (statSync(target).isDirectory()) {
-      for (const name of readdirSync(target).sort()) {
-        if (/^m5-seeds-.*\.jsonl$/.test(name) || /\.jsonl$/.test(name)) files.push(join(target, name));
-      }
-    } else files.push(target);
-  }
+const readRows = (targets: readonly string[]): Row[] => {
   const rows: Row[] = [];
-  for (const file of files) {
-    const body = readFileSync(file, "utf8").trim();
+  for (const target of targets) {
+    // A named shard that is not there is an error, never an empty contribution:
+    // silently analysing six sevenths of a registered run is the failure this
+    // list exists to prevent.
+    if (!existsSync(target) || !statSync(target).isFile()) {
+      throw new Error(`analysis set: ${target} is missing — the registered run is not complete here`);
+    }
+    const body = readFileSync(target, "utf8").trim();
     if (body === "") continue;
-    for (const line of body.split("\n")) rows.push(JSON.parse(line) as Row);
+    const shard = target.replace(/^.*\//, "").replace(/\.jsonl$/, "");
+    for (const line of body.split("\n")) rows.push({ ...(JSON.parse(line) as Row), shard });
   }
   return rows;
+};
+
+/**
+ * Deviation 4: a seed re-run replaces its original rows whole.
+ *
+ * Keyed on (task, cond, seed) because that is the registered cell. A cell
+ * present in both a re-run shard and an original one takes the re-run, and the
+ * count of what was dropped is reported — a silent replacement would be
+ * indistinguishable from a shard that was never read.
+ */
+const supersede = (rows: readonly Row[]): { kept: Row[]; superseded: number } => {
+  const cell = (row: Row): string => `${row.task}\u0000${row.cond}\u0000${String(row.seed)}`;
+  const rerunCells = new Set(
+    rows.filter((row) => row.shard?.endsWith("-rerun") === true).map(cell),
+  );
+  const kept = rows.filter(
+    (row) => row.shard?.endsWith("-rerun") === true || !rerunCells.has(cell(row)),
+  );
+  return { kept, superseded: rows.length - kept.length };
+};
+
+/**
+ * Deviations 3 and 4 oblige the verdict to report when each shard was produced
+ * and which are re-runs. Seeds 1-20 and 55-58 were produced days after 21-54
+ * against a `sonnet` alias that is not pinned to a build, and a reader cannot
+ * weigh that unless the table says so.
+ */
+const shardWindows = (rows: readonly Row[]): string[] => {
+  const byShard = new Map<string, string[]>();
+  for (const row of rows) {
+    const at = row.started_at;
+    if (row.shard === undefined || at === undefined) continue;
+    const seen = byShard.get(row.shard);
+    if (seen === undefined) byShard.set(row.shard, [at]);
+    else seen.push(at);
+  }
+  return [...byShard]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([shard, instants]) => {
+      const sorted = [...instants].sort();
+      const from = (sorted[0] ?? "").slice(0, 10);
+      const to = (sorted[sorted.length - 1] ?? "").slice(0, 10);
+      const rerun = shard.endsWith("-rerun") ? "  RE-RUN" : "";
+      const span = from === to ? from : `${from}..${to}`;
+      return `  ${shard.padEnd(26)} n=${String(instants.length).padStart(4)}  ${span}${rerun}`;
+    });
 };
 
 const pct = (n: number, d: number): string => (d === 0 ? "n/a" : `${((100 * n) / d).toFixed(1)}%`);
@@ -111,11 +191,15 @@ const main = (): void => {
     process.exit(ok ? 0 : 1);
   }
 
-  const targets = argv.length > 0 ? argv : ["bench/results"];
-  const rows = readRows(targets);
+  const targets = argv.length > 0 ? argv : REGISTERED_SHARDS;
+  const all = readRows(targets);
+  const { kept: rows, superseded } = supersede(all);
   const { errored, exposureFailed, analysed } = partition(rows);
 
   console.log(`rows read: ${rows.length} of the registered ${REGISTERED_ROWS}`);
+  if (superseded > 0) {
+    console.log(`  (${superseded} original row(s) superseded by a re-run of the same seed — deviation 4)`);
+  }
   console.log(`model(s): ${[...new Set(rows.map((r) => r.model ?? "unrecorded"))].join(", ")}`);
   console.log(`tasks: ${new Set(rows.map((r) => r.task)).size}  seeds: ${new Set(rows.map((r) => r.seed)).size}`);
   console.log("");
@@ -128,6 +212,9 @@ const main = (): void => {
     const verdict = share > 5 ? "  COMPROMISED (>5%)" : "";
     console.log(`  ${arm.padEnd(16)} exposure failures ${bad}/${armRows.length} = ${share.toFixed(1)}%${verdict}`);
   }
+  console.log("");
+  console.log("§11 deviations 3 and 4: when each shard was produced");
+  for (const line of shardWindows(rows)) console.log(line);
   console.log("");
   console.log("§11 truncation, reported per arm whatever the table says");
   for (const arm of ARMS) console.log(armReport(analysed, arm));
