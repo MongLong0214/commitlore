@@ -113,4 +113,34 @@ Its rows carry `simulated: false` but live under a `pilot/` path the CDEB-01 ver
 
 Recorded here as they happen, with dates, in the M5 style.
 
-*(none yet — the study has not run)*
+### Deviation 1 — one outcome was seen before the study ran (2026-08-07)
+
+Validating the harness end to end required one real agent run, and a run that
+produces no outcome would not have validated the oracle or the row. So the
+smoke run for `pending-rm-force / on / repeat 1` produced a complete row, and I
+read it: exposure, stop reason, oracle verdict, tokens, all of it.
+
+What that costs, stated plainly: **I have seen an outcome for one of the sixteen
+cells before the study ran.** The cell will be re-run fresh and its smoke row is
+in a scratch path under a `cdeb-p-smoke` study id, so no contaminated row can
+enter the analysis. But the registered analysis is mechanical and the
+preregistration was frozen in `r-cdebp01` before any of this, which is the only
+reason the exposure is bounded rather than fatal.
+
+M5's Appendix A.1 is the reason this is written down at all: the same rule was
+broken there twice by a runner that printed outcomes, and the remedy that
+matters is the record, not the intention.
+
+### Deviation 2 — what the smoke run established about the harness (2026-08-07)
+
+Reported here because it is harness validation, not a finding:
+
+- the snapshot froze at the pre-pilot `dev` sha, and the materialization's
+  same-history mismatches were empty
+- the shipping hook fired **9 times** and delivered 14 record ids, including
+  `r-gcunstageable` — the record this task can revive
+- the final tree froze, the oracle answered, and provider usage was captured
+- **one run costs 379 s**, so sixteen runs is roughly 100 minutes sequential
+- token volume was dominated by `cache_read_input_tokens` (3.78 M against 26 k
+  output), which is the provider-cache order-dependence PRD v1.2 §14.2 flags as
+  a disclosed limitation rather than a controllable quantity
