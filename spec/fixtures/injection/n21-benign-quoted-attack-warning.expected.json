@@ -1,0 +1,5 @@
+{
+  "description": "Benign: a warning that names the attack in order to reject it. Matching the literal withheld the one record whose purpose was to warn about it (#408).",
+  "blocked": false,
+  "patterns": []
+}
