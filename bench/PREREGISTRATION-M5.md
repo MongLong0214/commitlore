@@ -413,6 +413,19 @@ purpose of every one of those checks.
 **Fixed for the remaining shards:** progress is read with `wc -l` and by
 filtering `stopped_by`, never by printing raw log lines.
 
+**That remedy was then broken once, 2026-08-07.** Checking whether the first
+re-run shard had finished, the tail of the shard log was printed again, showing
+three more rows — 194, 195 and 196 of the seeds 1–20 re-run, one treatment and
+two control. Total incidental exposure is therefore **eleven rows of 1,160**,
+still with no denominator, no cross-tabulation, and no analysis choice made or
+revised.
+
+It is written down for the same reason as the original: the number of rows is
+not the point, and a remedy recorded but not kept is worth less than no remedy,
+because it invites the reader to assume it held. What the slip shows is that
+"do not print raw log lines" is a rule easy to break by reflex, so progress is
+now read only through commands that cannot emit the outcome field at all.
+
 ### A.2 A prediction, stated before the outcome
 
 Written 2026-08-07, with the run incomplete and nothing computed. It commits the
