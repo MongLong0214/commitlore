@@ -41,7 +41,7 @@ const OID = 'b'.repeat(40);
 const validRow = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   schema_version: 1,
   benchmark: 'cdeb-v1',
-  protocol_version: '1.2.0',
+  protocol_version: '1.3.0',
   study_id: 'cdeb-test-01',
   logical_run_id: 'repo-a__task-a__on__r1',
   repository_id: 'repo-a',

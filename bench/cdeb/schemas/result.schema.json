@@ -20,7 +20,7 @@
   "properties": {
     "schema_version": { "const": 1 },
     "benchmark": { "const": "cdeb-v1" },
-    "protocol_version": { "type": "string", "pattern": "^1\\.2\\.[0-9]+$" },
+    "protocol_version": { "type": "string", "pattern": "^1\\.3\\.[0-9]+$" },
     "study_id": { "type": "string", "minLength": 1 },
     "logical_run_id": { "type": "string", "pattern": "^[a-z0-9-]+__[a-z0-9-]+__(on|off)__r[1-3]$" },
     "repository_id": { "type": "string", "minLength": 1 },

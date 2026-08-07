@@ -17,7 +17,7 @@
   "properties": {
     "schema_version": { "const": 1 },
     "benchmark": { "const": "cdeb-v1" },
-    "protocol_version": { "type": "string", "pattern": "^1\\.2\\.[0-9]+$" },
+    "protocol_version": { "type": "string", "pattern": "^1\\.3\\.[0-9]+$" },
     "study_id": { "type": "string", "minLength": 1 },
     "protocol_digest": { "$ref": "#/$defs/sha256" },
     "candidate_registry_commitment": { "$ref": "#/$defs/sha256" },
@@ -57,10 +57,11 @@
     "claim_thresholds": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["safe_success_lift_pp", "token_volume_reduction", "revival_reduction", "min_off_revivals", "min_safe_successes_per_arm", "min_finite_replicates"],
+      "required": ["safe_success_lift_pp", "token_volume_reduction", "calibrated_overhead", "revival_reduction", "min_off_revivals", "min_safe_successes_per_arm", "min_finite_replicates"],
       "properties": {
         "safe_success_lift_pp": { "const": 10 },
-        "token_volume_reduction": { "const": 0.15 },
+        "token_volume_reduction": { "type": "number", "minimum": 0.05, "maximum": 0.95 },
+      "calibrated_overhead": { "type": "number", "minimum": 1.0 },
         "revival_reduction": { "const": 0.30 },
         "min_off_revivals": { "const": 10 },
         "min_safe_successes_per_arm": { "const": 10 },
