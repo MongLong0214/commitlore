@@ -61,6 +61,18 @@ const RUN_ENTRIES = new Set([
   "evaluator-attempts", "evaluator.json", "row.json",
 ]);
 
+/**
+ * Directories under the CDEB root that are not studies and must never be read
+ * as one (CDEB-P preregistration §8).
+ *
+ * A pilot produces rows deliberately outside the protocol — a different schema,
+ * no freeze manifest, no claim gate — and its numbers may not reach a verdict.
+ * Naming it here is the mechanism for that promise: the verifier skips it, and
+ * because the skip is a name rather than a heuristic, a real study can never
+ * become invisible by accident. The skip is printed on every run.
+ */
+const NON_STUDY_DIRS = new Set(["pilot"]);
+
 const findings = [];
 const fail = (study, message) => findings.push(`${study}: ${message}`);
 
@@ -222,14 +234,24 @@ const main = () => {
     console.log(`cdeb verify: no studies at ${root} — nothing to verify`);
     return 0;
   }
-  const studies = readdirSync(root).sort();
-  for (const name of studies) {
+  const entries = readdirSync(root).sort();
+  const skipped = [];
+  const studies = [];
+  for (const name of entries) {
     const path = join(root, name);
     if (!statSync(path).isDirectory()) {
       fail("(root)", `unknown file "${name}" — the CDEB root holds study directories only`);
       continue;
     }
+    if (NON_STUDY_DIRS.has(name)) {
+      skipped.push(name);
+      continue;
+    }
+    studies.push(name);
     verifyStudy(root, name);
+  }
+  if (skipped.length > 0) {
+    console.log(`cdeb verify: not a study, skipped: ${skipped.join(", ")}`);
   }
 
   if (findings.length > 0) {
