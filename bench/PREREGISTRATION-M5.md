@@ -246,3 +246,75 @@ an obligation means anything.
 **What was read to produce this note:** `stopped_by`, `turns`, `tokens`,
 `accepted_records` and `guard_exposure`. Not `reproposed`, and not any
 cross-tabulation of it.
+
+### Deviation 3 — 2026-08-07: 400 completed rows were lost, and are being re-run
+
+**The run finished.** Its log records all six shards and a final count of 1,160:
+
+```
+=== seeds  1-10 done 2026-08-02T02:46:04Z rows=200 ===
+=== seeds 11-20 done 2026-08-02T12:46:57Z rows=200 ===
+=== seeds 21-30 done 2026-08-02T23:08:55Z rows=200 ===
+=== seeds 31-40 done 2026-08-03T10:03:56Z rows=200 ===
+=== seeds 41-50 done 2026-08-03T20:36:31Z rows=200 ===
+=== seeds 51-58 done 2026-08-04T01:16:13Z rows=160 ===
+ALL SHARDS COMPLETE 2026-08-04T01:16:13Z
+```
+
+**The first two shards no longer exist.** They were written only to a session
+scratchpad under the system temporary directory and were never copied anywhere
+durable. Between 2026-08-04 and 2026-08-07 the operating system's temp reaper
+removed them. No other copy was made, and a search of every local filesystem
+found none. 400 rows — seeds 1–20, both arms, all ten tasks — are unrecoverable.
+
+This was an operational failure in how the run was stored, not a fault in the
+harness or the design. A sixty-hour measurement was left with a single copy in a
+directory whose contract is that it may be emptied.
+
+**Why the loss is outcome-independent.** The reaper selects by age and cannot
+read a row. The two shards deleted are exactly the two oldest, written
+2026-08-01 and 2026-08-02; the four that survive are the four most recent. No
+property of a result influenced what was removed, and what survives is a
+contiguous seed range, 21–58, complete in both arms at 380 each.
+
+**Nothing was analysed.** Establishing what survived required `run_id`,
+`harness_commit`, `dist_digest`, `task`, `cond`, `seed` and `model`.
+`reproposed` was not read on any row and no 2×2 table was computed, then or
+since. `bench/m5-analysis.ts` enforces this independently: it exits before the
+table on any input short of 1,160 rows.
+
+**The lost rows are being re-run, restoring n = 1,160.** The alternative — 
+analysing the surviving 760 as a reduced-power run — was rejected. §8 registers
+1,160 rows and calls anything less a partially completed run that "is not
+analysed and not reported as a result." 760 rows carry roughly 62% power against
+the registered effect where the design specifies 80%, and choosing a smaller n
+after part of the data is gone is the shape of decision this document exists to
+forbid, however innocent its cause.
+
+**What is held constant.** The re-run is pinned to the harness commit the
+surviving rows record, `788a9db`, whose committed `dist/` reproduces the recorded
+digest `f54cda47…` exactly — verified before the re-run was launched, not
+asserted. Same ten registered fixtures, same `--model sonnet`, same `--cond
+both`, same caps, same seeds 1–20. Every row of the completed set will therefore
+agree on `harness_commit` and `dist_digest`.
+
+**What differs, and must be reported.** The re-run rows are produced roughly five
+days after the originals, against a `sonnet` alias that is not pinned to a build,
+so the provider's model may not be byte-identical to the one that produced seeds
+21–58. This is a real limitation and cannot be engineered away at this point. Two
+things bound it: the re-run covers whole seeds, and within each seed both arms,
+so any drift falls on treatment and control equally and cannot manufacture a
+difference between them.
+
+**The verdict must report the production window per shard** — seeds 21–58 from
+2026-08-01 to 2026-08-04, seeds 1–20 on 2026-08-07 — and state that seeds 1–20
+are a re-run, beside the 2×2 table. Registered here before those rows exist.
+
+**Storage, changed so this cannot repeat.** Results are written outside the
+scratchpad and each shard is committed to `bench/results/` as it lands. The four
+surviving shards were committed before the re-run was launched.
+
+**One harness check preceded the re-run**, at seed 999 — outside the registered
+range of 1–58, so no registered cell was touched. It confirms the pinned harness
+runs and stamps the expected commit and digest. Its rows are discarded and are
+not citable.
