@@ -57,6 +57,44 @@ Which hosts are supported, and what each install path requires: [docs/COMPATIBIL
 
 **Give your next agent the judgment your last one earned.**
 
+## The code survived. The decision didn't.
+
+*Stop re-reviewing the same bad idea.*
+
+
+**Without CommitLore.** A new session sees two functions with similar inputs and
+reuses one.
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+The team now has another flag, another wrapper, and another compatibility branch
+protecting a use case the function was never meant to own. The reviewer writes
+"we already rejected this" for the second time.
+
+**With CommitLore.** Before editing, the agent receives:
+
+```
+commitlore: active records for src/pricing.ts
+
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
+```
+
+`[claim]` is doing real work: this record was not written by a trusted author of
+the repository, so the agent is told to treat it as information rather than as an
+order. A record that *was* signed by a trusted author renders as `[directive]`.
+
+The module boundary is in front of the agent before it proposes the change,
+rather than in a review comment after. Whether it acts on that is an
+agent-behaviour question this project has not answered — see the measurement
+below, and [what it does not show](docs/evidence.md).
+
 ## See it work
 
 <p align="center">
@@ -101,37 +139,6 @@ with the same `commitlore context` you would run anywhere else.
 
 **The full list, with what each one cost: [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md).**
 
-## Retrieval can find records. Path scope keeps reversed decisions out.
-
-Before an agent's first edit, how much of a repository's still-active decision set actually reaches it? On this repository, at the 800-token budget the hook ships with:
-
-| route | budget | active decisions delivered | reversed ones delivered | tokens |
-|---|---:|---:|---:|---:|
-| the code alone | — | 0.0% | 0 | 0 |
-| `git log` for the path | 800 | 42.0% | 7 | 673,134 |
-| **CommitLore path scope** | **800** | **81.7%** | **0** | **511,412** |
-| CommitLore, cap removed | none | 92.3% | 0 | 741,429 |
-
-With the cap removed, path scope recovers exactly what a whole-repository dump recovers — 2,047 of 2,217 — for a fraction of its 92,175,612 tokens and none of its 7,322 reversed records. The scope costs nothing. The cap costs 10.6 points. The remaining 170 are records the trust grader withholds.
-
-**This measures delivery, not effect.** No agent ran, so it bounds what one could recover, not what one does — and a retrieval number can climb while the outcome it is meant to predict falls. SWE-bench measured BM25 recall rising from 29.58 to 51.06 across its context budgets and reported that "even when increasing the maximum context size for BM25 would increase recall with respect to the oracle files, performance drops … as models are simply ineffective at localizing problematic code" ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). One corpus, one repository. Seven superseded records and no expired ones, so zero-reversed-delivered says nothing yet about expiry. Method and full tables: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
-
-**The `git log` baseline is not an artifact of measuring ourselves.** The same measurement on four repositories this project did not write — Django, SymPy, scikit-learn and Requests, at pinned commits — puts the share of a path's history that survives an 800-token cut between **37.4% and 55.6%**. The 42.0% above sits inside that band. Losing something close to half a file's history to a fixed budget is what `git log` does on large, long-lived repositories generally, not something peculiar to this one. What did *not* transfer is the mechanism: our paths carry a median of one commit at 687 tokens where Django's carry eight at 213, so long commit messages make the ordinary-Git baseline worse at a fixed budget — a cost of this project's own practice. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) also reports a delivery figure on those repositories; read §9.0 and §9.5 first, because the records there were generated from revert commits by a program and the headline number is one the attachment predicate forces rather than a retrieval result.
-
-Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
-
-Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. The advantage appears when decisions have been reversed—the case this product exists for.
-
-The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
-
-| route | model-visible records | relevant records | model-visible tokens |
-|---|---:|---:|---:|
-| inject everything | 10,002 | 2/2 | 1,004,554 |
-| top-k lexical | 2 | 1/2 | 190 |
-| CommitLore path scope | 2 | 2/2 | 335 |
-
-This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model. Where recall ties, and what else has and has not been measured: [docs/evidence.md](docs/evidence.md).
-
 ## Try it in a repository
 
 Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
@@ -168,43 +175,36 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## The code survived. The decision didn't.
+## Retrieval can find records. Path scope keeps reversed decisions out.
 
-*Stop re-reviewing the same bad idea.*
+Before an agent's first edit, how much of a repository's still-active decision set actually reaches it? On this repository, at the 800-token budget the hook ships with:
 
+| route | budget | active decisions delivered | reversed ones delivered | tokens |
+|---|---:|---:|---:|---:|
+| the code alone | — | 0.0% | 0 | 0 |
+| `git log` for the path | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore path scope** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore, cap removed | none | 92.3% | 0 | 741,429 |
 
-**Without CommitLore.** A new session sees two functions with similar inputs and
-reuses one.
+With the cap removed, path scope recovers exactly what a whole-repository dump recovers — 2,047 of 2,217 — for a fraction of its 92,175,612 tokens and none of its 7,322 reversed records. The scope costs nothing. The cap costs 10.6 points. The remaining 170 are records the trust grader withholds.
 
-```ts
-calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
-```
+**This measures delivery, not effect.** No agent ran, so it bounds what one could recover, not what one does — and a retrieval number can climb while the outcome it is meant to predict falls. SWE-bench measured BM25 recall rising from 29.58 to 51.06 across its context budgets and reported that "even when increasing the maximum context size for BM25 would increase recall with respect to the oracle files, performance drops … as models are simply ineffective at localizing problematic code" ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). One corpus, one repository. Seven superseded records and no expired ones, so zero-reversed-delivered says nothing yet about expiry. Method and full tables: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
 
-The team now has another flag, another wrapper, and another compatibility branch
-protecting a use case the function was never meant to own. The reviewer writes
-"we already rejected this" for the second time.
+**The `git log` baseline is not an artifact of measuring ourselves.** The same measurement on four repositories this project did not write — Django, SymPy, scikit-learn and Requests, at pinned commits — puts the share of a path's history that survives an 800-token cut between **37.4% and 55.6%**. The 42.0% above sits inside that band. Losing something close to half a file's history to a fixed budget is what `git log` does on large, long-lived repositories generally, not something peculiar to this one. What did *not* transfer is the mechanism: our paths carry a median of one commit at 687 tokens where Django's carry eight at 213, so long commit messages make the ordinary-Git baseline worse at a fixed budget — a cost of this project's own practice. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) also reports a delivery figure on those repositories; read §9.0 and §9.5 first, because the records there were generated from revert commits by a program and the headline number is one the attachment predicate forces rather than a retrieval result.
 
-**With CommitLore.** Before editing, the agent receives:
+Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
 
-```
-commitlore: active records for src/pricing.ts
+Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. The advantage appears when decisions have been reversed—the case this product exists for.
 
-Limit
-  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
 
-Ruled-out
-  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
-                                    and rounding semantics differ between the two flows
-```
+| route | model-visible records | relevant records | model-visible tokens |
+|---|---:|---:|---:|
+| inject everything | 10,002 | 2/2 | 1,004,554 |
+| top-k lexical | 2 | 1/2 | 190 |
+| CommitLore path scope | 2 | 2/2 | 335 |
 
-`[claim]` is doing real work: this record was not written by a trusted author of
-the repository, so the agent is told to treat it as information rather than as an
-order. A record that *was* signed by a trusted author renders as `[directive]`.
-
-The module boundary is in front of the agent before it proposes the change,
-rather than in a review comment after. Whether it acts on that is an
-agent-behaviour question this project has not answered — see the measurement
-below, and [what it does not show](docs/evidence.md).
+This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model. Where recall ties, and what else has and has not been measured: [docs/evidence.md](docs/evidence.md).
 
 ## How it works
 
