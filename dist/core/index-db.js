@@ -737,11 +737,32 @@ const healthProblem = (db) => {
         return `index is unreadable: ${errorMessage(error)}`;
     }
 };
+/**
+ * How long a contended connection waits before giving up (#420).
+ *
+ * SQLite's default is 0: a busy database fails immediately, and `openSource`
+ * then answers from a full scan. Correct, but expensive — at 100,000 commits an
+ * indexed `context` is 496 ms p50 against 86,673 ms for the scan
+ * (`docs/evidence.md`) — and routine, because the PreToolUse hook fires per
+ * edit and an agent touching several files runs several of them at once. Eight
+ * concurrent cold starts put four of them on the scan path.
+ *
+ * The bound separates two cases rather than being generous. An **incremental**
+ * update takes milliseconds, so this absorbs it. A **full rebuild** on a large
+ * repository takes seconds, and waiting one out inside a hook the agent is
+ * blocked on is worse than scanning — so this expires first on purpose and lets
+ * the existing fallback answer.
+ */
+const BUSY_TIMEOUT_MS = 500;
 const openDatabaseFile = (path, readonly) => {
     const Ctor = loadDatabaseCtor();
     const db = new Ctor(path, { readOnly: readonly });
+    // `node:sqlite` has no `.pragma()` helper (ADR-0012); a pragma is just SQL.
+    //
+    // Set on readers too: WAL lets readers and one writer run together, but a
+    // reader still meets `SQLITE_BUSY` while the writer checkpoints.
+    db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     if (!readonly) {
-        // `node:sqlite` has no `.pragma()` helper (ADR-0012); a pragma is just SQL.
         db.exec('PRAGMA journal_mode = WAL');
         db.exec('PRAGMA synchronous = NORMAL');
     }

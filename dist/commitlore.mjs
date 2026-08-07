@@ -12586,9 +12586,11 @@ var healthProblem = (db) => {
     return `index is unreadable: ${errorMessage(error2)}`;
   }
 };
+var BUSY_TIMEOUT_MS = 500;
 var openDatabaseFile = (path2, readonly2) => {
   const Ctor = loadDatabaseCtor();
   const db = new Ctor(path2, { readOnly: readonly2 });
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   if (!readonly2) {
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA synchronous = NORMAL");
