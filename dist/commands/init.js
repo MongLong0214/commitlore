@@ -36,6 +36,7 @@ import { notesAvailability } from '../core/notes.js';
 import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
+import { installPrePushHook } from '../hooks/pre-push.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -65,15 +66,18 @@ const runHooksStep = (opts) => {
     const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
     const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
     const postCommit = installPostCommitHook(opts.cwd);
-    const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) => result.code === 0
+    // #416: without this the notes mirror is written locally and never leaves the
+    // machine, so a teammate's clone cannot see a record it holds.
+    const prePush = installPrePushHook(opts.cwd);
+    const lines = [commitMsg, prepareCommitMsg, postCommit, prePush].flatMap((result) => result.code === 0
         ? result.stdout.trimEnd().split('\n')
         : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic']);
     return {
         step: 'hooks',
         title: 'hooks install',
-        code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
+        code: [commitMsg, prepareCommitMsg, postCommit, prePush].some((r) => r.code === 2) ? 2 : 0,
         lines,
-        detail: [commitMsg, prepareCommitMsg, postCommit],
+        detail: [commitMsg, prepareCommitMsg, postCommit, prePush],
     };
 };
 const runIndexStep = (opts) => {
