@@ -1,0 +1,123 @@
+/**
+ * CDEB-P task controls (PRD §4.7).
+ *
+ * A task is only worth running if its oracle is known to answer correctly on
+ * inputs whose answer is already known. Two controls per task, and both matter
+ * for opposite reasons:
+ *
+ *   good — this repository as it stands. It respects its own decisions, so an
+ *          oracle reporting REVIVED here is a false positive, and every OFF-arm
+ *          revival it later reports would be noise read as signal.
+ *   bad  — the rejected approach, implemented. An oracle that does not see it
+ *          reports SAFE for a tree that revived the decision, which is the
+ *          failure that would make a null result meaningless.
+ *
+ * The bad controls are written against the real source, so a refactor that
+ * moves the construct they mutate breaks this test rather than silently
+ * blinding the oracle. That is the intended failure mode: `verify-scope` was
+ * caught here first, where the mutation anchored on a string `bench/verify.mjs`
+ * does not contain and the "bad" tree was therefore identical to the good one.
+ */
+
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { afterAll, describe, expect, it } from 'vitest';
+
+import { PILOT_TASKS } from '../bench/cdeb/pilot/tasks.ts';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const scratch: string[] = [];
+
+afterAll(() => {
+  for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+});
+
+/** The rejected approach for each task, as a patch over the real source. */
+const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][]> = {
+  'verify-scope': [
+    ['bench/verify.mjs', (s) => `const GATED = ["m5-seeds-21-30.jsonl", "t703-ablation.jsonl"];\n${s}`],
+  ],
+  'lifecycle-fourth-value': [
+    ['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'orphaned';"))],
+  ],
+  'pending-rm-force': [['src/commands/pending.ts', (s) => `${s}\nexport const FORCE_FLAG = '--force';\n`]],
+  'guard-blocking-policy': [
+    ['src/core/guard.ts', (s) => `${s}\nexport interface GuardPolicy { blocking: boolean }\n`],
+  ],
+};
+
+/** A tree holding the named files, optionally mutated. */
+const tree = (label: string, files: readonly string[], mutate?: (rel: string, s: string) => string): string => {
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), `cdeb-ctl-${label}-`));
+  scratch.push(dir);
+  for (const rel of files) {
+    const raw = readFileSync(join(REPO_ROOT, rel), 'utf8');
+    const out = join(dir, rel);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, mutate === undefined ? raw : mutate(rel, raw));
+  }
+  return dir;
+};
+
+describe('CDEB-P task controls', () => {
+  it('registers four tasks, each naming a record that exists in this history', () => {
+    expect(PILOT_TASKS).toHaveLength(4);
+    for (const task of PILOT_TASKS) {
+      expect(task.record_ids.length).toBeGreaterThan(0);
+      for (const id of task.record_ids) expect(id).toMatch(/^r-[a-z0-9]+$/);
+    }
+  });
+
+  /**
+   * §4.2 forbids four things: the product's name, an instruction to consult
+   * prior decisions, the name of the rejected approach, and the name of the
+   * construct holding the answer. It does not forbid domain nouns — a
+   * maintenance request about a records tool cannot avoid the word "record",
+   * and a prompt contorted to avoid it would read as a test, which §4.2 exists
+   * to prevent.
+   */
+  it('every prompt stays natural — §4.2 forbids the product, the method and the answer', () => {
+    const forbidden = [
+      'commitlore',
+      'ruled-out',
+      'previous decision',
+      'prior decision',
+      'git log',
+      'trailer',
+      'lifecycle',
+      '--force',
+      'manifest',
+      'policy key',
+    ];
+    for (const task of PILOT_TASKS) {
+      const prompt = task.prompt.toLowerCase();
+      for (const term of forbidden) {
+        expect(prompt, `${task.task_id} leaks "${term}"`).not.toContain(term);
+      }
+    }
+  });
+
+  for (const task of PILOT_TASKS) {
+    const patches = BAD_CONTROL[task.task_id];
+
+    it(`${task.task_id}: the good control reads SAFE`, () => {
+      expect(patches, `${task.task_id} has no bad control`).toBeDefined();
+      const verdict = task.oracle(tree(`${task.task_id}-good`, (patches ?? []).map(([rel]) => rel)));
+      expect(verdict.rejected_decision_revived, verdict.detail).toBe(false);
+      expect(verdict.functional_pass, verdict.detail).toBe(true);
+    });
+
+    it(`${task.task_id}: the bad control reads REVIVED`, () => {
+      const files = (patches ?? []).map(([rel]) => rel);
+      const apply = (rel: string, source: string): string => {
+        const patch = (patches ?? []).find(([target]) => target === rel);
+        return patch === undefined ? source : patch[1](source);
+      };
+      const verdict = task.oracle(tree(`${task.task_id}-bad`, files, apply));
+      expect(verdict.rejected_decision_revived, verdict.detail).toBe(true);
+    });
+  }
+});
