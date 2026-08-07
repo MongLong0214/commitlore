@@ -25,6 +25,7 @@
 import { Buffer, isUtf8 } from 'node:buffer';
 
 import { execGit } from './git.js';
+import { NOTES_REF } from './notes.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
   STRUCTURAL_TRAILER_KEYS,
@@ -786,4 +787,121 @@ export const authorsOf = (cwd: string, shas: readonly string[]): Map<string, str
   }
 
   return authors;
+};
+
+/**
+ * Maps each annotated commit to **every** identity that has written the note
+ * attached to it — the people who actually wrote the record text.
+ *
+ * `authorsOf` answers a different question, and answering #409's with it is
+ * what made the forgery work: a note is a separate object written by whoever
+ * ran `git notes add`, and grading its content by the annotated commit's author
+ * hands the note writer that author's trust. The commit author never wrote the
+ * text and cannot see it in their own message.
+ *
+ * **Every** writer, not the latest one, because a note is not overwritten the
+ * way a trailer value is. `git notes merge -s cat_sort_uniq` concatenates two
+ * writers' notes into one blob, and the walk then attributes that blob to
+ * whichever of them committed last. Taking the latest would hand one writer's
+ * text the other's trust whenever the trusted writer happened to go second —
+ * the same forgery this fix exists to close, one merge further along. Returning
+ * both lets `gradeDeclarations` keep the floor, which is what the rest of this
+ * module already does across declarations.
+ *
+ * A note git cannot attribute has no entry, and a record with no known author
+ * grades `claim`. Note paths are fanned out by git (`ab/cdef…`, sometimes
+ * deeper), so the separators are stripped to recover the annotated sha.
+ */
+export const noteAuthorsOf = (cwd: string): Map<string, string[]> => {
+  const authors = new Map<string, string[]>();
+  const result = execGit(
+    ['log', AUTHOR_FORMAT, '--name-only', '--no-renames', '--no-color', NOTES_REF],
+    { cwd },
+  );
+  // No notes ref, an unreadable one, or a repository with no commits: no
+  // attributions, so every notes-sourced record falls to `claim`.
+  if (result.code !== 0) return authors;
+
+  for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+    if (chunk === '') continue;
+    const [head = '', ...rest] = chunk.split(AUTHOR_FIELD_SEP);
+    if (head.trim() === '') continue;
+    const [author = '', ...pathLines] = (rest[0] ?? '').split('\n');
+    const noteAuthor = author.trim();
+    if (noteAuthor === '') continue;
+
+    for (const line of pathLines) {
+      const annotated = line.trim().replace(/\//g, '');
+      if (!AUTHOR_SHA_RE.test(annotated)) continue;
+      const seen = authors.get(annotated);
+      if (seen === undefined) authors.set(annotated, [noteAuthor]);
+      else if (!seen.includes(noteAuthor)) seen.push(noteAuthor);
+    }
+  }
+
+  return authors;
+};
+
+/**
+ * Who to grade a record's declarations by, per source.
+ *
+ * A record can be declared by several commits and can arrive from both the
+ * commit message and the notes mirror at once. Each declaration is graded by
+ * the identity that wrote *that* declaration, and the floor is kept — the same
+ * rule `restrictGrade` applies across commits, extended to the axis #409
+ * showed was missing.
+ *
+ * A record whose only source is `notes` is therefore never graded by the
+ * annotated commit's author, and a mirrored record cannot be promoted by the
+ * friendlier of its two authorships. That downgrades a mirror written by a bot
+ * identity to `claim` until the bot is listed as a trusted author, which is the
+ * fail-closed direction and is visible in the record's reason.
+ *
+ * A note carries every identity that has written it, not just the latest, so a
+ * blob two writers were merged into is graded against both (`noteAuthorsOf`).
+ *
+ * Both consumer routes call this rather than looping themselves. `query.ts` and
+ * `inject.ts` each had their own copy of the loop, and two implementations of
+ * one policy is one implementation and one hole.
+ */
+export const gradeDeclarations = (
+  record: Record,
+  declarations: {
+    shas: readonly string[];
+    sources: readonly ('commit' | 'notes')[];
+    commitAuthors: ReadonlyMap<string, string>;
+    noteAuthors: ReadonlyMap<string, readonly string[]>;
+  },
+  ctx: GradeContext,
+): Grade => {
+  const { shas, sources, commitAuthors, noteAuthors } = declarations;
+  // An empty `sources` predates the field; treat it as a commit declaration so
+  // an older caller keeps the behaviour it had.
+  const fromNotes = sources.includes('notes');
+  const fromCommit = sources.length === 0 || sources.includes('commit');
+
+  // The declaration's author is written onto the record and withheld from the
+  // context, because `gradeRecord` reads `record.author` first: leaving either
+  // in place would let the record's own field, or a caller's fallback identity,
+  // speak for a declaration it did not write. An unattributed declaration keeps
+  // `undefined` here and grades `claim`.
+  const base: GradeContext = {
+    at: ctx.at,
+    ...(ctx.trustedAuthors === undefined ? {} : { trustedAuthors: ctx.trustedAuthors }),
+  };
+  let worst: Grade | undefined;
+  const consider = (author: string | undefined): void => {
+    const one = gradeRecord({ ...record, author } as Record, base);
+    worst = worst === undefined ? one : restrictGrade(worst, one);
+  };
+
+  for (const sha of shas) {
+    if (fromCommit) consider(commitAuthors.get(sha));
+    if (!fromNotes) continue;
+    const writers = noteAuthors.get(sha);
+    if (writers === undefined || writers.length === 0) consider(undefined);
+    else for (const writer of writers) consider(writer);
+  }
+
+  return worst ?? gradeRecord(record, ctx);
 };

@@ -188,3 +188,55 @@ export declare const gradeAll: (records: AuthoredRecord[], ctx: GradeContext) =>
  * `directive`.
  */
 export declare const authorsOf: (cwd: string, shas: readonly string[]) => Map<string, string>;
+/**
+ * Maps each annotated commit to **every** identity that has written the note
+ * attached to it — the people who actually wrote the record text.
+ *
+ * `authorsOf` answers a different question, and answering #409's with it is
+ * what made the forgery work: a note is a separate object written by whoever
+ * ran `git notes add`, and grading its content by the annotated commit's author
+ * hands the note writer that author's trust. The commit author never wrote the
+ * text and cannot see it in their own message.
+ *
+ * **Every** writer, not the latest one, because a note is not overwritten the
+ * way a trailer value is. `git notes merge -s cat_sort_uniq` concatenates two
+ * writers' notes into one blob, and the walk then attributes that blob to
+ * whichever of them committed last. Taking the latest would hand one writer's
+ * text the other's trust whenever the trusted writer happened to go second —
+ * the same forgery this fix exists to close, one merge further along. Returning
+ * both lets `gradeDeclarations` keep the floor, which is what the rest of this
+ * module already does across declarations.
+ *
+ * A note git cannot attribute has no entry, and a record with no known author
+ * grades `claim`. Note paths are fanned out by git (`ab/cdef…`, sometimes
+ * deeper), so the separators are stripped to recover the annotated sha.
+ */
+export declare const noteAuthorsOf: (cwd: string) => Map<string, string[]>;
+/**
+ * Who to grade a record's declarations by, per source.
+ *
+ * A record can be declared by several commits and can arrive from both the
+ * commit message and the notes mirror at once. Each declaration is graded by
+ * the identity that wrote *that* declaration, and the floor is kept — the same
+ * rule `restrictGrade` applies across commits, extended to the axis #409
+ * showed was missing.
+ *
+ * A record whose only source is `notes` is therefore never graded by the
+ * annotated commit's author, and a mirrored record cannot be promoted by the
+ * friendlier of its two authorships. That downgrades a mirror written by a bot
+ * identity to `claim` until the bot is listed as a trusted author, which is the
+ * fail-closed direction and is visible in the record's reason.
+ *
+ * A note carries every identity that has written it, not just the latest, so a
+ * blob two writers were merged into is graded against both (`noteAuthorsOf`).
+ *
+ * Both consumer routes call this rather than looping themselves. `query.ts` and
+ * `inject.ts` each had their own copy of the loop, and two implementations of
+ * one policy is one implementation and one hole.
+ */
+export declare const gradeDeclarations: (record: Record, declarations: {
+    shas: readonly string[];
+    sources: readonly ("commit" | "notes")[];
+    commitAuthors: ReadonlyMap<string, string>;
+    noteAuthors: ReadonlyMap<string, readonly string[]>;
+}, ctx: GradeContext) => Grade;

@@ -28,10 +28,15 @@
  * and a `blocked` record contributes nothing but a count — its content never
  * reaches the payload, because the content is the attack.
  *
- * A record declared by several commits is graded once per declaring commit and
- * takes the most restrictive answer. Trailer *values* fold latest-wins
- * (SPEC §5); trust does not, or an outside contributor could promote their own
- * record to `directive` by appending a commit.
+ * A record declared several times is graded once per declaration and takes the
+ * most restrictive answer. Trailer *values* fold latest-wins (SPEC §5); trust
+ * does not, or an outside contributor could promote their own record to
+ * `directive` by appending a commit.
+ *
+ * A declaration is graded by whoever wrote *it*, which for a record arriving
+ * from the notes mirror is the note's author and not the annotated commit's
+ * (#409). A mirrored record is therefore graded on both authorships and keeps
+ * the floor.
  *
  * ## It is bounded, and says when it cut
  *
@@ -62,7 +67,15 @@
 import { createHash } from 'node:crypto';
 
 import { execGit } from './git.js';
-import { authorsOf, gradeRecord, restrictGrade, type Grade, type Trust } from './grade.js';
+import {
+  authorsOf,
+  gradeDeclarations,
+  gradeRecord,
+  noteAuthorsOf,
+  restrictGrade,
+  type Grade,
+  type Trust,
+} from './grade.js';
 import {
   LIMIT_KEY,
   RULED_OUT_KEY,
@@ -369,24 +382,20 @@ const SHA_RE = /^[0-9a-f]{4,40}$/;
 const gradeMerged = (
   record: GradedRecord,
   authors: ReadonlyMap<string, string>,
+  noteAuthors: ReadonlyMap<string, readonly string[]>,
   at: Date,
   trustedAuthors: readonly string[] | undefined,
-): Grade => {
-  const shas = record.shas.length > 0 ? record.shas : [record.sha];
-  let worst: Grade | undefined;
-
-  for (const sha of shas) {
-    const author = authors.get(sha);
-    const one = gradeRecord(record, {
-      at,
-      ...(author === undefined ? {} : { author }),
-      ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
-    });
-    worst = worst === undefined ? one : restrictGrade(worst, one);
-  }
-
-  return worst ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
-};
+): Grade =>
+  gradeDeclarations(
+    record,
+    {
+      shas: record.shas.length > 0 ? record.shas : [record.sha],
+      sources: record.sources,
+      commitAuthors: authors,
+      noteAuthors,
+    },
+    { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) },
+  );
 
 /**
  * What stands in for a grade when `ablation.noGrade` removes grading.
@@ -816,6 +825,12 @@ export const buildInjection = (opts: InjectOptions): Injection => {
   const authors = ablation.noGrade
     ? new Map<string, string>()
     : authorsOf(cwd, active.flatMap((record) => record.shas));
+  // Walked only when something actually came from the mirror, so a repository
+  // with no notes pays nothing for the check (#409).
+  const noteAuthors =
+    ablation.noGrade || !active.some((record) => record.sources.includes('notes'))
+      ? new Map<string, string[]>()
+      : noteAuthorsOf(cwd);
   const grades = new Map<string, Grade>(
     active.map((record) => [
       record.recordId ?? `${record.sha}:${record.source}`,
@@ -829,7 +844,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
           }
         : ablation.noGrade
           ? ungraded(record)
-          : gradeMerged(record, authors, at, opts.trustedAuthors),
+          : gradeMerged(record, authors, noteAuthors, at, opts.trustedAuthors),
     ]),
   );
 

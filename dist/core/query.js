@@ -45,7 +45,7 @@
  */
 import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
 import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
-import { authorsOf, gradeRecord, restrictGrade } from './grade.js';
+import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
 import { SINGLE_VALUED, } from './types.js';
@@ -483,19 +483,14 @@ const gradeMerged = (merged, cwd, at, trustedAuthors) => {
     if (merged.length === 0)
         return;
     const authors = authorsOf(cwd, merged.flatMap((record) => record.shas));
+    // Walked only when something actually came from the mirror, so a repository
+    // with no notes pays nothing for the check (#409).
+    const noteAuthors = merged.some((record) => record.sources.includes('notes'))
+        ? noteAuthorsOf(cwd)
+        : new Map();
     for (const record of merged) {
         const shas = record.shas.length > 0 ? record.shas : [record.sha];
-        let grade;
-        for (const sha of shas) {
-            const author = authors.get(sha);
-            const one = gradeRecord({ trailers: record.trailers }, {
-                at,
-                ...(author === undefined ? {} : { author }),
-                ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
-            });
-            grade = grade === undefined ? one : restrictGrade(grade, one);
-        }
-        const resolved = grade ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
+        const resolved = gradeDeclarations({ trailers: record.trailers }, { shas, sources: record.sources, commitAuthors: authors, noteAuthors }, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
         record.trust = resolved.trust;
         if (resolved.matchedTrailerKeys !== undefined) {
             record.matchedTrailerKeys = resolved.matchedTrailerKeys;
