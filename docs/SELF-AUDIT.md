@@ -30,8 +30,10 @@ injected legend went on advertising it. Both prior benchmarks measured
 what they were.
 
 **[#343](https://github.com/MongLong0214/commitlore/issues/343) — no evidence that a fresh agent recovers the decisions a repository holds.**
-Filed against the absence of evidence for the product's central premise, before
-any benchmark existed. It became M1.
+Filed from an external review of v0.5.0, against the absence of evidence for the
+product's central premise: the review granted that lifecycle, attachment,
+grading and rebase-survival were proved, and said the thing the product is *for*
+was not. The behaviour study it asked for is the one still running.
 
 **[#341](https://github.com/MongLong0214/commitlore/issues/341) — the `suggest` policy named an approval that nothing could enforce.**
 A configuration value implied a human consent step the code had no way to check.
@@ -130,5 +132,10 @@ it starts.
 
 ---
 
-*This page is generated from real issues. If an entry no longer matches the
-code, that is a defect in this page and worth an issue of its own.*
+*This page is written by hand from real issues. If an entry no longer matches
+the code, that is a defect in this page and worth an issue of its own.*
+
+*It has already had one. The first version of this page claimed #343 "became
+M1". It did not — M1 predates it by weeks, and #343 came out of an external
+review of v0.5.0. Caught by checking the claim against the milestone rather
+than against memory, which is the same check this page is about.*
