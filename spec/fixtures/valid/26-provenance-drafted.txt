@@ -1,0 +1,6 @@
+Move the session cache into the process
+
+Provenance: drafted
+Limit: the v1 runtime has no network egress outside the app subnet
+Ruled-out: shared Redis cache | ops refuses another stateful dependency for a v1
+Record-Id: r-draft01

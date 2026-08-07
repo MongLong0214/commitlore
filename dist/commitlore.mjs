@@ -11210,7 +11210,7 @@ var canonicalConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_CANONICAL.ge
 var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
-var PROVENANCE_PREFIXES = ["authored", "inherited", "reconstructed", "unknown"];
+var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
 var RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
 
@@ -14227,6 +14227,7 @@ var provenanceOf = (record2) => {
   const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0]?.trim();
   if (raw === void 0) return { kind: "unknown" };
   if (raw === "authored") return { kind: "authored" };
+  if (raw === "drafted") return { kind: "drafted" };
   if (raw === "reconstructed") return { kind: "reconstructed" };
   const inherited = INHERITED_RE.exec(raw);
   const sha = inherited?.[1];
@@ -14275,6 +14276,9 @@ var grade = (input, ctx) => {
   const claim = (reason) => ({ provenance, lifecycle, trust: "claim", reason });
   if (provenance === "reconstructed") {
     return claim("provenance is reconstructed \u2014 rebuilt from history, never directly authored");
+  }
+  if (provenance === "drafted") {
+    return claim("provenance is drafted \u2014 captured without a person reading it");
   }
   if (provenance !== "authored") {
     return claim(`provenance is ${provenance}, and only authored records can direct an agent`);

@@ -1,0 +1,10 @@
+{
+  "description": "Provenance: drafted — captured from a transcript and staged without a person reading it (ADR-0030). Well-formed, and capped at claim by SPEC §7 rather than rejected.",
+  "trailers": [
+    { "key": "Provenance", "value": "drafted" },
+    { "key": "Limit", "value": "the v1 runtime has no network egress outside the app subnet" },
+    { "key": "Ruled-out", "value": "shared Redis cache | ops refuses another stateful dependency for a v1" },
+    { "key": "Record-Id", "value": "r-draft01" }
+  ],
+  "canonical": "Limit: the v1 runtime has no network egress outside the app subnet\nRuled-out: shared Redis cache | ops refuses another stateful dependency for a v1\nRecord-Id: r-draft01\nProvenance: drafted\n"
+}

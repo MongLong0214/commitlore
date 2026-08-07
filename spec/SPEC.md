@@ -121,7 +121,7 @@ That leaves the third: an author who wrote a pipe into the alternative and got a
 | `Supersedes:` | `Record-Id` | yes | Retires an earlier record |
 | `Expires:` | `YYYY-MM-DD` \| free-text condition | no | When this record stops being active |
 | `Evidence:` | `path` \| `path#anchor` \| URL | yes | Link from a claim to its proof |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
 | `CommitLore-Version:` | semver | no | Protocol version this record targets |
 | `X-<Name>:` | free text | yes | Organization extension — preserved, never interpreted by the core |
 
@@ -228,7 +228,7 @@ A validation failure MUST exit non-zero. Implementations MUST NOT silently repai
 
 Records are graded on two axes, and the grade decides how `Warn:` is delivered:
 
-- **provenance** — `authored` | `inherited` | `reconstructed` | `unknown`
+- **provenance** — `authored` | `drafted` | `inherited` | `reconstructed` | `unknown`
 - **lifecycle** — `active` | `superseded` | `expired`
 
 `Warn:` renders as an **instruction** only when provenance is `authored` and the commit's author is trusted for the repository. Otherwise it renders as a **claim** — surfaced as information, never as a directive. Records from outside contributors always render as claims.
