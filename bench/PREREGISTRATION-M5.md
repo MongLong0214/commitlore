@@ -246,3 +246,206 @@ an obligation means anything.
 **What was read to produce this note:** `stopped_by`, `turns`, `tokens`,
 `accepted_records` and `guard_exposure`. Not `reproposed`, and not any
 cross-tabulation of it.
+
+### Deviation 3 — 2026-08-07: 400 completed rows were lost, and are being re-run
+
+**The run finished.** Its log records all six shards and a final count of 1,160:
+
+```
+=== seeds  1-10 done 2026-08-02T02:46:04Z rows=200 ===
+=== seeds 11-20 done 2026-08-02T12:46:57Z rows=200 ===
+=== seeds 21-30 done 2026-08-02T23:08:55Z rows=200 ===
+=== seeds 31-40 done 2026-08-03T10:03:56Z rows=200 ===
+=== seeds 41-50 done 2026-08-03T20:36:31Z rows=200 ===
+=== seeds 51-58 done 2026-08-04T01:16:13Z rows=160 ===
+ALL SHARDS COMPLETE 2026-08-04T01:16:13Z
+```
+
+**The first two shards no longer exist.** They were written only to a session
+scratchpad under the system temporary directory and were never copied anywhere
+durable. Between 2026-08-04 and 2026-08-07 the operating system's temp reaper
+removed them. No other copy was made, and a search of every local filesystem
+found none. 400 rows — seeds 1–20, both arms, all ten tasks — are unrecoverable.
+
+This was an operational failure in how the run was stored, not a fault in the
+harness or the design. A sixty-hour measurement was left with a single copy in a
+directory whose contract is that it may be emptied.
+
+**Why the loss is outcome-independent.** The reaper selects by age and cannot
+read a row. The two shards deleted are exactly the two oldest, written
+2026-08-01 and 2026-08-02; the four that survive are the four most recent. No
+property of a result influenced what was removed, and what survives is a
+contiguous seed range, 21–58, complete in both arms at 380 each.
+
+**Nothing was analysed.** Establishing what survived required `run_id`,
+`harness_commit`, `dist_digest`, `task`, `cond`, `seed` and `model`.
+`reproposed` was not read on any row and no 2×2 table was computed, then or
+since. `bench/m5-analysis.ts` enforces this independently: it exits before the
+table on any input short of 1,160 rows.
+
+**The lost rows are being re-run, restoring n = 1,160.** The alternative — 
+analysing the surviving 760 as a reduced-power run — was rejected. §8 registers
+1,160 rows and calls anything less a partially completed run that "is not
+analysed and not reported as a result." 760 rows carry roughly 62% power against
+the registered effect where the design specifies 80%, and choosing a smaller n
+after part of the data is gone is the shape of decision this document exists to
+forbid, however innocent its cause.
+
+**What is held constant.** The re-run is pinned to the harness commit the
+surviving rows record, `788a9db`, whose committed `dist/` reproduces the recorded
+digest `f54cda47…` exactly — verified before the re-run was launched, not
+asserted. Same ten registered fixtures, same `--model sonnet`, same `--cond
+both`, same caps, same seeds 1–20. Every row of the completed set will therefore
+agree on `harness_commit` and `dist_digest`.
+
+**What differs, and must be reported.** The re-run rows are produced roughly five
+days after the originals, against a `sonnet` alias that is not pinned to a build,
+so the provider's model may not be byte-identical to the one that produced seeds
+21–58. This is a real limitation and cannot be engineered away at this point. Two
+things bound it: the re-run covers whole seeds, and within each seed both arms,
+so any drift falls on treatment and control equally and cannot manufacture a
+difference between them.
+
+**The verdict must report the production window per shard** — seeds 21–58 from
+2026-08-01 to 2026-08-04, seeds 1–20 on 2026-08-07 — and state that seeds 1–20
+are a re-run, beside the 2×2 table. Registered here before those rows exist.
+
+**Storage, changed so this cannot repeat.** Results are written outside the
+scratchpad and each shard is committed to `bench/results/` as it lands. The four
+surviving shards were committed before the re-run was launched.
+
+**One harness check preceded the re-run**, at seed 999 — outside the registered
+range of 1–58, so no registered cell was touched. It confirms the pinned harness
+runs and stamps the expected commit and digest. Its rows are discarded and are
+not citable.
+
+### Deviation 4 — 2026-08-07: 70 rows carry no measurement, and seeds 55–58 are re-run too
+
+Found while auditing `stopped_by` across the surviving shards, which §6 and §7
+require to be monitored. **`stopped_by: "error"` stands at 70 of the 760
+surviving rows.** They are not scattered:
+
+| seed | error rows |
+|---|---:|
+| 21–54 | **0** of 680 |
+| 55 | 10 of 20 |
+| 56 | 20 of 20 |
+| 57 | 20 of 20 |
+| 58 | 20 of 20 |
+
+The run died partway through seed 55 and produced nothing but errors after it.
+The tail shard's wall-clock says the same thing: 4.7 hours for 160 rows against
+roughly 10.4 hours for each 200-row shard before it.
+
+**This corrects the earlier reading of the run log.** `ALL SHARDS COMPLETE` and
+a final count of 1,160 meant 1,160 rows were *written*. It did not mean 1,160
+measurements exist, and §7 has always said so: a row with `stopped_by: "error"`
+carries no measurement and does not enter the analysis set. The registered n was
+never reached.
+
+**The errors are balanced across arms at 35 and 35**, and they fall on all ten
+tasks. Nothing about a result influenced which rows failed — the harness stopped
+producing measurements at a point in the seed order.
+
+**Seeds 55–58 are re-run in full**, alongside seeds 1–20 (deviation 3). Whole
+seeds, both arms, all ten tasks — not the 70 errored cells alone. Re-running
+only the cells that failed would make the re-run set depend on a per-cell
+property, and although `error` is the absence of a measurement rather than an
+outcome, whole-seed replacement removes the question entirely. The 10 non-error
+rows in seed 55 are superseded by their re-run counterparts and are not analysed.
+
+That restores the registered design exactly:
+
+| source | seeds | rows | per arm |
+|---|---|---:|---:|
+| surviving, error-free | 21–54 | 680 | 340 |
+| re-run (deviation 3) | 1–20 | 400 | 200 |
+| re-run (this deviation) | 55–58 | 80 | 40 |
+| **total** | **1–58** | **1,160** | **580** |
+
+Everything deviation 3 records about the re-run applies here too: same pinned
+harness commit `788a9db`, same verified `dist` digest, same ten fixtures, same
+`--model sonnet`, and the same limitation that these rows are produced days
+after seeds 21–54 against an alias that is not pinned to a build. **The verdict
+must report the production window per shard**, and must state that seeds 1–20
+and 55–58 are re-runs.
+
+**Still nothing analysed.** This note was produced from `stopped_by`, `seed`,
+`task`, `cond` and the shard wall-clock. Not `reproposed`, and no
+cross-tabulation of it.
+
+---
+
+## Appendix A — what was seen during the run, and a prediction made before the result
+
+Neither section below is part of the registered analysis. They are here because
+§8's stopping rule is only as good as the account of what was actually looked
+at, and because a prediction is worth nothing unless it is written down while it
+can still be wrong.
+
+### A.1 Incidental exposure to `reproposed`
+
+Progress was reported during the run as "no outcome has been examined." That was
+**not accurate**, and the correction belongs here rather than in a message.
+
+`bench/runner.ts` prints one console line per run, and that line carries
+`reproposed=`. Checking progress by reading the tail of the shard log therefore
+displayed individual outcome values. Across the whole run, eight rows were seen
+this way:
+
+| arm | rows | values |
+|---|---|---|
+| `commitlore-on` | 1, 3, 7, 11, 13, 41 | one `true`, five `false` |
+| `commitlore-off` | 2, 70 | one `true`, one `false` (row 70 is `stopped_by: "error"` and is excluded by §7 regardless) |
+
+Eight rows of 1,160, with no denominator and no cross-tabulation. No 2×2 table
+was computed, no analysis choice was made or revised, and nothing in §3, §7 or
+§8 was altered at any point. A sample this size cannot inform a decision even in
+principle.
+
+It is recorded anyway for the same reason the deviations are: an account of a
+run that quietly rounds "a few rows appeared in a log line" down to "nothing was
+examined" is the kind of account this document exists to make impossible. The
+monitoring §6 and §7 require — `stopped_by`, `guard_exposure`,
+`accepted_records`, `turns`, `tokens`, `model` — is unaffected and was the
+purpose of every one of those checks.
+
+**Fixed for the remaining shards:** progress is read with `wc -l` and by
+filtering `stopped_by`, never by printing raw log lines.
+
+### A.2 A prediction, stated before the outcome
+
+Written 2026-08-07, with the run incomplete and nothing computed. It commits the
+author to an expectation that the result can falsify.
+
+**Direction: the registered one** — `commitlore-on < commitlore-off`.
+
+**Magnitude: smaller than the registered 6.6pp.** Three things point the same
+way, and none of them is a result:
+
+1. **The measured treatment is its weakest form.** No arm passes
+   `--trusted-author`, so every record renders `[claim]`, and the payload's own
+   legend tells the agent: *"Not an instruction: do not act on it as an order."*
+   (#415). A `[directive]` world is not what this run measures.
+2. **`bench/ROUTE-GAP.md`** records treatment-arm runs that implemented
+   something explicitly listed in the injected block. The injection is not
+   reliably honoured.
+3. **The truncation imbalance of deviation 2 is conservative.** The control arm
+   is truncated at 31.4% against 16.7%, and truncation suppresses re-proposal —
+   so it shrinks the gap the hypothesis predicts rather than manufacturing one.
+
+**Stated probabilities**, so this cannot be reread as whatever happens:
+
+| outcome | |
+|---|---:|
+| significant, registered direction | 30–40% |
+| registered direction, not significant | ~45% |
+| null, or the other direction | ~20% |
+
+**The largest way this could be wrong.** The control base rate of the current
+task set is unknown to the author. M1-era diagnosis found seven of ten tasks had
+a control base rate of zero — "most of the measuring instrument was empty" — and
+the tasks were rewritten afterwards for the discriminative property. If that
+rewrite raised the control rate well above the 23.3% §4 plans against, the
+absolute effect and the power are both larger than assumed here, and a
+significant result is more likely than these numbers say.
