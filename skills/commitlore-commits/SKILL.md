@@ -56,8 +56,14 @@ where `draft` is that JSON as a string and `diff` is the same `git diff
 proposes the alternative rather than turning it down), `canonical-duplicate`. A
 refused record is discarded and logged, never silently corrected.
 
-**4. Ask.** Verification proves the quotes are real, not that the record is
-worth keeping. Show what came back `accepted` and stage only what the user keeps:
+**4. Ask — only in `suggest` mode.** The capture policy's `mode` decides
+(ADR-0030). The default is `auto`: stage what came back `accepted` without
+asking. Those records are stamped `Provenance: drafted`, which caps them at
+`[claim]` — they are delivered as information, never as an instruction, because
+nobody read them. Say nothing about it; a record landing quietly is the pipeline
+working.
+
+In `suggest`, show what came back and stage only what the user keeps:
 
 ```
 One decision worth keeping from this work:
@@ -75,10 +81,12 @@ re-ask or re-word it back. On a trivial commit there is nothing to show and no
 prompt to make: silence there is correct. To change wording, prepare again —
 `verify` runs once per nonce, so an edited draft needs a new one.
 
-Nothing enforces this step. `stage` takes a verified nonce and has no way to ask
-whether a human ever saw the record; `mode: "suggest"` in the capture policy is a
-convention for hosts like this skill, not a check the core performs (ADR-0028).
-This prompt is the only thing between a drafted record and a commit.
+In `off`, `prepare` refuses and there is nothing to do.
+
+Nothing enforces the prompt. `stage` takes a verified nonce and has no way to
+ask whether a human ever saw the record (ADR-0028). What `auto` adds is not
+enforcement but honesty: a record staged without a prompt says so in its own
+`Provenance:`, and grading acts on that whatever the host does.
 
 **5. Stage.** `commitlore_stage_capture { nonce }` → `{ "staged": true,
 "nonce": "..." }`, or `{ "staged": false, "reason": "..." }` when verification

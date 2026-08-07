@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
-import { resolvePolicy } from './capture-policy.js';
+import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
 import { createPending } from './pending.js';
 // ---------------------------------------------------------------------------
 // Guard advisory — ADR-0020, T-1109
@@ -104,6 +104,13 @@ export const prepareCaptureContext = (opts) => {
     const policy = resolvePolicy(cwd);
     const policyIdentityHash = policy.identityHash;
     const policyError = policy.error;
+    // ADR-0030 decision 5. `off` refuses here rather than later: no transcript is
+    // hashed, no candidate is drafted, and no pending file is written. A switch
+    // that still produced a candidate and discarded it would leave the user's
+    // session text hashed on disk for a feature they turned off.
+    if (policy.policy.mode === 'off') {
+        throw new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`);
+    }
     // 6. Build the prompt contract via buildHarvestPrompt
     const prompt = buildHarvestPrompt({ transcript, diff });
     // 7. Compute guard advisory — T-1109

@@ -18,6 +18,8 @@
  */
 import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
+import { resolvePolicy } from './capture-policy.js';
+const PROVENANCE_KEY = 'Provenance';
 import { readPending, storeVerification } from './pending.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
@@ -191,6 +193,21 @@ export const verifyCaptureRecords = (opts) => {
                 continue;
             }
             accepted.push(verified);
+        }
+        // ADR-0030. In `auto` the host stages without asking, so nobody read this
+        // record — whatever the model wrote in its `Provenance:` line. Stamping
+        // `drafted` here is the only moment the pipeline knows that for certain,
+        // and grading caps a drafted record at `claim`.
+        //
+        // `suggest` is left alone: a host in that mode may have asked, and `stage`
+        // has no way to tell whether it did (ADR-0028), so overwriting would be a
+        // claim this code cannot support either way.
+        if (resolvePolicy(cwd).policy.mode === 'auto') {
+            for (const verified of accepted) {
+                const trailers = verified.record.trailers.filter((trailer) => trailer.key !== PROVENANCE_KEY);
+                trailers.push({ key: PROVENANCE_KEY, value: 'drafted' });
+                verified.record.trailers = trailers;
+            }
         }
         // Collect rejections from verifyDraft
         for (const rejectedRec of verifyResult.rejected) {

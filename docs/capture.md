@@ -60,3 +60,39 @@ grammar is in [protocol.md](protocol.md); the normative rules are in
   force — through MCP, or through the `PreToolUse` hook.
 - A decision that was later superseded or expired does not reach the agent as if
   it still stood. `commitlore stale` lists the ones that no longer apply.
+
+## Standing behind a record nobody read
+
+A record marked `Provenance: drafted` was produced by the capture pipeline and
+staged without a person reading it. Its quotes are checked against the
+transcript and the diff it came from, so it is real — but nobody vouched for the
+wording, and that is what `[directive]` claims. It is delivered as `[claim]`
+however trusted its author is (ADR-0030).
+
+**Endorsing one is a new record, never an edit.** A commit message cannot be
+changed without rewriting history, so the way to stand behind a drafted record
+is to write one that supersedes it:
+
+```
+feat: stand behind the cache decision
+
+Warn: session entries must stay under 4KB
+Ruled-out: shared Redis cache | ops refuses another stateful dependency
+Supersedes: r-promo01
+Record-Id: r-promo02
+Provenance: authored
+```
+
+The lifecycle fold retires the drafted record, and the endorsement is graded on
+its own author:
+
+```
+before   [claim]      r-promo01   session entries must stay under 4KB
+after    [directive]  r-promo02   session entries must stay under 4KB
+```
+
+Nothing was added for this — `Supersedes:` and the fold already did it.
+
+**Never endorsing anything is the supported path.** A repository where nobody
+promotes serves every record as a `claim`, which is what an installed CommitLore
+serves today unless `--trusted-author` is configured.

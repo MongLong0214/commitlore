@@ -15230,8 +15230,9 @@ var guard = (opts) => {
 import { createHash } from "node:crypto";
 import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
 import { join as join2 } from "node:path";
+var CAPTURE_MODES = ["auto", "suggest", "off"];
 var POLICY_DEFAULTS = {
-  mode: "suggest",
+  mode: "auto",
   max_records_per_commit: 1,
   require_verified_evidence: true
 };
@@ -15279,12 +15280,12 @@ var validate = (raw) => {
   }
   const policy = { ...POLICY_DEFAULTS };
   if ("mode" in obj) {
-    if (obj.mode !== "suggest") {
+    if (typeof obj.mode !== "string" || !CAPTURE_MODES.includes(obj.mode)) {
       return {
-        error: `${POLICY_FILE_NAME}: mode must be "suggest" (got ${JSON.stringify(obj.mode)})`
+        error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(", ")} (got ${JSON.stringify(obj.mode)})`
       };
     }
-    policy.mode = "suggest";
+    policy.mode = obj.mode;
   }
   if ("max_records_per_commit" in obj) {
     const v = obj.max_records_per_commit;
@@ -15606,6 +15607,11 @@ var prepareCaptureContext = (opts) => {
   const policy = resolvePolicy(cwd);
   const policyIdentityHash = policy.identityHash;
   const policyError = policy.error;
+  if (policy.policy.mode === "off") {
+    throw new Error(
+      `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
+    );
+  }
   const prompt = buildHarvestPrompt({ transcript, diff });
   const diffPaths = extractPathsFromDiff(diff);
   const advisory = computeGuardAdvisory({
@@ -15636,6 +15642,7 @@ var prepareCaptureContext = (opts) => {
 
 // src/core/capture-verify.ts
 import { createHash as createHash3 } from "node:crypto";
+var PROVENANCE_KEY3 = "Provenance";
 var sha2562 = (input) => createHash3("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
 var canonicalTuple = (record2) => {
@@ -15756,6 +15763,15 @@ var verifyCaptureRecords = (opts) => {
         continue;
       }
       accepted.push(verified);
+    }
+    if (resolvePolicy(cwd).policy.mode === "auto") {
+      for (const verified of accepted) {
+        const trailers = verified.record.trailers.filter(
+          (trailer) => trailer.key !== PROVENANCE_KEY3
+        );
+        trailers.push({ key: PROVENANCE_KEY3, value: "drafted" });
+        verified.record.trailers = trailers;
+      }
     }
     for (const rejectedRec of verifyResult.rejected) {
       rejected.push({
@@ -16302,7 +16318,7 @@ var describeRecordedHookTarget = (target) => [
 
 // src/core/squash.ts
 var RECORD_ID_KEY4 = "Record-Id";
-var PROVENANCE_KEY3 = "Provenance";
+var PROVENANCE_KEY4 = "Provenance";
 var EXPIRES_KEY2 = "Expires";
 var VERSION_KEY = "CommitLore-Version";
 var UNIT = "";
@@ -16470,7 +16486,7 @@ var foldGroup = (members) => {
   const slots = /* @__PURE__ */ new Map();
   for (const record2 of members) {
     for (const trailer of record2.trailers) {
-      if (trailer.key === PROVENANCE_KEY3 || trailer.key === RECORD_ID_KEY4) continue;
+      if (trailer.key === PROVENANCE_KEY4 || trailer.key === RECORD_ID_KEY4) continue;
       if (SINGLE_VALUED.has(trailer.key)) {
         const list = candidates.get(trailer.key) ?? [];
         list.push({ value: trailer.value, sha: record2.sha });
@@ -16505,7 +16521,7 @@ var planSquash = (records) => {
     const block = [...payload];
     if (group.recordId !== void 0) block.push({ key: RECORD_ID_KEY4, value: group.recordId });
     if (newest !== void 0) {
-      block.push({ key: PROVENANCE_KEY3, value: `inherited ${newest.sha}` });
+      block.push({ key: PROVENANCE_KEY4, value: `inherited ${newest.sha}` });
     }
     return block;
   });
