@@ -40,6 +40,7 @@ import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '..
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 import { installPrePushHook, type PrePushHookResult } from '../hooks/pre-push.js';
+import { seedTrustedAuthor, type TrustSeedResult } from '../core/trusted-authors.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -47,7 +48,7 @@ export interface InitOptions {
   force?: boolean;
 }
 
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'trust';
 
 export interface InitStep {
   step: StepName;
@@ -56,7 +57,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | TrustSeedResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 
 interface IndexStepDetail {
@@ -179,6 +180,24 @@ const runIndexStep = (opts: InitOptions): InitStep => {
   }
 };
 
+/**
+ * #415: with no trusted author recorded, grading fails closed and every record
+ * the agent ever sees is `[claim]` — the `[directive]` tier the injected legend
+ * advertises was unreachable on every install. Seeding the installer's own
+ * identity makes it reachable without weakening the property it protects: a
+ * different author's commit still grades `claim`.
+ */
+const runTrustStep = (opts: InitOptions): InitStep => {
+  const result = seedTrustedAuthor(opts.cwd ?? process.cwd());
+  return {
+    step: 'trust',
+    title: 'trusted author',
+    code: 0,
+    lines: [result.author === null ? result.reason : `${result.author} — ${result.reason}`],
+    detail: result,
+  };
+};
+
 const runClaudeHookStep = (opts: InitOptions): InitStep => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
@@ -226,7 +245,7 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
  */
 export const runInit = (opts: InitOptions = {}): InitReport => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode: exitCode as 0 | 1 | 2 };
 };
@@ -234,6 +253,7 @@ export const runInit = (opts: InitOptions = {}): InitReport => {
 /** User-facing step labels — no internal command names. */
 const STEP_LABEL: Record<StepName, string> = {
   hooks: 'Hooks',
+  trust: 'Trust',
   index: 'Index',
   'claude-hook': 'Agent integration',
   doctor: 'Final check',
@@ -241,6 +261,7 @@ const STEP_LABEL: Record<StepName, string> = {
 
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export const STEP_HEADING: Record<StepName, string> = {
+  trust: 'trusted author',
   hooks: '[1/4] hooks install',
   index: '[2/4] index --rebuild',
   'claude-hook': '[3/4] claude hook install',

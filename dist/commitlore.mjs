@@ -18419,6 +18419,37 @@ var register7 = (program3) => {
   });
 };
 
+// src/core/trusted-authors.ts
+var TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
+var configuredTrustedAuthors = (cwd) => {
+  const result = execGit(["config", "--local", "--get-all", TRUSTED_AUTHOR_KEY], { cwd });
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
+};
+var seedTrustedAuthor = (cwd) => {
+  const existing = configuredTrustedAuthors(cwd);
+  if (existing.length > 0) {
+    return {
+      recorded: false,
+      author: existing[0] ?? null,
+      reason: `already trusts ${String(existing.length)} author(s) \u2014 left unchanged`
+    };
+  }
+  const email2 = execGit(["config", "--get", "user.email"], { cwd }).stdout.trim();
+  if (email2 === "") {
+    return {
+      recorded: false,
+      author: null,
+      reason: "no git user.email on this machine, so records stay [claim] until an author is set"
+    };
+  }
+  const written = execGit(["config", "--local", "--add", TRUSTED_AUTHOR_KEY, email2], { cwd });
+  if (written.code !== 0) {
+    return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
+  }
+  return { recorded: true, author: email2, reason: `records you author are now [directive]` };
+};
+
 // src/commands/init.ts
 var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
@@ -18491,6 +18522,16 @@ var runIndexStep = (opts) => {
     }
   }
 };
+var runTrustStep = (opts) => {
+  const result = seedTrustedAuthor(opts.cwd ?? process.cwd());
+  return {
+    step: "trust",
+    title: "trusted author",
+    code: 0,
+    lines: [result.author === null ? result.reason : `${result.author} \u2014 ${result.reason}`],
+    detail: result
+  };
+};
 var runClaudeHookStep = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
@@ -18510,17 +18551,19 @@ var runClaudeHookStep = (opts) => {
 };
 var runInit = (opts = {}) => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode };
 };
 var STEP_LABEL = {
   hooks: "Hooks",
+  trust: "Trust",
   index: "Index",
   "claude-hook": "Agent integration",
   doctor: "Final check"
 };
 var STEP_HEADING = {
+  trust: "trusted author",
   hooks: "[1/4] hooks install",
   index: "[2/4] index --rebuild",
   "claude-hook": "[3/4] claude hook install",
@@ -19623,7 +19666,7 @@ var hookOutput = (text) => `${JSON.stringify({
 var injectOptions = (path2, options, cwd) => {
   const at = evaluationInstant2(options.at);
   const budget = tokenBudget(options.budget);
-  const trustedAuthors = options.trustedAuthor ?? [];
+  const trustedAuthors = options.trustedAuthor ?? configuredTrustedAuthors(cwd);
   return {
     path: path2,
     cwd,

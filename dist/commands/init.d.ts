@@ -38,12 +38,13 @@ import { type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { type PostCommitHookResult } from '../hooks/post-commit.js';
 import { type PrePushHookResult } from '../hooks/pre-push.js';
+import { type TrustSeedResult } from '../core/trusted-authors.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
     force?: boolean;
 }
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'trust';
 export interface InitStep {
     step: StepName;
     title: string;
@@ -51,7 +52,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | TrustSeedResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
