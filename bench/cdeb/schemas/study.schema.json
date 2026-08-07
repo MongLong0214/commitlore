@@ -11,7 +11,8 @@
     "repository_bundles", "agent_runtime_image_digest", "requested_model",
     "observed_model_id", "agent_cli_version", "agent_executable_sha256",
     "product_commit", "dist_digest", "hook_proxy_sha256", "byte_identity_verified",
-    "evaluator_image_digests", "analysis_source_digest", "bootstrap_seed",
+    "evaluator_image_digests", "analysis_source_digest", "bootstrap_seed", "calibrated_overhead",
+    "qualification_manifest_sha256", "runtime_qualification_summary", "delivery_qualification_summary",
     "claim_thresholds", "expected_logical_runs"
   ],
   "properties": {
@@ -53,15 +54,32 @@
       "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
     },
     "analysis_source_digest": { "$ref": "#/$defs/sha256" },
+    "calibrated_overhead": {
+      "description": "Descriptive only (PRD §16.4). Reported and frozen; it sets no threshold.",
+      "type": "number", "minimum": 0
+    },
+    "qualification_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "runtime_qualification_summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tasks_probed", "tasks_qualified"],
+      "properties": {
+        "tasks_probed": { "type": "integer", "minimum": 30 },
+        "tasks_qualified": { "const": 30 }
+      }
+    },
+    "delivery_qualification_summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tasks_verified"],
+      "properties": { "tasks_verified": { "const": 30 } }
+    },
     "bootstrap_seed": { "type": "string", "minLength": 1 },
     "claim_thresholds": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["safe_success_lift_pp", "token_volume_reduction", "calibrated_overhead", "revival_reduction", "min_off_revivals", "min_safe_successes_per_arm", "min_finite_replicates"],
+      "required": ["safe_success_lift_pp", "token_volume_reduction", "revival_reduction", "min_off_revivals", "min_safe_successes_per_arm", "min_finite_replicates"],
       "properties": {
         "safe_success_lift_pp": { "const": 10 },
-        "token_volume_reduction": { "type": "number", "minimum": 0.05, "maximum": 0.95 },
-      "calibrated_overhead": { "type": "number", "minimum": 1.0 },
+        "token_volume_reduction": { "const": 0.15 },
         "revival_reduction": { "const": 0.30 },
         "min_off_revivals": { "const": 10 },
         "min_safe_successes_per_arm": { "const": 10 },

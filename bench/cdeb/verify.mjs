@@ -95,6 +95,34 @@ const validateAgainst = (study, kind, path, value) => {
 };
 
 /**
+ * §9.5 (v1.3): exposure fields must be mutually consistent. The schema accepts
+ * each field in isolation, so a row can claim a delivered record with zero
+ * proxy executions and still validate. These are the relations that make the
+ * opportunity/delivery split mean something rather than name something.
+ */
+const checkExposure = (study, path, row) => {
+  const e = row.exposure;
+  if (e.proxy_executions > e.hook_opportunities) {
+    fail(study, `${path}: proxy_executions ${e.proxy_executions} exceeds hook_opportunities ${e.hook_opportunities}`);
+  }
+  if (e.delivered_record_ids.length > 0 && e.proxy_executions === 0) {
+    fail(study, `${path}: records delivered with zero proxy executions — nothing ran to deliver them`);
+  }
+  if (e.payload_sha256s.length > e.proxy_executions) {
+    fail(study, `${path}: ${e.payload_sha256s.length} payload(s) from ${e.proxy_executions} proxy execution(s)`);
+  }
+  if (e.expected_record_delivered && e.delivered_record_ids.length === 0) {
+    fail(study, `${path}: expected_record_delivered is true with no delivered_record_ids`);
+  }
+  if (e.delivered_before_first_mutation && e.delivered_record_ids.length === 0) {
+    fail(study, `${path}: delivered_before_first_mutation is true with nothing delivered`);
+  }
+  if (e.product_failures > e.proxy_executions) {
+    fail(study, `${path}: ${e.product_failures} product failure(s) from ${e.proxy_executions} execution(s)`);
+  }
+};
+
+/**
  * §14.7: stored derived fields are recomputed from their raw inputs. Schema
  * validity proves the shape; only recomputation proves the value.
  */
@@ -128,13 +156,24 @@ const verifyStudy = (root, studyName) => {
     }
   }
 
+  // A study without its freeze manifest is not a study whose rows mean
+  // anything: the thresholds, the qualification summaries and the model and
+  // product commitments all live there. v1.2's verifier validated it only when
+  // it happened to exist, so a directory of valid rows verified clean with no
+  // commitments at all.
   const freezePath = join(dir, "public-freeze.json");
   let expectedRuns = null;
-  if (existsSync(freezePath)) {
-    const freeze = readJson(study, freezePath);
+  let freeze = null;
+  if (!existsSync(freezePath)) {
+    fail(study, "public-freeze.json is missing — rows without a freeze manifest commit to nothing");
+  } else {
+    freeze = readJson(study, freezePath);
     if (freeze !== null && validateAgainst(study, "study", freezePath, freeze)) {
       expectedRuns = freeze.expected_logical_runs;
     }
+  }
+  if (!existsSync(join(dir, "randomization.json"))) {
+    fail(study, "randomization.json is missing — the run order was never committed");
   }
 
   // Expected logical run ids, when the randomization names them. Kept minimal:
@@ -155,6 +194,7 @@ const verifyStudy = (root, studyName) => {
     const row = readJson(study, path);
     if (!validateAgainst(study, "result", path, row)) return;
     checkDerived(study, path, row);
+    checkExposure(study, path, row);
     if (seenIds.has(row.logical_run_id)) {
       fail(study, `duplicate logical_run_id ${row.logical_run_id} in ${path} and ${seenIds.get(row.logical_run_id)}`);
     } else {
@@ -162,6 +202,23 @@ const verifyStudy = (root, studyName) => {
     }
     if (expectedIds !== null && !expectedIds.has(row.logical_run_id)) {
       fail(study, `${path}: logical_run_id ${row.logical_run_id} is not in the randomization's expected set`);
+    }
+    // Every row must name the study it belongs to and the protocol it was
+    // produced under. A row from another freeze inside this directory is the
+    // contamination #441 was about, one level down.
+    if (freeze !== null) {
+      if (row.study_id !== freeze.study_id) {
+        fail(study, `${path}: study_id ${row.study_id} does not match the freeze's ${freeze.study_id}`);
+      }
+      if (row.protocol_version !== freeze.protocol_version) {
+        fail(study, `${path}: protocol_version ${row.protocol_version} does not match the freeze's ${freeze.protocol_version}`);
+      }
+      if (row.product_commit !== freeze.product_commit) {
+        fail(study, `${path}: product_commit does not match the freeze`);
+      }
+      if (row.dist_digest !== freeze.dist_digest) {
+        fail(study, `${path}: dist_digest does not match the freeze`);
+      }
     }
   };
 
