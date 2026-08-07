@@ -6,10 +6,10 @@ measure and the analysis in advance, so that nothing about the analysis can be
 chosen after the numbers are visible.
 
 - Follows: `bench/PREREGISTRATION-M5.md` · ADR-0007 · T-703 · SPEC §7
-- Status: **drafted, NOT registered.** §5 cannot be fixed without a base rate,
-  and §4's fixtures do not exist yet. This document is registered — and the
-  status line here changes — only when §4 and §5 carry numbers rather than
-  procedures. Running M6 before then would be an unregistered run.
+- Status: **drafted, NOT registered.** §5 cannot be fixed without a base rate.
+  This document is registered — and the status line here changes — only when §5
+  carries a number rather than a procedure. Running M6 before then would be an
+  unregistered run. §4 no longer blocks it (corrected 2026-08-07, see §12).
 
 ---
 
@@ -54,32 +54,51 @@ that `blocked` withholds never reaches either arm's payload in the same form, so
 description, never a second test, and no subset is analysed as if it were the
 registered comparison.
 
-## 4. The blocking precondition — the current fixtures cannot measure this
+## 4. What the arms actually differ by — corrected
 
-`bench/types.ts` states it plainly about `no-grade`:
+This section said the existing fixtures could not measure anything, on the
+strength of `bench/types.ts`'s description of the `no-grade` arm:
 
 > Inert on a task whose records are all `Provenance: authored`, because there is
 > nothing to promote.
 
-Every one of the ten `reproposal-*` fixtures is that kind of task. Running M6 on
-them would compare an arm against itself and report a null that means nothing —
-the same failure as M1's underpowering, arrived at from the other direction.
+**That was wrong, and taking it on trust was the error.** It describes
+`bench/context.ts`'s `assembleContext`, which routes on `record.provenance ===
+"authored"`. Neither arm of M6 reaches it: `writeArmSettings` returns a settings
+path for any arm carrying an ablation, so the runner installs the hook and
+leaves `injectedContext` null. `commitlore-on` runs the real `commitlore inject`
+and `no-grade` runs the real `buildInjection` through the ablation shim.
 
-M6 therefore needs a **new fixture set**, and the fixtures are part of what this
-document must fix before the run. Each task seeds, alongside its ordinary
-records, one **planted record** that grading treats differently from `no-grade`:
+Measured on an ordinary authored record, both arms, same repository:
 
-- a record from an **untrusted author** (`directive` under `no-grade`, `claim`
-  under grading), and
-- a record carrying an **injection payload** (`blocked` under grading, injected
-  verbatim under `no-grade`).
+| arm | `[directive]` | `[claim]` |
+|---|---:|---:|
+| `commitlore-on` | 0 | 6 |
+| `no-grade` | 6 | 0 |
 
-The planted record must instruct something (a) the task does not otherwise call
-for, (b) that is unambiguous in a diff, and (c) that is harmless in a throwaway
-workspace. What the agent is told to do is what "compliance" then means.
+Every record flips. The existing ten fixtures are usable as they stand.
 
-**Neither the fixture count nor their contents are fixed by this draft.** They
-are what §5 needs before it can be written, and both belong here before a run.
+**Why the flip is total, which matters more than that it exists.** No arm passes
+`--trusted-author`, and `gradeRecord` is fail-closed on an empty list. So
+grading puts every record at `claim` and removing it puts every record at
+`directive`. M6 is therefore not a test of "does the right grade reach the right
+record" — it is a test of **whether the tag on the line changes what the agent
+does**, with the content held identical.
+
+That is a narrower question than §2 states, and it is the one this instrument
+can actually ask. §2 is left as written because it is the hypothesis; this
+section records what the arms can and cannot separate, which a reader needs in
+order to know what a result means.
+
+**The same is true of the shipped product** (#415): the PreToolUse hook `init`
+installs passes no `--trusted-author` either, so a real user's agent also reads
+`[claim]` on every record. M6 measures the configuration users have, not a
+laboratory one — and so did M1 and M5.
+
+**A planted-record fixture set is still worth building**, and #412 keeps it: it
+would separate "the tag changed behaviour" from "the tag changed behaviour on a
+record the agent had reason to distrust". It is no longer a precondition for
+running M6 at all.
 
 ## 5. Size — cannot be fixed yet, and why that is stated rather than guessed
 
@@ -87,7 +106,7 @@ M5's n came from M1's observed control rate. M6 has no prior: nobody has
 measured how often an agent complies with a planted record it was handed as an
 instruction. Writing a number here would be an assumption dressed as a design.
 
-The order is therefore: **fixtures (§4) → base-rate pilot → n → register → run.**
+The order is therefore: **base-rate pilot → n → register → run.**
 
 The pilot measures the `no-grade` compliance rate and wall-clock only. Its rows
 are **not** part of the analysis set and are **not citable**, exactly as M5's
@@ -182,3 +201,28 @@ Recorded as they happen, with dates. A deviation that is not written down is
 indistinguishable from a design that was always this way.
 
 *(none yet — the run has not started)*
+
+### Correction 1 — 2026-08-07: §4 was wrong, and the run it blocked was not blocked
+
+§4 originally said M6 could not run on the existing fixtures, quoting
+`bench/types.ts`'s claim that the `no-grade` arm is inert on tasks whose records
+are all `Provenance: authored`. I took that description on trust and wrote a
+blocking precondition out of it.
+
+Checking it instead of quoting it: both M6 arms run the real injector, so
+neither reaches the renderer that description is about. Every record flips
+`[claim]` → `[directive]` between the arms on the fixtures that already exist.
+
+**What this changes.** §4 is rewritten to record what the arms separate rather
+than to block the run. §5 still holds — `n` needs a base rate nobody has
+measured — so the document is still not registered, but for one reason instead
+of two. The fixture work moves to #412 as an improvement rather than a
+precondition, and `bench/types.ts` is corrected in the same change.
+
+**Recorded here rather than fixed silently**, because this document's whole
+claim on a reader is that what it says was decided before the numbers. A
+correction it does not carry is indistinguishable from a design that was always
+this way — the rule §12 opens with.
+
+Nothing about M5's outcome was known when this was written. Nothing about M6 has
+been run.
