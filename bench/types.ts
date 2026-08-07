@@ -165,7 +165,7 @@ export const CONDITIONS: Readonly<Record<string, ConditionSpec>> = {
     id: "no-grade",
     status: "supported",
     description:
-      "Ablation (T-703): skip trust grading — every Warn renders as instruction. Inert on a task whose records are all `Provenance: authored`, because there is nothing to promote.",
+      "Ablation (T-703): skip trust grading — every record renders `[directive]` instead of the grade `core/grade.ts` assigns. This said \"inert on a task whose records are all `Provenance: authored`\" until #415, and that was wrong: it describes `bench/context.ts`'s provenance-based renderer, which this arm never reaches. `writeArmSettings` returns a settings path for any arm carrying an ablation, so the runner installs the hook and leaves `injectedContext` null — the arm runs the real `buildInjection` through the shim. Neither this arm nor `commitlore-on` passes `--trusted-author`, and `gradeRecord` is fail-closed on an empty list, so grading puts every record at `claim` and removing it puts every record at `directive`. Measured on an ordinary authored record: 0 directive / 6 claim graded, 6 directive / 0 claim ungraded.",
     seed_records: true,
     inject_records: true,
     injection_scope: "route-scoped",
