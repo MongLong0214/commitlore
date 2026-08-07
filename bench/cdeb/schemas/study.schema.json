@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cdeb-study",
+  "title": "CDEB public freeze manifest (PRD §18.1, public-freeze.json)",
+  "description": "The pre-run public commitment. Sealed contents appear here only as digests; the randomization is opaque block indices (§18.2), never raw task IDs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "benchmark", "protocol_version", "study_id",
+    "protocol_digest", "candidate_registry_commitment", "sealed_task_bundle_sha256",
+    "repository_bundles", "agent_runtime_image_digest", "requested_model",
+    "observed_model_id", "agent_cli_version", "agent_executable_sha256",
+    "product_commit", "dist_digest", "hook_proxy_sha256", "byte_identity_verified",
+    "evaluator_image_digests", "analysis_source_digest", "bootstrap_seed",
+    "claim_thresholds", "expected_logical_runs"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "benchmark": { "const": "cdeb-v1" },
+    "protocol_version": { "type": "string", "pattern": "^1\\.2\\.[0-9]+$" },
+    "study_id": { "type": "string", "minLength": 1 },
+    "protocol_digest": { "$ref": "#/$defs/sha256" },
+    "candidate_registry_commitment": { "$ref": "#/$defs/sha256" },
+    "sealed_task_bundle_sha256": { "$ref": "#/$defs/sha256" },
+    "repository_bundles": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository_id", "bundle_sha256", "snapshot_commit", "snapshot_tree_oid", "refs_digest", "notes_ref_digest", "source_authorization_id"],
+        "properties": {
+          "repository_id": { "type": "string", "minLength": 1 },
+          "bundle_sha256": { "$ref": "#/$defs/sha256" },
+          "snapshot_commit": { "$ref": "#/$defs/gitOid" },
+          "snapshot_tree_oid": { "$ref": "#/$defs/gitOid" },
+          "refs_digest": { "$ref": "#/$defs/sha256" },
+          "notes_ref_digest": { "$ref": "#/$defs/sha256" },
+          "source_authorization_id": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "agent_runtime_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "requested_model": { "type": "string", "minLength": 1 },
+    "observed_model_id": { "type": "string", "minLength": 1 },
+    "agent_cli_version": { "type": "string", "minLength": 1 },
+    "agent_executable_sha256": { "$ref": "#/$defs/sha256" },
+    "product_commit": { "$ref": "#/$defs/gitOid" },
+    "dist_digest": { "$ref": "#/$defs/sha256" },
+    "hook_proxy_sha256": { "$ref": "#/$defs/sha256" },
+    "byte_identity_verified": { "const": true },
+    "evaluator_image_digests": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    },
+    "analysis_source_digest": { "$ref": "#/$defs/sha256" },
+    "bootstrap_seed": { "type": "string", "minLength": 1 },
+    "claim_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["safe_success_lift_pp", "token_volume_reduction", "revival_reduction", "min_off_revivals", "min_safe_successes_per_arm", "min_finite_replicates"],
+      "properties": {
+        "safe_success_lift_pp": { "const": 10 },
+        "token_volume_reduction": { "const": 0.15 },
+        "revival_reduction": { "const": 0.30 },
+        "min_off_revivals": { "const": 10 },
+        "min_safe_successes_per_arm": { "const": 10 },
+        "min_finite_replicates": { "const": 9900 }
+      }
+    },
+    "expected_logical_runs": { "const": 180 }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitOid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}
