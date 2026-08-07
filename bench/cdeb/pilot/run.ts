@@ -44,6 +44,17 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "
 
 /** Wall-clock budget per run, frozen before the study (PRD §10.5). */
 const TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * The snapshot the arms are measured on: `dev` as it stood **before** the
+ * pilot's own tasks and oracles were committed.
+ *
+ * Not HEAD. Bundling the branch this harness lives on would materialize a
+ * repository containing `bench/cdeb/pilot/tasks.ts` — every prompt, every
+ * rejected approach and every oracle predicate — inside the tree the agent is
+ * being measured in. `test/cdeb-materializer.test.ts` pins the absence.
+ */
+const SNAPSHOT_REF = "fdc454f4d4f9cf05c1d4d17713660d18051dc4db";
 const MODEL = "sonnet";
 const REPEATS = [1, 2] as const;
 const CONDITIONS = ["off", "on"] as const;
@@ -264,7 +275,7 @@ const main = (): void => {
 
   const bundleDir = mkdtempSync(join(tmpdir(), "cdeb-p-bundle-"));
   const bundlePath = join(bundleDir, "commitlore.bundle");
-  const identity = createRepositoryBundle("commitlore", REPO_ROOT, bundlePath);
+  const identity = createRepositoryBundle("commitlore", REPO_ROOT, bundlePath, arg("snapshot") ?? SNAPSHOT_REF);
   process.stdout.write(`cdeb-p: frozen at ${identity.snapshot_commit.slice(0, 8)}\n`);
 
   const tasks = PILOT_TASKS.filter((t) => onlyTask === undefined || t.task_id === onlyTask);
