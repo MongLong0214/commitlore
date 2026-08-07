@@ -127,3 +127,56 @@ describe('ADR-0030 a record nobody read cannot direct an agent', () => {
     expect(grade.provenance).toBe('unknown');
   });
 });
+
+/**
+ * ADR-0030 decision 3: promotion is a **new record that `Supersedes:` the old
+ * one**, never an edit, because a commit message is immutable.
+ *
+ * Nothing was built for this — `Supersedes:` and the lifecycle fold already
+ * did it, and `drafted` was the only missing piece. That is worth a test
+ * rather than a sentence: the claim "promotion works" is otherwise resting on
+ * two mechanisms nobody has run together.
+ */
+describe('ADR-0030 promotion is a superseding record, not an edit', () => {
+  it('retires the drafted record and serves the endorsement as a directive', () => {
+    const dir = createTestRepo({
+      path: mkdtempSync(join(realpathSync(tmpdir()), 'commitlore-promote-')),
+    });
+    scratch.push(dir);
+    git(dir, ['config', 'user.email', 'writer@example.invalid']);
+    git(dir, ['config', 'user.name', 'writer']);
+
+    const body = 'Warn: session entries must stay under 4KB\n';
+    writeFileSync(join(dir, 'src.ts'), 'export const a = 1;\n');
+    git(dir, ['add', '-A']);
+    git(dir, [
+      'commit',
+      '--quiet',
+      '-m',
+      `feat: cache in process\n\n${body}Record-Id: r-promo01\nProvenance: drafted\n`,
+    ]);
+
+    const before = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] }).text;
+    expect(before).toContain('r-promo01');
+    expect(before).not.toContain('[directive]  r-promo01');
+
+    writeFileSync(join(dir, 'src.ts'), 'export const a = 2;\n');
+    git(dir, ['add', '-A']);
+    git(dir, [
+      'commit',
+      '--quiet',
+      '-m',
+      `feat: stand behind it\n\n${body}Supersedes: r-promo01\nRecord-Id: r-promo02\nProvenance: authored\n`,
+    ]);
+
+    const after = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] }).text;
+    const line = after
+      .split('\n')
+      .find((candidate) => candidate.includes('session entries must stay under 4KB'));
+
+    expect(line).toContain('[directive]');
+    expect(line).toContain('r-promo02');
+    // The drafted one is retired by the fold, not left beside its endorsement.
+    expect(after).not.toContain('r-promo01  ');
+  });
+});

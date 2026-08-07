@@ -15,6 +15,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { computePolicyIdentityHash } from '../src/core/capture-policy.js';
 import {
   existsSync,
   mkdirSync,
@@ -34,14 +35,11 @@ import { createTestRepo } from './git-fixtures.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const HARDCODED_DEFAULTS = {
-  mode: 'suggest' as const,
-  max_records_per_commit: 1,
-  require_verified_evidence: true,
-} as const;
-
-const policyIdentityHash = (): string =>
-  createHash('sha256').update(JSON.stringify(HARDCODED_DEFAULTS)).digest('hex');
+// Taken from the module rather than retyped. A local copy of the defaults went
+// stale the moment ADR-0030 changed `mode`, and every case here then wrote a
+// pending file the hook correctly refused — which reads as four broken features
+// rather than one out-of-date literal.
+const policyIdentityHash = (): string => computePolicyIdentityHash();
 
 interface PendingFileOptions {
   nonce?: string;
