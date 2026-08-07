@@ -14279,6 +14279,52 @@ var authorsOf = (cwd, shas) => {
   }
   return authors;
 };
+var noteAuthorsOf = (cwd) => {
+  const authors = /* @__PURE__ */ new Map();
+  const result = execGit(
+    ["log", AUTHOR_FORMAT, "--name-only", "--no-renames", "--no-color", NOTES_REF],
+    { cwd }
+  );
+  if (result.code !== 0) return authors;
+  for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+    if (chunk === "") continue;
+    const [head = "", ...rest] = chunk.split(AUTHOR_FIELD_SEP);
+    if (head.trim() === "") continue;
+    const [author = "", ...pathLines] = (rest[0] ?? "").split("\n");
+    const noteAuthor = author.trim();
+    if (noteAuthor === "") continue;
+    for (const line of pathLines) {
+      const annotated = line.trim().replace(/\//g, "");
+      if (!AUTHOR_SHA_RE.test(annotated)) continue;
+      const seen = authors.get(annotated);
+      if (seen === void 0) authors.set(annotated, [noteAuthor]);
+      else if (!seen.includes(noteAuthor)) seen.push(noteAuthor);
+    }
+  }
+  return authors;
+};
+var gradeDeclarations = (record2, declarations2, ctx) => {
+  const { shas, sources, commitAuthors, noteAuthors } = declarations2;
+  const fromNotes = sources.includes("notes");
+  const fromCommit = sources.length === 0 || sources.includes("commit");
+  const base = {
+    at: ctx.at,
+    ...ctx.trustedAuthors === void 0 ? {} : { trustedAuthors: ctx.trustedAuthors }
+  };
+  let worst;
+  const consider = (author) => {
+    const one = gradeRecord({ ...record2, author }, base);
+    worst = worst === void 0 ? one : restrictGrade(worst, one);
+  };
+  for (const sha of shas) {
+    if (fromCommit) consider(commitAuthors.get(sha));
+    if (!fromNotes) continue;
+    const writers = noteAuthors.get(sha);
+    if (writers === void 0 || writers.length === 0) consider(void 0);
+    else for (const writer of writers) consider(writer);
+  }
+  return worst ?? gradeRecord(record2, ctx);
+};
 
 // src/core/query.ts
 var LIMIT_KEY = "Limit";
@@ -14527,22 +14573,14 @@ var gradeMerged = (merged, cwd, at, trustedAuthors) => {
     cwd,
     merged.flatMap((record2) => record2.shas)
   );
+  const noteAuthors = merged.some((record2) => record2.sources.includes("notes")) ? noteAuthorsOf(cwd) : /* @__PURE__ */ new Map();
   for (const record2 of merged) {
     const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
-    let grade2;
-    for (const sha of shas) {
-      const author = authors.get(sha);
-      const one = gradeRecord(
-        { trailers: record2.trailers },
-        {
-          at,
-          ...author === void 0 ? {} : { author },
-          ...trustedAuthors === void 0 ? {} : { trustedAuthors }
-        }
-      );
-      grade2 = grade2 === void 0 ? one : restrictGrade(grade2, one);
-    }
-    const resolved = grade2 ?? gradeRecord(record2, { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } });
+    const resolved = gradeDeclarations(
+      { trailers: record2.trailers },
+      { shas, sources: record2.sources, commitAuthors: authors, noteAuthors },
+      { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } }
+    );
     record2.trust = resolved.trust;
     if (resolved.matchedTrailerKeys !== void 0) {
       record2.matchedTrailerKeys = resolved.matchedTrailerKeys;
@@ -18809,20 +18847,16 @@ var resolveInstant = (cwd, at) => {
   const parsed = Date.parse(result.stdout.trim());
   return Number.isNaN(parsed) ? EPOCH : new Date(parsed);
 };
-var gradeMerged2 = (record2, authors, at, trustedAuthors) => {
-  const shas = record2.shas.length > 0 ? record2.shas : [record2.sha];
-  let worst;
-  for (const sha of shas) {
-    const author = authors.get(sha);
-    const one = gradeRecord(record2, {
-      at,
-      ...author === void 0 ? {} : { author },
-      ...trustedAuthors === void 0 ? {} : { trustedAuthors }
-    });
-    worst = worst === void 0 ? one : restrictGrade(worst, one);
-  }
-  return worst ?? gradeRecord(record2, { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } });
-};
+var gradeMerged2 = (record2, authors, noteAuthors, at, trustedAuthors) => gradeDeclarations(
+  record2,
+  {
+    shas: record2.shas.length > 0 ? record2.shas : [record2.sha],
+    sources: record2.sources,
+    commitAuthors: authors,
+    noteAuthors
+  },
+  { at, ...trustedAuthors === void 0 ? {} : { trustedAuthors } }
+);
 var ungraded = (record2) => ({
   provenance: record2.provenance?.kind ?? "unknown",
   lifecycle: record2.lifecycle,
@@ -19035,6 +19069,7 @@ var buildInjection = (opts) => {
   const active = ablation.noLifecycle ? result.records : result.records.filter((record2) => record2.lifecycle === "active");
   if (active.length === 0) return empty;
   const authors = ablation.noGrade ? /* @__PURE__ */ new Map() : authorsOf(cwd, active.flatMap((record2) => record2.shas));
+  const noteAuthors = ablation.noGrade || !active.some((record2) => record2.sources.includes("notes")) ? /* @__PURE__ */ new Map() : noteAuthorsOf(cwd);
   const grades = new Map(
     active.map((record2) => [
       record2.recordId ?? `${record2.sha}:${record2.source}`,
@@ -19044,7 +19079,7 @@ var buildInjection = (opts) => {
         trust: "blocked",
         reason: "Record-Id collision",
         matchedTrailerKeys: ["Record-Id"]
-      } : ablation.noGrade ? ungraded(record2) : gradeMerged2(record2, authors, at, opts.trustedAuthors)
+      } : ablation.noGrade ? ungraded(record2) : gradeMerged2(record2, authors, noteAuthors, at, opts.trustedAuthors)
     ])
   );
   const { entries, withheld, withheldValues } = project(active, grades);

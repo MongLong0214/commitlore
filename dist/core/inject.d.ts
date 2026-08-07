@@ -28,10 +28,15 @@
  * and a `blocked` record contributes nothing but a count — its content never
  * reaches the payload, because the content is the attack.
  *
- * A record declared by several commits is graded once per declaring commit and
- * takes the most restrictive answer. Trailer *values* fold latest-wins
- * (SPEC §5); trust does not, or an outside contributor could promote their own
- * record to `directive` by appending a commit.
+ * A record declared several times is graded once per declaration and takes the
+ * most restrictive answer. Trailer *values* fold latest-wins (SPEC §5); trust
+ * does not, or an outside contributor could promote their own record to
+ * `directive` by appending a commit.
+ *
+ * A declaration is graded by whoever wrote *it*, which for a record arriving
+ * from the notes mirror is the note's author and not the annotated commit's
+ * (#409). A mirrored record is therefore graded on both authorships and keeps
+ * the floor.
  *
  * ## It is bounded, and says when it cut
  *
