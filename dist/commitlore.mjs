@@ -12205,7 +12205,7 @@ var loadDatabaseCtor = () => {
     );
   }
 };
-var SCHEMA_VERSION = 2;
+var SCHEMA_VERSION = 3;
 var NOTES_REF2 = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
