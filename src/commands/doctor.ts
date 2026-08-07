@@ -57,6 +57,7 @@ import {
   readClaudeHookStatus,
 } from '../hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../hooks/commit-msg.js';
+import { unfinishedRuns } from '../mcp/lifecycle.js';
 
 /**
  * `skipped` is a check that exists but has nothing to inspect yet — it is not
@@ -746,6 +747,43 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   );
 };
 
+/**
+ * MCP servers that started here and never recorded an exit (#424).
+ *
+ * A session lost all seven commitlore tools mid-conversation while
+ * `claude mcp list` still reported the server connected and no process was
+ * running. Nothing on disk could say whether it had ever come up, because the
+ * client was not started with `--debug` and the server's stderr went to a pipe.
+ *
+ * `mcp/lifecycle.ts` now leaves a start and an exit line. A start with neither
+ * an exit beside it nor a live process is a server that was killed rather than
+ * one that closed its session — which is the observation nobody could make.
+ *
+ * A `warn`, and only about the past: it says what happened, not that anything
+ * is wrong now. Nothing here can restore a lost registration.
+ */
+const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
+  const title = 'MCP server sessions';
+  const id = 'mcp-lifecycle';
+  const cwd = opts.cwd ?? process.cwd();
+  const unfinished = unfinishedRuns(cwd);
+
+  if (unfinished.length === 0) {
+    return check(id, title, 'ok', 'every recorded MCP session ended cleanly, or is still running');
+  }
+
+  const last = unfinished[unfinished.length - 1];
+  return check(
+    id,
+    title,
+    'warn',
+    `${unfinished.length} MCP server session(s) started here and never recorded an exit — ` +
+      `most recently pid ${String(last?.pid ?? 0)} at ${last?.at ?? 'unknown'}. ` +
+      'A killed server loses its tool registration in the client, which reports the same as a tool that never existed (#424)',
+    'restart the client session; if this repeats, capture it with a client started under --debug',
+  );
+};
+
 const checkIndex = (opts: DoctorOptions): DoctorCheck => {
   const cwd = opts.cwd ?? process.cwd();
   let handle;
@@ -990,6 +1028,7 @@ export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
     hookRuntime,
     checkInjectRuntime(opts),
     checkInjectVersion(opts),
+    checkMcpLifecycle(opts),
     checkGit(opts),
     checkHistoryDepth(opts),
     checkIndex(opts),
