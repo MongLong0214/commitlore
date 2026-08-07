@@ -382,6 +382,26 @@ Oracle은 agent transcript가 아니라 final implementation state를 검사한�
 그 task는 어떤 비교에도 기여하지 못하면서 연구의 4분의 1을 소비한다. v1.2까지
 §4.6은 이 조건을 바랐을 뿐 확인할 방법이 없었다.
 
+**0.6은 이제 판단값이 아니라 관측된 분리에서 나온다 (v1.3).** CDEB-P의 wall
+time이 두 가지를 동시에 말한다.
+
+```text
+완료된 12런의 최댓값   431s = 0.48 × budget
+timeout된 task         900s = 1.00 × budget
+관측된 셀 내 최대 편차  ×4.9  (verify-scope ON: 89s → 431s, 같은 셀)
+```
+
+첫 두 줄이 문턱값을 정한다: 파일럿의 좋은 task와 나쁜 task는 **0.48과 1.00 사이
+어디서든 분리된다.** 0.6은 그 구간 안이며, 양 끝 어디에도 붙어 있지 않다.
+
+**세 번째 줄이 이 게이트가 주장할 수 있는 것을 제한한다.** 같은 task·같은 arm의
+두 반복이 ×4.9까지 벌어졌다. 두 번의 probe는 그 꼬리를 잡지 못한다. 따라서 이
+qualification은 **중앙값 근처를 거르는 screen이며, study에서 timeout이 나오지
+않는다는 보장이 아니다.** Study의 timeout은 §10.4의 정상적인 measured failure로
+남고 intention-to-treat가 처리한다. 이 게이트가 막는 것은 파일럿에서 실제로
+일어난 일 — **한 task의 네 런이 전부 timeout이 되어 아무 비교에도 기여하지 못하는
+것** — 뿐이다.
+
 **Runtime-boundedness qualification (v1.3).** 이름이 정확해야 한다 — 이것은
 **task가 예산 안에서 끝나는지**를 재는 것이지, task가 완료 가능하다거나 기능적으로
 풀렸다는 증명이 아니다. `stop_reason == completed`는 프로세스가 timeout 전에
@@ -391,9 +411,8 @@ Oracle은 agent transcript가 아니라 final implementation state를 검사한�
 봉인 전, 각 task는 **ON 한 번과 OFF 한 번**을 모두 통과해야 한다.
 
 ```text
-qualified  ⟺  for both arms:
-                 stop_reason == completed
-                 AND wall_ms <= 0.6 × that task's frozen timeout_ms
+qualified  ⟺  both arms complete AND max(wall_ms over both probes)
+                 <= 0.6 × that task's frozen timeout_ms
 ```
 
 **양 arm을 모두 요구하는 이유:** 실행 시간은 treatment에 민감하다. 한 arm으로만
