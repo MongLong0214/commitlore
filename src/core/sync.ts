@@ -74,6 +74,21 @@ const gitOptions = (opts: NotesOptions): { cwd?: string } =>
 /** The ref a fetch lands on. Deliberately not `NOTES_REF`: see `syncRemote`. */
 const FETCH_HEAD_REF = 'refs/notes/commitlore-remote';
 
+/**
+ * Publishing the mirror, with hooks disabled.
+ *
+ * `--no-verify` is not a convenience: the `pre-push` hook runs `sync`, and a
+ * plain `git push` from inside it re-triggers that hook, which pushes again.
+ * Measured before the flag existed — a single `git push` fired the hook 1,240
+ * times in 40 seconds and never returned, so every user's push would hang.
+ *
+ * It belongs here rather than in the hook because the recursion is a property
+ * of this push, not of the caller: nothing is served by a notes push running a
+ * hook whose only job is to push notes.
+ */
+const pushMirror = (remote: string, opts: NotesOptions): ReturnType<typeof execGit> =>
+  execGit(['push', '--no-verify', remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions(opts));
+
 const revParse = (ref: string, opts: NotesOptions): string | null => {
   const result = execGit(['rev-parse', '--verify', '--quiet', ref], gitOptions(opts));
   const sha = result.stdout.trim();
@@ -175,7 +190,7 @@ export const syncRemote = (remote: string, opts: SyncOptions = {}): SyncResult =
       if (opts.fetchOnly === true) {
         return { remote, outcome: 'merged', detail: 'merged both mirrors; not published' };
       }
-      const pushed = execGit(['push', remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions(opts));
+      const pushed = pushMirror(remote, opts);
       return pushed.code === 0
         ? { remote, outcome: 'merged', detail: 'merged both mirrors and published' }
         : failure(remote, pushed.stderr.trim() || `git push ${remote} failed`);
@@ -189,7 +204,7 @@ export const syncRemote = (remote: string, opts: SyncOptions = {}): SyncResult =
   if (opts.dryRun === true) {
     return { remote, outcome: 'pushed', detail: 'would publish the local mirror' };
   }
-  const pushed = execGit(['push', remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions(opts));
+  const pushed = pushMirror(remote, opts);
   return pushed.code === 0
     ? { remote, outcome: 'pushed', detail: 'published the local mirror' }
     : failure(remote, pushed.stderr.trim() || `git push ${remote} failed`);
