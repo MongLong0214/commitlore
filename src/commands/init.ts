@@ -39,6 +39,7 @@ import { notesAvailability } from '../core/notes.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
+import { installPrePushHook, type PrePushHookResult } from '../hooks/pre-push.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -55,7 +56,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 
 interface IndexStepDetail {
@@ -114,7 +115,10 @@ const runHooksStep = (opts: InitOptions): InitStep => {
   const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
   const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
   const postCommit = installPostCommitHook(opts.cwd);
-  const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) =>
+  // #416: without this the notes mirror is written locally and never leaves the
+  // machine, so a teammate's clone cannot see a record it holds.
+  const prePush = installPrePushHook(opts.cwd);
+  const lines = [commitMsg, prepareCommitMsg, postCommit, prePush].flatMap((result) =>
     result.code === 0
       ? result.stdout.trimEnd().split('\n')
       : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic'],
@@ -122,9 +126,9 @@ const runHooksStep = (opts: InitOptions): InitStep => {
   return {
     step: 'hooks',
     title: 'hooks install',
-    code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
+    code: [commitMsg, prepareCommitMsg, postCommit, prePush].some((r) => r.code === 2) ? 2 : 0,
     lines,
-    detail: [commitMsg, prepareCommitMsg, postCommit],
+    detail: [commitMsg, prepareCommitMsg, postCommit, prePush],
   };
 };
 

@@ -193,7 +193,10 @@ describe('doctor: notes fetch refspec', () => {
 
   it('accepts a wildcard refspec that already covers the mirror', () => {
     const { repo } = repoWithRemote('doctor-refspec-wildcard');
-    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+    // Unforced, and that is the whole difference from the case below. This
+    // literal carried a `+` until #417: a wildcard that *covers* the mirror is
+    // still accepted; one that *overwrites* it is not.
+    git(repo, ['config', '--add', 'remote.origin.fetch', 'refs/notes/*:refs/notes/*']);
 
     const report = runDoctor({ cwd: repo });
 
@@ -202,6 +205,43 @@ describe('doctor: notes fetch refspec', () => {
       .split('\n')
       .filter((line) => line === NOTES_REFSPEC);
     expect(configured).toHaveLength(1);
+  });
+
+  /**
+   * #417. A forced notes refspec makes every `git fetch` overwrite the local
+   * mirror with the remote's, destroying a record written here and not yet
+   * pushed — silently, and with exit 0. It covers the mirror, so the
+   * `coversNotes` check reported it `ok`.
+   */
+  it('warns about a forced notes refspec, and --fix unforces it', () => {
+    const { repo } = repoWithRemote('doctor-refspec-forced');
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'notes-refspec');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toMatch(/forced refspec/);
+
+    expect(statusOf(runDoctor({ cwd: repo, fix: true }), 'notes-refspec')).toBe('ok');
+
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch'])
+      .split('\n')
+      .filter((line) => line !== '');
+    expect(configured).toContain(NOTES_REFSPEC);
+    expect(configured.filter((line) => line.startsWith('+refs/notes/'))).toEqual([]);
+  });
+
+  it('leaves a remote’s unrelated refspecs alone when it unforces the notes one', () => {
+    const { repo } = repoWithRemote('doctor-refspec-forced-neighbours');
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/tags/*:refs/tags/*']);
+
+    runDoctor({ cwd: repo, fix: true });
+
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch'])
+      .split('\n')
+      .filter((line) => line !== '');
+    expect(configured).toContain('+refs/tags/*:refs/tags/*');
+    expect(configured).toContain(NOTES_REFSPEC);
   });
 
   it('warns when there is no remote at all', () => {

@@ -43,6 +43,7 @@ import {
   NOTES_REF,
   NOTES_REFSPEC,
   coversNotes,
+  forcesNotes,
   listRemotes,
   fetchRefspecs,
 } from '../core/notes.js';
@@ -93,6 +94,17 @@ const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 
+/**
+ * `git config --replace-all` takes a **regular expression** for the value it
+ * replaces, so a refspec passed through raw is not a literal: `refs/notes/*`
+ * reads as "`refs/notes` then zero or more `/`", which does not match the
+ * asterisk actually in the value. A pattern that matches nothing does not fail
+ * — `--replace-all` appends instead, leaving the entry it was meant to remove
+ * in place beside a new one.
+ */
+const escapeConfigValuePattern = (value: string): string =>
+  value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
+
 const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
 
 const check = (
@@ -122,6 +134,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   }
 
   let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+  let forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
   let fixed = false;
 
   if (opts.fix === true) {
@@ -134,12 +147,38 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
           gitOptions(opts),
         );
         fixed = replaced.code === 0 || fixed;
+      } else if (configured.some(forcesNotes)) {
+        // #417: a forced refspec overwrites the local mirror on every fetch.
+        // Each forced entry is replaced individually rather than the whole key
+        // rewritten, so a remote's other refspecs survive untouched.
+        for (const entry of configured.filter(forcesNotes)) {
+          const replaced = execGit(
+            ['config', '--replace-all', key, NOTES_REFSPEC, `^${escapeConfigValuePattern(entry)}$`],
+            gitOptions(opts),
+          );
+          fixed = replaced.code === 0 || fixed;
+        }
       } else if (!configured.some(coversNotes)) {
         const added = execGit(['config', '--add', key, NOTES_REFSPEC], gitOptions(opts));
         fixed = added.code === 0 || fixed;
       }
     }
     missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+    forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
+  }
+
+  if (forced.length > 0) {
+    return check(
+      'notes-refspec',
+      title,
+      'warn',
+      `${forced.join(', ')} fetches ${NOTES_REF} with a forced refspec, so an ordinary git fetch ` +
+        'overwrites this clone\'s mirror — a record written here and not yet pushed is destroyed silently',
+      forced
+        .map((remote) => `git config --replace-all remote.${remote}.fetch '${NOTES_REFSPEC}' '^\\+refs/notes/'`)
+        .join('\n'),
+      fixed,
+    );
   }
 
   if (missing.length > 0) {

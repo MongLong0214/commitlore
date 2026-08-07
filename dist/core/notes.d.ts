@@ -17,8 +17,20 @@ export declare const NOTES_REF = "refs/notes/commitlore";
  * The fetch refspec a clone needs before it can see anyone else's records.
  * `git fetch` does not fetch notes by default, so a fresh clone reads an empty
  * mirror until this is configured — `commitlore doctor --fix` adds it.
+ *
+ * **Deliberately not forced** (#417). This carried a leading `+` and therefore
+ * overwrote the local mirror with the remote's on every fetch, diverged or not.
+ * A note is not a cache — the note *is* the record — so that destroyed records
+ * rather than invalidating a derived file, silently and with exit 0. Writing a
+ * record and pulling before pushing it was enough to lose it.
+ *
+ * Unforced costs one thing and buys one thing. A fast-forward still applies
+ * without ceremony, which is the ordinary case; the only fetch that behaves
+ * differently is one where the local ref holds commits the remote does not —
+ * exactly the fetch where forcing destroys something. The cost is a visible
+ * `! [rejected]` there, and `commitlore sync` is what resolves it.
  */
-export declare const NOTES_REFSPEC = "+refs/notes/*:refs/notes/*";
+export declare const NOTES_REFSPEC = "refs/notes/*:refs/notes/*";
 export interface NotesOptions {
     cwd?: string;
 }
@@ -107,6 +119,13 @@ export declare const fetchRefspecs: (remote: string, opts: NotesOptions) => stri
  * not be told it is missing anything.
  */
 export declare const coversNotes: (refspec: string) => boolean;
+/**
+ * Whether a configured refspec would overwrite the local mirror (#417).
+ *
+ * `coversNotes` asks whether the mirror lands where we read it. This asks
+ * whether getting it there may destroy a record on the way.
+ */
+export declare const forcesNotes: (refspec: string) => boolean;
 /**
  * Whether this repository can answer for the notes mirror, and if not, why.
  *
