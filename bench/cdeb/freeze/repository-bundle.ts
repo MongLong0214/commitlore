@@ -31,6 +31,9 @@ import { git, gitOrThrow } from "../../git.ts";
 
 export const NOTES_REF = "refs/notes/commitlore";
 
+/** Branch name the snapshot is bundled under; temporary in the source. */
+export const BUNDLE_REF_NAME = "cdeb-snapshot";
+
 /** The §6.1 identity of a frozen bundle. */
 export interface RepositoryBundleIdentity {
   readonly repository_id: string;
@@ -60,9 +63,29 @@ const sha256File = (path: string): string => sha256(readFileSync(path));
  * Every ref the repository carries, as `sha ref` lines sorted by ref name.
  * `for-each-ref` rather than `show-ref` so an empty result is an answer, and
  * sorted so the digest does not depend on enumeration order.
+ *
+ * `refs/remotes/` is excluded: a materialization keeps the bundle under an
+ * origin remote as an artefact of how it was cloned, and that is a property of
+ * the transport rather than of the repository the arms are supposed to share.
  */
 const refsListing = (cwd: string): string =>
-  gitOrThrow(cwd, ["for-each-ref", "--format=%(objectname) %(refname)", "--sort=refname"]);
+  gitOrThrow(cwd, [
+    "for-each-ref",
+    "--format=%(objectname) %(refname)",
+    "--sort=refname",
+    "refs/heads",
+    "refs/tags",
+    "refs/notes",
+  ]);
+
+/** The refs a bundle actually carries, read back out of the bundle itself. */
+const bundledRefs = (cwd: string, bundlePath: string): string =>
+  gitOrThrow(cwd, ["bundle", "list-heads", bundlePath])
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .sort()
+    .join("\n");
 
 const notesTip = (cwd: string): string => {
   const result = git(cwd, ["rev-parse", "--verify", "--quiet", NOTES_REF]);
@@ -94,29 +117,55 @@ const workingTreeDigest = (cwd: string): string =>
 /**
  * Creates the frozen bundle for a repository at an exact snapshot.
  *
- * `--all` plus the notes ref explicitly: `git bundle create --all` includes
- * `refs/notes/*` only when the repository's config fetches them, and a bundle
- * that silently dropped the mirror would materialize into a repository where
- * every notes-sourced record simply does not exist — an OFF arm by accident.
+ * **The bundle carries the snapshot and the notes mirror, and nothing else.**
+ * `--all` was the obvious spelling and is wrong here: it packs every branch in
+ * the source, so a materialization would hand the agent `git show
+ * other-branch:path` over work the study is supposed to have sealed. Caught
+ * before any run — bundling this repository's own HEAD while the pilot's tasks
+ * and oracles sat on that branch would have put the answers inside the tree the
+ * agent was being measured in.
+ *
+ * The notes ref is named explicitly because `git bundle create` includes
+ * `refs/notes/*` only when the source's config fetches them, and a bundle that
+ * silently dropped the mirror would materialize a repository where every
+ * notes-sourced record is simply absent — an OFF arm by accident.
  */
 export const createRepositoryBundle = (
   repositoryId: string,
   sourceCwd: string,
   bundlePath: string,
+  snapshotRef = "HEAD",
 ): RepositoryBundleIdentity => {
   mkdirSync(join(bundlePath, ".."), { recursive: true });
-  const refs = ["--all"];
-  if (notesTip(sourceCwd) !== "absent") refs.push(NOTES_REF);
-  gitOrThrow(sourceCwd, ["bundle", "create", bundlePath, ...refs]);
-  gitOrThrow(sourceCwd, ["bundle", "verify", bundlePath]);
+  const snapshot = gitOrThrow(sourceCwd, ["rev-parse", snapshotRef]).trim();
 
-  const snapshot = gitOrThrow(sourceCwd, ["rev-parse", "HEAD"]).trim();
+  // `git bundle create` takes rev-list arguments and stores the *ref names*
+  // among them, so a bare sha bundles objects with nothing for a clone to land
+  // on. The name has to sit under refs/heads/ — `git clone` builds its checkout
+  // from branches, and a bundle whose only ref was refs/cdeb/snapshot cloned
+  // into a repository that could not read its own tree. Refusing to reuse an
+  // existing name keeps this from ever clobbering a real branch, and the
+  // finally removes the ref whether or not the bundle succeeded.
+  const tempRef = `refs/heads/${BUNDLE_REF_NAME}`;
+  if (git(sourceCwd, ["rev-parse", "--verify", "--quiet", tempRef]).status === 0) {
+    throw new Error(`bundle: ${tempRef} already exists in the source — refusing to overwrite it`);
+  }
+  gitOrThrow(sourceCwd, ["update-ref", tempRef, snapshot]);
+  try {
+    const refs = [tempRef];
+    if (notesTip(sourceCwd) !== "absent") refs.push(NOTES_REF);
+    gitOrThrow(sourceCwd, ["bundle", "create", bundlePath, ...refs]);
+    gitOrThrow(sourceCwd, ["bundle", "verify", bundlePath]);
+  } finally {
+    git(sourceCwd, ["update-ref", "-d", tempRef]);
+  }
+
   return {
     repository_id: repositoryId,
     bundle_sha256: sha256File(bundlePath),
     snapshot_commit: snapshot,
     snapshot_tree_oid: gitOrThrow(sourceCwd, ["rev-parse", `${snapshot}^{tree}`]).trim(),
-    refs_digest: sha256(refsListing(sourceCwd)),
+    refs_digest: sha256(bundledRefs(sourceCwd, bundlePath)),
     notes_ref_digest: sha256(notesTip(sourceCwd)),
   };
 };

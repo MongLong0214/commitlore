@@ -110,6 +110,37 @@ describe('#445 the frozen repository materializer', () => {
     expect(message).toContain('r-cdeb01');
   });
 
+  /**
+   * The sealed-corpus property (PRD §5). `--all` was the obvious way to build
+   * the bundle and would have packed every branch in the source — including,
+   * for CDEB-P, the branch holding its own prompts and oracles. An agent in the
+   * materialization could then have read the answers with `git show`.
+   */
+  it('carries only the snapshot and the notes mirror — no other branch is reachable', () => {
+    const source = sourceRepo('sealed');
+    // A second branch holding something the study would want sealed.
+    gitOrThrow(source, ['checkout', '--quiet', '-b', 'sealed-answers']);
+    writeFileSync(join(source, 'answers.txt'), 'the rejected approach is the shared cache\n');
+    gitOrThrow(source, ['add', '-A']);
+    gitOrThrow(source, ['commit', '--quiet', '-m', 'chore: answers']);
+    const snapshot = gitOrThrow(source, ['rev-parse', 'HEAD~1']).trim();
+    gitOrThrow(source, ['checkout', '--quiet', '-']);
+
+    const bundle = join(temp('sealed-bundle'), 'repo.bundle');
+    const identity = createRepositoryBundle('repo-a', source, bundle, snapshot);
+    const target = join(temp('sealed-wt'), 'wt');
+    materializeBundle(identity, bundle, target);
+
+    expect(identity.snapshot_commit).toBe(snapshot);
+    // The branch is not a ref, and its blob is not reachable by any means.
+    const refs = gitOrThrow(target, ['for-each-ref', '--format=%(refname)']);
+    expect(refs).not.toContain('sealed-answers');
+    const objects = gitOrThrow(target, ['rev-list', '--all', '--objects']);
+    expect(objects).not.toContain('answers.txt');
+    // And the notes mirror still made the trip.
+    expect(gitOrThrow(target, ['notes', '--ref=commitlore', 'show', snapshot])).toContain('r-cdeb02');
+  });
+
   it('refuses a bundle whose bytes do not match the freeze', () => {
     const source = sourceRepo('tamper');
     const bundle = join(temp('tamper-bundle'), 'repo.bundle');
