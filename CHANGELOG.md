@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+### `[directive]` became reachable
+
+Records reach an agent graded `directive`, `claim` or `blocked`. `directive`
+means "treat this as a constraint" and is where the trust model lives. Until
+now **no installed surface could produce one**: nothing passed
+`--trusted-author`, grading failed closed to `claim` for every record every user
+had ever received, and the injected legend went on advertising a tier that had
+never been delivered or measured (#415).
+
+`init` now records the installing user's git identity in
+`commitlore.trustedAuthor`. Records you authored reach your agent as
+`[directive]`; every other author's stay `[claim]`, so the property that stops a
+contributor's commit from instructing someone else's agent is untouched. A team
+widens it to its reviewers, or empties it back to trust-nobody, with one git
+command and no hand-edited hook.
+
+**M1 and M5 measured `[claim]`-graded delivery.** Their numbers describe that
+tier and do not transfer to this one.
+
+### Capture runs unattended
+
+ADR-0030. `mode` defaults to `auto`: the pipeline drafts and stages a record
+without asking, and the record is stamped `Provenance: drafted`. A drafted
+record is capped at `[claim]` — nobody read it, so it cannot direct an agent —
+and is promoted by a person declaring `Supersedes:` on an authored record. A
+repository declines the whole thing by setting `mode: "off"`.
+
+### Fixed
+
+- The pre-push hook re-entered itself through `sync`'s push and **hung every
+  `git push`** — 1,240 invocations in 40 seconds (#422)
+- A non-executable `COMMITLORE_BIN` **killed the git operation next to it**
+  instead of falling through (#428)
+- Notes-sourced records inherited the annotated commit's author trust, so
+  **anyone who could write `refs/notes` could forge a `directive`** (#409)
+- The injection guard matched a literal phrase, serving an attack paraphrase as
+  `directive` and blocking a benign one (#408)
+- Concurrent hooks fell back to a full scan for want of a SQLite busy timeout
+  (#420)
+- The notes refspec `doctor --fix` wrote was forced, so an ordinary `git fetch`
+  **silently destroyed unpushed records** (#417)
+- The notes mirror was written locally and never left the machine (#416)
+- A commit carrying a record could never be amended (#430)
+- `doctor` did not say when the agent's hook was running a different build than
+  the CLI (#433)
+- The MCP server left no record of whether it closed or was killed (#424 work)
+
+### Evidence and protocol
+
+- **`docs/SELF-AUDIT.md`** — what this repository caught in itself, leading with
+  the claims this project published that turned out to be false
+- The CDEB benchmark protocol at v1.2, its schemas, a recursive verifier wired
+  into default CI, and a frozen-bundle materializer that proves two arms saw one
+  repository
+- **CDEB-P**, a pilot that measured what CDEB v1 assumed: the mechanism is
+  observable, and the ON arm costs 45% more, which makes the registered token
+  gate unreachable as written
+- The M5 analysis reads the shards its preregistration names, after the previous
+  version read 1,835 rows from four different experiments and would have passed
+  its own stopping rule on the contamination (#441)
+- ADR-0031 names Zed's DeltaDB and which three differences carry weight
+
+### Documentation
+
+- The README shows the concrete failure before the evidence tables. Nothing was
+  softened; the order changed.
+- The plugin does not update itself, and updating is two steps
+
 `bench/TOKEN-LEDGER.md` prices what a record costs to write against what the
 projection saves to read, and closes the gap `docs/evidence.md` carried under
 *Break-even*. The two write-side terms obtainable with no model call are
