@@ -480,6 +480,30 @@ export const isSuccessionDeclared = (
  * A Record-Id belongs to exactly one record unless a later commit declares
  * `Supersedes:` for it. Same-message duplicates and divergent notes are still
  * collisions: neither is a later authored succession.
+ *
+ * **Divergent, not merely repeated** (#430). This counted commit-sourced
+ * records and never compared them, which is stricter than SPEC §3.2:
+ *
+ * > A `Record-Id` MUST resolve to exactly one logical record. Re-declaring that
+ * > record in later commits is a lifecycle update … A note MUST NOT add or
+ * > replace content under an id declared by a commit message; that is an
+ * > identity collision, not an update.
+ *
+ * — and than §6's own example of the violation, "a note adds **different
+ * content** under a `Record-Id` already declared by a commit". The concept was
+ * already here, one branch up in `hasAmbiguousGroup`, applied only when a note
+ * was involved: the spec's rule serving half the cases it governs.
+ *
+ * The visible cost was that a commit carrying a record could never be amended.
+ * During an amend HEAD is still the commit being replaced, so the group holds
+ * its record and the incoming one — byte-identical — and the count fired. No
+ * hook can tell `commit-msg` that an amend is happening, and with this rule
+ * none has to.
+ *
+ * Byte-identical is deliberately narrower than §3.2 allows. A "lifecycle
+ * update" may legitimately carry changes, and deciding which ones stay updates
+ * is a wider question; requiring identity cannot overshoot the spec while it is
+ * open.
  */
 export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
   const groups = groupsByRecordId(records);
@@ -487,8 +511,33 @@ export const findIdCollisions = (records: StaleRecord[]): Violation[] => {
   return [...groups]
     .filter(([recordId, group]) => {
       if (hasAmbiguousGroup(group)) return true;
+      const declared = group.filter((record) => record.source !== 'notes');
+      // Identical payloads are one record re-declared (§3.2) — **unless the id
+      // has been retired somewhere in this history.** Once something declares
+      // `Supersedes:` for it, a further declaration is ambiguous about whether
+      // the id is active, and that ambiguity is about lifecycle rather than
+      // content: two byte-identical declarations straddling a supersession are
+      // still two answers to "is this in force". So the count rule stands
+      // wherever the id was ever superseded, and `hasDeclaredSuccession` keeps
+      // deciding, as before, whether the supersession came late enough to
+      // forgive the duplicate it followed.
+      const retiredSomewhere = ordered.some(
+        ({ record }) =>
+          record.source !== 'notes' &&
+          record.trailers.some(
+            (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId,
+          ),
+      );
+      // And the payload has to exist. Two blocks carrying nothing but an id are
+      // not one record re-declared; they are an id with no record attached, and
+      // reading them as identical would be true only vacuously. Flagging them
+      // keeps a real signal — that shape is a copy-paste, not a lifecycle
+      // update — and costs nothing here, because an amend re-declares content.
+      const signatures = new Set(declared.map(payloadSignature));
+      const identical = signatures.size === 1 && !signatures.has('');
       return (
-        group.filter((record) => record.source !== 'notes').length > 1 &&
+        declared.length > 1 &&
+        (retiredSomewhere || !identical) &&
         !hasDeclaredSuccession(recordId, ordered)
       );
     })

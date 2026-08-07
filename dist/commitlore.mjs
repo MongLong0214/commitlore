@@ -13794,7 +13794,15 @@ var findIdCollisions = (records) => {
   const ordered = chronological(records);
   return [...groups].filter(([recordId, group]) => {
     if (hasAmbiguousGroup(group)) return true;
-    return group.filter((record2) => record2.source !== "notes").length > 1 && !hasDeclaredSuccession(recordId, ordered);
+    const declared = group.filter((record2) => record2.source !== "notes");
+    const retiredSomewhere = ordered.some(
+      ({ record: record2 }) => record2.source !== "notes" && record2.trailers.some(
+        (trailer) => trailer.key === SUPERSEDES_KEY && trailer.value === recordId
+      )
+    );
+    const signatures = new Set(declared.map(payloadSignature));
+    const identical = signatures.size === 1 && !signatures.has("");
+    return declared.length > 1 && (retiredSomewhere || !identical) && !hasDeclaredSuccession(recordId, ordered);
   }).map(([recordId]) => ({
     key: RECORD_ID_KEY2,
     value: recordId,
