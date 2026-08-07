@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cdeb-task",
+  "title": "CDEB sealed task metadata (PRD §4, §5)",
+  "description": "The non-secret metadata of one sealed task. Prompt text, expected record IDs and evaluator sources live in the sealed bundle and appear here only as digests, alongside the reviewer attestation §4.8 requires.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "benchmark", "task_id", "candidate_id", "repository_id", "category",
+    "timeout_ms", "prompt_sha256", "evaluator_image_digest",
+    "good_control_sha256", "bad_control_sha256", "noop_control_sha256",
+    "oracle_kind", "reviewer_attestation"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "benchmark": { "const": "cdeb-v1" },
+    "task_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "candidate_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "repository_id": { "type": "string", "minLength": 1 },
+    "category": {
+      "enum": [
+        "rejected-architecture", "rejected-workaround", "compatibility-constraint",
+        "security-operational", "superseded-lifecycle"
+      ]
+    },
+    "timeout_ms": { "type": "integer", "minimum": 60000 },
+    "prompt_sha256": { "$ref": "#/$defs/sha256" },
+    "evaluator_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "good_control_sha256": { "$ref": "#/$defs/sha256" },
+    "bad_control_sha256": { "$ref": "#/$defs/sha256" },
+    "noop_control_sha256": { "$ref": "#/$defs/sha256" },
+    "oracle_kind": {
+      "enum": ["runtime-invariant", "ast-structure", "config-topology", "structural-predicate", "lexical-approved"]
+    },
+    "reviewer_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewer_identity", "artifact_digest", "attested_at"],
+      "properties": {
+        "reviewer_identity": { "type": "string", "minLength": 1 },
+        "artifact_digest": { "$ref": "#/$defs/sha256" },
+        "attested_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

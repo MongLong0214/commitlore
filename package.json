@@ -16,12 +16,13 @@
     "build": "tsc -p tsconfig.json && npm run bundle",
     "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
     "bench:external": "npm run build && node --experimental-strip-types bench/external/run.ts",
-    "bench:verify": "node bench/verify.mjs",
+    "bench:verify": "node bench/verify.mjs && node bench/cdeb/verify.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
-    "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts"
+    "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
+    "bench:cdeb:verify": "node bench/cdeb/verify.mjs"
   },
   "keywords": [
     "git",
