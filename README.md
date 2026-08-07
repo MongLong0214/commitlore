@@ -83,6 +83,24 @@ warnings
 
 Reproducing that exact `PreToolUse` hook path, and every other command: [docs/cli.md](docs/cli.md).
 
+## The repository is the demo
+
+A tool that claims to stop agents re-deciding settled questions should be able
+to show what it caught in itself. This one keeps that list in public, including
+the entries where the thing that turned out to be false was something this
+project had already published:
+
+- **No install could produce the trust tier the README's claims rested on.** Records reach an agent graded `directive` or `claim`. It turned out no installed surface configured a trusted author, so grading failed closed to `claim` for everyone — while the injected legend advertised the tier nobody could reach. Both prior benchmarks had measured `claim`-graded delivery ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **The registered benchmark analysis would have read four different experiments at once** — and because its stopping rule was a row count, the contamination would have made the study *pass* its own completeness gate ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
+- **The result-schema gate was not run by anything**, so the schema drifted five fields behind the runner and nobody noticed for two days ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
+- **A shipped pre-push hook hung every `git push`** — 1,240 hook invocations in 40 seconds — because the function had been tested eleven times and the hook path zero times ([#422](https://github.com/MongLong0214/commitlore/issues/422)).
+
+Every one of those is a `Ruled-out:`, `Warn:` or `Limit:` line in a commit
+trailer, validated by the hook this project asks you to install, and readable
+with the same `commitlore context` you would run anywhere else.
+
+**The full list, with what each one cost: [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md).**
+
 ## Retrieval can find records. Path scope keeps reversed decisions out.
 
 Before an agent's first edit, how much of a repository's still-active decision set actually reaches it? On this repository, at the 800-token budget the hook ships with:
