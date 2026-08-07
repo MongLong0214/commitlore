@@ -17659,6 +17659,7 @@ import { resolve as resolve8 } from "node:path";
 // src/core/sync.ts
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var FETCH_HEAD_REF = "refs/notes/commitlore-remote";
+var pushMirror = (remote, opts) => execGit(["push", "--no-verify", remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions4(opts));
 var revParse2 = (ref, opts) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", ref], gitOptions4(opts));
   const sha = result.stdout.trim();
@@ -17718,7 +17719,7 @@ var syncRemote = (remote, opts = {}) => {
       if (opts.fetchOnly === true) {
         return { remote, outcome: "merged", detail: "merged both mirrors; not published" };
       }
-      const pushed2 = execGit(["push", remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions4(opts));
+      const pushed2 = pushMirror(remote, opts);
       return pushed2.code === 0 ? { remote, outcome: "merged", detail: "merged both mirrors and published" } : failure2(remote, pushed2.stderr.trim() || `git push ${remote} failed`);
     }
   }
@@ -17728,7 +17729,7 @@ var syncRemote = (remote, opts = {}) => {
   if (opts.dryRun === true) {
     return { remote, outcome: "pushed", detail: "would publish the local mirror" };
   }
-  const pushed = execGit(["push", remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions4(opts));
+  const pushed = pushMirror(remote, opts);
   return pushed.code === 0 ? { remote, outcome: "pushed", detail: "published the local mirror" } : failure2(remote, pushed.stderr.trim() || `git push ${remote} failed`);
 };
 var syncNotes = (opts = {}) => {
