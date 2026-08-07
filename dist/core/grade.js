@@ -492,6 +492,8 @@ const provenanceOf = (record) => {
         return { kind: 'unknown' };
     if (raw === 'authored')
         return { kind: 'authored' };
+    if (raw === 'drafted')
+        return { kind: 'drafted' };
     if (raw === 'reconstructed')
         return { kind: 'reconstructed' };
     const inherited = INHERITED_RE.exec(raw);
@@ -572,6 +574,15 @@ const grade = (input, ctx) => {
     const claim = (reason) => ({ provenance, lifecycle, trust: 'claim', reason });
     if (provenance === 'reconstructed') {
         return claim('provenance is reconstructed — rebuilt from history, never directly authored');
+    }
+    // ADR-0030. Capture may stage a record without anyone reading it, and such a
+    // record is real — its quotes were checked against the transcript and the
+    // diff it was drafted from. What it lacks is a person who stood behind the
+    // wording, and that is exactly what `directive` claims. The cap is here
+    // rather than in the pipeline because grading is what consumer routes ask,
+    // and a rule the writer could decline to apply is not a rule.
+    if (provenance === 'drafted') {
+        return claim('provenance is drafted — captured without a person reading it');
     }
     if (provenance !== 'authored') {
         return claim(`provenance is ${provenance}, and only authored records can direct an agent`);

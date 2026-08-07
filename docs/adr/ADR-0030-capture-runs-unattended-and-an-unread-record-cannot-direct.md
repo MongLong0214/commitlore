@@ -1,16 +1,23 @@
 # ADR-0030: capture runs unattended, and a record nobody read cannot direct an agent
 
-- Status: **Proposed** (2026-08-07)
+- Status: **Accepted** (2026-08-07), approved by the owner
 - Related: [ADR-0021](ADR-0021-capture-pending-transaction.md) (the pending
   format and phase vocabulary this would extend) ·
   [ADR-0028](ADR-0028-suggest-is-a-host-side-convention.md) (which left this
   decision unbuilt and named the ADR it needs) · SPEC §3 (`Provenance:`) ·
   SPEC §7 (trust) · [#415](https://github.com/MongLong0214/commitlore/issues/415)
 
-**Proposed, not Accepted.** It changes SPEC vocabulary, which binds every
-implementer of the protocol and not just this codebase, and ADR-0028 says
-plainly that the thing it declines to build "needs its own ADR **and its own
-approval**." This document is the first half.
+Approved 2026-08-07. ADR-0028 said the thing it declined to build "needs its own
+ADR **and its own approval**" — this is the ADR, and the approval is recorded
+here because the change it authorises touches SPEC vocabulary, which binds every
+implementer of the protocol and not just this codebase.
+
+**Landing in order.** Decision 2 — the `drafted` value and the grading cap —
+ships first and alone, because it is the guarantee the rest depends on: it is
+additive, an implementation that does not know the value reads it as `unknown`
+and also grades `claim`, and nothing about capture changes until it is in place.
+Decisions 1, 3 and 5 (unattended staging, promotion by supersession, the off
+switch) follow separately.
 
 ## Context
 
