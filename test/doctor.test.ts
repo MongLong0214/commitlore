@@ -529,7 +529,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
 
   /**
    * A pin whose version cannot be established is not health. It is also not a
-   * crash: doctor has to keep reporting the other nine checks.
+   * crash: doctor has to keep reporting every other check.
    */
   it('does not report ok when the pinned install declares no version', () => {
     const repo = pinnedTo('doctor-pin-unknown', otherInstall('doctor-pin-unknown-install', null));
@@ -540,7 +540,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    expect(report.checks).toHaveLength(10);
+    expect(report.checks).toHaveLength(11);
   });
 });
 
@@ -946,6 +946,7 @@ describe('doctor: report', () => {
       'commit-msg-hook',
       'hook-runtime',
       'inject-runtime',
+      'inject-version',
       'git-trailers',
       'history-depth',
       'index-health',
@@ -967,7 +968,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(10);
+    expect(parsed.checks).toHaveLength(11);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
