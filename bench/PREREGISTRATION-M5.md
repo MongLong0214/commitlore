@@ -318,3 +318,58 @@ surviving shards were committed before the re-run was launched.
 range of 1–58, so no registered cell was touched. It confirms the pinned harness
 runs and stamps the expected commit and digest. Its rows are discarded and are
 not citable.
+
+### Deviation 4 — 2026-08-07: 70 rows carry no measurement, and seeds 55–58 are re-run too
+
+Found while auditing `stopped_by` across the surviving shards, which §6 and §7
+require to be monitored. **`stopped_by: "error"` stands at 70 of the 760
+surviving rows.** They are not scattered:
+
+| seed | error rows |
+|---|---:|
+| 21–54 | **0** of 680 |
+| 55 | 10 of 20 |
+| 56 | 20 of 20 |
+| 57 | 20 of 20 |
+| 58 | 20 of 20 |
+
+The run died partway through seed 55 and produced nothing but errors after it.
+The tail shard's wall-clock says the same thing: 4.7 hours for 160 rows against
+roughly 10.4 hours for each 200-row shard before it.
+
+**This corrects the earlier reading of the run log.** `ALL SHARDS COMPLETE` and
+a final count of 1,160 meant 1,160 rows were *written*. It did not mean 1,160
+measurements exist, and §7 has always said so: a row with `stopped_by: "error"`
+carries no measurement and does not enter the analysis set. The registered n was
+never reached.
+
+**The errors are balanced across arms at 35 and 35**, and they fall on all ten
+tasks. Nothing about a result influenced which rows failed — the harness stopped
+producing measurements at a point in the seed order.
+
+**Seeds 55–58 are re-run in full**, alongside seeds 1–20 (deviation 3). Whole
+seeds, both arms, all ten tasks — not the 70 errored cells alone. Re-running
+only the cells that failed would make the re-run set depend on a per-cell
+property, and although `error` is the absence of a measurement rather than an
+outcome, whole-seed replacement removes the question entirely. The 10 non-error
+rows in seed 55 are superseded by their re-run counterparts and are not analysed.
+
+That restores the registered design exactly:
+
+| source | seeds | rows | per arm |
+|---|---|---:|---:|
+| surviving, error-free | 21–54 | 680 | 340 |
+| re-run (deviation 3) | 1–20 | 400 | 200 |
+| re-run (this deviation) | 55–58 | 80 | 40 |
+| **total** | **1–58** | **1,160** | **580** |
+
+Everything deviation 3 records about the re-run applies here too: same pinned
+harness commit `788a9db`, same verified `dist` digest, same ten fixtures, same
+`--model sonnet`, and the same limitation that these rows are produced days
+after seeds 21–54 against an alias that is not pinned to a build. **The verdict
+must report the production window per shard**, and must state that seeds 1–20
+and 55–58 are re-runs.
+
+**Still nothing analysed.** This note was produced from `stopped_by`, `seed`,
+`task`, `cond` and the shard wall-clock. Not `reproposed`, and no
+cross-tabulation of it.
