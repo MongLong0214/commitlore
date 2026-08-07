@@ -149,8 +149,8 @@ describe('commitlore init — the happy path', () => {
 
     const report = runInitAsCli({ cwd: repo });
 
-    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'index', 'claude-hook', 'doctor']);
-    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0]);
+    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'trust', 'index', 'claude-hook', 'doctor']);
+    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0]);
     expect(report.exitCode).toBe(0);
 
     expect(readHookStatus(repo).state).toBe('installed');
@@ -279,7 +279,7 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     const report = runInitAsCli({ cwd: repo });
 
     // Nothing here is a thrown exception: every step reports its own outcome.
-    expect(report.steps).toHaveLength(4);
+    expect(report.steps).toHaveLength(5);
     for (const step of report.steps) {
       expect(step.lines.length).toBeGreaterThan(0);
     }

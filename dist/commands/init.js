@@ -37,6 +37,7 @@ import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.
 import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
 import { installPrePushHook } from '../hooks/pre-push.js';
+import { seedTrustedAuthor } from '../core/trusted-authors.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -127,6 +128,23 @@ const runIndexStep = (opts) => {
         }
     }
 };
+/**
+ * #415: with no trusted author recorded, grading fails closed and every record
+ * the agent ever sees is `[claim]` — the `[directive]` tier the injected legend
+ * advertises was unreachable on every install. Seeding the installer's own
+ * identity makes it reachable without weakening the property it protects: a
+ * different author's commit still grades `claim`.
+ */
+const runTrustStep = (opts) => {
+    const result = seedTrustedAuthor(opts.cwd ?? process.cwd());
+    return {
+        step: 'trust',
+        title: 'trusted author',
+        code: 0,
+        lines: [result.author === null ? result.reason : `${result.author} — ${result.reason}`],
+        detail: result,
+    };
+};
 const runClaudeHookStep = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     const settingsPath = claudeSettingsPath(cwd);
@@ -169,19 +187,21 @@ const runClaudeHookStep = (opts) => {
  */
 export const runInit = (opts = {}) => {
     const notesBefore = notesAvailability(cwdOption(opts));
-    const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
     return { steps, notesBefore, exitCode: exitCode };
 };
 /** User-facing step labels — no internal command names. */
 const STEP_LABEL = {
     hooks: 'Hooks',
+    trust: 'Trust',
     index: 'Index',
     'claude-hook': 'Agent integration',
     doctor: 'Final check',
 };
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export const STEP_HEADING = {
+    trust: 'trusted author',
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
     'claude-hook': '[3/4] claude hook install',
