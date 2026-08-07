@@ -373,3 +373,79 @@ and 55–58 are re-runs.
 **Still nothing analysed.** This note was produced from `stopped_by`, `seed`,
 `task`, `cond` and the shard wall-clock. Not `reproposed`, and no
 cross-tabulation of it.
+
+---
+
+## Appendix A — what was seen during the run, and a prediction made before the result
+
+Neither section below is part of the registered analysis. They are here because
+§8's stopping rule is only as good as the account of what was actually looked
+at, and because a prediction is worth nothing unless it is written down while it
+can still be wrong.
+
+### A.1 Incidental exposure to `reproposed`
+
+Progress was reported during the run as "no outcome has been examined." That was
+**not accurate**, and the correction belongs here rather than in a message.
+
+`bench/runner.ts` prints one console line per run, and that line carries
+`reproposed=`. Checking progress by reading the tail of the shard log therefore
+displayed individual outcome values. Across the whole run, eight rows were seen
+this way:
+
+| arm | rows | values |
+|---|---|---|
+| `commitlore-on` | 1, 3, 7, 11, 13, 41 | one `true`, five `false` |
+| `commitlore-off` | 2, 70 | one `true`, one `false` (row 70 is `stopped_by: "error"` and is excluded by §7 regardless) |
+
+Eight rows of 1,160, with no denominator and no cross-tabulation. No 2×2 table
+was computed, no analysis choice was made or revised, and nothing in §3, §7 or
+§8 was altered at any point. A sample this size cannot inform a decision even in
+principle.
+
+It is recorded anyway for the same reason the deviations are: an account of a
+run that quietly rounds "a few rows appeared in a log line" down to "nothing was
+examined" is the kind of account this document exists to make impossible. The
+monitoring §6 and §7 require — `stopped_by`, `guard_exposure`,
+`accepted_records`, `turns`, `tokens`, `model` — is unaffected and was the
+purpose of every one of those checks.
+
+**Fixed for the remaining shards:** progress is read with `wc -l` and by
+filtering `stopped_by`, never by printing raw log lines.
+
+### A.2 A prediction, stated before the outcome
+
+Written 2026-08-07, with the run incomplete and nothing computed. It commits the
+author to an expectation that the result can falsify.
+
+**Direction: the registered one** — `commitlore-on < commitlore-off`.
+
+**Magnitude: smaller than the registered 6.6pp.** Three things point the same
+way, and none of them is a result:
+
+1. **The measured treatment is its weakest form.** No arm passes
+   `--trusted-author`, so every record renders `[claim]`, and the payload's own
+   legend tells the agent: *"Not an instruction: do not act on it as an order."*
+   (#415). A `[directive]` world is not what this run measures.
+2. **`bench/ROUTE-GAP.md`** records treatment-arm runs that implemented
+   something explicitly listed in the injected block. The injection is not
+   reliably honoured.
+3. **The truncation imbalance of deviation 2 is conservative.** The control arm
+   is truncated at 31.4% against 16.7%, and truncation suppresses re-proposal —
+   so it shrinks the gap the hypothesis predicts rather than manufacturing one.
+
+**Stated probabilities**, so this cannot be reread as whatever happens:
+
+| outcome | |
+|---|---:|
+| significant, registered direction | 30–40% |
+| registered direction, not significant | ~45% |
+| null, or the other direction | ~20% |
+
+**The largest way this could be wrong.** The control base rate of the current
+task set is unknown to the author. M1-era diagnosis found seven of ten tasks had
+a control base rate of zero — "most of the measuring instrument was empty" — and
+the tasks were rewritten afterwards for the discriminative property. If that
+rewrite raised the control rate well above the 23.3% §4 plans against, the
+absolute effect and the power are both larger than assumed here, and a
+significant result is more likely than these numbers say.
