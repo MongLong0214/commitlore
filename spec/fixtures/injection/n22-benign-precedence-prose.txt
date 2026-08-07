@@ -1,0 +1,5 @@
+fix(http): order the timeout rules
+
+Warn: The retry policy takes precedence over the per-request timeout; do not reorder them.
+Record-Id: r-inj038
+Provenance: authored

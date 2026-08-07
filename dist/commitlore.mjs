@@ -13889,6 +13889,23 @@ var INJECTION_PATTERNS = [
     intent: "claims to replace the agent\u2019s instructions"
   },
   {
+    id: "bypass.supersede-instructions",
+    family: "policy-bypass",
+    // The same demand as `bypass.ignore-previous`, phrased as a replacement
+    // rather than a deletion (#408). "Ignore your instructions" was recognised;
+    // "follow this instead of your instructions" was not, so an attacker only
+    // had to reword.
+    //
+    // The object carries the precision. A replacement construction is ordinary
+    // engineering prose — "this takes precedence over the per-request timeout"
+    // — and becomes an attack only when what it replaces is the agent's own
+    // instructions. `rules` and `guidelines` are deliberately absent: business
+    // rules take precedence over each other all the time.
+    pattern: /\b(?:instead of|rather than|in place of|supersedes?|superseding|overrides?|overriding|takes? precedence over|taking precedence over|takes? priority over)\s+(?:(?:all|any|the|your|these|those|my|other|earlier|previous|prior|existing|current|original|system|agent|above)\s+){0,4}(?:instruction|instructions|prompt|prompts|directive|directives)\b/,
+    negatable: true,
+    intent: "claims to replace the agent\u2019s instructions rather than delete them"
+  },
+  {
     id: "bypass.role-marker",
     family: "policy-bypass",
     // A chat role marker inside a commit trailer is never prose; it is an
@@ -13985,6 +14002,28 @@ var NEGATIONS = /* @__PURE__ */ new Set([
   "forbid",
   "forbidden",
   "prohibited"
+]);
+var MENTIONS = /* @__PURE__ */ new Set([
+  "says",
+  "say",
+  "saying",
+  "said",
+  "reads",
+  "reading",
+  "contains",
+  "containing",
+  "quotes",
+  "quoting",
+  "quoted",
+  "mentions",
+  "mentioning",
+  "matches",
+  "matching",
+  "phrase",
+  "phrases",
+  "wording",
+  "literal",
+  "string"
 ]);
 var NEGATION_LOOKBACK = 2;
 var INVISIBLE_RE = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
@@ -14123,18 +14162,19 @@ var decodedCandidates = (text) => {
   return [...decoded];
 };
 var CJK_NEGATION_RE = /(?:不要|不得|禁止|请勿|請勿|切勿)[^。！？.!?\n]{0,8}$/u;
-var isNegated = (haystack, index, matchedText) => {
+var isDisarmed = (haystack, index, matchedText) => {
   const prefix = haystack.slice(0, index);
   if (CJK_NEGATION_RE.test(prefix)) return true;
   if (/[^\x00-\x7F]/u.test(matchedText)) return false;
   const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== "");
-  return words.slice(-NEGATION_LOOKBACK).some((word) => NEGATIONS.has(word));
+  const window = words.slice(-NEGATION_LOOKBACK);
+  return window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word));
 };
 var fires = (haystack, entry) => {
   const scanner = new RegExp(entry.pattern.source, "g");
   for (const match of haystack.matchAll(scanner)) {
     if (match.index === void 0) continue;
-    if (!entry.negatable || !isNegated(haystack, match.index, match[0])) return true;
+    if (!entry.negatable || !isDisarmed(haystack, match.index, match[0])) return true;
   }
   return false;
 };
