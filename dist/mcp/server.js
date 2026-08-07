@@ -47,6 +47,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { toJson, withholdBlocked } from '../commands/query.js';
+import { recordServerStart } from './lifecycle.js';
 import { buildReport, collectRecords } from '../commands/stale.js';
 import { beforeChange } from '../core/before-change.js';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
@@ -593,6 +594,10 @@ const routeConsoleToStderr = () => {
 /** Connects the server to this process's stdin/stdout. Resolves once listening. */
 export const startStdioServer = async (opts = {}) => {
     routeConsoleToStderr();
+    // #424: a session lost every commitlore tool mid-conversation and nothing on
+    // disk could say whether the server had been running. This leaves that much
+    // behind. It cannot fail the start — see `mcp/lifecycle.ts`.
+    recordServerStart(opts.cwd ?? process.cwd());
     const server = createServer(opts);
     await server.connect(new StdioServerTransport());
     return server;

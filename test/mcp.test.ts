@@ -45,7 +45,7 @@ const SERVER_MODULE = fileURLToPath(new URL('../dist/mcp/server.js', import.meta
 const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 
 /** The files this ticket owns. The source guards below scan exactly these. */
-const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'commands/mcp.ts'];
+const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'mcp/lifecycle.ts', 'commands/mcp.ts'];
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -1046,7 +1046,14 @@ describe('no network, by inspection', () => {
     readFileSync(join(PACKAGE_ROOT, 'src', relative), 'utf8');
 
   it('scans every file this ticket owns', () => {
-    expect(readdirSync(join(PACKAGE_ROOT, 'src', 'mcp')).sort()).toEqual(['main.ts', 'server.ts']);
+    // The point of this list: a file added to `src/mcp/` must be added to
+    // `OWNED_SOURCES` too, or the no-network inspection below would silently
+    // stop covering the whole directory.
+    expect(readdirSync(join(PACKAGE_ROOT, 'src', 'mcp')).sort()).toEqual([
+      'lifecycle.ts',
+      'main.ts',
+      'server.ts',
+    ]);
   });
 
   it('contains no HTTP client of any kind', () => {
