@@ -9,15 +9,19 @@ on:
     tags:
       - "v*"
 
-# `contents: write` is what lets the publish job create the GitHub Release
-# and upload assets to it. `id-token`/`attestations` are what
-# actions/attest-build-provenance needs (Sigstore-backed keyless signing —
-# no secret key for this repo to manage or leak). Nothing here needs to
-# write code, open PRs, or touch anything but this one release.
+# Read for the workflow; the ability to create a release belongs to the one job
+# that creates one. Granting `contents: write` here hands it to the gates too,
+# and the gates run `actions/checkout@v4` and `actions/setup-node@v4` — mutable
+# major tags whose contents can change under the same reference. Anything
+# executing inside a gate with a release-write token could create the release
+# before that gate, or any other, had finished, which would make the ordering
+# these jobs exist to enforce decorative.
+#
+# `id-token` and `attestations` were granted for an attestation action this
+# workflow does not contain. Privilege granted for a step that is not here is
+# privilege available to every step that is.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
   # `exact-head-ci` reads the check runs GitHub recorded for the tagged commit.
   # Reading a branch's green badge would answer a different, weaker question.
   checks: read
@@ -50,10 +54,14 @@ jobs:
         name: The pushed commit is already contained in main
         run: node scripts/check-release-target.mjs "$GITHUB_SHA" main --github-output
 
-  # Refuses the whole release before a single binary is built. A release
-  # whose asset reports a version that disagrees with its own tag is not
-  # fixable after the fact — the tag is immutable once fetched, the asset is
-  # immutable once downloaded. See scripts/check-release-version.mjs.
+  # Refuses the whole release before a single binary is built. A release whose
+  # asset reports a version that disagrees with its own tag is not fixable
+  # after the fact: the asset is immutable once downloaded, and a tag someone
+  # has already fetched cannot be corrected for them by moving it here.
+  #
+  # The tag itself is not immutable — this workflow exists because a ref can
+  # move — which is what the `v*` ruleset and the binding check below are for.
+  # See scripts/check-release-version.mjs.
   #
   # The checkout takes the canonical sha, not the tag: the version this job
   # compares must come from the same bytes every other gate qualified.
@@ -252,6 +260,11 @@ jobs:
     # semantics. Keep it free of `if:`: a condition such as `always()` would
     # turn a failed qualification into a path that can still publish.
     needs: [version-consistency, install-gate, release-target, exact-head-ci]
+    # The only job that may create a release, and it cannot start until all four
+    # gates have passed. Scoping the grant here is what makes that ordering a
+    # constraint rather than a convention.
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     env:
       RELEASE_COMMIT: ${{ needs.release-target.outputs.commit }}

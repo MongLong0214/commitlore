@@ -344,6 +344,17 @@ describe('#499 the published tag is the commit the gates qualified', () => {
       expect(result.stderr).toContain('cannot exist without its tag object');
     });
 
+    it('refuses a line carrying more than one sha and ref', () => {
+      // `split(/\s+/, 2)` discarded everything past the first pair, so a line
+      // saying two contradictory things was read as the first and accepted.
+      const file = listing(`${SHA_A}\t${REF} ${SHA_B}\t${REF}\n`);
+
+      const result = run(TAG_BINDING, [TAG, SHA_A, '--from-file', file], REPO_ROOT);
+
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('more than one sha and ref');
+    });
+
     it('refuses a listing carrying refs that were never requested', () => {
       const file = listing(`${SHA_A}\t${REF}\n${SHA_B}\trefs/tags/v0.0.1\n`);
 
@@ -460,6 +471,39 @@ describe('#499 every release boundary consumes one canonical sha', () => {
     const raw = readFileSync(RELEASE_WORKFLOW, 'utf8');
 
     expect(raw).toContain('--target "$RELEASE_COMMIT"');
+  });
+
+  // The gates run mutable `@v4` actions. A workflow-global `contents: write`
+  // would give every one of them a token that can create the release, and an
+  // action whose contents changed under the same reference could publish
+  // before any gate finished — the ordering below would still be declared and
+  // would no longer be a constraint.
+  it('grants release-write to the publishing job alone', () => {
+    const raw = readFileSync(RELEASE_WORKFLOW, 'utf8');
+    const parsed = load(raw) as {
+      permissions?: Record<string, string>;
+      jobs: Record<string, { permissions?: Record<string, string> }>;
+    };
+
+    expect(parsed.permissions?.['contents']).toBe('read');
+
+    for (const [name, job] of Object.entries(parsed.jobs)) {
+      if (name === 'publish') continue;
+      expect(job.permissions?.['contents'] ?? 'read').toBe('read');
+    }
+
+    expect(parsed.jobs['publish']?.permissions?.['contents']).toBe('write');
+  });
+
+  it('grants no privilege for an action the workflow does not contain', () => {
+    const raw = readFileSync(RELEASE_WORKFLOW, 'utf8');
+    const parsed = load(raw) as { permissions?: Record<string, string> };
+
+    // `id-token` and `attestations` were granted for an attestation action that
+    // is not here. Unused privilege is still available to every step present.
+    expect(raw).not.toContain('attest-build-provenance');
+    expect(parsed.permissions?.['id-token']).toBeUndefined();
+    expect(parsed.permissions?.['attestations']).toBeUndefined();
   });
 
   it('orders the binding check before the release is created', () => {
