@@ -4,7 +4,7 @@
  * It owns exception containment and timing around the ordered registry, so
  * check modules only decide their own verdicts and rendering cannot alter run order.
  */
-import { check } from './model.js';
+import { check, defaultDoctorContext } from './model.js';
 import { CHECK_REGISTRY } from './registry.js';
 import { buildReport } from './report.js';
 /**
@@ -55,7 +55,7 @@ const collapseBlockedBy = (checks) => {
     });
 };
 export const runDoctor = (opts = {}) => {
-    const ctx = { opts, now: process.hrtime.bigint, memo: new Map() };
+    const ctx = defaultDoctorContext(opts);
     const completed = new Map();
     const checks = CHECK_REGISTRY.map((definition) => {
         const dependencies = new Map();

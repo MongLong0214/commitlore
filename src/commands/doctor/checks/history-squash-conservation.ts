@@ -5,10 +5,9 @@
  * diagnosed from Git and records alone, without coupling to sibling checks.
  */
 
-import { execGit } from '../../../core/git.js';
 import { runQuery } from '../../../core/query.js';
 import { collectRange } from '../../../core/squash.js';
-import { check, gitOptions, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, gitOptions, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
 const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
@@ -33,8 +32,9 @@ interface SquashCandidateScan {
  * already contains — the ordinary merge or fast-forward case — is not one:
  * nothing was collapsed, so there is nothing this check can lose track of.
  */
-const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidateScan => {
-  const listed = execGit(
+const squashCandidates = (ctx: DoctorContext, head: string): SquashCandidateScan => {
+  const { opts, git } = ctx;
+  const listed = git(
     ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
     gitOptions(opts),
   );
@@ -47,17 +47,17 @@ const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidateSca
 
   const candidates: SquashCandidate[] = [];
   for (const branch of branches) {
-    const resolved = execGit(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
+    const resolved = git(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
     const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
     if (sha === '' || sha === head) continue;
 
     // Already an ancestor of HEAD (or identical to it): reached by an
     // ordinary merge, rebase, or fast-forward, and nothing was lost.
-    if (execGit(['merge-base', '--is-ancestor', sha, head], gitOptions(opts)).code === 0) {
+    if (git(['merge-base', '--is-ancestor', sha, head], gitOptions(opts)).code === 0) {
       continue;
     }
 
-    const merged = execGit(['merge-base', sha, head], gitOptions(opts));
+    const merged = git(['merge-base', sha, head], gitOptions(opts));
     if (merged.code !== 0) continue; // no common ancestor — unrelated history
     const base = merged.stdout.trim();
     if (base === '' || base === sha) continue;
@@ -116,13 +116,14 @@ const scanEvidence = (
  * That is a real, narrower gap than "detects every lost record" and is
  * reported as such rather than silently passed over.
  */
-export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
+export const checkSquashConservation = (ctx: DoctorContext): DoctorCheck => {
+  const { opts, git } = ctx;
   const title = 'squash conservation';
   const id = 'squash-conservation';
   const category: Category = 'history';
   const cwd = opts.cwd ?? process.cwd();
 
-  const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
+  const head = git(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
   if (head.code !== 0) {
     return check(
       id,
@@ -140,7 +141,7 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
-  const scan = squashCandidates(opts, head.stdout.trim());
+  const scan = squashCandidates(ctx, head.stdout.trim());
   const { candidates } = scan;
   if (candidates.length === 0) {
     return check(

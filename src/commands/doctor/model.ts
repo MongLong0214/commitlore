@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+
+import { execGit, type ExecGitOptions, type GitResult } from '../../core/git.js';
+import { openIndex } from '../../core/index-db.js';
+
 /**
  * Doctor's model and construction seam.
  *
@@ -120,6 +125,11 @@ export interface DoctorOptions {
   /** Apply the reversible local config fixes. */
   fix?: boolean;
 }
+
+/** The process effects a check may need, supplied by the runner. */
+export type DoctorGit = (args: string[], opts?: ExecGitOptions) => GitResult;
+export type DoctorSpawn = typeof spawnSync;
+export type DoctorOpenIndex = typeof openIndex;
 
 /** Probe message for the git capability check — one trailer of each shape. */
 export const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
@@ -271,4 +281,26 @@ export interface DoctorContext {
   /** Monotonic, for `durationMs`. A wall clock can go backwards. */
   readonly now: () => bigint;
   readonly memo: Map<string, DoctorCheck>;
+  /** Git process runner; checks must not reach around this seam. */
+  readonly git: DoctorGit;
+  /** General child-process runner for executable and hook probes. */
+  readonly spawn: DoctorSpawn;
+  /** Environment seen by hook probes and configuration checks. */
+  readonly env: NodeJS.ProcessEnv;
+  /** Derived-index opener. */
+  readonly openIndex: DoctorOpenIndex;
 }
+
+/**
+ * The shipping process effects. Tests pass a complete synthetic context to
+ * exercise effect-dependent branches without starting the process they probe.
+ */
+export const defaultDoctorContext = (opts: DoctorOptions = {}): DoctorContext => ({
+  opts,
+  now: process.hrtime.bigint,
+  memo: new Map(),
+  git: execGit,
+  spawn: spawnSync,
+  env: process.env,
+  openIndex,
+});

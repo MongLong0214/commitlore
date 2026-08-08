@@ -4,7 +4,7 @@
  * It owns the pending-transaction diagnosis because only that subsystem can
  * distinguish an ordinary waiting capture from one that can no longer apply.
  */
-import { type DoctorCheck, type DoctorOptions } from '../model.js';
+import { type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * #458: captures that were prepared and then never reached a commit.
  *
@@ -28,4 +28,4 @@ import { type DoctorCheck, type DoctorOptions } from '../model.js';
  * to the tree it was prepared for, and attaching it to a different one is worse
  * than dropping it. The defect is the silence.
  */
-export declare const checkPendingBacklog: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkPendingBacklog: (ctx: DoctorContext) => DoctorCheck;

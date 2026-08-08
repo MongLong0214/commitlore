@@ -4,7 +4,7 @@
  * It owns execution of the installed hook under Git's environment; consumers
  * receive its completed row through the registry rather than importing it.
  */
-import { type DoctorCheck, type DoctorOptions } from '../model.js';
+import { type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * Whether the installed hook actually runs, in the environment git gives it.
  *
@@ -24,4 +24,4 @@ import { type DoctorCheck, type DoctorOptions } from '../model.js';
  * a runtime exits non-zero having parsed nothing, which is indistinguishable
  * from "your message was fine" to everyone except this check.
  */
-export declare const checkHookRuntime: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkHookRuntime: (ctx: DoctorContext) => DoctorCheck;

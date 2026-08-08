@@ -5,7 +5,7 @@
  * check modules only decide their own verdicts and rendering cannot alter run order.
  */
 
-import { check, type DoctorCheck, type DoctorContext, type DoctorOptions, type DoctorReport } from './model.js';
+import { check, defaultDoctorContext, type DoctorCheck, type DoctorContext, type DoctorOptions, type DoctorReport } from './model.js';
 import { CHECK_REGISTRY, type CheckDefinition } from './registry.js';
 import { buildReport } from './report.js';
 
@@ -75,7 +75,7 @@ const collapseBlockedBy = (checks: readonly DoctorCheck[]): DoctorCheck[] => {
 };
 
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
-  const ctx: DoctorContext = { opts, now: process.hrtime.bigint, memo: new Map() };
+  const ctx: DoctorContext = defaultDoctorContext(opts);
   const completed = new Map<string, DoctorCheck>();
   const checks = CHECK_REGISTRY.map((definition) => {
     const dependencies = new Map<string, DoctorCheck>();

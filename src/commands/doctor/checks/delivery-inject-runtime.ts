@@ -5,21 +5,21 @@
  * result evaluation; version comparison remains a separate sibling check.
  */
 
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import { runQuery } from '../../../core/query.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_MARKER, claudeSettingsPath, readClaudeHookStatus } from '../../../hooks/claude-settings.js';
-import { check, streamEvidence, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, streamEvidence, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * Turns a completed (or attempted) probe run into this check's verdict.
  *
  * Split out from `checkInjectRuntime` so the *decision* — not the race that
  * can accompany it — is what a test exercises directly with a synthetic
- * `spawnSync` result.
+ * child-process result.
  *
- * `spawnSync`'s `input` option writes the probe payload to the child's stdin
+ * The child-process `input` option writes the probe payload to the child's stdin
  * after the child is already running. A child that never reads stdin (every
  * fixture here, and plenty of real hooks) routinely exits and closes that
  * pipe before Node finishes the write, which fails with EPIPE — on a shared,
@@ -156,7 +156,8 @@ export const evaluateInjectRun = (
   );
 };
 
-export const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
+export const checkInjectRuntime = (ctx: DoctorContext): DoctorCheck => {
+  const { opts, spawn, env } = ctx;
   const title = 'PreToolUse hook runtime';
   const id = 'inject-runtime';
   const category: Category = 'delivery';
@@ -279,14 +280,14 @@ export const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
   const executable = configured.slice(0, configured.indexOf(' '));
   const args = configured.slice(executable.length + 1).split(' ');
-  const run = spawnSync(executable, args, {
+  const run = spawn(executable, args, {
     shell: false,
     encoding: 'utf8',
     cwd,
     input: payload,
     env: {
-      PATH: process.env['PATH'] ?? '/usr/bin:/bin',
-      HOME: process.env['HOME'] ?? '',
+      PATH: env['PATH'] ?? '/usr/bin:/bin',
+      HOME: env['HOME'] ?? '',
     },
   });
 

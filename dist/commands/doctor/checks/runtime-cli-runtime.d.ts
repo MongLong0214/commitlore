@@ -4,7 +4,7 @@
  * It owns the installation artifact probe because that verdict is independent
  * of every other check; shared report construction remains in the model seam.
  */
-import { type DoctorCheck, type DoctorOptions } from '../model.js';
+import { type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * Whether the CLI this installation actually uses runs.
  *
@@ -26,4 +26,4 @@ import { type DoctorCheck, type DoctorOptions } from '../model.js';
  * `--version` is the cheapest thing the CLI can be asked to do that still forces
  * the runtime to resolve, the bundle to load, and its imports to resolve.
  */
-export declare const checkRuntime: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkRuntime: (ctx: DoctorContext) => DoctorCheck;

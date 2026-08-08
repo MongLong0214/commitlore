@@ -6,7 +6,7 @@
  */
 
 import { runPendingList } from '../../pending.js';
-import { check, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * #458: captures that were prepared and then never reached a commit.
@@ -31,11 +31,11 @@ import { check, type Category, type DoctorCheck, type DoctorOptions } from '../m
  * to the tree it was prepared for, and attaching it to a different one is worse
  * than dropping it. The defect is the silence.
  */
-export const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
+export const checkPendingBacklog = (ctx: DoctorContext): DoctorCheck => {
   const title = 'pending captures';
   const id = 'pending-backlog';
   const category: Category = 'capture';
-  const cwd = opts.cwd ?? process.cwd();
+  const cwd = ctx.opts.cwd ?? process.cwd();
 
   let listing;
   try {

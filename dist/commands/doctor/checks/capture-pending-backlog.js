@@ -29,11 +29,11 @@ import { check } from '../model.js';
  * to the tree it was prepared for, and attaching it to a different one is worse
  * than dropping it. The defect is the silence.
  */
-export const checkPendingBacklog = (opts) => {
+export const checkPendingBacklog = (ctx) => {
     const title = 'pending captures';
     const id = 'pending-backlog';
     const category = 'capture';
-    const cwd = opts.cwd ?? process.cwd();
+    const cwd = ctx.opts.cwd ?? process.cwd();
     let listing;
     try {
         listing = runPendingList({ cwd });

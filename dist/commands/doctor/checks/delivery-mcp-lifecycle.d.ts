@@ -4,7 +4,7 @@
  * It owns interpretation of local MCP lifecycle records because those records
  * describe a separate delivery surface from hooks or their configured builds.
  */
-import { type DoctorCheck, type DoctorOptions } from '../model.js';
+import { type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * MCP servers that started here and never recorded an exit (#424).
  *
@@ -20,4 +20,4 @@ import { type DoctorCheck, type DoctorOptions } from '../model.js';
  * A `warn`, and only about the past: it says what happened, not that anything
  * is wrong now. Nothing here can restore a lost registration.
  */
-export declare const checkMcpLifecycle: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkMcpLifecycle: (ctx: DoctorContext) => DoctorCheck;

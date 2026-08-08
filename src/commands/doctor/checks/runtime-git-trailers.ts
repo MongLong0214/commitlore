@@ -5,9 +5,8 @@
  * trailer parser; the probe message and report factory remain shared model data.
  */
 
-import { execGit } from '../../../core/git.js';
 import { parseCommitMessage } from '../../../core/trailers.js';
-import { check, gitOptions, PROBE_MESSAGE, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, gitOptions, PROBE_MESSAGE, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * Runs the real parse path once. Trailer boundaries are git's to decide
@@ -18,11 +17,11 @@ import { check, gitOptions, PROBE_MESSAGE, type Category, type DoctorCheck, type
  * the git binary on `PATH` and this codebase's parse path, neither of which is
  * a property of the repository being inspected.
  */
-export const checkGit = (opts: DoctorOptions): DoctorCheck => {
+export const checkGit = (ctx: DoctorContext): DoctorCheck => {
   const title = 'git interpret-trailers';
   const id = 'git-trailers';
   const category: Category = 'runtime';
-  const version = execGit(['--version'], gitOptions(opts)).stdout.trim();
+  const version = ctx.git(['--version'], gitOptions(ctx.opts)).stdout.trim();
   const upgrade = 'install a git that supports interpret-trailers --parse (git >= 2.9)';
 
   let trailers;

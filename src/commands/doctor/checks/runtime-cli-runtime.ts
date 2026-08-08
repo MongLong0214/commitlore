@@ -5,11 +5,10 @@
  * of every other check; shared report construction remains in the model seam.
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 import { installedPath } from '../../../core/paths.js';
-import { boundedExcerpt, check, gitOptions, streamEvidence, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { boundedExcerpt, check, gitOptions, streamEvidence, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * Whether the CLI this installation actually uses runs.
@@ -32,7 +31,7 @@ import { boundedExcerpt, check, gitOptions, streamEvidence, type Category, type 
  * `--version` is the cheapest thing the CLI can be asked to do that still forces
  * the runtime to resolve, the bundle to load, and its imports to resolve.
  */
-export const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
+export const checkRuntime = (ctx: DoctorContext): DoctorCheck => {
   const title = 'cli runtime';
   const id = 'cli-runtime';
   const category: Category = 'runtime';
@@ -61,10 +60,10 @@ export const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
-  const run = spawnSync(process.execPath, [entry, '--version'], {
+  const run = ctx.spawn(process.execPath, [entry, '--version'], {
     shell: false,
     encoding: 'utf8',
-    ...gitOptions(opts),
+    ...gitOptions(ctx.opts),
   });
 
   if (run.error !== undefined) {

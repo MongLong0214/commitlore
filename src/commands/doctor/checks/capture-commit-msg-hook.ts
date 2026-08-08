@@ -8,10 +8,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { execGit } from '../../../core/git.js';
 import { classifyBinTarget, describeRecordedHookTarget, readRecordedHookTarget } from '../../../core/hook-target.js';
 import { HOOK_MARKER, commitMsgStub } from '../../../hooks/commit-msg.js';
-import { blocked, check, gitOptions, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { blocked, check, gitOptions, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * Installation belongs to `commitlore hooks install` (T-202). This reads.
@@ -19,7 +18,8 @@ import { blocked, check, gitOptions, type Category, type DoctorCheck, type Docto
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-export const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
+export const checkHook = (ctx: DoctorContext, runtime: DoctorCheck): DoctorCheck => {
+  const { opts, git, env } = ctx;
   const title = 'commit-msg hook';
   const id = 'commit-msg-hook';
   const category: Category = 'capture';
@@ -27,7 +27,7 @@ export const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorChec
 
   // --git-path, not a hardcoded .git/: worktrees and submodules keep hooks
   // somewhere else entirely.
-  const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
+  const located = git(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
   if (located.code !== 0) {
     return check(
       id,
@@ -44,7 +44,7 @@ export const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorChec
 
   const path = resolve(opts.cwd ?? process.cwd(), located.stdout.trim());
   const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
-  const override = process.env['COMMITLORE_BIN'];
+  const override = env['COMMITLORE_BIN'];
   const hookEvidence = {
     hook_path: path,
     bin: target.bin || '(unset)',

@@ -16218,7 +16218,6 @@ CommitLore-Version: 2.0.0
 `;
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
-import { spawnSync as spawnSync3 } from "node:child_process";
 import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
@@ -16464,6 +16463,7 @@ var claudeHookStatus = (input) => {
 };
 
 // src/commands/doctor/model.ts
+import { spawnSync as spawnSync3 } from "node:child_process";
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var boundedExcerpt = (output) => {
@@ -16517,6 +16517,15 @@ var blocked = (dependency, row) => {
   }
   return { ...row, blockedBy: dependency.id };
 };
+var defaultDoctorContext = (opts = {}) => ({
+  opts,
+  now: process.hrtime.bigint,
+  memo: /* @__PURE__ */ new Map(),
+  git: execGit,
+  spawn: spawnSync3,
+  env: process.env,
+  openIndex
+});
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 var evaluateInjectRun = (run, ctx) => {
@@ -16620,7 +16629,8 @@ var evaluateInjectRun = (run, ctx) => {
     }
   );
 };
-var checkInjectRuntime = (opts) => {
+var checkInjectRuntime = (ctx) => {
+  const { opts, spawn, env } = ctx;
   const title = "PreToolUse hook runtime";
   const id = "inject-runtime";
   const category = "delivery";
@@ -16733,14 +16743,14 @@ var checkInjectRuntime = (opts) => {
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
   const args = configured.slice(executable.length + 1).split(" ");
-  const run = spawnSync3(executable, args, {
+  const run = spawn(executable, args, {
     shell: false,
     encoding: "utf8",
     cwd,
     input: payload,
     env: {
-      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-      HOME: process.env["HOME"] ?? ""
+      PATH: env["PATH"] ?? "/usr/bin:/bin",
+      HOME: env["HOME"] ?? ""
     }
   });
   const result = evaluateInjectRun(run, { id, category, title, executable, path: path2, fix, unavailableFix });
@@ -17001,12 +17011,13 @@ var commitMsgStub = () => stubText(UNRESOLVED_GATE);
 var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
 
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
-var checkHook = (opts, runtime) => {
+var checkHook = (ctx, runtime) => {
+  const { opts, git: git2, env } = ctx;
   const title = "commit-msg hook";
   const id = "commit-msg-hook";
   const category = "capture";
   const install = "commitlore hooks install";
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) {
     return check(
       id,
@@ -17022,7 +17033,7 @@ var checkHook = (opts, runtime) => {
   }
   const path2 = resolve7(opts.cwd ?? process.cwd(), located.stdout.trim());
   const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
-  const override = process.env["COMMITLORE_BIN"];
+  const override = env["COMMITLORE_BIN"];
   const hookEvidence = {
     hook_path: path2,
     bin: target.bin || "(unset)",
@@ -17139,17 +17150,17 @@ var checkHook = (opts, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { spawnSync as spawnSync4 } from "node:child_process";
 import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
-var checkHookRuntime = (opts) => {
+var checkHookRuntime = (ctx) => {
+  const { opts, git: git2, spawn, env } = ctx;
   const title = "hook runtime";
   const id = "hook-runtime";
   const category = "capture";
   const fix = "commitlore hooks install";
   const cwd = opts.cwd ?? process.cwd();
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) {
     return check(
       id,
@@ -17186,13 +17197,13 @@ var checkHookRuntime = (opts) => {
   const probe = join5(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync4(probe, PROBE_MESSAGE);
-    const run = spawnSync4("/bin/sh", [hook, probe], {
+    const run = spawn("/bin/sh", [hook, probe], {
       shell: false,
       encoding: "utf8",
       cwd,
       // No node, and no PATH entry that could supply one. `git` must stay
       // reachable: the hook reads its own config through it.
-      env: { PATH: "/usr/bin:/bin", HOME: process.env["HOME"] ?? "" }
+      env: { PATH: "/usr/bin:/bin", HOME: env["HOME"] ?? "" }
     });
     if (run.error !== void 0) {
       return check(
@@ -17469,11 +17480,11 @@ var register3 = (program3) => {
 };
 
 // src/commands/doctor/checks/capture-pending-backlog.ts
-var checkPendingBacklog = (opts) => {
+var checkPendingBacklog = (ctx) => {
   const title = "pending captures";
   const id = "pending-backlog";
   const category = "capture";
-  const cwd = opts.cwd ?? process.cwd();
+  const cwd = ctx.opts.cwd ?? process.cwd();
   let listing;
   try {
     listing = runPendingList({ cwd });
@@ -17555,9 +17566,9 @@ var checkPendingBacklog = (opts) => {
 };
 
 // src/commands/doctor/checks/delivery-inject-version.ts
-import { spawnSync as spawnSync5 } from "node:child_process";
 var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-var checkInjectVersion = (opts, dependencies) => {
+var checkInjectVersion = (ctx, dependencies) => {
+  const { opts, spawn, env } = ctx;
   const title = "PreToolUse hook version";
   const id = "inject-version";
   const category = "delivery";
@@ -17604,13 +17615,13 @@ var checkInjectVersion = (opts, dependencies) => {
   }
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
-  const run = spawnSync5(executable, ["--version"], {
+  const run = spawn(executable, ["--version"], {
     shell: false,
     encoding: "utf8",
     cwd,
     env: {
-      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-      HOME: process.env["HOME"] ?? ""
+      PATH: env["PATH"] ?? "/usr/bin:/bin",
+      HOME: env["HOME"] ?? ""
     }
   });
   const reported = typeof run.stdout === "string" ? run.stdout : "";
@@ -17764,11 +17775,11 @@ var unfinishedRuns = (cwd = process.cwd()) => {
 };
 
 // src/commands/doctor/checks/delivery-mcp-lifecycle.ts
-var checkMcpLifecycle = (opts) => {
+var checkMcpLifecycle = (ctx) => {
   const title = "MCP server sessions";
   const id = "mcp-lifecycle";
   const category = "delivery";
-  const cwd = opts.cwd ?? process.cwd();
+  const cwd = ctx.opts.cwd ?? process.cwd();
   const unfinished = unfinishedRuns(cwd);
   if (unfinished.length === 0) {
     return check(
@@ -17804,7 +17815,7 @@ var checkMcpLifecycle = (opts) => {
 };
 
 // src/commands/doctor/checks/history-history-depth.ts
-var checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd()) ? check(
+var checkHistoryDepth = (ctx) => hasShallowHistory(ctx.opts.cwd ?? process.cwd()) ? check(
   "history-depth",
   "history",
   "history depth",
@@ -18084,8 +18095,9 @@ var attachToNotes = (targetSha, plan, opts = {}) => {
 
 // src/commands/doctor/checks/history-squash-conservation.ts
 var MAX_SQUASH_CANDIDATE_BRANCHES = 200;
-var squashCandidates = (opts, head) => {
-  const listed = execGit(
+var squashCandidates = (ctx, head) => {
+  const { opts, git: git2 } = ctx;
+  const listed = git2(
     ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
     gitOptions2(opts)
   );
@@ -18094,13 +18106,13 @@ var squashCandidates = (opts, head) => {
   const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
   const candidates = [];
   for (const branch of branches) {
-    const resolved = execGit(["rev-parse", "--verify", "--quiet", branch], gitOptions2(opts));
+    const resolved = git2(["rev-parse", "--verify", "--quiet", branch], gitOptions2(opts));
     const sha = resolved.code === 0 ? resolved.stdout.trim() : "";
     if (sha === "" || sha === head) continue;
-    if (execGit(["merge-base", "--is-ancestor", sha, head], gitOptions2(opts)).code === 0) {
+    if (git2(["merge-base", "--is-ancestor", sha, head], gitOptions2(opts)).code === 0) {
       continue;
     }
-    const merged = execGit(["merge-base", sha, head], gitOptions2(opts));
+    const merged = git2(["merge-base", sha, head], gitOptions2(opts));
     if (merged.code !== 0) continue;
     const base = merged.stdout.trim();
     if (base === "" || base === sha) continue;
@@ -18118,12 +18130,13 @@ var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDAT
   branches_seen: String(scan2.branchesSeen),
   branches_checked: String(scan2.branchesChecked)
 } : evidence;
-var checkSquashConservation = (opts) => {
+var checkSquashConservation = (ctx) => {
+  const { opts, git: git2 } = ctx;
   const title = "squash conservation";
   const id = "squash-conservation";
   const category = "history";
   const cwd = opts.cwd ?? process.cwd();
-  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions2(opts));
+  const head = git2(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions2(opts));
   if (head.code !== 0) {
     return check(
       id,
@@ -18140,7 +18153,7 @@ var checkSquashConservation = (opts) => {
       }
     );
   }
-  const scan2 = squashCandidates(opts, head.stdout.trim());
+  const scan2 = squashCandidates(ctx, head.stdout.trim());
   const { candidates } = scan2;
   if (candidates.length === 0) {
     return check(
@@ -18252,11 +18265,12 @@ var checkSquashConservation = (opts) => {
 };
 
 // src/commands/doctor/checks/index-index-health.ts
-var checkIndex = (opts) => {
+var checkIndex = (ctx) => {
+  const { opts, git: git2, openIndex: openIndex2 } = ctx;
   const cwd = opts.cwd ?? process.cwd();
   let handle;
   try {
-    handle = openIndex({ cwd, readonly: true });
+    handle = openIndex2({ cwd, readonly: true });
   } catch {
     return check(
       "index-health",
@@ -18280,7 +18294,7 @@ var checkIndex = (opts) => {
   }
   try {
     const info = indexInfo(handle);
-    const head = execGit(["rev-parse", "HEAD"], gitOptions2(opts));
+    const head = git2(["rev-parse", "HEAD"], gitOptions2(opts));
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
     const indexEvidence = {
@@ -18340,9 +18354,8 @@ var checkIndex = (opts) => {
 };
 
 // src/commands/doctor/checks/runtime-cli-runtime.ts
-import { spawnSync as spawnSync6 } from "node:child_process";
 import { existsSync as existsSync9 } from "node:fs";
-var checkRuntime = (opts) => {
+var checkRuntime = (ctx) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const category = "runtime";
@@ -18367,10 +18380,10 @@ var checkRuntime = (opts) => {
       }
     );
   }
-  const run = spawnSync6(process.execPath, [entry, "--version"], {
+  const run = ctx.spawn(process.execPath, [entry, "--version"], {
     shell: false,
     encoding: "utf8",
-    ...gitOptions2(opts)
+    ...gitOptions2(ctx.opts)
   });
   if (run.error !== void 0) {
     return check(
@@ -18432,11 +18445,11 @@ var checkRuntime = (opts) => {
 };
 
 // src/commands/doctor/checks/runtime-git-trailers.ts
-var checkGit = (opts) => {
+var checkGit = (ctx) => {
   const title = "git interpret-trailers";
   const id = "git-trailers";
   const category = "runtime";
-  const version2 = execGit(["--version"], gitOptions2(opts)).stdout.trim();
+  const version2 = ctx.git(["--version"], gitOptions2(ctx.opts)).stdout.trim();
   const upgrade = "install a git that supports interpret-trailers --parse (git >= 2.9)";
   let trailers;
   try {
@@ -18483,12 +18496,13 @@ var checkGit = (opts) => {
 };
 
 // src/commands/doctor/checks/transport-notes-push.ts
-var checkPush = (opts) => {
+var checkPush = (ctx) => {
+  const { opts, git: git2 } = ctx;
   const title = "notes push";
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? "origin";
   const command = `git push ${remote} ${NOTES_REF}`;
-  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions2(opts));
+  const local = git2(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions2(opts));
   const localEvidence = {
     remote,
     local_sha: local.code === 0 ? local.stdout.trim() || "unknown" : "none"
@@ -18506,7 +18520,7 @@ var checkPush = (opts) => {
       { evidence: { ...localEvidence, remote_sha: "not_queried" } }
     );
   }
-  const advertised = execGit(["ls-remote", remote, NOTES_REF], gitOptions2(opts));
+  const advertised = git2(["ls-remote", remote, NOTES_REF], gitOptions2(opts));
   if (advertised.code !== 0) {
     return check(
       "notes-push",
@@ -18557,7 +18571,8 @@ var checkPush = (opts) => {
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
-var checkRefspec = (opts) => {
+var checkRefspec = (ctx) => {
+  const { opts, git: git2 } = ctx;
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
   const remoteEvidence = { remotes: remotes.join(", ") || "none" };
@@ -18582,21 +18597,21 @@ var checkRefspec = (opts) => {
       const key = `remote.${remote}.fetch`;
       const configured = fetchRefspecs(remote, opts);
       if (configured.includes(EXACT_NOTES_REFSPEC)) {
-        const replaced = execGit(
+        const replaced = git2(
           ["config", "--replace-all", key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
           gitOptions2(opts)
         );
         fixed = replaced.code === 0 || fixed;
       } else if (configured.some(forcesNotes)) {
         for (const entry of configured.filter(forcesNotes)) {
-          const replaced = execGit(
+          const replaced = git2(
             ["config", "--replace-all", key, NOTES_REFSPEC, `^${escapeConfigValuePattern(entry)}$`],
             gitOptions2(opts)
           );
           fixed = replaced.code === 0 || fixed;
         }
       } else if (!configured.some(coversNotes)) {
-        const added = execGit(["config", "--add", key, NOTES_REFSPEC], gitOptions2(opts));
+        const added = git2(["config", "--add", key, NOTES_REFSPEC], gitOptions2(opts));
         fixed = added.code === 0 || fixed;
       }
     }
@@ -18629,7 +18644,7 @@ var checkRefspec = (opts) => {
       { evidence: { ...remoteEvidence, missing: missing.join(", ") } }
     );
   }
-  const failed = remotes.map((remote) => ({ remote, result: execGit(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
+  const failed = remotes.map((remote) => ({ remote, result: git2(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
     return check(
       "notes-refspec",
@@ -18670,24 +18685,24 @@ var checkRefspec = (opts) => {
 var hookRuntimeOf = (ctx) => {
   const cached2 = ctx.memo.get("hook-runtime");
   if (cached2 !== void 0) return cached2;
-  const computed = checkHookRuntime(ctx.opts);
+  const computed = checkHookRuntime(ctx);
   ctx.memo.set("hook-runtime", computed);
   return computed;
 };
 var CHECK_REGISTRY = [
-  { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
-  { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
-  { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
-  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+  { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
+  { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
+  { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
+  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx, hookRuntimeOf(ctx)) },
   { id: "hook-runtime", title: "hook runtime", category: "capture", dependencies: [], optional: false, run: hookRuntimeOf },
-  { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
-  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx.opts, dependencies) },
-  { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
-  { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
-  { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
-  { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx.opts) },
-  { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx.opts) },
-  { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx.opts) }
+  { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx) },
+  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
+  { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
+  { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
+  { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },
+  { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
+  { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx) },
+  { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx) }
 ];
 
 // src/commands/doctor/render.ts
@@ -18784,7 +18799,7 @@ var collapseBlockedBy = (checks) => {
   });
 };
 var runDoctor = (opts = {}) => {
-  const ctx = { opts, now: process.hrtime.bigint, memo: /* @__PURE__ */ new Map() };
+  const ctx = defaultDoctorContext(opts);
   const completed = /* @__PURE__ */ new Map();
   const checks = CHECK_REGISTRY.map((definition) => {
     const dependencies = /* @__PURE__ */ new Map();

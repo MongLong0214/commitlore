@@ -6,7 +6,7 @@
  */
 
 import { unfinishedRuns } from '../../../mcp/lifecycle.js';
-import { check, type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
  * MCP servers that started here and never recorded an exit (#424).
@@ -23,11 +23,11 @@ import { check, type Category, type DoctorCheck, type DoctorOptions } from '../m
  * A `warn`, and only about the past: it says what happened, not that anything
  * is wrong now. Nothing here can restore a lost registration.
  */
-export const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
+export const checkMcpLifecycle = (ctx: DoctorContext): DoctorCheck => {
   const title = 'MCP server sessions';
   const id = 'mcp-lifecycle';
   const category: Category = 'delivery';
-  const cwd = opts.cwd ?? process.cwd();
+  const cwd = ctx.opts.cwd ?? process.cwd();
   const unfinished = unfinishedRuns(cwd);
 
   if (unfinished.length === 0) {

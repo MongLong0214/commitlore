@@ -6,10 +6,10 @@
  */
 
 import { hasShallowHistory } from '../../../core/git.js';
-import { check, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, type DoctorCheck, type DoctorContext } from '../model.js';
 
-export const checkHistoryDepth = (opts: DoctorOptions): DoctorCheck =>
-  hasShallowHistory(opts.cwd ?? process.cwd())
+export const checkHistoryDepth = (ctx: DoctorContext): DoctorCheck =>
+  hasShallowHistory(ctx.opts.cwd ?? process.cwd())
     ? check(
         'history-depth', 'history',
         'history depth',

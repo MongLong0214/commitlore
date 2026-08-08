@@ -4,7 +4,6 @@
  * It owns the local branch/history comparison because squash loss can be
  * diagnosed from Git and records alone, without coupling to sibling checks.
  */
-import { execGit } from '../../../core/git.js';
 import { runQuery } from '../../../core/query.js';
 import { collectRange } from '../../../core/squash.js';
 import { check, gitOptions } from '../model.js';
@@ -18,8 +17,9 @@ const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
  * already contains — the ordinary merge or fast-forward case — is not one:
  * nothing was collapsed, so there is nothing this check can lose track of.
  */
-const squashCandidates = (opts, head) => {
-    const listed = execGit(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], gitOptions(opts));
+const squashCandidates = (ctx, head) => {
+    const { opts, git } = ctx;
+    const listed = git(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], gitOptions(opts));
     if (listed.code !== 0)
         return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
     const allBranches = listed.stdout
@@ -28,16 +28,16 @@ const squashCandidates = (opts, head) => {
     const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
     const candidates = [];
     for (const branch of branches) {
-        const resolved = execGit(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
+        const resolved = git(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
         const sha = resolved.code === 0 ? resolved.stdout.trim() : '';
         if (sha === '' || sha === head)
             continue;
         // Already an ancestor of HEAD (or identical to it): reached by an
         // ordinary merge, rebase, or fast-forward, and nothing was lost.
-        if (execGit(['merge-base', '--is-ancestor', sha, head], gitOptions(opts)).code === 0) {
+        if (git(['merge-base', '--is-ancestor', sha, head], gitOptions(opts)).code === 0) {
             continue;
         }
-        const merged = execGit(['merge-base', sha, head], gitOptions(opts));
+        const merged = git(['merge-base', sha, head], gitOptions(opts));
         if (merged.code !== 0)
             continue; // no common ancestor — unrelated history
         const base = merged.stdout.trim();
@@ -88,19 +88,20 @@ const scanEvidence = (scan, evidence) => scan.branchesSeen > MAX_SQUASH_CANDIDAT
  * That is a real, narrower gap than "detects every lost record" and is
  * reported as such rather than silently passed over.
  */
-export const checkSquashConservation = (opts) => {
+export const checkSquashConservation = (ctx) => {
+    const { opts, git } = ctx;
     const title = 'squash conservation';
     const id = 'squash-conservation';
     const category = 'history';
     const cwd = opts.cwd ?? process.cwd();
-    const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
+    const head = git(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
     if (head.code !== 0) {
         return check(id, category, title, 'skipped', 'no HEAD yet — nothing to compare against', null, false, false, {
             evidence: { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' },
             skipReason: 'unborn_head',
         });
     }
-    const scan = squashCandidates(opts, head.stdout.trim());
+    const scan = squashCandidates(ctx, head.stdout.trim());
     const { candidates } = scan;
     if (candidates.length === 0) {
         return check(id, category, title, 'skipped', `no local branch looks like the source of a squash — nothing to check${scanLimitDetail(scan)}`, null, false, false, {

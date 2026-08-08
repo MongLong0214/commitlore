@@ -4,7 +4,6 @@
  * It owns the runtime capability probe because only this check judges Git's
  * trailer parser; the probe message and report factory remain shared model data.
  */
-import { execGit } from '../../../core/git.js';
 import { parseCommitMessage } from '../../../core/trailers.js';
 import { check, gitOptions, PROBE_MESSAGE } from '../model.js';
 /**
@@ -16,11 +15,11 @@ import { check, gitOptions, PROBE_MESSAGE } from '../model.js';
  * the git binary on `PATH` and this codebase's parse path, neither of which is
  * a property of the repository being inspected.
  */
-export const checkGit = (opts) => {
+export const checkGit = (ctx) => {
     const title = 'git interpret-trailers';
     const id = 'git-trailers';
     const category = 'runtime';
-    const version = execGit(['--version'], gitOptions(opts)).stdout.trim();
+    const version = ctx.git(['--version'], gitOptions(ctx.opts)).stdout.trim();
     const upgrade = 'install a git that supports interpret-trailers --parse (git >= 2.9)';
     let trailers;
     try {

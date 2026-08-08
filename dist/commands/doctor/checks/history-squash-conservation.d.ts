@@ -4,7 +4,7 @@
  * It owns the local branch/history comparison because squash loss can be
  * diagnosed from Git and records alone, without coupling to sibling checks.
  */
-import { type DoctorCheck, type DoctorOptions } from '../model.js';
+import { type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * Detects records a squash may have collapsed out of reach, and says so
  * (SPEC §2.4, bug-issue-60 finding 1: nothing invokes `squash-preserve`, and
@@ -32,4 +32,4 @@ import { type DoctorCheck, type DoctorOptions } from '../model.js';
  * That is a real, narrower gap than "detects every lost record" and is
  * reported as such rather than silently passed over.
  */
-export declare const checkSquashConservation: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkSquashConservation: (ctx: DoctorContext) => DoctorCheck;

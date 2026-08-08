@@ -4,7 +4,6 @@
  * It owns the installation artifact probe because that verdict is independent
  * of every other check; shared report construction remains in the model seam.
  */
-import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { installedPath } from '../../../core/paths.js';
 import { boundedExcerpt, check, gitOptions, streamEvidence } from '../model.js';
@@ -29,7 +28,7 @@ import { boundedExcerpt, check, gitOptions, streamEvidence } from '../model.js';
  * `--version` is the cheapest thing the CLI can be asked to do that still forces
  * the runtime to resolve, the bundle to load, and its imports to resolve.
  */
-export const checkRuntime = (opts) => {
+export const checkRuntime = (ctx) => {
     const title = 'cli runtime';
     const id = 'cli-runtime';
     const category = 'runtime';
@@ -46,10 +45,10 @@ export const checkRuntime = (opts) => {
             },
         });
     }
-    const run = spawnSync(process.execPath, [entry, '--version'], {
+    const run = ctx.spawn(process.execPath, [entry, '--version'], {
         shell: false,
         encoding: 'utf8',
-        ...gitOptions(opts),
+        ...gitOptions(ctx.opts),
     });
     if (run.error !== undefined) {
         return check(id, category, title, 'fail', `could not run ${entry}: ${run.error.message}`, null, false, undefined, {

@@ -4,10 +4,10 @@
  * It owns the derived-index observation because the index is an independent
  * cache whose health must never be inferred from another check's result.
  */
-import { closeIndex, indexInfo, openIndex } from '../../../core/index-db.js';
-import { execGit } from '../../../core/git.js';
+import { closeIndex, indexInfo } from '../../../core/index-db.js';
 import { check, gitOptions } from '../model.js';
-export const checkIndex = (opts) => {
+export const checkIndex = (ctx) => {
+    const { opts, git, openIndex } = ctx;
     const cwd = opts.cwd ?? process.cwd();
     let handle;
     try {
@@ -26,7 +26,7 @@ export const checkIndex = (opts) => {
     }
     try {
         const info = indexInfo(handle);
-        const head = execGit(['rev-parse', 'HEAD'], gitOptions(opts));
+        const head = git(['rev-parse', 'HEAD'], gitOptions(opts));
         const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
         const fts = info.fts ? 'FTS5' : 'no FTS5 (value search falls back to LIKE)';
         const indexEvidence = {

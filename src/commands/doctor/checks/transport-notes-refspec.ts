@@ -5,9 +5,8 @@
  * sibling check may alter transport configuration on its behalf.
  */
 
-import { execGit } from '../../../core/git.js';
 import { NOTES_REF, NOTES_REFSPEC, coversNotes, forcesNotes, listRemotes, fetchRefspecs } from '../../../core/notes.js';
-import { check, evidenceKey, gitOptions, type DoctorCheck, type DoctorOptions } from '../model.js';
+import { check, evidenceKey, gitOptions, type DoctorCheck, type DoctorContext } from '../model.js';
 
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
@@ -23,7 +22,8 @@ const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 const escapeConfigValuePattern = (value: string): string =>
   value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
 
-export const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
+export const checkRefspec = (ctx: DoctorContext): DoctorCheck => {
+  const { opts, git } = ctx;
   const title = 'notes fetch refspec';
   const remotes = listRemotes(opts);
   const remoteEvidence = { remotes: remotes.join(', ') || 'none' };
@@ -50,7 +50,7 @@ export const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
       const key = `remote.${remote}.fetch`;
       const configured = fetchRefspecs(remote, opts);
       if (configured.includes(EXACT_NOTES_REFSPEC)) {
-        const replaced = execGit(
+        const replaced = git(
           ['config', '--replace-all', key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
           gitOptions(opts),
         );
@@ -60,14 +60,14 @@ export const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
         // Each forced entry is replaced individually rather than the whole key
         // rewritten, so a remote's other refspecs survive untouched.
         for (const entry of configured.filter(forcesNotes)) {
-          const replaced = execGit(
+          const replaced = git(
             ['config', '--replace-all', key, NOTES_REFSPEC, `^${escapeConfigValuePattern(entry)}$`],
             gitOptions(opts),
           );
           fixed = replaced.code === 0 || fixed;
         }
       } else if (!configured.some(coversNotes)) {
-        const added = execGit(['config', '--add', key, NOTES_REFSPEC], gitOptions(opts));
+        const added = git(['config', '--add', key, NOTES_REFSPEC], gitOptions(opts));
         fixed = added.code === 0 || fixed;
       }
     }
@@ -105,7 +105,7 @@ export const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   }
 
   const failed = remotes
-    .map((remote) => ({ remote, result: execGit(['fetch', '--dry-run', remote], gitOptions(opts)) }))
+    .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], gitOptions(opts)) }))
     .filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
     return check(

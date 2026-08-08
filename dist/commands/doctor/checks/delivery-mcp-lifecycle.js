@@ -21,11 +21,11 @@ import { check } from '../model.js';
  * A `warn`, and only about the past: it says what happened, not that anything
  * is wrong now. Nothing here can restore a lost registration.
  */
-export const checkMcpLifecycle = (opts) => {
+export const checkMcpLifecycle = (ctx) => {
     const title = 'MCP server sessions';
     const id = 'mcp-lifecycle';
     const category = 'delivery';
-    const cwd = opts.cwd ?? process.cwd();
+    const cwd = ctx.opts.cwd ?? process.cwd();
     const unfinished = unfinishedRuns(cwd);
     if (unfinished.length === 0) {
         return check(id, category, title, 'ok', 'every recorded MCP session ended cleanly, or is still running', null, false, undefined, { evidence: { unfinished_count: '0', last_pid: 'none', last_at: 'none' } });

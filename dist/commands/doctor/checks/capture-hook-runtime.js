@@ -4,11 +4,9 @@
  * It owns execution of the installed hook under Git's environment; consumers
  * receive its completed row through the registry rather than importing it.
  */
-import { spawnSync } from 'node:child_process';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir as tmpdirPath } from 'node:os';
 import { join, resolve } from 'node:path';
-import { execGit } from '../../../core/git.js';
 import { check, gitOptions, PROBE_MESSAGE, streamEvidence } from '../model.js';
 /**
  * Whether the installed hook actually runs, in the environment git gives it.
@@ -29,13 +27,14 @@ import { check, gitOptions, PROBE_MESSAGE, streamEvidence } from '../model.js';
  * a runtime exits non-zero having parsed nothing, which is indistinguishable
  * from "your message was fine" to everyone except this check.
  */
-export const checkHookRuntime = (opts) => {
+export const checkHookRuntime = (ctx) => {
+    const { opts, git, spawn, env } = ctx;
     const title = 'hook runtime';
     const id = 'hook-runtime';
     const category = 'capture';
     const fix = 'commitlore hooks install';
     const cwd = opts.cwd ?? process.cwd();
-    const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
+    const located = git(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
     if (located.code !== 0) {
         return check(id, category, title, 'warn', 'not inside a git repository', fix, false, undefined, {
             evidence: {
@@ -54,13 +53,13 @@ export const checkHookRuntime = (opts) => {
     const probe = join(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
     try {
         writeFileSync(probe, PROBE_MESSAGE);
-        const run = spawnSync('/bin/sh', [hook, probe], {
+        const run = spawn('/bin/sh', [hook, probe], {
             shell: false,
             encoding: 'utf8',
             cwd,
             // No node, and no PATH entry that could supply one. `git` must stay
             // reachable: the hook reads its own config through it.
-            env: { PATH: '/usr/bin:/bin', HOME: process.env['HOME'] ?? '' },
+            env: { PATH: '/usr/bin:/bin', HOME: env['HOME'] ?? '' },
         });
         if (run.error !== undefined) {
             return check(id, category, title, 'fail', `could not run the hook: ${run.error.message}`, fix, false, undefined, {

@@ -4,16 +4,16 @@
  * It owns the configured PreToolUse execution probe and its deterministic
  * result evaluation; version comparison remains a separate sibling check.
  */
-import { type SpawnSyncReturns } from 'node:child_process';
-import { type Category, type DoctorCheck, type DoctorOptions } from '../model.js';
+import type { SpawnSyncReturns } from 'node:child_process';
+import { type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 /**
  * Turns a completed (or attempted) probe run into this check's verdict.
  *
  * Split out from `checkInjectRuntime` so the *decision* — not the race that
  * can accompany it — is what a test exercises directly with a synthetic
- * `spawnSync` result.
+ * child-process result.
  *
- * `spawnSync`'s `input` option writes the probe payload to the child's stdin
+ * The child-process `input` option writes the probe payload to the child's stdin
  * after the child is already running. A child that never reads stdin (every
  * fixture here, and plenty of real hooks) routinely exits and closes that
  * pipe before Node finishes the write, which fails with EPIPE — on a shared,
@@ -44,4 +44,4 @@ export declare const evaluateInjectRun: (run: SpawnSyncReturns<string>, ctx: {
     fix: string;
     unavailableFix: string;
 }) => DoctorCheck;
-export declare const checkInjectRuntime: (opts: DoctorOptions) => DoctorCheck;
+export declare const checkInjectRuntime: (ctx: DoctorContext) => DoctorCheck;

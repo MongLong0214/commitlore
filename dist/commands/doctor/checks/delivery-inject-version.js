@@ -4,7 +4,6 @@
  * It owns comparison of the configured hook executable with this CLI, keeping
  * that freshness signal separate from the runtime check that establishes it runs.
  */
-import { spawnSync } from 'node:child_process';
 import { packageVersion } from '../../../core/paths.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_MARKER, claudeSettingsPath, readClaudeHookStatus } from '../../../hooks/claude-settings.js';
 import { blocked, boundedExcerpt, check, streamEvidence, } from '../model.js';
@@ -27,7 +26,8 @@ import { blocked, boundedExcerpt, check, streamEvidence, } from '../model.js';
  * run over.
  */
 const SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-export const checkInjectVersion = (opts, dependencies) => {
+export const checkInjectVersion = (ctx, dependencies) => {
+    const { opts, spawn, env } = ctx;
     const title = 'PreToolUse hook version';
     const id = 'inject-version';
     const category = 'delivery';
@@ -54,13 +54,13 @@ export const checkInjectVersion = (opts, dependencies) => {
     }
     const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
     const executable = configured.slice(0, configured.indexOf(' '));
-    const run = spawnSync(executable, ['--version'], {
+    const run = spawn(executable, ['--version'], {
         shell: false,
         encoding: 'utf8',
         cwd,
         env: {
-            PATH: process.env['PATH'] ?? '/usr/bin:/bin',
-            HOME: process.env['HOME'] ?? '',
+            PATH: env['PATH'] ?? '/usr/bin:/bin',
+            HOME: env['HOME'] ?? '',
         },
     });
     const reported = typeof run.stdout === 'string' ? run.stdout : '';

@@ -1,11 +1,6 @@
-/**
- * Doctor's model and construction seam.
- *
- * Check modules share the frozen report shapes, factory, and observation
- * helpers here so that each can own one diagnosis without reaching into a
- * sibling check. Construction stays central because status-derived fields and
- * non-empty evidence are report-wide invariants, not per-check conventions.
- */
+import { spawnSync } from 'node:child_process';
+import { execGit } from '../../core/git.js';
+import { openIndex } from '../../core/index-db.js';
 /** Probe message for the git capability check — one trailer of each shape. */
 export const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
 export const gitOptions = (opts) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
@@ -71,4 +66,17 @@ export const blocked = (dependency, row) => {
     }
     return { ...row, blockedBy: dependency.id };
 };
+/**
+ * The shipping process effects. Tests pass a complete synthetic context to
+ * exercise effect-dependent branches without starting the process they probe.
+ */
+export const defaultDoctorContext = (opts = {}) => ({
+    opts,
+    now: process.hrtime.bigint,
+    memo: new Map(),
+    git: execGit,
+    spawn: spawnSync,
+    env: process.env,
+    openIndex,
+});
 //# sourceMappingURL=model.js.map
