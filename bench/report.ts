@@ -77,22 +77,49 @@ export interface DeclaredSource {
  */
 export const README_SOURCES: readonly DeclaredSource[] = [
   {
-    file: "bench/results/t702-m4-final.jsonl",
+    file: "bench/results/m5-seeds-1-10-rerun.jsonl",
     status: "final",
     status_note:
-      "The registered M4 measurement (PREREGISTRATION.md §16), the qualification-gated matrix whose primary " +
-      "comparison is `commitlore-guard` against `commitlore-on`. Run from an isolated checkout against frozen " +
-      "code `081d858c1`, under the environment controls of §5-b; every row carries a uniform `harness_commit` " +
-      "and `dist_digest`. bench/VERDICT-M4.md is historical; docs/VERDICT-M4.md is the correction. M1 " +
-      "(bench/VERDICT-M1.md), M1-b " +
-      "(bench/VERDICT-M1b.md) and M2 (bench/VERDICT-M2.md) are not revised and are not pooled here — a " +
-      "different task set and a third arm make them a different matrix, the same reason the ablation log below " +
-      "stays out of this list. M3 is void (§15). No manifest exists for this file: `runner.ts` does not write " +
-      "`model` onto a row, and none was written for this run either, so the model behind these 112 rows is " +
-      "unrecorded rather than declared (bench/README.md, \"Open after T-702\", item 1). Each file's own " +
-      "manifest is the authority on its status; this declaration is the fallback.",
+      "The registered M5 measurement (bench/PREREGISTRATION-M5.md), whose primary comparison is `commitlore-on` against `commitlore-off` on the re-proposal task set. Seven shards, 1,160 rows, one harness commit `788a9db3` and one dist digest `f54cda4795cc` across every one. Three shards are re-runs (deviations 3 and 4): 400 rows were lost to a temp reaper and re-produced, and seeds 55-58 were re-run whole after 70 of their surviving rows carried no measurement. 80 original cells are superseded by a rule in bench/m5-analysis.ts -- an original is dropped whenever a re-run shard holds the same task, condition and seed -- rather than by a trimmed file nobody can review. One row carrying `stopped_by: error` is excluded by the registered rule. The arms truncate unequally, 28.5% control against 21.2% treatment, which deviations 1 and 2 require the verdict to report because truncation suppresses re-proposal and so shrinks rather than manufactures the gap. Every record in the run rendered `[claim]`: no arm passed --trusted-author, so this measures the weaker of the two trust tiers and not the `[directive]` path 0.7.1 made reachable (#415). bench/VERDICT-M5.md is the verdict. M1 (bench/VERDICT-M1.md), M1-b, M2 and M4 (docs/VERDICT-M4.md) are not pooled here -- different task sets and, for M4, a third arm, the same reason the ablation log stays out of this list. Each file's own manifest is the authority on its status; this declaration is the fallback.",
+  },
+  {
+    file: "bench/results/m5-seeds-11-20-rerun.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
+  },
+  {
+    file: "bench/results/m5-seeds-21-30.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
+  },
+  {
+    file: "bench/results/m5-seeds-31-40.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
+  },
+  {
+    file: "bench/results/m5-seeds-41-50.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
+  },
+  {
+    file: "bench/results/m5-seeds-51-58.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
+  },
+  {
+    file: "bench/results/m5-seeds-55-58-rerun.jsonl",
+    status: "final",
+    status_note:
+      "Part of the registered M5 set declared above; see the first entry for the full status.",
   },
 ];
+
 
 /*
  * The ablation log is deliberately NOT listed above.
@@ -346,21 +373,40 @@ export interface Progress {
   readonly recorded: number;
   /** Total planned runs across the manifests that declare a plan, or null. */
   readonly planned: number | null;
+  /**
+   * Rows left after a re-run of the same cell supersedes the original.
+   *
+   * A study that re-runs a shard has more rows on disk than measurements, and
+   * a line reporting the file count invites the reader to take the larger
+   * number for the study's size. M5 has 1,240 rows across seven shards and
+   * 1,160 cells, because 400 rows were re-produced after a temp reaper and one
+   * seed range was re-run whole. The supersession rule lives in
+   * `bench/m5-analysis.ts`; this counts the same way so the published line and
+   * the registered analysis cannot disagree.
+   */
+  readonly distinct: number;
 }
+
+/** One measurement: a task, an arm and a seed. Re-runs repeat it. */
+const cellKey = (row: Record<string, unknown>): string =>
+  `${String(row['task'])}\u0000${String(row['cond'])}\u0000${String(row['seed'])}`;
 
 export const progressOf = (sources: Sources): Progress => {
   const recorded = sources.rows.length;
-  if (recorded === 0) return { state: "no-measurement", recorded, planned: null };
+  const distinct = new Set(
+    sources.rows.map((row) => cellKey(row as unknown as Record<string, unknown>)),
+  ).size;
+  if (recorded === 0) return { state: "no-measurement", recorded, planned: null, distinct };
 
   const planned = sources.present.reduce<number | null>((total, source) => {
     if (total === null || source.plannedRuns === null) return null;
     return total + source.plannedRuns;
   }, 0);
 
-  if (planned === null) return { state: "unknown-plan", recorded, planned: null };
-  if (recorded < planned) return { state: "in-progress", recorded, planned };
-  if (recorded > planned) return { state: "over-planned", recorded, planned };
-  return { state: "measured", recorded, planned };
+  if (planned === null) return { state: "unknown-plan", recorded, planned: null, distinct };
+  if (recorded < planned) return { state: "in-progress", recorded, planned, distinct };
+  if (recorded > planned) return { state: "over-planned", recorded, planned, distinct };
+  return { state: "measured", recorded, planned, distinct };
 };
 
 export interface ModelReport {
@@ -545,7 +591,12 @@ const statusLine = (progress: Progress, sources: Sources): string => {
   }
   if (progress.state === "unknown-plan") {
     return (
-      `**${progress.recorded} runs recorded.** No manifest declares how many runs the matrix was meant to produce, ` +
+      (progress.distinct === progress.recorded
+        ? `**${progress.recorded} runs recorded.** `
+        : `**${progress.distinct} measurements across ${progress.recorded} rows.** ` +
+          `${progress.recorded - progress.distinct} row(s) are superseded by a re-run of the same task, ` +
+          "arm and seed, and the analysis counts the survivor. ") +
+      "No manifest declares how many runs the matrix was meant to produce, " +
       "so completeness cannot be checked from the logs alone."
     );
   }
