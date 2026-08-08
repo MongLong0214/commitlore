@@ -31,6 +31,28 @@ import type { Command } from 'commander';
  * setup is incomplete but nothing gives a wrong answer locally.
  */
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skipped';
+/**
+ * The subsystem a check speaks for (PRD §2.1). A row that cannot name one
+ * cannot be selected, grouped or rolled up, so it is supplied at construction
+ * rather than looked up from the id afterwards — a lookup gives a new check a
+ * silent default, and this makes omitting one a type error.
+ */
+export type Category = 'runtime' | 'transport' | 'capture' | 'delivery' | 'history' | 'index';
+/**
+ * Display-grade ordering only. **Never drives the exit code** (ADR-0032 §3).
+ *
+ * Derived from `status` at the single factory below and impossible to supply:
+ * two axes that can disagree make every consumer resolve the disagreement, and
+ * deriving at one chokepoint makes the inconsistency unrepresentable rather
+ * than merely discouraged.
+ */
+export type Severity = 'error' | 'warning' | 'info';
+/**
+ * Why a check did not run, from a closed set (PRD §1.2). A skip whose reason is
+ * free text is a skip nothing can act on. The union grows one member at a time
+ * as sites are mapped.
+ */
+export type SkipReason = 'command_unrecognized' | 'hook_not_installed' | 'probe_path_unavailable' | 'version_unreadable' | 'unborn_head' | 'nothing_applicable';
 export interface DoctorCheck {
     id: string;
     title: string;
@@ -41,6 +63,19 @@ export interface DoctorCheck {
     fix: string | null;
     /** Whether this run's `--fix` changed something for this check. */
     fixed: boolean;
+    category: Category;
+    /** Derived from `status`; never passed in, never read by the exit code. */
+    severity: Severity;
+    /**
+     * The observation behind the conclusion. Populated per check by a later
+     * ticket; `{}` until then, so an absent field never has to be told apart
+     * from an empty one.
+     */
+    evidence: Record<string, string>;
+    /** No shipping check is optional at introduction (PRD §1.4). */
+    optional: boolean;
+    /** Present only on `skipped`. Omitted, never null. */
+    skipReason?: SkipReason;
 }
 export interface DoctorReport {
     checks: DoctorCheck[];
@@ -83,6 +118,7 @@ export interface DoctorOptions {
  */
 export declare const evaluateInjectRun: (run: SpawnSyncReturns<string>, ctx: {
     id: string;
+    category: Category;
     title: string;
     executable: string;
     path: string;

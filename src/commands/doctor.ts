@@ -67,7 +67,39 @@ import { runPendingList } from './pending.js';
  */
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skipped';
 
+/**
+ * The subsystem a check speaks for (PRD §2.1). A row that cannot name one
+ * cannot be selected, grouped or rolled up, so it is supplied at construction
+ * rather than looked up from the id afterwards — a lookup gives a new check a
+ * silent default, and this makes omitting one a type error.
+ */
+export type Category = 'runtime' | 'transport' | 'capture' | 'delivery' | 'history' | 'index';
+
+/**
+ * Display-grade ordering only. **Never drives the exit code** (ADR-0032 §3).
+ *
+ * Derived from `status` at the single factory below and impossible to supply:
+ * two axes that can disagree make every consumer resolve the disagreement, and
+ * deriving at one chokepoint makes the inconsistency unrepresentable rather
+ * than merely discouraged.
+ */
+export type Severity = 'error' | 'warning' | 'info';
+
+/**
+ * Why a check did not run, from a closed set (PRD §1.2). A skip whose reason is
+ * free text is a skip nothing can act on. The union grows one member at a time
+ * as sites are mapped.
+ */
+export type SkipReason =
+  | 'command_unrecognized'
+  | 'hook_not_installed'
+  | 'probe_path_unavailable'
+  | 'version_unreadable'
+  | 'unborn_head'
+  | 'nothing_applicable';
+
 export interface DoctorCheck {
+  // ---- v1 fields: names, types and meanings frozen (ADR-0032 §6) ----
   id: string;
   title: string;
   status: CheckStatus;
@@ -77,6 +109,21 @@ export interface DoctorCheck {
   fix: string | null;
   /** Whether this run's `--fix` changed something for this check. */
   fixed: boolean;
+
+  // ---- v2 additive fields, owned by construction ----
+  category: Category;
+  /** Derived from `status`; never passed in, never read by the exit code. */
+  severity: Severity;
+  /**
+   * The observation behind the conclusion. Populated per check by a later
+   * ticket; `{}` until then, so an absent field never has to be told apart
+   * from an empty one.
+   */
+  evidence: Record<string, string>;
+  /** No shipping check is optional at introduction (PRD §1.4). */
+  optional: boolean;
+  /** Present only on `skipped`. Omitted, never null. */
+  skipReason?: SkipReason;
 }
 
 export interface DoctorReport {
@@ -109,15 +156,52 @@ const escapeConfigValuePattern = (value: string): string =>
 
 const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
 
+/**
+ * `severity` as a total function of `status` — the only place it is decided.
+ *
+ * `skipped` maps to `info`, not `warning`: a check that could not run has
+ * reported nothing, and giving it a warning's weight is how a report starts
+ * ranking its own blind spots above its findings.
+ */
+const severityOf = (status: CheckStatus): Severity =>
+  status === 'fail' ? 'error' : status === 'warn' ? 'warning' : 'info';
+
+/**
+ * The single constructor. No `DoctorCheck` object literal exists outside it.
+ *
+ * `severity` is absent from the parameter list on purpose — there is no way to
+ * pass one, which is the mechanical form of ADR-0032 §3's rule. `category` is
+ * required and positional so a new check cannot be added without naming its
+ * subsystem.
+ *
+ * The two `needsAttention` overrides this file already carried are unchanged:
+ * the no-remote refspec warn and the ENOENT inject fail both clear it, because
+ * neither is something the user can act on here (#192, #221).
+ */
 const check = (
   id: string,
+  category: Category,
   title: string,
   status: CheckStatus,
   detail: string,
   fix: string | null = null,
   fixed = false,
   needsAttention = status === 'warn' || status === 'fail',
-): DoctorCheck => ({ id, title, status, needsAttention, detail, fix, fixed });
+  extra: { evidence?: Record<string, string>; optional?: boolean; skipReason?: SkipReason } = {},
+): DoctorCheck => ({
+  id,
+  title,
+  status,
+  needsAttention,
+  detail,
+  fix,
+  fixed,
+  category,
+  severity: severityOf(status),
+  evidence: extra.evidence ?? {},
+  optional: extra.optional ?? false,
+  ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
+});
 
 const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   const title = 'notes fetch refspec';
@@ -125,7 +209,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
 
   if (remotes.length === 0) {
     return check(
-      'notes-refspec',
+      'notes-refspec', 'transport',
       title,
       'warn',
       'no remote is configured, so records cannot be shared with anyone',
@@ -171,7 +255,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
 
   if (forced.length > 0) {
     return check(
-      'notes-refspec',
+      'notes-refspec', 'transport',
       title,
       'warn',
       `${forced.join(', ')} fetches ${NOTES_REF} with a forced refspec, so an ordinary git fetch ` +
@@ -185,7 +269,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
 
   if (missing.length > 0) {
     return check(
-      'notes-refspec',
+      'notes-refspec', 'transport',
       title,
       'warn',
       `${missing.join(', ')} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
@@ -198,7 +282,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
     .filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
     return check(
-      'notes-refspec',
+      'notes-refspec', 'transport',
       title,
       'warn',
       `could not verify (${failed
@@ -215,7 +299,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   // "repaired", while every query still answers from a mirror that was never
   // retrieved -- the configuration is right and the records are still missing.
   return check(
-    'notes-refspec',
+    'notes-refspec', 'transport',
     title,
     'ok',
     fixed
@@ -239,7 +323,7 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
 
   if (local.code !== 0) {
     return check(
-      'notes-push',
+      'notes-push', 'transport',
       title,
       'ok',
       `no local mirror yet — nothing to push (${command}, once there is)`,
@@ -249,7 +333,7 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
   const advertised = execGit(['ls-remote', remote, NOTES_REF], gitOptions(opts));
   if (advertised.code !== 0) {
     return check(
-      'notes-push',
+      'notes-push', 'transport',
       title,
       'warn',
       `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
@@ -257,11 +341,11 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
     );
   }
   if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
-    return check('notes-push', title, 'ok', `${remote} has the current ${NOTES_REF}`);
+    return check('notes-push', 'transport', title, 'ok', `${remote} has the current ${NOTES_REF}`);
   }
 
   return check(
-    'notes-push',
+    'notes-push', 'transport',
     title,
     'warn',
     `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
@@ -278,13 +362,14 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
 const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
   const title = 'commit-msg hook';
   const id = 'commit-msg-hook';
+  const category: Category = 'capture';
   const install = 'commitlore hooks install';
 
   // --git-path, not a hardcoded .git/: worktrees and submodules keep hooks
   // somewhere else entirely.
   const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
   if (located.code !== 0) {
-    return check(id, title, 'warn', 'not inside a git repository', install);
+    return check(id, category, title, 'warn', 'not inside a git repository', install);
   }
 
   const path = resolve(opts.cwd ?? process.cwd(), located.stdout.trim());
@@ -295,13 +380,14 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
     ...(override === undefined || override === '' ? [] : [`COMMITLORE_BIN: ${override}`]),
   ].join('; ');
   if (!existsSync(path)) {
-    return check(id, title, 'warn', `no commit-msg hook at ${path}; ${targetDetail}`, install);
+    return check(id, category, title, 'warn', `no commit-msg hook at ${path}; ${targetDetail}`, install);
   }
 
   const contents = readFileSync(path, 'utf8');
   if (!contents.includes(HOOK_MARKER)) {
     return check(
       id,
+      category,
       title,
       'warn',
       `a commit-msg hook exists at ${path} but does not invoke commitlore; ${targetDetail}`,
@@ -316,6 +402,7 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
   if (contents !== commitMsgStub()) {
     return check(
       id,
+      category,
       title,
       'warn',
       `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI; ${targetDetail}`,
@@ -337,6 +424,7 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
   if (runtime.status !== 'ok') {
     return check(
       id,
+      category,
       title,
       runtime.status,
       `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`,
@@ -344,8 +432,8 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
     );
   }
   return problems.length === 0
-    ? check(id, title, 'ok', `installed at ${path}; ${targetDetail}`)
-    : check(id, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
+    ? check(id, category, title, 'ok', `installed at ${path}; ${targetDetail}`)
+    : check(id, category, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
 };
 
 /**
@@ -360,6 +448,7 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
 const checkGit = (opts: DoctorOptions): DoctorCheck => {
   const title = 'git interpret-trailers';
   const id = 'git-trailers';
+  const category: Category = 'runtime';
   const version = execGit(['--version'], gitOptions(opts)).stdout.trim();
   const upgrade = 'install a git that supports interpret-trailers --parse (git >= 2.9)';
 
@@ -368,15 +457,15 @@ const checkGit = (opts: DoctorOptions): DoctorCheck => {
     trailers = parseCommitMessage(PROBE_MESSAGE);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return check(id, title, 'fail', `${version || 'git'} could not parse a probe: ${reason}`, upgrade);
+    return check(id, category, title, 'fail', `${version || 'git'} could not parse a probe: ${reason}`, upgrade);
   }
 
   const parsed = trailers.map((trailer) => `${trailer.key}: ${trailer.value}`).join(', ');
   if (parsed !== 'Limit: probe, Blast: local') {
-    return check(id, title, 'fail', `${version} parsed the probe as [${parsed}]`, upgrade);
+    return check(id, category, title, 'fail', `${version} parsed the probe as [${parsed}]`, upgrade);
   }
 
-  return check(id, title, 'ok', `${version} parses trailers as the spec expects`);
+  return check(id, category, title, 'ok', `${version} parses trailers as the spec expects`);
 };
 
 /**
@@ -403,6 +492,7 @@ const checkGit = (opts: DoctorOptions): DoctorCheck => {
 const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'cli runtime';
   const id = 'cli-runtime';
+  const category: Category = 'runtime';
 
   // The bundle first: it is what a clone has and what the plugin invokes. The
   // tsc output is the fallback for a checkout that has not been bundled.
@@ -411,6 +501,7 @@ const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
   if (entry === undefined) {
     return check(
       id,
+      category,
       title,
       'fail',
       `no built CLI at ${candidates.join(' or ')} — this checkout has not been built`,
@@ -425,14 +516,14 @@ const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
   });
 
   if (run.error !== undefined) {
-    return check(id, title, 'fail', `could not run ${entry}: ${run.error.message}`, null);
+    return check(id, category, title, 'fail', `could not run ${entry}: ${run.error.message}`, null);
   }
   if (run.status !== 0) {
     const detail = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? `exit ${String(run.status)}`;
-    return check(id, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 'npm install');
+    return check(id, category, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 'npm install');
   }
 
-  return check(id, title, 'ok', `${entry} runs (${run.stdout.trim()})`);
+  return check(id, category, title, 'ok', `${entry} runs (${run.stdout.trim()})`);
 };
 
 /**
@@ -457,16 +548,17 @@ const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
 const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'hook runtime';
   const id = 'hook-runtime';
+  const category: Category = 'capture';
   const fix = 'commitlore hooks install';
   const cwd = opts.cwd ?? process.cwd();
 
   const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
-  if (located.code !== 0) return check(id, title, 'warn', 'not inside a git repository', fix);
+  if (located.code !== 0) return check(id, category, title, 'warn', 'not inside a git repository', fix);
 
   const hook = resolve(cwd, located.stdout.trim());
   // The hook's absence is `checkHook`'s finding; saying it twice teaches the
   // reader to skim both.
-  if (!existsSync(hook)) return check(id, title, 'ok', 'no hook installed — nothing to run');
+  if (!existsSync(hook)) return check(id, category, title, 'ok', 'no hook installed — nothing to run');
 
   const probe = join(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
@@ -481,7 +573,7 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
     });
 
     if (run.error !== undefined) {
-      return check(id, title, 'fail', `could not run the hook: ${run.error.message}`, fix);
+      return check(id, category, title, 'fail', `could not run the hook: ${run.error.message}`, fix);
     }
     if (run.status !== 0) {
       const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
@@ -498,12 +590,13 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
       } else {
         detail = `the hook exited ${String(run.status)} under the restricted PATH — cause unclear: ${said || 'no output'}`;
       }
-      return check(id, title, 'fail', detail, fix);
+      return check(id, category, title, 'fail', detail, fix);
     }
-    return check(id, title, 'ok', 'the hook runs and validates without node on PATH');
+    return check(id, category, title, 'ok', 'the hook runs and validates without node on PATH');
   } catch (error) {
     return check(
       id,
+      category,
       title,
       'warn',
       `could not probe the hook: ${error instanceof Error ? error.message : String(error)}`,
@@ -545,14 +638,23 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
  */
 export const evaluateInjectRun = (
   run: SpawnSyncReturns<string>,
-  ctx: { id: string; title: string; executable: string; path: string; fix: string; unavailableFix: string },
+  ctx: {
+    id: string;
+    category: Category;
+    title: string;
+    executable: string;
+    path: string;
+    fix: string;
+    unavailableFix: string;
+  },
 ): DoctorCheck => {
-  const { id, title, executable, path, fix, unavailableFix } = ctx;
+  const { id, category, title, executable, path, fix, unavailableFix } = ctx;
 
   if (run.status === null || run.status === undefined) {
     if (run.error !== undefined && 'code' in run.error && run.error.code === 'ENOENT') {
       return check(
         id,
+      category,
         title,
         'fail',
         `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
@@ -561,6 +663,7 @@ export const evaluateInjectRun = (
     }
     return check(
       id,
+      category,
       title,
       'fail',
       `could not run the PreToolUse hook: ${run.error?.message ?? 'no diagnosis'}`,
@@ -572,6 +675,7 @@ export const evaluateInjectRun = (
     const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
     return check(
       id,
+      category,
       title,
       'fail',
       `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`,
@@ -582,18 +686,20 @@ export const evaluateInjectRun = (
     const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
     return check(
       id,
+      category,
       title,
       'fail',
       `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`,
       fix,
     );
   }
-  return check(id, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+  return check(id, category, title, 'ok', `the PreToolUse hook returned context for ${path}`);
 };
 
 const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
   const title = 'PreToolUse hook runtime';
   const id = 'inject-runtime';
+  const category: Category = 'delivery';
   const fix = 'reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor';
   const unavailableFix =
     'install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor';
@@ -605,6 +711,7 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
     if (settings.state === 'outdated' && command !== undefined) {
       return check(
         id,
+      category,
         title,
         'skipped',
         `not checked: configured command ${JSON.stringify(command)} is not recognised; running it might have side effects`,
@@ -614,19 +721,19 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
       settings.state === 'absent'
         ? `not installed in ${settings.settingsPath}`
         : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
-    return check(id, title, 'warn', detail, 'commitlore inject install-claude-hook');
+    return check(id, category, title, 'warn', detail, 'commitlore inject install-claude-hook');
   }
 
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, title, 'skipped', 'not checked: the configured command is not recognised');
+    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised');
   }
 
   const path = runQuery({ cwd, noIndex: true }).records
     .flatMap((record) => record.paths)
     .find((candidate) => candidate !== '' && candidate !== '.');
   if (path === undefined) {
-    return check(id, title, 'skipped', 'no recorded path is available for a runtime probe');
+    return check(id, category, title, 'skipped', 'no recorded path is available for a runtime probe');
   }
 
   const payload = JSON.stringify({
@@ -650,7 +757,7 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
     },
   });
 
-  const result = evaluateInjectRun(run, { id, title, executable, path, fix, unavailableFix });
+  const result = evaluateInjectRun(run, { id, category, title, executable, path, fix, unavailableFix });
 
   // An unresolvable executable is an incomplete environment — the hook will
   // not fire until the user installs it — but it does not make records
@@ -692,16 +799,17 @@ const SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
 const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   const title = 'PreToolUse hook version';
   const id = 'inject-version';
+  const category: Category = 'delivery';
   const cwd = opts.cwd ?? process.cwd();
   const mine = packageVersion();
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
 
   if (settings.state !== 'installed') {
-    return check(id, title, 'skipped', `no installed hook to compare against ${mine}`);
+    return check(id, category, title, 'skipped', `no installed hook to compare against ${mine}`);
   }
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, title, 'skipped', 'not checked: the configured command is not recognised');
+    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised');
   }
 
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
@@ -719,7 +827,7 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   if (run.status !== 0 || typeof run.stdout !== 'string') {
     // `checkInjectRuntime` owns "the hook does not run at all" and reports it
     // with the remedy. Saying it twice would be noise.
-    return check(id, title, 'skipped', `${executable} did not report a version`);
+    return check(id, category, title, 'skipped', `${executable} did not report a version`);
   }
 
   const theirs = run.stdout.trim();
@@ -730,17 +838,19 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   if (!SEMVER_ISH.test(theirs)) {
     return check(
       id,
+      category,
       title,
       'skipped',
       `${executable} answered --version with something that is not a version`,
     );
   }
   if (theirs === mine) {
-    return check(id, title, 'ok', `the hook runs ${theirs}, the same build as this CLI`);
+    return check(id, category, title, 'ok', `the hook runs ${theirs}, the same build as this CLI`);
   }
 
   return check(
     id,
+      category,
     title,
     'warn',
     `the agent's hook runs ${theirs} but this CLI is ${mine} — every edit is graded by ${theirs}'s rules, not this one's`,
@@ -766,16 +876,18 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
 const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
   const title = 'MCP server sessions';
   const id = 'mcp-lifecycle';
+  const category: Category = 'delivery';
   const cwd = opts.cwd ?? process.cwd();
   const unfinished = unfinishedRuns(cwd);
 
   if (unfinished.length === 0) {
-    return check(id, title, 'ok', 'every recorded MCP session ended cleanly, or is still running');
+    return check(id, category, title, 'ok', 'every recorded MCP session ended cleanly, or is still running');
   }
 
   const last = unfinished[unfinished.length - 1];
   return check(
     id,
+      category,
     title,
     'warn',
     `${unfinished.length} MCP server session(s) started here and never recorded an exit — ` +
@@ -811,18 +923,20 @@ const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
 const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
   const title = 'pending captures';
   const id = 'pending-backlog';
+  const category: Category = 'capture';
   const cwd = opts.cwd ?? process.cwd();
 
   let listing;
   try {
     listing = runPendingList({ cwd });
   } catch {
-    return check(id, title, 'ok', 'no pending directory — nothing has been captured here yet');
+    return check(id, category, title, 'ok', 'no pending directory — nothing has been captured here yet');
   }
 
   if (listing.unreadable.length > 0) {
     return check(
       id,
+      category,
       title,
       'warn',
       `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
@@ -837,6 +951,7 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
     const held = listing.transactions.length;
     return check(
       id,
+      category,
       title,
       'ok',
       held === 0 ? 'no captures are waiting' : `${String(held)} capture(s) waiting, all still able to apply`,
@@ -861,6 +976,7 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
 
   return check(
     id,
+      category,
     title,
     'warn',
     `${detail}; oldest from ${oldest ?? 'an unknown time'}. ` +
@@ -877,7 +993,7 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
     handle = openIndex({ cwd, readonly: true });
   } catch {
     return check(
-      'index-health',
+      'index-health', 'index',
       'index health',
       'warn',
       'no index yet — queries fall back to scanning the history',
@@ -891,21 +1007,21 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
     const fts = info.fts ? 'FTS5' : 'no FTS5 (value search falls back to LIKE)';
     return behind
       ? check(
-          'index-health',
+          'index-health', 'index',
           'index health',
           'warn',
           `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`,
           'commitlore index',
         )
       : check(
-          'index-health',
+          'index-health', 'index',
           'index health',
           'ok',
           `${info.trailers} trailers over ${info.commits} commits, current with HEAD — ${fts}`,
         );
   } catch (error) {
     return check(
-      'index-health',
+      'index-health', 'index',
       'index health',
       'warn',
       `index unreadable (${error instanceof Error ? error.message : String(error)}) — queries still work without it`,
@@ -923,13 +1039,13 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
 const checkHistoryDepth = (opts: DoctorOptions): DoctorCheck =>
   hasShallowHistory(opts.cwd ?? process.cwd())
     ? check(
-        'history-depth',
+        'history-depth', 'history',
         'history depth',
         'warn',
         'this clone has shallow history, so queries may be missing records that exist upstream',
         'git fetch --unshallow',
       )
-    : check('history-depth', 'history depth', 'ok', 'full history is available');
+    : check('history-depth', 'history', 'history depth', 'ok', 'full history is available');
 
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
 const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
@@ -1013,17 +1129,19 @@ const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidate[] 
 const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
   const title = 'squash conservation';
   const id = 'squash-conservation';
+  const category: Category = 'history';
   const cwd = opts.cwd ?? process.cwd();
 
   const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
   if (head.code !== 0) {
-    return check(id, title, 'skipped', 'no HEAD yet — nothing to compare against');
+    return check(id, category, title, 'skipped', 'no HEAD yet — nothing to compare against');
   }
 
   const candidates = squashCandidates(opts, head.stdout.trim());
   if (candidates.length === 0) {
     return check(
       id,
+      category,
       title,
       'skipped',
       'no local branch looks like the source of a squash — nothing to check',
@@ -1074,6 +1192,7 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
   if (checked === 0) {
     return check(
       id,
+      category,
       title,
       'skipped',
       `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
@@ -1088,6 +1207,7 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
     const more = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
     return check(
       id,
+      category,
       title,
       'warn',
       `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
@@ -1101,7 +1221,7 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
         `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)`
       : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
-  return check(id, title, 'ok', detail);
+  return check(id, category, title, 'ok', detail);
 };
 
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
