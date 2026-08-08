@@ -23,7 +23,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
-warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: /Users/isaac/.nvm/versions/node/v<version>/bin/node
+warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
@@ -42,7 +42,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
-warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: /Users/isaac/.nvm/versions/node/v<version>/bin/node
+warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json

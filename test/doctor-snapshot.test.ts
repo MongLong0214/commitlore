@@ -91,6 +91,11 @@ const normalise = (text: string, repo: string): string =>
         .replaceAll(realpathSync(PACKAGE_ROOT), '<root>')
         .replaceAll(PACKAGE_ROOT, '<root>')
         .replaceAll(realpathSync(tmpdir()), '<tmp>')
+        // The interpreter's path is the machine's, not the report's: nvm on a
+        // laptop, hostedtoolcache on a runner. Leaving it in makes the
+        // snapshot a record of where it was first generated.
+        .replaceAll(realpathSync(process.execPath), '<node>')
+        .replaceAll(process.execPath, '<node>')
         // mkdtemp's random suffix varies per run; the path shape is what
         // matters, and leaving the suffix in makes the snapshot fail for a
         // reason that has nothing to do with the report.
