@@ -20007,7 +20007,8 @@ var hookOutput = (text) => `${JSON.stringify({
 var injectOptions = (path2, options, cwd) => {
   const at = evaluationInstant2(options.at);
   const budget = tokenBudget(options.budget);
-  const trustedAuthors = options.trustedAuthor ?? configuredTrustedAuthors(cwd);
+  const flagged = options.trustedAuthor ?? [];
+  const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
   return {
     path: path2,
     cwd,

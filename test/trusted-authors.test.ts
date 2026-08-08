@@ -13,7 +13,10 @@
  * existed.
  */
 
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -28,6 +31,7 @@ import {
 } from '../src/core/trusted-authors.js';
 import { createTestRepo } from './git-fixtures.js';
 
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
 
 afterAll(() => {
@@ -133,5 +137,58 @@ describe('#415 trusted authors after a plain install', () => {
 
     execGit(['config', '--unset-all', TRUSTED_AUTHOR_KEY], { cwd: repo });
     expect(injected()).toMatch(/\[claim\]\s+r-trust01/);
+  });
+});
+
+/**
+ * The layer the earlier tests in this file did not reach.
+ *
+ * Everything above drives `buildInjection` with options assembled by hand. That
+ * passes whether or not the CLI ever produces those options — and it did not.
+ * Commander declares `--trusted-author` with a default of `[]`, so the absent
+ * flag arrived as an empty array rather than `undefined`, the nullish fallback
+ * to the configured authors never fired, and **every record on every install
+ * still graded `claim`**. The defect #415 was opened about, reintroduced one
+ * layer up by the fix for it, and shipped in 0.7.0.
+ *
+ * The file header already said a unit test of `gradeRecord` would have passed
+ * throughout the period the original bug existed. This is the same sentence one
+ * layer out, and the reason these cases spawn the built CLI instead.
+ */
+describe('#415 through the command line, which is the only path the hook uses', () => {
+  const cli = (args: string[], cwd: string): string => {
+    const run = spawnSync(process.execPath, [join(REPO_ROOT, 'dist', 'commitlore.mjs'), ...args], {
+      cwd,
+      encoding: 'utf8',
+    });
+    return `${run.stdout}${run.stderr}`;
+  };
+
+  it('renders the installer\'s own record as [directive] with no flag at all', () => {
+    commitRecord(INSTALLER, RECORD);
+    seedTrustedAuthor(repo);
+
+    // No `--trusted-author`. This is exactly what CLAUDE_HOOK_COMMAND runs.
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[directive\]\s+r-trust01/);
+  });
+
+  it('still renders another author\'s record as [claim] through the same path', () => {
+    commitRecord(OUTSIDER, RECORD);
+    seedTrustedAuthor(repo);
+
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
+  });
+
+  it('grades claim when nothing is configured and no flag is given', () => {
+    commitRecord(INSTALLER, RECORD);
+
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
+  });
+
+  it('lets an explicit flag override an empty configuration', () => {
+    commitRecord(INSTALLER, RECORD);
+
+    const out = cli(['inject', '--path', 'session.ts', '--trusted-author', INSTALLER], repo);
+    expect(out).toMatch(/\[directive\]\s+r-trust01/);
   });
 });

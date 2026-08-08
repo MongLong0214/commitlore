@@ -232,10 +232,20 @@ const injectOptions = (
 ): InjectOptions => {
   const at = evaluationInstant(options.at);
   const budget = tokenBudget(options.budget);
-  // #415: with no flag and no configured authors this is empty, and grading
-  // fails closed to `claim`. The installed hook passes no flag, so the config
-  // value written at `init` is the only route to a `[directive]` in practice.
-  const trustedAuthors = options.trustedAuthor ?? configuredTrustedAuthors(cwd);
+  // #415: the installed hook passes no flag, so the config value written at
+  // `init` is the only route to a `[directive]` in practice.
+  //
+  // The nullish check that used to stand here never fired. Commander declares
+  // `--trusted-author` with a default of `[]`, so `options.trustedAuthor` is an
+  // empty array rather than `undefined` when the flag is absent, `?? ` passes
+  // it through, and every record graded `claim` on every install — exactly the
+  // defect #415 was opened about, reintroduced one layer up by the fix for it.
+  //
+  // Length is the test that matches what the caller meant: an explicit flag is
+  // always non-empty, and an absent flag is always empty, whichever of the two
+  // shapes Commander hands over.
+  const flagged = options.trustedAuthor ?? [];
+  const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
   return {
     path,
     cwd,
