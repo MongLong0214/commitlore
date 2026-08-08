@@ -45,6 +45,16 @@ export type ProbeCondition = "commitlore-on" | "commitlore-off";
 
 export interface RuntimeProbe {
   readonly condition: ProbeCondition;
+  /**
+   * The model this probe ran. Recorded and checked, not assumed.
+   *
+   * A probe on a different model than the study measures the runtime of work
+   * the study will never do, which makes the gate a screen against the wrong
+   * distribution. §2.2 already forces a new study id when the observed model
+   * changes; this is the same rule reaching the qualification that selects the
+   * corpus.
+   */
+  readonly model: string;
   readonly stop_reason: "completed" | "timeout" | "agent_error";
   readonly wall_ms: number;
   readonly artifact_sha256: string;
@@ -135,7 +145,7 @@ export const runProbe = (
 
   const artifact = `${result.stdout ?? ""}\n---stderr---\n${result.stderr ?? ""}`;
   return {
-    probe: { condition, stop_reason, wall_ms, artifact_sha256: sha256(artifact) },
+    probe: { condition, model, stop_reason, wall_ms, artifact_sha256: sha256(artifact) },
     artifact,
   };
 };
@@ -151,6 +161,7 @@ export const runProbe = (
 export const qualifyRuntime = (
   probes: readonly RuntimeProbe[],
   timeoutMs: number,
+  pinnedModel: string,
 ): RuntimeQualification => {
   const threshold_ms = Math.floor(timeoutMs * RUNTIME_FRACTION);
   const reasons: string[] = [];
@@ -162,6 +173,12 @@ export const qualifyRuntime = (
   for (const probe of probes) {
     if (probe.stop_reason !== "completed") {
       reasons.push(`${probe.condition} stopped as ${probe.stop_reason}`);
+    }
+    if (probe.model !== pinnedModel) {
+      reasons.push(
+        `${probe.condition} probed ${probe.model} but the study is pinned to ${pinnedModel} — ` +
+          "a runtime screen on another model screens the wrong distribution",
+      );
     }
   }
   const slowest = probes.reduce((worst, probe) => Math.max(worst, probe.wall_ms), 0);

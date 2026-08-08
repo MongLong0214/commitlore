@@ -21,11 +21,22 @@ import {
 /** The pilot's per-task budget. */
 const BUDGET_MS = 900_000;
 
+/**
+ * The model this study is pinned to.
+ *
+ * Sonnet, because the 0.6 threshold these cases check was derived from Sonnet
+ * wall times — the pilot's 0.48-vs-1.00 separation is Sonnet data, and a model
+ * change makes the derivation a guess again. M1 and M5 also measured Sonnet, so
+ * this keeps CDEB comparable with the evidence already published.
+ */
+const MODEL = 'sonnet';
+
 const probe = (
   condition: ProbeCondition,
   wall_ms: number,
   stop_reason: RuntimeProbe['stop_reason'] = 'completed',
-): RuntimeProbe => ({ condition, stop_reason, wall_ms, artifact_sha256: 'a'.repeat(64) });
+  model: string = MODEL,
+): RuntimeProbe => ({ condition, model, stop_reason, wall_ms, artifact_sha256: 'a'.repeat(64) });
 
 describe('§4.6 runtime-boundedness qualification', () => {
   it('qualifies a task at the pilot\'s fastest observed pair', () => {
@@ -33,6 +44,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-off', 80_000), probe('commitlore-on', 89_000)],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified, result.reasons.join('; ')).toBe(true);
     expect(result.threshold_ms).toBe(540_000);
@@ -43,6 +55,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-off', 902_000, 'timeout'), probe('commitlore-on', 903_000, 'timeout')],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified).toBe(false);
     expect(result.reasons.join(' ')).toMatch(/stopped as timeout/);
@@ -54,6 +67,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-off', 88_000), probe('commitlore-on', 431_000)],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified, result.reasons.join('; ')).toBe(true);
     expect(431_000 / BUDGET_MS).toBeLessThan(RUNTIME_FRACTION);
@@ -63,6 +77,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-off', 10_000), probe('commitlore-on', 700_000)],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified).toBe(false);
     expect(result.reasons.join(' ')).toMatch(/slowest probe 700000ms exceeds the 540000ms/);
@@ -71,7 +86,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
   it('refuses a single-arm qualification — runtime is treatment-sensitive', () => {
     // Qualifying on one arm selects a corpus that arm finishes faster, and the
     // bias is not separable from the result afterwards.
-    const result = qualifyRuntime([probe('commitlore-on', 100_000)], BUDGET_MS);
+    const result = qualifyRuntime([probe('commitlore-on', 100_000)], BUDGET_MS, MODEL);
     expect(result.qualified).toBe(false);
     expect(result.reasons.join(' ')).toMatch(/both arms are required/);
   });
@@ -80,6 +95,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-on', 100_000), probe('commitlore-on', 110_000)],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified).toBe(false);
     expect(result.reasons.join(' ')).toMatch(/both arms are required/);
@@ -89,6 +105,7 @@ describe('§4.6 runtime-boundedness qualification', () => {
     const result = qualifyRuntime(
       [probe('commitlore-off', 5_000, 'agent_error'), probe('commitlore-on', 90_000)],
       BUDGET_MS,
+      MODEL,
     );
     expect(result.qualified).toBe(false);
     expect(result.reasons.join(' ')).toMatch(/stopped as agent_error/);
@@ -98,9 +115,22 @@ describe('§4.6 runtime-boundedness qualification', () => {
     // Reading an outcome to decide corpus membership would be selection on the
     // dependent variable. The probe type must not carry one.
     const keys = Object.keys(probe('commitlore-on', 1_000));
-    expect(keys.sort()).toEqual(['artifact_sha256', 'condition', 'stop_reason', 'wall_ms']);
+    expect(keys.sort()).toEqual(['artifact_sha256', 'condition', 'model', 'stop_reason', 'wall_ms']);
     for (const forbidden of ['functional_pass', 'rejected_decision_revived', 'decision_safe_success']) {
       expect(keys).not.toContain(forbidden);
     }
+  });
+
+  it('refuses a probe run on a model the study is not pinned to', () => {
+    // The qualification decides corpus membership by runtime. A probe on
+    // another model screens a distribution the study will never produce, so
+    // §2.2's "model change means a new study" reaches this gate too.
+    const result = qualifyRuntime(
+      [probe('commitlore-off', 80_000), probe('commitlore-on', 89_000, 'completed', 'opus')],
+      BUDGET_MS,
+      MODEL,
+    );
+    expect(result.qualified).toBe(false);
+    expect(result.reasons.join(' ')).toMatch(/probed opus but the study is pinned to sonnet/);
   });
 });
