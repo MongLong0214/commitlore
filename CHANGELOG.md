@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 ### The behaviour claim is measured: 2.8% against 18.8%
 
