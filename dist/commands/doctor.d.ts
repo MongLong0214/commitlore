@@ -67,9 +67,8 @@ export interface DoctorCheck {
     /** Derived from `status`; never passed in, never read by the exit code. */
     severity: Severity;
     /**
-     * The observation behind the conclusion. Populated per check by a later
-     * ticket; `{}` until then, so an absent field never has to be told apart
-     * from an empty one.
+     * The observation behind the conclusion. A row without one cannot explain
+     * why its status is trustworthy, so construction rejects empty evidence.
      */
     evidence: Record<string, string>;
     /** No shipping check is optional at introduction (PRD §1.4). */
