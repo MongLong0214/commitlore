@@ -102,12 +102,14 @@ agent handed the repository's active records re-proposed a ruled-out approach in
 | the agent alone | **18.8%** (109/579) |
 | **with CommitLore** | **2.8%** (16/580) |
 
-Fisher exact two-tailed `p = 0.0000`; difference −16.1pp, Newcombe 95% −19.6 to
-−12.7. **The threshold was registered at 6.6pp before the run**, and the
-preregistration predicted a *smaller* effect than it got — that prediction, with
-its stated probabilities, is in
-[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2 and it was
-wrong.
+**The threshold was registered before the run**, and the preregistration
+predicted a *smaller* effect than it got — that prediction, with its stated
+probabilities, is in
+[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2, and it was
+wrong. The significance test, the interval and the registered threshold are in
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here: a statistic
+retyped into prose drifts from the log that produced it, and this repository
+gates against exactly that (`scripts/check-readme-numbers.mjs`).
 
 Three limits belong beside the number. Every record in that run rendered
 `[claim]`, with the payload telling the agent not to act on it as an order — the

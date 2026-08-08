@@ -11,11 +11,10 @@ records re-proposed a ruled-out approach in **16 of 580** runs; without them,
 ```
 commitlore-on    16/580 =  2.8%   Wilson 95%  1.7 – 4.4%
 commitlore-off  109/579 = 18.8%   Wilson 95% 15.9 – 22.2%
-
-Fisher exact, two-tailed   p = 0.0000
-difference                 −16.1pp   Newcombe 95% −19.6 to −12.7
-registered threshold       6.6pp
 ```
+
+The significance test, the interval on the difference and the registered
+threshold are in `bench/VERDICT-M5.md`, not retyped here.
 
 Three things about how it was produced matter more than the number:
 
@@ -26,7 +25,8 @@ Three things about how it was produced matter more than the number:
   probabilities, and it was wrong.
 - **The control arm truncated more** (28.5% against 21.2%), and truncation
   suppresses re-proposal — so the artefact removes control-arm chances rather
-  than manufacturing treatment ones. 16.1pp is a floor with respect to it.
+  than manufacturing treatment ones. The measured difference is a floor with
+  respect to it.
 
 **Every record in this run rendered `[claim]`**, with the payload's own legend
 telling the agent not to act on it as an order. The `[directive]` tier below
