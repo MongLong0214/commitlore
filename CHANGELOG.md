@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.1
+
+### `[directive]` did not work in 0.7.0
+
+0.7.0's headline change made the `[directive]` tier reachable. **It did not
+reach anyone.** `commander` declares `--trusted-author` with a default of `[]`,
+so the flag arrived as an empty array rather than `undefined` when it was
+absent, the nullish fallback to the author `init` records never fired, and
+every record on every install still graded `[claim]`.
+
+That is the defect #415 was opened about, reintroduced one layer up by the fix
+for it.
+
+Reproduced against the released artefact: `commitlore inject --path <p>` — the
+form the hook runs — rendered `[claim]`, while the same command with an
+explicit `--trusted-author` rendered `[directive]`.
+
+The tests that passed drove `buildInjection` with options assembled by hand and
+never went through the command line, which is the only path the hook uses.
+`test/trusted-authors.test.ts` now spawns the built CLI. Its own header had
+already warned that a unit test one layer down would have passed throughout the
+period the original bug existed; the same sentence applied one layer up and was
+not heard.
+
+### Fixed
+
+- `package-lock.json` still declared `0.1.0` while the manifests read `0.7.0`.
+  Stale since the first release.
+
+### Corrections to 0.7.0's own record
+
+The promotion PR said 132 commits; it was **137**. It said `RELEASE-GATE.md` §4
+lists seven install checks; it lists **six**. Both were miscounts in the
+evidence submitted for review, and both are corrected here rather than left in
+the history unremarked.
+
 ## 0.7.0
 
 ### The behaviour claim is measured: 2.8% against 18.8%

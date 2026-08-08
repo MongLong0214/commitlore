@@ -48,7 +48,7 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
 ```
 
 어떤 host를 지원하는지, 각 설치 경로가 무엇을 요구하는지: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
@@ -138,11 +138,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh
-sh install.sh v0.7.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh
+sh install.sh v0.7.1
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v0.7.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.7.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
