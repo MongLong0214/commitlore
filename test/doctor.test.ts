@@ -540,7 +540,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    expect(report.checks).toHaveLength(12);
+    expect(report.checks).toHaveLength(13);
   });
 });
 
@@ -948,6 +948,7 @@ describe('doctor: report', () => {
       'inject-runtime',
       'inject-version',
       'mcp-lifecycle',
+      'pending-backlog',
       'git-trailers',
       'history-depth',
       'index-health',
@@ -969,7 +970,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(12);
+    expect(parsed.checks).toHaveLength(13);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
