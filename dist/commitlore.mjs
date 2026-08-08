@@ -17250,20 +17250,22 @@ var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
 var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var severityOf = (status) => status === "fail" ? "error" : status === "warn" ? "warning" : "info";
-var check = (id, category, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) => ({
-  id,
-  title,
-  status,
-  needsAttention,
-  detail,
-  fix,
-  fixed,
-  category,
-  severity: severityOf(status),
-  evidence: extra.evidence ?? {},
-  optional: extra.optional ?? false,
-  ...extra.skipReason === void 0 ? {} : { skipReason: extra.skipReason }
-});
+function check(id, category, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) {
+  return {
+    id,
+    title,
+    status,
+    needsAttention,
+    detail,
+    fix,
+    fixed,
+    category,
+    severity: severityOf(status),
+    evidence: extra.evidence ?? {},
+    optional: extra.optional ?? false,
+    ...extra.skipReason === void 0 ? {} : { skipReason: extra.skipReason }
+  };
+}
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
@@ -17436,14 +17438,21 @@ var checkHook = (opts, runtime) => {
     ]
   ];
   if (runtime.status !== "ok") {
-    return check(
-      id,
-      category,
-      title,
-      runtime.status,
-      `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`,
-      install
-    );
+    const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
+    if (runtime.status === "skipped") {
+      return check(
+        id,
+        category,
+        title,
+        "skipped",
+        inherited,
+        install,
+        false,
+        false,
+        { skipReason: runtime.skipReason ?? "nothing_applicable" }
+      );
+    }
+    return check(id, category, title, runtime.status, inherited, install);
   }
   return problems.length === 0 ? check(id, category, title, "ok", `installed at ${path2}; ${targetDetail}`) : check(id, category, title, "warn", `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`, install);
 };
@@ -17610,7 +17619,11 @@ var checkInjectRuntime = (opts) => {
         category,
         title,
         "skipped",
-        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`
+        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`,
+        null,
+        false,
+        false,
+        { skipReason: "command_unrecognized" }
       );
     }
     const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
@@ -17618,11 +17631,11 @@ var checkInjectRuntime = (opts) => {
   }
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, "skipped", "not checked: the configured command is not recognised");
+    return check(id, category, title, "skipped", "not checked: the configured command is not recognised", null, false, false, { skipReason: "command_unrecognized" });
   }
   const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
   if (path2 === void 0) {
-    return check(id, category, title, "skipped", "no recorded path is available for a runtime probe");
+    return check(id, category, title, "skipped", "no recorded path is available for a runtime probe", null, false, false, { skipReason: "probe_path_unavailable" });
   }
   const payload = JSON.stringify({
     session_id: "commitlore-doctor",
@@ -17659,11 +17672,11 @@ var checkInjectVersion = (opts) => {
   const mine = packageVersion();
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
   if (settings.state !== "installed") {
-    return check(id, category, title, "skipped", `no installed hook to compare against ${mine}`);
+    return check(id, category, title, "skipped", `no installed hook to compare against ${mine}`, null, false, false, { skipReason: "hook_not_installed" });
   }
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, "skipped", "not checked: the configured command is not recognised");
+    return check(id, category, title, "skipped", "not checked: the configured command is not recognised", null, false, false, { skipReason: "command_unrecognized" });
   }
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
@@ -17677,7 +17690,7 @@ var checkInjectVersion = (opts) => {
     }
   });
   if (run.status !== 0 || typeof run.stdout !== "string") {
-    return check(id, category, title, "skipped", `${executable} did not report a version`);
+    return check(id, category, title, "skipped", `${executable} did not report a version`, null, false, false, { skipReason: "version_unreadable" });
   }
   const theirs = run.stdout.trim();
   if (!SEMVER_ISH.test(theirs)) {
@@ -17686,7 +17699,11 @@ var checkInjectVersion = (opts) => {
       category,
       title,
       "skipped",
-      `${executable} answered --version with something that is not a version`
+      `${executable} answered --version with something that is not a version`,
+      null,
+      false,
+      false,
+      { skipReason: "version_unreadable" }
     );
   }
   if (theirs === mine) {
@@ -17853,7 +17870,7 @@ var checkSquashConservation = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions3(opts));
   if (head.code !== 0) {
-    return check(id, category, title, "skipped", "no HEAD yet \u2014 nothing to compare against");
+    return check(id, category, title, "skipped", "no HEAD yet \u2014 nothing to compare against", null, false, false, { skipReason: "unborn_head" });
   }
   const candidates = squashCandidates(opts, head.stdout.trim());
   if (candidates.length === 0) {
@@ -17862,7 +17879,11 @@ var checkSquashConservation = (opts) => {
       category,
       title,
       "skipped",
-      "no local branch looks like the source of a squash \u2014 nothing to check"
+      "no local branch looks like the source of a squash \u2014 nothing to check",
+      null,
+      false,
+      false,
+      { skipReason: "nothing_applicable" }
     );
   }
   let known = null;
@@ -17900,7 +17921,11 @@ var checkSquashConservation = (opts) => {
       category,
       title,
       "skipped",
-      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`
+      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
+      null,
+      false,
+      false,
+      { skipReason: "nothing_applicable" }
     );
   }
   if (lost.length > 0) {
