@@ -18089,8 +18089,9 @@ var squashCandidates = (opts, head) => {
     ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
     gitOptions2(opts)
   );
-  if (listed.code !== 0) return [];
-  const branches = listed.stdout.split("\n").filter((line2) => line2 !== "").slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+  if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
+  const allBranches = listed.stdout.split("\n").filter((line2) => line2 !== "");
+  const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
   const candidates = [];
   for (const branch of branches) {
     const resolved = execGit(["rev-parse", "--verify", "--quiet", branch], gitOptions2(opts));
@@ -18105,8 +18106,18 @@ var squashCandidates = (opts, head) => {
     if (base === "" || base === sha) continue;
     candidates.push({ branch, sha, base });
   }
-  return candidates;
+  return {
+    candidates,
+    branchesSeen: allBranches.length,
+    branchesChecked: branches.length
+  };
 };
+var scanLimitDetail = (scan2) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan2.branchesSeen} local branches were checked` : "";
+var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? {
+  ...evidence,
+  branches_seen: String(scan2.branchesSeen),
+  branches_checked: String(scan2.branchesChecked)
+} : evidence;
 var checkSquashConservation = (opts) => {
   const title = "squash conservation";
   const id = "squash-conservation";
@@ -18129,19 +18140,20 @@ var checkSquashConservation = (opts) => {
       }
     );
   }
-  const candidates = squashCandidates(opts, head.stdout.trim());
+  const scan2 = squashCandidates(opts, head.stdout.trim());
+  const { candidates } = scan2;
   if (candidates.length === 0) {
     return check(
       id,
       category,
       title,
       "skipped",
-      "no local branch looks like the source of a squash \u2014 nothing to check",
+      `no local branch looks like the source of a squash \u2014 nothing to check${scanLimitDetail(scan2)}`,
       null,
       false,
       false,
       {
-        evidence: { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" },
+        evidence: scanEvidence(scan2, { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" }),
         skipReason: "nothing_applicable"
       }
     );
@@ -18181,17 +18193,17 @@ var checkSquashConservation = (opts) => {
       category,
       title,
       "skipped",
-      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
+      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable${scanLimitDetail(scan2)}`,
       null,
       false,
       false,
       {
-        evidence: {
+        evidence: scanEvidence(scan2, {
           candidates: String(candidates.length),
           checked: "0",
           uncheckable: String(uncheckable),
           lost_count: "0"
-        },
+        }),
         skipReason: "nothing_applicable"
       }
     );
@@ -18204,21 +18216,21 @@ var checkSquashConservation = (opts) => {
       category,
       title,
       "warn",
-      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
+      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan2)}`,
       "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result",
       false,
       void 0,
       {
-        evidence: {
+        evidence: scanEvidence(scan2, {
           candidates: String(candidates.length),
           checked: String(checked),
           uncheckable: String(uncheckable),
           lost_count: String(lost.length)
-        }
+        })
       }
     );
   }
-  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
+  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan2)}` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan2)}`;
   return check(
     id,
     category,
@@ -18229,12 +18241,12 @@ var checkSquashConservation = (opts) => {
     false,
     void 0,
     {
-      evidence: {
+      evidence: scanEvidence(scan2, {
         candidates: String(candidates.length),
         checked: String(checked),
         uncheckable: String(uncheckable),
         lost_count: "0"
-      }
+      })
     }
   );
 };

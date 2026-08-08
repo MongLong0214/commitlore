@@ -21,11 +21,11 @@ const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
 const squashCandidates = (opts, head) => {
     const listed = execGit(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], gitOptions(opts));
     if (listed.code !== 0)
-        return [];
-    const branches = listed.stdout
+        return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
+    const allBranches = listed.stdout
         .split('\n')
-        .filter((line) => line !== '')
-        .slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+        .filter((line) => line !== '');
+    const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
     const candidates = [];
     for (const branch of branches) {
         const resolved = execGit(['rev-parse', '--verify', '--quiet', branch], gitOptions(opts));
@@ -45,8 +45,22 @@ const squashCandidates = (opts, head) => {
             continue;
         candidates.push({ branch, sha, base });
     }
-    return candidates;
+    return {
+        candidates,
+        branchesSeen: allBranches.length,
+        branchesChecked: branches.length,
+    };
 };
+const scanLimitDetail = (scan) => scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
+    ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan.branchesSeen} local branches were checked`
+    : '';
+const scanEvidence = (scan, evidence) => scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
+    ? {
+        ...evidence,
+        branches_seen: String(scan.branchesSeen),
+        branches_checked: String(scan.branchesChecked),
+    }
+    : evidence;
 /**
  * Detects records a squash may have collapsed out of reach, and says so
  * (SPEC §2.4, bug-issue-60 finding 1: nothing invokes `squash-preserve`, and
@@ -86,10 +100,11 @@ export const checkSquashConservation = (opts) => {
             skipReason: 'unborn_head',
         });
     }
-    const candidates = squashCandidates(opts, head.stdout.trim());
+    const scan = squashCandidates(opts, head.stdout.trim());
+    const { candidates } = scan;
     if (candidates.length === 0) {
-        return check(id, category, title, 'skipped', 'no local branch looks like the source of a squash — nothing to check', null, false, false, {
-            evidence: { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' },
+        return check(id, category, title, 'skipped', `no local branch looks like the source of a squash — nothing to check${scanLimitDetail(scan)}`, null, false, false, {
+            evidence: scanEvidence(scan, { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' }),
             skipReason: 'nothing_applicable',
         });
     }
@@ -129,13 +144,13 @@ export const checkSquashConservation = (opts) => {
         }
     }
     if (checked === 0) {
-        return check(id, category, title, 'skipped', `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`, null, false, false, {
-            evidence: {
+        return check(id, category, title, 'skipped', `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable${scanLimitDetail(scan)}`, null, false, false, {
+            evidence: scanEvidence(scan, {
                 candidates: String(candidates.length),
                 checked: '0',
                 uncheckable: String(uncheckable),
                 lost_count: '0',
-            },
+            }),
             skipReason: 'nothing_applicable',
         });
     }
@@ -145,27 +160,27 @@ export const checkSquashConservation = (opts) => {
             .map((entry) => `${entry.recordId} (${entry.branch})`)
             .join(', ');
         const more = lost.length > 5 ? `, and ${lost.length - 5} more` : '';
-        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`, 'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
+        return check(id, category, title, 'warn', `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan)}`, 'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
             'then commit or attach the result', false, undefined, {
-            evidence: {
+            evidence: scanEvidence(scan, {
                 candidates: String(candidates.length),
                 checked: String(checked),
                 uncheckable: String(uncheckable),
                 lost_count: String(lost.length),
-            },
+            }),
         });
     }
     const detail = uncheckable > 0
         ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
-            `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)`
-        : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
+            `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan)}`
+        : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan)}`;
     return check(id, category, title, 'ok', detail, null, false, undefined, {
-        evidence: {
+        evidence: scanEvidence(scan, {
             candidates: String(candidates.length),
             checked: String(checked),
             uncheckable: String(uncheckable),
             lost_count: '0',
-        },
+        }),
     });
 };
 //# sourceMappingURL=history-squash-conservation.js.map

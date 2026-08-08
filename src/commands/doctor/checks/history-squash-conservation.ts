@@ -19,6 +19,12 @@ interface SquashCandidate {
   base: string;
 }
 
+interface SquashCandidateScan {
+  candidates: SquashCandidate[];
+  branchesSeen: number;
+  branchesChecked: number;
+}
+
 /**
  * Local branches that look like `git merge --squash` may have collapsed them
  * into HEAD without a trace: not an ancestor of HEAD (a squash never carries
@@ -27,17 +33,17 @@ interface SquashCandidate {
  * already contains — the ordinary merge or fast-forward case — is not one:
  * nothing was collapsed, so there is nothing this check can lose track of.
  */
-const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidate[] => {
+const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidateScan => {
   const listed = execGit(
     ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
     gitOptions(opts),
   );
-  if (listed.code !== 0) return [];
+  if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
 
-  const branches = listed.stdout
+  const allBranches = listed.stdout
     .split('\n')
-    .filter((line) => line !== '')
-    .slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+    .filter((line) => line !== '');
+  const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
 
   const candidates: SquashCandidate[] = [];
   for (const branch of branches) {
@@ -59,8 +65,29 @@ const squashCandidates = (opts: DoctorOptions, head: string): SquashCandidate[] 
     candidates.push({ branch, sha, base });
   }
 
-  return candidates;
+  return {
+    candidates,
+    branchesSeen: allBranches.length,
+    branchesChecked: branches.length,
+  };
 };
+
+const scanLimitDetail = (scan: SquashCandidateScan): string =>
+  scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
+    ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan.branchesSeen} local branches were checked`
+    : '';
+
+const scanEvidence = (
+  scan: SquashCandidateScan,
+  evidence: Record<string, string>,
+): Record<string, string> =>
+  scan.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES
+    ? {
+        ...evidence,
+        branches_seen: String(scan.branchesSeen),
+        branches_checked: String(scan.branchesChecked),
+      }
+    : evidence;
 
 /**
  * Detects records a squash may have collapsed out of reach, and says so
@@ -113,19 +140,20 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
     );
   }
 
-  const candidates = squashCandidates(opts, head.stdout.trim());
+  const scan = squashCandidates(opts, head.stdout.trim());
+  const { candidates } = scan;
   if (candidates.length === 0) {
     return check(
       id,
       category,
       title,
       'skipped',
-      'no local branch looks like the source of a squash — nothing to check',
+      `no local branch looks like the source of a squash — nothing to check${scanLimitDetail(scan)}`,
         null,
     false,
     false,
     {
-      evidence: { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' },
+      evidence: scanEvidence(scan, { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' }),
       skipReason: 'nothing_applicable',
     },
   );
@@ -178,17 +206,17 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       category,
       title,
       'skipped',
-      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
+      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable${scanLimitDetail(scan)}`,
         null,
     false,
     false,
     {
-      evidence: {
+      evidence: scanEvidence(scan, {
         candidates: String(candidates.length),
         checked: '0',
         uncheckable: String(uncheckable),
         lost_count: '0',
-      },
+      }),
       skipReason: 'nothing_applicable',
     },
   );
@@ -205,18 +233,18 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       category,
       title,
       'warn',
-      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
+      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan)}`,
       'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
         'then commit or attach the result',
       false,
       undefined,
       {
-        evidence: {
+        evidence: scanEvidence(scan, {
           candidates: String(candidates.length),
           checked: String(checked),
           uncheckable: String(uncheckable),
           lost_count: String(lost.length),
-        },
+        }),
       },
     );
   }
@@ -224,8 +252,8 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
   const detail =
     uncheckable > 0
       ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
-        `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)`
-      : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
+        `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan)}`
+      : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan)}`;
   return check(
     id,
     category,
@@ -236,12 +264,12 @@ export const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
     false,
     undefined,
     {
-      evidence: {
+      evidence: scanEvidence(scan, {
         candidates: String(candidates.length),
         checked: String(checked),
         uncheckable: String(uncheckable),
         lost_count: '0',
-      },
+      }),
     },
   );
 };
