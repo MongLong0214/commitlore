@@ -19,6 +19,7 @@
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 import { splitRuledOut } from '../core/trailers.js';
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
@@ -117,10 +118,20 @@ const recordLimit = (raw) => {
 const queryOptions = (paths, options, keys) => {
     const at = evaluationInstant(options.at);
     const limit = recordLimit(options.limit);
-    // Same spelling and same default as `commitlore inject`: with no trusted
-    // author, a `Warn:` grades `claim`. The two routes must answer alike, or the
-    // grade means one thing on the hook and another on the terminal.
-    const trustedAuthors = options.trustedAuthor ?? [];
+    // Same spelling and same resolution as `commitlore inject`: the two routes
+    // must answer alike, or the grade means one thing on the hook and another on
+    // the terminal. That sentence was already here while the two routes did in
+    // fact disagree — `inject` fell back to the configured authors and this did
+    // not, so `context` reported `claim` for a record the hook would have
+    // rendered `directive`.
+    //
+    // Length rather than nullishness, for the reason #484 records: commander
+    // declares this option with a default of `[]`, so an absent flag is an empty
+    // array and never a nullish value.
+    const flagged = options.trustedAuthor ?? [];
+    // This route has no cwd of its own; it reads the repository it was invoked
+    // in, the same one `runQuery` resolves against.
+    const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
     return {
         paths,
         allHistory: options.allHistory === true,

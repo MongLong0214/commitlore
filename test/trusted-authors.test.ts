@@ -191,4 +191,24 @@ describe('#415 through the command line, which is the only path the hook uses', 
     const out = cli(['inject', '--path', 'session.ts', '--trusted-author', INSTALLER], repo);
     expect(out).toMatch(/\[directive\]\s+r-trust01/);
   });
+
+  it('answers the same on the query route as on the hook route', () => {
+    // query.ts carried the sentence "the two routes must answer alike, or the
+    // grade means one thing on the hook and another on the terminal" while the
+    // two routes did in fact disagree: `inject` fell back to the configured
+    // authors and `context` did not. A comment asserting a property is not the
+    // property.
+    commitRecord(INSTALLER, RECORD);
+    seedTrustedAuthor(repo);
+
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[directive\]\s+r-trust01/);
+    expect(cli(['context', 'session.ts'], repo)).toMatch(/r-trust01\s+\S+\s+\[directive\]/);
+  });
+
+  it('keeps the two routes agreeing when nothing is configured', () => {
+    commitRecord(INSTALLER, RECORD);
+
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
+    expect(cli(['context', 'session.ts'], repo)).toMatch(/r-trust01\s+\S+\s+\[claim\]/);
+  });
 });

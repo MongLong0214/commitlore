@@ -28769,7 +28769,8 @@ var recordLimit = (raw) => {
 var queryOptions = (paths, options, keys) => {
   const at = evaluationInstant3(options.at);
   const limit = recordLimit(options.limit);
-  const trustedAuthors = options.trustedAuthor ?? [];
+  const flagged = options.trustedAuthor ?? [];
+  const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
   return {
     paths,
     allHistory: options.allHistory === true,
