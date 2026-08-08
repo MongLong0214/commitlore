@@ -29,4 +29,17 @@
  * for the full "Ruled-out" reasoning.
  */
 import type { Command } from 'commander';
+import type { DoctorCheck } from './model.js';
+/**
+ * The actionable root causes, in the order a user should address them.
+ *
+ * Filtering happens here; remediation-text deduplication belongs to the text
+ * renderer, where it can retain one line for every independently failing row.
+ */
+export declare const computeFixPlan: (checks: readonly DoctorCheck[]) => string[];
+export declare const deriveHeadline: (args: {
+    checks: readonly DoctorCheck[];
+    fixPlan: readonly string[];
+    status: "ok" | "degraded" | "failed";
+}) => string;
 export declare const register: (program: Command) => void;

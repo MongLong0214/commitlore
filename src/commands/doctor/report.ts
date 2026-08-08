@@ -31,8 +31,40 @@
 
 import type { Command } from 'commander';
 
+import type { DoctorCheck } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
+
+/**
+ * The actionable root causes, in the order a user should address them.
+ *
+ * Filtering happens here; remediation-text deduplication belongs to the text
+ * renderer, where it can retain one line for every independently failing row.
+ */
+export const computeFixPlan = (checks: readonly DoctorCheck[]): string[] => [
+  ...checks.filter((check) => check.status === 'fail' && check.blockedBy === undefined),
+  ...checks.filter((check) => check.status === 'warn' && check.blockedBy === undefined),
+].map((check) => check.id);
+
+const headlineWithoutAction = (status: 'ok' | 'degraded' | 'failed'): string => {
+  if (status === 'ok') return 'Doctor is healthy.';
+  if (status === 'degraded') return 'Doctor is usable; some checks could not be verified.';
+  return 'Doctor failed; no actionable checks are available.';
+};
+
+export const deriveHeadline = (args: {
+  checks: readonly DoctorCheck[];
+  fixPlan: readonly string[];
+  status: 'ok' | 'degraded' | 'failed';
+}): string => {
+  const nextId = args.fixPlan[0];
+  if (nextId === undefined) return headlineWithoutAction(args.status);
+
+  const next = args.checks.find((check) => check.id === nextId);
+  if (next === undefined) return headlineWithoutAction(args.status);
+
+  return `Next action [${next.id}]: ${next.detail}${next.fix === null ? '' : ` — ${next.fix}`}`;
+};
 
 export const register = (program: Command): void => {
   program
