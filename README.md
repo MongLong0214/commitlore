@@ -91,9 +91,33 @@ the repository, so the agent is told to treat it as information rather than as a
 order. A record that *was* signed by a trusted author renders as `[directive]`.
 
 The module boundary is in front of the agent before it proposes the change,
-rather than in a review comment after. Whether it acts on that is an
-agent-behaviour question this project has not answered — see the measurement
-below, and [what it does not show](docs/evidence.md).
+rather than in a review comment after.
+
+**Whether it acts on that is now measured.** Across 1,160 registered runs, an
+agent handed the repository's active records re-proposed a ruled-out approach in
+**2.8%** of them (16/580). Without them: **18.8%** (109/579).
+
+| arm | re-proposed a ruled-out approach |
+|---|---:|
+| the agent alone | **18.8%** (109/579) |
+| **with CommitLore** | **2.8%** (16/580) |
+
+Fisher exact two-tailed `p = 0.0000`; difference −16.1pp, Newcombe 95% −19.6 to
+−12.7. **The threshold was registered at 6.6pp before the run**, and the
+preregistration predicted a *smaller* effect than it got — that prediction, with
+its stated probabilities, is in
+[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2 and it was
+wrong.
+
+Three limits belong beside the number. Every record in that run rendered
+`[claim]`, with the payload telling the agent not to act on it as an order — the
+`[directive]` tier became reachable only afterwards, so **this measures the
+weaker of the two**. It is one model, one harness, and ten constructed
+fixtures. And the oracle reads the final implementation state: it shows agents
+which received records re-proposed less often, not that any of them read
+anything. Method, exclusions and the per-arm truncation split:
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) and
+[what it does not show](docs/evidence.md).
 
 ## See it work
 
