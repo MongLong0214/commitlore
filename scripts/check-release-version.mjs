@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Release gate (`.github/workflows/release.yml`): the pushed tag, this
- * package's declared version, and the CLI's own `--version` output must all
- * agree before anything is built or attached to a release.
+ * package's declared version, every release manifest's declared version, and
+ * the CLI's own `--version` output must all agree before anything is built or
+ * attached to a release.
  *
  * This matters more than the usual "the numbers should match" check. A tag
  * is immutable the moment someone has fetched it, and a release asset is
@@ -11,11 +12,16 @@
  * with a `v0.1.1` and an explanation. Catching the mismatch before the build
  * matrix runs is the only point where it is still cheap.
  *
- * Compares three sources:
+ * Compares every release-version source:
  *   - the git tag this workflow triggered on (`GITHUB_REF_NAME`, e.g.
  *     `v0.1.0`; a plain argument for local testing), with exactly one
  *     leading `v` stripped
- *   - `package.json`'s `"version"` field
+ *   - `package.json`'s `.version` field
+ *   - `.claude-plugin/plugin.json`'s `.version` field — the manifest Claude
+ *     Code resolves when installing the canonical plugin distribution
+ *   - `package-lock.json`'s `.version` and `.packages[""].version` fields.
+ *     They are independent root-package declarations and must both move with
+ *     the release, while dependency versions in that lockfile do not.
  *   - `node dist/commitlore.mjs --version` — the same value every build of
  *     the CLI reports, script or compiled binary, since both read it from
  *     the same `packageVersion()` (`src/core/paths.ts`) against the same
@@ -37,6 +43,36 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const BUNDLE = join(REPO_ROOT, 'dist', 'commitlore.mjs');
 
+/**
+ * A missing or malformed manifest is an inability to run this gate (exit 2),
+ * not a version disagreement (exit 1). Name every field it would have
+ * supplied so the release operator knows exactly what to restore or repair.
+ */
+const readManifest = (relativePath, fields) => {
+  const path = join(REPO_ROOT, relativePath);
+  const sources = fields.map((field) => `${relativePath} ${field}`).join(' and ');
+  if (!existsSync(path)) {
+    console.error(`ERROR: ${sources} cannot be checked: required manifest is missing`);
+    process.exit(2);
+  }
+
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`ERROR: ${sources} cannot be checked: invalid JSON (${reason})`);
+    process.exit(2);
+  }
+};
+
+const requiredVersion = (value, source) => {
+  if (typeof value !== 'string' || value === '') {
+    console.error(`ERROR: ${source} must be a non-empty version string`);
+    process.exit(2);
+  }
+  return value;
+};
+
 const tagArg = process.argv[2] ?? process.env.GITHUB_REF_NAME;
 if (!tagArg) {
   console.error('ERROR: no tag given — pass one as an argument or set GITHUB_REF_NAME');
@@ -54,31 +90,44 @@ if (!existsSync(BUNDLE)) {
   process.exit(2);
 }
 
-const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
-const pkgVersion = pkg.version;
-if (typeof pkgVersion !== 'string' || pkgVersion === '') {
-  console.error('ERROR: package.json has no "version" string');
-  process.exit(2);
-}
+const pkg = readManifest('package.json', ['.version']);
+const plugin = readManifest('.claude-plugin/plugin.json', ['.version']);
+const packageLock = readManifest('package-lock.json', ['.version', '.packages[""].version']);
+
+const pkgVersion = requiredVersion(pkg.version, 'package.json .version');
+const pluginVersion = requiredVersion(plugin.version, '.claude-plugin/plugin.json .version');
+const packageLockVersion = requiredVersion(packageLock.version, 'package-lock.json .version');
+const packageLockRootVersion = requiredVersion(
+  packageLock.packages?.['']?.version,
+  'package-lock.json .packages[""].version',
+);
 
 const cliVersion = execFileSync(process.execPath, [BUNDLE, '--version'], { encoding: 'utf8' }).trim();
 
 const mismatches = [];
-if (tagVersion !== pkgVersion) {
-  mismatches.push(`tag "${tagArg}" (${tagVersion}) != package.json "version" (${pkgVersion})`);
-}
-if (pkgVersion !== cliVersion) {
-  mismatches.push(`package.json "version" (${pkgVersion}) != \`commitlore --version\` (${cliVersion})`);
-}
-if (tagVersion !== cliVersion) {
-  mismatches.push(`tag "${tagArg}" (${tagVersion}) != \`commitlore --version\` (${cliVersion})`);
+const versionSources = [
+  ['package.json .version', pkgVersion],
+  ['.claude-plugin/plugin.json .version', pluginVersion],
+  ['package-lock.json .version', packageLockVersion],
+  ['package-lock.json .packages[""].version', packageLockRootVersion],
+  ['dist/commitlore.mjs --version', cliVersion],
+];
+for (const [source, version] of versionSources) {
+  if (tagVersion !== version) {
+    mismatches.push(`tag "${tagArg}" (${tagVersion}) != ${source} (${version})`);
+  }
 }
 
 if (mismatches.length > 0) {
   console.error(`ERROR: version mismatch — refusing to release (${mismatches.length} disagreement(s)):`);
   for (const m of mismatches) console.error(`  - ${m}`);
-  console.error('  Delete the tag, fix package.json (and rebuild), and push a corrected tag.');
+  console.error('  Delete the tag, fix every named manifest (and rebuild), and push a corrected tag.');
   process.exit(1);
 }
 
-console.log(`version consistent: tag ${tagArg} == package.json ${pkgVersion} == commitlore --version ${cliVersion}`);
+console.log(
+  `version consistent: tag ${tagArg} == package.json .version ${pkgVersion} == ` +
+    `.claude-plugin/plugin.json .version ${pluginVersion} == package-lock.json .version ` +
+    `${packageLockVersion} == package-lock.json .packages[""].version ${packageLockRootVersion} == ` +
+    `dist/commitlore.mjs --version ${cliVersion}`,
+);
