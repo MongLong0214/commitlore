@@ -32,7 +32,7 @@
 
 import type { Command } from 'commander';
 
-import { formatReport, runDoctor, type DoctorReport } from './doctor.js';
+import { formatCheckReport, runDoctor, type DoctorReport } from './doctor.js';
 import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
@@ -107,7 +107,7 @@ const runDoctorStep = (opts: InitOptions): InitStep => {
     step: 'doctor',
     title: 'doctor --fix',
     code,
-    lines: formatReport(report).trimEnd().split('\n'),
+    lines: formatCheckReport(report).trimEnd().split('\n'),
     detail: report,
   };
 };

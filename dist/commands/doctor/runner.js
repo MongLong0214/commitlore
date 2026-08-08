@@ -1,0 +1,95 @@
+/**
+ * Doctor's registry runner.
+ *
+ * It owns exception containment and timing around the ordered registry, so
+ * check modules only decide their own verdicts and rendering cannot alter run order.
+ */
+import { check, defaultDoctorContext } from './model.js';
+import { CHECK_REGISTRY, selectChecks } from './registry.js';
+import { buildReport } from './report.js';
+/**
+ * A check that threw becomes a row rather than a stack trace.
+ *
+ * The user who most needs a diagnosis is the one whose repository is in a
+ * state some check did not anticipate. Losing the other twelve answers to that
+ * is the worst possible trade, so the throw is contained and reported as what
+ * it is: this check could not complete.
+ */
+const containedRun = (definition, ctx, dependencies) => {
+    try {
+        return definition.run(ctx, dependencies);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return check(definition.id, definition.category, definition.title, 'fail', 'this check could not complete, so its subsystem is unreported', null, false, true, {
+            evidence: { error: message.split('\n')[0] ?? 'unknown error' },
+            optional: definition.optional,
+        });
+    }
+};
+const statusRank = (status) => status === 'fail' ? 3 : status === 'warn' ? 2 : status === 'skipped' ? 1 : 0;
+const collapseBlockedBy = (checks) => {
+    const byId = new Map(checks.map((row) => [row.id, row]));
+    return checks.map((row) => {
+        if (row.blockedBy === undefined)
+            return row;
+        const visited = new Set([row.id]);
+        let root = byId.get(row.blockedBy);
+        while (root !== undefined && root.blockedBy !== undefined) {
+            if (visited.has(root.id)) {
+                throw new Error(`doctor check ${row.id} has a cyclic blockedBy chain`);
+            }
+            visited.add(root.id);
+            root = byId.get(root.blockedBy);
+        }
+        if (root === undefined) {
+            throw new Error(`doctor check ${row.id} names an unknown blocker`);
+        }
+        if (root.status === 'ok') {
+            throw new Error(`doctor check ${row.id} names an ok blocker`);
+        }
+        if (statusRank(row.status) > statusRank(root.status)) {
+            throw new Error(`doctor check ${row.id} is more severe than its blocker`);
+        }
+        return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
+    });
+};
+export const runDoctor = (opts = {}, context) => {
+    // Validate and choose the registry before constructing effects or invoking a
+    // check. An invalid selection is therefore a usage error that cannot touch
+    // the repository, and a filtered row cannot pay for an unselected probe.
+    const selection = selectChecks(opts);
+    const ctx = {
+        ...(context ?? defaultDoctorContext(opts)),
+        opts,
+        selectedIds: new Set(selection.definitions.map((definition) => definition.id)),
+    };
+    const completed = new Map();
+    const checks = selection.definitions.map((definition) => {
+        const dependencies = new Map();
+        for (const dependency of definition.dependencies) {
+            const row = completed.get(dependency);
+            // A dependency outside a partial selection must remain unrun. Checks
+            // already model an unavailable dependency as an absent map entry; the
+            // full registry path still supplies every declared dependency.
+            if (row !== undefined)
+                dependencies.set(dependency, row);
+        }
+        const started = ctx.now();
+        const contained = containedRun(definition, ctx, dependencies);
+        // The registry is the declaration point for optionality. Containment must
+        // preserve it, and a check implementation cannot accidentally disagree.
+        const row = contained.optional === definition.optional
+            ? contained
+            : { ...contained, optional: definition.optional };
+        const elapsed = Number((ctx.now() - started) / 1000000n);
+        const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+        completed.set(definition.id, timed);
+        return timed;
+    });
+    const collapsed = collapseBlockedBy(checks);
+    return selection.selection === undefined
+        ? buildReport(collapsed)
+        : buildReport(collapsed, { selection: selection.selection, totalChecks: CHECK_REGISTRY.length });
+};
+//# sourceMappingURL=runner.js.map

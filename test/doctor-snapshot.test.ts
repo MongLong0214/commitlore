@@ -15,7 +15,7 @@
 
 import { execFileSync, type SpawnSyncReturns } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,10 +24,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   CHECK_REGISTRY,
   evaluateInjectRun,
+  formatCheckReport,
   formatReport,
   runDoctor,
   type CheckDefinition,
   type DoctorCheck,
+  type DoctorReport,
 } from '../src/commands/doctor.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
@@ -85,6 +87,18 @@ const populated = (label: string, hookBin: string): string => {
  * promises not to move: the check set, its order, each status, and the fix
  * line offered.
  */
+/**
+ * The check writes the interpreter path home-relative, so the raw `execPath`
+ * replacements below never see it on a machine where node lives under `$HOME`.
+ * Producing the same tilde form here catches the laptop case; on a runner,
+ * where node is outside `$HOME`, this returns the absolute path the
+ * replacements already handle, so both environments normalise alike.
+ */
+const asWritten = (value: string): string => {
+  const home = homedir();
+  return value.startsWith(`${home}/`) ? `~/${value.slice(home.length + 1)}` : value;
+};
+
 const normalise = (text: string, repo: string): string =>
   text
     .split('\n')
@@ -98,6 +112,8 @@ const normalise = (text: string, repo: string): string =>
         // The interpreter's path is the machine's, not the report's: nvm on a
         // laptop, hostedtoolcache on a runner. Leaving it in makes the
         // snapshot a record of where it was first generated.
+        .replaceAll(asWritten(realpathSync(process.execPath)), '<node>')
+        .replaceAll(asWritten(process.execPath), '<node>')
         .replaceAll(realpathSync(process.execPath), '<node>')
         .replaceAll(process.execPath, '<node>')
         // mkdtemp's random suffix varies per run; the path shape is what
@@ -108,6 +124,7 @@ const normalise = (text: string, repo: string): string =>
         .replace(/\b[0-9a-f]{7,12}\b/g, '<short-sha>')
         .replace(/\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?/g, '<version>')
         .replace(/\b\d+\s?ms\b/g, '<ms>')
+        .replace(/durationMs: \d+/g, 'durationMs: <ms>')
         .replace(/git version .*/, 'git version <git>')
         .replace(/\/[^\s'"]*commitlore[^\s'"]*/g, '<path>'),
     )
@@ -154,6 +171,136 @@ describe('#462 doctor text report, pinned', () => {
       expect(typeof row.fixed).toBe('boolean');
       expect(row.fix === null || typeof row.fix === 'string').toBe(true);
     }
+  });
+});
+
+/** #470 deliberately adds this triage header; the check block stays pinned below. */
+describe('#470 doctor text report header', () => {
+  const fixtureCheck = (
+    id: string,
+    status: DoctorCheck['status'],
+    detail: string,
+    fix: string | null,
+  ): DoctorCheck => ({
+    id,
+    title: id,
+    status,
+    needsAttention: status === 'warn' || status === 'fail',
+    detail,
+    fix,
+    fixed: false,
+    category: 'runtime',
+    severity: status === 'fail' ? 'error' : status === 'warn' ? 'warning' : 'info',
+    evidence: { fixture: id },
+    optional: false,
+  });
+
+  const mixedReport = (): DoctorReport => {
+    const sharedFix = 'commitlore hooks install';
+    const checks = [
+      fixtureCheck('root-failure', 'fail', 'the root finding needs repair', sharedFix),
+      fixtureCheck('first-echo', 'warn', 'the first dependent is affected', sharedFix),
+      fixtureCheck('second-echo', 'warn', 'the second dependent is affected', sharedFix),
+      fixtureCheck('third-echo', 'warn', 'the third dependent is affected', sharedFix),
+    ];
+    return {
+      schema: 'commitlore_doctor.v2',
+      version: 'fixture',
+      status: 'failed',
+      installSource: 'unknown',
+      headline: 'Next action [root-failure]: the root finding needs repair — commitlore hooks install',
+      summary: { total: 4, ok: 0, warn: 3, fail: 1, skipped: 0, durationMs: 412 },
+      fixPlan: checks.map((check) => check.id),
+      checks,
+      exitCode: 1,
+    };
+  };
+
+  it('puts the headline on line one and the summary on line two for mixed statuses', () => {
+    const lines = formatReport(mixedReport()).trimEnd().split('\n');
+
+    expect(lines.slice(0, 2)).toEqual([
+      'Next action [root-failure]: the root finding needs repair — commitlore hooks install',
+      '0 ok, 3 warnings, 1 failed, 0 skipped (412ms)',
+    ]);
+  });
+
+  it('prints four plan entries but a shared fix string only once', () => {
+    const plan = formatReport(mixedReport()).trimEnd().split('\n').slice(2, 6);
+
+    expect(plan).toEqual([
+      '1. [fail] root-failure — the root finding needs repair (commitlore hooks install)',
+      '2. [warn] first-echo — the first dependent is affected',
+      '3. [warn] second-echo — the second dependent is affected',
+      '4. [warn] third-echo — the third dependent is affected',
+    ]);
+  });
+
+  it('renders a degraded report with no actionable entry as usable, never healthy', () => {
+    const report: DoctorReport = {
+      schema: 'commitlore_doctor.v2',
+      version: 'fixture',
+      status: 'degraded',
+      installSource: 'unknown',
+      headline: 'Doctor is usable; some checks could not be verified.',
+      summary: { total: 1, ok: 0, warn: 0, fail: 0, skipped: 1, durationMs: 4 },
+      fixPlan: [],
+      checks: [fixtureCheck('unverified', 'skipped', 'a source could not be read', null)],
+      exitCode: 0,
+    };
+
+    const headline = formatReport(report).split('\n', 1)[0];
+    expect(headline).toBe('Doctor is usable; some checks could not be verified.');
+    expect(headline).not.toContain('healthy');
+  });
+
+  it('keeps the per-check tail byte-identical to the pre-ticket rows', () => {
+    const broken = populated('tailbroken', join(temp('tailnowhere'), 'missing.mjs'));
+    const working = populated('tailworking', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+
+    expect({
+      broken: normalise(formatCheckReport(runDoctor({ cwd: broken })), broken),
+      working: normalise(formatCheckReport(runDoctor({ cwd: working })), working),
+    }).toMatchSnapshot();
+  });
+
+  it('pins verbose diagnostics while the default adds no per-check lines', () => {
+    const repo = populated('verbose', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const report = runDoctor({ cwd: repo });
+    const plain = formatReport(report);
+    const verbose = normalise(formatReport(report, { verbose: true }), repo);
+    const cliVerbose = normalise(
+      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--verbose'], {
+        cwd: repo,
+        encoding: 'utf8',
+      }),
+      repo,
+    );
+
+    expect(plain).not.toMatch(/^\s+(?:evidence\.|skipReason:|durationMs:)/m);
+    expect(verbose).toContain('evidence.');
+    expect(verbose).toContain('skipReason:');
+    expect(verbose).toContain('durationMs:');
+    expect(cliVerbose).toBe(verbose);
+    expect(verbose).toMatchSnapshot();
+  });
+
+  it('matches NO_COLOR output byte-for-byte when stdout is non-TTY', () => {
+    const repo = populated('no-color', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const env = { ...process.env };
+    delete env.NO_COLOR;
+    const run = (childEnv: NodeJS.ProcessEnv): string =>
+      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor'], {
+        cwd: repo,
+        encoding: 'utf8',
+        env: childEnv,
+      });
+
+    const plain = run(env);
+    // Wall-clock durations are intentionally measured on each command run;
+    // they are the only run-specific part of otherwise byte-identical streams.
+    expect(normalise(run({ ...env, NO_COLOR: '1' }), repo)).toBe(normalise(plain, repo));
+    expect(plain).not.toContain('\u001b');
   });
 });
 
@@ -282,6 +429,11 @@ describe('#463 the registry and runner', () => {
       expect(row?.status).toBe('fail');
       expect(row?.evidence['error']).toBe('exploded on purpose');
       expect(report.checks).toHaveLength(CHECK_REGISTRY.length);
+      // #469's honesty clamp reads the final row set, including this runner-
+      // synthesized failure. A containment row must never leave the envelope
+      // sounding healthy merely because the original check did not return.
+      expect(report.status).not.toBe('ok');
+      expect(report.status).toBe('failed');
       expect(report.exitCode).toBe(1);
     } finally {
       (victim as { run: CheckDefinition['run'] }).run = original;

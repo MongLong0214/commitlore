@@ -88,6 +88,28 @@ is in [protocol.md](protocol.md).
 `prepare-commit-msg`, `post-commit` and `pre-push` are internal hook commands.
 Git invokes them; you do not.
 
+### `doctor --json` envelope
+
+`commitlore doctor --json` emits the versioned `commitlore_doctor.v2` envelope.
+Consumers should pin `schema`, then read only the fields they need: the contract
+is additive within that schema. New fields may appear, but existing fields keep
+their names, types, and meanings; removing or repurposing one requires a new
+schema id.
+
+The envelope contains the producing CLI `version`; aggregate `status`
+(`ok`, `degraded`, or `failed`); offline-detected `installSource` (`plugin`,
+`npm`, `npx`, `source`, or `unknown`); a human `headline`; ordered `fixPlan`;
+and the registry-ordered `checks` rows. `summary` has `total`, one count for
+each check status (`ok`, `warn`, `fail`, `skipped`), and `durationMs`, the sum
+of the check durations. Those counts always add up to `total`, which equals
+`checks.length`.
+
+`status` and `exitCode` answer different questions. Any non-optional failed
+check makes the status `failed` and exits 1. Otherwise any non-optional warning
+or skipped check makes it `degraded`, which exits 0; only an all-`ok`
+non-optional run is `ok`. `selection` is reserved for filtered reports. It is
+absent (never `null`) from the current unfiltered report.
+
 ## Sharing records with a team
 
 A record in a commit message travels with the commit. A record in
