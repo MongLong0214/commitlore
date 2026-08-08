@@ -14,6 +14,12 @@
  */
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skipped';
 
+/** The report-level verdict a JSON consumer can branch on. */
+export type DoctorStatus = 'ok' | 'degraded' | 'failed';
+
+/** How this CLI installation was reached, without probing the network. */
+export type InstallSource = 'plugin' | 'npm' | 'npx' | 'source' | 'unknown';
+
 /**
  * The subsystem a check speaks for (PRD §2.1). A row that cannot name one
  * cannot be selected, grouped or rolled up, so it is supplied at construction
@@ -81,8 +87,31 @@ export interface DoctorCheck {
 }
 
 export interface DoctorReport {
+  /** A consumer pins this schema id, not an incidental set of object keys. */
+  schema: 'commitlore_doctor.v2';
+  /** The CLI version that produced this report. */
+  version: string;
+  /** Derived once from the final completed rows. */
+  status: DoctorStatus;
+  /** The detected distribution channel for the running CLI. */
+  installSource: InstallSource;
+  /** The first actionable finding, or a status-appropriate no-action message. */
+  headline: string;
+  /** Counts and the sum of all per-check durations. */
+  summary: {
+    total: number;
+    ok: number;
+    warn: number;
+    fail: number;
+    skipped: number;
+    durationMs: number;
+  };
+  /** Root causes in remediation order. */
+  fixPlan: string[];
+  /** Reserved for the filters ticket; omitted, never null, on a full run. */
+  selection?: string[];
   checks: DoctorCheck[];
-  /** 0 unless some check is `fail` — warnings do not fail the command (SPEC §10: 1 is a finding). */
+  /** 1 iff a non-optional check failed; degraded reports exit 0. */
   exitCode: number;
 }
 

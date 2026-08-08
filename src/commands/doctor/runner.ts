@@ -7,6 +7,7 @@
 
 import { check, type DoctorCheck, type DoctorContext, type DoctorOptions, type DoctorReport } from './model.js';
 import { CHECK_REGISTRY, type CheckDefinition } from './registry.js';
+import { buildReport } from './report.js';
 
 /**
  * A check that threw becomes a row rather than a stack trace.
@@ -34,7 +35,10 @@ const containedRun = (
       null,
       false,
       true,
-      { evidence: { error: message.split('\n')[0] ?? 'unknown error' } },
+      {
+        evidence: { error: message.split('\n')[0] ?? 'unknown error' },
+        optional: definition.optional,
+      },
     );
   }
 };
@@ -83,15 +87,17 @@ export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
       dependencies.set(dependency, row);
     }
     const started = ctx.now();
-    const row = containedRun(definition, ctx, dependencies);
+    const contained = containedRun(definition, ctx, dependencies);
+    // The registry is the declaration point for optionality. Containment must
+    // preserve it, and a check implementation cannot accidentally disagree.
+    const row = contained.optional === definition.optional
+      ? contained
+      : { ...contained, optional: definition.optional };
     const elapsed = Number((ctx.now() - started) / 1_000_000n);
     const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
     completed.set(definition.id, timed);
     return timed;
   });
   const collapsed = collapseBlockedBy(checks);
-  return {
-    checks: collapsed,
-    exitCode: collapsed.some((entry) => entry.status === 'fail') ? 1 : 0,
-  };
+  return buildReport(collapsed);
 };

@@ -282,6 +282,11 @@ describe('#463 the registry and runner', () => {
       expect(row?.status).toBe('fail');
       expect(row?.evidence['error']).toBe('exploded on purpose');
       expect(report.checks).toHaveLength(CHECK_REGISTRY.length);
+      // #469's honesty clamp reads the final row set, including this runner-
+      // synthesized failure. A containment row must never leave the envelope
+      // sounding healthy merely because the original check did not return.
+      expect(report.status).not.toBe('ok');
+      expect(report.status).toBe('failed');
       expect(report.exitCode).toBe(1);
     } finally {
       (victim as { run: CheckDefinition['run'] }).run = original;

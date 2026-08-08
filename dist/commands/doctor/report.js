@@ -28,6 +28,9 @@
  * mistake is still local and cheap to fix — see the check's own doc comment
  * for the full "Ruled-out" reasoning.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
+import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
 /**
@@ -56,13 +59,87 @@ export const deriveHeadline = (args) => {
         return headlineWithoutAction(args.status);
     return `Next action [${next.id}]: ${next.detail}${next.fix === null ? '' : ` — ${next.fix}`}`;
 };
+/**
+ * The report's only status derivation.
+ *
+ * This must receive the runner's final row set, after containment has turned a
+ * thrown check into a failed row. Otherwise a crash could leave the envelope
+ * looking healthy even though its checks say it was not fully examined.
+ */
+export const deriveStatus = (checks) => {
+    const required = checks.filter((check) => !check.optional);
+    if (required.some((check) => check.status === 'fail'))
+        return 'failed';
+    if (required.some((check) => check.status === 'warn' || check.status === 'skipped')) {
+        return 'degraded';
+    }
+    return 'ok';
+};
+/**
+ * Classify the installation from paths and the plugin environment only. This
+ * deliberately spawns nothing: doctor reports the channel, it does not ask it
+ * whether an update exists.
+ */
+export const deriveInstallSource = ({ entryPath = installedPath('dist', 'commitlore.mjs'), packageRoot = PACKAGE_ROOT, pluginRoot = process.env['CLAUDE_PLUGIN_ROOT'], } = {}) => {
+    if (pluginRoot !== undefined && pluginRoot !== '')
+        return 'plugin';
+    const segments = resolve(entryPath).split(sep);
+    if (segments.includes('_npx'))
+        return 'npx';
+    if (segments.includes('node_modules'))
+        return 'npm';
+    try {
+        const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+        if (manifest.name === 'commitlore' && existsSync(join(packageRoot, '.git')))
+            return 'source';
+    }
+    catch {
+        // A malformed package manifest cannot license a source classification.
+    }
+    return 'unknown';
+};
+const summarize = (checks) => {
+    const summary = {
+        total: checks.length,
+        ok: 0,
+        warn: 0,
+        fail: 0,
+        skipped: 0,
+        durationMs: 0,
+    };
+    for (const check of checks) {
+        summary[check.status] += 1;
+        summary.durationMs += check.durationMs ?? 0;
+    }
+    return summary;
+};
+/**
+ * The final JSON envelope constructor. `selection` is intentionally absent:
+ * this command has no filter surface yet, and the additive contract reserves
+ * absence rather than a null placeholder for it.
+ */
+export const buildReport = (checks) => {
+    const status = deriveStatus(checks);
+    const fixPlan = computeFixPlan(checks);
+    return {
+        schema: 'commitlore_doctor.v2',
+        version: packageVersion(),
+        status,
+        installSource: deriveInstallSource(),
+        headline: deriveHeadline({ checks, fixPlan, status }),
+        summary: summarize(checks),
+        fixPlan,
+        checks,
+        exitCode: checks.some((check) => !check.optional && check.status === 'fail') ? 1 : 0,
+    };
+};
 export const register = (program) => {
     program
         .command('doctor')
         .description('check that this repository can carry and share CommitLore records')
         .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
         .option('--json', 'emit the report as JSON')
-        .addHelpText('after', '\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC §10).')
+        .addHelpText('after', '\nExit codes: 0 no non-optional check failed, 1 a non-optional check failed, 2 usage error (SPEC §10).')
         .action((options) => {
         const report = runDoctor({ fix: options.fix === true });
         process.stdout.write(options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report));

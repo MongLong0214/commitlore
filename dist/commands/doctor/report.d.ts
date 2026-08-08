@@ -29,7 +29,7 @@
  * for the full "Ruled-out" reasoning.
  */
 import type { Command } from 'commander';
-import type { DoctorCheck } from './model.js';
+import type { DoctorCheck, DoctorReport, DoctorStatus, InstallSource } from './model.js';
 /**
  * The actionable root causes, in the order a user should address them.
  *
@@ -40,6 +40,30 @@ export declare const computeFixPlan: (checks: readonly DoctorCheck[]) => string[
 export declare const deriveHeadline: (args: {
     checks: readonly DoctorCheck[];
     fixPlan: readonly string[];
-    status: "ok" | "degraded" | "failed";
+    status: DoctorStatus;
 }) => string;
+/**
+ * The report's only status derivation.
+ *
+ * This must receive the runner's final row set, after containment has turned a
+ * thrown check into a failed row. Otherwise a crash could leave the envelope
+ * looking healthy even though its checks say it was not fully examined.
+ */
+export declare const deriveStatus: (checks: readonly DoctorCheck[]) => DoctorStatus;
+/**
+ * Classify the installation from paths and the plugin environment only. This
+ * deliberately spawns nothing: doctor reports the channel, it does not ask it
+ * whether an update exists.
+ */
+export declare const deriveInstallSource: ({ entryPath, packageRoot, pluginRoot, }?: {
+    entryPath?: string;
+    packageRoot?: string;
+    pluginRoot?: string;
+}) => InstallSource;
+/**
+ * The final JSON envelope constructor. `selection` is intentionally absent:
+ * this command has no filter surface yet, and the additive contract reserves
+ * absence rather than a null placeholder for it.
+ */
+export declare const buildReport: (checks: DoctorCheck[]) => DoctorReport;
 export declare const register: (program: Command) => void;

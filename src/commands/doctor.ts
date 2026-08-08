@@ -19,6 +19,8 @@ export type {
   DoctorContext,
   DoctorOptions,
   DoctorReport,
+  DoctorStatus,
+  InstallSource,
   Severity,
   SkipReason,
 } from './doctor/model.js';

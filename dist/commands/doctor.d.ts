@@ -11,4 +11,4 @@ export { CHECK_REGISTRY, type CheckDefinition } from './doctor/registry.js';
 export { formatReport } from './doctor/render.js';
 export { register } from './doctor/report.js';
 export { runDoctor } from './doctor/runner.js';
-export type { Category, CheckStatus, DoctorCheck, DoctorContext, DoctorOptions, DoctorReport, Severity, SkipReason, } from './doctor/model.js';
+export type { Category, CheckStatus, DoctorCheck, DoctorContext, DoctorOptions, DoctorReport, DoctorStatus, InstallSource, Severity, SkipReason, } from './doctor/model.js';

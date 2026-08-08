@@ -443,8 +443,8 @@ is in `docs/DOCTOR-PRD.md` §9.
 - **A dedicated install-source check** | it was either a fourteenth check
   (a behaviour change the migration would have to sequence) or buried
   evidence. The envelope keeps the `installSource` field (#433 justifies
-  naming the channel), and the resolved entry path rides `cli-runtime`'s
-  evidence as `entry_path` — inspectable without a new row
+  naming the channel), and the resolved entry path already rides
+  `cli-runtime`'s evidence as `entry` — inspectable without a new row
 - **SetupDoctor's capability/operation-readiness matrix** (`capabilities`,
   `OperationReadinessRow`) | it exists because logic-pro-mcp routes
   operations across channels with per-operation planners; CommitLore has no

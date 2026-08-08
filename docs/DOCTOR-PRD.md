@@ -433,9 +433,9 @@ in the environment or the resolved entry path under the plugin root →
 npx cache segment (`_npx`) → `npx`; a checkout (entry next to a `.git` with
 this package's name) → `source`; otherwise `unknown`. These heuristics are
 asserted per-surface in tests; until a surface has a test, its detection is
-marked `unknown` rather than guessed. The resolved entry path is recorded as
-`entry_path` in `cli-runtime`'s evidence — a v2-additive evidence key on an
-existing check, so the classification is inspectable without the dedicated
+marked `unknown` rather than guessed. The resolved entry path is already
+recorded as `entry` in `cli-runtime`'s evidence, so the classification is
+inspectable without the dedicated
 fourteenth check the first revision implied (a review finding: that check
 was either a behaviour change the migration would have to sequence, or
 buried evidence). Why the field earns its place: #433 — an installed plugin

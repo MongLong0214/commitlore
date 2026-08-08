@@ -6,6 +6,7 @@
  */
 import { check } from './model.js';
 import { CHECK_REGISTRY } from './registry.js';
+import { buildReport } from './report.js';
 /**
  * A check that threw becomes a row rather than a stack trace.
  *
@@ -20,7 +21,10 @@ const containedRun = (definition, ctx, dependencies) => {
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return check(definition.id, definition.category, definition.title, 'fail', 'this check could not complete, so its subsystem is unreported', null, false, true, { evidence: { error: message.split('\n')[0] ?? 'unknown error' } });
+        return check(definition.id, definition.category, definition.title, 'fail', 'this check could not complete, so its subsystem is unreported', null, false, true, {
+            evidence: { error: message.split('\n')[0] ?? 'unknown error' },
+            optional: definition.optional,
+        });
     }
 };
 const statusRank = (status) => status === 'fail' ? 3 : status === 'warn' ? 2 : status === 'skipped' ? 1 : 0;
@@ -63,16 +67,18 @@ export const runDoctor = (opts = {}) => {
             dependencies.set(dependency, row);
         }
         const started = ctx.now();
-        const row = containedRun(definition, ctx, dependencies);
+        const contained = containedRun(definition, ctx, dependencies);
+        // The registry is the declaration point for optionality. Containment must
+        // preserve it, and a check implementation cannot accidentally disagree.
+        const row = contained.optional === definition.optional
+            ? contained
+            : { ...contained, optional: definition.optional };
         const elapsed = Number((ctx.now() - started) / 1000000n);
         const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
         completed.set(definition.id, timed);
         return timed;
     });
     const collapsed = collapseBlockedBy(checks);
-    return {
-        checks: collapsed,
-        exitCode: collapsed.some((entry) => entry.status === 'fail') ? 1 : 0,
-    };
+    return buildReport(collapsed);
 };
 //# sourceMappingURL=runner.js.map
