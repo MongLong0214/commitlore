@@ -21,7 +21,12 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { formatReport, runDoctor } from '../src/commands/doctor.js';
+import {
+  CHECK_REGISTRY,
+  formatReport,
+  runDoctor,
+  type CheckDefinition,
+} from '../src/commands/doctor.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -199,5 +204,78 @@ describe('#462 the check model', () => {
     const refspec = runDoctor({ cwd: remoteless }).checks.find((row) => row.id === 'notes-refspec');
     expect(refspec?.status).toBe('warn');
     expect(refspec?.needsAttention).toBe(false);
+  });
+});
+
+/**
+ * #463: the registry is data, and the runner survives a check that does not.
+ */
+describe('#463 the registry and runner', () => {
+  it('keeps ids unique, kebab-case, and every category populated', () => {
+    const ids = CHECK_REGISTRY.map((entry) => entry.id);
+    expect(new Set(ids).size, 'two entries share an id').toBe(ids.length);
+    for (const entry of CHECK_REGISTRY) {
+      expect(entry.id).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(entry.optional, `${entry.id} is optional; PRD §1.4 says none are`).toBe(false);
+    }
+    const categories = new Set(CHECK_REGISTRY.map((entry) => entry.category));
+    for (const category of ['runtime', 'transport', 'capture', 'delivery', 'history', 'index']) {
+      expect(categories, `no check speaks for ${category}`).toContain(category);
+    }
+  });
+
+  it('declares dependencies only on earlier entries', () => {
+    // A forward edge cannot be satisfied by the emission order, which is how a
+    // fix plan would end up pointing at a row nobody has computed yet.
+    const seen = new Set<string>();
+    for (const entry of CHECK_REGISTRY) {
+      for (const dependency of entry.dependencies) {
+        expect(seen, `${entry.id} depends on ${dependency}, which is not earlier`).toContain(
+          dependency,
+        );
+      }
+      seen.add(entry.id);
+    }
+  });
+
+  it('drives the report from the registry, in registry order', () => {
+    const repo = populated('registry', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    expect(runDoctor({ cwd: repo }).checks.map((row) => row.id)).toEqual(
+      CHECK_REGISTRY.map((entry) => entry.id),
+    );
+  });
+
+  it('stamps a whole, non-negative durationMs on every row', () => {
+    const repo = populated('timing', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    for (const row of runDoctor({ cwd: repo }).checks) {
+      expect(row.durationMs, `${row.id} was not timed`).toBeTypeOf('number');
+      expect(Number.isInteger(row.durationMs)).toBe(true);
+      expect(row.durationMs).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('turns a throwing check into one failed row and still runs the rest', () => {
+    // The user who most needs a diagnosis is the one whose repository is in a
+    // state some check did not anticipate. Losing the other twelve answers to
+    // that is the worst possible trade.
+    const repo = populated('throwing', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const victim = CHECK_REGISTRY.find((entry) => entry.id === 'git-trailers');
+    if (victim === undefined) throw new Error('git-trailers left the registry');
+
+    const original = victim.run;
+    try {
+      (victim as { run: CheckDefinition['run'] }).run = () => {
+        throw new Error('exploded on purpose\nsecond line');
+      };
+      const report = runDoctor({ cwd: repo });
+      const row = report.checks.find((entry) => entry.id === 'git-trailers');
+
+      expect(row?.status).toBe('fail');
+      expect(row?.evidence['error']).toBe('exploded on purpose');
+      expect(report.checks).toHaveLength(CHECK_REGISTRY.length);
+      expect(report.exitCode).toBe(1);
+    } finally {
+      (victim as { run: CheckDefinition['run'] }).run = original;
+    }
   });
 });

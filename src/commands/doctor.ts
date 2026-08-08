@@ -124,6 +124,12 @@ export interface DoctorCheck {
   optional: boolean;
   /** Present only on `skipped`. Omitted, never null. */
   skipReason?: SkipReason;
+  /**
+   * Wall time for this check, whole milliseconds, never negative. Stamped by
+   * the runner from a monotonic clock — PRD §10's budget is an assertion until
+   * something measures it.
+   */
+  durationMs?: number;
 }
 
 export interface DoctorReport {
@@ -1224,23 +1230,109 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
   return check(id, category, title, 'ok', detail);
 };
 
+/**
+ * What a check is given. `memo` exists for the one dependency this file has
+ * always had: `commit-msg-hook` consumes `hook-runtime`'s result, and both are
+ * rows. The runner emits in registry order — where `commit-msg-hook` presents
+ * first — so the dependency cannot be satisfied by running earlier entries and
+ * reading their output. Memoising the computation keeps "each check runs
+ * exactly once" true without reordering the report.
+ */
+export interface DoctorContext {
+  readonly opts: DoctorOptions;
+  /** Monotonic, for `durationMs`. A wall clock can go backwards. */
+  readonly now: () => bigint;
+  readonly memo: Map<string, DoctorCheck>;
+}
+
+/**
+ * A check as data rather than a position in a hand-written array.
+ *
+ * What that buys, and why it is worth the indirection (ADR-0032 §4): ordering
+ * becomes something a test can assert, `--only`/`--category` become filters
+ * over data instead of new code paths, each `run` is testable in isolation, and
+ * the dependencies that exist implicitly today get a declared place.
+ */
+export interface CheckDefinition {
+  readonly id: string;
+  readonly title: string;
+  readonly category: Category;
+  /** Ids of entries that appear earlier in this registry (PRD §2 req 2). */
+  readonly dependencies: readonly string[];
+  readonly optional: boolean;
+  readonly run: (ctx: DoctorContext) => DoctorCheck;
+}
+
+/** Runs `hook-runtime` at most once per report, whichever row asks first. */
+const hookRuntimeOf = (ctx: DoctorContext): DoctorCheck => {
+  const cached = ctx.memo.get('hook-runtime');
+  if (cached !== undefined) return cached;
+  const computed = checkHookRuntime(ctx.opts);
+  ctx.memo.set('hook-runtime', computed);
+  return computed;
+};
+
+/**
+ * The registry. **Order is the report's order**, frozen to the array
+ * `runDoctor` shipped with, because PRD §9.1 holds the text byte-identical
+ * until the rendering ticket.
+ *
+ * `commit-msg-hook → hook-runtime` is deliberately not declared here: the
+ * dependency runs backwards against this order, and §2 req 2 admits only
+ * earlier entries. It is threaded through `memo` instead and declared once the
+ * ordering rule is settled.
+ */
+export const CHECK_REGISTRY: readonly CheckDefinition[] = [
+  { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
+  { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
+  { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
+  { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+  { id: 'hook-runtime', title: 'hook runtime', category: 'capture', dependencies: [], optional: false, run: hookRuntimeOf },
+  { id: 'inject-runtime', title: 'PreToolUse hook runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
+  { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx) => checkInjectVersion(ctx.opts) },
+  { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
+  { id: 'pending-backlog', title: 'pending captures', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
+  { id: 'git-trailers', title: 'git interpret-trailers', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
+  { id: 'history-depth', title: 'history depth', category: 'history', dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx.opts) },
+  { id: 'index-health', title: 'index health', category: 'index', dependencies: [], optional: false, run: (ctx) => checkIndex(ctx.opts) },
+  { id: 'squash-conservation', title: 'squash conservation', category: 'history', dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx.opts) },
+] as const;
+
+/**
+ * A check that threw becomes a row rather than a stack trace.
+ *
+ * The user who most needs a diagnosis is the one whose repository is in a
+ * state some check did not anticipate. Losing the other twelve answers to that
+ * is the worst possible trade, so the throw is contained and reported as what
+ * it is: this check could not complete.
+ */
+const containedRun = (definition: CheckDefinition, ctx: DoctorContext): DoctorCheck => {
+  try {
+    return definition.run(ctx);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return check(
+      definition.id,
+      definition.category,
+      definition.title,
+      'fail',
+      'this check could not complete, so its subsystem is unreported',
+      null,
+      false,
+      true,
+      { evidence: { error: message.split('\n')[0] ?? 'unknown error' } },
+    );
+  }
+};
+
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
-  const hookRuntime = checkHookRuntime(opts);
-  const checks = [
-    checkRuntime(opts),
-    checkRefspec(opts),
-    checkPush(opts),
-    checkHook(opts, hookRuntime),
-    hookRuntime,
-    checkInjectRuntime(opts),
-    checkInjectVersion(opts),
-    checkMcpLifecycle(opts),
-    checkPendingBacklog(opts),
-    checkGit(opts),
-    checkHistoryDepth(opts),
-    checkIndex(opts),
-    checkSquashConservation(opts),
-  ];
+  const ctx: DoctorContext = { opts, now: process.hrtime.bigint, memo: new Map() };
+  const checks = CHECK_REGISTRY.map((definition) => {
+    const started = ctx.now();
+    const row = containedRun(definition, ctx);
+    const elapsed = Number((ctx.now() - started) / 1_000_000n);
+    return { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+  });
   return {
     checks,
     exitCode: checks.some((entry) => entry.status === 'fail') ? 1 : 0,

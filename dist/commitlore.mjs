@@ -17918,23 +17918,54 @@ var checkSquashConservation = (opts) => {
   const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
   return check(id, category, title, "ok", detail);
 };
+var hookRuntimeOf = (ctx) => {
+  const cached2 = ctx.memo.get("hook-runtime");
+  if (cached2 !== void 0) return cached2;
+  const computed = checkHookRuntime(ctx.opts);
+  ctx.memo.set("hook-runtime", computed);
+  return computed;
+};
+var CHECK_REGISTRY = [
+  { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
+  { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
+  { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
+  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+  { id: "hook-runtime", title: "hook runtime", category: "capture", dependencies: [], optional: false, run: hookRuntimeOf },
+  { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
+  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx) => checkInjectVersion(ctx.opts) },
+  { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
+  { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
+  { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
+  { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx.opts) },
+  { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx.opts) },
+  { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx.opts) }
+];
+var containedRun = (definition, ctx) => {
+  try {
+    return definition.run(ctx);
+  } catch (error2) {
+    const message = error2 instanceof Error ? error2.message : String(error2);
+    return check(
+      definition.id,
+      definition.category,
+      definition.title,
+      "fail",
+      "this check could not complete, so its subsystem is unreported",
+      null,
+      false,
+      true,
+      { evidence: { error: message.split("\n")[0] ?? "unknown error" } }
+    );
+  }
+};
 var runDoctor = (opts = {}) => {
-  const hookRuntime = checkHookRuntime(opts);
-  const checks = [
-    checkRuntime(opts),
-    checkRefspec(opts),
-    checkPush(opts),
-    checkHook(opts, hookRuntime),
-    hookRuntime,
-    checkInjectRuntime(opts),
-    checkInjectVersion(opts),
-    checkMcpLifecycle(opts),
-    checkPendingBacklog(opts),
-    checkGit(opts),
-    checkHistoryDepth(opts),
-    checkIndex(opts),
-    checkSquashConservation(opts)
-  ];
+  const ctx = { opts, now: process.hrtime.bigint, memo: /* @__PURE__ */ new Map() };
+  const checks = CHECK_REGISTRY.map((definition) => {
+    const started = ctx.now();
+    const row = containedRun(definition, ctx);
+    const elapsed = Number((ctx.now() - started) / 1000000n);
+    return { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+  });
   return {
     checks,
     exitCode: checks.some((entry) => entry.status === "fail") ? 1 : 0
