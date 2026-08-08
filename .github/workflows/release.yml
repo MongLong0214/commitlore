@@ -37,13 +37,147 @@ jobs:
       - name: Tag, package.json, and `commitlore --version` agree
         run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
 
+  # RELEASE-GATE §4 used to be a human checklist run after `gh release create`.
+  # That made a failed row a correction to something already published: the
+  # release existed, but its documented installation did not work. This job
+  # makes the six checks a prerequisite instead, so publication cannot get
+  # ahead of the artifact it claims to qualify.
+  install-gate:
+    runs-on: ubuntu-latest
+    steps:
+      # The default checkout follows the event SHA today, but qualifying the
+      # branch that happened to contain that SHA would weaken the claim when
+      # checkout's default changes. The pushed tag is the artifact users name.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A checkout can hide exactly the distribution failures this protects
+      # against: an untracked bundle, a path that reaches back to the source
+      # tree, or dependencies left over from CI. Clone the pushed tag anew,
+      # then run every check from that clone as an installer does.
+      - name: The tagged installation passes RELEASE-GATE section 4
+        run: |
+          set -euo pipefail
+          clone_dir="$(mktemp -d)/commitlore"
+          git clone --quiet --branch "$GITHUB_REF_NAME" --depth 1 \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$clone_dir"
+          cd "$clone_dir"
+
+          # The bundle is the shipped CLI; no build or npm install belongs in
+          # this job, because either would conceal a clone missing what ships.
+          clone_version="$(node dist/commitlore.mjs --version)"
+          printf 'fresh clone version: %s\n' "$clone_version"
+
+          if validation_output="$(printf 'Subject\n\nBlast: wide\n' | node dist/commitlore.mjs validate 2>&1)"; then
+            echo "expected the invalid message to be rejected"
+            exit 1
+          else
+            validation_exit=$?
+          fi
+          printf '%s\n' "$validation_output"
+          test "$validation_exit" -eq 1 || {
+            echo "validate exited $validation_exit, expected 1"
+            exit 1
+          }
+          case "$validation_output" in
+            *Blast*) ;;
+            *)
+              echo "validate rejected the message without reporting its Blast violation"
+              exit 1
+              ;;
+          esac
+
+          # A fresh clone is allowed to warn about unfetched notes and setup it
+          # has not opted into. `doctor` exits zero exactly when none of those
+          # findings is a fail, which is the RELEASE-GATE row's condition.
+          node dist/commitlore.mjs doctor
+
+          # The installed stub records node's absolute path. This command
+          # removes node from PATH while retaining git, so a rejection proves
+          # the hook used that recorded interpreter rather than ambient PATH.
+          git config user.name "Release gate"
+          git config user.email "release-gate@example.invalid"
+          node dist/commitlore.mjs hooks install
+          if hook_output="$(env -i PATH=/usr/bin:/bin git commit --allow-empty \
+            -m 'Release gate invalid message' -m 'Blast: wide' 2>&1)"; then
+            echo "expected the PATH-less hook to reject the invalid commit"
+            exit 1
+          else
+            hook_exit=$?
+          fi
+          printf '%s\n' "$hook_output"
+          test "$hook_exit" -ne 0 || {
+            echo "the PATH-less hook accepted an invalid commit"
+            exit 1
+          }
+          case "$hook_output" in
+            *Blast*) ;;
+            *)
+              echo "the hook rejected the commit without running validation"
+              exit 1
+              ;;
+          esac
+
+          # This is the earlier, marker-bearing stub body. Installing first
+          # records an otherwise healthy target; replacing only the body makes
+          # a real stale-stub fixture rather than merely testing a missing hook.
+          hook_path="$(git rev-parse --git-path hooks/commit-msg)"
+          printf '%s\n' '#!/bin/sh' '# commitlore:commit-msg:v1' \
+            'exec commitlore validate "$1"' > "$hook_path"
+          chmod +x "$hook_path"
+
+          # Doctor deliberately runs a hook probe with PATH=/usr/bin:/bin.
+          # This historical body therefore also produces the expected separate
+          # hook-runtime fail and doctor exits 1. The row being qualified is
+          # commit-msg-hook, whose required verdict is warn rather than ok, so
+          # read that row instead of mistaking the fixture's other finding for
+          # this row's outcome.
+          if stale_report="$(node dist/commitlore.mjs doctor --json)"; then
+            stale_doctor_exit=0
+          else
+            stale_doctor_exit=$?
+          fi
+          printf '%s\n' "$stale_report"
+          printf 'stale-hook doctor exit: %s\n' "$stale_doctor_exit"
+          printf '%s' "$stale_report" | node -e '
+            let input = "";
+            process.stdin.on("data", (chunk) => { input += chunk; });
+            process.stdin.on("end", () => {
+              const report = JSON.parse(input);
+              const hook = report.checks.find((check) => check.id === "commit-msg-hook");
+              if (hook?.status !== "warn") {
+                console.error("expected the stale commit-msg hook to warn, got:", hook);
+                process.exit(1);
+              }
+              console.log("stale commit-msg hook: warn");
+            });
+          '
+
+          # The runner intentionally prefers a CLI on PATH, so keep PATH narrow
+          # and include only the node directory needed for the clone fallback.
+          # Comparing versions catches a different installation that still
+          # answers --version successfully (#483).
+          node_dir="$(dirname "$(command -v node)")"
+          plugin_version="$(env PATH="/usr/bin:/bin:$node_dir" \
+            CLAUDE_PLUGIN_ROOT="$clone_dir" "$clone_dir/scripts/commitlore-run.sh" --version)"
+          printf 'plugin version: %s\n' "$plugin_version"
+          test "$plugin_version" = "$clone_version" || {
+            echo "plugin resolved $plugin_version, expected clone version $clone_version"
+            exit 1
+          }
+
   # Nothing is compiled and nothing is attached. ADR-0026 makes the plugin the
   # canonical install path and `install.sh`/`install.ps1` the secondary one, and
   # both take a pinned source checkout -- so the release itself is the tag, and the
   # tag is what those installers resolve. A release with no assets is the whole
   # artifact set, not an incomplete one.
   publish:
-    needs: version-consistency
+    needs: [version-consistency, install-gate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

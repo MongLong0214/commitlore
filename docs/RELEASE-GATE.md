@@ -46,6 +46,10 @@ exclusion, so this table is a spot check of the rule, not the rule itself.
 
 ## 4. The installation the documentation describes actually works
 
+These checks run as the `install-gate` job in the tag-triggered release workflow,
+against a fresh clone of the pushed tag. `publish` depends on that job, so a
+GitHub Release cannot exist until every automated row below has passed.
+
 | check | command | pass |
 |---|---|---|
 | fresh clone runs | `git clone`, then `dist/commitlore.mjs --version` | exit 0 |
