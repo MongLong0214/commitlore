@@ -32,8 +32,7 @@ import {
   buildReport,
   declarationFor,
   readSources,
-  renderSection,
-} from '../bench/report.ts';
+  renderSection, progressOf } from '../bench/report.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const FIXTURES = 'test/fixtures/bench';
@@ -281,7 +280,15 @@ describe('a partial matrix is labelled as one', () => {
   it('says how many of the planned runs are recorded', () => {
     const markdown = report(PARTIAL);
     expect(markdown).toContain('**Measurement in progress — 12 of 24 planned runs recorded.**');
-    expect(json(PARTIAL).progress).toEqual({ state: 'in-progress', recorded: 12, planned: 24 });
+    // `distinct` counts task-arm-seed cells rather than rows, so a study that
+    // re-ran a shard does not publish its file count as its size. Equal here
+    // because nothing in this fixture is a re-run.
+    expect(json(PARTIAL).progress).toEqual({
+      state: 'in-progress',
+      recorded: 12,
+      planned: 24,
+      distinct: 12,
+    });
   });
 
   it('calls a finished matrix complete', () => {
@@ -510,5 +517,30 @@ describe('the CLI refuses what it cannot answer honestly', () => {
 
   it('prints usage when given no files and no --section', () => {
     expect(runReport().status).toBe(2);
+  });
+});
+
+describe('a re-run shard does not inflate the published size', () => {
+  it('counts cells rather than rows, and names the difference', () => {
+    // M5 has 1,240 rows across seven shards and 1,160 measurements, because
+    // 400 rows were re-produced after a temp reaper and one seed range was
+    // re-run whole. Reporting the row count invites a reader to take the
+    // larger number for the study's size, and the registered analysis in
+    // bench/m5-analysis.ts already drops the superseded original.
+    const base = { task: 't1', cond: 'commitlore-on', seed: 1 };
+    const rows = [
+      { ...base, run_id: 'first' },
+      { ...base, run_id: 'rerun' },
+      { task: 't1', cond: 'commitlore-off', seed: 1, run_id: 'first' },
+    ] as unknown as Parameters<typeof progressOf>[0]['rows'];
+
+    const progress = progressOf({
+      rows,
+      present: [],
+      missing: [],
+    } as unknown as Parameters<typeof progressOf>[0]);
+
+    expect(progress.recorded).toBe(3);
+    expect(progress.distinct).toBe(2);
   });
 });
