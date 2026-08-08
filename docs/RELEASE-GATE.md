@@ -97,6 +97,72 @@ accidentally query CI using a tag-object SHA. Both are direct `publish`
 dependencies and `publish` has no `if:` condition that can override a failed or
 skipped dependency.
 
+### One commit, decided once (#499)
+
+A tag is a mutable ref. Every boundary that resolves the tag *name* asks the
+remote what it means **now**, and two boundaries can get two answers — so the
+gates above once qualified one commit while a fresh clone of the same tag landed
+on another, everything green. The release could then ship a commit nothing had
+checked.
+
+`release-target` is therefore anchored on the **event SHA**: what the tag pointed
+at when the push happened, which cannot be edited afterwards. Resolving the name
+there would leave a window *before the job starts* in which a move redefines the
+whole release. It exports that commit, and every later boundary consumes the SHA
+rather than the name:
+
+| boundary | consumes |
+|---|---|
+| `version-consistency` | checks out the canonical SHA; the tag name is only the version string it compares |
+| `exact-head-ci` | queries check runs at the canonical SHA |
+| `install-gate` | clones `--no-checkout`, detaches onto the canonical SHA, and asserts `HEAD` landed there |
+| `publish` | checks out the canonical SHA, then refuses unless the live tag still resolves to it |
+
+Immediately before publication, `scripts/check-tag-binding.mjs` re-reads the live
+`refs/tags/<version>` from the remote and refuses unless it still resolves to the
+canonical SHA. That check is what establishes the release ships the qualified
+commit. A missing tag is a refusal, not an empty success: `gh release create`
+runs with `--verify-tag`, so publication can never create the reference it was
+meant to verify.
+
+`--target <canonical SHA>` is passed too, but it is **not** load-bearing and
+nothing above relies on it. `gh` documents it as the branch or SHA used when the
+command creates a tag automatically. What the CLI does with it when the tag
+already exists is not asserted here either way; the proven property is narrower
+and is the only one claimed: **`--target` does not establish that the tag equals
+the canonical commit, and it cannot retarget an existing tag.** Live equality,
+the ruleset, and `--verify-tag` are what carry that weight.
+
+It is passed as explicit request metadata and as defence for one future mistake:
+if someone drops `--verify-tag`, the implicit creation that re-enables lands on
+the qualified commit rather than the default branch.
+
+That check queries **both** `refs/tags/<version>` and `refs/tags/<version>^{}`.
+`ls-remote` returns only the tag object for an annotated tag unless the peeled
+ref is named explicitly — verified against this repository's own `v0.7.0`, where
+one pattern returns `7f2aa4e2…` and only the peeled pattern reveals the commit
+`1ec65718…`. Asking for one pattern would compare an annotated release against
+its tag-object SHA and refuse every one of them for a reason that has nothing to
+do with the commit.
+
+Three controls cover three different intervals, and none of them covers another's:
+
+| interval | control | state |
+|---|---|---|
+| push → binding check | event-SHA propagation, then the binding check | detects drift and refuses |
+| binding check → `gh release create` | ruleset on `refs/tags/v*`, `update` and `deletion` denied, no bypass actors | `active` |
+| after the release exists | immutable releases | `enabled` |
+
+Be exact about the middle row. The binding check reads the tag and then the next
+step creates the release; a move landing between those two is not something the
+check can see, because it has already run. What holds that window closed is the
+ruleset, and only the ruleset. Removing it, or adding a bypass actor to it,
+reopens the window silently — no test here would notice.
+
+So the binding check does not make the ruleset unnecessary. It catches every
+drift that happened before it ran; the ruleset is what prevents the drift it
+cannot catch.
+
 ## 6. Every published claim is reproducible
 
 - `scripts/check-readme-numbers.mjs` exits 0 — no number in any README is typed
