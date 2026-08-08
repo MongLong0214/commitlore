@@ -6,7 +6,7 @@
  */
 
 import { check, defaultDoctorContext, type DoctorCheck, type DoctorContext, type DoctorOptions, type DoctorReport } from './model.js';
-import { CHECK_REGISTRY, type CheckDefinition } from './registry.js';
+import { CHECK_REGISTRY, selectChecks, type CheckDefinition } from './registry.js';
 import { buildReport } from './report.js';
 
 /**
@@ -74,17 +74,25 @@ const collapseBlockedBy = (checks: readonly DoctorCheck[]): DoctorCheck[] => {
   });
 };
 
-export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
-  const ctx: DoctorContext = defaultDoctorContext(opts);
+export const runDoctor = (opts: DoctorOptions = {}, context?: DoctorContext): DoctorReport => {
+  // Validate and choose the registry before constructing effects or invoking a
+  // check. An invalid selection is therefore a usage error that cannot touch
+  // the repository, and a filtered row cannot pay for an unselected probe.
+  const selection = selectChecks(opts);
+  const ctx: DoctorContext = {
+    ...(context ?? defaultDoctorContext(opts)),
+    opts,
+    selectedIds: new Set(selection.definitions.map((definition) => definition.id)),
+  };
   const completed = new Map<string, DoctorCheck>();
-  const checks = CHECK_REGISTRY.map((definition) => {
+  const checks = selection.definitions.map((definition) => {
     const dependencies = new Map<string, DoctorCheck>();
     for (const dependency of definition.dependencies) {
       const row = completed.get(dependency);
-      if (row === undefined) {
-        throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
-      }
-      dependencies.set(dependency, row);
+      // A dependency outside a partial selection must remain unrun. Checks
+      // already model an unavailable dependency as an absent map entry; the
+      // full registry path still supplies every declared dependency.
+      if (row !== undefined) dependencies.set(dependency, row);
     }
     const started = ctx.now();
     const contained = containedRun(definition, ctx, dependencies);
@@ -99,5 +107,7 @@ export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
     return timed;
   });
   const collapsed = collapseBlockedBy(checks);
-  return buildReport(collapsed);
+  return selection.selection === undefined
+    ? buildReport(collapsed)
+    : buildReport(collapsed, { selection: selection.selection, totalChecks: CHECK_REGISTRY.length });
 };

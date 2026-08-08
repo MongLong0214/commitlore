@@ -7,7 +7,7 @@
  * individual checks can have boundaries that match their responsibilities.
  */
 export { evaluateInjectRun } from './doctor/checks/delivery-inject-runtime.js';
-export { CHECK_REGISTRY } from './doctor/registry.js';
+export { CHECK_REGISTRY, DoctorSelectionError, selectChecks, } from './doctor/registry.js';
 export { formatCheckReport, formatReport } from './doctor/render.js';
 export { register } from './doctor/report.js';
 export { runDoctor } from './doctor/runner.js';

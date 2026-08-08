@@ -18,7 +18,7 @@ import { blocked, check, gitOptions, type Category, type DoctorCheck, type Docto
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-export const checkHook = (ctx: DoctorContext, runtime: DoctorCheck): DoctorCheck => {
+export const checkHook = (ctx: DoctorContext, runtime?: DoctorCheck): DoctorCheck => {
   const { opts, git, env } = ctx;
   const title = 'commit-msg hook';
   const id = 'commit-msg-hook';
@@ -113,7 +113,7 @@ export const checkHook = (ctx: DoctorContext, runtime: DoctorCheck): DoctorCheck
               'ignores it and falls through to the remaining resolution steps',
           ]),
   ];
-  if (runtime.status !== 'ok') {
+  if (runtime !== undefined && runtime.status !== 'ok') {
     const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
     // A skipped runtime would make this row a skip too, and a skip has to name
     // a reason. Inheriting the runtime's is the only answer that stays true —

@@ -19,7 +19,7 @@ import { checkRuntime } from './checks/runtime-cli-runtime.js';
 import { checkGit } from './checks/runtime-git-trailers.js';
 import { checkPush } from './checks/transport-notes-push.js';
 import { checkRefspec } from './checks/transport-notes-refspec.js';
-import type { Category, DoctorCheck, DoctorContext } from './model.js';
+import type { Category, DoctorCheck, DoctorContext, DoctorOptions } from './model.js';
 
 /**
  * A check as data rather than a position in a hand-written array.
@@ -49,6 +49,15 @@ const hookRuntimeOf = (ctx: DoctorContext): DoctorCheck => {
 };
 
 /**
+ * `commit-msg-hook` historically asks for its runtime result through `memo`
+ * because it appears before `hook-runtime` in the frozen output order. On a
+ * partial run that would silently execute a row the user did not select, so
+ * its optional hand-off is available only when the runtime row is selected.
+ */
+const selectedHookRuntimeOf = (ctx: DoctorContext): DoctorCheck | undefined =>
+  ctx.selectedIds?.has('hook-runtime') === false ? undefined : hookRuntimeOf(ctx);
+
+/**
  * The registry. **Order is the report's order**, frozen to the array
  * `runDoctor` shipped with, because PRD §9.1 holds the text byte-identical
  * until the rendering ticket.
@@ -62,7 +71,7 @@ export const CHECK_REGISTRY: readonly CheckDefinition[] = [
   { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
   { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
   { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
-  { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx, hookRuntimeOf(ctx)) },
+  { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },
   { id: 'hook-runtime', title: 'hook runtime', category: 'capture', dependencies: [], optional: false, run: hookRuntimeOf },
   { id: 'inject-runtime', title: 'PreToolUse hook runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx) },
   { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
@@ -73,3 +82,53 @@ export const CHECK_REGISTRY: readonly CheckDefinition[] = [
   { id: 'index-health', title: 'index health', category: 'index', dependencies: [], optional: false, run: (ctx) => checkIndex(ctx) },
   { id: 'squash-conservation', title: 'squash conservation', category: 'history', dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx) },
 ] as const;
+
+/** An invalid selection is a usage error, never an empty health report. */
+export class DoctorSelectionError extends Error {}
+
+export interface DoctorSelection {
+  /** The entries to run, kept in their registry order. */
+  readonly definitions: readonly CheckDefinition[];
+  /** Present exactly when a caller asked for a partial run. */
+  readonly selection?: string[];
+}
+
+const knownCategories = (): ReadonlySet<string> => new Set(CHECK_REGISTRY.map((definition) => definition.category));
+
+/**
+ * Select before a context or check exists. Filtering after the runner would
+ * hide rows while still spawning probes and touching Git, which is neither a
+ * filter nor an honest partial report.
+ */
+export const selectChecks = (opts: DoctorOptions): DoctorSelection => {
+  const ids = opts.only === undefined ? undefined : [...new Set(opts.only)];
+  const category = opts.category;
+
+  if (ids === undefined && category === undefined) return { definitions: CHECK_REGISTRY };
+
+  if (ids !== undefined) {
+    if (ids.length === 0 || ids.some((id) => id === '')) {
+      throw new DoctorSelectionError('--only must name at least one check id');
+    }
+    const unknown = ids.find((id) => !CHECK_REGISTRY.some((definition) => definition.id === id));
+    if (unknown !== undefined) throw new DoctorSelectionError(`unknown doctor check id: ${unknown}`);
+  }
+
+  if (category !== undefined && !knownCategories().has(category)) {
+    throw new DoctorSelectionError(`unknown doctor check category: ${category}`);
+  }
+
+  const definitions = CHECK_REGISTRY.filter(
+    (definition) =>
+      (ids === undefined || ids.includes(definition.id)) &&
+      (category === undefined || definition.category === category),
+  );
+  if (definitions.length === 0) {
+    throw new DoctorSelectionError('--only and --category do not select a common check');
+  }
+
+  return {
+    definitions,
+    selection: [...(ids ?? []), ...(category === undefined ? [] : [category])],
+  };
+};

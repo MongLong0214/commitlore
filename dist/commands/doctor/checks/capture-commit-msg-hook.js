@@ -65,7 +65,7 @@ export const checkHook = (ctx, runtime) => {
                         'ignores it and falls through to the remaining resolution steps',
                 ]),
     ];
-    if (runtime.status !== 'ok') {
+    if (runtime !== undefined && runtime.status !== 'ok') {
         const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
         // A skipped runtime would make this row a skip too, and a skip has to name
         // a reason. Inheriting the runtime's is the only answer that stays true —

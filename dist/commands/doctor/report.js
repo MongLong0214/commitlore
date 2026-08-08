@@ -113,22 +113,27 @@ const summarize = (checks) => {
     }
     return summary;
 };
-/**
- * The final JSON envelope constructor. `selection` is intentionally absent:
- * this command has no filter surface yet, and the additive contract reserves
- * absence rather than a null placeholder for it.
- */
-export const buildReport = (checks) => {
+export const buildReport = (checks, options = {}) => {
+    if (options.selection !== undefined && options.selection.length === 0) {
+        throw new Error('doctor selection must not be empty');
+    }
+    if (options.selection !== undefined && options.totalChecks === undefined) {
+        throw new Error('doctor selection requires the full registry size');
+    }
     const status = deriveStatus(checks);
     const fixPlan = computeFixPlan(checks);
+    const headline = deriveHeadline({ checks, fixPlan, status });
     return {
         schema: 'commitlore_doctor.v2',
         version: packageVersion(),
         status,
         installSource: deriveInstallSource(),
-        headline: deriveHeadline({ checks, fixPlan, status }),
+        headline: options.selection === undefined
+            ? headline
+            : `${checks.length} of ${options.totalChecks} checks run — ${headline}`,
         summary: summarize(checks),
         fixPlan,
+        ...(options.selection === undefined ? {} : { selection: [...options.selection] }),
         checks,
         exitCode: checks.some((check) => !check.optional && check.status === 'fail') ? 1 : 0,
     };
@@ -140,9 +145,17 @@ export const register = (program) => {
         .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
         .option('--json', 'emit the report as JSON')
         .option('--verbose', 'include diagnostic evidence, skip reasons, and durations for each check')
-        .addHelpText('after', '\nExit codes: 0 no non-optional check failed, 1 a non-optional check failed, 2 usage error (SPEC §10).')
+        .option('--only <ids>', 'run only these comma-separated check ids')
+        .option('--category <name>', 'run only checks in this category')
+        .addHelpText('after', '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).')
         .action((options) => {
-        const report = runDoctor({ fix: options.fix === true });
+        const doctorOptions = { fix: options.fix === true };
+        if (options.only !== undefined) {
+            doctorOptions.only = options.only.split(',').map((id) => id.trim());
+        }
+        if (options.category !== undefined)
+            doctorOptions.category = options.category;
+        const report = runDoctor(doctorOptions);
         process.stdout.write(options.json === true
             ? `${JSON.stringify(report, null, 2)}\n`
             : formatReport(report, { verbose: options.verbose === true }));

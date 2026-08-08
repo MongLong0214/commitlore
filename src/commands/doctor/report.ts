@@ -35,7 +35,7 @@ import { join, resolve, sep } from 'node:path';
 import type { Command } from 'commander';
 
 import { PACKAGE_ROOT, installedPath, packageVersion } from '../../core/paths.js';
-import type { DoctorCheck, DoctorReport, DoctorStatus, InstallSource } from './model.js';
+import type { DoctorCheck, DoctorOptions, DoctorReport, DoctorStatus, InstallSource } from './model.js';
 import { formatReport } from './render.js';
 import { runDoctor } from './runner.js';
 
@@ -136,21 +136,39 @@ const summarize = (checks: readonly DoctorCheck[]): DoctorReport['summary'] => {
 };
 
 /**
- * The final JSON envelope constructor. `selection` is intentionally absent:
- * this command has no filter surface yet, and the additive contract reserves
- * absence rather than a null placeholder for it.
+ * The final JSON envelope constructor. `selection` remains absent on the full
+ * registry and is present only when a filtered runner supplies its request.
  */
-export const buildReport = (checks: DoctorCheck[]): DoctorReport => {
+export interface DoctorReportOptions {
+  /** The requested partial selection. Omitted for the full registry. */
+  selection?: readonly string[];
+  /** Registry size, used only to qualify a partial headline. */
+  totalChecks?: number;
+}
+
+export const buildReport = (checks: DoctorCheck[], options: DoctorReportOptions = {}): DoctorReport => {
+  if (options.selection !== undefined && options.selection.length === 0) {
+    throw new Error('doctor selection must not be empty');
+  }
+  if (options.selection !== undefined && options.totalChecks === undefined) {
+    throw new Error('doctor selection requires the full registry size');
+  }
+
   const status = deriveStatus(checks);
   const fixPlan = computeFixPlan(checks);
+  const headline = deriveHeadline({ checks, fixPlan, status });
   return {
     schema: 'commitlore_doctor.v2',
     version: packageVersion(),
     status,
     installSource: deriveInstallSource(),
-    headline: deriveHeadline({ checks, fixPlan, status }),
+    headline:
+      options.selection === undefined
+        ? headline
+        : `${checks.length} of ${options.totalChecks} checks run — ${headline}`,
     summary: summarize(checks),
     fixPlan,
+    ...(options.selection === undefined ? {} : { selection: [...options.selection] }),
     checks,
     exitCode: checks.some((check) => !check.optional && check.status === 'fail') ? 1 : 0,
   };
@@ -163,12 +181,20 @@ export const register = (program: Command): void => {
     .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
     .option('--json', 'emit the report as JSON')
     .option('--verbose', 'include diagnostic evidence, skip reasons, and durations for each check')
+    .option('--only <ids>', 'run only these comma-separated check ids')
+    .option('--category <name>', 'run only checks in this category')
     .addHelpText(
       'after',
-      '\nExit codes: 0 no non-optional check failed, 1 a non-optional check failed, 2 usage error (SPEC §10).',
+      '\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC §10).',
     )
-    .action((options: { fix?: boolean; json?: boolean; verbose?: boolean }) => {
-      const report = runDoctor({ fix: options.fix === true });
+    .action((options: { fix?: boolean; json?: boolean; verbose?: boolean; only?: string; category?: string }) => {
+      const doctorOptions: DoctorOptions = { fix: options.fix === true };
+      if (options.only !== undefined) {
+        doctorOptions.only = options.only.split(',').map((id) => id.trim());
+      }
+      if (options.category !== undefined) doctorOptions.category = options.category;
+
+      const report = runDoctor(doctorOptions);
       process.stdout.write(
         options.json === true
           ? `${JSON.stringify(report, null, 2)}\n`

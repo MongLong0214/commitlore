@@ -11,4 +11,4 @@ import { type DoctorCheck, type DoctorContext } from '../model.js';
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-export declare const checkHook: (ctx: DoctorContext, runtime: DoctorCheck) => DoctorCheck;
+export declare const checkHook: (ctx: DoctorContext, runtime?: DoctorCheck) => DoctorCheck;

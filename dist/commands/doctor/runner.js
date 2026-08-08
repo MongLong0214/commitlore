@@ -5,7 +5,7 @@
  * check modules only decide their own verdicts and rendering cannot alter run order.
  */
 import { check, defaultDoctorContext } from './model.js';
-import { CHECK_REGISTRY } from './registry.js';
+import { CHECK_REGISTRY, selectChecks } from './registry.js';
 import { buildReport } from './report.js';
 /**
  * A check that threw becomes a row rather than a stack trace.
@@ -54,17 +54,26 @@ const collapseBlockedBy = (checks) => {
         return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
     });
 };
-export const runDoctor = (opts = {}) => {
-    const ctx = defaultDoctorContext(opts);
+export const runDoctor = (opts = {}, context) => {
+    // Validate and choose the registry before constructing effects or invoking a
+    // check. An invalid selection is therefore a usage error that cannot touch
+    // the repository, and a filtered row cannot pay for an unselected probe.
+    const selection = selectChecks(opts);
+    const ctx = {
+        ...(context ?? defaultDoctorContext(opts)),
+        opts,
+        selectedIds: new Set(selection.definitions.map((definition) => definition.id)),
+    };
     const completed = new Map();
-    const checks = CHECK_REGISTRY.map((definition) => {
+    const checks = selection.definitions.map((definition) => {
         const dependencies = new Map();
         for (const dependency of definition.dependencies) {
             const row = completed.get(dependency);
-            if (row === undefined) {
-                throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
-            }
-            dependencies.set(dependency, row);
+            // A dependency outside a partial selection must remain unrun. Checks
+            // already model an unavailable dependency as an absent map entry; the
+            // full registry path still supplies every declared dependency.
+            if (row !== undefined)
+                dependencies.set(dependency, row);
         }
         const started = ctx.now();
         const contained = containedRun(definition, ctx, dependencies);
@@ -79,6 +88,8 @@ export const runDoctor = (opts = {}) => {
         return timed;
     });
     const collapsed = collapseBlockedBy(checks);
-    return buildReport(collapsed);
+    return selection.selection === undefined
+        ? buildReport(collapsed)
+        : buildReport(collapsed, { selection: selection.selection, totalChecks: CHECK_REGISTRY.length });
 };
 //# sourceMappingURL=runner.js.map

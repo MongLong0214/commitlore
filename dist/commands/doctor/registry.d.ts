@@ -5,7 +5,7 @@
  * hook-runtime hand-off, so checks stay self-contained modules rather than
  * importing each other.
  */
-import type { Category, DoctorCheck, DoctorContext } from './model.js';
+import type { Category, DoctorCheck, DoctorContext, DoctorOptions } from './model.js';
 /**
  * A check as data rather than a position in a hand-written array.
  *
@@ -34,3 +34,18 @@ export interface CheckDefinition {
  * ordering rule is settled.
  */
 export declare const CHECK_REGISTRY: readonly CheckDefinition[];
+/** An invalid selection is a usage error, never an empty health report. */
+export declare class DoctorSelectionError extends Error {
+}
+export interface DoctorSelection {
+    /** The entries to run, kept in their registry order. */
+    readonly definitions: readonly CheckDefinition[];
+    /** Present exactly when a caller asked for a partial run. */
+    readonly selection?: string[];
+}
+/**
+ * Select before a context or check exists. Filtering after the runner would
+ * hide rows while still spawning probes and touching Git, which is neither a
+ * filter nor an honest partial report.
+ */
+export declare const selectChecks: (opts: DoctorOptions) => DoctorSelection;

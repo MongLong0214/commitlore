@@ -124,6 +124,10 @@ export interface DoctorOptions {
   cwd?: string;
   /** Apply the reversible local config fixes. */
   fix?: boolean;
+  /** Run only these check ids. An absent value means the full registry. */
+  only?: readonly string[];
+  /** Run only checks in this category. An absent value means every category. */
+  category?: string;
 }
 
 /** The process effects a check may need, supplied by the runner. */
@@ -278,6 +282,12 @@ export const blocked = (dependency: DoctorCheck, row: DoctorCheck): DoctorCheck 
  */
 export interface DoctorContext {
   readonly opts: DoctorOptions;
+  /**
+   * The registry entries this run is permitted to execute. A selected
+   * `commit-msg-hook` must not reach through its historical memo seam and run
+   * `hook-runtime` when that row was filtered out.
+   */
+  readonly selectedIds?: ReadonlySet<string>;
   /** Monotonic, for `durationMs`. A wall clock can go backwards. */
   readonly now: () => bigint;
   readonly memo: Map<string, DoctorCheck>;

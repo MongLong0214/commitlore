@@ -61,9 +61,14 @@ export declare const deriveInstallSource: ({ entryPath, packageRoot, pluginRoot,
     pluginRoot?: string;
 }) => InstallSource;
 /**
- * The final JSON envelope constructor. `selection` is intentionally absent:
- * this command has no filter surface yet, and the additive contract reserves
- * absence rather than a null placeholder for it.
+ * The final JSON envelope constructor. `selection` remains absent on the full
+ * registry and is present only when a filtered runner supplies its request.
  */
-export declare const buildReport: (checks: DoctorCheck[]) => DoctorReport;
+export interface DoctorReportOptions {
+    /** The requested partial selection. Omitted for the full registry. */
+    selection?: readonly string[];
+    /** Registry size, used only to qualify a partial headline. */
+    totalChecks?: number;
+}
+export declare const buildReport: (checks: DoctorCheck[], options?: DoctorReportOptions) => DoctorReport;
 export declare const register: (program: Command) => void;
