@@ -154,10 +154,21 @@ const rows = payload
   .split('\n')
   .map((line) => line.trim())
   .filter((line) => line.length > 0)
+  // Split the whole line, not its first two fields. A limit of 2 discards
+  // whatever follows, so a line carrying a second sha and ref would be read as
+  // the first pair and accepted: the payload said two contradictory things and
+  // the check would have reported one of them as verified.
   .map((line) => {
-    const [sha, name] = line.split(/\s+/, 2);
-    return { sha, name };
+    const fields = line.split(/\s+/);
+    return { sha: fields[0], name: fields[1], extra: fields.slice(2) };
   });
+
+const overfull = rows.find(({ extra }) => extra.length > 0);
+if (overfull !== undefined) {
+  console.error(`ERROR: a line in the listing from ${source} carries more than one sha and ref.`);
+  console.error(`  offending line: ${overfull.sha} ${overfull.name} ${overfull.extra.join(' ')}`);
+  process.exit(2);
+}
 
 const malformed = rows.find(({ sha, name }) => !/^[0-9a-f]{40}$/.test(sha ?? '') || (name ?? '') === '');
 if (malformed !== undefined) {

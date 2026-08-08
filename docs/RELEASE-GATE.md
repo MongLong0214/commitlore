@@ -47,7 +47,8 @@ exclusion, so this table is a spot check of the rule, not the rule itself.
 ## 4. The installation the documentation describes actually works
 
 These checks run as the `install-gate` job in the tag-triggered release workflow,
-against a fresh clone of the pushed tag. `publish` depends on this job as well as
+against a fresh clone landed on the canonical commit — not on the tag name; §5
+explains why that distinction is the point. `publish` depends on this job as well as
 the version, ancestry, and exact-head-CI gates, so a GitHub Release cannot exist
 until every automated prerequisite has passed.
 
@@ -80,7 +81,7 @@ The tag workflow therefore blocks `publish` on both jobs below.
 
 | check | command | pass |
 |---|---|---|
-| release target | `scripts/check-release-target.mjs <tag> main` from a `fetch-depth: 0` checkout | the tag resolves to a commit contained in `main`; a shallow checkout fails rather than guessing |
+| release target | `scripts/check-release-target.mjs "$GITHUB_SHA" main` from a `fetch-depth: 0` checkout | the pushed commit is contained in `main`; a shallow checkout fails rather than guessing |
 | exact-head CI | `scripts/check-exact-head-ci.mjs <owner> <repo> <resolved-tag-sha>` | all six explicitly named check runs below are present at that SHA, `completed`, and concluded `success` |
 
 The exact-head list is fixed rather than inferred from the API response:
