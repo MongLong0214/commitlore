@@ -17054,6 +17054,195 @@ var unfinishedRuns = (cwd = process.cwd()) => {
   });
 };
 
+// src/commands/pending.ts
+var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
+var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
+var summarise = (record2, head) => ({
+  nonce: record2.nonce,
+  phase: record2.phase,
+  records: record2.records.length,
+  validation_result: record2.validation_result,
+  created_at: record2.created_at,
+  expires_at: record2.expires_at,
+  base_head: record2.base_head,
+  stale: headHasMovedPast(record2.base_head, head),
+  gc_eligible: gcEligible(record2)
+});
+var runPendingList = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const head = resolveHead(cwd);
+  const transactions = [];
+  const unreadable = [];
+  for (const nonce of listPendingNonces(cwd)) {
+    let record2 = null;
+    try {
+      record2 = readPending(nonce, { cwd });
+    } catch {
+      unreadable.push(nonce);
+      continue;
+    }
+    if (record2 === null) {
+      unreadable.push(nonce);
+      continue;
+    }
+    transactions.push(summarise(record2, head));
+  }
+  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return { transactions, unreadable };
+};
+var resolvePrefix = (cwd, prefix) => {
+  const wanted = prefix.trim().toLowerCase();
+  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  if (candidates.length === 0) {
+    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+  }
+  if (candidates.length > 1) {
+    return {
+      nonce: null,
+      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
+    };
+  }
+  const [only = ""] = candidates;
+  return { nonce: only, error: null };
+};
+var runPendingShow = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { transaction: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return { transaction: null, error: `${only} could not be read: ${detail}` };
+  }
+  if (record2 === null) {
+    return { transaction: null, error: `${only} could not be read as a transaction` };
+  }
+  const head = resolveHead(cwd);
+  return {
+    transaction: {
+      ...record2,
+      stale: headHasMovedPast(record2.base_head, head),
+      gc_eligible: gcEligible(record2)
+    },
+    error: null
+  };
+};
+var runPendingRemove = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { removed: null, phase: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
+    };
+  }
+  if (record2 === null) {
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
+    };
+  }
+  if (PROTECTED_PHASES2.has(record2.phase)) {
+    return {
+      removed: null,
+      phase: record2.phase,
+      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
+    };
+  }
+  if (!deletePending(only, { cwd })) {
+    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
+  }
+  return { removed: only, phase: record2.phase, error: null };
+};
+var age = (from, now) => {
+  const started = Date.parse(from);
+  if (Number.isNaN(started)) return "?";
+  const minutes = Math.max(0, Math.round((now - started) / 6e4));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+};
+var renderList = (result, now) => {
+  if (result.transactions.length === 0 && result.unreadable.length === 0) {
+    return "no pending capture transactions\n";
+  }
+  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
+  for (const row of result.transactions) {
+    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
+    lines.push(
+      [
+        row.nonce.slice(0, 8).padEnd(9),
+        row.phase.padEnd(9),
+        String(row.records).padEnd(8),
+        (row.validation_result ?? "-").padEnd(11),
+        age(row.created_at, now).padEnd(5),
+        row.base_head.slice(0, 8).padEnd(9),
+        flags
+      ].join(" ")
+    );
+  }
+  for (const nonce of result.unreadable) {
+    lines.push(`${nonce.slice(0, 8)} unreadable`);
+  }
+  return `${lines.join("\n")}
+`;
+};
+var register3 = (program3) => {
+  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
+  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
+    const result = runPendingList({});
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      return;
+    }
+    process.stdout.write(renderList(result, Date.now()));
+  });
+  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingShow({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.transaction === null) process.exitCode = 1;
+      return;
+    }
+    if (result.transaction === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not found"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
+`);
+  });
+  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingRemove({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.removed === null) process.exitCode = 1;
+      return;
+    }
+    if (result.removed === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not removed"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`removed ${result.removed} (${result.phase ?? "unknown"})
+`);
+  });
+};
+
 // src/commands/doctor.ts
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
@@ -17489,6 +17678,46 @@ var checkMcpLifecycle = (opts) => {
     "restart the client session; if this repeats, capture it with a client started under --debug"
   );
 };
+var checkPendingBacklog = (opts) => {
+  const title = "pending captures";
+  const id = "pending-backlog";
+  const cwd = opts.cwd ?? process.cwd();
+  let listing;
+  try {
+    listing = runPendingList({ cwd });
+  } catch {
+    return check(id, title, "ok", "no pending directory \u2014 nothing has been captured here yet");
+  }
+  if (listing.unreadable.length > 0) {
+    return check(
+      id,
+      title,
+      "warn",
+      `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
+      "commitlore pending ls"
+    );
+  }
+  const stranded = listing.transactions.filter((transaction) => transaction.stale);
+  if (stranded.length === 0) {
+    const held = listing.transactions.length;
+    return check(
+      id,
+      title,
+      "ok",
+      held === 0 ? "no captures are waiting" : `${String(held)} capture(s) waiting, all still able to apply`
+    );
+  }
+  const lost = stranded.filter((transaction) => transaction.phase === "staged");
+  const oldest = stranded.map((transaction) => transaction.created_at).sort()[0];
+  const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
+  return check(
+    id,
+    title,
+    "warn",
+    `${detail}; oldest from ${oldest ?? "an unknown time"}. A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)`,
+    "commitlore pending ls"
+  );
+};
 var checkIndex = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   let handle;
@@ -17645,6 +17874,7 @@ var runDoctor = (opts = {}) => {
     checkInjectRuntime(opts),
     checkInjectVersion(opts),
     checkMcpLifecycle(opts),
+    checkPendingBacklog(opts),
     checkGit(opts),
     checkHistoryDepth(opts),
     checkIndex(opts),
@@ -17666,7 +17896,7 @@ var formatReport = (report) => {
   return `${lines.join("\n")}
 `;
 };
-var register3 = (program3) => {
+var register4 = (program3) => {
   program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").addHelpText("after", "\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC \xA710).").action((options) => {
     const report = runDoctor({ fix: options.fix === true });
     process.stdout.write(
@@ -17829,7 +18059,7 @@ var runPostCommitFinaliser = (cwd) => {
     return;
   }
 };
-var register4 = (program3) => {
+var register5 = (program3) => {
   program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
     try {
       runPostCommitFinaliser(process.cwd());
@@ -17975,7 +18205,7 @@ var installPrePushHook = (cwd = process.cwd()) => {
   }
 };
 var describeSync = (results) => results.filter((result) => result.detail !== "" && result.outcome !== "nothing-to-do").map((result) => `commitlore: notes mirror (${result.remote}): ${result.detail}`);
-var register5 = (program3) => {
+var register6 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     try {
       const results = syncNotes(remote === void 0 || remote === "" ? {} : { remotes: [remote] });
@@ -18164,7 +18394,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     return;
   }
 };
-var register6 = (program3) => {
+var register7 = (program3) => {
   program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
     preserveSquashRecords(messageFile);
     try {
@@ -18402,7 +18632,7 @@ var emit = (result) => {
   if (result.stderr !== "") process.stderr.write(result.stderr);
   if (result.code !== 0) process.exitCode = result.code;
 };
-var register7 = (program3) => {
+var register8 = (program3) => {
   const hooks = program3.command("hooks").description(
     `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`
   );
@@ -18622,7 +18852,7 @@ var formatInitReportVerbose = (report) => {
   }
   return lines.join("\n") + "\n";
 };
-var register8 = (program3) => {
+var register9 = (program3) => {
   program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").addHelpText(
     "after",
     "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
@@ -18744,7 +18974,7 @@ var runDemo = async (opts = {}) => {
     process.removeListener("SIGTERM", onSignal);
   }
 };
-var register9 = (program3) => {
+var register10 = (program3) => {
   program3.command("demo").description("run a self-contained lifecycle demo in a temporary repository (no network, no model)").action(async () => {
     const result = await runDemo();
     if (result.exitCode !== 0) {
@@ -18841,7 +19071,7 @@ var runHarvest = (options) => {
 `, exitCode: USAGE_EXIT_CODE };
   }
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").addHelpText(
     "after",
     "\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft that is not a draft (SPEC \xA710)."
@@ -18995,7 +19225,7 @@ var runAsHook = async (options) => {
 `
   );
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("guard").description("[experimental advisory] flag a proposal that may revive a ruled-out alternative \u2014 a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
@@ -19137,7 +19367,7 @@ var runHarvestVerify = (options) => {
 `, exitCode: BAD_INPUT };
   }
 };
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").addHelpText(
     "after",
     "\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, an unreadable path, a draft that is not a draft (SPEC \xA710)."
@@ -19222,7 +19452,7 @@ var runIndex = (options) => {
     closeIndex(handle);
   }
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
     "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
@@ -19742,7 +19972,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register14 = (program3) => {
+var register15 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -28601,7 +28831,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register15 = (program3) => {
+var register16 = (program3) => {
   define(
     program3,
     "context",
@@ -28753,7 +28983,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register16 = (program3) => {
+var register17 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -29289,7 +29519,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register17 = (program3) => {
+var register18 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -29298,195 +29528,6 @@ var register17 = (program3) => {
       );
       process.exitCode = 2;
     });
-  });
-};
-
-// src/commands/pending.ts
-var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
-var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
-var summarise = (record2, head) => ({
-  nonce: record2.nonce,
-  phase: record2.phase,
-  records: record2.records.length,
-  validation_result: record2.validation_result,
-  created_at: record2.created_at,
-  expires_at: record2.expires_at,
-  base_head: record2.base_head,
-  stale: headHasMovedPast(record2.base_head, head),
-  gc_eligible: gcEligible(record2)
-});
-var runPendingList = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const head = resolveHead(cwd);
-  const transactions = [];
-  const unreadable = [];
-  for (const nonce of listPendingNonces(cwd)) {
-    let record2 = null;
-    try {
-      record2 = readPending(nonce, { cwd });
-    } catch {
-      unreadable.push(nonce);
-      continue;
-    }
-    if (record2 === null) {
-      unreadable.push(nonce);
-      continue;
-    }
-    transactions.push(summarise(record2, head));
-  }
-  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  return { transactions, unreadable };
-};
-var resolvePrefix = (cwd, prefix) => {
-  const wanted = prefix.trim().toLowerCase();
-  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
-  if (candidates.length === 0) {
-    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
-  }
-  if (candidates.length > 1) {
-    return {
-      nonce: null,
-      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
-    };
-  }
-  const [only = ""] = candidates;
-  return { nonce: only, error: null };
-};
-var runPendingShow = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { transaction: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return { transaction: null, error: `${only} could not be read: ${detail}` };
-  }
-  if (record2 === null) {
-    return { transaction: null, error: `${only} could not be read as a transaction` };
-  }
-  const head = resolveHead(cwd);
-  return {
-    transaction: {
-      ...record2,
-      stale: headHasMovedPast(record2.base_head, head),
-      gc_eligible: gcEligible(record2)
-    },
-    error: null
-  };
-};
-var runPendingRemove = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { removed: null, phase: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
-    };
-  }
-  if (record2 === null) {
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
-    };
-  }
-  if (PROTECTED_PHASES2.has(record2.phase)) {
-    return {
-      removed: null,
-      phase: record2.phase,
-      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
-    };
-  }
-  if (!deletePending(only, { cwd })) {
-    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
-  }
-  return { removed: only, phase: record2.phase, error: null };
-};
-var age = (from, now) => {
-  const started = Date.parse(from);
-  if (Number.isNaN(started)) return "?";
-  const minutes = Math.max(0, Math.round((now - started) / 6e4));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-};
-var renderList = (result, now) => {
-  if (result.transactions.length === 0 && result.unreadable.length === 0) {
-    return "no pending capture transactions\n";
-  }
-  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
-  for (const row of result.transactions) {
-    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
-    lines.push(
-      [
-        row.nonce.slice(0, 8).padEnd(9),
-        row.phase.padEnd(9),
-        String(row.records).padEnd(8),
-        (row.validation_result ?? "-").padEnd(11),
-        age(row.created_at, now).padEnd(5),
-        row.base_head.slice(0, 8).padEnd(9),
-        flags
-      ].join(" ")
-    );
-  }
-  for (const nonce of result.unreadable) {
-    lines.push(`${nonce.slice(0, 8)} unreadable`);
-  }
-  return `${lines.join("\n")}
-`;
-};
-var register18 = (program3) => {
-  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
-  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
-    const result = runPendingList({});
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      return;
-    }
-    process.stdout.write(renderList(result, Date.now()));
-  });
-  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result = runPendingShow({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      if (result.transaction === null) process.exitCode = 1;
-      return;
-    }
-    if (result.transaction === null) {
-      process.stderr.write(`commitlore pending: ${result.error ?? "not found"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
-`);
-  });
-  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result = runPendingRemove({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      if (result.removed === null) process.exitCode = 1;
-      return;
-    }
-    if (result.removed === null) {
-      process.stderr.write(`commitlore pending: ${result.error ?? "not removed"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`removed ${result.removed} (${result.phase ?? "unknown"})
-`);
   });
 };
 
@@ -30537,27 +30578,27 @@ program2.command("parse").description("Parse a commit message into its CommitLor
   runParse(options);
 });
 register20(program2);
-register5(program2);
+register6(program2);
 register21(program2);
 registerUninstall(program2);
-register7(program2);
-register13(program2);
-register15(program2);
-register16(program2);
-register3(program2);
 register8(program2);
-register10(program2);
-register12(program2);
-register19(program2);
-register6(program2);
-register4(program2);
-register11(program2);
 register14(program2);
+register16(program2);
+register17(program2);
+register4(program2);
+register9(program2);
+register11(program2);
+register13(program2);
+register19(program2);
+register7(program2);
+register5(program2);
+register12(program2);
+register15(program2);
 register(program2);
 register2(program2);
-register9(program2);
-register17(program2);
+register10(program2);
 register18(program2);
+register3(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
