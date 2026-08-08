@@ -139,10 +139,13 @@ export const register = (program) => {
         .description('check that this repository can carry and share CommitLore records')
         .option('--fix', 'apply the reversible local config fixes (notes fetch refspec)')
         .option('--json', 'emit the report as JSON')
+        .option('--verbose', 'include diagnostic evidence, skip reasons, and durations for each check')
         .addHelpText('after', '\nExit codes: 0 no non-optional check failed, 1 a non-optional check failed, 2 usage error (SPEC §10).')
         .action((options) => {
         const report = runDoctor({ fix: options.fix === true });
-        process.stdout.write(options.json === true ? `${JSON.stringify(report, null, 2)}\n` : formatReport(report));
+        process.stdout.write(options.json === true
+            ? `${JSON.stringify(report, null, 2)}\n`
+            : formatReport(report, { verbose: options.verbose === true }));
         process.exitCode = report.exitCode;
     });
 };

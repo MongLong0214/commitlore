@@ -18692,15 +18692,43 @@ var CHECK_REGISTRY = [
 
 // src/commands/doctor/render.ts
 var STATUS_WIDTH = 8;
-var formatReport = (report) => {
+var DETAIL_INDENT = " ".repeat(STATUS_WIDTH);
+var formatCheckReport = (report, { verbose = false } = {}) => {
   const lines = report.checks.flatMap((entry) => {
     const head = `${entry.status.padEnd(STATUS_WIDTH)}${entry.title} \u2014 ${entry.detail}`;
-    const fixed = entry.fixed ? [`${" ".repeat(STATUS_WIDTH)}fixed by --fix`] : [];
-    const fix = entry.fix === null ? [] : entry.fix.split("\n").map((line2) => `${" ".repeat(STATUS_WIDTH)}fix: ${line2}`);
-    return [head, ...fixed, ...fix];
+    const fixed = entry.fixed ? [`${DETAIL_INDENT}fixed by --fix`] : [];
+    const fix = entry.fix === null ? [] : entry.fix.split("\n").map((line2) => `${DETAIL_INDENT}fix: ${line2}`);
+    const diagnostics = verbose === false ? [] : [
+      ...Object.entries(entry.evidence).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${DETAIL_INDENT}evidence.${key}: ${value === "" ? "(empty)" : value}`),
+      ...entry.skipReason === void 0 ? [] : [`${DETAIL_INDENT}skipReason: ${entry.skipReason}`],
+      ...entry.durationMs === void 0 ? [] : [`${DETAIL_INDENT}durationMs: ${entry.durationMs}`]
+    ];
+    return [head, ...fixed, ...fix, ...diagnostics];
   });
   return `${lines.join("\n")}
 `;
+};
+var formatSummary = (report) => {
+  const { ok, warn: warn2, fail: fail3, skipped, durationMs } = report.summary;
+  return `${ok} ok, ${warn2} warnings, ${fail3} failed, ${skipped} skipped (${durationMs}ms)`;
+};
+var formatFixPlan = (report) => {
+  const checksById = new Map(report.checks.map((check2) => [check2.id, check2]));
+  const seenFixes = /* @__PURE__ */ new Set();
+  return report.fixPlan.flatMap((id, index) => {
+    const check2 = checksById.get(id);
+    if (check2 === void 0) return [];
+    const fix = check2.fix;
+    const showFix = fix !== null && !seenFixes.has(fix);
+    if (fix !== null) seenFixes.add(fix);
+    const renderedFix = showFix ? ` (${fix.replace(/\r?\n/g, " ")})` : "";
+    return [`${index + 1}. [${check2.status}] ${check2.id} \u2014 ${check2.detail}${renderedFix}`];
+  });
+};
+var formatReport = (report, options = {}) => {
+  const header2 = [report.headline, formatSummary(report), ...formatFixPlan(report)].join("\n");
+  return `${header2}
+${formatCheckReport(report, options)}`;
 };
 
 // src/commands/doctor/report.ts
@@ -18851,14 +18879,14 @@ var buildReport = (checks) => {
   };
 };
 var register4 = (program3) => {
-  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").addHelpText(
+  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").option("--verbose", "include diagnostic evidence, skip reasons, and durations for each check").addHelpText(
     "after",
     "\nExit codes: 0 no non-optional check failed, 1 a non-optional check failed, 2 usage error (SPEC \xA710)."
   ).action((options) => {
     const report = runDoctor({ fix: options.fix === true });
     process.stdout.write(
       options.json === true ? `${JSON.stringify(report, null, 2)}
-` : formatReport(report)
+` : formatReport(report, { verbose: options.verbose === true })
     );
     process.exitCode = report.exitCode;
   });
@@ -19647,7 +19675,7 @@ var runDoctorStep = (opts) => {
     step: "doctor",
     title: "doctor --fix",
     code,
-    lines: formatReport(report).trimEnd().split("\n"),
+    lines: formatCheckReport(report).trimEnd().split("\n"),
     detail: report
   };
 };

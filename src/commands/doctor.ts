@@ -9,7 +9,7 @@
 
 export { evaluateInjectRun } from './doctor/checks/delivery-inject-runtime.js';
 export { CHECK_REGISTRY, type CheckDefinition } from './doctor/registry.js';
-export { formatReport } from './doctor/render.js';
+export { formatCheckReport, formatReport } from './doctor/render.js';
 export { register } from './doctor/report.js';
 export { runDoctor } from './doctor/runner.js';
 export type {

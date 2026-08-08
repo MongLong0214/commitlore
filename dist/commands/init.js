@@ -29,7 +29,7 @@
  * twice with nothing else changing degrades gracefully because with nothing
  * else changing, none of the three sub-invocations do.
  */
-import { formatReport, runDoctor } from './doctor.js';
+import { formatCheckReport, runDoctor } from './doctor.js';
 import { installHook } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
@@ -59,7 +59,7 @@ const runDoctorStep = (opts) => {
         step: 'doctor',
         title: 'doctor --fix',
         code,
-        lines: formatReport(report).trimEnd().split('\n'),
+        lines: formatCheckReport(report).trimEnd().split('\n'),
         detail: report,
     };
 };
