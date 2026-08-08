@@ -53,7 +53,16 @@ exclusion, so this table is a spot check of the rule, not the rule itself.
 | fresh clone doctor | `dist/commitlore.mjs doctor` | exit 0, no `fail` |
 | hook survives a PATH without node | commit under `env -i PATH=/usr/bin:/bin` | validated, bad message rejected |
 | a stale hook is reported | doctor on a repo whose stub predates the current one | `warn`, not `ok` |
-| plugin entry point resolves | `CLAUDE_PLUGIN_ROOT=<clone> scripts/commitlore-run.sh --version` | exit 0 |
+| plugin entry point resolves | `env PATH=/usr/bin:/bin:<node-dir> CLAUDE_PLUGIN_ROOT=<clone> scripts/commitlore-run.sh --version` | exit 0 **and the version equals the clone's** |
+
+The `PATH` is narrowed on purpose. `commitlore-run.sh` tries `commitlore` on
+`PATH` before `CLAUDE_PLUGIN_ROOT`, deliberately — the installer's wrapper execs
+node itself, so it works where this script would otherwise have to find node,
+and on the hook hot path a missing node means no context at all. The
+consequence is that **a machine with both a CLI install and the plugin runs
+whichever the CLI install is**, and the release check passed for two releases
+while reporting the wrong version, because it only asked whether *something*
+resolved (#483). Leaving `PATH` alone here would keep asking that question.
 
 ## 5. Every published claim is reproducible
 
