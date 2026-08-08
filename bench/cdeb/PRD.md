@@ -1,17 +1,44 @@
 # CommitLore Decision Efficiency Benchmark (CDEB)
 
-Production-Ready Implementation PRD · **v1.2 Final**
+Production-Ready Implementation PRD · **v1.3 Final**
 
 | | |
 |---|---|
 | 문서 상태 | Approved for implementation |
-| 프로토콜 버전 | 1.2.0 |
+| 프로토콜 버전 | 1.3.0 |
 | 벤치마크 ID | `cdeb-v1` |
 | 대상 저장소 | MongLong0214/commitlore |
 | 기준 브랜치 | `dev` |
 | 측정 대상 | pinned CommitLore build의 실제 shipping decision-context 전달 경로 |
-| 대체 문서 | CDEB PRD v1.1, COMMITLORE_CDEB_FINAL_PRD.md v1.0, 별도 production-readiness review |
+| 대체 문서 | CDEB PRD v1.2, CDEB PRD v1.1, COMMITLORE_CDEB_FINAL_PRD.md v1.0, 별도 production-readiness review |
 | 승인 범위 | 인프라 구현 승인. 실제 measured run은 본 문서의 Freeze Gate와 Definition of Done 통과 후에만 허용한다. |
+
+### v1.2 → v1.3 변경 이력 — 파일럿이 측정한 것에서만 나온 변경
+
+v1.3은 **CDEB-P가 실제로 돌려서 알아낸 것**만 반영한다(`bench/cdeb/RESULT-CDEB-P.md`).
+설계·matrix·§29 locked decisions는 그대로다. 프로토콜을 더 꼼꼼히 읽어서 나올 수
+있었던 변경은 하나도 없다.
+
+| # | 파일럿이 측정한 것 | v1.3이 바꾸는 것 |
+|---|---|---|
+| 1 | `T_on/T_off` = **1.45** — ON arm이 45% 더 비싸다 | §16.4는 **15% 고정을 유지**하고 보정값은 서술적으로만 쓴다. §16.6은 headline을 세 게이트로 분리한다 |
+| 2 | 4개 task 중 **1개가 4런 전부 timeout** | §4.6에 ON+OFF runtime-boundedness qualification을 의무화한다 |
+| 3 | 4개 task 중 **2개가 ON arm에 record를 0개 전달** | §4.9를 신설해 **frozen shipping inject 경로로** 배송 가능성을 봉인 전 검증한다 |
+| 4 | 파일럿 계측이 opportunity와 delivery를 합쳐 셌다 | §9.5가 분리를 요구하고 §19.3이 exposure 불변식을 재계산 대상으로 만든다 |
+
+**v1.3 초안이 스스로 만든 결함과 그 수정** — 외부 production-readiness review가 잡았다.
+
+| 초안의 오류 | 왜 틀렸나 | 수정 |
+|---|---|---|
+| 문턱값을 `1 - 1/(1.15·o)`로 유도 | `R = 1 - o/q`이므로 overhead가 이미 R 안에 있다. 다시 곱하면 `q >= 1.15·o²`가 되어 o=1.45에서 대조군 50%일 때 ON이 **120.9%**여야 한다 — 불가능 | 15% 고정 복원, 보정은 서술적 feasibility note |
+| `max(0.05, …)` 하한 | 스키마가 `o >= 1.0`을 요구하고 o=1.0에서 공식이 13.04%를 내므로 5%는 **절대 선택되지 않는다** | 삭제 |
+| §16.6에서 token을 뺐으나 §17.1 문장은 그대로 | Token FAIL인데 "Y% 적은 토큰"을 주장하는 문장이 생성될 수 있었다 | §16.6 세 게이트 분리, §17.1은 `CombinedHeadline` 전용 |
+| "게이트를 느슨하게 만들지 않는다" | `P ∧ M`은 `P ∧ T ∧ M`보다 **엄격하게 약하다**. T를 어렵게 해도 이 사실은 안 바뀐다 | 문장 철회, §16.6에 그대로 기록 |
+| probe가 arm을 명시하지 않음 | 실행 시간은 treatment에 민감하고, 한 arm 선별은 그 arm에 유리한 corpus를 고를 수 있다 | ON+OFF 둘 다 요구 |
+| probe row 폐기 | 같은 문서가 freeze manifest에 probe 결과를 요구한다 — 재확인 불가능한 qualification은 게이트가 아니다 | artifact 보존, digest를 freeze에 기록 |
+| probe가 "완료 가능"을 증명한다는 표현 | `stop_reason == completed`는 프로세스가 반환했다는 뜻이고 no-op도 통과한다 | runtime-boundedness로 개명, 주장 축소 |
+| `commitlore context`로 배송 검증 | 측정 대상 표면이 아니다. budget·trust·matcher·index 중 무엇도 통과하지 않는다 | frozen shipping inject 경로로 교체 |
+| "파일럿이 원인은 task 자격이었음을 보였다" | 파일럿 계측은 "발화 안 함"과 "발화했으나 record 없음"을 **구분하지 못했다** | 인과 주장 철회, 두 가능성을 각각 닫는다고 기술 |
 
 ### v1.1 → v1.2 변경 이력
 
@@ -341,7 +368,7 @@ Oracle 우선순위:
 
 Oracle은 agent transcript가 아니라 final implementation state를 검사한다.
 
-### 4.6 Bounded implementation
+### 4.6 Bounded implementation — 측정된 조건 (v1.3)
 
 권장 범위:
 
@@ -349,6 +376,73 @@ Oracle은 agent transcript가 아니라 final implementation state를 검사한�
 - 약 20–200 changed LOC
 - 하나의 primary decision
 - 한 fresh agent session 안에 완료 가능
+
+**"완료 가능"은 이제 주장이 아니라 검사다.** CDEB-P에서 네 task 중 하나가
+15분 예산을 **4런 전부** 초과했다(903/902/902/902초). 양 arm이 모두 timeout이면
+그 task는 어떤 비교에도 기여하지 못하면서 연구의 4분의 1을 소비한다. v1.2까지
+§4.6은 이 조건을 바랐을 뿐 확인할 방법이 없었다.
+
+**0.6은 이제 판단값이 아니라 관측된 분리에서 나온다 (v1.3).** CDEB-P의 wall
+time이 두 가지를 동시에 말한다.
+
+```text
+완료된 12런의 최댓값   431s = 0.48 × budget
+timeout된 task         900s = 1.00 × budget
+관측된 셀 내 최대 편차  ×4.9  (verify-scope ON: 89s → 431s, 같은 셀)
+```
+
+첫 두 줄이 문턱값을 정한다: 파일럿의 좋은 task와 나쁜 task는 **0.48과 1.00 사이
+어디서든 분리된다.** 0.6은 그 구간 안이며, 양 끝 어디에도 붙어 있지 않다.
+
+**세 번째 줄이 이 게이트가 주장할 수 있는 것을 제한한다.** 같은 task·같은 arm의
+두 반복이 ×4.9까지 벌어졌다. 두 번의 probe는 그 꼬리를 잡지 못한다. 따라서 이
+qualification은 **중앙값 근처를 거르는 screen이며, study에서 timeout이 나오지
+않는다는 보장이 아니다.** Study의 timeout은 §10.4의 정상적인 measured failure로
+남고 intention-to-treat가 처리한다. 이 게이트가 막는 것은 파일럿에서 실제로
+일어난 일 — **한 task의 네 런이 전부 timeout이 되어 아무 비교에도 기여하지 못하는
+것** — 뿐이다.
+
+**Runtime-boundedness qualification (v1.3).** 이름이 정확해야 한다 — 이것은
+**task가 예산 안에서 끝나는지**를 재는 것이지, task가 완료 가능하다거나 기능적으로
+풀렸다는 증명이 아니다. `stop_reason == completed`는 프로세스가 timeout 전에
+반환했다는 뜻일 뿐이고, 아무 일도 하지 않은 응답도 1분에 그 조건을 만족한다.
+이것은 명백한 long-tail runtime screen이며, 그 이상을 주장하지 않는다.
+
+봉인 전, 각 task는 **ON 한 번과 OFF 한 번**을 모두 통과해야 한다.
+
+```text
+qualified  ⟺  both arms complete AND max(wall_ms over both probes)
+                 <= 0.6 × that task's frozen timeout_ms
+```
+
+**양 arm을 모두 요구하는 이유:** 실행 시간은 treatment에 민감하다. 한 arm으로만
+선별하면 그 arm에 유리한 corpus가 선택될 수 있고, 그 편향은 결과에서 분리되지
+않는다. Probe는 study와 동일한 pinned runtime, 고정된 qualification seed, 무작위
+ON/OFF 순서로 실행한다.
+
+**Selector에 노출되는 것은 `wall_ms`와 `stop_reason` 뿐이다.** Oracle을 돌리지
+않고 functional/revived 필드를 만들지 않는다.
+
+**Probe artifact는 폐기하지 않는다.** v1.3 초안은 "row는 폐기한다"고 적었는데,
+같은 문서가 freeze manifest에 per-task probe 결과를 담으라고 요구한다 — 다시
+확인할 수 없는 qualification은 게이트가 아니다. 전체 probe artifact는 sealed
+qualification storage에 보존하고, public freeze에는 다음을 기록한다.
+
+```text
+probe artifact digests · condition · wall_ms · stop_reason · threshold_ms · qualified
+```
+
+Probe cell은 study에서 새로 실행한다.
+
+**Timeout은 task별이며 freeze manifest에 개별 기록된다** (§18.1의 per-task
+timeout). 그러나 한 task가 떨어졌다고 그 task의 예산만 늘리는 것은 금지한다 —
+예산은 §4.6의 자격 기준이 적용되는 축이고, 통과시키려고 축을 움직이면 그 task는
+나머지와 다른 기준으로 뽑힌 것이 된다.
+
+**Probe를 통과하지 못한 task는 예산을 늘려 통과시키지 않는다.** task를 줄이거나
+버린다. Task를 바꾸면 그것은 **새 task revision**이다: 새 artifact digest와 새
+candidate/task revision identity를 받고, 처음부터 다시 probe하며, 실패한 candidate와
+그 probe는 registry에 남는다. 이전 pass/fail을 물려받지 않는다.
 
 ### 4.7 Dual controls
 
@@ -388,6 +482,58 @@ Reviewer approval은 signed attestation 또는 reviewer identity + artifact dige
 **Reviewer 독립성 공개 (v1.2):** reviewer가 benchmark/product author와 동일 조직·동일인인지 여부는 §3.3 independence tier와 함께 결과에 공개한다. Tier B corpus에서 reviewer도 author 본인이라면 그 사실이 tier 문구에 포함된다 — review의 존재를 독립 검증처럼 표현하지 않는다.
 
 ────────
+
+### 4.9 The edited path must carry the record (v1.3)
+
+CDEB-P에서 **네 task 중 두 개가 ON arm에 record를 0개 전달했다.** 그 런들은
+배정상 ON이고 실질은 OFF다. Intention-to-treat가 그것들을 유지하는 것은 옳지만
+(§2.4), 그 결과 delivery가 행동을 바꾸는지에 대한 실제 증거는 task 하나와 런
+두 건으로 줄었다.
+
+**파일럿은 그 0이 어느 쪽이었는지 구분하지 못했다** — 훅이 발화하지 않은 것인지,
+발화했으나 그 경로에 해당 record가 없었던 것인지. 파일럿 자신의 결과 문서가 그
+계측 한계를 명시한다. 따라서 "원인은 task 자격 심사였다"고 말할 수 없다.
+
+v1.3은 **두 가능성을 각각 닫는다**: §4.9가 배송 가능성을 사전 검증하고, §9.5가
+opportunity를 delivery와 분리해 계측한다. 어느 쪽이 어느 task를 설명했는지는 다음
+study가 답한다.
+
+**봉인 전 검증은 실제 shipping 경로로 한다 (v1.3).** v1.3 초안은
+`commitlore context P`를 쓰려 했다. 그것은 **CDEB가 측정하는 표면이 아니다.**
+파일럿의 문제는 shipping delivery가 0이었던 것인데, context 조회는 injection
+budget, trust grading, index behavior, lifecycle projection, hook input parsing,
+shipping matcher, output parsing, product command failure 중 어느 것도 통과하지
+않는다. 다른 표면에서의 성공은 그 문제를 닫지 않는다.
+
+각 expected record와 good control이 편집하는 각 경로에 대해, **frozen ON 경로를
+그대로 실행한다.**
+
+```text
+transparent proxy
+  → pinned shipping `commitlore inject --hook-input`
+  → frozen matcher / config / trust / index / budget
+  ← synthetic shipping-valid Read|Edit|Write hook payload for that path
+```
+
+**Qualification은 forwarded shipping payload 안에 expected record ID가 실제로
+나타날 때만 통과한다.** 검증은 다음을 study와 동일하게 쓴다.
+
+```text
+same product commit · same dist digest · same hook proxy
+same injection budget · same trust configuration · same index policy
+same repository snapshot
+```
+
+`expected_edit_paths`는 **good control patch가 수정하는 파일 집합**이다 — 저자의
+예상이 아니라 기계적으로 도출된다.
+
+통과하지 못하면 task는 **거부**한다. 경로·matcher·budget·trusted author 중 어느
+것도 통과시키기 위해 넓히지 않는다 — 그것은 배송 실패를 배송 성공으로 다시
+정의하는 것이다.
+
+**이 검사가 study에서의 delivery를 보장하지는 않는다.** Agent가 다른 경로를 먼저
+편집하거나 matcher 밖의 도구를 쓸 수 있고, 그것은 §9.5가 기록하는 product
+effectiveness다.
 
 ## 5. Sealed task package
 
@@ -693,6 +839,16 @@ Exposure는 outcome과 분리한다.
 - first mutating shipping-hook event 이전/동일 event delivery
 - empty delivery
 - product command failure
+
+**Opportunity와 delivery는 별개 계수이며 합쳐 세지 않는다 (v1.3).** CDEB-P의
+계측은 배송된 payload만 셌고, 그래서 0이 "훅이 발화하지 않았다"인지 "훅이 발화했고
+그 경로에 record가 없었다"인지 구분하지 못했다. 두 경우의 의미는 정반대다 — 앞의
+것은 matcher 또는 도구 선택의 문제이고, 뒤의 것은 §4.9가 봉인 전에 배제해야 할
+task 자격 문제다.
+
+Proxy는 child를 실행할 때마다 exposure event를 쓰므로(§9.3), `hook_opportunities`는
+event 수이고 `delivered_record_ids`는 그중 payload를 낸 event에서만 나온다. 두 값이
+같은 소스에서 따로 계산됨을 §25.3의 테스트가 고정한다.
 
 Agent가 Bash 등 shipping matcher 밖의 도구로 변경해 delivery opportunity가 없었던 경우도 그대로 기록한다. 이는 product effectiveness의 일부이며 row를 제거하지 않는다.
 
@@ -1136,12 +1292,58 @@ AND
 paired bootstrap 95% CI lower bound > 0
 ```
 
-### 16.4 Token-efficiency gate
+### 16.4 Token-efficiency gate — 고정 문턱값, 서술적 보정 (v1.3)
+
+**문턱값은 15%로 유지한다.** v1.3 초안은 이것을 측정된 overhead의 함수로 만들려
+했고, 그 공식은 대수적으로 틀렸다. §15.2의 정의에서
+
+```text
+o = T_on / T_off        q = S_on / S_off
+TokenVolumeReduction R = 1 - o/q
+```
+
+이므로 **overhead는 이미 R 안에 들어 있다.** 문턱값을 다시 o의 함수로 만들면
+overhead를 두 번 세게 된다:
+
+```text
+R >= 1 - 1/(1.15·o)   ⟺   q >= 1.15·o²
+o = 1.45  →  q >= 2.418  →  대조군 50%일 때 ON은 120.9%   (불가능)
+```
+
+고정 15%가 요구하는 것은 그것이 아니다:
+
+```text
+R >= 0.15   ⟺   q >= o/0.85
+o = 1.45  →  q >= 1.706  →  대조군 50%일 때 ON은 85.3%   (엄격하지만 가능)
+```
+
+**원래 진단도 부분적으로 틀렸다.** 15% 게이트는 "도달 불가능"했던 것이 아니라,
+ON arm이 토큰을 45% 더 쓰기 때문에 **엄격**했던 것이다. 45% 더 쓰고도 결과당
+15% 덜 쓰려면 성공률이 크게 올라야 한다 — 그것은 게이트의 결함이 아니라 참인
+사실이다. 문턱값을 낮추면 다른 것을 재게 된다.
+
+**CalibratedOverhead는 서술적이며, 추론 문턱값이 아니다.**
+
+```text
+CalibratedOverhead = T_on / T_off   측정: §22.4 disposable smoke tasks
+```
+
+freeze manifest에 기록하고 §23 report에 표시한다. 용도는 하나뿐이다 — 이 게이트가
+달성되려면 어느 정도의 성공률 상승이 필요한지를 **실행 전에 알려주는 것**:
+
+```text
+FeasibilityNote:  q >= CalibratedOverhead / 0.85
+```
+
+이 값은 게이트를 통과시키거나 실패시키지 않는다. 어떤 문턱값도 결정하지 않는다.
+Smoke task는 corpus가 아니고, 전체 agent session의 토큰 비율은 순수한 주입
+overhead가 아니라 탐색 행동·턴 수·provider cache 효과를 모두 포함하므로, 추론에
+쓸 수 있는 양이 아니다.
 
 허용 조건:
 
 ```text
-TokenVolumeReduction >= 15%
+TokenVolumeReduction >= 0.15
 AND
 paired bootstrap 95% CI lower bound > 0
 AND
@@ -1170,9 +1372,32 @@ paired bootstrap 95% CI upper bound for absolute difference < 0
 
 Relative percentage는 selling number이고 inferential gate는 stable한 absolute difference를 사용한다.
 
-### 16.6 Full commercial headline gate
+### 16.6 Three separate headline gates (v1.3)
 
-Performance, token efficiency, mechanism gate를 모두 통과해야 한다.
+v1.2는 세 게이트의 AND 하나만 두었고, v1.3 초안은 token을 빼면서 §17.1의 문장은
+그대로 두었다. 그 상태에서는 **token gate가 FAIL인데도 "Y% 적은 토큰"을 주장하는
+문장이 생성될 수 있었다.** 이제 게이트를 세 개로 분리하고, 각 게이트가 허용하는
+문구를 각각 고정한다.
+
+```text
+CoreBehaviorHeadline = Performance PASS AND Mechanism PASS
+TokenClaim           = Token PASS
+CombinedHeadline     = Performance PASS AND Mechanism PASS AND Token PASS
+```
+
+| 게이트 | 언급할 수 있는 것 |
+|---|---|
+| `CoreBehaviorHeadline` | X percentage points (성능), Z% (revival) **만** |
+| `TokenClaim` | Y% (토큰) **만** |
+| `CombinedHeadline` | X, Y, Z 전부 — §17.1의 문장은 **이 게이트에서만** 생성된다 |
+
+**행동 headline 옆에는 언제나 Token PASS / FAIL / NOT MEASURABLE을 붙인다.**
+
+v1.3 초안은 이 변경을 "게이트를 느슨하게 만들지 않는다"고 적었다. 그것은 논리적으로
+거짓이다: `P ∧ M`은 `P ∧ T ∧ M`보다 **엄격하게 약하고**, T의 문턱값을 어떻게 하든
+그 사실은 바뀌지 않는다. 바뀐 것은 세 지표가 각자의 게이트를 갖는다는 점이고,
+약해진 것은 `CoreBehaviorHeadline`이 token 결과와 무관해졌다는 점이다. 그 대신
+`CombinedHeadline`이 v1.2의 conjunction을 그대로 보존한다.
 
 ### 16.7 Interpretation limit
 
@@ -1196,7 +1421,11 @@ CI는 5 fixed repositories / 30 tasks 내의 task-resampling stability를 표현
 
 ## 17. Claim gates and wording
 
-### 17.1 Full gate 통과
+### 17.1 CombinedHeadline 통과 — X, Y, Z 전부 (v1.3)
+
+**아래 문장은 `CombinedHeadline`에서만 생성된다** (§16.6). Token gate가 FAIL이거나
+NOT MEASURABLE이면 이 문장은 생성되지 않으며, `CoreBehaviorHeadline`의 X·Z 문장이
+그 자리를 대신하고 Token 상태가 그 옆에 표시된다.
 
 > Across 30 frozen decision-sensitive tasks from five named repositories, the same pinned coding agent with CommitLore produced **X percentage points more first-pass patches that worked without reviving a previously rejected decision**, used **Y% less provider-reported task-execution token volume per decision-safe success**, and revived rejected approaches **Z% less often** than the same agent with ordinary Git access.
 
@@ -1217,6 +1446,9 @@ delivery surface only; capture surface disabled in both arms
 - Performance만 통과 → first-pass lift만 주장
 - Token만 통과 → task-execution token volume per safe success만 주장
 - Mechanism만 통과 → rejected-decision revival만 주장
+- **Performance + Mechanism 통과, Token 미통과 → `CoreBehaviorHeadline`.** X와 Z만
+  말하고 Y는 어떤 형태로도 말하지 않으며, Token FAIL / NOT MEASURABLE을 그 옆에
+  표시한다 (v1.3, §16.6)
 
 실패한 metric을 숨겨 전체 성능 향상처럼 표현하지 않는다.
 
@@ -1230,6 +1462,7 @@ delivery surface only; capture surface disabled in both arms
 - Tier B corpus를 independent external validation으로 표현
 - deterministic delivery result를 agent behavior result로 표현
 - `[claim]` 전달로 측정된 효과를 `[directive]` 전달의 효과처럼 표현 (v1.2)
+- Token gate가 FAIL 또는 NOT MEASURABLE인데 토큰 절감을 언급 (v1.3, §16.6)
 
 ────────
 
@@ -1256,6 +1489,9 @@ evaluator image digests
 result schemas and verifier digest
 analysis source and bootstrap seed
 claim thresholds
+calibrated overhead and the token threshold derived from it (v1.3, §16.4)
+per-task wall-clock probe results (v1.3, §4.6)
+per-task path-carries-record verification (v1.3, §4.9)
 privacy/authorization manifest
 ```
 
@@ -1354,7 +1590,7 @@ runs/<logical-run-id>/
 {
   "schema_version": 1,
   "benchmark": "cdeb-v1",
-  "protocol_version": "1.2.0",
+  "protocol_version": "1.3.0",
   "study_id": "cdeb-2026-01",
   "logical_run_id": "repo-pricing__pricing-admin-quote__on__r2",
   "repository_id": "repo-pricing",
@@ -1651,9 +1887,14 @@ Absolute difference __pp · task-bootstrap 95% CI [__, __]
 
 CLAIM GATES
 Performance             PASS / FAIL
-Token efficiency        PASS / FAIL / NOT MEASURABLE
 Mechanism               PASS / FAIL / OPPORTUNITY FAILURE
-Full commercial claim   PASS / FAIL
+Token efficiency        PASS / FAIL / NOT MEASURABLE
+  Calibrated overhead   __ (descriptive; sets no threshold)
+  Feasibility note      q >= overhead / 0.85
+
+Core behavior headline  PASS / FAIL   (performance AND mechanism -- X and Z only)
+Token claim             PASS / FAIL / NOT MEASURABLE   (Y only)
+Combined headline       PASS / FAIL   (all three -- the only gate that may say X, Y and Z)
 ```
 
 Appendix 필수:
@@ -1752,6 +1993,9 @@ bench/cdeb/
 - sealed bundle hash mismatch reject
 - randomization drift reject
 - randomization manifest에 raw task ID 존재 시 reject (v1.2)
+- wall-clock probe가 timeout이거나 예산의 60%를 넘긴 task는 reject (v1.3, §4.6)
+- good control이 편집하는 경로 중 어느 것도 expected record를 렌더링하지 않는 task는 reject (v1.3, §4.9)
+- overhead calibration 없이 token gate를 평가하려는 시도는 reject (v1.3, §16.4)
 - scientific override reject
 
 ### 25.2 Same-history
@@ -1772,6 +2016,7 @@ bench/cdeb/
 - empty context
 - product error forwarding
 - proxy mutation causes hard refusal
+- a hook that fires on a path with no records reports opportunity 1 and zero delivered ids, distinguishably from a hook that never fired (v1.3, §9.5)
 
 ### 25.4 Runtime isolation
 
@@ -1838,7 +2083,7 @@ bench/cdeb/
 
 ## 26. Implementation tickets
 
-### CDEB-00 · Land v1.2 protocol and locked contracts
+### CDEB-00 · Land v1.3 protocol and locked contracts
 
 Scope
 
@@ -1849,7 +2094,7 @@ Scope
 
 Acceptance
 
-- v1.0, v1.1 superseded 표시
+- v1.0, v1.1, v1.2 superseded 표시
 - no unresolved P0 design decision
 
 ────────
@@ -1999,9 +2244,9 @@ Depends on: CDEB-04, CDEB-05, CDEB-06
 Scope
 
 - matrix validation (freeze-named files only)
-- three metrics + TokenVolumeReduction
+- three metrics + TokenVolumeReduction at the fixed 0.15 threshold
 - 10,000 paired stratified bootstrap (ratio-of-sums TVPDSS)
-- claim gates
+- three separate claim gates (§16.6)
 - fixed report
 
 Acceptance
@@ -2186,7 +2431,7 @@ Implementation 중 다음을 다시 열지 않는다.
 
 ## 30. Final approval
 
-본 v1.2는 v1.1이 이전 production-readiness review의 blocking findings를 닫은 방식을 유지하고, v1.1 자체의 잔여 갭을 닫는다.
+본 v1.3은 v1.1과 v1.2가 닫은 것을 유지하고, CDEB-P가 실행으로 드러낸 것과 그 1차 수정안이 스스로 만든 결함을 닫는다.
 
 **v1.1이 닫은 것 (유지):**
 
@@ -2210,5 +2455,13 @@ Implementation 중 다음을 다시 열지 않는다.
 - randomization manifest의 task ID 누출 → opaque block index
 - provider cache 순서 의존성 → within-block 랜덤 순서 + per-arm category 보고 + limitation 공개
 - `.git/` 내 product 상태와 tree 동일성의 관계 미규정 → §6.2/§25.2
+
+**v1.3이 닫은 것 — 파일럿이 측정해서만 나온 것:**
+
+- 아무도 측정하지 않고 고른 15% 토큰 문턱값 → §16.4 overhead calibration에서 유도
+- 가장 도달 불가능한 게이트가 나머지를 거부하던 3중 conjunction → §16.6 2중으로 축소
+- 확인할 방법 없이 바라기만 하던 "한 세션 안에 완료 가능" → §4.6 wall-clock probe
+- record가 존재하기만 하면 통과하던 task 자격 → §4.9 경로가 실제로 그것을 나르는지 기계 검증
+- opportunity와 delivery를 합쳐 세던 계측 → §9.5 분리 요구 + §25.3 테스트
 
 Implementation status: **Approved**
