@@ -506,9 +506,20 @@ Node-only by decision (ADR-0026) and has no brew channel.
    exit `0`. The first revision said "No network. No socket, ever" — false
    against the shipping command, a review finding, corrected here rather
    than narrowed silently.
-2. **No writes without `--fix`.** A plain run is read-only including under
-   failure; `--fix` applies only reversible local config and reports every
-   change via `fixed: true` on the row it fixed.
+2. **No writes without `--fix`, with one measured exception.** A plain run
+   modifies no repository content and no CommitLore state: `index.db` is
+   byte-identical after it, including under failure. `--fix` applies only
+   reversible local config and reports every change via `fixed: true` on the
+   row it fixed.
+
+   The exception is SQLite's own bookkeeping. Opening a WAL database creates
+   or touches `index.db-shm`, and `--fix` creates `-wal` alongside it — for
+   readers as much as writers, and they hold no committed data. The first
+   revision of this section said "zero writes" without it, and writing the
+   §11 read-only test strictly is what found the wording false (#473).
+   Removing the exception would mean opening the index outside WAL for
+   doctor, which trades a documentation problem for the concurrency one #420
+   was about.
 3. **No claim it cannot evidence.** Every row carries the observation that
    produced it, `ok` included (§1.3.1) — the first revision required
    evidence only for non-ok rows, and the review showed `ok` with `{}`
@@ -607,7 +618,7 @@ Every line is a command or a test that decides the answer.
 | release gate unchanged | `dist/commitlore.mjs doctor` on a fresh clone | exit 0, no `fail` (RELEASE-GATE §4 row still passes) |
 | no non-git network | full run with Node socket APIs stubbed to throw | all checks complete |
 | offline honesty | full run with every remote pointed at an unreachable host | run completes, exit 0; transport rows `warn` "could not verify" |
-| read-only | full run without `--fix` under a watched fs | zero writes |
+| read-only | full run without `--fix` under a watched fs | `index.db` byte-identical; nothing else changes but SQLite's `-shm`/`-wal` sidecars (§8.2) |
 | partial honesty | `doctor --only cli-runtime --json` | `selection` present; headline prefixed `1 of 15 checks run` |
 | summary invariant | property test over fixtures | counts sum to `total == checks.length`; per-check `durationMs` sums to ≤ `summary.durationMs` |
 | budget | timed run per §10.1 | `summary.durationMs` within the recorded budget |
