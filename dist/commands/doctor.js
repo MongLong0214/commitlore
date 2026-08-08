@@ -109,6 +109,12 @@ function check(id, category, title, status, detail, fix = null, fixed = false, n
         ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
     };
 }
+const blocked = (dependency, row) => {
+    if (dependency.status === 'ok') {
+        throw new Error(`doctor check ${row.id} cannot repeat an ok finding`);
+    }
+    return { ...row, blockedBy: dependency.id };
+};
 const checkRefspec = (opts) => {
     const title = 'notes fetch refspec';
     const remotes = listRemotes(opts);
@@ -217,7 +223,8 @@ const checkPush = (opts) => {
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-const checkHook = (opts, runtime) => {
+const checkHook = (ctx) => {
+    const { opts } = ctx;
     const title = 'commit-msg hook';
     const id = 'commit-msg-hook';
     const category = 'capture';
@@ -266,6 +273,7 @@ const checkHook = (opts, runtime) => {
                         'ignores it and falls through to the remaining resolution steps',
                 ]),
     ];
+    const runtime = hookRuntimeOf(ctx);
     if (runtime.status !== 'ok') {
         const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
         // A skipped runtime would make this row a skip too, and a skip has to name
@@ -275,12 +283,12 @@ const checkHook = (opts, runtime) => {
         // written out rather than cast away so that adding one cannot silently
         // produce a reasonless skip here.
         if (runtime.status === 'skipped') {
-            return check(id, category, title, 'skipped', inherited, install, false, false, {
+            return blocked(runtime, check(id, category, title, 'skipped', inherited, install, false, false, {
                 evidence: { ...hookEvidence, runtime_status: runtime.status },
                 skipReason: runtime.skipReason ?? 'nothing_applicable',
-            });
+            }));
         }
-        return check(id, category, title, runtime.status, inherited, install, false, undefined, { evidence: { ...hookEvidence, runtime_status: runtime.status } });
+        return blocked(runtime, check(id, category, title, runtime.status, inherited, install, false, undefined, { evidence: { ...hookEvidence, runtime_status: runtime.status } }));
     }
     return problems.length === 0
         ? check(id, category, title, 'ok', `installed at ${path}; ${targetDetail}`, null, false, undefined, { evidence: hookEvidence })
@@ -689,7 +697,7 @@ const checkInjectRuntime = (opts) => {
  * run over.
  */
 const SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-const checkInjectVersion = (opts) => {
+const checkInjectVersion = (opts, dependencies) => {
     const title = 'PreToolUse hook version';
     const id = 'inject-version';
     const category = 'delivery';
@@ -736,7 +744,9 @@ const checkInjectVersion = (opts) => {
     if (run.status !== 0 || typeof run.stdout !== 'string') {
         // `checkInjectRuntime` owns "the hook does not run at all" and reports it
         // with the remedy. Saying it twice would be noise.
-        return check(id, category, title, 'skipped', `${executable} did not report a version`, null, false, false, { evidence: versionEvidence, skipReason: 'version_unreadable' });
+        const skipped = check(id, category, title, 'skipped', `${executable} did not report a version`, null, false, false, { evidence: versionEvidence, skipReason: 'version_unreadable' });
+        const runtime = dependencies.get('inject-runtime');
+        return runtime === undefined || runtime.status === 'ok' ? skipped : blocked(runtime, skipped);
     }
     const theirs = run.stdout.trim();
     // Exit 0 is not the same as an answer. A wrapper that ignores its arguments
@@ -1098,19 +1108,18 @@ const hookRuntimeOf = (ctx) => {
  * `runDoctor` shipped with, because PRD §9.1 holds the text byte-identical
  * until the rendering ticket.
  *
- * `commit-msg-hook → hook-runtime` is deliberately not declared here: the
- * dependency runs backwards against this order, and §2 req 2 admits only
- * earlier entries. It is threaded through `memo` instead and declared once the
- * ordering rule is settled.
+ * `commit-msg-hook → hook-runtime` stays in the runner's memo because the
+ * frozen presentation order puts the consumer first. Declaring it backwards
+ * would make the registry claim an ordering guarantee it cannot keep.
  */
 export const CHECK_REGISTRY = [
     { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
     { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
     { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
-    { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+    { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx) },
     { id: 'hook-runtime', title: 'hook runtime', category: 'capture', dependencies: [], optional: false, run: hookRuntimeOf },
     { id: 'inject-runtime', title: 'PreToolUse hook runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
-    { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx) => checkInjectVersion(ctx.opts) },
+    { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx.opts, dependencies) },
     { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
     { id: 'pending-backlog', title: 'pending captures', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
     { id: 'git-trailers', title: 'git interpret-trailers', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
@@ -1126,26 +1135,65 @@ export const CHECK_REGISTRY = [
  * is the worst possible trade, so the throw is contained and reported as what
  * it is: this check could not complete.
  */
-const containedRun = (definition, ctx) => {
+const containedRun = (definition, ctx, dependencies) => {
     try {
-        return definition.run(ctx);
+        return definition.run(ctx, dependencies);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return check(definition.id, definition.category, definition.title, 'fail', 'this check could not complete, so its subsystem is unreported', null, false, true, { evidence: { error: message.split('\n')[0] ?? 'unknown error' } });
     }
 };
+const statusRank = (status) => status === 'fail' ? 3 : status === 'warn' ? 2 : status === 'skipped' ? 1 : 0;
+const collapseBlockedBy = (checks) => {
+    const byId = new Map(checks.map((row) => [row.id, row]));
+    return checks.map((row) => {
+        if (row.blockedBy === undefined)
+            return row;
+        const visited = new Set([row.id]);
+        let root = byId.get(row.blockedBy);
+        while (root !== undefined && root.blockedBy !== undefined) {
+            if (visited.has(root.id)) {
+                throw new Error(`doctor check ${row.id} has a cyclic blockedBy chain`);
+            }
+            visited.add(root.id);
+            root = byId.get(root.blockedBy);
+        }
+        if (root === undefined) {
+            throw new Error(`doctor check ${row.id} names an unknown blocker`);
+        }
+        if (root.status === 'ok') {
+            throw new Error(`doctor check ${row.id} names an ok blocker`);
+        }
+        if (statusRank(row.status) > statusRank(root.status)) {
+            throw new Error(`doctor check ${row.id} is more severe than its blocker`);
+        }
+        return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
+    });
+};
 export const runDoctor = (opts = {}) => {
     const ctx = { opts, now: process.hrtime.bigint, memo: new Map() };
+    const completed = new Map();
     const checks = CHECK_REGISTRY.map((definition) => {
+        const dependencies = new Map();
+        for (const dependency of definition.dependencies) {
+            const row = completed.get(dependency);
+            if (row === undefined) {
+                throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
+            }
+            dependencies.set(dependency, row);
+        }
         const started = ctx.now();
-        const row = containedRun(definition, ctx);
+        const row = containedRun(definition, ctx, dependencies);
         const elapsed = Number((ctx.now() - started) / 1000000n);
-        return { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+        const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+        completed.set(definition.id, timed);
+        return timed;
     });
+    const collapsed = collapseBlockedBy(checks);
     return {
-        checks,
-        exitCode: checks.some((entry) => entry.status === 'fail') ? 1 : 0,
+        checks: collapsed,
+        exitCode: collapsed.some((entry) => entry.status === 'fail') ? 1 : 0,
     };
 };
 const STATUS_WIDTH = 8;

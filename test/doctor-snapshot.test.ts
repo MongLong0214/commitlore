@@ -31,6 +31,7 @@ import {
 } from '../src/commands/doctor.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
+import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -519,5 +520,219 @@ describe('#465 doctor evidence', () => {
     expect(index?.evidence['commits']).not.toBe('');
     expect(index?.detail).toContain(`${index?.evidence['trailers']} trailers`);
     expect(index?.detail).toContain(`${index?.evidence['commits']} commits`);
+  });
+});
+
+/**
+ * #466: a repeated symptom names its cause without discarding the observation
+ * that made the symptom useful. The blocked row stays in the report because a
+ * later independent defect must have somewhere honest to appear.
+ */
+describe('#466 root-cause collapse', () => {
+  const row = (id: string, status: DoctorCheck['status'], blockedBy?: string): DoctorCheck => ({
+    id,
+    title: id,
+    status,
+    needsAttention: status === 'warn' || status === 'fail',
+    detail: `${id} fixture result`,
+    fix: null,
+    fixed: false,
+    category: 'runtime',
+    severity: status === 'fail' ? 'error' : status === 'warn' ? 'warning' : 'info',
+    evidence: { fixture: id },
+    optional: false,
+    ...(blockedBy === undefined ? {} : { blockedBy }),
+  });
+
+  const currentHookWithDeadRuntime = (label: string): string => {
+    const repo = populated(label, resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    writeFileSync(join(repo, '.git', 'hooks', 'commit-msg'), commitMsgStub());
+    git(repo, ['config', '--local', 'commitlore.node', '/nonexistent/node']);
+    return repo;
+  };
+
+  it('resolves a blocked chain to its root', () => {
+    // A consumer should not have to re-walk A → B → C to find the instruction
+    // that matters. This substitutes only the registry, leaving the runner
+    // that performs the collapse under test.
+    const registry = CHECK_REGISTRY as CheckDefinition[];
+    const original = [...registry];
+    const synthetic: CheckDefinition[] = [
+      {
+        id: 'collapse-root',
+        title: 'collapse root',
+        category: 'runtime',
+        dependencies: [],
+        optional: false,
+        run: () => row('collapse-root', 'fail'),
+      },
+      {
+        id: 'collapse-middle',
+        title: 'collapse middle',
+        category: 'runtime',
+        dependencies: ['collapse-root'],
+        optional: false,
+        run: (_ctx, dependencies) => {
+          const root = dependencies.get('collapse-root');
+          if (root === undefined) throw new Error('collapse root did not run');
+          return row('collapse-middle', 'skipped', root.id);
+        },
+      },
+      {
+        id: 'collapse-leaf',
+        title: 'collapse leaf',
+        category: 'runtime',
+        dependencies: ['collapse-middle'],
+        optional: false,
+        run: (_ctx, dependencies) => {
+          const middle = dependencies.get('collapse-middle');
+          if (middle === undefined) throw new Error('collapse middle did not run');
+          return row('collapse-leaf', 'skipped', middle.id);
+        },
+      },
+    ];
+
+    registry.splice(0, registry.length, ...synthetic);
+    try {
+      const report = runDoctor();
+
+      expect(report.checks.map((entry) => entry.id)).toEqual(
+        ['collapse-root', 'collapse-middle', 'collapse-leaf'],
+      );
+      expect(report.checks.find((entry) => entry.id === 'collapse-leaf')?.blockedBy).toBe(
+        'collapse-root',
+      );
+    } finally {
+      registry.splice(0, registry.length, ...original);
+    }
+  });
+
+  it('keeps a dead hook runtime\'s dependent row, detail, and evidence', () => {
+    // Removing the hook row makes a dead runtime look tidier by hiding the
+    // installation it actually affected. The duplicate is an annotation, not
+    // permission to stop looking.
+    const repo = currentHookWithDeadRuntime('collapse-hook');
+    const report = runDoctor({ cwd: repo });
+    const runtime = report.checks.find((entry) => entry.id === 'hook-runtime');
+    const hook = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(runtime?.status).toBe('fail');
+    expect(hook?.blockedBy).toBe('hook-runtime');
+    expect(hook?.detail).toContain(`outcome: ${runtime?.detail}`);
+    expect(hook?.evidence['runtime_status']).toBe('fail');
+    expect(report.checks.filter((entry) => entry.id === 'commit-msg-hook')).toHaveLength(1);
+    expect(formatReport(report)).toContain(`${hook?.status?.padEnd(8)}${hook?.title} — ${hook?.detail}`);
+  });
+
+  it('keeps a stale stub unblocked when its runtime is also dead', () => {
+    // The stale body is actionable in its own right. Attributing it to the
+    // missing runtime would make a future fix plan bury the update it needs.
+    const repo = currentHookWithDeadRuntime('collapse-stale');
+    writeFileSync(
+      join(repo, '.git', 'hooks', 'commit-msg'),
+      `#!/bin/sh\n${HOOK_MARKER}\nexec commitlore validate "$1"\n`,
+    );
+    const report = runDoctor({ cwd: repo });
+    const runtime = report.checks.find((entry) => entry.id === 'hook-runtime');
+    const hook = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(runtime?.status).toBe('fail');
+    expect(hook?.status).toBe('warn');
+    expect(hook?.detail).toContain('out of date');
+    expect(hook?.blockedBy).toBeUndefined();
+    expect(Object.keys(hook ?? {})).not.toContain('blockedBy');
+  });
+
+  it('marks the unreadable inject version as blocked by its failed runtime', () => {
+    const repo = populated('collapse-inject-runtime', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const bin = temp('collapse-inject-runtime-bin');
+    const command = join(bin, 'commitlore');
+    writeFileSync(command, '#!/bin/sh\necho broken >&2\nexit 7\n');
+    chmodSync(command, 0o755);
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+    try {
+      const report = runDoctor({ cwd: repo });
+      const runtime = report.checks.find((entry) => entry.id === 'inject-runtime');
+      const version = report.checks.find((entry) => entry.id === 'inject-version');
+
+      expect(runtime?.status).toBe('fail');
+      expect(version?.status).toBe('skipped');
+      expect(version?.detail).toBe('commitlore did not report a version');
+      expect(version?.blockedBy).toBe('inject-runtime');
+      expect(version?.evidence).toMatchObject({ executable: 'commitlore', exit_code: '7' });
+      expect(formatReport(report)).toContain(
+        `skipped ${version?.title} — commitlore did not report a version`,
+      );
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('leaves an independent inject version mismatch unblocked', () => {
+    // A version comparison that runs and disagrees has fresh evidence. The
+    // runtime being a declared prerequisite does not turn that finding into
+    // an echo.
+    const repo = populated('collapse-inject-version', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const bin = temp('collapse-inject-version-bin');
+    const command = join(bin, 'commitlore');
+    writeFileSync(
+      command,
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  printf \'0.0.0\\n\'\nelse\n  printf context\\n\nfi\n',
+    );
+    chmodSync(command, 0o755);
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+    try {
+      const report = runDoctor({ cwd: repo });
+      const runtime = report.checks.find((entry) => entry.id === 'inject-runtime');
+      const version = report.checks.find((entry) => entry.id === 'inject-version');
+
+      expect(runtime?.status).toBe('ok');
+      expect(version?.status).toBe('warn');
+      expect(version?.detail).toContain('0.0.0');
+      expect(version?.blockedBy).toBeUndefined();
+      expect(Object.keys(version ?? {})).not.toContain('blockedBy');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('never names an ok blocker or omits a row while collapse is active', () => {
+    // A recovered dependency must not leave stale metadata behind, and a
+    // blocked row still counts because its own observation remains evidence.
+    const reports = [
+      runDoctor({ cwd: populated('collapse-clean', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs')) }),
+      runDoctor({ cwd: currentHookWithDeadRuntime('collapse-count') }),
+    ];
+
+    for (const report of reports) {
+      expect(report.checks).toHaveLength(CHECK_REGISTRY.length);
+      for (const entry of report.checks) {
+        if (entry.blockedBy === undefined) continue;
+        const blocker = report.checks.find((candidate) => candidate.id === entry.blockedBy);
+        expect(blocker?.status, `${entry.id} is blocked by an ok or missing row`).not.toBe('ok');
+      }
+    }
+  });
+
+  it('omits blockedBy rather than serializing null on rows that stand alone', () => {
+    // Consumers distinguish absent additive fields from a present key whose
+    // value they do not understand. Null would break that compatibility shape.
+    const report = runDoctor({
+      cwd: populated('collapse-omitted', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs')),
+    });
+
+    for (const entry of report.checks) {
+      if (entry.blockedBy !== undefined) continue;
+      expect(Object.keys(entry), `${entry.id} carries a null blocker`).not.toContain('blockedBy');
+    }
+    expect(JSON.stringify(report)).not.toContain('"blockedBy":null');
   });
 });

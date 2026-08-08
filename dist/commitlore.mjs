@@ -17294,6 +17294,12 @@ function check(id, category, title, status, detail, fix = null, fixed = false, n
     ...extra.skipReason === void 0 ? {} : { skipReason: extra.skipReason }
   };
 }
+var blocked = (dependency, row) => {
+  if (dependency.status === "ok") {
+    throw new Error(`doctor check ${row.id} cannot repeat an ok finding`);
+  }
+  return { ...row, blockedBy: dependency.id };
+};
 var checkRefspec = (opts) => {
   const title = "notes fetch refspec";
   const remotes = listRemotes(opts);
@@ -17471,7 +17477,8 @@ var checkPush = (opts) => {
     { evidence: { ...localEvidence, remote_sha: remoteSha || "none" } }
   );
 };
-var checkHook = (opts, runtime) => {
+var checkHook = (ctx) => {
+  const { opts } = ctx;
   const title = "commit-msg hook";
   const id = "commit-msg-hook";
   const category = "capture";
@@ -17549,34 +17556,41 @@ var checkHook = (opts, runtime) => {
       "COMMITLORE_BIN override is active, but is not a .js or .mjs file \u2014 the hook ignores it and falls through to the remaining resolution steps"
     ]
   ];
+  const runtime = hookRuntimeOf(ctx);
   if (runtime.status !== "ok") {
     const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
     if (runtime.status === "skipped") {
-      return check(
+      return blocked(
+        runtime,
+        check(
+          id,
+          category,
+          title,
+          "skipped",
+          inherited,
+          install,
+          false,
+          false,
+          {
+            evidence: { ...hookEvidence, runtime_status: runtime.status },
+            skipReason: runtime.skipReason ?? "nothing_applicable"
+          }
+        )
+      );
+    }
+    return blocked(
+      runtime,
+      check(
         id,
         category,
         title,
-        "skipped",
+        runtime.status,
         inherited,
         install,
         false,
-        false,
-        {
-          evidence: { ...hookEvidence, runtime_status: runtime.status },
-          skipReason: runtime.skipReason ?? "nothing_applicable"
-        }
-      );
-    }
-    return check(
-      id,
-      category,
-      title,
-      runtime.status,
-      inherited,
-      install,
-      false,
-      void 0,
-      { evidence: { ...hookEvidence, runtime_status: runtime.status } }
+        void 0,
+        { evidence: { ...hookEvidence, runtime_status: runtime.status } }
+      )
     );
   }
   return problems.length === 0 ? check(
@@ -18104,7 +18118,7 @@ var checkInjectRuntime = (opts) => {
   return result;
 };
 var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-var checkInjectVersion = (opts) => {
+var checkInjectVersion = (opts, dependencies) => {
   const title = "PreToolUse hook version";
   const id = "inject-version";
   const category = "delivery";
@@ -18169,7 +18183,7 @@ var checkInjectVersion = (opts) => {
     ...streamEvidence("stdout", reported)
   };
   if (run.status !== 0 || typeof run.stdout !== "string") {
-    return check(
+    const skipped = check(
       id,
       category,
       title,
@@ -18180,6 +18194,8 @@ var checkInjectVersion = (opts) => {
       false,
       { evidence: versionEvidence, skipReason: "version_unreadable" }
     );
+    const runtime = dependencies.get("inject-runtime");
+    return runtime === void 0 || runtime.status === "ok" ? skipped : blocked(runtime, skipped);
   }
   const theirs = run.stdout.trim();
   if (!SEMVER_ISH.test(theirs)) {
@@ -18615,10 +18631,10 @@ var CHECK_REGISTRY = [
   { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
   { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
   { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
-  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx) },
   { id: "hook-runtime", title: "hook runtime", category: "capture", dependencies: [], optional: false, run: hookRuntimeOf },
   { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
-  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx) => checkInjectVersion(ctx.opts) },
+  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx.opts, dependencies) },
   { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
   { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
   { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
@@ -18626,9 +18642,9 @@ var CHECK_REGISTRY = [
   { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx.opts) },
   { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx.opts) }
 ];
-var containedRun = (definition, ctx) => {
+var containedRun = (definition, ctx, dependencies) => {
   try {
-    return definition.run(ctx);
+    return definition.run(ctx, dependencies);
   } catch (error2) {
     const message = error2 instanceof Error ? error2.message : String(error2);
     return check(
@@ -18644,17 +18660,55 @@ var containedRun = (definition, ctx) => {
     );
   }
 };
+var statusRank = (status) => status === "fail" ? 3 : status === "warn" ? 2 : status === "skipped" ? 1 : 0;
+var collapseBlockedBy = (checks) => {
+  const byId = new Map(checks.map((row) => [row.id, row]));
+  return checks.map((row) => {
+    if (row.blockedBy === void 0) return row;
+    const visited = /* @__PURE__ */ new Set([row.id]);
+    let root = byId.get(row.blockedBy);
+    while (root !== void 0 && root.blockedBy !== void 0) {
+      if (visited.has(root.id)) {
+        throw new Error(`doctor check ${row.id} has a cyclic blockedBy chain`);
+      }
+      visited.add(root.id);
+      root = byId.get(root.blockedBy);
+    }
+    if (root === void 0) {
+      throw new Error(`doctor check ${row.id} names an unknown blocker`);
+    }
+    if (root.status === "ok") {
+      throw new Error(`doctor check ${row.id} names an ok blocker`);
+    }
+    if (statusRank(row.status) > statusRank(root.status)) {
+      throw new Error(`doctor check ${row.id} is more severe than its blocker`);
+    }
+    return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
+  });
+};
 var runDoctor = (opts = {}) => {
   const ctx = { opts, now: process.hrtime.bigint, memo: /* @__PURE__ */ new Map() };
+  const completed = /* @__PURE__ */ new Map();
   const checks = CHECK_REGISTRY.map((definition) => {
+    const dependencies = /* @__PURE__ */ new Map();
+    for (const dependency of definition.dependencies) {
+      const row2 = completed.get(dependency);
+      if (row2 === void 0) {
+        throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
+      }
+      dependencies.set(dependency, row2);
+    }
     const started = ctx.now();
-    const row = containedRun(definition, ctx);
+    const row = containedRun(definition, ctx, dependencies);
     const elapsed = Number((ctx.now() - started) / 1000000n);
-    return { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+    const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+    completed.set(definition.id, timed);
+    return timed;
   });
+  const collapsed = collapseBlockedBy(checks);
   return {
-    checks,
-    exitCode: checks.some((entry) => entry.status === "fail") ? 1 : 0
+    checks: collapsed,
+    exitCode: collapsed.some((entry) => entry.status === "fail") ? 1 : 0
   };
 };
 var STATUS_WIDTH = 8;
@@ -29354,12 +29408,12 @@ var SECTIONS = [
 ];
 var SECTION_KEYS = SECTIONS.map((section2) => section2.key);
 var withholdBlocked = (result) => {
-  const blocked = result.records.filter(
+  const blocked2 = result.records.filter(
     (record2) => record2.trust === "blocked" && record2.withheldTrailerKeys === void 0
   );
-  if (blocked.length === 0) return result;
-  const collisions = blocked.filter((record2) => record2.identityCollision === true);
-  const injectionBlocked = blocked.filter((record2) => record2.identityCollision !== true);
+  if (blocked2.length === 0) return result;
+  const collisions = blocked2.filter((record2) => record2.identityCollision === true);
+  const injectionBlocked = blocked2.filter((record2) => record2.identityCollision !== true);
   const keys = [
     ...new Set(injectionBlocked.flatMap((record2) => record2.matchedTrailerKeys ?? []))
   ].sort();
