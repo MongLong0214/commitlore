@@ -121,6 +121,8 @@ export interface DoctorCheck {
   evidence: Record<string, string>;
   /** No shipping check is optional at introduction (PRD §1.4). */
   optional: boolean;
+  /** Absence preserves the additive JSON contract for findings that stand alone. */
+  blockedBy?: string;
   /** Present only on `skipped`. Omitted, never null. */
   skipReason?: SkipReason;
   /**
@@ -285,6 +287,13 @@ function check(
     ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
   };
 }
+
+const blocked = (dependency: DoctorCheck, row: DoctorCheck): DoctorCheck => {
+  if (dependency.status === 'ok') {
+    throw new Error(`doctor check ${row.id} cannot repeat an ok finding`);
+  }
+  return { ...row, blockedBy: dependency.id };
+};
 
 const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   const title = 'notes fetch refspec';
@@ -494,7 +503,8 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
  * The marker is imported from the stub rather than restated, so that doctor
  * can never disagree with the installer about what "installed" means.
  */
-const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
+const checkHook = (ctx: DoctorContext): DoctorCheck => {
+  const { opts } = ctx;
   const title = 'commit-msg hook';
   const id = 'commit-msg-hook';
   const category: Category = 'capture';
@@ -588,6 +598,7 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
               'ignores it and falls through to the remaining resolution steps',
           ]),
   ];
+  const runtime = hookRuntimeOf(ctx);
   if (runtime.status !== 'ok') {
     const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
     // A skipped runtime would make this row a skip too, and a skip has to name
@@ -597,31 +608,37 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
     // written out rather than cast away so that adding one cannot silently
     // produce a reasonless skip here.
     if (runtime.status === 'skipped') {
-      return check(
+      return blocked(
+        runtime,
+        check(
+          id,
+          category,
+          title,
+          'skipped',
+          inherited,
+          install,
+          false,
+          false,
+          {
+            evidence: { ...hookEvidence, runtime_status: runtime.status },
+            skipReason: runtime.skipReason ?? 'nothing_applicable',
+          },
+        ),
+      );
+    }
+    return blocked(
+      runtime,
+      check(
         id,
         category,
         title,
-        'skipped',
+        runtime.status,
         inherited,
         install,
         false,
-        false,
-        {
-          evidence: { ...hookEvidence, runtime_status: runtime.status },
-          skipReason: runtime.skipReason ?? 'nothing_applicable',
-        },
-      );
-    }
-    return check(
-      id,
-      category,
-      title,
-      runtime.status,
-      inherited,
-      install,
-      false,
-      undefined,
-      { evidence: { ...hookEvidence, runtime_status: runtime.status } },
+        undefined,
+        { evidence: { ...hookEvidence, runtime_status: runtime.status } },
+      ),
     );
   }
   return problems.length === 0
@@ -1308,7 +1325,10 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
  */
 const SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
 
-const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
+const checkInjectVersion = (
+  opts: DoctorOptions,
+  dependencies: ReadonlyMap<string, DoctorCheck>,
+): DoctorCheck => {
   const title = 'PreToolUse hook version';
   const id = 'inject-version';
   const category: Category = 'delivery';
@@ -1378,7 +1398,7 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   if (run.status !== 0 || typeof run.stdout !== 'string') {
     // `checkInjectRuntime` owns "the hook does not run at all" and reports it
     // with the remedy. Saying it twice would be noise.
-    return check(
+    const skipped = check(
       id,
       category,
       title,
@@ -1389,6 +1409,8 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
       false,
       { evidence: versionEvidence, skipReason: 'version_unreadable' },
     );
+    const runtime = dependencies.get('inject-runtime');
+    return runtime === undefined || runtime.status === 'ok' ? skipped : blocked(runtime, skipped);
   }
 
   const theirs = run.stdout.trim();
@@ -1999,7 +2021,7 @@ export interface CheckDefinition {
   /** Ids of entries that appear earlier in this registry (PRD §2 req 2). */
   readonly dependencies: readonly string[];
   readonly optional: boolean;
-  readonly run: (ctx: DoctorContext) => DoctorCheck;
+  readonly run: (ctx: DoctorContext, dependencies: ReadonlyMap<string, DoctorCheck>) => DoctorCheck;
 }
 
 /** Runs `hook-runtime` at most once per report, whichever row asks first. */
@@ -2016,19 +2038,18 @@ const hookRuntimeOf = (ctx: DoctorContext): DoctorCheck => {
  * `runDoctor` shipped with, because PRD §9.1 holds the text byte-identical
  * until the rendering ticket.
  *
- * `commit-msg-hook → hook-runtime` is deliberately not declared here: the
- * dependency runs backwards against this order, and §2 req 2 admits only
- * earlier entries. It is threaded through `memo` instead and declared once the
- * ordering rule is settled.
+ * `commit-msg-hook → hook-runtime` stays in the runner's memo because the
+ * frozen presentation order puts the consumer first. Declaring it backwards
+ * would make the registry claim an ordering guarantee it cannot keep.
  */
 export const CHECK_REGISTRY: readonly CheckDefinition[] = [
   { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
   { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
   { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
-  { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx.opts, hookRuntimeOf(ctx)) },
+  { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx) },
   { id: 'hook-runtime', title: 'hook runtime', category: 'capture', dependencies: [], optional: false, run: hookRuntimeOf },
   { id: 'inject-runtime', title: 'PreToolUse hook runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
-  { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx) => checkInjectVersion(ctx.opts) },
+  { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx.opts, dependencies) },
   { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
   { id: 'pending-backlog', title: 'pending captures', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
   { id: 'git-trailers', title: 'git interpret-trailers', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
@@ -2045,9 +2066,13 @@ export const CHECK_REGISTRY: readonly CheckDefinition[] = [
  * is the worst possible trade, so the throw is contained and reported as what
  * it is: this check could not complete.
  */
-const containedRun = (definition: CheckDefinition, ctx: DoctorContext): DoctorCheck => {
+const containedRun = (
+  definition: CheckDefinition,
+  ctx: DoctorContext,
+  dependencies: ReadonlyMap<string, DoctorCheck>,
+): DoctorCheck => {
   try {
-    return definition.run(ctx);
+    return definition.run(ctx, dependencies);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return check(
@@ -2064,17 +2089,60 @@ const containedRun = (definition: CheckDefinition, ctx: DoctorContext): DoctorCh
   }
 };
 
+const statusRank = (status: CheckStatus): number =>
+  status === 'fail' ? 3 : status === 'warn' ? 2 : status === 'skipped' ? 1 : 0;
+
+const collapseBlockedBy = (checks: readonly DoctorCheck[]): DoctorCheck[] => {
+  const byId = new Map(checks.map((row) => [row.id, row]));
+
+  return checks.map((row) => {
+    if (row.blockedBy === undefined) return row;
+
+    const visited = new Set([row.id]);
+    let root = byId.get(row.blockedBy);
+    while (root !== undefined && root.blockedBy !== undefined) {
+      if (visited.has(root.id)) {
+        throw new Error(`doctor check ${row.id} has a cyclic blockedBy chain`);
+      }
+      visited.add(root.id);
+      root = byId.get(root.blockedBy);
+    }
+    if (root === undefined) {
+      throw new Error(`doctor check ${row.id} names an unknown blocker`);
+    }
+    if (root.status === 'ok') {
+      throw new Error(`doctor check ${row.id} names an ok blocker`);
+    }
+    if (statusRank(row.status) > statusRank(root.status)) {
+      throw new Error(`doctor check ${row.id} is more severe than its blocker`);
+    }
+    return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
+  });
+};
+
 export const runDoctor = (opts: DoctorOptions = {}): DoctorReport => {
   const ctx: DoctorContext = { opts, now: process.hrtime.bigint, memo: new Map() };
+  const completed = new Map<string, DoctorCheck>();
   const checks = CHECK_REGISTRY.map((definition) => {
+    const dependencies = new Map<string, DoctorCheck>();
+    for (const dependency of definition.dependencies) {
+      const row = completed.get(dependency);
+      if (row === undefined) {
+        throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
+      }
+      dependencies.set(dependency, row);
+    }
     const started = ctx.now();
-    const row = containedRun(definition, ctx);
+    const row = containedRun(definition, ctx, dependencies);
     const elapsed = Number((ctx.now() - started) / 1_000_000n);
-    return { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+    const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
+    completed.set(definition.id, timed);
+    return timed;
   });
+  const collapsed = collapseBlockedBy(checks);
   return {
-    checks,
-    exitCode: checks.some((entry) => entry.status === 'fail') ? 1 : 0,
+    checks: collapsed,
+    exitCode: collapsed.some((entry) => entry.status === 'fail') ? 1 : 0,
   };
 };
 

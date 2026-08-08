@@ -73,6 +73,8 @@ export interface DoctorCheck {
     evidence: Record<string, string>;
     /** No shipping check is optional at introduction (PRD §1.4). */
     optional: boolean;
+    /** Absence preserves the additive JSON contract for findings that stand alone. */
+    blockedBy?: string;
     /** Present only on `skipped`. Omitted, never null. */
     skipReason?: SkipReason;
     /**
@@ -159,17 +161,16 @@ export interface CheckDefinition {
     /** Ids of entries that appear earlier in this registry (PRD §2 req 2). */
     readonly dependencies: readonly string[];
     readonly optional: boolean;
-    readonly run: (ctx: DoctorContext) => DoctorCheck;
+    readonly run: (ctx: DoctorContext, dependencies: ReadonlyMap<string, DoctorCheck>) => DoctorCheck;
 }
 /**
  * The registry. **Order is the report's order**, frozen to the array
  * `runDoctor` shipped with, because PRD §9.1 holds the text byte-identical
  * until the rendering ticket.
  *
- * `commit-msg-hook → hook-runtime` is deliberately not declared here: the
- * dependency runs backwards against this order, and §2 req 2 admits only
- * earlier entries. It is threaded through `memo` instead and declared once the
- * ordering rule is settled.
+ * `commit-msg-hook → hook-runtime` stays in the runner's memo because the
+ * frozen presentation order puts the consumer first. Declaring it backwards
+ * would make the registry claim an ordering guarantee it cannot keep.
  */
 export declare const CHECK_REGISTRY: readonly CheckDefinition[];
 export declare const runDoctor: (opts?: DoctorOptions) => DoctorReport;
