@@ -284,3 +284,66 @@ describe('#463 the registry and runner', () => {
     }
   });
 });
+
+/**
+ * #464: a skip that does not say why is a skip nothing can act on.
+ *
+ * The compile-time guard covers the factory. These cover what it cannot: a
+ * site that maps to the wrong reason, and a fixture nobody looked at where a
+ * new skip site landed bare.
+ */
+describe('#464 typed skip reasons', () => {
+  const REASONS = [
+    'command_unrecognized',
+    'hook_not_installed',
+    'probe_path_unavailable',
+    'version_unreadable',
+    'unborn_head',
+    'nothing_applicable',
+  ];
+
+  it('gives every skipped row in a full run a reason from the union', () => {
+    // The suite-wide invariant PRD §11 names. A new skip site that bypassed
+    // the factory would surface here rather than in a consumer.
+    const repos = [
+      populated('skipA', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs')),
+      populated('skipB', join(temp('skipB-nowhere'), 'no-such-binary.mjs')),
+    ];
+    let seen = 0;
+    for (const repo of repos) {
+      for (const row of runDoctor({ cwd: repo }).checks) {
+        if (row.status !== 'skipped') continue;
+        seen += 1;
+        expect(REASONS, `${row.id} skipped with reason ${String(row.skipReason)}`).toContain(
+          row.skipReason,
+        );
+      }
+    }
+    expect(seen, 'no fixture produced a skipped row, so this proved nothing').toBeGreaterThan(0);
+  });
+
+  it('omits the key entirely on rows that are not skipped', () => {
+    // ADR-0032 §6: an additive field must be omitted, never null. A consumer
+    // that reads `"skipReason" in row` breaks on the null form.
+    const repo = populated('skipomit', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const report = runDoctor({ cwd: repo });
+
+    for (const row of report.checks) {
+      if (row.status === 'skipped') continue;
+      expect(Object.keys(row), `${row.id} carries skipReason while ${row.status}`).not.toContain(
+        'skipReason',
+      );
+    }
+    expect(JSON.stringify(report)).not.toContain('"skipReason":null');
+  });
+
+  it('maps an unborn HEAD to unborn_head rather than a generic reason', () => {
+    // One named mapping, asserted end to end: a reason that drifts when the
+    // site's logic is next touched fails here.
+    const repo = createTestRepo({ path: temp('unborn') });
+    const row = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'squash-conservation');
+
+    expect(row?.status).toBe('skipped');
+    expect(row?.skipReason).toBe('unborn_head');
+  });
+});

@@ -184,7 +184,40 @@ const severityOf = (status: CheckStatus): Severity =>
  * the no-remote refspec warn and the ENOENT inject fail both clear it, because
  * neither is something the user can act on here (#192, #221).
  */
-const check = (
+type CheckExtra =
+  | { evidence?: Record<string, string>; optional?: boolean; skipReason?: never }
+  /**
+   * A `skipped` row must name a reason from the union. `skipped` is the one
+   * status that reports nothing, so without a reason it says only "no answer" —
+   * and a consumer branching on "we did not look" has nothing but prose to
+   * match against, which the next release is free to reword. Making the reason
+   * required is what turns that into a contract.
+   */
+  | { evidence?: Record<string, string>; optional?: boolean; skipReason: SkipReason };
+
+function check(
+  id: string,
+  category: Category,
+  title: string,
+  status: 'ok' | 'warn' | 'fail',
+  detail: string,
+  fix?: string | null,
+  fixed?: boolean,
+  needsAttention?: boolean,
+  extra?: { evidence?: Record<string, string>; optional?: boolean; skipReason?: never },
+): DoctorCheck;
+function check(
+  id: string,
+  category: Category,
+  title: string,
+  status: 'skipped',
+  detail: string,
+  fix: string | null,
+  fixed: boolean,
+  needsAttention: boolean,
+  extra: { evidence?: Record<string, string>; optional?: boolean; skipReason: SkipReason },
+): DoctorCheck;
+function check(
   id: string,
   category: Category,
   title: string,
@@ -193,8 +226,9 @@ const check = (
   fix: string | null = null,
   fixed = false,
   needsAttention = status === 'warn' || status === 'fail',
-  extra: { evidence?: Record<string, string>; optional?: boolean; skipReason?: SkipReason } = {},
-): DoctorCheck => ({
+  extra: CheckExtra = {},
+): DoctorCheck {
+  return {
   id,
   title,
   status,
@@ -206,8 +240,9 @@ const check = (
   severity: severityOf(status),
   evidence: extra.evidence ?? {},
   optional: extra.optional ?? false,
-  ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
-});
+    ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
+  };
+}
 
 const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   const title = 'notes fetch refspec';
@@ -428,14 +463,27 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
           ]),
   ];
   if (runtime.status !== 'ok') {
-    return check(
-      id,
-      category,
-      title,
-      runtime.status,
-      `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`,
-      install,
-    );
+    const inherited = `installed at ${path}; ${targetDetail}; outcome: ${runtime.detail}`;
+    // A skipped runtime would make this row a skip too, and a skip has to name
+    // a reason. Inheriting the runtime's is the only answer that stays true —
+    // this row did not look for the same reason that one did not. The branch is
+    // unreachable today because `hook-runtime` has no skip site, and it is
+    // written out rather than cast away so that adding one cannot silently
+    // produce a reasonless skip here.
+    if (runtime.status === 'skipped') {
+      return check(
+        id,
+        category,
+        title,
+        'skipped',
+        inherited,
+        install,
+        false,
+        false,
+        { skipReason: runtime.skipReason ?? 'nothing_applicable' },
+      );
+    }
+    return check(id, category, title, runtime.status, inherited, install);
   }
   return problems.length === 0
     ? check(id, category, title, 'ok', `installed at ${path}; ${targetDetail}`)
@@ -721,7 +769,11 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
         title,
         'skipped',
         `not checked: configured command ${JSON.stringify(command)} is not recognised; running it might have side effects`,
-      );
+            null,
+      false,
+      false,
+      { skipReason: 'command_unrecognized' },
+    );
     }
     const detail =
       settings.state === 'absent'
@@ -732,14 +784,14 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
 
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised');
+    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised', null, false, false, { skipReason: 'command_unrecognized' });
   }
 
   const path = runQuery({ cwd, noIndex: true }).records
     .flatMap((record) => record.paths)
     .find((candidate) => candidate !== '' && candidate !== '.');
   if (path === undefined) {
-    return check(id, category, title, 'skipped', 'no recorded path is available for a runtime probe');
+    return check(id, category, title, 'skipped', 'no recorded path is available for a runtime probe', null, false, false, { skipReason: 'probe_path_unavailable' });
   }
 
   const payload = JSON.stringify({
@@ -811,11 +863,11 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
 
   if (settings.state !== 'installed') {
-    return check(id, category, title, 'skipped', `no installed hook to compare against ${mine}`);
+    return check(id, category, title, 'skipped', `no installed hook to compare against ${mine}`, null, false, false, { skipReason: 'hook_not_installed' });
   }
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised');
+    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised', null, false, false, { skipReason: 'command_unrecognized' });
   }
 
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
@@ -833,7 +885,7 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   if (run.status !== 0 || typeof run.stdout !== 'string') {
     // `checkInjectRuntime` owns "the hook does not run at all" and reports it
     // with the remedy. Saying it twice would be noise.
-    return check(id, category, title, 'skipped', `${executable} did not report a version`);
+    return check(id, category, title, 'skipped', `${executable} did not report a version`, null, false, false, { skipReason: 'version_unreadable' });
   }
 
   const theirs = run.stdout.trim();
@@ -848,7 +900,11 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
       title,
       'skipped',
       `${executable} answered --version with something that is not a version`,
-    );
+        null,
+    false,
+    false,
+    { skipReason: 'version_unreadable' },
+  );
   }
   if (theirs === mine) {
     return check(id, category, title, 'ok', `the hook runs ${theirs}, the same build as this CLI`);
@@ -1140,7 +1196,7 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
 
   const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
   if (head.code !== 0) {
-    return check(id, category, title, 'skipped', 'no HEAD yet — nothing to compare against');
+    return check(id, category, title, 'skipped', 'no HEAD yet — nothing to compare against', null, false, false, { skipReason: 'unborn_head' });
   }
 
   const candidates = squashCandidates(opts, head.stdout.trim());
@@ -1151,7 +1207,11 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       title,
       'skipped',
       'no local branch looks like the source of a squash — nothing to check',
-    );
+        null,
+    false,
+    false,
+    { skipReason: 'nothing_applicable' },
+  );
   }
 
   let known: Set<string> | null = null;
@@ -1202,7 +1262,11 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       title,
       'skipped',
       `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
-    );
+        null,
+    false,
+    false,
+    { skipReason: 'nothing_applicable' },
+  );
   }
 
   if (lost.length > 0) {
