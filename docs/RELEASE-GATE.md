@@ -47,8 +47,9 @@ exclusion, so this table is a spot check of the rule, not the rule itself.
 ## 4. The installation the documentation describes actually works
 
 These checks run as the `install-gate` job in the tag-triggered release workflow,
-against a fresh clone of the pushed tag. `publish` depends on that job, so a
-GitHub Release cannot exist until every automated row below has passed.
+against a fresh clone of the pushed tag. `publish` depends on this job as well as
+the version, ancestry, and exact-head-CI gates, so a GitHub Release cannot exist
+until every automated prerequisite has passed.
 
 | check | command | pass |
 |---|---|---|
@@ -68,23 +69,51 @@ whichever the CLI install is**, and the release check passed for two releases
 while reporting the wrong version, because it only asked whether *something*
 resolved (#483). Leaving `PATH` alone here would keep asking that question.
 
-## 5. Every published claim is reproducible
+## 5. The tag is a promoted, exactly green commit
+
+A matching version and a working fresh clone say nothing about *where* a tag was
+cut. A dev-only commit can satisfy both. Nor does a green `main` badge prove the
+tagged SHA passed: it may be a failed, cancelled, skipped, timed-out, still
+running, or entirely untested commit between two green ones.
+
+The tag workflow therefore blocks `publish` on both jobs below.
+
+| check | command | pass |
+|---|---|---|
+| release target | `scripts/check-release-target.mjs <tag> main` from a `fetch-depth: 0` checkout | the tag resolves to a commit contained in `main`; a shallow checkout fails rather than guessing |
+| exact-head CI | `scripts/check-exact-head-ci.mjs <owner> <repo> <resolved-tag-sha>` | all six explicitly named check runs below are present at that SHA, `completed`, and concluded `success` |
+
+The exact-head list is fixed rather than inferred from the API response:
+`check (22)`, `check (24)`, `git-matrix (ubuntu-latest)`, `git-matrix
+(macos-latest)`, `install-script`, and `install-ps1`. Any other conclusion —
+including `failure`, `cancelled`, `timed_out`, `skipped`, `neutral`, `stale`, or
+`action_required` — blocks publication. So do `queued` and `in_progress`, a
+check reported for another SHA, and an absent check; an empty result is six
+absent checks, not a clean result.
+
+`release-target` exports the commit behind the tag only after the ancestry check
+passes. `exact-head-ci` consumes that exact commit, so annotated tags do not
+accidentally query CI using a tag-object SHA. Both are direct `publish`
+dependencies and `publish` has no `if:` condition that can override a failed or
+skipped dependency.
+
+## 6. Every published claim is reproducible
 
 - `scripts/check-readme-numbers.mjs` exits 0 — no number in any README is typed
   by hand.
 - No README asserts something a command in this file contradicts. The three that
   did (green on `main`, a clone carries its dependencies, a clone carries the
   whole memory) are the reason this section exists.
-- CI is green **at the exact commit being released**, checked by looking at CI
-  rather than at a local test run. A local suite passed at every one of the three
-  commits where CI was red.
+- CI is green **at the exact commit being released**, as enforced by section 5's
+  explicit check-run set rather than inferred from a local test run or a branch
+  badge. A local suite passed at every one of the three commits where CI was red.
 
-## 6. The suite proves something
+## 7. The suite proves something
 
 - `npx vitest run` green, and the run reports `Test Files N passed` — a bare test
   count is not evidence. A delegated task once reported 943 of a 1108 baseline
   because another process was writing to the worktree during its run.
-- Each fix in sections 1–4 has a test that fails when that one fix is reverted.
+- Each fix in sections 1–5 has a test that fails when that one fix is reverted.
   Reverting is the evidence; a passing test proves nothing on its own.
 
 ## What this gate deliberately does not require
