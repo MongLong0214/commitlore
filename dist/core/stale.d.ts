@@ -120,6 +120,30 @@ export declare const isSuccessionDeclared: (recordId: string, records: StaleReco
  * A Record-Id belongs to exactly one record unless a later commit declares
  * `Supersedes:` for it. Same-message duplicates and divergent notes are still
  * collisions: neither is a later authored succession.
+ *
+ * **Divergent, not merely repeated** (#430). This counted commit-sourced
+ * records and never compared them, which is stricter than SPEC §3.2:
+ *
+ * > A `Record-Id` MUST resolve to exactly one logical record. Re-declaring that
+ * > record in later commits is a lifecycle update … A note MUST NOT add or
+ * > replace content under an id declared by a commit message; that is an
+ * > identity collision, not an update.
+ *
+ * — and than §6's own example of the violation, "a note adds **different
+ * content** under a `Record-Id` already declared by a commit". The concept was
+ * already here, one branch up in `hasAmbiguousGroup`, applied only when a note
+ * was involved: the spec's rule serving half the cases it governs.
+ *
+ * The visible cost was that a commit carrying a record could never be amended.
+ * During an amend HEAD is still the commit being replaced, so the group holds
+ * its record and the incoming one — byte-identical — and the count fired. No
+ * hook can tell `commit-msg` that an amend is happening, and with this rule
+ * none has to.
+ *
+ * Byte-identical is deliberately narrower than §3.2 allows. A "lifecycle
+ * update" may legitimately carry changes, and deciding which ones stay updates
+ * is a wider question; requiring identity cannot overshoot the spec while it is
+ * open.
  */
 export declare const findIdCollisions: (records: StaleRecord[]) => Violation[];
 /** Whether a state belongs in a stale report: retired, expired, or flagged. */

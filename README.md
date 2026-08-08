@@ -19,9 +19,10 @@
 
 **The Git-native decision layer for coding agents.**
 
-Every fresh agent can read the implementation. None of them can recover the
+Every fresh agent inherits the implementation. None of them inherit the
 constraints, the alternatives your team rejected, the warnings, or the
-verification gaps — those disappear when the session that held them ends.
+verification gaps — those do not travel with the code unless something carries
+them.
 
 CommitLore preserves that engineering judgment in Git, and surfaces only the
 decisions still in force before the next edit. A decision that was later
@@ -49,90 +50,12 @@ Prerequisites for either path: Node.js 22+ and Git. The script checks both befor
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh | sh
 ```
 
 Which hosts are supported, and what each install path requires: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 **Give your next agent the judgment your last one earned.**
-
-## See it work
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
-
-**A fresh agent. Zero chat history. It still knows why the obvious fix was rejected.** Query a path before changing it:
-
-```bash
-commitlore context install.sh
-```
-
-The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-Reproducing that exact `PreToolUse` hook path, and every other command: [docs/cli.md](docs/cli.md).
-
-## Retrieval can find records. Path scope keeps reversed decisions out.
-
-Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
-
-Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. The advantage appears when decisions have been reversed—the case this product exists for.
-
-The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
-
-| route | model-visible records | relevant records | model-visible tokens |
-|---|---:|---:|---:|
-| inject everything | 10,002 | 2/2 | 1,004,554 |
-| top-k lexical | 2 | 1/2 | 190 |
-| CommitLore path scope | 2 | 2/2 | 335 |
-
-This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model. Where recall ties, and what else has and has not been measured: [docs/evidence.md](docs/evidence.md).
-
-## Try it in a repository
-
-Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
-
-```bash
-cd your-repository
-commitlore init
-commitlore context .
-```
-
-After that:
-
-- Commit normally. Most commits carry no record.
-- If a record is present, the commit-msg hook validates it; it never creates one.
-- Agents query decision context through MCP or receive it from the `PreToolUse` hook.
-- Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
-
-Keep working through your coding agent. When a change contains decision context the diff cannot preserve, ask the agent to include a CommitLore record in the commit.
-
-<details>
-<summary>Prefer to inspect or pin the installation?</summary>
-
-The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, or clone the repository. The script installs a pinned source checkout and a thin wrapper that runs `node <checkout>/dist/commitlore.mjs` — it downloads no compiled artifact and runs no build step, so what it puts on your machine is the source you can read.
-
-```bash
-# Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh
-sh install.sh v0.6.0
-
-# Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v0.6.0 https://github.com/MongLong0214/commitlore
-node commitlore/dist/commitlore.mjs --version
-```
-
-</details>
 
 ## The code survived. The decision didn't.
 
@@ -167,9 +90,147 @@ Ruled-out
 the repository, so the agent is told to treat it as information rather than as an
 order. A record that *was* signed by a trusted author renders as `[directive]`.
 
-It shares the pure calculation primitives instead, and leaves the checkout policy
-entrypoint alone. The review never happens, because the decision was already
-there.
+The module boundary is in front of the agent before it proposes the change,
+rather than in a review comment after.
+
+**Whether it acts on that is now measured.** Across 1,160 registered runs, an
+agent handed the repository's active records re-proposed a ruled-out approach in
+**2.8%** of them (16/580). Without them: **18.8%** (109/579).
+
+| arm | re-proposed a ruled-out approach |
+|---|---:|
+| the agent alone | **18.8%** (109/579) |
+| **with CommitLore** | **2.8%** (16/580) |
+
+**The threshold was registered before the run**, and the preregistration
+predicted a *smaller* effect than it got — that prediction, with its stated
+probabilities, is in
+[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2, and it was
+wrong. The significance test, the interval and the registered threshold are in
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here: a statistic
+retyped into prose drifts from the log that produced it, and this repository
+gates against exactly that (`scripts/check-readme-numbers.mjs`).
+
+Three limits belong beside the number. Every record in that run rendered
+`[claim]`, with the payload telling the agent not to act on it as an order — the
+`[directive]` tier became reachable only afterwards, so **this measures the
+weaker of the two**. It is one model, one harness, and ten constructed
+fixtures. And the oracle reads the final implementation state: it shows agents
+which received records re-proposed less often, not that any of them read
+anything. Method, exclusions and the per-arm truncation split:
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) and
+[what it does not show](docs/evidence.md).
+
+## See it work
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+**A fresh agent. Zero chat history. It is still handed why the obvious fix was rejected.** Query a path before changing it:
+
+```bash
+commitlore context install.sh
+```
+
+The output includes the active record that ruled out publishing a `-musl` target as the fix for the installer defect, including its reason. The hook returns context; it does not claim to block the edit.
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+Reproducing that exact `PreToolUse` hook path, and every other command: [docs/cli.md](docs/cli.md).
+
+## The repository is the demo
+
+A tool that claims to stop agents re-deciding settled questions should be able
+to show what it caught in itself. This one keeps that list in public, including
+the entries where the thing that turned out to be false was something this
+project had already published:
+
+- **No install could produce the trust tier the README's claims rested on.** Records reach an agent graded `directive` or `claim`. It turned out no installed surface configured a trusted author, so grading failed closed to `claim` for everyone — while the injected legend advertised the tier nobody could reach. Both prior benchmarks had measured `claim`-graded delivery ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **The registered benchmark analysis would have read four different experiments at once** — and because its stopping rule was a row count, the contamination would have made the study *pass* its own completeness gate ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
+- **The result-schema gate was not run by anything**, so the schema drifted five fields behind the runner and nobody noticed for two days ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
+- **A shipped pre-push hook hung every `git push`** — 1,240 hook invocations in 40 seconds — because the function had been tested eleven times and the hook path zero times ([#422](https://github.com/MongLong0214/commitlore/issues/422)).
+
+Every one of those is a `Ruled-out:`, `Warn:` or `Limit:` line in a commit
+trailer, validated by the hook this project asks you to install, and readable
+with the same `commitlore context` you would run anywhere else.
+
+**The full list, with what each one cost: [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md).**
+
+## Try it in a repository
+
+Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+After that:
+
+- Commit normally. Most commits carry no record.
+- If a record is present, the commit-msg hook validates it; it never creates one.
+- Agents query decision context through MCP or receive it from the `PreToolUse` hook.
+- Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
+
+Keep working through your coding agent. When a change contains decision context the diff cannot preserve, ask the agent to include a CommitLore record in the commit.
+
+<details>
+<summary>Prefer to inspect or pin the installation?</summary>
+
+The one-liner is for convenience. For a reviewed or pinned install, download and inspect `install.sh` first, or clone the repository. The script installs a pinned source checkout and a thin wrapper that runs `node <checkout>/dist/commitlore.mjs` — it downloads no compiled artifact and runs no build step, so what it puts on your machine is the source you can read.
+
+```bash
+# Pin and inspect the installer before executing it.
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh
+sh install.sh v0.7.0
+
+# Or skip the script entirely: the checkout it makes is one you can make yourself.
+git clone --depth 1 --branch v0.7.0 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
+```
+
+</details>
+
+## Retrieval can find records. Path scope keeps reversed decisions out.
+
+Before an agent's first edit, how much of a repository's still-active decision set actually reaches it? On this repository, at the 800-token budget the hook ships with:
+
+| route | budget | active decisions delivered | reversed ones delivered | tokens |
+|---|---:|---:|---:|---:|
+| the code alone | — | 0.0% | 0 | 0 |
+| `git log` for the path | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore path scope** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore, cap removed | none | 92.3% | 0 | 741,429 |
+
+With the cap removed, path scope recovers exactly what a whole-repository dump recovers — 2,047 of 2,217 — for a fraction of its 92,175,612 tokens and none of its 7,322 reversed records. The scope costs nothing. The cap costs 10.6 points. The remaining 170 are records the trust grader withholds.
+
+**This measures delivery, not effect.** No agent ran, so it bounds what one could recover, not what one does — and a retrieval number can climb while the outcome it is meant to predict falls. SWE-bench measured BM25 recall rising from 29.58 to 51.06 across its context budgets and reported that "even when increasing the maximum context size for BM25 would increase recall with respect to the oracle files, performance drops … as models are simply ineffective at localizing problematic code" ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). One corpus, one repository. Seven superseded records and no expired ones, so zero-reversed-delivered says nothing yet about expiry. Method and full tables: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
+
+**The `git log` baseline is not an artifact of measuring ourselves.** The same measurement on four repositories this project did not write — Django, SymPy, scikit-learn and Requests, at pinned commits — puts the share of a path's history that survives an 800-token cut between **37.4% and 55.6%**. The 42.0% above sits inside that band. Losing something close to half a file's history to a fixed budget is what `git log` does on large, long-lived repositories generally, not something peculiar to this one. What did *not* transfer is the mechanism: our paths carry a median of one commit at 687 tokens where Django's carry eight at 213, so long commit messages make the ordinary-Git baseline worse at a fixed budget — a cost of this project's own practice. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) also reports a delivery figure on those repositories; read §9.0 and §9.5 first, because the records there were generated from revert commits by a program and the headline number is one the attachment predicate forces rather than a retrieval result.
+
+Missing a record costs the model context. Handing it a decision that was already reversed costs it correctness. In this [retrieval measurement](bench/retrieval/result.md), at every size from 0 to 10,000 distractors, BM25, embedding top-k, hybrid RRF, and embedding with a path filter each returned one superseded record. CommitLore path scope with lifecycle returned zero stale records and both current records (2/2).
+
+Recall is the supporting result: retrieval finds broadly the same records either way, but only one route knows which are still current. The advantage appears when decisions have been reversed—the case this product exists for.
+
+The separate #167 exposure run still matters: only 2 of 10,002 records reached the model.
+
+| route | model-visible records | relevant records | model-visible tokens |
+|---|---:|---:|---:|
+| inject everything | 10,002 | 2/2 | 1,004,554 |
+| top-k lexical | 2 | 1/2 | 190 |
+| CommitLore path scope | 2 | 2/2 | 335 |
+
+This measures exposure and recall at a fixed two-record output budget—not token cost, billed cost, accuracy, or agent behaviour. It is one corpus, one query, and one pinned embedding model. Where recall ties, and what else has and has not been measured: [docs/evidence.md](docs/evidence.md).
 
 ## How it works
 
@@ -197,6 +258,15 @@ every edit. Adoption cost, from the same report: one command, and 7.4 seconds to
 index 768 commits. Nothing touched history or the working tree. The console
 output and the full report are in [docs/evidence.md](docs/evidence.md).
 
+That was a 768-commit repository. At **100,000 commits an indexed `context` query
+answers in 496 ms at p50**, and the hooks behind it cost 185.85 ms p50 for
+`commit-msg` and 102.40 ms p50 for the injection hook. Those are the numbers that
+decide whether this stays installed on a large repository, and they are measured
+rather than asserted. The same run carries the figure that looks bad: without the
+index, that query at 100,000 commits takes 86,673 ms. The index is not an
+optimisation on top of a working query — it is what makes the query possible at
+that size, which is why `init` builds one and `doctor` checks it.
+
 **Three properties no hosted chat-history product can offer**, and the reason the
 authority is Git rather than a service:
 
@@ -213,10 +283,22 @@ authority is Git rather than a service:
 | `CLAUDE.md` / `AGENTS.md` | how the agent should work |
 | ADRs | large architecture decisions, as documents |
 | Chat memory / RAG | related text from the past |
+| [Lore](https://arxiv.org/abs/2603.15566) | the same idea, published first — decision records in git trailers |
 | **CommitLore** | **which decisions still apply to this code path** |
 
 Similarity search can find a related decision. CommitLore also knows whether that
 decision is still active, superseded, or expired — and shows only the first.
+
+**On that third row.** [Lore](https://arxiv.org/abs/2603.15566) (March 2026)
+proposed decision records in native git trailers four months before this
+repository existed, with a vocabulary that maps almost one-to-one onto this one.
+The protocol idea is not novel here and saying otherwise would not survive anyone
+reading the paper. What Lore has no counterpart for is the lifecycle —
+`Supersedes:` and `Expires:`, and the filtering that makes the row above true —
+or the trust grading; and it states that it "outlines an empirical validation
+path" rather than running one. That validation, including the parts that failed,
+is what this project has that the paper does not
+([ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)).
 
 The authority is ordinary commit trailers and `refs/notes/commitlore`. Indexes and reports are derived and rebuildable from those Git records.
 

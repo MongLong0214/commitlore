@@ -19,8 +19,8 @@
 
 **코딩 에이전트를 위한 Git 네이티브 decision layer.**
 
-새 에이전트는 구현을 읽을 수 있습니다. 하지만 제약도, 팀이 기각한 대안도, 경고도, 검증
-공백도 복원하지 못합니다 — 그것들을 쥐고 있던 세션이 끝나면 사라지기 때문입니다.
+새 에이전트는 구현을 물려받습니다. 하지만 제약도, 팀이 기각한 대안도, 경고도, 검증 공백도
+물려받지 못합니다 — 무언가가 실어 나르지 않는 한 그것들은 코드와 함께 이동하지 않습니다.
 
 CommitLore는 그 엔지니어링 판단을 Git에 보존하고, 다음 편집 전에 **지금도 유효한 결정만**
 전달합니다. 이후 대체되거나 만료된 결정은 여전히 유효한 것처럼 에이전트에게 도달하지
@@ -48,7 +48,7 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh | sh
 ```
 
 어떤 host를 지원하는지, 각 설치 경로가 무엇을 요구하는지: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/inst
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
 </p>
 
-**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지 안다.** 바꾸기 전에 path를 조회한다.
+**새 에이전트, 채팅 이력은 0개. 그래도 뻔한 수정안이 왜 제외됐는지를 건네받는다.** 바꾸기 전에 path를 조회한다.
 
 ```bash
 commitlore context install.sh
@@ -82,6 +82,21 @@ warnings
 이 PreToolUse hook path를 그대로 재현하는 방법과 나머지 모든 명령은 [docs/cli.md](docs/cli.md)에 있다.
 
 ## 검색은 레코드를 찾을 수 있습니다. 경로 범위는 뒤집힌 결정을 걸러냅니다.
+
+에이전트가 첫 편집을 하기 전에, 저장소가 가진 아직 유효한 결정 중 실제로 몇 퍼센트가 에이전트에게 도달할까요? 이 저장소에서, 훅이 기본으로 쓰는 800토큰 예산 기준:
+
+| 경로 | 예산 | 전달된 유효 결정 | 전달된 뒤집힌 결정 | 토큰 |
+|---|---:|---:|---:|---:|
+| 코드만 | — | 0.0% | 0 | 0 |
+| 해당 경로의 `git log` | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore 경로 범위** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore, 상한 해제 | 없음 | 92.3% | 0 | 741,429 |
+
+상한을 풀면 경로 범위는 저장소 전체 덤프가 회수하는 것과 정확히 같은 2,217쌍 중 2,047쌍을 회수합니다. 덤프의 92,175,612 토큰 중 일부만 쓰고, 덤프가 함께 실어 나르는 뒤집힌 레코드 7,322개는 하나도 전달하지 않습니다. **범위는 아무 대가도 치르지 않습니다.** 상한이 10.6포인트를 씁니다. 남은 170쌍은 신뢰 등급자가 보류한 레코드입니다.
+
+**이것은 전달을 잰 것이지 효과를 잰 것이 아닙니다.** 에이전트를 돌리지 않았으므로 회수할 수 *있는* 양의 상한이지 실제로 회수하는 양이 아닙니다. 그리고 검색 지표는 그것이 예측해야 할 결과가 나빠지는 동안에도 올라갈 수 있습니다. SWE-bench는 컨텍스트 예산을 늘릴 때 BM25 recall이 29.58에서 51.06으로 오르는 것을 측정하고도, "BM25의 최대 컨텍스트 크기를 늘리면 oracle 파일에 대한 recall이 올라가는 경우에도 성능은 떨어진다 … 모델이 문제 코드를 국소화하는 데 그저 서툴기 때문"이라고 보고했습니다 ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). 코퍼스 하나, 저장소 하나입니다. 대체된 레코드는 7개, 만료된 레코드는 0개이므로 "뒤집힌 결정 0건 전달"은 만료에 대해서는 아직 아무것도 말하지 않습니다. 방법과 전체 표: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
+
+**`git log` 기준선은 우리가 우리를 재서 나온 값이 아닙니다.** 같은 측정을 이 프로젝트가 쓰지 않은 저장소 넷 — Django, SymPy, scikit-learn, Requests — 에 고정 커밋으로 적용하면, 한 경로의 이력 중 800토큰 절단에서 살아남는 비율이 **37.4%에서 55.6%** 사이입니다. 위의 42.0%가 그 구간 안에 들어갑니다. 고정 예산이 한 파일 이력의 절반 가까이를 잘라내는 것은 크고 오래된 저장소에서 `git log`가 일반적으로 하는 일이지, 이 저장소만의 특이점이 아닙니다. **이전되지 않은 것은 메커니즘입니다.** 우리 경로는 중앙값 1커밋에 687토큰인데 Django는 8커밋에 213토큰이라, 긴 커밋 메시지가 고정 예산에서 평범한 Git 기준선을 더 나쁘게 만듭니다 — 이 프로젝트 자체 관행이 치르는 비용입니다. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md)는 그 저장소들에 대한 전달 수치도 보고하지만 §9.0과 §9.5를 먼저 읽으십시오. 거기 레코드는 revert 커밋에서 프로그램이 생성한 것이고, 헤드라인 숫자는 검색 결과가 아니라 부착 술어가 강제하는 값입니다.
 
 레코드 하나를 놓치면 모델은 맥락을 잃습니다. 이미 뒤집힌 결정을 건네면 정확성을 잃습니다. 이 [검색 측정](bench/retrieval/result.md)에서 방해 레코드가 0개부터 10,000개까지인 모든 크기에서 BM25, 임베딩 top-k, 하이브리드 RRF, 경로 필터를 적용한 임베딩은 각각 대체되어 폐기된 레코드 하나를 반환했습니다. 수명 주기를 적용한 CommitLore 경로 범위는 오래된 레코드를 0개 반환하고 현재 레코드 둘(2/2)을 모두 반환했습니다.
 
@@ -123,11 +138,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh
-sh install.sh v0.6.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh
+sh install.sh v0.7.0
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v0.6.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.7.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -164,8 +179,9 @@ Ruled-out
 에이전트는 이것을 명령이 아니라 정보로 다루라고 안내받는다. 신뢰된 작성자가 남긴
 record는 `[directive]`로 렌더된다.
 
-에이전트는 대신 순수 계산 primitive를 공유하고 checkout 정책 진입점은 건드리지 않는다.
-그 리뷰는 아예 일어나지 않는다. 결정이 이미 거기 있었기 때문이다.
+모듈 경계가 리뷰 코멘트로 뒤늦게가 아니라, 에이전트가 변경을 제안하기 **전에** 그 앞에
+놓인다. 에이전트가 그에 따라 행동하는지는 이 프로젝트가 답하지 않은 에이전트 행동의
+문제다 — 아래 측정과 [측정하지 않은 것](docs/evidence.md)을 보라.
 
 ## 어떻게 동작하나
 
@@ -189,6 +205,14 @@ record는 `[directive]`로 렌더된다.
 인덱싱에 7.4초. 히스토리도 작업 트리도 건드리지 않는다. 콘솔 출력과 리포트 전문은
 [docs/evidence.md](docs/evidence.md)에 있다.
 
+그건 커밋 768개짜리 저장소였다. **커밋 10만 개에서 인덱스를 쓴 `context` 질의는 p50
+496 ms에 답한다.** 그 뒤에서 도는 훅은 `commit-msg`가 p50 185.85 ms, 주입 훅이 p50
+102.40 ms다. 큰 저장소에 이걸 계속 설치해 둘지 결정하는 건 이 숫자들이고, 주장이 아니라
+측정값이다. 같은 실행에는 보기 나쁜 숫자도 들어 있다. 인덱스 없이 같은 질의를 커밋 10만
+개에서 하면 86,673 ms가 걸린다. 인덱스는 잘 도는 질의 위에 얹은 최적화가 아니라 그
+규모에서 질의를 가능하게 만드는 것 자체이고, 그래서 `init`이 그것을 만들고 `doctor`가
+그것을 확인한다.
+
 **호스팅형 채팅 기록 제품이 줄 수 없는 세 가지**, 그리고 권위를 서비스가 아니라 Git에 둔 이유:
 
 | 도구 | 기억하는 것 |
@@ -196,10 +220,20 @@ record는 `[directive]`로 렌더된다.
 | `CLAUDE.md` / `AGENTS.md` | 에이전트가 어떻게 일해야 하는가 |
 | ADR | 큰 아키텍처 결정을 문서로 |
 | Chat memory / RAG | 과거의 관련 텍스트 |
+| [Lore](https://arxiv.org/abs/2603.15566) | 같은 발상, 먼저 발표됨 — git trailer에 담은 결정 레코드 |
 | **CommitLore** | **이 코드 경로에 지금도 유효한 결정** |
 
 유사도 검색은 관련된 결정을 찾아줄 수 있다. CommitLore는 거기에 더해 그 결정이 아직
 유효한지, 대체됐는지, 만료됐는지를 알고 — 첫 번째 것만 보여준다.
+
+**세 번째 행에 대하여.** [Lore](https://arxiv.org/abs/2603.15566)(2026년 3월)는 이
+저장소가 생기기 넉 달 전에 native git trailer에 결정 레코드를 담는 방식을 제안했고, 그
+어휘는 이쪽과 거의 일대일로 대응한다. **프로토콜 발상은 여기서 새로운 것이 아니며**,
+아니라고 말해봐야 논문을 읽는 사람 앞에서 버티지 못한다. Lore에 대응물이 없는 것은
+lifecycle — `Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참으로 만드는 필터링 —
+과 신뢰 등급이고, 논문 자신은 "empirical validation path를 *제시한다*"고 쓴다. 실행하지는
+않는다. 그 검증을 실패한 부분까지 포함해 가진 것이 이 프로젝트가 논문보다 가진 것이다
+([ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)).
 
 ## 무엇이 다른가
 

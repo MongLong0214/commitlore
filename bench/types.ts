@@ -1,3 +1,5 @@
+import type { TurnLedger } from "./drivers/stream-json.ts";
+
 /**
  * How a run ended.
  *
@@ -163,7 +165,7 @@ export const CONDITIONS: Readonly<Record<string, ConditionSpec>> = {
     id: "no-grade",
     status: "supported",
     description:
-      "Ablation (T-703): skip trust grading — every Warn renders as instruction. Inert on a task whose records are all `Provenance: authored`, because there is nothing to promote.",
+      "Ablation (T-703): skip trust grading — every record renders `[directive]` instead of the grade `core/grade.ts` assigns. This said \"inert on a task whose records are all `Provenance: authored`\" until #415, and that was wrong: it describes `bench/context.ts`'s provenance-based renderer, which this arm never reaches. `writeArmSettings` returns a settings path for any arm carrying an ablation, so the runner installs the hook and leaves `injectedContext` null — the arm runs the real `buildInjection` through the shim. Neither this arm nor `commitlore-on` passes `--trusted-author`, and `gradeRecord` is fail-closed on an empty list, so grading puts every record at `claim` and removing it puts every record at `directive`. Measured on an ordinary authored record: 0 directive / 6 claim graded, 6 directive / 0 claim ungraded.",
     seed_records: true,
     inject_records: true,
     injection_scope: "route-scoped",
@@ -317,16 +319,18 @@ export interface RunRecord {
   // are not, and are not approximated in their place:
   //
   //   - rejected-path tool actions: `DriverResult.transcript` is the `claude`
-  //     CLI's final `result` text (`--output-format json`), not a transcript
-  //     of tool calls, so there is no tool-call log to count actions from.
-  //     `drivers/claude-headless.ts` would need `--output-format stream-json`
-  //     (or an equivalent capture) recording each tool_use block to make this
-  //     observable.
+  //     CLI's final `result` text, not a transcript of tool calls, so there is
+  //     no tool-call log to count actions from. `--output-format stream-json`
+  //     now available in the driver names the *kind* of each content block
+  //     (`turn_usage[].content_blocks` records `tool_use`), so a turn that
+  //     called a tool can be told from one that only wrote prose — but not
+  //     which tool, or on what. Counting actions still needs the tool_use
+  //     block's own name and input, which this parser discards.
   //   - turns spent before abandoning the rejected path: `turns` below is the
-  //     run's total turn count (`num_turns` from that same final JSON), with
-  //     no attribution of which turn did what. Seeing "abandoned after N
-  //     turns" needs the same per-turn capture as the item above, keyed by
-  //     turn index.
+  //     run's total turn count (`num_turns` from that same final JSON). The
+  //     per-turn ledger below now indexes turns, so "after N turns" is
+  //     expressible; what is still missing is which turn was on the rejected
+  //     path, which is a detector question rather than a capture one.
   //
   // Every field below is optional for the reason `reproposal_matches` is: a
   // row written before this harness computed it carries none of them, and a
@@ -355,6 +359,25 @@ export interface RunRecord {
    * above for what would be needed to see a reverted attempt at all.
    */
   readonly rejected_path_first_edit?: 0 | 1;
+
+  // --- Per-turn usage ---
+
+  /**
+   * Provider-reported token usage, one entry per assistant API call, with the
+   * turns' sum checked against the session total the CLI reports for itself.
+   *
+   * Written only when the runner was invoked with `--per-turn-usage` and the
+   * installed CLI supplied the events; absent is "not instrumented", the same
+   * reading the CPAA fields above take. `tokens` above remains the session
+   * total under its own long-standing field selection and is not recomputed
+   * from this, so a row that carries a ledger stays comparable with every row
+   * that does not.
+   *
+   * This is the instrument `bench/TOKEN-LEDGER.md` §5 blocker B named as
+   * missing. It makes attribution possible; it does not by itself price the
+   * drafting turn, which still needs a bench arm that runs `capture`.
+   */
+  readonly turn_usage?: TurnLedger;
 }
 
 /** A task's comparator-only qualification result before either analysis arm runs. */

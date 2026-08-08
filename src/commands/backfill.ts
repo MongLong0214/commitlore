@@ -20,6 +20,8 @@
 
 import type { Command } from 'commander';
 
+import { notesAvailability } from '../core/notes.js';
+
 import {
   DEFAULT_BATCH_SIZE,
   DEFAULT_LIMIT,
@@ -176,24 +178,34 @@ const jsonPayload = (result: BackfillResult): string =>
     2,
   )}\n`;
 
-const present = (result: BackfillResult, json: boolean): BackfillOutcome => {
+const present = (
+  result: BackfillResult,
+  json: boolean,
+  incomplete: string | null = null,
+): BackfillOutcome => {
+  const caveat =
+    incomplete === null
+      ? ''
+      : `${PREFIX} the notes mirror is ${incomplete}, so "no record" below means "none this clone can see" — ` +
+        `counts of note trailers and of targets are both drawn from an index that could not read it. ` +
+        `fix: commitlore doctor --fix, then git fetch\n`;
   const detail = [
     ...result.report.discarded.map(discardLine),
     ...result.report.skipped.map(skipLine),
   ].join('');
 
-  if (json) return { stdout: jsonPayload(result), stderr: detail, exitCode: 0 };
+  if (json) return { stdout: jsonPayload(result), stderr: caveat + detail, exitCode: 0 };
 
   /* In prompt mode stdout is the payload a session consumes, so the summary
      goes to stderr and stays out of whatever the user pipes it into. */
   if (result.report.mode === 'prompt-only') {
     return {
       stdout: promptPayload(result),
-      stderr: `${detail}${summary(result.report)}`,
+      stderr: `${caveat}${detail}${summary(result.report)}`,
       exitCode: 0,
     };
   }
-  return { stdout: summary(result.report), stderr: detail, exitCode: 0 };
+  return { stdout: summary(result.report), stderr: caveat + detail, exitCode: 0 };
 };
 
 /**
@@ -201,9 +213,41 @@ const present = (result: BackfillResult, json: boolean): BackfillOutcome => {
  * outcome rather than an exception: the one thing a user of a cold-start command
  * should never see is a stack trace telling them nothing they can act on.
  */
+/**
+ * #403, and PRD Phase 0: fail closed when the notes mirror was not read.
+ *
+ * `backfill` selects its targets from the index — "commits with no record". A
+ * commit whose record lives only in an unfetched note has, from here, no record,
+ * so it is eligible for reconstruction. Writing then produces a second record
+ * for one decision: either a `Record-Id` collision, or worse, no collision and
+ * two records the lifecycle fold cannot reconcile.
+ *
+ * The read-only modes still run — they are how a user diagnoses this — but they
+ * say the selection was drawn from an index that could not see the mirror. Only
+ * the writing mode refuses, because only it can create the duplicate.
+ */
+const NOT_COMPLETE = new Set(['unfetched', 'diverged', 'shallow']);
+
+const incompleteMirror = (options: BackfillCommandOptions): string | null => {
+  const state = notesAvailability(options.cwd === undefined ? {} : { cwd: options.cwd });
+  return NOT_COMPLETE.has(state) ? state : null;
+};
+
 export const runBackfill = (options: BackfillCommandOptions): BackfillOutcome => {
+  const incomplete = incompleteMirror(options);
+  const writes = options.draft !== undefined && options.dryRun !== true;
+  if (incomplete !== null && writes) {
+    return {
+      stdout: '',
+      stderr:
+        `${PREFIX} the notes mirror is ${incomplete}, so a record that already exists upstream reads here ` +
+        `as a commit with none. Reconstructing now can write a second record for one decision.\n` +
+        `${PREFIX} fix: commitlore doctor --fix, then git fetch, then rerun\n`,
+      exitCode: 2,
+    };
+  }
   try {
-    return present(backfill(toBackfillOptions(options)), options.json === true);
+    return present(backfill(toBackfillOptions(options)), options.json === true, incomplete);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     // A usage error, never a finding (SPEC §10): a bad flag, an unreadable

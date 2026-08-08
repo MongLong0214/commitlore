@@ -1,7 +1,7 @@
-import { lstatSync, realpathSync, statSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { execGit } from './git.js';
-import { PACKAGE_ROOT } from './paths.js';
+import { PACKAGE_ROOT, findPackageRoot, packageVersion } from './paths.js';
 const configValue = (cwd, key) => execGit(['config', '--local', '--get', key], { cwd }).stdout.trim();
 const isFile = (path) => {
     try {
@@ -58,6 +58,67 @@ export const classifyBinTarget = (path) => path.endsWith('.js') || path.endsWith
  * instead of guessing at it independently.
  */
 export const hasAllowedBinExtension = (path) => classifyBinTarget(path) !== null;
+/**
+ * Which release the recorded path belongs to, or `null` when that cannot be
+ * established.
+ *
+ * Read from the `package.json` above the recorded file rather than by running
+ * it with `--version`. Those are the same number — `packageVersion()` reads the
+ * `package.json` above its own module — but one of them is a file read and the
+ * other is a subprocess. `hooks status` currently spawns nothing at all, and
+ * the recorded path is by design a value a `.git/config` edit can change
+ * (ADR-0011's threat model); a diagnostic that executes it to find out what it
+ * is would hand that edit a run on every `status` and every `doctor`, which is
+ * a larger door than the question is worth.
+ *
+ * The walk starts at the recorded file's directory, so it lands on the same
+ * root that file would compute for itself when it runs — a bundle in
+ * `<install>/dist/` resolves to `<install>`, exactly as `PACKAGE_ROOT` does
+ * inside it.
+ */
+const recordedVersion = (binPath) => {
+    try {
+        const manifest = readFileSync(join(findPackageRoot(dirname(binPath)), 'package.json'), 'utf8');
+        const parsed = JSON.parse(manifest);
+        return typeof parsed.version === 'string' && parsed.version !== '' ? parsed.version : null;
+    }
+    catch {
+        // No manifest above it, unreadable, or not JSON. All three mean the same
+        // thing to the caller: this pin's version is unknown.
+        return null;
+    }
+};
+/**
+ * The version skew #382 reported, stated as problems rather than repaired.
+ *
+ * `hooks install` writes `commitlore.bin`/`commitlore.root` into one
+ * repository's config, and an upgrade installs a new release somewhere else
+ * without visiting the repositories that pinned the old one. The hook is the
+ * enforcement point, so the pinned build is what validates every commit —
+ * two releases of `validate` changes can be inert while `commitlore --version`
+ * reports the newest one. `doctor` already printed the stale path inside its
+ * own `ok` line; this is that same value compared instead of merely echoed.
+ *
+ * An undeterminable version is reported too. The pin still decides what runs,
+ * and "I could not find out" is not the same answer as "it matches" — a false
+ * green here costs a repository every fix shipped since the pin was written.
+ */
+const versionProblems = (binPath) => {
+    const running = packageVersion();
+    const pinned = recordedVersion(binPath);
+    if (pinned === null) {
+        return [
+            `commitlore.bin does not declare a version, so it cannot be compared with this CLI (${running}) — ` +
+                'the hook may be validating commits with a different build',
+        ];
+    }
+    if (pinned === running)
+        return [];
+    return [
+        `commitlore.bin is version ${pinned}, but this CLI is ${running} — the hook validates ` +
+            `every commit with ${pinned}, so anything fixed since then does not apply here`,
+    ];
+};
 export const readRecordedHookTarget = (cwd) => {
     const bin = configValue(cwd, 'commitlore.bin');
     const node = configValue(cwd, 'commitlore.node');
@@ -83,6 +144,9 @@ export const readRecordedHookTarget = (cwd) => {
             // `doctor` explain a hook that declines rather than contradict it.
             if (isSymlink(binPath))
                 problems.push('commitlore.bin is a symlink');
+            // Last, because the ones above say the hook will not run this file at
+            // all, and which release it belongs to is only interesting once it will.
+            problems.push(...versionProblems(binPath));
         }
     }
     if (node === '')

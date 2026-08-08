@@ -1,0 +1,14 @@
+=== seeds 1-10 start 2026-08-06T23:08:24Z ===
+conditions commitlore-on, commitlore-off
+runs       200 (10 seed(s) x 10 task(s) x 2 condition(s))
+
+
+run_id 20260806T230824Z-60e31e
+rows   200 -> <outdir>/m5-seeds-1-10-rerun.jsonl
+tokens 8321053/200000000
+errors 1
+=== seeds 1-10 done 2026-08-07T09:59:37Z rows=     200 ===
+=== seeds 11-20 start 2026-08-07T09:59:37Z ===
+conditions commitlore-on, commitlore-off
+runs       200 (10 seed(s) x 10 task(s) x 2 condition(s))
+

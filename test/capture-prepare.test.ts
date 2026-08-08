@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { computePolicyIdentityHash } from '../src/core/capture-policy.js';
 import { execSync } from 'node:child_process';
 
 import { prepareCaptureContext } from '../src/core/capture-prepare.js';
@@ -56,16 +57,11 @@ describe('prepareCaptureContext', () => {
     expect(result.staged_tree_oid).toBe(treeOid);
     expect(result.staged_tree_oid).toMatch(/^[0-9a-f]{40}$/);
 
-    // policy_identity_hash is deterministic
-    const policyDefaults = {
-      mode: 'suggest',
-      max_records_per_commit: 1,
-      require_verified_evidence: true,
-    };
-    const expectedPolicyHash = createHash('sha256')
-      .update(JSON.stringify(policyDefaults))
-      .digest('hex');
-    expect(result.policy_identity_hash).toBe(expectedPolicyHash);
+    // policy_identity_hash is deterministic. Taken from the module rather than
+    // rebuilt from a local copy of the defaults: that copy went stale the moment
+    // ADR-0030 changed `mode`, and a stale copy here fails as though `prepare`
+    // were broken.
+    expect(result.policy_identity_hash).toBe(computePolicyIdentityHash());
 
     // source_hashes present and correct
     const expectedTranscriptHash = createHash('sha256').update(transcript).digest('hex');

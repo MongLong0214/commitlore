@@ -63,9 +63,13 @@ The root `tsconfig.json` excludes `bench/`, so this directory has its own.
 | `--timeout-ms <n>` | per-run wall clock (default 600000) |
 | `--keep` | keep the temporary workspaces and print their paths |
 | `--save-transcripts <dir>` | write each run's transcript, diff, commits and injected context |
+| `--per-turn-usage` | record provider-reported token usage per turn into `turn_usage` |
 
 Use `--save-transcripts` whenever a number will be quoted anywhere. A detector
 verdict nobody can re-read is a verdict nobody can challenge.
+
+`--per-turn-usage` is off by default, and off is the shape every committed
+result in `bench/results/` was produced under. See *Per-turn usage* below.
 
 ## Conditions
 
@@ -792,6 +796,60 @@ conditional on* below.
 `node bench/verify.mjs <file>` validates every line and exits non-zero on any
 failure, on a malformed line, or on a file with no rows.
 
+`npm run bench:verify` — with no arguments — runs the same check over every
+`bench/results/*.jsonl`, and is the CI step. Scope is default-in: a results file
+is gated as soon as it is committed, with nothing to register. Two exemptions
+are decided per row and printed on every run, and the rule for each is stated at
+the top of `bench/verify.mjs`:
+
+- a file whose every row carries `schema_version` holds metric rows, not run
+  records, and this schema does not describe it (a file mixing the two is
+  failed, not classified);
+- rows recorded before `1073fa4` are not required to carry `harness_commit` and
+  `dist_digest`, which did not exist yet. Every other constraint still applies
+  to them, and `started_at` comes from the clock, so no new row can qualify.
+
+## Per-turn usage
+
+`--per-turn-usage` writes a `turn_usage` object: one entry per assistant API
+call, carrying that turn's `input_tokens`, `output_tokens`,
+`cache_creation_input_tokens`, `cache_read_input_tokens`, `thinking_tokens`,
+`stop_reason` and the kinds of its content blocks. Absent means *not
+instrumented*, never zero — the reading the CPAA fields already take.
+
+The row's `tokens` field is untouched by it. It stays the session total under
+the same field selection it has always used (input + output + cache creation,
+cache reads excluded), read from the same final `result` event, so a row with a
+ledger is comparable with every row without one.
+
+What the CLI's stream carries, established by running it rather than by reading
+the docs, on CLI 2.1.220 — the captures are committed under
+`test/fixtures/claude-stream/`:
+
+- `--output-format stream-json` emits an `assistant` event **per content
+  block**, each carrying the same `message.usage` object and the same
+  `message.id`. Summing them double-counts every turn.
+- On those events, `input_tokens` and both cache fields are final and
+  reconcile exactly against the session total. `output_tokens` does not: it is
+  the `message_start` snapshot. Measured on one probe, three turns reported 4,
+  1 and 1 against real outputs of 157, 193 and 36 — a session total of 6
+  against 403. Nothing in the event marks it provisional.
+- The turn's real output arrives only on the `message_delta` event, which is
+  emitted only under `--include-partial-messages`. It also breaks out
+  `output_tokens_details.thinking_tokens`.
+
+So the driver passes `--include-partial-messages`, and the parser keys off
+`message_delta`. Every ledger carries its own audit: `turn_total`,
+`session_total` and a `reconciled` boolean. If the turns do not sum to the total
+the CLI states for itself, field for field, the ledger says so on the row rather
+than being trusted.
+
+Two things it still does not give you. `content_blocks` records that a turn
+called a tool, not which tool or on what — the tool_use block's name and input
+are discarded. And subagent turns are recorded with their
+`parent_tool_use_id` rather than merged away, because a ledger that hid them
+would not total the session it claims to total.
+
 ## Metrics
 
 `node bench/metrics.ts <file...> [--json]` aggregates per condition: re-proposal
@@ -864,6 +922,17 @@ Two things would close it, in order of size:
    of the numerator is free by design and will stay free unless verification
    grows a model. The field is written only when the step actually ran, because
    a measured zero and an absent field are different claims.
+
+**What `token_ledger` closed, and what it did not.** The deterministic
+half of item 1 is now measured: `bench/deterministic/ledger.ts` prices the
+generated harvest prompt — the scaffold plus the staged diff — once per
+record-bearing commit in this repository's own history, with no model call, and
+turns item 2's "structurally 0" into a scan of the built verify module graph
+rather than an assertion. The method is `bench/TOKEN-LEDGER.md`. What it did not
+close is the model's drafting turn, and the blocker there is named rather than
+estimated: `drivers/claude-headless.ts` reads one session-total `usage` object
+out of `--output-format json`, so there is no per-turn ledger to attribute an
+answer to that turn even if a call were made.
 
 ### Significance
 

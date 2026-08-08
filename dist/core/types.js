@@ -114,7 +114,7 @@ export const canonicalConventionalTrailerKey = (key) => CONVENTIONAL_TRAILER_CAN
 export const BLAST_VALUES = ['local', 'module', 'system'];
 export const UNDO_VALUES = ['easy', 'costly', 'permanent'];
 export const CERTAINTY_VALUES = ['firm', 'tentative', 'guess'];
-export const PROVENANCE_PREFIXES = ['authored', 'inherited', 'reconstructed', 'unknown'];
+export const PROVENANCE_PREFIXES = ['authored', 'drafted', 'inherited', 'reconstructed', 'unknown'];
 export const RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 export const EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
 //# sourceMappingURL=types.js.map

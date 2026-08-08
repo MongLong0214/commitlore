@@ -54,17 +54,30 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type Trailer } from './types.js';
 export type IndexDatabase = DatabaseSync;
 /**
- * Bumped whenever the table shape changes. A mismatch is not an error: the
- * index is derived, so the old file is deleted and rebuilt (ADR-0003). Without
- * this, a user upgrading the CLI would silently read a table that no longer
- * means what the code thinks it means.
+ * Bumped whenever a stored row stops meaning what it meant — a changed table
+ * shape, **or** a changed rule about which rows belong here at all. A mismatch
+ * is not an error: the index is derived, so the old file is deleted and rebuilt
+ * (ADR-0003). Without it, a user upgrading the CLI silently reads a table that
+ * no longer means what the code thinks it means.
+ *
+ * "Shape only" was the earlier reading, and it is what caused #406. #335 added
+ * the `isCommitLoreKey` gate and changed no column, so the version stayed at 2
+ * and every v0.5.0 index was accepted as current. The other rebuild trigger is
+ * `lastIndexedSha !== head`, which cannot see a classifier change, so the
+ * commits were never re-read: ordinary conventional-commit trailers kept being
+ * served as records under the exact rule #335 was closed to enforce. `doctor`
+ * compares the cache against HEAD and never against the classifier, so the one
+ * check a user would run reported the stale index `ok`.
  *
  * v2 adds `trailers.block`: a message MAY now carry several record blocks
  * (SPEC §2.4, bug-issue-60), and rows from different blocks on the same
  * commit need a column of their own to stay apart — `seq` alone repeats
  * across blocks.
+ *
+ * v3 changes no column. It retires every index built before #335's classifier
+ * gate, which is the only way those rows can be re-read.
  */
-export declare const SCHEMA_VERSION = 2;
+export declare const SCHEMA_VERSION = 3;
 export declare const NOTES_REF = "refs/notes/commitlore";
 export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */

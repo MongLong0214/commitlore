@@ -76,20 +76,54 @@ is in [protocol.md](protocol.md).
 | `commitlore index` | builds or refreshes the derived record index (`.git/commitlore/index.db`) |
 | `commitlore parse` | parses a commit message into its CommitLore trailers (SPEC §2) |
 | `commitlore validate` | checks commit trailers against the protocol (SPEC §6) |
+| `commitlore sync` | publishes and collects the notes mirror — the `pre-push` hook runs it for you |
 | `commitlore squash-preserve <range>` | carries the records of a squashed branch onto the merge commit (ADR-0004) |
 | `commitlore demo` | runs a self-contained lifecycle demo in a temporary repository (no network, no model) |
 | `commitlore uninstall` | removes what `install.sh` or `install.ps1` wrote — see [install.md](install.md) |
 
 `hooks install` preserves and chains any existing `commit-msg` hook.
 `hooks uninstall` removes every CommitLore hook — `commit-msg`,
-`prepare-commit-msg`, `post-commit` — and restores any they replaced.
+`prepare-commit-msg`, `post-commit`, `pre-push` — and restores any they replaced.
 
-`prepare-commit-msg` and `post-commit` are internal hook commands. Git invokes
-them; you do not.
+`prepare-commit-msg`, `post-commit` and `pre-push` are internal hook commands.
+Git invokes them; you do not.
+
+## Sharing records with a team
+
+A record in a commit message travels with the commit. A record in
+`refs/notes/commitlore` — what `backfill` writes, and what squash inheritance
+carries — does not, because Git neither fetches nor pushes notes by default.
+
+Both directions are handled after `commitlore init`, and neither needs a command:
+
+- **Collecting.** `doctor --fix` configures the fetch refspec, so any `git fetch`
+  brings the mirror with it.
+- **Publishing.** The `pre-push` hook runs `commitlore sync`, so `git push`
+  carries your records with the code they describe. It cannot fail your push:
+  every path in it exits 0, and anything worth knowing goes to stderr.
+
+`commitlore sync` is there for what the hook cannot cover — a repository whose
+hooks were never installed, collecting without pushing (`--fetch-only`), and
+seeing what would happen first (`--dry-run`).
+
+When two clones have both written records, `sync` merges the union rather than
+picking a winner, because concatenating two sets of records loses nothing.
+**A merged note is graded `claim` until every identity that has written it is a
+trusted author** — a note two people wrote is attributed to both, and trust takes
+the floor (SPEC §7).
+
+The fetch refspec is deliberately **not** forced. A forced one overwrites this
+clone's mirror on every fetch, which destroys a record written here and not yet
+pushed. The cost of unforcing is that a diverged fetch prints
+`! [rejected] (non-fast-forward)` instead of silently discarding your work;
+`commitlore sync` resolves it. `doctor` reports a forced refspec left over from
+an older version, and `--fix` rewrites it.
 
 ## The index is derived
 
 `.git/commitlore/index.db` is a cache. The authority is the commit trailers and
-`refs/notes/commitlore`, so `commitlore index --rebuild` can always reconstruct
-it, and `--no-index` answers the same questions from Git alone — more slowly.
-The gap between the two at scale is measured in [evidence.md](evidence.md).
+`refs/notes/commitlore`, so `commitlore index --rebuild` reconstructs it from
+whatever Git holds here — and says so on stderr when `refs/notes/commitlore` was
+never fetched, because then it rebuilds from one source of the two. `--no-index`
+answers the same questions from Git alone — more slowly. The gap between the two
+at scale is measured in [evidence.md](evidence.md).

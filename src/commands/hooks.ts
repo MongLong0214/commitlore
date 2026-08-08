@@ -57,6 +57,11 @@ import {
   POST_COMMIT_HOOK_NAME,
 } from '../hooks/post-commit.js';
 import {
+  PRE_PUSH_CHAINED_HOOK_NAME,
+  PRE_PUSH_HOOK_MARKER,
+  PRE_PUSH_HOOK_NAME,
+} from '../hooks/pre-push.js';
+import {
   PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME,
   PREPARE_COMMIT_MSG_HOOK_MARKER,
   PREPARE_COMMIT_MSG_HOOK_NAME,
@@ -329,6 +334,13 @@ const CAPTURE_HOOKS: readonly CaptureHook[] = [
     marker: POST_COMMIT_HOOK_MARKER,
     chainedName: POST_COMMIT_CHAINED_HOOK_NAME,
   },
+  // #416. Listed here so `hooks uninstall` removes what `init` installed: a
+  // hook this command does not know about is one it leaves behind.
+  {
+    name: PRE_PUSH_HOOK_NAME,
+    marker: PRE_PUSH_HOOK_MARKER,
+    chainedName: PRE_PUSH_CHAINED_HOOK_NAME,
+  },
 ];
 
 /** Throws on a filesystem failure, which the caller reports against the hook's name. */
@@ -390,7 +402,7 @@ export const uninstallHook = (input: HookInput = {}): HookResult => {
   }
 
   // A gate that was absent or foreign is not a reason to stop: `init` installs
-  // the other two independently, and each of the three can be in any state.
+  // the others independently, and each of them can be in any state.
   for (const hook of CAPTURE_HOOKS) {
     try {
       lines.push(...removeCaptureHook(before.hooksDir, hook));

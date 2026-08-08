@@ -1,25 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
-  <title id="title">CommitLore — Git remembers what changed. CommitLore remembers why.</title>
-  <desc id="desc">A Git-native decision record carries a rejected alternative and its reason to a fresh coding-agent session.</desc>
+  <title id="title">CommitLore — Your agents inherit the code. Make them inherit the judgment.</title>
+  <desc id="desc">A fresh coding agent receives the active decision for a path, carrying a ruled-out alternative and its reason, while a superseded record is withheld because a later decision reversed it.</desc>
   <rect width="1200" height="400" rx="24" fill="#f7f5f0"/>
   <path d="M48 48H1152M48 334H1152" stroke="#d8d3c8"/>
   <g transform="translate(64 76)">
-    <text fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600" letter-spacing="2">GIT-NATIVE DECISION MEMORY</text>
-    <text y="66" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">Git remembers</text>
-    <text y="122" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">what changed.</text>
-    <text y="178" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">CommitLore</text>
-    <text y="234" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">remembers why.</text>
-    <text y="282" fill="#3e3b35" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22">Reviewable decisions that travel with the code.</text>
+    <text fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600" letter-spacing="2">GIT-NATIVE DECISION LAYER</text>
+    <text y="66" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">Your agents</text>
+    <text y="122" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">inherit the code.</text>
+    <text y="178" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">Make them inherit</text>
+    <text y="234" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">the judgment.</text>
+    <text y="282" fill="#3e3b35" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22">Only the decisions still in force reach the next edit.</text>
   </g>
   <g transform="translate(712 76)">
     <rect width="424" height="246" rx="14" fill="#fffdf9" stroke="#bdb6aa"/>
-    <text x="28" y="40" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600">A FRESH AGENT SEES</text>
+    <text x="28" y="40" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600">A FRESH AGENT RECEIVES</text>
     <path d="M28 58H396" stroke="#ded9d0"/>
-    <text x="28" y="94" fill="#181714" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">Ruled-out:</text>
-    <text x="28" y="124" fill="#3e3b35" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">publish a -musl release target</text>
-    <text x="28" y="164" fill="#181714" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">because:</text>
-    <text x="28" y="194" fill="#3e3b35" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">a release-matrix change, not a</text>
-    <text x="28" y="220" fill="#3e3b35" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">fix for this installer defect</text>
+    <text x="28" y="96" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700"><tspan fill="#3f6b4f">[active]</tspan><tspan fill="#6d675e" x="150">r-demo02</tspan></text>
+    <text x="28" y="128" fill="#181714" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">Ruled-out: Redis cluster</text>
+    <text x="28" y="154" fill="#3e3b35" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">| cost disproportionate</text>
+    <path d="M28 180H396" stroke="#ede9e2"/>
+    <text x="28" y="212" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700"><tspan fill="#9a8f80">[superseded]</tspan><tspan fill="#9a8f80" x="212">r-demo01</tspan></text>
+    <text x="28" y="238" fill="#9a8f80" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">withheld — reversed later</text>
   </g>
-  <text x="712" y="356" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">commit trailer → hook context</text>
+  <text x="712" y="356" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">commit trailer → lifecycle → hook context</text>
 </svg>

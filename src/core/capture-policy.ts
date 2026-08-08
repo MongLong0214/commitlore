@@ -51,7 +51,22 @@ import { execGit } from './git.js';
  * convention this project documents and its own skill follows, not an enforced
  * one — ADR-0028 records why the line sits there and what moving it would cost.
  */
-export type CaptureMode = 'suggest';
+/**
+ * What capture does with a candidate record (ADR-0030).
+ *
+ * - `auto` — stage it without asking. The default. Every record staged this way
+ *   is marked `Provenance: drafted` and can never grade above `claim`, because
+ *   nobody read it (see `capture-stage.ts`).
+ * - `suggest` — draft it and leave staging to the host, which may ask first.
+ *   What this repository shipped before ADR-0030, kept for a host that wants
+ *   the prompt. `stage` still cannot tell whether anyone was asked, so a record
+ *   staged in this mode carries whatever provenance it was drafted with.
+ * - `off` — capture nothing. `prepare` refuses, so no transcript is hashed and
+ *   no candidate exists.
+ */
+export type CaptureMode = 'auto' | 'suggest' | 'off';
+
+export const CAPTURE_MODES: readonly CaptureMode[] = ['auto', 'suggest', 'off'];
 
 export interface CapturePolicy {
   mode: CaptureMode;
@@ -66,7 +81,7 @@ export interface CapturePolicy {
  * which pins the value.
  */
 export const POLICY_DEFAULTS: CapturePolicy = {
-  mode: 'suggest',
+  mode: 'auto',
   max_records_per_commit: 1,
   require_verified_evidence: true,
 };
@@ -186,12 +201,12 @@ const validate = (
   const policy: CapturePolicy = { ...POLICY_DEFAULTS };
 
   if ('mode' in obj) {
-    if (obj.mode !== 'suggest') {
+    if (typeof obj.mode !== 'string' || !CAPTURE_MODES.includes(obj.mode as CaptureMode)) {
       return {
-        error: `${POLICY_FILE_NAME}: mode must be "suggest" (got ${JSON.stringify(obj.mode)})`,
+        error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(', ')} (got ${JSON.stringify(obj.mode)})`,
       };
     }
-    policy.mode = 'suggest';
+    policy.mode = obj.mode as CaptureMode;
   }
 
   if ('max_records_per_commit' in obj) {

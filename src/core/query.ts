@@ -60,7 +60,14 @@ import {
   type RecordSource,
   type TrailerQuery,
 } from './index-db.js';
-import { authorsOf, gradeRecord, restrictGrade, type Grade } from './grade.js';
+import {
+  authorsOf,
+  gradeDeclarations,
+  gradeRecord,
+  noteAuthorsOf,
+  restrictGrade,
+  type Grade,
+} from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
 import {
   foldLifecycle,
@@ -692,23 +699,18 @@ const gradeMerged = (
     cwd,
     merged.flatMap((record) => record.shas),
   );
+  // Walked only when something actually came from the mirror, so a repository
+  // with no notes pays nothing for the check (#409).
+  const noteAuthors = merged.some((record) => record.sources.includes('notes'))
+    ? noteAuthorsOf(cwd)
+    : new Map<string, string[]>();
   for (const record of merged) {
     const shas = record.shas.length > 0 ? record.shas : [record.sha];
-    let grade: Grade | undefined;
-    for (const sha of shas) {
-      const author = authors.get(sha);
-      const one = gradeRecord(
-        { trailers: record.trailers } as Record,
-        {
-          at,
-          ...(author === undefined ? {} : { author }),
-          ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
-        },
-      );
-      grade = grade === undefined ? one : restrictGrade(grade, one);
-    }
-    const resolved =
-      grade ?? gradeRecord(record, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
+    const resolved = gradeDeclarations(
+      { trailers: record.trailers } as Record,
+      { shas, sources: record.sources, commitAuthors: authors, noteAuthors },
+      { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) },
+    );
     record.trust = resolved.trust;
     if (resolved.matchedTrailerKeys !== undefined) {
       record.matchedTrailerKeys = resolved.matchedTrailerKeys;

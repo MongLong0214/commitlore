@@ -134,7 +134,7 @@ export const canonicalConventionalTrailerKey = (key: string): string =>
 export const BLAST_VALUES = ['local', 'module', 'system'] as const;
 export const UNDO_VALUES = ['easy', 'costly', 'permanent'] as const;
 export const CERTAINTY_VALUES = ['firm', 'tentative', 'guess'] as const;
-export const PROVENANCE_PREFIXES = ['authored', 'inherited', 'reconstructed', 'unknown'] as const;
+export const PROVENANCE_PREFIXES = ['authored', 'drafted', 'inherited', 'reconstructed', 'unknown'] as const;
 
 export type Blast = (typeof BLAST_VALUES)[number];
 export type Undo = (typeof UNDO_VALUES)[number];
@@ -160,6 +160,13 @@ export interface ParsedCommit {
 /** How a record came to exist — the provenance axis of trust grading (SPEC §7). */
 export type Provenance =
   | { kind: 'authored' }
+  /**
+   * Produced by the capture pipeline from a transcript and staged without a
+   * person reading it (ADR-0030). Real, verified against its sources, and
+   * capped at `claim` — the same treatment `reconstructed` gets, for the same
+   * reason: nobody stood behind the wording.
+   */
+  | { kind: 'drafted' }
   | { kind: 'inherited'; sha: string }
   | { kind: 'reconstructed' }
   | { kind: 'unknown' };

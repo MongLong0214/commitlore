@@ -45,7 +45,7 @@ const SERVER_MODULE = fileURLToPath(new URL('../dist/mcp/server.js', import.meta
 const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 
 /** The files this ticket owns. The source guards below scan exactly these. */
-const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'commands/mcp.ts'];
+const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'mcp/lifecycle.ts', 'commands/mcp.ts'];
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -261,7 +261,16 @@ interface Stub {
   stderr: () => string;
   /** Lines seen on stdout that were not parseable JSON — the pollution signal. */
   malformed: () => string[];
-  close: () => void;
+  /**
+   * Ends stdin, stops the child, and resolves only once it has actually gone.
+   *
+   * `child.kill()` returns as soon as the signal is delivered, not once the
+   * process is done — and this server writes its exit record on the way out
+   * (src/mcp/lifecycle.ts), so a caller that removed the temp directory right
+   * after `close()` returned raced a live write and hit ENOTEMPTY in CI. A
+   * shutdown that is not awaited is not a shutdown.
+   */
+  close: () => Promise<void>;
 }
 
 const startStub = (cwd: string, entry: string = SERVER_ENTRY): Stub => {
@@ -336,9 +345,16 @@ const startStub = (cwd: string, entry: string = SERVER_ENTRY): Stub => {
     stdout: () => out,
     stderr: () => err,
     malformed: () => malformed,
-    close: () => {
+    close: async () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const exited = new Promise<void>((resolve) => child.once('exit', () => { resolve(); }));
       child.stdin.end();
       child.kill();
+      // SIGTERM first, then escalate: a server wedged in its own exit path must
+      // not hang the suite, and the escalation is itself worth seeing.
+      const escalation = setTimeout(() => child.kill('SIGKILL'), 5_000);
+      await exited;
+      clearTimeout(escalation);
     },
   };
 };
@@ -442,8 +458,9 @@ beforeAll(async () => {
   initialized = await handshake(stub);
 }, 120_000);
 
-afterAll(() => {
-  stub?.close();
+afterAll(async () => {
+  // Await the shutdown before removing anything the server may still write to.
+  await stub?.close();
   for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -891,8 +908,8 @@ describe.each(['Warn', 'Limit'] as const)(
     await handshake(attackedStub);
   }, 120_000);
 
-  afterAll(() => {
-    attackedStub?.close();
+  afterAll(async () => {
+    await attackedStub?.close();
   });
 
   const context = async (): Promise<Record<string, unknown>> => {
@@ -967,8 +984,8 @@ describe('a blocked record has an invalid structural value', () => {
     await handshake(attackedStub);
   }, 120_000);
 
-  afterAll(() => {
-    attackedStub?.close();
+  afterAll(async () => {
+    await attackedStub?.close();
   });
 
   it('does not expose that value through the query tool', async () => {
@@ -1036,7 +1053,7 @@ describe('stdout carries the protocol and nothing else', () => {
       expect(polluted.stderr()).toContain('POLLUTION-debug');
       expect(polluted.stderr()).toContain('pollution');
     } finally {
-      polluted.close();
+      await polluted.close();
     }
   }, 60_000);
 });
@@ -1046,7 +1063,14 @@ describe('no network, by inspection', () => {
     readFileSync(join(PACKAGE_ROOT, 'src', relative), 'utf8');
 
   it('scans every file this ticket owns', () => {
-    expect(readdirSync(join(PACKAGE_ROOT, 'src', 'mcp')).sort()).toEqual(['main.ts', 'server.ts']);
+    // The point of this list: a file added to `src/mcp/` must be added to
+    // `OWNED_SOURCES` too, or the no-network inspection below would silently
+    // stop covering the whole directory.
+    expect(readdirSync(join(PACKAGE_ROOT, 'src', 'mcp')).sort()).toEqual([
+      'lifecycle.ts',
+      'main.ts',
+      'server.ts',
+    ]);
   });
 
   it('contains no HTTP client of any kind', () => {

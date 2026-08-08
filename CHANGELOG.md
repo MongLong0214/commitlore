@@ -1,8 +1,129 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
-Nothing yet.
+### The behaviour claim is measured: 2.8% against 18.8%
+
+M5 is complete — 1,160 registered runs. An agent handed the repository's active
+records re-proposed a ruled-out approach in **16 of 580** runs; without them,
+**109 of 579**.
+
+```
+commitlore-on    16/580 =  2.8%   Wilson 95%  1.7 – 4.4%
+commitlore-off  109/579 = 18.8%   Wilson 95% 15.9 – 22.2%
+```
+
+The significance test, the interval on the difference and the registered
+threshold are in `bench/VERDICT-M5.md`, not retyped here.
+
+Three things about how it was produced matter more than the number:
+
+- **The threshold was registered before the run**, not chosen after it.
+- **The preregistration predicted a *smaller* effect** and gave three reasons.
+  All three were conservative; the result is 2.4× the threshold. That
+  prediction is in `bench/PREREGISTRATION-M5.md` Appendix A.2 with its stated
+  probabilities, and it was wrong.
+- **The control arm truncated more** (28.5% against 21.2%), and truncation
+  suppresses re-proposal — so the artefact removes control-arm chances rather
+  than manufacturing treatment ones. The measured difference is a floor with
+  respect to it.
+
+**Every record in this run rendered `[claim]`**, with the payload's own legend
+telling the agent not to act on it as an order. The `[directive]` tier below
+became reachable only in this release, *after* the run. This number describes
+the weaker tier. One model, one harness, ten constructed fixtures, and an
+oracle that reads the final tree rather than establishing anything was read:
+`bench/VERDICT-M5.md`.
+
+### `[directive]` became reachable
+
+Records reach an agent graded `directive`, `claim` or `blocked`. `directive`
+means "treat this as a constraint" and is where the trust model lives. Until
+now **no installed surface could produce one**: nothing passed
+`--trusted-author`, grading failed closed to `claim` for every record every user
+had ever received, and the injected legend went on advertising a tier that had
+never been delivered or measured (#415).
+
+`init` now records the installing user's git identity in
+`commitlore.trustedAuthor`. Records you authored reach your agent as
+`[directive]`; every other author's stay `[claim]`, so the property that stops a
+contributor's commit from instructing someone else's agent is untouched. A team
+widens it to its reviewers, or empties it back to trust-nobody, with one git
+command and no hand-edited hook.
+
+**M1 and M5 measured `[claim]`-graded delivery.** Their numbers describe that
+tier and do not transfer to this one.
+
+### Capture runs unattended
+
+ADR-0030. `mode` defaults to `auto`: the pipeline drafts and stages a record
+without asking, and the record is stamped `Provenance: drafted`. A drafted
+record is capped at `[claim]` — nobody read it, so it cannot direct an agent —
+and is promoted by a person declaring `Supersedes:` on an authored record. A
+repository declines the whole thing by setting `mode: "off"`.
+
+### Fixed
+
+- The pre-push hook re-entered itself through `sync`'s push and **hung every
+  `git push`** — 1,240 invocations in 40 seconds (#422)
+- A non-executable `COMMITLORE_BIN` **killed the git operation next to it**
+  instead of falling through (#428)
+- Notes-sourced records inherited the annotated commit's author trust, so
+  **anyone who could write `refs/notes` could forge a `directive`** (#409)
+- The injection guard matched a literal phrase, serving an attack paraphrase as
+  `directive` and blocking a benign one (#408)
+- Concurrent hooks fell back to a full scan for want of a SQLite busy timeout
+  (#420)
+- The notes refspec `doctor --fix` wrote was forced, so an ordinary `git fetch`
+  **silently destroyed unpushed records** (#417)
+- The notes mirror was written locally and never left the machine (#416)
+- A commit carrying a record could never be amended (#430)
+- `doctor` did not say when the agent's hook was running a different build than
+  the CLI (#433)
+- The MCP server left no record of whether it closed or was killed (#424 work)
+
+### Evidence and protocol
+
+- **`docs/SELF-AUDIT.md`** — what this repository caught in itself, leading with
+  the claims this project published that turned out to be false
+- The CDEB benchmark protocol at v1.2, its schemas, a recursive verifier wired
+  into default CI, and a frozen-bundle materializer that proves two arms saw one
+  repository
+- **CDEB-P**, a pilot that measured what CDEB v1 assumed: the mechanism is
+  observable, and the ON arm costs 45% more, which makes the registered token
+  gate unreachable as written
+- The M5 analysis reads the shards its preregistration names, after the previous
+  version read 1,835 rows from four different experiments and would have passed
+  its own stopping rule on the contamination (#441)
+- ADR-0031 names Zed's DeltaDB and which three differences carry weight
+
+### Documentation
+
+- The README shows the concrete failure before the evidence tables. Nothing was
+  softened; the order changed.
+- The plugin does not update itself, and updating is two steps
+
+`bench/TOKEN-LEDGER.md` prices what a record costs to write against what the
+projection saves to read, and closes the gap `docs/evidence.md` carried under
+*Break-even*. The two write-side terms obtainable with no model call are
+measured — the generated harvest prompt's scaffold at 1,197 tokens, and each
+commit's staged diff, which takes a median capture to 3,537 tokens — and
+verification's zero is now a scan of the built verify module graph rather than
+an assertion. The read side is the committed delivery run restated per read.
+
+Both halves are floors, so the break-even they produce is a lower bound: against
+an agent that runs `git log -- <path>` at the same 800-token budget, this
+repository's records pay for themselves after at least 22,326 path-scoped reads.
+Against an agent that reads no history there is no break-even at any read count,
+and that row is published rather than omitted. At the same budget the saving is
+154.6 tokens per read and the recall difference is 39.7 points, so on this
+corpus the case rests on recall rather than on tokens — the token-reduction
+percentage is the weaker half of the answer.
+
+What remains unmeasured is named rather than estimated: the tokens a model
+spends drafting a record. The driver reads one session-total `usage` object out
+of `--output-format json`, so there is no per-turn ledger to attribute an answer
+to that turn even if a call were made.
 
 ## 0.6.0 — 2026-08-01
 

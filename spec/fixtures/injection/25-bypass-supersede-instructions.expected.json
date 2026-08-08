@@ -1,0 +1,7 @@
+{
+  "description": "Family 2 (policy bypass): the ignore-previous demand phrased as a replacement rather than a deletion (#408).",
+  "blocked": true,
+  "patterns": [
+    "bypass.supersede-instructions"
+  ]
+}

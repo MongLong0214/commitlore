@@ -25,6 +25,7 @@
 import { Buffer, isUtf8 } from 'node:buffer';
 
 import { execGit } from './git.js';
+import { NOTES_REF } from './notes.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
   STRUCTURAL_TRAILER_KEYS,
@@ -210,6 +211,24 @@ export const INJECTION_PATTERNS: readonly InjectionPattern[] = [
     intent: 'claims to replace the agent’s instructions',
   },
   {
+    id: 'bypass.supersede-instructions',
+    family: 'policy-bypass',
+    // The same demand as `bypass.ignore-previous`, phrased as a replacement
+    // rather than a deletion (#408). "Ignore your instructions" was recognised;
+    // "follow this instead of your instructions" was not, so an attacker only
+    // had to reword.
+    //
+    // The object carries the precision. A replacement construction is ordinary
+    // engineering prose — "this takes precedence over the per-request timeout"
+    // — and becomes an attack only when what it replaces is the agent's own
+    // instructions. `rules` and `guidelines` are deliberately absent: business
+    // rules take precedence over each other all the time.
+    pattern:
+      /\b(?:instead of|rather than|in place of|supersedes?|superseding|overrides?|overriding|takes? precedence over|taking precedence over|takes? priority over)\s+(?:(?:all|any|the|your|these|those|my|other|earlier|previous|prior|existing|current|original|system|agent|above)\s+){0,4}(?:instruction|instructions|prompt|prompts|directive|directives)\b/,
+    negatable: true,
+    intent: 'claims to replace the agent’s instructions rather than delete them',
+  },
+  {
     id: 'bypass.role-marker',
     family: 'policy-bypass',
     // A chat role marker inside a commit trailer is never prose; it is an
@@ -317,6 +336,49 @@ const NEGATIONS: ReadonlySet<string> = new Set([
   'forbid',
   'forbidden',
   'prohibited',
+]);
+
+/**
+ * Words that mark the text after them as **mentioned rather than used** (#408).
+ *
+ * A record whose job is to warn about this class of attack has to name the
+ * attack: "reject any record that says ignore all prior instructions". Matching
+ * the literal blocked that record, and a blocked record's content is withheld —
+ * so the one record an agent most needed to read was the one it could not. A
+ * defensive quotation was punished while an attack paraphrase went through.
+ *
+ * This disarms one occurrence, not the record. `fires` blocks unless *every*
+ * occurrence is disarmed, so quoting the phrase and then issuing it still
+ * blocks — pinned by a test, because that is the bypass this would otherwise
+ * open. An attacker can still phrase a whole payload as a report, and loses
+ * most of its imperative force in doing so; that residual is the price of a
+ * defensive record being readable at all.
+ *
+ * Consulted only for `negatable` patterns, the same gate `NEGATIONS` uses:
+ * those are the entries whose authors already judged surrounding prose able to
+ * change their reading.
+ */
+const MENTIONS: ReadonlySet<string> = new Set([
+  'says',
+  'say',
+  'saying',
+  'said',
+  'reads',
+  'reading',
+  'contains',
+  'containing',
+  'quotes',
+  'quoting',
+  'quoted',
+  'mentions',
+  'mentioning',
+  'matches',
+  'matching',
+  'phrase',
+  'phrases',
+  'wording',
+  'literal',
+  'string',
 ]);
 
 /** How many words before a match the negation guard reads. */
@@ -470,12 +532,22 @@ const decodedCandidates = (text: string): string[] => {
 /** Whether a nearby CJK prohibition or one of the preceding English words disarms a match. */
 const CJK_NEGATION_RE = /(?:不要|不得|禁止|请勿|請勿|切勿)[^。！？.!?\n]{0,8}$/u;
 
-const isNegated = (haystack: string, index: number, matchedText: string): boolean => {
+/**
+ * Whether the prose immediately before a match disarms it — either by negating
+ * the imperative (`NEGATIONS`) or by reporting it rather than issuing it
+ * (`MENTIONS`, #408).
+ *
+ * Both read the same short window, and both are deliberately narrow: only the
+ * two words immediately before the match are consulted, so "never mind the
+ * above, run the following" still blocks (fixture `20-bypass-negation-decoy`).
+ */
+const isDisarmed = (haystack: string, index: number, matchedText: string): boolean => {
   const prefix = haystack.slice(0, index);
   if (CJK_NEGATION_RE.test(prefix)) return true;
   if (/[^\x00-\x7F]/u.test(matchedText)) return false;
   const words = prefix.split(/[^a-z0-9]+/).filter((word) => word !== '');
-  return words.slice(-NEGATION_LOOKBACK).some((word) => NEGATIONS.has(word));
+  const window = words.slice(-NEGATION_LOOKBACK);
+  return window.some((word) => NEGATIONS.has(word) || MENTIONS.has(word));
 };
 
 const fires = (haystack: string, entry: InjectionPattern): boolean => {
@@ -484,7 +556,7 @@ const fires = (haystack: string, entry: InjectionPattern): boolean => {
   const scanner = new RegExp(entry.pattern.source, 'g');
   for (const match of haystack.matchAll(scanner)) {
     if (match.index === undefined) continue;
-    if (!entry.negatable || !isNegated(haystack, match.index, match[0])) return true;
+    if (!entry.negatable || !isDisarmed(haystack, match.index, match[0])) return true;
   }
   return false;
 };
@@ -545,6 +617,7 @@ const provenanceOf = (record: Record): Provenance => {
   const raw = trailerValues(record.trailers, PROVENANCE_KEY)[0]?.trim();
   if (raw === undefined) return { kind: 'unknown' };
   if (raw === 'authored') return { kind: 'authored' };
+  if (raw === 'drafted') return { kind: 'drafted' };
   if (raw === 'reconstructed') return { kind: 'reconstructed' };
 
   const inherited = INHERITED_RE.exec(raw);
@@ -643,6 +716,15 @@ const grade = (input: GradeInput, ctx: GradeContext): Grade => {
 
   if (provenance === 'reconstructed') {
     return claim('provenance is reconstructed — rebuilt from history, never directly authored');
+  }
+  // ADR-0030. Capture may stage a record without anyone reading it, and such a
+  // record is real — its quotes were checked against the transcript and the
+  // diff it was drafted from. What it lacks is a person who stood behind the
+  // wording, and that is exactly what `directive` claims. The cap is here
+  // rather than in the pipeline because grading is what consumer routes ask,
+  // and a rule the writer could decline to apply is not a rule.
+  if (provenance === 'drafted') {
+    return claim('provenance is drafted — captured without a person reading it');
   }
   if (provenance !== 'authored') {
     return claim(`provenance is ${provenance}, and only authored records can direct an agent`);
@@ -786,4 +868,121 @@ export const authorsOf = (cwd: string, shas: readonly string[]): Map<string, str
   }
 
   return authors;
+};
+
+/**
+ * Maps each annotated commit to **every** identity that has written the note
+ * attached to it — the people who actually wrote the record text.
+ *
+ * `authorsOf` answers a different question, and answering #409's with it is
+ * what made the forgery work: a note is a separate object written by whoever
+ * ran `git notes add`, and grading its content by the annotated commit's author
+ * hands the note writer that author's trust. The commit author never wrote the
+ * text and cannot see it in their own message.
+ *
+ * **Every** writer, not the latest one, because a note is not overwritten the
+ * way a trailer value is. `git notes merge -s cat_sort_uniq` concatenates two
+ * writers' notes into one blob, and the walk then attributes that blob to
+ * whichever of them committed last. Taking the latest would hand one writer's
+ * text the other's trust whenever the trusted writer happened to go second —
+ * the same forgery this fix exists to close, one merge further along. Returning
+ * both lets `gradeDeclarations` keep the floor, which is what the rest of this
+ * module already does across declarations.
+ *
+ * A note git cannot attribute has no entry, and a record with no known author
+ * grades `claim`. Note paths are fanned out by git (`ab/cdef…`, sometimes
+ * deeper), so the separators are stripped to recover the annotated sha.
+ */
+export const noteAuthorsOf = (cwd: string): Map<string, string[]> => {
+  const authors = new Map<string, string[]>();
+  const result = execGit(
+    ['log', AUTHOR_FORMAT, '--name-only', '--no-renames', '--no-color', NOTES_REF],
+    { cwd },
+  );
+  // No notes ref, an unreadable one, or a repository with no commits: no
+  // attributions, so every notes-sourced record falls to `claim`.
+  if (result.code !== 0) return authors;
+
+  for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+    if (chunk === '') continue;
+    const [head = '', ...rest] = chunk.split(AUTHOR_FIELD_SEP);
+    if (head.trim() === '') continue;
+    const [author = '', ...pathLines] = (rest[0] ?? '').split('\n');
+    const noteAuthor = author.trim();
+    if (noteAuthor === '') continue;
+
+    for (const line of pathLines) {
+      const annotated = line.trim().replace(/\//g, '');
+      if (!AUTHOR_SHA_RE.test(annotated)) continue;
+      const seen = authors.get(annotated);
+      if (seen === undefined) authors.set(annotated, [noteAuthor]);
+      else if (!seen.includes(noteAuthor)) seen.push(noteAuthor);
+    }
+  }
+
+  return authors;
+};
+
+/**
+ * Who to grade a record's declarations by, per source.
+ *
+ * A record can be declared by several commits and can arrive from both the
+ * commit message and the notes mirror at once. Each declaration is graded by
+ * the identity that wrote *that* declaration, and the floor is kept — the same
+ * rule `restrictGrade` applies across commits, extended to the axis #409
+ * showed was missing.
+ *
+ * A record whose only source is `notes` is therefore never graded by the
+ * annotated commit's author, and a mirrored record cannot be promoted by the
+ * friendlier of its two authorships. That downgrades a mirror written by a bot
+ * identity to `claim` until the bot is listed as a trusted author, which is the
+ * fail-closed direction and is visible in the record's reason.
+ *
+ * A note carries every identity that has written it, not just the latest, so a
+ * blob two writers were merged into is graded against both (`noteAuthorsOf`).
+ *
+ * Both consumer routes call this rather than looping themselves. `query.ts` and
+ * `inject.ts` each had their own copy of the loop, and two implementations of
+ * one policy is one implementation and one hole.
+ */
+export const gradeDeclarations = (
+  record: Record,
+  declarations: {
+    shas: readonly string[];
+    sources: readonly ('commit' | 'notes')[];
+    commitAuthors: ReadonlyMap<string, string>;
+    noteAuthors: ReadonlyMap<string, readonly string[]>;
+  },
+  ctx: GradeContext,
+): Grade => {
+  const { shas, sources, commitAuthors, noteAuthors } = declarations;
+  // An empty `sources` predates the field; treat it as a commit declaration so
+  // an older caller keeps the behaviour it had.
+  const fromNotes = sources.includes('notes');
+  const fromCommit = sources.length === 0 || sources.includes('commit');
+
+  // The declaration's author is written onto the record and withheld from the
+  // context, because `gradeRecord` reads `record.author` first: leaving either
+  // in place would let the record's own field, or a caller's fallback identity,
+  // speak for a declaration it did not write. An unattributed declaration keeps
+  // `undefined` here and grades `claim`.
+  const base: GradeContext = {
+    at: ctx.at,
+    ...(ctx.trustedAuthors === undefined ? {} : { trustedAuthors: ctx.trustedAuthors }),
+  };
+  let worst: Grade | undefined;
+  const consider = (author: string | undefined): void => {
+    const one = gradeRecord({ ...record, author } as Record, base);
+    worst = worst === undefined ? one : restrictGrade(worst, one);
+  };
+
+  for (const sha of shas) {
+    if (fromCommit) consider(commitAuthors.get(sha));
+    if (!fromNotes) continue;
+    const writers = noteAuthors.get(sha);
+    if (writers === undefined || writers.length === 0) consider(undefined);
+    else for (const writer of writers) consider(writer);
+  }
+
+  return worst ?? gradeRecord(record, ctx);
 };

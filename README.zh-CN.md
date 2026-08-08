@@ -19,8 +19,8 @@
 
 **面向编程代理的 Git 原生 decision layer。**
 
-每个新代理都能读懂实现。但它无法还原约束、团队否决过的替代方案、警告，以及验证缺口 ——
-承载这些的会话一结束，它们就消失了。
+每个新代理都继承了实现。但它不会继承约束、团队否决过的替代方案、警告，以及验证缺口 ——
+除非有什么东西把它们带上，否则这些并不随代码一起走。
 
 CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
 后来被取代或已过期的决定，不会以仍然成立的样子送到代理面前。
@@ -47,7 +47,7 @@ Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh | sh
 ```
 
 支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/inst
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
 </p>
 
-**一个全新的代理，没有聊天历史。它仍知道为什么那个显而易见的修复被排除了。** 在改动前查询 path：
+**一个全新的代理，没有聊天历史。它仍被交到手上：为什么那个显而易见的修复被排除了。** 在改动前查询 path：
 
 ```bash
 commitlore context install.sh
@@ -81,6 +81,21 @@ warnings
 如何原样复现这条 `PreToolUse` hook path，以及其余全部命令：[docs/cli.md](docs/cli.md)。
 
 ## 检索能找到记录。路径范围会排除已经推翻的决策。
+
+在代理进行第一次编辑之前，仓库中仍然有效的决策，究竟有多少真正到达了它？在本仓库中，按钩子默认使用的 800 token 预算：
+
+| 路由 | 预算 | 送达的有效决策 | 送达的已推翻决策 | token |
+|---|---:|---:|---:|---:|
+| 仅代码 | — | 0.0% | 0 | 0 |
+| 该路径的 `git log` | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore 路径范围** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore，取消上限 | 无 | 92.3% | 0 | 741,429 |
+
+取消上限后，路径范围回收的正是全仓库倾倒所回收的那一批 —— 2,217 组中的 2,047 组 —— 却只用掉其 92,175,612 token 中的一小部分，并且一条也不送出它随附的 7,322 条已推翻记录。**范围没有任何代价。** 上限消耗 10.6 个百分点。剩下的 170 组是信任分级器扣留的记录。
+
+**这测的是送达，不是效果。** 没有代理参与运行，所以它给出的是*可能*回收多少的上界，而不是实际回收了多少。而且检索指标完全可能在它本应预测的结果变差时继续上升。SWE-bench 测得随着上下文预算增加，BM25 的 recall 从 29.58 升至 51.06，却同时报告"即便增大 BM25 的最大上下文会提升相对 oracle 文件的 recall，性能仍会下降……因为模型根本不擅长定位有问题的代码"（[arXiv:2310.06770](https://arxiv.org/abs/2310.06770)）。一个语料库，一个仓库。被替代的记录有 7 条、已过期的有 0 条，所以"零条已推翻决策送达"对过期一事尚未给出任何结论。方法与完整表格：[bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
+
+**`git log` 基线并非我们自己测自己得出的产物。** 把同一测量应用到本项目并未撰写的四个仓库 —— Django、SymPy、scikit-learn 与 Requests，均固定在指定提交 —— 一条路径的历史在 800 token 截断下存活的比例落在 **37.4% 到 55.6%** 之间。上面的 42.0% 就在这个区间内。固定预算砍掉一个文件近半历史，是 `git log` 在大型、长期存续的仓库上普遍会做的事，而不是本仓库特有的现象。**没有转移的是机制。** 我们的路径中位数是 1 次提交 687 token，Django 则是 8 次提交 213 token —— 较长的提交信息会在固定预算下让普通 Git 基线更差，这是本项目自身实践付出的代价。[bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) 也报告了那些仓库上的送达数值，但请先读 §9.0 与 §9.5：其中的记录由程序从 revert 提交生成，标题数字是附着谓词强制的结果，并非检索成绩。
 
 漏掉一条记录，模型损失的是上下文；交给它一项已经推翻的决策，损失的是正确性。在这项[检索测量](bench/retrieval/result.md)中，从 0 到 10,000 条干扰记录的每个规模，BM25、embedding top-k、hybrid RRF 与带路径过滤的 embedding 都各返回了一条已被替代的记录。带生命周期的 CommitLore 路径范围返回零条过时记录，并返回两条当前记录 (2/2)。
 
@@ -122,11 +137,11 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.6.0/install.sh
-sh install.sh v0.6.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.0/install.sh
+sh install.sh v0.7.0
 
 # 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v0.6.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.7.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -162,8 +177,8 @@ Ruled-out
 `[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
 信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
 
-它转而共享纯计算原语，不去动 checkout 的策略入口。那次评审根本不会发生，因为决定早就在
-那里。
+模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。它是否照做，是
+本项目尚未回答的代理行为问题 —— 见下面的测量，以及[未被测量的部分](docs/evidence.md)。
 
 ## 工作方式
 
@@ -186,6 +201,13 @@ Ruled-out
 同一份报告中的接入成本：一条命令，768 次提交索引耗时 7.4 秒。不触碰历史，也不触碰工作区。
 控制台输出与报告全文见 [docs/evidence.md](docs/evidence.md)。
 
+那是一个 768 次提交的仓库。**在 10 万次提交上，带索引的 `context` 查询 p50 为 496 ms。**
+其背后运行的钩子，`commit-msg` p50 为 185.85 ms，注入钩子 p50 为 102.40 ms。决定这东西
+是否会一直留在一个大仓库里的正是这些数字，而它们是测出来的，不是声称的。同一次运行里
+也有难看的数字：不用索引，同样的查询在 10 万次提交上要 86,673 ms。索引不是加在一个本
+就可用的查询之上的优化，而是让该规模下的查询成为可能的东西本身 —— 这也是 `init` 会
+建立它、`doctor` 会检查它的原因。
+
 **托管式聊天记录产品无法提供的三个性质**，也是把权威放在 Git 而非服务上的理由：
 
 | 工具 | 它记住什么 |
@@ -193,10 +215,19 @@ Ruled-out
 | `CLAUDE.md` / `AGENTS.md` | 代理应该如何工作 |
 | ADR | 以文档形式记录大的架构决策 |
 | Chat memory / RAG | 过去的相关文本 |
+| [Lore](https://arxiv.org/abs/2603.15566) | 同样的想法，更早发表 —— 放在 git trailer 里的决策记录 |
 | **CommitLore** | **对这条代码路径当下仍然有效的决定** |
 
 相似度检索能找到相关的决定。CommitLore 还知道那个决定是否仍然有效、是否已被取代或过期 ——
 并且只呈现第一种。
+
+**关于第三行。** [Lore](https://arxiv.org/abs/2603.15566)（2026 年 3 月）在本仓库存在的
+四个月前就提出了把决策记录放进 native git trailer 的做法，其词汇与这里几乎一一对应。
+**协议这个想法在这里并不新颖**，说它新颖也经不起任何读过那篇论文的人。Lore 没有对应物
+的是生命周期 —— `Supersedes:` 与 `Expires:`，以及让上表最后一行成立的那层过滤 —— 以及
+信任分级；论文本身写的是"*勾勒出*一条实证验证路径"，并未做实验。把那份验证做出来、连同
+失败的部分一起留下，才是本项目相对那篇论文所拥有的东西
+（[ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)）。
 
 ## 有何不同
 

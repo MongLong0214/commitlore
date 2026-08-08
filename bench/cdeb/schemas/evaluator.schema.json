@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cdeb-evaluator",
+  "title": "CDEB evaluator output (PRD §12.4)",
+  "description": "What the sealed evaluator image emits for one candidate tree. No free-form quality score is representable here, by design.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "task_id", "functional_pass", "rejected_decision_revived",
+    "functional_checks", "decision_oracle_code", "evaluator_image_digest", "candidate_tree_oid"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "functional_pass": { "type": "boolean" },
+    "rejected_decision_revived": { "type": "boolean" },
+    "functional_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed"],
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "decision_oracle_code": { "enum": ["SAFE", "REVIVED"] },
+    "evaluator_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "candidate_tree_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

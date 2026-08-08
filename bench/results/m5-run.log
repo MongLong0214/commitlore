@@ -1,0 +1,38 @@
+=== seeds 1-10 start 16:19:33Z ===
+run_id 20260801T161933Z-26b1f2
+rows   200 -> <scratch>/m5-seeds-1-10.jsonl
+tokens 8369989/200000000
+=== seeds 1-10 done 02:46:04Z rows=     200 ===
+=== seeds 11-20 start 02:46:04Z ===
+run_id 20260802T024604Z-7a8bed
+rows   200 -> <scratch>/m5-seeds-11-20.jsonl
+tokens 8035358/200000000
+=== seeds 11-20 done 12:46:57Z rows=     200 ===
+=== seeds 21-30 start 12:46:57Z ===
+run_id 20260802T124657Z-ae3ba0
+rows   200 -> <scratch>/m5-seeds-21-30.jsonl
+tokens 8269863/200000000
+=== seeds 21-30 done 23:08:55Z rows=     200 ===
+=== seeds 31-40 start 23:08:55Z ===
+run_id 20260802T230855Z-00da79
+rows   200 -> <scratch>/m5-seeds-31-40.jsonl
+tokens 8377068/200000000
+=== seeds 31-40 done 10:03:56Z rows=     200 ===
+=== seeds 41-50 start 10:03:56Z ===
+run_id 20260803T100356Z-aeb38a
+rows   200 -> <scratch>/m5-seeds-41-50.jsonl
+tokens 8199201/200000000
+=== seeds 41-50 done 20:36:31Z rows=     200 ===
+=== seeds 51-58 start 20:36:31Z ===
+rows   160 -> <scratch>/m5-seeds-51-58.jsonl
+tokens 3698063/200000000
+errors 70
+=== seeds 51-58 done 01:16:13Z rows=     160 ===
+ALL SHARDS COMPLETE 2026-08-04T01:16:13Z
+     200 <scratch>/m5-seeds-1-10.jsonl
+     200 <scratch>/m5-seeds-11-20.jsonl
+     200 <scratch>/m5-seeds-21-30.jsonl
+     200 <scratch>/m5-seeds-31-40.jsonl
+     200 <scratch>/m5-seeds-41-50.jsonl
+     160 <scratch>/m5-seeds-51-58.jsonl
+    1160 total

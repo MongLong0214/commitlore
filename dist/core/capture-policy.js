@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execGit } from './git.js';
+export const CAPTURE_MODES = ['auto', 'suggest', 'off'];
 /**
  * Key order is load-bearing: it is the input to `JSON.stringify` and therefore
  * to the identity hash. Reordering these three lines changes the digest every
@@ -31,7 +32,7 @@ import { execGit } from './git.js';
  * which pins the value.
  */
 export const POLICY_DEFAULTS = {
-    mode: 'suggest',
+    mode: 'auto',
     max_records_per_commit: 1,
     require_verified_evidence: true,
 };
@@ -112,12 +113,12 @@ const validate = (raw) => {
     }
     const policy = { ...POLICY_DEFAULTS };
     if ('mode' in obj) {
-        if (obj.mode !== 'suggest') {
+        if (typeof obj.mode !== 'string' || !CAPTURE_MODES.includes(obj.mode)) {
             return {
-                error: `${POLICY_FILE_NAME}: mode must be "suggest" (got ${JSON.stringify(obj.mode)})`,
+                error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(', ')} (got ${JSON.stringify(obj.mode)})`,
             };
         }
-        policy.mode = 'suggest';
+        policy.mode = obj.mode;
     }
     if ('max_records_per_commit' in obj) {
         const v = obj.max_records_per_commit;

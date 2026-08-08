@@ -30,6 +30,7 @@ import {
 } from '../src/commands/doctor.js';
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
 import { execGit } from '../src/core/git.js';
+import { packageVersion } from '../src/core/paths.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md', import.meta.url));
@@ -192,7 +193,10 @@ describe('doctor: notes fetch refspec', () => {
 
   it('accepts a wildcard refspec that already covers the mirror', () => {
     const { repo } = repoWithRemote('doctor-refspec-wildcard');
-    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+    // Unforced, and that is the whole difference from the case below. This
+    // literal carried a `+` until #417: a wildcard that *covers* the mirror is
+    // still accepted; one that *overwrites* it is not.
+    git(repo, ['config', '--add', 'remote.origin.fetch', 'refs/notes/*:refs/notes/*']);
 
     const report = runDoctor({ cwd: repo });
 
@@ -201,6 +205,43 @@ describe('doctor: notes fetch refspec', () => {
       .split('\n')
       .filter((line) => line === NOTES_REFSPEC);
     expect(configured).toHaveLength(1);
+  });
+
+  /**
+   * #417. A forced notes refspec makes every `git fetch` overwrite the local
+   * mirror with the remote's, destroying a record written here and not yet
+   * pushed — silently, and with exit 0. It covers the mirror, so the
+   * `coversNotes` check reported it `ok`.
+   */
+  it('warns about a forced notes refspec, and --fix unforces it', () => {
+    const { repo } = repoWithRemote('doctor-refspec-forced');
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'notes-refspec');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toMatch(/forced refspec/);
+
+    expect(statusOf(runDoctor({ cwd: repo, fix: true }), 'notes-refspec')).toBe('ok');
+
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch'])
+      .split('\n')
+      .filter((line) => line !== '');
+    expect(configured).toContain(NOTES_REFSPEC);
+    expect(configured.filter((line) => line.startsWith('+refs/notes/'))).toEqual([]);
+  });
+
+  it('leaves a remote’s unrelated refspecs alone when it unforces the notes one', () => {
+    const { repo } = repoWithRemote('doctor-refspec-forced-neighbours');
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/notes/*:refs/notes/*']);
+    git(repo, ['config', '--add', 'remote.origin.fetch', '+refs/tags/*:refs/tags/*']);
+
+    runDoctor({ cwd: repo, fix: true });
+
+    const configured = git(repo, ['config', '--get-all', 'remote.origin.fetch'])
+      .split('\n')
+      .filter((line) => line !== '');
+    expect(configured).toContain('+refs/tags/*:refs/tags/*');
+    expect(configured).toContain(NOTES_REFSPEC);
   });
 
   it('warns when there is no remote at all', () => {
@@ -424,6 +465,82 @@ describe('doctor: a stale stub', () => {
       if (previous === undefined) delete process.env['COMMITLORE_BIN'];
       else process.env['COMMITLORE_BIN'] = previous;
     }
+  });
+});
+
+/**
+ * #382: the pin outlives the upgrade.
+ *
+ * `hooks install` writes `commitlore.bin`/`commitlore.root` into the
+ * repository's own config, and nothing rewrites them when a newer CLI is
+ * installed somewhere else. The hook then keeps validating every commit with
+ * the build it was pinned to while `commitlore --version` reports the new one —
+ * and doctor printed that stale path inside its own `ok` line without ever
+ * comparing it.
+ *
+ * The fixture is a second install directory, because that is what the upgrade
+ * actually leaves behind: a complete package root of its own, with its own
+ * `package.json` version, still sitting on disk and still pinned.
+ */
+describe('doctor: the pinned CLI is a different version than the running one (#382)', () => {
+  /** A package root whose `package.json` declares `version`, with a runnable bundle in it. */
+  const otherInstall = (label: string, version: string | null): string => {
+    const root = tempDir(label);
+    if (version !== null) {
+      writeFileSync(
+        join(root, 'package.json'),
+        `${JSON.stringify({ name: 'commitlore', version, type: 'module' }, null, 2)}\n`,
+      );
+    }
+    const bin = join(root, 'dist', 'commitlore.mjs');
+    // Exits 0 for any argv, so the `hook-runtime` probe stays `ok` and this
+    // check is the only thing the assertions can be reacting to.
+    writeScript(bin, 'process.exit(0);\n');
+    return bin;
+  };
+
+  const pinnedTo = (label: string, bin: string): string => {
+    const { repo } = repoWithRemote(label);
+    writeScript(hookPath(repo), commitMsgStub());
+    recordHookTarget(repo, bin, process.execPath, realpathSync(dirname(dirname(bin))));
+    return repo;
+  };
+
+  it('does not report ok, and names both versions and the remedy', () => {
+    const repo = pinnedTo('doctor-pin-skew', otherInstall('doctor-pin-old-install', '0.5.0'));
+
+    const report = runDoctor({ cwd: repo });
+    const check = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(statusOf(report, 'hook-runtime')).toBe('ok');
+    expect(check?.status).not.toBe('ok');
+    expect(check?.detail).toContain('0.5.0');
+    expect(check?.detail).toContain(packageVersion());
+    expect(check?.fix).toContain('hooks install');
+  });
+
+  it('stays ok when the pinned install declares the running version', () => {
+    const repo = pinnedTo('doctor-pin-same', otherInstall('doctor-pin-same-install', packageVersion()));
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(check?.status).toBe('ok');
+  });
+
+  /**
+   * A pin whose version cannot be established is not health. It is also not a
+   * crash: doctor has to keep reporting every other check.
+   */
+  it('does not report ok when the pinned install declares no version', () => {
+    const repo = pinnedTo('doctor-pin-unknown', otherInstall('doctor-pin-unknown-install', null));
+
+    const report = runDoctor({ cwd: repo });
+    const check = report.checks.find((entry) => entry.id === 'commit-msg-hook');
+
+    expect(check?.status).not.toBe('ok');
+    expect(check?.detail).toContain('version');
+    expect(check?.fix).toContain('hooks install');
+    expect(report.checks).toHaveLength(13);
   });
 });
 
@@ -829,6 +946,9 @@ describe('doctor: report', () => {
       'commit-msg-hook',
       'hook-runtime',
       'inject-runtime',
+      'inject-version',
+      'mcp-lifecycle',
+      'pending-backlog',
       'git-trailers',
       'history-depth',
       'index-health',
@@ -850,7 +970,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(10);
+    expect(parsed.checks).toHaveLength(13);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

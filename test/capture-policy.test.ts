@@ -29,7 +29,15 @@ import {
  * Consolidation must not change it: every pending file in flight on any machine
  * would otherwise report a policy change that never happened.
  */
-const PINNED_DEFAULT_DIGEST = '702612744c741f34141b0329f2a42a5a1623bee5a8d6cff61d49c2c613fbc4c5';
+const PINNED_DEFAULT_DIGEST = '02bd63fd270db510791fafbd80f4b735f228d8f26b635c4c5312c04b40780b31';
+
+/**
+ * What the defaults hashed to before ADR-0030 changed `mode` from `suggest` to
+ * `auto`. Kept named rather than deleted: a pending record written under it is
+ * refused after the upgrade, and that refusal is the identity hash doing its
+ * job, not a regression to hunt.
+ */
+const PRE_ADR30_DIGEST = '702612744c741f34141b0329f2a42a5a1623bee5a8d6cff61d49c2c613fbc4c5';
 
 const SRC_FILES = (dir: string): string[] => {
   const out: string[] = [];
@@ -87,11 +95,15 @@ describe('T-1110 resolution with no policy file', () => {
     expect(r.error).toBeNull();
   });
 
-  it('is what a pending record written before this change carries, so it stays consumable', () => {
-    // A pending record written by the pre-policy code path carries exactly this
-    // hash. Reading it back after the change must still match.
-    const written = PINNED_DEFAULT_DIGEST;
-    expect(resolvePolicy(repo).identityHash).toBe(written);
+  it('no longer matches a pending record written before ADR-0030, and that is the point', () => {
+    // ADR-0030 changed the default mode, so the defaults hash differently. A
+    // pending record written under the old default is refused at stage with
+    // "policy identity changed since prepare" — which is exactly what the hash
+    // exists to catch (ADR-0021 §7). The cost is bounded: a pending record
+    // expires five minutes after staging and 24 hours from creation, so only a
+    // capture in flight across the upgrade is lost.
+    expect(resolvePolicy(repo).identityHash).not.toBe(PRE_ADR30_DIGEST);
+    expect(resolvePolicy(repo).identityHash).toBe(PINNED_DEFAULT_DIGEST);
   });
 });
 
@@ -215,5 +227,49 @@ describe('T-1110 untrusted input', () => {
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.policy)).not.toContain('/tmp/evil');
     expect(JSON.stringify(r.policy)).not.toContain('rm -rf');
+  });
+});
+
+/**
+ * ADR-0030 decisions 1 and 5: capture runs unattended by default, a repository
+ * can turn it off, and a record staged without anyone reading it says so.
+ */
+describe('ADR-0030 capture modes', () => {
+  it('defaults to auto — unattended is the shipped behaviour', () => {
+    expect(resolvePolicy(repo).policy.mode).toBe('auto');
+  });
+
+  it('accepts each of the three modes from a policy file', () => {
+    for (const mode of ['auto', 'suggest', 'off'] as const) {
+      writeFileSync(join(repo, POLICY_FILE_NAME), `{ "mode": "${mode}" }\n`);
+      const resolved = resolvePolicy(repo);
+      expect(resolved.error, `mode ${mode} was rejected`).toBeNull();
+      expect(resolved.policy.mode).toBe(mode);
+    }
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  it('names all three in the error for an unknown mode, rather than the old single value', () => {
+    writeFileSync(join(repo, POLICY_FILE_NAME), `{ "mode": "ask-nicely" }\n`);
+    const resolved = resolvePolicy(repo);
+    expect(resolved.error).toMatch(/"auto"/);
+    expect(resolved.error).toMatch(/"suggest"/);
+    expect(resolved.error).toMatch(/"off"/);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  /**
+   * Each mode has a different identity, so switching one is a policy change the
+   * hook detects between stage and commit — the property ADR-0021 §7 built the
+   * hash for.
+   */
+  it('gives each mode its own identity', () => {
+    const digests = new Set<string>();
+    for (const mode of ['auto', 'suggest', 'off'] as const) {
+      writeFileSync(join(repo, POLICY_FILE_NAME), `{ "mode": "${mode}" }\n`);
+      digests.add(resolvePolicy(repo).identityHash);
+    }
+    expect(digests.size).toBe(3);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
   });
 });

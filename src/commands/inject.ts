@@ -25,6 +25,7 @@ import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
 import { buildInjection, type InjectOptions, type Injection } from '../core/inject.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 import {
   CLAUDE_HOOK_COMMAND,
   CLAUDE_HOOK_EVENT,
@@ -231,7 +232,10 @@ const injectOptions = (
 ): InjectOptions => {
   const at = evaluationInstant(options.at);
   const budget = tokenBudget(options.budget);
-  const trustedAuthors = options.trustedAuthor ?? [];
+  // #415: with no flag and no configured authors this is empty, and grading
+  // fails closed to `claim`. The installed hook passes no flag, so the config
+  // value written at `init` is the only route to a `[directive]` in practice.
+  const trustedAuthors = options.trustedAuthor ?? configuredTrustedAuthors(cwd);
   return {
     path,
     cwd,

@@ -32,9 +32,12 @@
 import { formatReport, runDoctor } from './doctor.js';
 import { installHook } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex } from '../core/index-db.js';
+import { notesAvailability } from '../core/notes.js';
 import { claudeSettingsPath, installClaudeHook } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
+import { installPrePushHook } from '../hooks/pre-push.js';
+import { seedTrustedAuthor } from '../core/trusted-authors.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -64,15 +67,18 @@ const runHooksStep = (opts) => {
     const commitMsg = installHook({ ...cwdOption(opts), ...(opts.force === undefined ? {} : { force: opts.force }) });
     const prepareCommitMsg = installPrepareCommitMsgHook(opts.cwd);
     const postCommit = installPostCommitHook(opts.cwd);
-    const lines = [commitMsg, prepareCommitMsg, postCommit].flatMap((result) => result.code === 0
+    // #416: without this the notes mirror is written locally and never leaves the
+    // machine, so a teammate's clone cannot see a record it holds.
+    const prePush = installPrePushHook(opts.cwd);
+    const lines = [commitMsg, prepareCommitMsg, postCommit, prePush].flatMap((result) => result.code === 0
         ? result.stdout.trimEnd().split('\n')
         : [result.stderr.trimEnd() || 'hooks install failed with no diagnostic']);
     return {
         step: 'hooks',
         title: 'hooks install',
-        code: commitMsg.code === 2 || prepareCommitMsg.code === 2 || postCommit.code === 2 ? 2 : 0,
+        code: [commitMsg, prepareCommitMsg, postCommit, prePush].some((r) => r.code === 2) ? 2 : 0,
         lines,
-        detail: [commitMsg, prepareCommitMsg, postCommit],
+        detail: [commitMsg, prepareCommitMsg, postCommit, prePush],
     };
 };
 const runIndexStep = (opts) => {
@@ -122,6 +128,23 @@ const runIndexStep = (opts) => {
         }
     }
 };
+/**
+ * #415: with no trusted author recorded, grading fails closed and every record
+ * the agent ever sees is `[claim]` — the `[directive]` tier the injected legend
+ * advertises was unreachable on every install. Seeding the installer's own
+ * identity makes it reachable without weakening the property it protects: a
+ * different author's commit still grades `claim`.
+ */
+const runTrustStep = (opts) => {
+    const result = seedTrustedAuthor(opts.cwd ?? process.cwd());
+    return {
+        step: 'trust',
+        title: 'trusted author',
+        code: 0,
+        lines: [result.author === null ? result.reason : `${result.author} — ${result.reason}`],
+        detail: result,
+    };
+};
 const runClaudeHookStep = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     const settingsPath = claudeSettingsPath(cwd);
@@ -163,19 +186,22 @@ const runClaudeHookStep = (opts) => {
  * leaves behind, not the state it started from.
  */
 export const runInit = (opts = {}) => {
-    const steps = [runHooksStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+    const notesBefore = notesAvailability(cwdOption(opts));
+    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
-    return { steps, exitCode: exitCode };
+    return { steps, notesBefore, exitCode: exitCode };
 };
 /** User-facing step labels — no internal command names. */
 const STEP_LABEL = {
     hooks: 'Hooks',
+    trust: 'Trust',
     index: 'Index',
     'claude-hook': 'Agent integration',
     doctor: 'Final check',
 };
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export const STEP_HEADING = {
+    trust: 'trusted author',
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
     'claude-hook': '[3/4] claude hook install',
@@ -198,6 +224,16 @@ export const formatInitReport = (report) => {
         }
         lines.push('');
         lines.push('init: ready');
+        // #402: every step succeeded and the index is still missing whatever the
+        // team kept in notes, because `git fetch` does not carry
+        // `refs/notes/commitlore`. That is the default state of a fresh clone, and
+        // this is the one screen most users will read. The clean run has a line to
+        // spare inside the ≤6 the output contract allows, and a `ready` that is not
+        // ready costs more than the line does. The state is `notesAvailability`'s,
+        // so this reports rather than checks.
+        if (report.notesBefore === 'unfetched') {
+            lines.push('note: the notes mirror has not been fetched, so the index covers commit messages alone — run: git fetch');
+        }
     }
     else {
         // At least one step needs attention or could not run.
