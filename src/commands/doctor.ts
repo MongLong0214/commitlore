@@ -115,9 +115,8 @@ export interface DoctorCheck {
   /** Derived from `status`; never passed in, never read by the exit code. */
   severity: Severity;
   /**
-   * The observation behind the conclusion. Populated per check by a later
-   * ticket; `{}` until then, so an absent field never has to be told apart
-   * from an empty one.
+   * The observation behind the conclusion. A row without one cannot explain
+   * why its status is trustworthy, so construction rejects empty evidence.
    */
   evidence: Record<string, string>;
   /** No shipping check is optional at introduction (PRD §1.4). */
@@ -161,6 +160,45 @@ const escapeConfigValuePattern = (value: string): string =>
   value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
 
 const gitOptions = (opts: DoctorOptions) => (opts.cwd === undefined ? {} : { cwd: opts.cwd });
+
+/** The bound keeps a broken child process from making a JSON report unbounded. */
+const boundedExcerpt = (output: string | null | undefined): {
+  firstLine: string;
+  truncated: 'true' | 'false';
+} => {
+  const [firstLine = ''] = (output ?? '').split(/\r?\n/, 1);
+  return {
+    firstLine: firstLine.slice(0, 200),
+    truncated: firstLine.length > 200 ? 'true' : 'false',
+  };
+};
+
+const streamEvidence = (stream: string, output: string | null | undefined): Record<string, string> => {
+  const excerpt = boundedExcerpt(output);
+  return {
+    [`${stream}_first_line`]: excerpt.firstLine,
+    [`${stream}_truncated`]: excerpt.truncated,
+  };
+};
+
+/** Reports keep paths useful in bug reports without carrying a user's home directory. */
+const homeRelativePath = (value: string): string => {
+  const home = process.env['HOME'];
+  if (home === undefined || home === '') return value;
+  const escapedHome = home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(new RegExp(`${escapedHome}(?=$|/)`, 'g'), '~');
+};
+
+const normaliseEvidence = (evidence: Record<string, string>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(evidence).map(([key, value]) => [key, homeRelativePath(value)]),
+  );
+
+const evidenceKey = (value: string): string =>
+  value
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase() || 'remote';
 
 /**
  * `severity` as a total function of `status` — the only place it is decided.
@@ -228,18 +266,22 @@ function check(
   needsAttention = status === 'warn' || status === 'fail',
   extra: CheckExtra = {},
 ): DoctorCheck {
+  const evidence = extra.evidence ?? {};
+  if (Object.keys(evidence).length === 0) {
+    throw new Error(`doctor check ${id} has no evidence`);
+  }
   return {
-  id,
-  title,
-  status,
-  needsAttention,
-  detail,
-  fix,
-  fixed,
-  category,
-  severity: severityOf(status),
-  evidence: extra.evidence ?? {},
-  optional: extra.optional ?? false,
+    id,
+    title,
+    status,
+    needsAttention,
+    detail,
+    fix,
+    fixed,
+    category,
+    severity: severityOf(status),
+    evidence: normaliseEvidence(evidence),
+    optional: extra.optional ?? false,
     ...(extra.skipReason === undefined ? {} : { skipReason: extra.skipReason }),
   };
 }
@@ -247,6 +289,7 @@ function check(
 const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
   const title = 'notes fetch refspec';
   const remotes = listRemotes(opts);
+  const remoteEvidence = { remotes: remotes.join(', ') || 'none' };
 
   if (remotes.length === 0) {
     return check(
@@ -257,6 +300,7 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
       'add a remote, then rerun: commitlore doctor --fix',
       false,
       false,
+      { evidence: remoteEvidence },
     );
   }
 
@@ -305,6 +349,8 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
         .map((remote) => `git config --replace-all remote.${remote}.fetch '${NOTES_REFSPEC}' '^\\+refs/notes/'`)
         .join('\n'),
       fixed,
+      undefined,
+      { evidence: { ...remoteEvidence, forced: forced.join(', ') } },
     );
   }
 
@@ -315,6 +361,9 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       `${missing.join(', ')} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
       missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join('\n'),
+      false,
+      undefined,
+      { evidence: { ...remoteEvidence, missing: missing.join(', ') } },
     );
   }
 
@@ -331,6 +380,18 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
         .join('; ')})`,
       failed.map(({ remote }) => `git fetch ${remote}`).join('\n'),
       fixed,
+      undefined,
+      {
+        evidence: {
+          ...remoteEvidence,
+          ...Object.fromEntries(
+            failed.map(({ remote, result }) => [
+              `fetch_exit_code_${evidenceKey(remote)}`,
+              String(result.code),
+            ]),
+          ),
+        },
+      },
     );
   }
 
@@ -348,6 +409,8 @@ const checkRefspec = (opts: DoctorOptions): DoctorCheck => {
       : `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`,
     fixed ? `git fetch ${remotes[0] ?? 'origin'}` : null,
     fixed,
+    undefined,
+    { evidence: remoteEvidence },
   );
 };
 
@@ -361,6 +424,10 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
   const remote = remotes[0] ?? 'origin';
   const command = `git push ${remote} ${NOTES_REF}`;
   const local = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
+  const localEvidence = {
+    remote,
+    local_sha: local.code === 0 ? local.stdout.trim() || 'unknown' : 'none',
+  };
 
   if (local.code !== 0) {
     return check(
@@ -368,6 +435,10 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
       title,
       'ok',
       `no local mirror yet — nothing to push (${command}, once there is)`,
+      null,
+      false,
+      undefined,
+      { evidence: { ...localEvidence, remote_sha: 'not_queried' } },
     );
   }
 
@@ -379,10 +450,30 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       `could not verify (${remote}: ${advertised.stderr.trim().split('\n')[0] ?? 'git ls-remote failed'})`,
       command,
+      false,
+      undefined,
+      {
+        evidence: {
+          ...localEvidence,
+          ls_remote_exit_code: String(advertised.code),
+          ...streamEvidence('ls_remote_stderr', advertised.stderr),
+        },
+      },
     );
   }
-  if (advertised.stdout.split(/\s/)[0] === local.stdout.trim()) {
-    return check('notes-push', 'transport', title, 'ok', `${remote} has the current ${NOTES_REF}`);
+  const remoteSha = advertised.stdout.split(/\s/)[0] ?? '';
+  if (remoteSha === local.stdout.trim()) {
+    return check(
+      'notes-push',
+      'transport',
+      title,
+      'ok',
+      `${remote} has the current ${NOTES_REF}`,
+      null,
+      false,
+      undefined,
+      { evidence: { ...localEvidence, remote_sha: remoteSha || 'none' } },
+    );
   }
 
   return check(
@@ -391,6 +482,9 @@ const checkPush = (opts: DoctorOptions): DoctorCheck => {
     'warn',
     `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
     command,
+    false,
+    undefined,
+    { evidence: { ...localEvidence, remote_sha: remoteSha || 'none' } },
   );
 };
 
@@ -410,18 +504,44 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
   // somewhere else entirely.
   const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
   if (located.code !== 0) {
-    return check(id, category, title, 'warn', 'not inside a git repository', install);
+    return check(
+      id,
+      category,
+      title,
+      'warn',
+      'not inside a git repository',
+      install,
+      false,
+      undefined,
+      { evidence: { hook_path: 'unavailable', bin: 'not_recorded', node: 'not_recorded' } },
+    );
   }
 
   const path = resolve(opts.cwd ?? process.cwd(), located.stdout.trim());
   const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
   const override = process.env['COMMITLORE_BIN'];
+  const hookEvidence = {
+    hook_path: path,
+    bin: target.bin || '(unset)',
+    node: target.node || '(unset)',
+    ...(override === undefined || override === '' ? {} : { commitlore_bin_override: override }),
+  };
   const targetDetail = [
     ...describeRecordedHookTarget(target),
     ...(override === undefined || override === '' ? [] : [`COMMITLORE_BIN: ${override}`]),
   ].join('; ');
   if (!existsSync(path)) {
-    return check(id, category, title, 'warn', `no commit-msg hook at ${path}; ${targetDetail}`, install);
+    return check(
+      id,
+      category,
+      title,
+      'warn',
+      `no commit-msg hook at ${path}; ${targetDetail}`,
+      install,
+      false,
+      undefined,
+      { evidence: hookEvidence },
+    );
   }
 
   const contents = readFileSync(path, 'utf8');
@@ -433,6 +553,9 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
       'warn',
       `a commit-msg hook exists at ${path} but does not invoke commitlore; ${targetDetail}`,
       install,
+      false,
+      undefined,
+      { evidence: hookEvidence },
     );
   }
 
@@ -448,6 +571,9 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
       'warn',
       `installed at ${path}, but the stub is out of date — it predates a change to how the hook finds the CLI; ${targetDetail}`,
       install,
+      false,
+      undefined,
+      { evidence: hookEvidence },
     );
   }
 
@@ -480,14 +606,47 @@ const checkHook = (opts: DoctorOptions, runtime: DoctorCheck): DoctorCheck => {
         install,
         false,
         false,
-        { skipReason: runtime.skipReason ?? 'nothing_applicable' },
+        {
+          evidence: { ...hookEvidence, runtime_status: runtime.status },
+          skipReason: runtime.skipReason ?? 'nothing_applicable',
+        },
       );
     }
-    return check(id, category, title, runtime.status, inherited, install);
+    return check(
+      id,
+      category,
+      title,
+      runtime.status,
+      inherited,
+      install,
+      false,
+      undefined,
+      { evidence: { ...hookEvidence, runtime_status: runtime.status } },
+    );
   }
   return problems.length === 0
-    ? check(id, category, title, 'ok', `installed at ${path}; ${targetDetail}`)
-    : check(id, category, title, 'warn', `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`, install);
+    ? check(
+        id,
+        category,
+        title,
+        'ok',
+        `installed at ${path}; ${targetDetail}`,
+        null,
+        false,
+        undefined,
+        { evidence: hookEvidence },
+      )
+    : check(
+        id,
+        category,
+        title,
+        'warn',
+        `installed at ${path}; ${targetDetail}; ${problems.join('; ')}`,
+        install,
+        false,
+        undefined,
+        { evidence: hookEvidence },
+      );
 };
 
 /**
@@ -511,15 +670,45 @@ const checkGit = (opts: DoctorOptions): DoctorCheck => {
     trailers = parseCommitMessage(PROBE_MESSAGE);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return check(id, category, title, 'fail', `${version || 'git'} could not parse a probe: ${reason}`, upgrade);
+    return check(
+      id,
+      category,
+      title,
+      'fail',
+      `${version || 'git'} could not parse a probe: ${reason}`,
+      upgrade,
+      false,
+      undefined,
+      { evidence: { git_version: version || 'unavailable', parsed: 'unavailable' } },
+    );
   }
 
   const parsed = trailers.map((trailer) => `${trailer.key}: ${trailer.value}`).join(', ');
   if (parsed !== 'Limit: probe, Blast: local') {
-    return check(id, category, title, 'fail', `${version} parsed the probe as [${parsed}]`, upgrade);
+    return check(
+      id,
+      category,
+      title,
+      'fail',
+      `${version} parsed the probe as [${parsed}]`,
+      upgrade,
+      false,
+      undefined,
+      { evidence: { git_version: version || 'unavailable', parsed } },
+    );
   }
 
-  return check(id, category, title, 'ok', `${version} parses trailers as the spec expects`);
+  return check(
+    id,
+    category,
+    title,
+    'ok',
+    `${version} parses trailers as the spec expects`,
+    null,
+    false,
+    undefined,
+    { evidence: { git_version: version || 'unavailable', parsed } },
+  );
 };
 
 /**
@@ -560,6 +749,15 @@ const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
       'fail',
       `no built CLI at ${candidates.join(' or ')} — this checkout has not been built`,
       'npm install && npm run build',
+      false,
+      undefined,
+      {
+        evidence: {
+          entry: candidates.join(' or '),
+          exit_code: 'not_run',
+          ...streamEvidence('stderr', ''),
+        },
+      },
     );
   }
 
@@ -570,14 +768,63 @@ const checkRuntime = (opts: DoctorOptions): DoctorCheck => {
   });
 
   if (run.error !== undefined) {
-    return check(id, category, title, 'fail', `could not run ${entry}: ${run.error.message}`, null);
+    return check(
+      id,
+      category,
+      title,
+      'fail',
+      `could not run ${entry}: ${run.error.message}`,
+      null,
+      false,
+      undefined,
+      {
+        evidence: {
+          entry,
+          exit_code: String(run.status ?? 'unavailable'),
+          error: run.error.message,
+          ...streamEvidence('stderr', run.stderr),
+        },
+      },
+    );
   }
   if (run.status !== 0) {
     const detail = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? `exit ${String(run.status)}`;
-    return check(id, category, title, 'fail', `${entry} exits ${String(run.status)}: ${detail}`, 'npm install');
+    return check(
+      id,
+      category,
+      title,
+      'fail',
+      `${entry} exits ${String(run.status)}: ${detail}`,
+      'npm install',
+      false,
+      undefined,
+      {
+        evidence: {
+          entry,
+          exit_code: String(run.status),
+          ...streamEvidence('stderr', run.stderr),
+        },
+      },
+    );
   }
 
-  return check(id, category, title, 'ok', `${entry} runs (${run.stdout.trim()})`);
+  return check(
+    id,
+    category,
+    title,
+    'ok',
+    `${entry} runs (${run.stdout.trim()})`,
+    null,
+    false,
+    undefined,
+    {
+      evidence: {
+        entry,
+        version: boundedExcerpt(run.stdout).firstLine,
+        ...streamEvidence('stdout', run.stdout),
+      },
+    },
+  );
 };
 
 /**
@@ -607,12 +854,42 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
   const cwd = opts.cwd ?? process.cwd();
 
   const located = execGit(['rev-parse', '--git-path', 'hooks/commit-msg'], gitOptions(opts));
-  if (located.code !== 0) return check(id, category, title, 'warn', 'not inside a git repository', fix);
+  if (located.code !== 0) {
+    return check(
+      id,
+      category,
+      title,
+      'warn',
+      'not inside a git repository',
+      fix,
+      false,
+      undefined,
+      {
+        evidence: {
+          hook_path: 'unavailable',
+          exit_code: String(located.code),
+          ...streamEvidence('stderr', located.stderr),
+        },
+      },
+    );
+  }
 
   const hook = resolve(cwd, located.stdout.trim());
   // The hook's absence is `checkHook`'s finding; saying it twice teaches the
   // reader to skim both.
-  if (!existsSync(hook)) return check(id, category, title, 'ok', 'no hook installed — nothing to run');
+  if (!existsSync(hook)) {
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      'no hook installed — nothing to run',
+      null,
+      false,
+      undefined,
+      { evidence: { hook_path: hook } },
+    );
+  }
 
   const probe = join(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
@@ -627,7 +904,24 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
     });
 
     if (run.error !== undefined) {
-      return check(id, category, title, 'fail', `could not run the hook: ${run.error.message}`, fix);
+      return check(
+        id,
+        category,
+        title,
+        'fail',
+        `could not run the hook: ${run.error.message}`,
+        fix,
+        false,
+        undefined,
+        {
+          evidence: {
+            hook_path: hook,
+            exit_code: String(run.status ?? 'unavailable'),
+            error: run.error.message,
+            ...streamEvidence('stderr', run.stderr),
+          },
+        },
+      );
     }
     if (run.status !== 0) {
       const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
@@ -644,9 +938,35 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
       } else {
         detail = `the hook exited ${String(run.status)} under the restricted PATH — cause unclear: ${said || 'no output'}`;
       }
-      return check(id, category, title, 'fail', detail, fix);
+      return check(
+        id,
+        category,
+        title,
+        'fail',
+        detail,
+        fix,
+        false,
+        undefined,
+        {
+          evidence: {
+            hook_path: hook,
+            exit_code: String(run.status),
+            ...streamEvidence('stderr', run.stderr),
+          },
+        },
+      );
     }
-    return check(id, category, title, 'ok', 'the hook runs and validates without node on PATH');
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      'the hook runs and validates without node on PATH',
+      null,
+      false,
+      undefined,
+      { evidence: { hook_path: hook, exit_code: '0' } },
+    );
   } catch (error) {
     return check(
       id,
@@ -655,6 +975,16 @@ const checkHookRuntime = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       `could not probe the hook: ${error instanceof Error ? error.message : String(error)}`,
       fix,
+      false,
+      undefined,
+      {
+        evidence: {
+          hook_path: hook,
+          exit_code: 'unavailable',
+          error: error instanceof Error ? error.message : String(error),
+          ...streamEvidence('stderr', ''),
+        },
+      },
     );
   } finally {
     rmSync(probe, { force: true });
@@ -703,6 +1033,7 @@ export const evaluateInjectRun = (
   },
 ): DoctorCheck => {
   const { id, category, title, executable, path, fix, unavailableFix } = ctx;
+  const executionEvidence = { executable, path };
 
   if (run.status === null || run.status === undefined) {
     if (run.error !== undefined && 'code' in run.error && run.error.code === 'ENOENT') {
@@ -713,6 +1044,15 @@ export const evaluateInjectRun = (
         'fail',
         `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
         unavailableFix,
+        false,
+        undefined,
+        {
+          evidence: {
+            ...executionEvidence,
+            exit_code: 'unavailable',
+            ...streamEvidence('stderr', run.stderr),
+          },
+        },
       );
     }
     return check(
@@ -722,6 +1062,16 @@ export const evaluateInjectRun = (
       'fail',
       `could not run the PreToolUse hook: ${run.error?.message ?? 'no diagnosis'}`,
       fix,
+      false,
+      undefined,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: 'unavailable',
+          error: run.error?.message ?? 'no diagnosis',
+          ...streamEvidence('stderr', run.stderr),
+        },
+      },
     );
   }
 
@@ -734,6 +1084,15 @@ export const evaluateInjectRun = (
       'fail',
       `the PreToolUse hook exits ${String(run.status)}: ${said || 'no diagnosis'}`,
       fix,
+      false,
+      undefined,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: String(run.status),
+          ...streamEvidence('stderr', run.stderr),
+        },
+      },
     );
   }
   if (`${run.stdout ?? ''}`.trim() === '') {
@@ -745,9 +1104,35 @@ export const evaluateInjectRun = (
       'fail',
       `the PreToolUse hook returned no context for a known-good payload${said === '' ? '' : `: ${said}`}`,
       fix,
+      false,
+      undefined,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: '0',
+          ...streamEvidence('stdout', run.stdout),
+          ...streamEvidence('stderr', run.stderr),
+        },
+      },
     );
   }
-  return check(id, category, title, 'ok', `the PreToolUse hook returned context for ${path}`);
+  return check(
+    id,
+    category,
+    title,
+    'ok',
+    `the PreToolUse hook returned context for ${path}`,
+    null,
+    false,
+    undefined,
+    {
+      evidence: {
+        ...executionEvidence,
+        exit_code: '0',
+        ...streamEvidence('stdout', run.stdout),
+      },
+    },
+  );
 };
 
 const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
@@ -772,26 +1157,95 @@ const checkInjectRuntime = (opts: DoctorOptions): DoctorCheck => {
             null,
       false,
       false,
-      { skipReason: 'command_unrecognized' },
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          configured_command: command,
+          executable: 'not_run',
+          exit_code: 'not_run',
+          ...streamEvidence('stderr', ''),
+        },
+        skipReason: 'command_unrecognized',
+      },
     );
     }
     const detail =
       settings.state === 'absent'
         ? `not installed in ${settings.settingsPath}`
         : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
-    return check(id, category, title, 'warn', detail, 'commitlore inject install-claude-hook');
+    return check(
+      id,
+      category,
+      title,
+      'warn',
+      detail,
+      'commitlore inject install-claude-hook',
+      false,
+      undefined,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          executable: 'not_run',
+          exit_code: 'not_run',
+          ...streamEvidence('stderr', ''),
+          ...(settings.problem === undefined ? {} : { problem: settings.problem }),
+        },
+      },
+    );
   }
 
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised', null, false, false, { skipReason: 'command_unrecognized' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      'not checked: the configured command is not recognised',
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          configured_command: command ?? 'none',
+          executable: 'not_run',
+          exit_code: 'not_run',
+          ...streamEvidence('stderr', ''),
+        },
+        skipReason: 'command_unrecognized',
+      },
+    );
   }
 
   const path = runQuery({ cwd, noIndex: true }).records
     .flatMap((record) => record.paths)
     .find((candidate) => candidate !== '' && candidate !== '.');
   if (path === undefined) {
-    return check(id, category, title, 'skipped', 'no recorded path is available for a runtime probe', null, false, false, { skipReason: 'probe_path_unavailable' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      'no recorded path is available for a runtime probe',
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          executable: 'not_run',
+          probe_path: 'unavailable',
+          exit_code: 'not_run',
+          ...streamEvidence('stderr', ''),
+        },
+        skipReason: 'probe_path_unavailable',
+      },
+    );
   }
 
   const payload = JSON.stringify({
@@ -863,11 +1317,42 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
 
   if (settings.state !== 'installed') {
-    return check(id, category, title, 'skipped', `no installed hook to compare against ${mine}`, null, false, false, { skipReason: 'hook_not_installed' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      `no installed hook to compare against ${mine}`,
+      null,
+      false,
+      false,
+      {
+        evidence: { executable: 'not_run', theirs: 'not_run', mine },
+        skipReason: 'hook_not_installed',
+      },
+    );
   }
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(id, category, title, 'skipped', 'not checked: the configured command is not recognised', null, false, false, { skipReason: 'command_unrecognized' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      'not checked: the configured command is not recognised',
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          executable: 'not_run',
+          theirs: 'not_run',
+          mine,
+          configured_command: command ?? 'none',
+        },
+        skipReason: 'command_unrecognized',
+      },
+    );
   }
 
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, '');
@@ -881,11 +1366,29 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
       HOME: process.env['HOME'] ?? '',
     },
   });
+  const reported = typeof run.stdout === 'string' ? run.stdout : '';
+  const versionEvidence = {
+    executable,
+    theirs: boundedExcerpt(reported).firstLine || 'unavailable',
+    mine,
+    exit_code: String(run.status ?? 'unavailable'),
+    ...streamEvidence('stdout', reported),
+  };
 
   if (run.status !== 0 || typeof run.stdout !== 'string') {
     // `checkInjectRuntime` owns "the hook does not run at all" and reports it
     // with the remedy. Saying it twice would be noise.
-    return check(id, category, title, 'skipped', `${executable} did not report a version`, null, false, false, { skipReason: 'version_unreadable' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      `${executable} did not report a version`,
+      null,
+      false,
+      false,
+      { evidence: versionEvidence, skipReason: 'version_unreadable' },
+    );
   }
 
   const theirs = run.stdout.trim();
@@ -903,11 +1406,21 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
         null,
     false,
     false,
-    { skipReason: 'version_unreadable' },
+    { evidence: versionEvidence, skipReason: 'version_unreadable' },
   );
   }
   if (theirs === mine) {
-    return check(id, category, title, 'ok', `the hook runs ${theirs}, the same build as this CLI`);
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      `the hook runs ${theirs}, the same build as this CLI`,
+      null,
+      false,
+      undefined,
+      { evidence: versionEvidence },
+    );
   }
 
   return check(
@@ -917,6 +1430,9 @@ const checkInjectVersion = (opts: DoctorOptions): DoctorCheck => {
     'warn',
     `the agent's hook runs ${theirs} but this CLI is ${mine} — every edit is graded by ${theirs}'s rules, not this one's`,
     'update the installation the hook resolves to (for the plugin: /plugin marketplace update commitlore), then rerun: commitlore doctor',
+    false,
+    undefined,
+    { evidence: versionEvidence },
   );
 };
 
@@ -943,7 +1459,17 @@ const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
   const unfinished = unfinishedRuns(cwd);
 
   if (unfinished.length === 0) {
-    return check(id, category, title, 'ok', 'every recorded MCP session ended cleanly, or is still running');
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      'every recorded MCP session ended cleanly, or is still running',
+      null,
+      false,
+      undefined,
+      { evidence: { unfinished_count: '0', last_pid: 'none', last_at: 'none' } },
+    );
   }
 
   const last = unfinished[unfinished.length - 1];
@@ -956,6 +1482,15 @@ const checkMcpLifecycle = (opts: DoctorOptions): DoctorCheck => {
       `most recently pid ${String(last?.pid ?? 0)} at ${last?.at ?? 'unknown'}. ` +
       'A killed server loses its tool registration in the client, which reports the same as a tool that never existed (#424)',
     'restart the client session; if this repeats, capture it with a client started under --debug',
+    false,
+    undefined,
+    {
+      evidence: {
+        unfinished_count: String(unfinished.length),
+        last_pid: String(last?.pid ?? 0),
+        last_at: last?.at ?? 'unknown',
+      },
+    },
   );
 };
 
@@ -992,7 +1527,17 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
   try {
     listing = runPendingList({ cwd });
   } catch {
-    return check(id, category, title, 'ok', 'no pending directory — nothing has been captured here yet');
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      'no pending directory — nothing has been captured here yet',
+      null,
+      false,
+      undefined,
+      { evidence: { stranded: '0', staged_expired: '0', oldest: 'none' } },
+    );
   }
 
   if (listing.unreadable.length > 0) {
@@ -1003,6 +1548,16 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
       'commitlore pending ls',
+      false,
+      undefined,
+      {
+        evidence: {
+          stranded: '0',
+          staged_expired: '0',
+          oldest: 'none',
+          unreadable: String(listing.unreadable.length),
+        },
+      },
     );
   }
 
@@ -1017,6 +1572,17 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
       title,
       'ok',
       held === 0 ? 'no captures are waiting' : `${String(held)} capture(s) waiting, all still able to apply`,
+      null,
+      false,
+      undefined,
+      {
+        evidence: {
+          stranded: '0',
+          staged_expired: '0',
+          oldest: 'none',
+          waiting: String(held),
+        },
+      },
     );
   }
 
@@ -1043,8 +1609,17 @@ const checkPendingBacklog = (opts: DoctorOptions): DoctorCheck => {
     'warn',
     `${detail}; oldest from ${oldest ?? 'an unknown time'}. ` +
       'A staged record binds to the tree it was prepared for and is skipped once that tree moves, ' +
-      'so these decisions were never written to the history (#458)',
+    'so these decisions were never written to the history (#458)',
     'commitlore pending ls',
+    false,
+    undefined,
+    {
+      evidence: {
+        stranded: String(stranded.length),
+        staged_expired: String(lost.length),
+        oldest: oldest ?? 'unknown',
+      },
+    },
   );
 };
 
@@ -1060,6 +1635,17 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       'no index yet — queries fall back to scanning the history',
       'commitlore index --rebuild',
+      false,
+      undefined,
+      {
+        evidence: {
+          trailers: '0',
+          commits: '0',
+          last_indexed_sha: 'none',
+          head_sha: 'not_queried',
+          fts: 'unavailable',
+        },
+      },
     );
   }
   try {
@@ -1067,6 +1653,13 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
     const head = execGit(['rev-parse', 'HEAD'], gitOptions(opts));
     const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
     const fts = info.fts ? 'FTS5' : 'no FTS5 (value search falls back to LIKE)';
+    const indexEvidence = {
+      trailers: String(info.trailers),
+      commits: String(info.commits),
+      last_indexed_sha: info.lastIndexedSha || 'none',
+      head_sha: head.code === 0 ? head.stdout.trim() || 'none' : 'unavailable',
+      fts: info.fts ? 'true' : 'false',
+    };
     return behind
       ? check(
           'index-health', 'index',
@@ -1074,12 +1667,19 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
           'warn',
           `${info.trailers} trailers over ${info.commits} commits, behind HEAD — ${fts}`,
           'commitlore index',
+          false,
+          undefined,
+          { evidence: indexEvidence },
         )
       : check(
           'index-health', 'index',
           'index health',
           'ok',
           `${info.trailers} trailers over ${info.commits} commits, current with HEAD — ${fts}`,
+          null,
+          false,
+          undefined,
+          { evidence: indexEvidence },
         );
   } catch (error) {
     return check(
@@ -1088,6 +1688,17 @@ const checkIndex = (opts: DoctorOptions): DoctorCheck => {
       'warn',
       `index unreadable (${error instanceof Error ? error.message : String(error)}) — queries still work without it`,
       'commitlore index --rebuild',
+      false,
+      undefined,
+      {
+        evidence: {
+          trailers: 'unavailable',
+          commits: 'unavailable',
+          last_indexed_sha: 'unavailable',
+          head_sha: 'unavailable',
+          fts: 'unavailable',
+        },
+      },
     );
   } finally {
     try {
@@ -1106,8 +1717,21 @@ const checkHistoryDepth = (opts: DoctorOptions): DoctorCheck =>
         'warn',
         'this clone has shallow history, so queries may be missing records that exist upstream',
         'git fetch --unshallow',
+        false,
+        undefined,
+        { evidence: { shallow: 'true' } },
       )
-    : check('history-depth', 'history', 'history depth', 'ok', 'full history is available');
+    : check(
+        'history-depth',
+        'history',
+        'history depth',
+        'ok',
+        'full history is available',
+        null,
+        false,
+        undefined,
+        { evidence: { shallow: 'false' } },
+      );
 
 /** Local branches this check will look at, past which a repository is skipped rather than walked exhaustively. */
 const MAX_SQUASH_CANDIDATE_BRANCHES = 200;
@@ -1196,7 +1820,20 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
 
   const head = execGit(['rev-parse', '--verify', '--quiet', 'HEAD'], gitOptions(opts));
   if (head.code !== 0) {
-    return check(id, category, title, 'skipped', 'no HEAD yet — nothing to compare against', null, false, false, { skipReason: 'unborn_head' });
+    return check(
+      id,
+      category,
+      title,
+      'skipped',
+      'no HEAD yet — nothing to compare against',
+      null,
+      false,
+      false,
+      {
+        evidence: { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' },
+        skipReason: 'unborn_head',
+      },
+    );
   }
 
   const candidates = squashCandidates(opts, head.stdout.trim());
@@ -1210,7 +1847,10 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
         null,
     false,
     false,
-    { skipReason: 'nothing_applicable' },
+    {
+      evidence: { candidates: '0', checked: '0', uncheckable: '0', lost_count: '0' },
+      skipReason: 'nothing_applicable',
+    },
   );
   }
 
@@ -1265,7 +1905,15 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
         null,
     false,
     false,
-    { skipReason: 'nothing_applicable' },
+    {
+      evidence: {
+        candidates: String(candidates.length),
+        checked: '0',
+        uncheckable: String(uncheckable),
+        lost_count: '0',
+      },
+      skipReason: 'nothing_applicable',
+    },
   );
   }
 
@@ -1283,6 +1931,16 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
       'commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, ' +
         'then commit or attach the result',
+      false,
+      undefined,
+      {
+        evidence: {
+          candidates: String(candidates.length),
+          checked: String(checked),
+          uncheckable: String(uncheckable),
+          lost_count: String(lost.length),
+        },
+      },
     );
   }
 
@@ -1291,7 +1949,24 @@ const checkSquashConservation = (opts: DoctorOptions): DoctorCheck => {
       ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD ` +
         `(${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)`
       : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
-  return check(id, category, title, 'ok', detail);
+  return check(
+    id,
+    category,
+    title,
+    'ok',
+    detail,
+    null,
+    false,
+    undefined,
+    {
+      evidence: {
+        candidates: String(candidates.length),
+        checked: String(checked),
+        uncheckable: String(uncheckable),
+        lost_count: '0',
+      },
+    },
+  );
 };
 
 /**

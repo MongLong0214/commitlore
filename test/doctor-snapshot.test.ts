@@ -13,8 +13,8 @@
  * — which checks run, in what order, with what status and what fix line.
  */
 
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, type SpawnSyncReturns } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,11 +23,14 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   CHECK_REGISTRY,
+  evaluateInjectRun,
   formatReport,
   runDoctor,
   type CheckDefinition,
+  type DoctorCheck,
 } from '../src/commands/doctor.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
+import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -345,5 +348,176 @@ describe('#464 typed skip reasons', () => {
 
     expect(row?.status).toBe('skipped');
     expect(row?.skipReason).toBe('unborn_head');
+  });
+});
+
+/**
+ * #465: a diagnostic conclusion is only as useful as the observation beside it.
+ *
+ * Text rendering deliberately ignores these fields until its own ticket, so
+ * these assertions look at the report object directly. That keeps the text
+ * snapshot meaningful while making the JSON contract hard to erode unnoticed.
+ */
+describe('#465 doctor evidence', () => {
+  const assertEvidence = (checks: readonly DoctorCheck[]): void => {
+    for (const row of checks) {
+      if (Object.keys(row.evidence).length === 0) {
+        throw new Error(`${row.id} is ${row.status} without evidence`);
+      }
+    }
+  };
+
+  const injectContext: Parameters<typeof evaluateInjectRun>[1] = {
+    id: 'inject-runtime',
+    category: 'delivery',
+    title: 'PreToolUse hook runtime',
+    executable: 'configured-commitlore',
+    path: 'probe.ts',
+    fix: 'reinstall the configured executable',
+    unavailableFix: 'make the configured executable available',
+  };
+
+  const injectRun = (stderr: string): SpawnSyncReturns<string> => ({
+    pid: 1,
+    output: [null, '', stderr],
+    stdout: '',
+    stderr,
+    status: 7,
+    signal: null,
+  });
+
+  it('gives every full-run row evidence, and rejects a deliberately bare finding', () => {
+    // A new failure path can otherwise read plausibly in text while dropping
+    // the observation a JSON consumer needs to distinguish it from another.
+    const reports = [
+      runDoctor({ cwd: populated('evidence-working', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs')) }),
+      runDoctor({ cwd: populated('evidence-broken', join(temp('evidence-missing'), 'missing.mjs')) }),
+    ];
+    const rows = reports.flatMap((report) => report.checks);
+
+    assertEvidence(rows);
+    expect(rows.some((row) => row.status !== 'ok')).toBe(true);
+    for (const row of rows) {
+      for (const [key, value] of Object.entries(row.evidence)) {
+        expect(key, `${row.id} emitted a non-contract evidence key`).toMatch(/^[a-z][a-z0-9_]*$/);
+        expect(value, `${row.id}.${key} is not a string`).toBeTypeOf('string');
+      }
+    }
+
+    const broken: DoctorCheck = {
+      id: 'test-only-bare-finding',
+      title: 'test-only bare finding',
+      status: 'fail',
+      needsAttention: true,
+      detail: 'this row exists only to exercise the invariant',
+      fix: null,
+      fixed: false,
+      category: 'runtime',
+      severity: 'error',
+      evidence: {},
+      optional: false,
+    };
+    expect(() => assertEvidence([broken])).toThrow('test-only-bare-finding is fail without evidence');
+  });
+
+  it('renders paths under HOME as home-relative evidence', () => {
+    // Fixture paths are the path shape users paste into bug reports. Pointing
+    // HOME at their parent proves sanitisation reaches paths from every check,
+    // not only the one that introduced this field.
+    const home = temp('evidence-home');
+    const repo = createTestRepo({ path: join(home, 'repo') });
+    const previousHome = process.env['HOME'];
+    process.env['HOME'] = home;
+    try {
+      const values = runDoctor({ cwd: repo }).checks.flatMap((row) => Object.values(row.evidence));
+      expect(values.some((value) => value.includes('~/'))).toBe(true);
+      for (const value of values) expect(value).not.toContain(home);
+    } finally {
+      if (previousHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previousHome;
+    }
+  });
+
+  it('bounds captured stderr while preserving whether anything was omitted', () => {
+    // The bound is what keeps a broken hook that prints a large stack trace
+    // from turning a diagnostic response into an unbounded JSON payload.
+    const truncated = evaluateInjectRun(injectRun(`${'x'.repeat(10_000)}\nsecond line`), injectContext);
+    const untruncated = evaluateInjectRun(injectRun('short diagnostic\nsecond line'), injectContext);
+
+    expect(truncated.evidence['stderr_first_line']).toHaveLength(200);
+    expect(truncated.evidence['stderr_truncated']).toBe('true');
+    expect(untruncated.evidence['stderr_first_line']).toBe('short diagnostic');
+    expect(untruncated.evidence['stderr_truncated']).toBe('false');
+  });
+
+  it('records the configured executable it runs and both sides of a hook version comparison', () => {
+    // #149 reconstructed a path that did not appear in settings; #382 had both
+    // versions in hand but left the skew trapped inside prose. This fixture
+    // makes the configured command do both jobs so the two observations stay
+    // coupled to the executions that produced them.
+    const repo = populated('evidence-inject', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const bin = temp('evidence-inject-bin');
+    const command = join(bin, 'commitlore');
+    writeFileSync(
+      command,
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  printf \'0.0.0\\n\'\nelse\n  printf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\nfi\n',
+    );
+    chmodSync(command, 0o755);
+    installClaudeHook({ settingsPath: claudeSettingsPath(repo) });
+
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${bin}:/usr/bin:/bin`;
+    try {
+      const rows = runDoctor({ cwd: repo }).checks;
+      const runtime = rows.find((row) => row.id === 'inject-runtime');
+      const version = rows.find((row) => row.id === 'inject-version');
+
+      expect(runtime?.status).toBe('ok');
+      expect(runtime?.evidence['executable']).toBe('commitlore');
+      expect(runtime?.evidence['exit_code']).toBe('0');
+      expect(version?.evidence['executable']).toBe('commitlore');
+      expect(version?.evidence['theirs']).toBe('0.0.0');
+      expect(version?.evidence['mine']).not.toBe('');
+    } finally {
+      if (previousPath === undefined) delete process.env['PATH'];
+      else process.env['PATH'] = previousPath;
+    }
+  });
+
+  it('surfaces the hook target recorded at installation and an active override', () => {
+    // #49 was invisible because doctor observed the target but kept it only in
+    // prose. The override matters for the same reason: it wins resolution.
+    const bin = resolve(PACKAGE_ROOT, 'dist/commitlore.mjs');
+    const repo = populated('evidence-hook-target', bin);
+    const override = join(repo, 'override.mjs');
+    const previousOverride = process.env['COMMITLORE_BIN'];
+    process.env['COMMITLORE_BIN'] = override;
+    try {
+      const hook = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'commit-msg-hook');
+      const home = process.env['HOME'];
+      const homeRelative = (value: string): string =>
+        home !== undefined && value.startsWith(`${home}/`) ? `~/${value.slice(home.length + 1)}` : value;
+
+      expect(hook?.evidence['hook_path']).toContain('hooks/commit-msg');
+      expect(hook?.evidence['bin']).toBe(homeRelative(bin));
+      expect(hook?.evidence['node']).toBe(homeRelative(process.execPath));
+      expect(hook?.evidence['commitlore_bin_override']).toBe(override);
+    } finally {
+      if (previousOverride === undefined) delete process.env['COMMITLORE_BIN'];
+      else process.env['COMMITLORE_BIN'] = previousOverride;
+    }
+  });
+
+  it('keeps the counts that licence an index-health verdict', () => {
+    // Counting a different trailer convention produced a persuasive but wrong
+    // green report in #335/#458. Keeping these numbers structured lets a test
+    // compare the conclusion with the observation that licensed it.
+    const repo = populated('evidence-index-counts', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
+    const index = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'index-health');
+
+    expect(index?.evidence['trailers']).not.toBe('');
+    expect(index?.evidence['commits']).not.toBe('');
+    expect(index?.detail).toContain(`${index?.evidence['trailers']} trailers`);
+    expect(index?.detail).toContain(`${index?.evidence['commits']} commits`);
   });
 });
