@@ -18,6 +18,9 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  # `exact-head-ci` reads the check runs GitHub recorded for the tagged commit.
+  # Reading a branch's green badge would answer a different, weaker question.
+  checks: read
 
 jobs:
   # Refuses the whole release before a single binary is built. A release
@@ -36,6 +39,48 @@ jobs:
       - run: npm run build
       - name: Tag, package.json, and `commitlore --version` agree
         run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+
+  # A version-consistent tag can still name a commit that exists only on dev.
+  # `merge-base` can answer that only from complete history: a shallow checkout
+  # is not a smaller proof, it is an incomplete graph that the script refuses.
+  # The accepted commit is an output so the API gate below queries the commit an
+  # annotated tag resolves to, rather than assuming the event SHA is one.
+  release-target:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.ancestry.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: ancestry
+        name: The pushed tag is already contained in main
+        run: node scripts/check-release-target.mjs "$GITHUB_REF_NAME" main --github-output
+
+  # A tag push does not create a new CI result for the commit it names. The
+  # relevant evidence is the existing set of check runs at that exact commit,
+  # not the last green run on main and not a local suite this release happens
+  # to start. The script has a fixed required list and treats every missing or
+  # non-success result as a block; an empty API response is therefore a failure.
+  exact-head-ci:
+    needs: release-target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every required CI check succeeded at the tagged commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-exact-head-ci.mjs "$GITHUB_REPOSITORY_OWNER" "${GITHUB_REPOSITORY#*/}" "${{ needs.release-target.outputs.commit }}"
 
   # RELEASE-GATE §4 used to be a human checklist run after `gh release create`.
   # That made a failed row a correction to something already published: the
@@ -177,7 +222,10 @@ jobs:
   # tag is what those installers resolve. A release with no assets is the whole
   # artifact set, not an incomplete one.
   publish:
-    needs: [version-consistency, install-gate]
+    # A skipped or failed prerequisite skips this job by GitHub's default needs
+    # semantics. Keep it free of `if:`: a condition such as `always()` would
+    # turn a failed qualification into a path that can still publish.
+    needs: [version-consistency, install-gate, release-target, exact-head-ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
