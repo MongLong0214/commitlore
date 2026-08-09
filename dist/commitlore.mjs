@@ -17687,7 +17687,7 @@ var checkInjectVersion = (ctx, dependencies) => {
 };
 
 // src/mcp/lifecycle.ts
-import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync10, writeFileSync as writeFileSync5, statSync as statSync3 } from "node:fs";
+import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync10, statSync as statSync3, writeFileSync as writeFileSync5, writeSync } from "node:fs";
 import { dirname as dirname5, join as join6 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
@@ -17717,27 +17717,59 @@ var write = (cwd, line2) => {
   }
 };
 var stamp = (at) => `${at.toISOString().slice(0, 19)}Z`;
-var recordServerStart = (cwd = process.cwd(), at = /* @__PURE__ */ new Date()) => {
+var errorMessage4 = (error2) => {
+  const message = error2 instanceof Error ? error2.message || error2.name : String(error2);
+  const singleLine = message.replace(/[\r\n]+/g, " ").trim();
+  return singleLine === "" ? "unknown error" : singleLine;
+};
+var recordServerStart = (cwd = process.cwd(), at = /* @__PURE__ */ new Date(), output = process.stdout) => {
   const entry = process.argv[1] ?? "unknown";
   write(cwd, `started ${stamp(at)} pid ${String(process.pid)} ${packageVersion()} ${entry}`);
-  let done = false;
-  const exit = (how) => {
-    if (done) return;
-    done = true;
-    write(cwd, `exited  ${stamp(/* @__PURE__ */ new Date())} pid ${String(process.pid)} ${how}`);
+  let reason;
+  const note = (detail, priority) => {
+    if (reason === void 0 || priority >= reason.priority) reason = { detail, priority };
+  };
+  const crash = (error2) => {
+    const detail = `crashed: ${errorMessage4(error2)}`;
+    note(detail, 3);
+    try {
+      writeSync(2, `commitlore mcp: ${detail}
+`);
+    } catch {
+    }
   };
   process.once("exit", () => {
-    exit("clean");
+    write(
+      cwd,
+      `exited  ${stamp(/* @__PURE__ */ new Date())} pid ${String(process.pid)} ${reason?.detail ?? "clean"}`
+    );
   });
   process.stdin.once("end", () => {
-    exit("stdin closed");
+    note("stdin closed", 1);
+  });
+  output.once("error", (error2) => {
+    if (error2.code === "EPIPE") {
+      note("client hung up", 2);
+      process.exit(0);
+    }
+    crash(error2);
+    process.exit(1);
+  });
+  process.once("uncaughtException", (error2) => {
+    crash(error2);
+    process.exit(1);
+  });
+  process.once("unhandledRejection", (reason2) => {
+    crash(reason2);
+    process.exit(1);
   });
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.once(signal, () => {
-      exit(signal);
+      note(signal, 2);
       process.exit(0);
     });
   }
+  return { crash };
 };
 var readLifecycle = (cwd = process.cwd()) => {
   try {
@@ -17759,6 +17791,7 @@ var readLifecycle = (cwd = process.cwd()) => {
     return [];
   }
 };
+var crashedRuns = (cwd = process.cwd()) => readLifecycle(cwd).filter((entry) => entry.kind === "exited" && entry.detail.startsWith("crashed: "));
 var unfinishedRuns = (cwd = process.cwd()) => {
   const entries = readLifecycle(cwd);
   const exited = new Set(entries.filter((e) => e.kind === "exited").map((e) => e.pid));
@@ -17779,8 +17812,9 @@ var checkMcpLifecycle = (ctx) => {
   const id = "mcp-lifecycle";
   const category = "delivery";
   const cwd = ctx.opts.cwd ?? process.cwd();
+  const crashed = crashedRuns(cwd);
   const unfinished = unfinishedRuns(cwd);
-  if (unfinished.length === 0) {
+  if (crashed.length === 0 && unfinished.length === 0) {
     return check(
       id,
       category,
@@ -17791,6 +17825,30 @@ var checkMcpLifecycle = (ctx) => {
       false,
       void 0,
       { evidence: { unfinished_count: "0", last_pid: "none", last_at: "none" } }
+    );
+  }
+  if (crashed.length > 0) {
+    const last2 = crashed[crashed.length - 1];
+    const cause = last2?.detail.slice("crashed: ".length) || "unknown error";
+    const unfinishedDetail = unfinished.length === 0 ? "" : ` ${unfinished.length} more session(s) started but never recorded an exit.`;
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `${crashed.length} MCP server session(s) crashed \u2014 most recently pid ${String(last2?.pid ?? 0)} at ${last2?.at ?? "unknown"}: ${cause}.${unfinishedDetail}`,
+      "restart the client session; if this repeats, capture it with a client started under --debug",
+      false,
+      void 0,
+      {
+        evidence: {
+          crash_count: String(crashed.length),
+          last_crash_pid: String(last2?.pid ?? 0),
+          last_crash_at: last2?.at ?? "unknown",
+          last_crash_cause: cause,
+          unfinished_count: String(unfinished.length)
+        }
+      }
     );
   }
   const last = unfinished[unfinished.length - 1];
@@ -27928,8 +27986,8 @@ var Protocol = class {
                   if (queuedMessage.type === "response") {
                     resolver(message);
                   } else {
-                    const errorMessage5 = message;
-                    const error2 = new McpError(errorMessage5.error.code, errorMessage5.error.message, errorMessage5.error.data);
+                    const errorMessage6 = message;
+                    const error2 = new McpError(errorMessage6.error.code, errorMessage6.error.message, errorMessage6.error.data);
                     resolver(error2);
                   }
                 } else {
@@ -29229,23 +29287,23 @@ var Server = class extends Protocol {
       const wrappedHandler = async (request, extra) => {
         const validatedRequest = safeParse2(CallToolRequestSchema, request);
         if (!validatedRequest.success) {
-          const errorMessage5 = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage5}`);
+          const errorMessage6 = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage6}`);
         }
         const { params } = validatedRequest.data;
         const result = await Promise.resolve(handler(request, extra));
         if (params.task) {
           const taskValidationResult = safeParse2(CreateTaskResultSchema, result);
           if (!taskValidationResult.success) {
-            const errorMessage5 = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
-            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage5}`);
+            const errorMessage6 = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage6}`);
           }
           return taskValidationResult.data;
         }
         const validationResult = safeParse2(CallToolResultSchema, result);
         if (!validationResult.success) {
-          const errorMessage5 = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage5}`);
+          const errorMessage6 = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage6}`);
         }
         return validationResult.data;
       };
@@ -30163,7 +30221,7 @@ var VERIFY_CAPTURE_TOOL = "commitlore_verify_capture";
 var STAGE_CAPTURE_TOOL = "commitlore_stage_capture";
 var CONTEXT_URI_PREFIX = "commitlore://context/";
 var CONTEXT_URI_TEMPLATE = `${CONTEXT_URI_PREFIX}{+path}`;
-var errorMessage4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var errorMessage5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var warn = (message) => {
   process.stderr.write(`commitlore mcp: ${message}
 `);
@@ -30172,7 +30230,7 @@ var packageVersion2 = () => {
   try {
     return packageVersion() ?? FALLBACK_VERSION;
   } catch (error2) {
-    warn(`could not read the package version (${errorMessage4(error2)})`);
+    warn(`could not read the package version (${errorMessage5(error2)})`);
     return FALLBACK_VERSION;
   }
 };
@@ -30502,13 +30560,13 @@ var createServer = (opts = {}) => {
   };
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
   server.setRequestHandler(CallToolRequestSchema, (request) => {
-    const handler = handlers[request.params.name];
-    if (handler === void 0) throw new Error(`unknown tool: ${request.params.name}`);
     try {
+      const handler = handlers[request.params.name];
+      if (handler === void 0) throw new Error(`unknown tool: ${request.params.name}`);
       return handler(request.params.arguments ?? {});
     } catch (error2) {
       return {
-        content: [{ type: "text", text: `commitlore: ${errorMessage4(error2)}` }],
+        content: [{ type: "text", text: `commitlore: ${errorMessage5(error2)}` }],
         isError: true
       };
     }
@@ -30560,10 +30618,16 @@ var routeConsoleToStderr = () => {
 };
 var startStdioServer = async (opts = {}) => {
   routeConsoleToStderr();
-  recordServerStart(opts.cwd ?? process.cwd());
-  const server = createServer(opts);
-  await server.connect(new StdioServerTransport());
-  return server;
+  const transport = new StdioServerTransport(process.stdin, process.stdout);
+  const lifecycle = recordServerStart(opts.cwd ?? process.cwd(), /* @__PURE__ */ new Date(), process.stdout);
+  try {
+    const server = createServer(opts);
+    await server.connect(transport);
+    return server;
+  } catch (error2) {
+    lifecycle.crash(error2);
+    throw error2;
+  }
 };
 
 // src/commands/mcp.ts

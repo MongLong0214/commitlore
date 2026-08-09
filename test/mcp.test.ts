@@ -698,12 +698,13 @@ describe('commitlore_query', () => {
     expect(toolText(response)).toContain('kind must be one of');
   });
 
-  it('reports a missing tool as a protocol error', async () => {
+  it('reports a missing tool as a tool error like every other dispatch failure', async () => {
     const response = await stub.request('tools/call', {
       name: 'commitlore_nonexistent',
       arguments: {},
     });
-    expect(response.error?.message).toContain('unknown tool');
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toContain('unknown tool');
   });
 });
 
