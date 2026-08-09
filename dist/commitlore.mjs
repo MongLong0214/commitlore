@@ -16184,35 +16184,34 @@ import { tmpdir } from "node:os";
 import { dirname as dirname6, join as join9, resolve as resolve14 } from "node:path";
 
 // src/demo/fixture.ts
-var targetPath = "src/services/cache.ts";
-var expectedActiveRecordId = "r-demo02";
-var predecessorCommitMessage = `Decide on Redis for session cache
+var targetPath = "src/pricing.ts";
+var expectedActiveRecordId = "r-price02";
+var predecessorCommitMessage = `Reuse calculatePrice for admin quotes
 
-Use Redis as the session cache backend. It handles our throughput
-requirements and the ops team already runs a managed instance.
+Admin quotes reuse calculatePrice so their preview stays aligned with the
+final checkout total.
 
-Limit: must not exceed 512 MB memory budget per node
-Ruled-out: memcached | no built-in persistence for session recovery
+Limit: admin quotes share checkout eligibility and rounding
+Ruled-out: separate admin quote path | a shared calculation keeps totals aligned
 Blast: module
 Undo: costly
 Certainty: firm
-Record-Id: r-demo01
+Record-Id: r-price01
 Provenance: authored
 CommitLore-Version: 2.0.0
 `;
-var successorCommitMessage = `Switch session cache from Redis to SQLite
+var successorCommitMessage = `Give admin quotes their own pricing path
 
-Redis added operational complexity without matching throughput gains for
-our actual traffic pattern. SQLite embedded cache removes the external
-dependency and simplifies deployment.
+Admin quote eligibility and rounding differ from final checkout pricing.
+Keep the quote path separate instead of carrying exceptions in calculatePrice.
 
-Supersedes: r-demo01
-Limit: single-writer constraint requires careful connection pooling
-Ruled-out: Redis cluster | cost and complexity disproportionate to traffic
+Supersedes: r-price01
+Limit: calculatePrice owns final checkout pricing only
+Ruled-out: reuse checkout pricing | admin eligibility and rounding differ
 Blast: module
 Undo: easy
 Certainty: firm
-Record-Id: r-demo02
+Record-Id: r-price02
 Provenance: authored
 CommitLore-Version: 2.0.0
 `;
@@ -19969,13 +19968,16 @@ var runDemo = async (opts = {}) => {
     git(["config", "commit.gpgsign", "false"], tmpDir);
     const targetFullPath = join9(tmpDir, targetPath);
     mkdirSync9(dirname6(targetFullPath), { recursive: true });
-    writeFileSync10(targetFullPath, "// session cache module\n");
+    writeFileSync10(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
     if (opts.crashTest === true) {
       throw new Error("demo: simulated crash for testing cleanup");
     }
-    writeFileSync10(targetFullPath, "// session cache module \u2014 now using SQLite\n");
+    writeFileSync10(
+      targetFullPath,
+      "export const calculatePrice = () => {};\nexport const calculateAdminQuote = () => {};\n"
+    );
     git(["add", "."], tmpDir);
     git(["commit", "-m", successorCommitMessage], tmpDir);
     runInit({ cwd: tmpDir });
@@ -19988,10 +19990,10 @@ var runDemo = async (opts = {}) => {
     lines.push("\u2500\u2500\u2500 commitlore demo \u2500\u2500\u2500");
     lines.push("");
     lines.push(`Scenario: two decisions recorded for ${targetPath}`);
-    lines.push('  1. "Use Redis for session cache" (later superseded)');
-    lines.push('  2. "Switch to SQLite" (supersedes the first \u2014 now active)');
+    lines.push('  1. "Reuse calculatePrice for admin quotes" (later superseded)');
+    lines.push('  2. "Give admin quotes their own path" (supersedes the first \u2014 now active)');
     lines.push("");
-    lines.push("An agent proposes reverting to Redis. CommitLore answers:");
+    lines.push("An agent proposes reusing calculatePrice for admin quotes. CommitLore answers:");
     lines.push("");
     if (queryResult.records.length === 0) {
       lines.push("  (no active records found)");
@@ -20008,7 +20010,7 @@ var runDemo = async (opts = {}) => {
     }
     lines.push("");
     lines.push(`Only the active decision (${expectedActiveRecordId}) is shown.`);
-    lines.push("The superseded Redis decision is filtered out \u2014 the agent cannot revive it.");
+    lines.push("The superseded reuse decision is filtered out \u2014 the agent cannot revive it.");
     lines.push("");
     const output = lines.join("\n");
     return { exitCode: 0, output };

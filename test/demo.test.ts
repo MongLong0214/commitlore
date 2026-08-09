@@ -56,10 +56,10 @@ describe('commitlore demo', () => {
 
   it('output shows lifecycle filtering — active record present, superseded excluded', async () => {
     const result = await runDemo({ cwd: userRepo, tmpRoot: demoRoot });
-    // The active record (r-demo02, SQLite) should be visible
-    expect(result.output).toContain('r-demo02');
-    // The superseded record (r-demo01, Redis predecessor) should be filtered out
-    expect(result.output).not.toContain('r-demo01');
+    // The active record (r-price02, separate admin quote path) should be visible
+    expect(result.output).toContain('r-price02');
+    // The superseded record (r-price01, reuse calculatePrice) should be filtered out
+    expect(result.output).not.toContain('r-price01');
   });
 
   it('temporary directory does not exist after successful completion', async () => {
