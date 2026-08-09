@@ -226,3 +226,67 @@ this way — the rule §12 opens with.
 
 Nothing about M5's outcome was known when this was written. Nothing about M6 has
 been run.
+
+---
+
+## 13. The base-rate pilot — protocol, fixed before it runs
+
+§5 says the order is *base-rate pilot → n → register → run*, and leaves the
+pilot itself undescribed. This section fixes it. It is written before the pilot
+executes, for the same reason every other number in this document was: a
+protocol chosen after seeing rows is a protocol chosen by the rows.
+
+### What it measures
+
+The `no-grade` compliance rate, and wall-clock per run. Nothing else. No
+comparison, no table, no verdict.
+
+### Design
+
+| | |
+|---|---|
+| arm | `no-grade` only |
+| tasks | **all ten** `reproposal-*` fixtures |
+| seeds | 3 per task, seeds 1–3 |
+| runs | 30 |
+| driver | `claude-headless` |
+| model | fixed at execution and recorded in every row |
+
+**All ten tasks, not a subset.** §5 records what a subset cost M5: its pilot's
+33.3% came from three tasks including the strongest one in the set, and planning
+from it would have sized the run too small. A base rate taken from a convenience
+sample of a ten-task instrument is a base rate for the sample.
+
+Three seeds is the smallest number that lets a task's runs disagree with each
+other. The pilot is not powered to detect anything, and is not meant to be — its
+job is to say roughly where the rate sits so §5 can size against it.
+
+### Invocation
+
+    node --experimental-strip-types bench/runner.ts \
+      --cond no-grade --seed 1,2,3 --driver claude-headless \
+      --out bench/results/m6-pilot-<date>.jsonl \
+      --save-transcripts bench/results/transcripts-m6-pilot
+
+The output path is under `bench/results/` and not in a temporary directory,
+and the shard is committed when it lands. That is M5 deviation 3, which cost
+that study a re-run.
+
+### Before it starts
+
+No other runner is running. M5 lost roughly two hours to two runners writing the
+same file from different harness commits, and the check that would have caught
+it takes one command.
+
+### What the pilot's rows may and may not be used for
+
+They fix `n` in §5 and they are cited nowhere else. They are not part of any
+analysis set, they do not appear in any table, and they are not evidence for or
+against §2's hypothesis. M5's pilot rows carry the same status and the same
+reason.
+
+### What fixing `n` will look like
+
+`n` follows from the observed `no-grade` rate by the same power calculation §5
+would have used with a prior. When it carries a number, the status line at the
+top of this document changes to registered, in the same commit.
