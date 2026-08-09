@@ -14,22 +14,74 @@
 
 # CommitLore
 
-## 代理继承了代码。
-## 也把判断传下去。
+**你的编程代理不断重新提议团队早已否决的方案。**
 
-**面向编程代理的 Git 原生 decision layer。**
+CommitLore 把这些决策保存在 Git 中，并在它编辑文件之前，把仍然有效的决策交给它
+——**无需托管服务，也不会有一个字节离开你的仓库**。
 
-每个新代理都继承了实现。但它不会继承约束、团队否决过的替代方案、警告，以及验证缺口 ——
-除非有什么东西把它们带上，否则这些并不随代码一起走。
+在 1,160 次已登记的运行中，重新提议已否决方案的比例从 **18.8%** 降至 **2.8%**。下面的示例就是代理实际看到的内容。
 
-CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
-后来被取代或已过期的决定，不会以仍然成立的样子送到代理面前。
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
 
-**仓库拥有 · 感知生命周期 · 证据经过验证 · 不依赖特定代理**
+<details>
+<summary><strong>目录</strong></summary>
 
-Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
+- [一个例子中的问题](#代码留了下来决定没有)
+- [安装](#安装)
+- [这在什么情况下帮不上忙](#这在什么情况下帮不上忙)
+- [完整地说，它是什么](#完整地说它是什么)
+- [看它实际运行](#看它实际运行)
+- [这个仓库本身就是演示](#这个仓库本身就是演示)
+- [路径范围与检索](#检索能找到记录路径范围会排除已经推翻的决策)
+- [工作方式](#工作方式)
+- [来自另一仓库的现场报告](#在真实仓库中的样子)
+- [有何不同](#有何不同)
+- [在哪里见效](#在哪里见效)
+- [record 如何创建](#record-如何创建)
+- [完整 record](#完整-record)
+- [仓库能够证明什么](#仓库能够证明什么)
+- [证据](#evidence更窄的产品主张)
+- [卸载](#卸载) · [文档](#文档) · [贡献](#贡献)
 
-没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
+</details>
+
+## 代码留了下来，决定没有。
+
+*不再重复评审同一个坏主意。*
+
+
+**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
+第二次写下"我们已经否决过这个了"。
+
+**有 CommitLore。** 编辑之前，代理收到：
+
+```
+commitlore: active records for src/pricing.ts
+
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
+```
+
+`[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
+信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
+
+模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。
+
+这个数字没有说明的内容，位于下方两个章节后的[这在什么情况下帮不上忙](#这在什么情况下帮不上忙)。在安装前而不是之后花时间读一读，值得。
+
+## 安装
 
 安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
 
@@ -54,64 +106,7 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/inst
 
 **把上一个代理挣得的判断，交给下一个代理。**
 
-## 看它实际运行
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
-
-**一个全新的代理，没有聊天历史。它仍被交到手上：为什么那个显而易见的修复被排除了。** 在改动前查询 path：
-
-```bash
-commitlore context install.sh
-```
-
-输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-如何原样复现这条 `PreToolUse` hook path，以及其余全部命令：[docs/cli.md](docs/cli.md)。
-
-## 检索能找到记录。路径范围会排除已经推翻的决策。
-
-在代理进行第一次编辑之前，仓库中仍然有效的决策，究竟有多少真正到达了它？在本仓库中，按钩子默认使用的 800 token 预算：
-
-| 路由 | 预算 | 送达的有效决策 | 送达的已推翻决策 | token |
-|---|---:|---:|---:|---:|
-| 仅代码 | — | 0.0% | 0 | 0 |
-| 该路径的 `git log` | 800 | 42.0% | 7 | 673,134 |
-| **CommitLore 路径范围** | **800** | **81.7%** | **0** | **511,412** |
-| CommitLore，取消上限 | 无 | 92.3% | 0 | 741,429 |
-
-取消上限后，路径范围回收的正是全仓库倾倒所回收的那一批 —— 2,217 组中的 2,047 组 —— 却只用掉其 92,175,612 token 中的一小部分，并且一条也不送出它随附的 7,322 条已推翻记录。**范围没有任何代价。** 上限消耗 10.6 个百分点。剩下的 170 组是信任分级器扣留的记录。
-
-**这测的是送达，不是效果。** 没有代理参与运行，所以它给出的是*可能*回收多少的上界，而不是实际回收了多少。而且检索指标完全可能在它本应预测的结果变差时继续上升。SWE-bench 测得随着上下文预算增加，BM25 的 recall 从 29.58 升至 51.06，却同时报告"即便增大 BM25 的最大上下文会提升相对 oracle 文件的 recall，性能仍会下降……因为模型根本不擅长定位有问题的代码"（[arXiv:2310.06770](https://arxiv.org/abs/2310.06770)）。一个语料库，一个仓库。被替代的记录有 7 条、已过期的有 0 条，所以"零条已推翻决策送达"对过期一事尚未给出任何结论。方法与完整表格：[bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
-
-**`git log` 基线并非我们自己测自己得出的产物。** 把同一测量应用到本项目并未撰写的四个仓库 —— Django、SymPy、scikit-learn 与 Requests，均固定在指定提交 —— 一条路径的历史在 800 token 截断下存活的比例落在 **37.4% 到 55.6%** 之间。上面的 42.0% 就在这个区间内。固定预算砍掉一个文件近半历史，是 `git log` 在大型、长期存续的仓库上普遍会做的事，而不是本仓库特有的现象。**没有转移的是机制。** 我们的路径中位数是 1 次提交 687 token，Django 则是 8 次提交 213 token —— 较长的提交信息会在固定预算下让普通 Git 基线更差，这是本项目自身实践付出的代价。[bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) 也报告了那些仓库上的送达数值，但请先读 §9.0 与 §9.5：其中的记录由程序从 revert 提交生成，标题数字是附着谓词强制的结果，并非检索成绩。
-
-漏掉一条记录，模型损失的是上下文；交给它一项已经推翻的决策，损失的是正确性。在这项[检索测量](bench/retrieval/result.md)中，从 0 到 10,000 条干扰记录的每个规模，BM25、embedding top-k、hybrid RRF 与带路径过滤的 embedding 都各返回了一条已被替代的记录。带生命周期的 CommitLore 路径范围返回零条过时记录，并返回两条当前记录 (2/2)。
-
-召回率是辅助结果：两种方式的检索大体找到相同的记录，但只有一条路由知道哪些仍然有效。决策被推翻时优势才会出现——而这正是本产品存在的情形。
-
-独立的 #167 暴露运行仍然重要：10,002 条记录中只有 2 条到达模型。
-
-| 路由 | 模型可见记录 | 相关记录 | 模型可见令牌 |
-|---|---:|---:|---:|
-| 注入全部内容 | 10,002 | 2/2 | 1,004,554 |
-| top-k 词法检索 | 2 | 1/2 | 190 |
-| CommitLore 路径范围 | 2 | 2/2 | 335 |
-
-这项测量是在固定的两条记录输出预算下进行的暴露与召回率测量，不测量令牌成本、计费成本、准确率或代理行为。它只涉及一个语料库、一个查询和一个固定的 embedding 模型。召回率打平的地方，以及此外还测量了什么、没测量什么：[docs/evidence.md](docs/evidence.md)。
-
-## 在仓库中试用
+### 然后，在每个仓库中
 
 然后在每个需要验证 hook 与本地 index 的仓库运行 `commitlore init`。安装程序会检测受支持的编程代理，并在可以安全处理的地方注册本地 MCP server。
 
@@ -147,38 +142,104 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
-## 代码留了下来，决定没有。
-
-*不再重复评审同一个坏主意。*
 
 
-**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
+## 这在什么情况下帮不上忙
 
-```ts
-calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+请在安装前阅读，而不是之后。
+
+- **测量的是较弱的那一档。** 在 1,160 次研究中，所有记录都渲染为 `[claim]`，
+  它告诉代理把记录当作信息来权衡，而不是当作命令。`[directive]` 档位是在那之后
+  才可达的，所以上面的数字是**测得的下限**，而不是宣称的上限。
+- **一个模型、一套 harness、十个构造的 fixture。** oracle 读取的是最终实现状态，
+  因此它显示收到记录的代理更少重提被排除的方案，但并不显示其中任何一个读过什么。
+- 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
+- M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
+- Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。
+
+## 完整地说，它是什么
+
+**面向编程代理的 Git 原生 decision layer。**
+
+每个新代理都继承了实现。但它不会继承约束、团队否决过的替代方案、警告，以及验证缺口 ——
+除非有什么东西把它们带上，否则这些并不随代码一起走。
+
+CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只呈现**当下仍然有效的决定**。
+后来被取代或已过期的决定，不会以仍然成立的样子送到代理面前。
+
+**仓库拥有 · 感知生命周期 · 证据经过验证 · 不依赖特定代理**
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
+
+没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
+
+## 看它实际运行
+
+
+
+**一个全新的代理，没有聊天历史。它仍被交到手上：为什么那个显而易见的修复被排除了。** 在改动前查询 path：
+
+```bash
+commitlore context install.sh
 ```
 
-团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
-第二次写下"我们已经否决过这个了"。
+输出会包含一条 active record：它排除了把发布 `-musl` target 当作 installer 缺陷修复的做法，并说明原因。hook 提供上下文；它并不声称会阻止编辑。
 
-**有 CommitLore。** 编辑之前，代理收到：
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
 
-```
-commitlore: active records for src/pricing.ts
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
 
-Limit
-  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
-
-Ruled-out
-  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
-                                    and rounding semantics differ between the two flows
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
 ```
 
-`[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
-信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
+如何原样复现这条 `PreToolUse` hook path，以及其余全部命令：[docs/cli.md](docs/cli.md)。
 
-模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。它是否照做，是
-本项目尚未回答的代理行为问题 —— 见下面的测量，以及[未被测量的部分](docs/evidence.md)。
+## 这个仓库本身就是演示
+
+一个声称能阻止代理重新决定已尘埃落定的问题的工具，应当能够展示它在自身上捕获了什么。这个工具公开维护该清单，其中也包括本项目已经发布、后来被证明有误的内容。
+
+- **没有任何一种安装方式能产生 README 的主张所依赖的信任等级。** record 到达代理时会被评为 `directive` 或 `claim`。结果是，没有已安装的 surface 配置了可信 author，于是所有人的等级都 fail-closed 为 `claim`，而注入的图例却展示了没人能达到的 tier。此前两项 benchmark 测量的都是 `claim` 等级的送达（[#415](https://github.com/MongLong0214/commitlore/issues/415)）。
+- **已登记的 benchmark 分析本会同时读取四项不同的实验。** 由于它的停止规则是行数，这种污染会让研究*通过*它自己的完整性关卡（[#441](https://github.com/MongLong0214/commitlore/issues/441)）。
+- **没有任何东西运行 result-schema gate。** 因此 schema 比 runner 落后五个字段，两天都没人发现（[#392](https://github.com/MongLong0214/commitlore/issues/392)）。
+- **一个已发布的 pre-push hook 会挂起每一次 `git push`。** 40 秒内调用 hook 1,240 次，因为函数被测试了十一次，而 hook path 一次也没有测试（[#422](https://github.com/MongLong0214/commitlore/issues/422)）。
+
+每一项都是 commit trailer 中的一行 `Ruled-out:`、`Warn:` 或 `Limit:`，由本项目请你安装的 hook 验证，并且可以用你在其他地方运行的同一条 `commitlore context` 读取。
+
+**完整列表及每一项的代价：[docs/SELF-AUDIT.md](docs/SELF-AUDIT.md)。**
+
+## 检索能找到记录。路径范围会排除已经推翻的决策。
+
+在代理进行第一次编辑之前，仓库中仍然有效的决策，究竟有多少真正到达了它？在本仓库中，按钩子默认使用的 800 token 预算：
+
+| 路由 | 预算 | 送达的有效决策 | 送达的已推翻决策 | token |
+|---|---:|---:|---:|---:|
+| 仅代码 | — | 0.0% | 0 | 0 |
+| 该路径的 `git log` | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore 路径范围** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore，取消上限 | 无 | 92.3% | 0 | 741,429 |
+
+取消上限后，路径范围回收的正是全仓库倾倒所回收的那一批 —— 2,217 组中的 2,047 组 —— 却只用掉其 92,175,612 token 中的一小部分，并且一条也不送出它随附的 7,322 条已推翻记录。**范围没有任何代价。** 上限消耗 10.6 个百分点。剩下的 170 组是信任分级器扣留的记录。
+
+**这测的是送达，不是效果。** 没有代理参与运行，所以它给出的是*可能*回收多少的上界，而不是实际回收了多少。而且检索指标完全可能在它本应预测的结果变差时继续上升。SWE-bench 测得随着上下文预算增加，BM25 的 recall 从 29.58 升至 51.06，却同时报告"即便增大 BM25 的最大上下文会提升相对 oracle 文件的 recall，性能仍会下降……因为模型根本不擅长定位有问题的代码"（[arXiv:2310.06770](https://arxiv.org/abs/2310.06770)）。一个语料库，一个仓库。被替代的记录有 7 条、已过期的有 0 条，所以"零条已推翻决策送达"对过期一事尚未给出任何结论。方法与完整表格：[bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
+
+**`git log` 基线并非我们自己测自己得出的产物。** 把同一测量应用到本项目并未撰写的四个仓库 —— Django、SymPy、scikit-learn 与 Requests，均固定在指定提交 —— 一条路径的历史在 800 token 截断下存活的比例落在 **37.4% 到 55.6%** 之间。上面的 42.0% 就在这个区间内。固定预算砍掉一个文件近半历史，是 `git log` 在大型、长期存续的仓库上普遍会做的事，而不是本仓库特有的现象。**没有转移的是机制。** 我们的路径中位数是 1 次提交 687 token，Django 则是 8 次提交 213 token —— 较长的提交信息会在固定预算下让普通 Git 基线更差，这是本项目自身实践付出的代价。[bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) 也报告了那些仓库上的送达数值，但请先读 §9.0 与 §9.5：其中的记录由程序从 revert 提交生成，标题数字是附着谓词强制的结果，并非检索成绩。
+
+漏掉一条记录，模型损失的是上下文；交给它一项已经推翻的决策，损失的是正确性。在这项[检索测量](bench/retrieval/result.md)中，从 0 到 10,000 条干扰记录的每个规模，BM25、embedding top-k、hybrid RRF 与带路径过滤的 embedding 都各返回了一条已被替代的记录。带生命周期的 CommitLore 路径范围返回零条过时记录，并返回两条当前记录 (2/2)。
+
+召回率是辅助结果：两种方式的检索大体找到相同的记录，但只有一条路由知道哪些仍然有效。决策被推翻时优势才会出现——而这正是本产品存在的情形。
+
+独立的 #167 暴露运行仍然重要：10,002 条记录中只有 2 条到达模型。
+
+| 路由 | 模型可见记录 | 相关记录 | 模型可见令牌 |
+|---|---:|---:|---:|
+| 注入全部内容 | 10,002 | 2/2 | 1,004,554 |
+| top-k 词法检索 | 2 | 1/2 | 190 |
+| CommitLore 路径范围 | 2 | 2/2 | 335 |
+
+这项测量是在固定的两条记录输出预算下进行的暴露与召回率测量，不测量令牌成本、计费成本、准确率或代理行为。它只涉及一个语料库、一个查询和一个固定的 embedding 模型。召回率打平的地方，以及此外还测量了什么、没测量什么：[docs/evidence.md](docs/evidence.md)。
 
 ## 工作方式
 
@@ -399,12 +460,6 @@ commitlore uninstall
 - [docs/protocol.md](docs/protocol.md) — record 格式，以及只用 Git 读取的方法
 - [docs/evidence.md](docs/evidence.md) — 哪些已被测量，哪些没有
 - [spec/SPEC.md](spec/SPEC.md) — 规范协议
-
-## 已知限制
-
-- 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
-- Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。
 
 ## 贡献
 
