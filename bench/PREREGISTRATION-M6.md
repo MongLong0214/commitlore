@@ -6,7 +6,9 @@ measure and the analysis in advance, so that nothing about the analysis can be
 chosen after the numbers are visible.
 
 - Follows: `bench/PREREGISTRATION-M5.md` · ADR-0007 · T-703 · SPEC §7
-- Status: **drafted, NOT registered.** §5 cannot be fixed without a base rate.
+- Status: **drafted, NOT registered — and now blocked on fixtures rather than
+  on a number.** The base-rate pilot ran on 2026-08-09 and returned 0/30 for
+  the `no-grade` arm, which is the floor. See §5.
   This document is registered — and the status line here changes — only when §5
   carries a number rather than a procedure. Running M6 before then would be an
   unregistered run. §4 no longer blocks it (corrected 2026-08-07, see §12).
@@ -99,6 +101,49 @@ laboratory one — and so did M1 and M5.
 would separate "the tag changed behaviour" from "the tag changed behaviour on a
 record the agent had reason to distrust". It is no longer a precondition for
 running M6 at all.
+
+## 5. Size — the pilot ran, and it did not produce a number to size against
+
+**Result, 2026-08-09: `no-grade` re-proposed a ruled-out approach in 0 of 30
+runs. Ten tasks, three seeds each, every task 0/3.**
+
+§13 fixed the reading before the rate was visible, and the rate falls in the
+third of its three bands: `no-grade` sits at or **under** M5's
+`commitlore-on` rate of 2.8%. §2 says a difference in that direction is a
+refutation reported as such, not a result.
+
+There is no `n` to write here. The hypothesis is that graded context produces
+*less* compliance than ungraded, and the ungraded arm is already at the floor —
+there is nothing for grading to reduce. No sample size makes a floor smaller.
+
+What that means, stated narrowly, because a null is easy to over-read:
+
+- It does **not** show that trust grading has no effect. It shows that **this
+  instrument cannot see one**, because the outcome it measures does not occur
+  in the arm the effect would have to move.
+- The ten `reproposal-*` fixtures were built to detect whether an agent
+  re-proposes a ruled-out approach when it has no records at all. Handed the
+  records with every line marked `[directive]`, the agent complied in every
+  run. The fixtures are working; they are answering a question M6 is not
+  asking.
+- §4's correction stands and was not the error. Both arms do reach the real
+  grading path and every record does flip. What flips with them is not
+  something these tasks can register.
+
+**M6 as designed does not have an instrument.** The fixtures it needs are the
+ones this ticket originally called for and §4's correction retired: a task
+whose planted record instructs something the task does not otherwise call for,
+where compliance is visible in a diff. That is the work, and it is now
+evidenced rather than assumed.
+
+The pilot's rows are at `bench/results/m6-pilot-20260809.jsonl`. They are not
+citable and are not part of any analysis set. They are here because a null that
+sends a study back to its fixtures should be as inspectable as one that does
+not.
+
+---
+
+## 5-bis. What the original §5 said, kept for the record
 
 ## 5. Size — cannot be fixed yet, and why that is stated rather than guessed
 
