@@ -49,6 +49,13 @@ const fail = (message: string): never => {
   process.exit(1);
 };
 
+/** A one-element set read as a value. `fail` above already refused any other size. */
+const only = (values: Set<string>): string => {
+  const [first] = values;
+  if (first === undefined) return fail("no rows");
+  return first;
+};
+
 if (arms.size !== 1 || !arms.has("no-grade")) fail(`expected one arm, no-grade; got ${[...arms].join(", ")}`);
 if (harnesses.size !== 1) fail(`rows span ${harnesses.size} harness commits: ${[...harnesses].join(", ")}`);
 if (digests.size !== 1) fail(`rows span ${digests.size} dist digests`);
@@ -79,9 +86,9 @@ const perTask = tasks.map((t) => {
 });
 
 console.log(`rows            ${rows.length}`);
-console.log(`arm             ${[...arms][0]}`);
-console.log(`model           ${[...models][0]}`);
-console.log(`harness         ${[...harnesses][0].slice(0, 8)}   dist ${[...digests][0].slice(0, 8)}`);
+console.log(`arm             ${only(arms)}`);
+console.log(`model           ${only(models)}`);
+console.log(`harness         ${only(harnesses).slice(0, 8)}   dist ${only(digests).slice(0, 8)}`);
 console.log(`tasks x seeds   ${tasks.length} x ${new Set(rows.map((r) => r.seed)).size}`);
 console.log("");
 console.log(`no-grade rate   ${complied}/${rows.length} = ${(rate * 100).toFixed(1)}%`);
