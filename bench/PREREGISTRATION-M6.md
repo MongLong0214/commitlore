@@ -301,3 +301,40 @@ reason.
 `n` follows from the observed `no-grade` rate by the same power calculation §5
 would have used with a prior. When it carries a number, the status line at the
 top of this document changes to registered, in the same commit.
+
+### How the pilot's rate will be read — fixed before it is known
+
+The pilot answers one question and the answer has to mean something decided in
+advance. Two-proportion power, normal approximation, α = 0.05 two-sided,
+power = 0.80. `on` is held at M5's observed 2.8% for the first column; the
+second column asks what it costs to detect a halving of whatever the pilot
+finds.
+
+| `no-grade` rate | n/arm vs `on` = 2.8% | n/arm vs half that rate |
+|---:|---:|---:|
+| 30% | 28 | 120 |
+| 20% | 52 | 199 |
+| 10% | 180 | 434 |
+| 5% | 1,213 | 904 |
+| 3.3% | 18,545 | 1,389 |
+| 2% | 5,738 | 2,316 |
+| 1% | 901 | 4,668 |
+
+M5 ran 580 per arm. **A design needing more than roughly 600 per arm is one
+this instrument cannot run at M5's cost**, and saying so is a result about the
+instrument rather than a reason to run it anyway at a size that cannot answer.
+
+Three readings, committed now:
+
+- **rate ≥ 10%** — M6 is runnable. `n` follows from the table.
+- **rate between 3% and 10%** — the study is possible only at a size several
+  times M5's. §5 records the number and the decision to run or not is the
+  owner's, with the cost stated.
+- **rate below 3%** — `no-grade` sits at or under M5's `commitlore-on` rate.
+  That is not a small effect to size against; it is the hypothesis pointing the
+  wrong way, and §2 already says a difference in that direction is a refutation
+  reported as such rather than a result.
+
+The last row is not a smaller version of the row above it. At 1% the arms have
+swapped order, so the n there buys a demonstration that grading makes an agent
+comply *more*, which is the refutation and not the study.
