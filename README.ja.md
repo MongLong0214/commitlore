@@ -14,137 +14,37 @@
 
 # CommitLore
 
-## エージェントはコードを受け継ぎます。
-## 判断も継がせましょう。
+**あなたのコーディングエージェントは、チームがすでに却下した案を何度も提案します。**
 
-**コーディングエージェントのための Git ネイティブな decision layer。**
+CommitLore はその決定を Git に残し、ファイルを編集する前に、まだ有効なものだけを
+エージェントに渡します — **ホスティングサービスなしで、リポジトリの外へ 1 バイトも
+出すことなく**。
 
-新しいエージェントは実装を受け継ぎます。しかし制約も、チームが却下した代替案も、警告も、
-検証のギャップも受け継ぎません — 何かが運ばないかぎり、それらはコードと一緒には動きません。
-
-CommitLore はその工学的判断を Git に保存し、次の編集の前に**今も有効な決定だけ**を届けます。
-のちに置き換えられた決定や期限切れの決定が、まだ有効であるかのようにエージェントへ届くことは
-ありません。
-
-**リポジトリ所有 · lifecycle 認識 · 根拠検証 · エージェント非依存**
-
-Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
-
-ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
-
-一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
-
-**Claude Code** — プラグイン一つで MCP サーバー、編集前のコンテキストフック、スキルが登録されます:
-
-```
-/plugin marketplace add MongLong0214/commitlore
-/plugin install commitlore@commitlore
-```
-
-プラグインが持つのはここまでで、MCP サーバー、編集前フック、スキルです。`commitlore` を `PATH` に置くことはないので、以下の `commitlore …` コマンドは `install.sh` / `install.ps1` から来るものであり、そのインストールも必要です。
-
-どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
-
-**その他のコーディングエージェント** — CLI をインストールします:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
-```
-
-どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
-
-**前のエージェントが得た判断を、次のエージェントに渡しましょう。**
-
-## 実際に動かす
+1,160 回の登録済み実行で、却下済みの案を再提案する割合は **18.8%** から **2.8%** になりました。エージェントが実際に見るものは、以下の例です。
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
 </p>
 
-**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを手渡されます。** 変更する前に path を照会します。
-
-```bash
-commitlore context install.sh
-```
-
-出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
-
-```console
-context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
-
-ruled-out
-  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
-
-warnings
-  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
-```
-
-この `PreToolUse` hook path をそのまま再現する方法と、その他すべてのコマンドは [docs/cli.md](docs/cli.md) にあります。
-
-## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
-
-エージェントが最初の編集を行う前に、リポジトリが持つ「今も有効な意思決定」のうち実際にどれだけがエージェントへ届くのか。このリポジトリで、フックが既定で使う 800 トークン予算のもとでは:
-
-| ルート | 予算 | 届いた有効な決定 | 届いた覆された決定 | トークン |
-|---|---:|---:|---:|---:|
-| コードのみ | — | 0.0% | 0 | 0 |
-| そのパスの `git log` | 800 | 42.0% | 7 | 673,134 |
-| **CommitLore パス範囲** | **800** | **81.7%** | **0** | **511,412** |
-| CommitLore、上限なし | なし | 92.3% | 0 | 741,429 |
-
-上限を外すと、パス範囲はリポジトリ全体のダンプが回収するのと同じ 2,217 組のうち 2,047 組を回収します。ダンプの 92,175,612 トークンの一部しか使わず、ダンプが一緒に運ぶ覆された 7,322 件は一つも届けません。**範囲は何も損なっていません。** 上限が 10.6 ポイントを消費します。残る 170 組は信頼グレーダーが保留したレコードです。
-
-**これは配信を測ったものであり、効果ではありません。** エージェントは走っていないので、回収し*得る*量の上限であって、実際に回収する量ではありません。そして検索指標は、それが予測すべき結果が悪化する間にも上がり得ます。SWE-bench はコンテキスト予算を増やすと BM25 の recall が 29.58 から 51.06 へ上がることを測定した上で、「BM25 の最大コンテキストを増やせば oracle ファイルに対する recall が上がる場合でも性能は落ちる … モデルが問題のコードを特定するのが単に不得手だからだ」と報告しています ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770))。コーパス一つ、リポジトリ一つです。置き換えられたレコードは 7 件、期限切れは 0 件なので、「覆された決定の配信ゼロ」は期限切れについてはまだ何も語りません。手法と全表: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
-
-**`git log` のベースラインは、自分で自分を測って出た値ではありません。** 同じ測定を、このプロジェクトが書いていない四つのリポジトリ — Django、SymPy、scikit-learn、Requests — に固定コミットで適用すると、あるパスの履歴のうち 800 トークンの切り詰めを生き残る割合は **37.4% から 55.6%** に収まります。上の 42.0% はその帯の中にあります。固定予算が一つのファイルの履歴の半分近くを落とすのは、大きく長命なリポジトリで `git log` が一般に行うことであり、このリポジトリ固有の性質ではありません。**転移しなかったのは仕組みのほうです。** 私たちのパスは中央値 1 コミットで 687 トークン、Django は 8 コミットで 213 トークン。つまり長いコミットメッセージは、固定予算のもとで通常の Git ベースラインをより悪くします — このプロジェクト自身の慣行が払っているコストです。[bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) はそれらのリポジトリでの配信値も報告しますが、まず §9.0 と §9.5 を読んでください。そこでのレコードは revert コミットからプログラムが生成したものであり、見出しの数値は検索の結果ではなく付与述語が強制する値です。
-
-レコードを一つ取り逃がせば、モデルはコンテキストを失います。すでに覆された意思決定を渡せば、正しさを損ないます。この[検索測定](bench/retrieval/result.md)では、ノイズが 0 件から 10,000 件までのすべてのサイズで、BM25、embedding top-k、hybrid RRF、パスフィルター付き embedding がそれぞれ廃止済みのレコードを一つ返しました。lifecycle を伴う CommitLore のパス範囲は古いレコードをゼロにし、現在の二つのレコード (2/2) を返しました。
-
-再現率は補助的な結果です。検索はおおむねどちらでも同じレコードを見つけますが、どの意思決定がまだ有効かを知るルートは一つだけです。意思決定が覆されたときに違いが現れます。これはまさにこの製品が存在するケースです。
-
-別の #167 の露出実行も重要です。10,002 件のうちモデルに届いたレコードは 2 件だけでした。
-
-| ルート | モデルに見えるレコード | 関連レコード | モデルに見えるトークン |
-|---|---:|---:|---:|
-| すべて注入 | 10,002 | 2/2 | 1,004,554 |
-| top-k 語彙検索 | 2 | 1/2 | 190 |
-| CommitLore パス範囲 | 2 | 2/2 | 335 |
-
-これは固定した 2 レコードの出力予算における露出と再現率の測定であり、トークンコスト、請求コスト、正確さ、エージェントの振る舞いを測るものではありません。これは一つのコーパス、一つのクエリ、一つの固定された embedding モデルによる結果です。再現率が並ぶ地点と、ほかに何が測定され何が測定されていないかは [docs/evidence.md](docs/evidence.md) にあります。
-
-## リポジトリで試す
-
-検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
-
-```bash
-cd your-repository
-commitlore init
-commitlore context .
-```
-
-そのあとは:
-
-- 普段どおりコミットします。ほとんどのコミットには record がありません。
-- record がある場合、commit-msg hook が検証します。record を作成することはありません。
-- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
-- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
-
-コーディングエージェントとの作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
-
 <details>
-<summary>インストールを確認または固定したいですか？</summary>
+<summary><strong>目次</strong></summary>
 
-この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone してください。スクリプトは固定タグのソースチェックアウトと、`node <checkout>/dist/commitlore.mjs` を実行する薄い wrapper だけをインストールします — コンパイル済み成果物のダウンロードもビルド手順もないため、マシンに置かれるのは読めるソースです。
-
-```bash
-# installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh
-sh install.sh v0.7.1
-
-# あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v0.7.1 https://github.com/MongLong0214/commitlore
-node commitlore/dist/commitlore.mjs --version
-```
+- [一つの例で見る問題](#コードは残った決定は残らなかった)
+- [インストール](#インストール)
+- [これが役に立たない場合](#これが役に立たない場合)
+- [詳しく言うと何なのか](#詳しく言うと何なのか)
+- [実際に動かす](#実際に動かす)
+- [このリポジトリ自体がデモ](#このリポジトリ自体がデモです)
+- [パス範囲と検索](#検索はレコードを見つけられるパス範囲は覆された意思決定を除外する)
+- [仕組み](#仕組み)
+- [別のリポジトリからの現場報告](#実際のリポジトリでの見え方)
+- [何が違うのか](#違い)
+- [どこで効くか](#どこで効くか)
+- [record の作られ方](#record-が作られる方法)
+- [完全な record](#完全な-record)
+- [リポジトリが証明すること](#リポジトリが証明すること)
+- [根拠](#evidence-より狭い製品上の主張)
+- [アンインストール](#アンインストール) · [ドキュメント](#ドキュメント) · [コントリビュート](#コントリビュート)
 
 </details>
 
@@ -180,8 +80,173 @@ Ruled-out
 作成者による record は `[directive]` として描画されます。
 
 モジュール境界が、レビューコメントとして後から届くのではなく、エージェントが変更を提案する
-**前に**その目の前に置かれます。それに従って動くかどうかは、このプロジェクトが答えていない
-エージェントの振る舞いの問題です — 下の測定と[測定していないこと](docs/evidence.md)を参照。
+**前に**その目の前に置かれます。
+
+この数字が示さないことは、二つ下の節にある[これが役に立たない場合](#これが役に立たない場合)で説明しています。インストールした後ではなく、その前に読む価値があります。
+
+## インストール
+
+一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
+
+**Claude Code** — プラグイン一つで MCP サーバー、編集前のコンテキストフック、スキルが登録されます:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+プラグインが持つのはここまでで、MCP サーバー、編集前フック、スキルです。`commitlore` を `PATH` に置くことはないので、以下の `commitlore …` コマンドは `install.sh` / `install.ps1` から来るものであり、そのインストールも必要です。
+
+どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
+
+**その他のコーディングエージェント** — CLI をインストールします:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
+```
+
+どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**前のエージェントが得た判断を、次のエージェントに渡しましょう。**
+
+### 次に、各リポジトリで
+
+検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+そのあとは:
+
+- 普段どおりコミットします。ほとんどのコミットには record がありません。
+- record がある場合、commit-msg hook が検証します。record を作成することはありません。
+- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
+- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+
+コーディングエージェントとの作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
+
+<details>
+<summary>インストールを確認または固定したいですか？</summary>
+
+この一行は利便性のためです。レビュー済みまたは固定されたインストールが必要なら、まず `install.sh` をダウンロードして確認するか、リポジトリを clone してください。スクリプトは固定タグのソースチェックアウトと、`node <checkout>/dist/commitlore.mjs` を実行する薄い wrapper だけをインストールします — コンパイル済み成果物のダウンロードもビルド手順もないため、マシンに置かれるのは読めるソースです。
+
+```bash
+# installer を固定してダウンロードし、確認してから実行します。
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh
+sh install.sh v0.7.1
+
+# あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
+git clone --depth 1 --branch v0.7.1 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
+```
+
+</details>
+
+
+
+## これが役に立たない場合
+
+インストールする前に読んでください。
+
+- **測定されたのは弱いほうの等級です。** 1,160 回の研究ではすべてのレコードが
+  `[claim]` として描画され、これはエージェントに命令ではなく情報として扱うよう
+  伝えます。`[directive]` 等級はその後に到達可能になったので、上の数値は主張された
+  上限ではなく**測定された下限**です。
+- **モデル 1 つ、ハーネス 1 つ、構成されたフィクスチャ 10 個です。** オラクルは
+  最終的な実装状態を読みます。したがってレコードを受け取ったエージェントのほうが
+  排除済みの手法を提案しにくかったことは示しますが、そのいずれかが何かを読んだ
+  ことは示しません。
+- cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
+- M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
+- Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。
+
+## 詳しく言うと、何なのか
+
+**コーディングエージェントのための Git ネイティブな decision layer。**
+
+新しいエージェントは実装を受け継ぎます。しかし制約も、チームが却下した代替案も、警告も、
+検証のギャップも受け継ぎません — 何かが運ばないかぎり、それらはコードと一緒には動きません。
+
+CommitLore はその工学的判断を Git に保存し、次の編集の前に**今も有効な決定だけ**を届けます。
+のちに置き換えられた決定や期限切れの決定が、まだ有効であるかのようにエージェントへ届くことは
+ありません。
+
+**リポジトリ所有 · lifecycle 認識 · 根拠検証 · エージェント非依存**
+
+Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
+
+ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
+
+## 実際に動かす
+
+
+
+**新しいエージェント、チャット履歴はゼロ。それでも明白な修正案がなぜ除外されたかを手渡されます。** 変更する前に path を照会します。
+
+```bash
+commitlore context install.sh
+```
+
+出力には、installer の欠陥の修正として `-musl` target を公開する案を除外した active record とその理由が含まれます。hook はコンテキストを返すものであり、編集を止めるとは主張しません。
+
+```console
+context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
+
+ruled-out
+  r-instci99a  <commit>  [claim]  Publish a -musl release target | a release.yml/build-matrix change, not an install.sh or CI-verification fix
+
+warnings
+  r-instci99a  <commit>  [claim]  Revisit this wording if a musl target ships
+```
+
+この `PreToolUse` hook path をそのまま再現する方法と、その他すべてのコマンドは [docs/cli.md](docs/cli.md) にあります。
+
+## このリポジトリ自体がデモです
+
+解決済みの問いをエージェントが再び決めないようにすると主張するツールなら、自身で何を捕まえたかも示せるべきです。このツールはその一覧を公開で保ち、このプロジェクトがすでに公開していたもののうち、後から誤りだと分かった項目も含めています。
+
+- **どのインストールでも、README の主張が前提とした信頼 tier を生み出せなかった。** record はエージェントに `directive` または `claim` として届きます。インストール済みのどの surface も信頼された author を構成していなかったため、grade は全員に対して `claim` へ fail-closed しましたが、注入された凡例は誰も到達できない tier を示していました。以前の二つの benchmark は `claim` 等級の配信を測定していました ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **登録された benchmark 分析は、一度に四つの異なる実験を読んでしまうところでした。** しかも停止規則が行数だったため、その混入によって研究は自身の完全性ゲートを*通過*していたでしょう ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
+- **result-schema gate は何からも実行されていませんでした。** そのため schema は runner より五フィールド遅れ、二日間誰も気付きませんでした ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
+- **出荷済みの pre-push hook はすべての `git push` を停止させました。** 40 秒間に hook が 1,240 回呼ばれました。関数は十一回テストされていたのに、hook path は一度もテストされていなかったからです ([#422](https://github.com/MongLong0214/commitlore/issues/422)).
+
+これらはすべて、このプロジェクトがインストールを勧める hook で検証されるコミット trailer の `Ruled-out:`、`Warn:`、`Limit:` の行であり、どこでも実行できるのと同じ `commitlore context` で読めます。
+
+**それぞれが支払った代償を含む完全な一覧: [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md)。**
+
+## 検索はレコードを見つけられる。パス範囲は覆された意思決定を除外する。
+
+エージェントが最初の編集を行う前に、リポジトリが持つ「今も有効な意思決定」のうち実際にどれだけがエージェントへ届くのか。このリポジトリで、フックが既定で使う 800 トークン予算のもとでは:
+
+| ルート | 予算 | 届いた有効な決定 | 届いた覆された決定 | トークン |
+|---|---:|---:|---:|---:|
+| コードのみ | — | 0.0% | 0 | 0 |
+| そのパスの `git log` | 800 | 42.0% | 7 | 673,134 |
+| **CommitLore パス範囲** | **800** | **81.7%** | **0** | **511,412** |
+| CommitLore、上限なし | なし | 92.3% | 0 | 741,429 |
+
+上限を外すと、パス範囲はリポジトリ全体のダンプが回収するのと同じ 2,217 組のうち 2,047 組を回収します。ダンプの 92,175,612 トークンの一部しか使わず、ダンプが一緒に運ぶ覆された 7,322 件は一つも届けません。**範囲は何も損なっていません。** 上限が 10.6 ポイントを消費します。残る 170 組は信頼グレーダーが保留したレコードです。
+
+**これは配信を測ったものであり、効果ではありません。** エージェントは走っていないので、回収し*得る*量の上限であって、実際に回収する量ではありません。そして検索指標は、それが予測すべき結果が悪化する間にも上がり得ます。SWE-bench はコンテキスト予算を増やすと BM25 の recall が 29.58 から 51.06 へ上がることを測定した上で、「BM25 の最大コンテキストを増やせば oracle ファイルに対する recall が上がる場合でも性能は落ちる … モデルが問題のコードを特定するのが単に不得手だからだ」と報告しています ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770))。コーパス一つ、リポジトリ一つです。置き換えられたレコードは 7 件、期限切れは 0 件なので、「覆された決定の配信ゼロ」は期限切れについてはまだ何も語りません。手法と全表: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
+
+**`git log` のベースラインは、自分で自分を測って出た値ではありません。** 同じ測定を、このプロジェクトが書いていない四つのリポジトリ — Django、SymPy、scikit-learn、Requests — に固定コミットで適用すると、あるパスの履歴のうち 800 トークンの切り詰めを生き残る割合は **37.4% から 55.6%** に収まります。上の 42.0% はその帯の中にあります。固定予算が一つのファイルの履歴の半分近くを落とすのは、大きく長命なリポジトリで `git log` が一般に行うことであり、このリポジトリ固有の性質ではありません。**転移しなかったのは仕組みのほうです。** 私たちのパスは中央値 1 コミットで 687 トークン、Django は 8 コミットで 213 トークン。つまり長いコミットメッセージは、固定予算のもとで通常の Git ベースラインをより悪くします — このプロジェクト自身の慣行が払っているコストです。[bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md) はそれらのリポジトリでの配信値も報告しますが、まず §9.0 と §9.5 を読んでください。そこでのレコードは revert コミットからプログラムが生成したものであり、見出しの数値は検索の結果ではなく付与述語が強制する値です。
+
+レコードを一つ取り逃がせば、モデルはコンテキストを失います。すでに覆された意思決定を渡せば、正しさを損ないます。この[検索測定](bench/retrieval/result.md)では、ノイズが 0 件から 10,000 件までのすべてのサイズで、BM25、embedding top-k、hybrid RRF、パスフィルター付き embedding がそれぞれ廃止済みのレコードを一つ返しました。lifecycle を伴う CommitLore のパス範囲は古いレコードをゼロにし、現在の二つのレコード (2/2) を返しました。
+
+再現率は補助的な結果です。検索はおおむねどちらでも同じレコードを見つけますが、どの意思決定がまだ有効かを知るルートは一つだけです。意思決定が覆されたときに違いが現れます。これはまさにこの製品が存在するケースです。
+
+別の #167 の露出実行も重要です。10,002 件のうちモデルに届いたレコードは 2 件だけでした。
+
+| ルート | モデルに見えるレコード | 関連レコード | モデルに見えるトークン |
+|---|---:|---:|---:|
+| すべて注入 | 10,002 | 2/2 | 1,004,554 |
+| top-k 語彙検索 | 2 | 1/2 | 190 |
+| CommitLore パス範囲 | 2 | 2/2 | 335 |
+
+これは固定した 2 レコードの出力予算における露出と再現率の測定であり、トークンコスト、請求コスト、正確さ、エージェントの振る舞いを測るものではありません。これは一つのコーパス、一つのクエリ、一つの固定された embedding モデルによる結果です。再現率が並ぶ地点と、ほかに何が測定され何が測定されていないかは [docs/evidence.md](docs/evidence.md) にあります。
 
 ## 仕組み
 
@@ -410,12 +475,6 @@ plugin。`--dry-run` は何も変更せずに報告します。それぞれを�
 - [docs/protocol.md](docs/protocol.md) — record の形式と、Git だけで読む方法
 - [docs/evidence.md](docs/evidence.md) — 何が測定され、何が測定されていないか
 - [spec/SPEC.md](spec/SPEC.md) — 規範プロトコル
-
-## 既知の制限事項
-
-- cryptographic author verification、repository-wide record coverage、symbol anchor、interactive record builder は未実装です: [#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
-- Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。
 
 ## コントリビュート
 

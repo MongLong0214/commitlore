@@ -2,9 +2,12 @@
  * T-1015 (#207): README section order — `See it work` sits after the install
  * command and before the evidence section, across all four language files.
  *
- * Binding anchors from the CEO amendment:
- *   product  → hero heading (decision-authority framing)
- *   local-first → "No hosted memory service."
+ * Binding anchors from the CEO amendment. #450 restructured the opening, so
+ * two anchors point at the sentences that carry those properties rather than
+ * at the wording they had before. THE REQUIRED ORDER IS UNCHANGED, and so is
+ * what each anchor stands for:
+ *   product  → the opening problem sentence (was: the hero heading)
+ *   local-first → "without a hosted service" (was: "No hosted memory service.")
  *   install promise → "Install once."
  *   install command → the `curl` block
  *   evidence → "Retrieval can find records. Path scope keeps reversed decisions out."
@@ -38,22 +41,25 @@ function findAnchors(file: string): ReadmeAnchors {
   // whether a proposal is bad, it decides whether a decision still applies.
   // "Stop re-reviewing the same bad idea" was tried here and moved into the
   // demo: as a hero it implied a judgement `guard` cannot make at 22% recall.
+  // #450 replaced the two-line poster heading that used to carry this with a
+  // plain problem sentence in the same position. What the amendment pinned —
+  // the reader learns what the product is about before anything else — is
+  // unchanged; the sentence carrying it is no longer a heading.
   const product = lines.findIndex(
     (l) =>
-      l.startsWith('## ') &&
-      (l.includes('inherit the judgment') ||
-        l.includes('판단까지 물려주세요') ||
-        l.includes('判断も継がせましょう') ||
-        l.includes('也把判断传下去')),
+      l.includes('keeps re-proposing things your team already rejected') ||
+      l.includes('이미 기각한 방안을 계속 다시 제안합니다') ||
+      l.includes('すでに却下した案を何度も提案します') ||
+      l.includes('不断重新提议团队早已否决的方案'),
   );
 
   // Local-first: "No hosted memory service." or equivalent
   const localFirst = lines.findIndex(
     (l) =>
-      l.includes('No hosted memory service') ||
-      l.includes('호스팅 메모리 서비스도') ||
-      l.includes('ホスト型メモリサービスも') ||
-      l.includes('没有托管记忆服务'),
+      l.includes('without a hosted service') ||
+      l.includes('호스팅 서비스 없이') ||
+      l.includes('ホスティングサービスなしで') ||
+      l.includes('无需托管服务'),
   );
 
   // Install promise: "Install once." or equivalent
@@ -79,13 +85,17 @@ function findAnchors(file: string): ReadmeAnchors {
       l === '## 看它实际运行',
   );
 
-  // Evidence: "Retrieval can find records..." heading or equivalent
+  // Evidence: the "Retrieval can find records..." heading. It must be the
+  // heading and not any line mentioning it — #450 added a contents list whose
+  // entries name the same sections, and a bare substring search finds the link
+  // first, which would compare the wrong position.
   const evidence = lines.findIndex(
     (l) =>
-      l.includes('Retrieval can find records') ||
+      l.startsWith('## ') &&
+      (l.includes('Retrieval can find records') ||
       l.includes('검색은 레코드를 찾을 수 있습니다') ||
       l.includes('検索はレコードを見つけられる') ||
-      l.includes('检索能找到记录'),
+      l.includes('检索能找到记录')),
   );
 
   return { file, product, localFirst, installPromise, installCommand, seeItWork, evidence };
