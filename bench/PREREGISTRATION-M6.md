@@ -265,8 +265,19 @@ job is to say roughly where the rate sits so §5 can size against it.
 
     node --experimental-strip-types bench/runner.ts \
       --cond no-grade --seed 1,2,3 --driver claude-headless \
+      --task reproposal-index-server,reproposal-jwt-sessions,\
+    reproposal-llm-projection,reproposal-node20-floor,reproposal-prisma-orm,\
+    reproposal-rabbitmq-queue,reproposal-redis-cache,reproposal-sigstore-signing,\
+    reproposal-static-global-context,reproposal-winston-logger \
       --out bench/results/m6-pilot-<date>.jsonl \
       --save-transcripts bench/results/transcripts-m6-pilot
+
+`--task` is not optional. `bench/tasks/` holds the ten `reproposal-*` fixtures
+alongside the `qualification-gitseed-*` ones, and the runner's default is every
+task in the directory. Omitting the flag runs the qualification set, which is a
+different instrument answering a different question. The first attempt at this
+pilot did exactly that; its one row was discarded rather than kept, because a
+row from the wrong fixture set is not a smaller pilot.
 
 The output path is under `bench/results/` and not in a temporary directory,
 and the shard is committed when it lands. That is M5 deviation 3, which cost
