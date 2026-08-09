@@ -20,25 +20,25 @@
   <g id="frame-1" visibility="hidden">
     <text x="16" y="62" fill="#81a2be" id="frame-1-line0">$ commitlore demo</text>
     <text x="16" y="98" fill="#b5bd68" id="frame-1-line2">─── commitlore demo ───</text>
-    <text x="16" y="134" fill="#c5c8c6" id="frame-1-line4">Scenario: two decisions recorded for src/services/cache.ts</text>
-    <text x="16" y="152" fill="#b294bb" id="frame-1-line5">  1. &quot;Use Redis for session cache&quot; (later superseded)</text>
-    <text x="16" y="170" fill="#c5c8c6" id="frame-1-line6">  2. &quot;Switch to SQLite&quot; (supersedes the first — now active)</text>
-    <text x="16" y="206" fill="#c5c8c6" id="frame-1-line8">An agent proposes reverting to Redis. CommitLore answers:</text>
+    <text x="16" y="134" fill="#c5c8c6" id="frame-1-line4">Scenario: two decisions recorded for src/pricing.ts</text>
+    <text x="16" y="152" fill="#b294bb" id="frame-1-line5">  1. &quot;Reuse calculatePrice for admin quotes&quot; (later superseded)</text>
+    <text x="16" y="170" fill="#c5c8c6" id="frame-1-line6">  2. &quot;Give admin quotes their own path&quot; (supersedes the first — now active)</text>
+    <text x="16" y="206" fill="#c5c8c6" id="frame-1-line8">An agent proposes reusing calculatePrice for admin quotes. CommitLore answers:</text>
     <set attributeName="visibility" to="visible" begin="1.83s" dur="1.83s" fill="remove"/>
     <set attributeName="visibility" to="hidden" begin="3.66s" fill="remove"/>
   </g>
   <g id="frame-2" visibility="hidden">
     <text x="16" y="62" fill="#81a2be" id="frame-2-line0">$ commitlore demo</text>
     <text x="16" y="98" fill="#b5bd68" id="frame-2-line2">─── commitlore demo ───</text>
-    <text x="16" y="134" fill="#c5c8c6" id="frame-2-line4">Scenario: two decisions recorded for src/services/cache.ts</text>
-    <text x="16" y="152" fill="#b294bb" id="frame-2-line5">  1. &quot;Use Redis for session cache&quot; (later superseded)</text>
-    <text x="16" y="170" fill="#c5c8c6" id="frame-2-line6">  2. &quot;Switch to SQLite&quot; (supersedes the first — now active)</text>
-    <text x="16" y="206" fill="#c5c8c6" id="frame-2-line8">An agent proposes reverting to Redis. CommitLore answers:</text>
-    <text x="16" y="242" fill="#b5bd68" id="frame-2-line10">  Record-Id: r-demo02 [active]</text>
-    <text x="16" y="260" fill="#cc6666" id="frame-2-line11">    Limit: single-writer constraint requires careful connection pooling</text>
-    <text x="16" y="278" fill="#cc6666" id="frame-2-line12">    Ruled-out: Redis cluster | cost and complexity disproportionate to traffic</text>
-    <text x="16" y="314" fill="#c5c8c6" id="frame-2-line14">Only the active decision (r-demo02) is shown.</text>
-    <text x="16" y="332" fill="#b294bb" id="frame-2-line15">The superseded Redis decision is filtered out — the agent cannot revive it.</text>
+    <text x="16" y="134" fill="#c5c8c6" id="frame-2-line4">Scenario: two decisions recorded for src/pricing.ts</text>
+    <text x="16" y="152" fill="#b294bb" id="frame-2-line5">  1. &quot;Reuse calculatePrice for admin quotes&quot; (later superseded)</text>
+    <text x="16" y="170" fill="#c5c8c6" id="frame-2-line6">  2. &quot;Give admin quotes their own path&quot; (supersedes the first — now active)</text>
+    <text x="16" y="206" fill="#c5c8c6" id="frame-2-line8">An agent proposes reusing calculatePrice for admin quotes. CommitLore answers:</text>
+    <text x="16" y="242" fill="#b5bd68" id="frame-2-line10">  Record-Id: r-price02 [active]</text>
+    <text x="16" y="260" fill="#cc6666" id="frame-2-line11">    Limit: calculatePrice owns final checkout pricing only</text>
+    <text x="16" y="278" fill="#cc6666" id="frame-2-line12">    Ruled-out: reuse checkout pricing | admin eligibility and rounding differ</text>
+    <text x="16" y="314" fill="#c5c8c6" id="frame-2-line14">Only the active decision (r-price02) is shown.</text>
+    <text x="16" y="332" fill="#b294bb" id="frame-2-line15">The superseded reuse decision is filtered out — the agent cannot revive it.</text>
     <set attributeName="visibility" to="visible" begin="3.67s" fill="freeze"/>
   </g>
 </svg>

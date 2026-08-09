@@ -93,7 +93,7 @@ export const runDemo = async (opts = {}) => {
         // Create the target file so the path exists
         const targetFullPath = join(tmpDir, targetPath);
         mkdirSync(dirname(targetFullPath), { recursive: true });
-        writeFileSync(targetFullPath, '// session cache module\n');
+        writeFileSync(targetFullPath, 'export const calculatePrice = () => {};\n');
         git(['add', '.'], tmpDir);
         // Commit the predecessor decision (will become superseded)
         git(['commit', '-m', predecessorCommitMessage], tmpDir);
@@ -102,7 +102,7 @@ export const runDemo = async (opts = {}) => {
             throw new Error('demo: simulated crash for testing cleanup');
         }
         // Modify the target file and commit the successor decision (supersedes predecessor)
-        writeFileSync(targetFullPath, '// session cache module — now using SQLite\n');
+        writeFileSync(targetFullPath, 'export const calculatePrice = () => {};\nexport const calculateAdminQuote = () => {};\n');
         git(['add', '.'], tmpDir);
         git(['commit', '-m', successorCommitMessage], tmpDir);
         // Run init to set up the index and hooks in the temp repo
@@ -118,10 +118,10 @@ export const runDemo = async (opts = {}) => {
         lines.push('─── commitlore demo ───');
         lines.push('');
         lines.push(`Scenario: two decisions recorded for ${targetPath}`);
-        lines.push('  1. "Use Redis for session cache" (later superseded)');
-        lines.push('  2. "Switch to SQLite" (supersedes the first — now active)');
+        lines.push('  1. "Reuse calculatePrice for admin quotes" (later superseded)');
+        lines.push('  2. "Give admin quotes their own path" (supersedes the first — now active)');
         lines.push('');
-        lines.push('An agent proposes reverting to Redis. CommitLore answers:');
+        lines.push('An agent proposes reusing calculatePrice for admin quotes. CommitLore answers:');
         lines.push('');
         if (queryResult.records.length === 0) {
             lines.push('  (no active records found)');
@@ -141,7 +141,7 @@ export const runDemo = async (opts = {}) => {
         }
         lines.push('');
         lines.push(`Only the active decision (${expectedActiveRecordId}) is shown.`);
-        lines.push('The superseded Redis decision is filtered out — the agent cannot revive it.');
+        lines.push('The superseded reuse decision is filtered out — the agent cannot revive it.');
         lines.push('');
         const output = lines.join('\n');
         return { exitCode: 0, output };

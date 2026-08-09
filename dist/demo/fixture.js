@@ -15,15 +15,15 @@
 /**
  * The path all demo records are scoped to.
  */
-export const targetPath = 'src/services/cache.ts';
+export const targetPath = 'src/pricing.ts';
 /**
  * Record-Id of the predecessor (will be computed as superseded downstream).
  */
-export const expectedSupersededRecordId = 'r-demo01';
+export const expectedSupersededRecordId = 'r-price01';
 /**
  * Record-Id of the successor (will be computed as active downstream).
  */
-export const expectedActiveRecordId = 'r-demo02';
+export const expectedActiveRecordId = 'r-price02';
 /**
  * A full commit message for the predecessor decision. When committed
  * chronologically first, this record is initially active. Once the successor
@@ -31,51 +31,50 @@ export const expectedActiveRecordId = 'r-demo02';
  *
  * Trailers satisfy SPEC §3 vocabulary and `record.schema.json`.
  */
-export const predecessorCommitMessage = `Decide on Redis for session cache
+export const predecessorCommitMessage = `Reuse calculatePrice for admin quotes
 
-Use Redis as the session cache backend. It handles our throughput
-requirements and the ops team already runs a managed instance.
+Admin quotes reuse calculatePrice so their preview stays aligned with the
+final checkout total.
 
-Limit: must not exceed 512 MB memory budget per node
-Ruled-out: memcached | no built-in persistence for session recovery
+Limit: admin quotes share checkout eligibility and rounding
+Ruled-out: separate admin quote path | a shared calculation keeps totals aligned
 Blast: module
 Undo: costly
 Certainty: firm
-Record-Id: r-demo01
+Record-Id: r-price01
 Provenance: authored
 CommitLore-Version: 2.0.0
 `;
 /**
  * A full commit message for the successor decision. It carries
- * `Supersedes: r-demo01`, which is how `foldLifecycle` retires the
+ * `Supersedes: r-price01`, which is how `foldLifecycle` retires the
  * predecessor and computes this record as active.
  */
-export const successorCommitMessage = `Switch session cache from Redis to SQLite
+export const successorCommitMessage = `Give admin quotes their own pricing path
 
-Redis added operational complexity without matching throughput gains for
-our actual traffic pattern. SQLite embedded cache removes the external
-dependency and simplifies deployment.
+Admin quote eligibility and rounding differ from final checkout pricing.
+Keep the quote path separate instead of carrying exceptions in calculatePrice.
 
-Supersedes: r-demo01
-Limit: single-writer constraint requires careful connection pooling
-Ruled-out: Redis cluster | cost and complexity disproportionate to traffic
+Supersedes: r-price01
+Limit: calculatePrice owns final checkout pricing only
+Ruled-out: reuse checkout pricing | admin eligibility and rounding differ
 Blast: module
 Undo: easy
 Certainty: firm
-Record-Id: r-demo02
+Record-Id: r-price02
 Provenance: authored
 CommitLore-Version: 2.0.0
 `;
 /**
  * A proposal that re-proposes the superseded approach. Used by T-1011 to
  * exercise lifecycle-filtered retrieval: when an agent proposes reverting to
- * Redis, the demo shows that the predecessor is superseded and the successor
- * is active — the agent should not revive the reversed decision.
+ * calculatePrice for admin quotes, the demo shows that the predecessor is
+ * superseded and the successor is active — the agent should not revive the
+ * reversed decision.
  *
  * This is plain text, not a CommitMessage — it represents what an agent might
  * say, not a record in the graph.
  */
-export const proposalText = 'I suggest we switch back to Redis for session caching. It would give us ' +
-    'better throughput for the new real-time features and the ops team already ' +
-    'has the infrastructure.';
+export const proposalText = 'I suggest reusing calculatePrice for admin quotes so previews and checkout ' +
+    'totals stay on one code path.';
 //# sourceMappingURL=fixture.js.map
