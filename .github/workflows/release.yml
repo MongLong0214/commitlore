@@ -9,28 +9,69 @@ on:
     tags:
       - "v*"
 
-# `contents: write` is what lets the publish job create the GitHub Release
-# and upload assets to it. `id-token`/`attestations` are what
-# actions/attest-build-provenance needs (Sigstore-backed keyless signing —
-# no secret key for this repo to manage or leak). Nothing here needs to
-# write code, open PRs, or touch anything but this one release.
+# Read for the workflow; the ability to create a release belongs to the one job
+# that creates one. Granting `contents: write` here hands it to the gates too,
+# and the gates run `actions/checkout@v4` and `actions/setup-node@v4` — mutable
+# major tags whose contents can change under the same reference. Anything
+# executing inside a gate with a release-write token could create the release
+# before that gate, or any other, had finished, which would make the ordering
+# these jobs exist to enforce decorative.
+#
+# `id-token` and `attestations` were granted for an attestation action this
+# workflow does not contain. Privilege granted for a step that is not here is
+# privilege available to every step that is.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
   # `exact-head-ci` reads the check runs GitHub recorded for the tagged commit.
   # Reading a branch's green badge would answer a different, weaker question.
   checks: read
 
 jobs:
-  # Refuses the whole release before a single binary is built. A release
-  # whose asset reports a version that disagrees with its own tag is not
-  # fixable after the fact — the tag is immutable once fetched, the asset is
-  # immutable once downloaded. See scripts/check-release-version.mjs.
+  # The canonical commit is fixed ONCE, here, and every later boundary consumes
+  # that sha. Each boundary used to resolve the tag *name* again, which meant
+  # four gates could each qualify a different commit: a ref-move regression
+  # showed the ancestry and CI gates still accepting the original sha while a
+  # fresh clone of the same tag landed on another main descendant.
+  #
+  # The anchor is the event sha, not the live tag. `github.sha` is what the tag
+  # pointed at when the push happened and cannot be changed afterwards; the ref
+  # can. Resolving the name here would leave a window before this job starts in
+  # which a move redefines the whole release, so the tag name is only ever the
+  # version label and the key the final binding check looks up.
+  release-target:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.ancestry.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: ancestry
+        name: The pushed commit is already contained in main
+        run: node scripts/check-release-target.mjs "$GITHUB_SHA" main --github-output
+
+  # Refuses the whole release before a single binary is built. A release whose
+  # asset reports a version that disagrees with its own tag is not fixable
+  # after the fact: the asset is immutable once downloaded, and a tag someone
+  # has already fetched cannot be corrected for them by moving it here.
+  #
+  # The tag itself is not immutable — this workflow exists because a ref can
+  # move — which is what the `v*` ruleset and the binding check below are for.
+  # See scripts/check-release-version.mjs.
+  #
+  # The checkout takes the canonical sha, not the tag: the version this job
+  # compares must come from the same bytes every other gate qualified.
   version-consistency:
+    needs: release-target
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-target.outputs.commit }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -39,27 +80,6 @@ jobs:
       - run: npm run build
       - name: Tag, package.json, and `commitlore --version` agree
         run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
-
-  # A version-consistent tag can still name a commit that exists only on dev.
-  # `merge-base` can answer that only from complete history: a shallow checkout
-  # is not a smaller proof, it is an incomplete graph that the script refuses.
-  # The accepted commit is an output so the API gate below queries the commit an
-  # annotated tag resolves to, rather than assuming the event SHA is one.
-  release-target:
-    runs-on: ubuntu-latest
-    outputs:
-      commit: ${{ steps.ancestry.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - id: ancestry
-        name: The pushed tag is already contained in main
-        run: node scripts/check-release-target.mjs "$GITHUB_REF_NAME" main --github-output
 
   # A tag push does not create a new CI result for the commit it names. The
   # relevant evidence is the existing set of check runs at that exact commit,
@@ -72,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.release-target.outputs.commit }}
           fetch-depth: 1
       - uses: actions/setup-node@v4
         with:
@@ -88,14 +108,14 @@ jobs:
   # makes the six checks a prerequisite instead, so publication cannot get
   # ahead of the artifact it claims to qualify.
   install-gate:
+    needs: release-target
     runs-on: ubuntu-latest
+    env:
+      RELEASE_COMMIT: ${{ needs.release-target.outputs.commit }}
     steps:
-      # The default checkout follows the event SHA today, but qualifying the
-      # branch that happened to contain that SHA would weaken the claim when
-      # checkout's default changes. The pushed tag is the artifact users name.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.release-target.outputs.commit }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -103,15 +123,29 @@ jobs:
 
       # A checkout can hide exactly the distribution failures this protects
       # against: an untracked bundle, a path that reaches back to the source
-      # tree, or dependencies left over from CI. Clone the pushed tag anew,
-      # then run every check from that clone as an installer does.
+      # tree, or dependencies left over from CI. Clone anew and run every check
+      # from that clone as an installer does.
+      #
+      # The clone lands on the canonical sha rather than `--branch <tag>`. That
+      # is the difference this correction exists for: cloning by name asks the
+      # remote what the tag means *now*, and the answer can differ from the one
+      # the other gates were given. `--no-checkout` first, because the sha is
+      # not a branch and cannot be a clone target directly.
       - name: The tagged installation passes RELEASE-GATE section 4
         run: |
           set -euo pipefail
           clone_dir="$(mktemp -d)/commitlore"
-          git clone --quiet --branch "$GITHUB_REF_NAME" --depth 1 \
+          git clone --quiet --no-checkout \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$clone_dir"
+          git -C "$clone_dir" checkout --quiet --detach "$RELEASE_COMMIT"
           cd "$clone_dir"
+
+          landed="$(git rev-parse HEAD)"
+          test "$landed" = "$RELEASE_COMMIT" || {
+            echo "clone landed on $landed, expected the qualified commit $RELEASE_COMMIT"
+            exit 1
+          }
+          printf 'fresh clone commit: %s\n' "$landed"
 
           # The bundle is the shipped CLI; no build or npm install belongs in
           # this job, because either would conceal a clone missing what ships.
@@ -226,15 +260,52 @@ jobs:
     # semantics. Keep it free of `if:`: a condition such as `always()` would
     # turn a failed qualification into a path that can still publish.
     needs: [version-consistency, install-gate, release-target, exact-head-ci]
+    # The only job that may create a release, and it cannot start until all four
+    # gates have passed. Scoping the grant here is what makes that ordering a
+    # constraint rather than a convention.
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
+    env:
+      RELEASE_COMMIT: ${{ needs.release-target.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-target.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
+      # Everything above can pass and the tag can still move before this step.
+      # The repository's `v*` ruleset (update and deletion both denied) is the
+      # standing control; this is the check that does not assume it held. It
+      # asks the remote, because a checkout only records what the tag meant
+      # when it was taken.
+      - name: The live tag still resolves to the qualified commit
+        run: node scripts/check-tag-binding.mjs "$GITHUB_REF_NAME" "$RELEASE_COMMIT"
+
+      # `--verify-tag` refuses when the tag does not exist, so publication can
+      # never create the reference it was meant to verify.
+      #
+      # `--target` is NOT what binds the release, and nothing here relies on it.
+      # It is documented as the branch or sha used when the command creates a
+      # tag automatically; what the CLI does with it when the tag already
+      # exists is not something this workflow asserts either way. The proven
+      # property is the narrow one: it does not establish that the tag equals
+      # this commit and it cannot retarget an existing tag.
+      #
+      # It is passed as explicit request metadata, and as defence for one
+      # future mistake: if an edit drops `--verify-tag`, the implicit creation
+      # that re-enables lands on the qualified commit instead of the default
+      # branch. What binds the release is the step above proving the live tag
+      # resolves to this commit, and the no-bypass `v*` ruleset keeping it there.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --target "$RELEASE_COMMIT" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes
