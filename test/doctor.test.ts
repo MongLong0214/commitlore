@@ -1014,6 +1014,34 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     return git(repo, ['rev-parse', 'HEAD']).trim();
   };
 
+  /** Adds refs directly so the cap fixture measures branches, not branch-creation process startup. */
+  const fillBranches = (repo: string, total: number): void => {
+    const existing = git(repo, ['for-each-ref', '--format=%(refname)', 'refs/heads'])
+      .split('\n')
+      .filter((line) => line !== '').length;
+    const head = git(repo, ['rev-parse', 'HEAD']).trim();
+    const creates = Array.from(
+      { length: total - existing },
+      (_, index) => `create refs/heads/zz-cap-${String(index + 1).padStart(3, '0')} ${head}`,
+    );
+    if (creates.length > 0) {
+      const result = execGit(['update-ref', '--stdin'], {
+        cwd: repo,
+        stdin: `${creates.join('\n')}\n`,
+      });
+      if (result.code !== 0) throw new Error(`git update-ref failed: ${result.stderr}`);
+    }
+  };
+
+  const preservedSquash = (repo: string, recordId: string): void => {
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    const { base, featureSha } = growFeatureBranch(repo, recordId);
+    const mergeSha = squashWithoutPreserving(repo);
+    const outcome = runSquashPreserve({ range: `${base}..${featureSha}`, target: mergeSha, cwd: repo });
+    expect(outcome.code).toBe(0);
+    rebuildIndex(openIndex({ cwd: repo }));
+  };
+
   it('skips when no local branch looks like a squash source', () => {
     const repo = initRepo('squash-conservation-none');
     git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'first']);
@@ -1057,5 +1085,36 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     const entry = after.checks.find((check) => check.id === 'squash-conservation');
     expect(entry?.status).toBe('ok');
     expect(entry?.detail).toContain('reachable from HEAD');
+  });
+
+  it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
+    const repo = initRepo('squash-conservation-capped');
+    preservedSquash(repo, 'r-capped01');
+    fillBranches(repo, 201);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.evidence).toMatchObject({ branches_seen: '201', branches_checked: '200' });
+    expect(entry?.detail).toContain('first 200 of 201 local branches');
+  });
+
+  it('keeps a 200-branch scan byte-for-byte on the existing report shape', () => {
+    const repo = initRepo('squash-conservation-at-cap');
+    preservedSquash(repo, 'r-atcap01');
+    fillBranches(repo, 200);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toBe(
+      '1 squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD',
+    );
+    expect(entry?.evidence).toEqual({
+      candidates: '1',
+      checked: '1',
+      uncheckable: '0',
+      lost_count: '0',
+    });
   });
 });

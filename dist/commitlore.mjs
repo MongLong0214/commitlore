@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve14.call(this, root, ref);
+      let _sch = resolve17.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve14(root, ref) {
+    function resolve17(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve14(baseURI, relativeURI, options) {
+    function resolve17(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve14,
+      resolve: resolve17,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync22 } from "node:fs";
+import { readFileSync as readFileSync23 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -16181,7 +16181,7 @@ var register2 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync10, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname6, join as join8, resolve as resolve11 } from "node:path";
+import { dirname as dirname6, join as join9, resolve as resolve14 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/services/cache.ts";
@@ -16217,26 +16217,567 @@ Provenance: authored
 CommitLore-Version: 2.0.0
 `;
 
-// src/commands/doctor.ts
+// src/commands/doctor/checks/delivery-inject-runtime.ts
+import { resolve as resolve5 } from "node:path";
+
+// src/hooks/claude-settings.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname3, join as join3 } from "node:path";
+var CLAUDE_HOOK_EVENT = "PreToolUse";
+var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
+var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
+var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
+var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
+var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var failure = (settingsPath, message) => ({
+  code: 2,
+  stdout: "",
+  stderr: `commitlore: ${message}
+`,
+  changed: false,
+  status: { settingsPath, state: "unreadable", entries: 0, commands: [], problem: message }
+});
+var success = (status, lines, changed) => ({
+  code: 0,
+  stdout: `${lines.join("\n")}
+`,
+  stderr: "",
+  status,
+  changed
+});
+var load = (settingsPath) => {
+  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
+  let raw;
+  try {
+    raw = readFileSync7(settingsPath, "utf8");
+  } catch (error2) {
+    throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
+  }
+  if (raw.trim() === "") return { settings: {}, existed: true };
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error2) {
+    throw new Error(
+      `${settingsPath} is not valid JSON (${messageOf2(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
+    );
+  }
+  if (!isPlainObject(parsed)) {
+    throw new Error(`${settingsPath} does not contain a JSON object \u2014 refusing to overwrite it`);
+  }
+  const hooks = parsed["hooks"];
+  if (hooks !== void 0 && !isPlainObject(hooks)) {
+    throw new Error(`${settingsPath} has a "hooks" value that is not an object \u2014 refusing to edit it`);
+  }
+  if (isPlainObject(hooks)) {
+    const event = hooks[CLAUDE_HOOK_EVENT];
+    if (event !== void 0 && !Array.isArray(event)) {
+      throw new Error(
+        `${settingsPath} has a "hooks.${CLAUDE_HOOK_EVENT}" value that is not an array \u2014 refusing to edit it`
+      );
+    }
+  }
+  return { settings: parsed, existed: true };
+};
+var eventGroups = (settings) => {
+  const hooks = settings["hooks"];
+  if (!isPlainObject(hooks)) return [];
+  const event = hooks[CLAUDE_HOOK_EVENT];
+  return Array.isArray(event) ? event.filter(isPlainObject) : [];
+};
+var isOurs = (entry) => isPlainObject(entry) && typeof entry["command"] === "string" && entry["command"].includes(CLAUDE_HOOK_MARKER);
+var ourCommands = (settings) => eventGroups(settings).flatMap(
+  (group) => (Array.isArray(group.hooks) ? group.hooks : []).filter(isOurs).map((entry) => String(entry["command"]))
+);
+var stateOf = (commands, expected) => {
+  if (commands.length === 0) return "absent";
+  if (commands.length > 1) return "conflicting";
+  return commands[0] === expected ? "installed" : "outdated";
+};
+var readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
+  let loaded;
+  try {
+    loaded = load(settingsPath);
+  } catch (error2) {
+    return {
+      settingsPath,
+      state: "unreadable",
+      entries: 0,
+      commands: [],
+      problem: messageOf2(error2)
+    };
+  }
+  const commands = ourCommands(loaded.settings);
+  return {
+    settingsPath,
+    state: stateOf(commands, command),
+    entries: commands.length,
+    commands
+  };
+};
+var withoutOurs = (groups) => {
+  let removed = 0;
+  const kept = [];
+  for (const group of groups) {
+    if (!Array.isArray(group.hooks)) {
+      kept.push(group);
+      continue;
+    }
+    const entries = group.hooks.filter((entry) => !isOurs(entry));
+    const dropped = group.hooks.length - entries.length;
+    removed += dropped;
+    if (dropped > 0 && entries.length === 0) continue;
+    kept.push(dropped === 0 ? group : { ...group, hooks: entries });
+  }
+  return { groups: kept, removed };
+};
+var withGroups = (settings, groups) => {
+  const hooks = isPlainObject(settings["hooks"]) ? { ...settings["hooks"] } : {};
+  if (groups.length === 0) delete hooks[CLAUDE_HOOK_EVENT];
+  else hooks[CLAUDE_HOOK_EVENT] = groups;
+  const next = { ...settings };
+  if (Object.keys(hooks).length === 0) delete next["hooks"];
+  else next["hooks"] = hooks;
+  return next;
+};
+var writeAtomic = (settingsPath, settings) => {
+  mkdirSync3(dirname3(settingsPath), { recursive: true });
+  let mode;
+  try {
+    mode = statSync(settingsPath).mode & 511;
+  } catch {
+    mode = void 0;
+  }
+  const temporary = `${settingsPath}.tmp-${process.pid}-${randomBytes3(4).toString("hex")}`;
+  const body = `${JSON.stringify(settings, null, 2)}
+`;
+  try {
+    writeFileSync3(temporary, body, mode === void 0 ? {} : { mode });
+    renameSync2(temporary, settingsPath);
+  } catch (error2) {
+    try {
+      unlinkSync3(temporary);
+    } catch {
+    }
+    throw new Error(`cannot write ${settingsPath}: ${messageOf2(error2)}`);
+  }
+};
+var validateCommand = (command) => {
+  if (!command.includes(CLAUDE_HOOK_MARKER)) {
+    throw new Error(
+      `the hook command must contain the marker ${JSON.stringify(CLAUDE_HOOK_MARKER)}, or uninstall would not be able to find it again`
+    );
+  }
+};
+var installClaudeHook = (input) => {
+  const { settingsPath } = input;
+  const command = input.command ?? CLAUDE_HOOK_COMMAND;
+  const matcher = input.matcher ?? CLAUDE_HOOK_MATCHER;
+  let loaded;
+  try {
+    validateCommand(command);
+    loaded = load(settingsPath);
+  } catch (error2) {
+    return failure(settingsPath, messageOf2(error2));
+  }
+  const before = ourCommands(loaded.settings);
+  const { groups } = withoutOurs(eventGroups(loaded.settings));
+  const next = withGroups(loaded.settings, [
+    ...groups,
+    { matcher, hooks: [{ type: "command", command }] }
+  ]);
+  const state = stateOf(before, command);
+  const unchanged = state === "installed" && JSON.stringify(next) === JSON.stringify(loaded.settings);
+  if (!unchanged) {
+    try {
+      writeAtomic(settingsPath, next);
+    } catch (error2) {
+      return failure(settingsPath, messageOf2(error2));
+    }
+  }
+  const headline = {
+    absent: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
+    installed: `${CLAUDE_HOOK_EVENT} injection hook already installed: ${settingsPath} (unchanged)`,
+    outdated: `updated the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
+    conflicting: `collapsed ${before.length} duplicate injection hooks into one: ${settingsPath}`,
+    unreadable: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`
+  }[state];
+  return success(readClaudeHookStatus(settingsPath, command), [
+    headline,
+    `  matcher: ${matcher}`,
+    `  command: ${command}`
+  ], !unchanged);
+};
+var uninstallClaudeHook = (input) => {
+  const { settingsPath } = input;
+  const command = input.command ?? CLAUDE_HOOK_COMMAND;
+  let loaded;
+  try {
+    loaded = load(settingsPath);
+  } catch (error2) {
+    return failure(settingsPath, messageOf2(error2));
+  }
+  if (!loaded.existed) {
+    return success(readClaudeHookStatus(settingsPath, command), [
+      `no settings file to clean: ${settingsPath}`
+    ], false);
+  }
+  const { groups, removed } = withoutOurs(eventGroups(loaded.settings));
+  if (removed === 0) {
+    return success(readClaudeHookStatus(settingsPath, command), [
+      `no commitlore injection hook in ${settingsPath}`
+    ], false);
+  }
+  try {
+    writeAtomic(settingsPath, withGroups(loaded.settings, groups));
+  } catch (error2) {
+    return failure(settingsPath, messageOf2(error2));
+  }
+  return success(readClaudeHookStatus(settingsPath, command), [
+    `removed ${removed} injection hook entr${removed === 1 ? "y" : "ies"}: ${settingsPath}`
+  ], true);
+};
+var claudeHookStatus = (input) => {
+  const status = readClaudeHookStatus(input.settingsPath, input.command ?? CLAUDE_HOOK_COMMAND);
+  if (status.state === "unreadable") {
+    return failure(input.settingsPath, status.problem ?? `cannot read ${input.settingsPath}`);
+  }
+  const described = {
+    absent: "not installed",
+    installed: "installed (commitlore)",
+    outdated: "installed (commitlore), command differs from this build",
+    conflicting: `installed ${status.entries} times \u2014 run install to collapse them`,
+    unreadable: "unreadable"
+  }[status.state];
+  return success(
+    status,
+    [
+      `settings: ${status.settingsPath}`,
+      `${CLAUDE_HOOK_EVENT} injection hook: ${described}`,
+      ...status.commands.map((command) => `  command: ${command}`)
+    ],
+    false
+  );
+};
+
+// src/commands/doctor/model.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync7, readFileSync as readFileSync10, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
-import { tmpdir as tmpdirPath } from "node:os";
-import { join as join6, resolve as resolve6 } from "node:path";
+var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
+var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var boundedExcerpt = (output) => {
+  const [firstLine5 = ""] = (output ?? "").split(/\r?\n/, 1);
+  return {
+    firstLine: firstLine5.slice(0, 200),
+    truncated: firstLine5.length > 200 ? "true" : "false"
+  };
+};
+var streamEvidence = (stream, output) => {
+  const excerpt = boundedExcerpt(output);
+  return {
+    [`${stream}_first_line`]: excerpt.firstLine,
+    [`${stream}_truncated`]: excerpt.truncated
+  };
+};
+var homeRelativePath = (value) => {
+  const home = process.env["HOME"];
+  if (home === void 0 || home === "") return value;
+  const escapedHome = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(new RegExp(`${escapedHome}(?=$|/)`, "g"), "~");
+};
+var normaliseEvidence = (evidence) => Object.fromEntries(
+  Object.entries(evidence).map(([key, value]) => [key, homeRelativePath(value)])
+);
+var evidenceKey = (value) => value.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase() || "remote";
+var severityOf = (status) => status === "fail" ? "error" : status === "warn" ? "warning" : "info";
+function check(id, category, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) {
+  const evidence = extra.evidence ?? {};
+  if (Object.keys(evidence).length === 0) {
+    throw new Error(`doctor check ${id} has no evidence`);
+  }
+  return {
+    id,
+    title,
+    status,
+    needsAttention,
+    detail,
+    fix,
+    fixed,
+    category,
+    severity: severityOf(status),
+    evidence: normaliseEvidence(evidence),
+    optional: extra.optional ?? false,
+    ...extra.skipReason === void 0 ? {} : { skipReason: extra.skipReason }
+  };
+}
+var blocked = (dependency, row) => {
+  if (dependency.status === "ok") {
+    throw new Error(`doctor check ${row.id} cannot repeat an ok finding`);
+  }
+  return { ...row, blockedBy: dependency.id };
+};
+var defaultDoctorContext = (opts = {}) => ({
+  opts,
+  now: process.hrtime.bigint,
+  memo: /* @__PURE__ */ new Map(),
+  git: execGit,
+  spawn: spawnSync3,
+  env: process.env,
+  openIndex
+});
+
+// src/commands/doctor/checks/delivery-inject-runtime.ts
+var evaluateInjectRun = (run, ctx) => {
+  const { id, category, title, executable, path: path2, fix, unavailableFix } = ctx;
+  const executionEvidence = { executable, path: path2 };
+  if (run.status === null || run.status === void 0) {
+    if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
+      return check(
+        id,
+        category,
+        title,
+        "fail",
+        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        unavailableFix,
+        false,
+        void 0,
+        {
+          evidence: {
+            ...executionEvidence,
+            exit_code: "unavailable",
+            ...streamEvidence("stderr", run.stderr)
+          }
+        }
+      );
+    }
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      `could not run the PreToolUse hook: ${run.error?.message ?? "no diagnosis"}`,
+      fix,
+      false,
+      void 0,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: "unavailable",
+          error: run.error?.message ?? "no diagnosis",
+          ...streamEvidence("stderr", run.stderr)
+        }
+      }
+    );
+  }
+  if (run.status !== 0) {
+    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      `the PreToolUse hook exits ${String(run.status)}: ${said || "no diagnosis"}`,
+      fix,
+      false,
+      void 0,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: String(run.status),
+          ...streamEvidence("stderr", run.stderr)
+        }
+      }
+    );
+  }
+  if (`${run.stdout ?? ""}`.trim() === "") {
+    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      `the PreToolUse hook returned no context for a known-good payload${said === "" ? "" : `: ${said}`}`,
+      fix,
+      false,
+      void 0,
+      {
+        evidence: {
+          ...executionEvidence,
+          exit_code: "0",
+          ...streamEvidence("stdout", run.stdout),
+          ...streamEvidence("stderr", run.stderr)
+        }
+      }
+    );
+  }
+  return check(
+    id,
+    category,
+    title,
+    "ok",
+    `the PreToolUse hook returned context for ${path2}`,
+    null,
+    false,
+    void 0,
+    {
+      evidence: {
+        ...executionEvidence,
+        exit_code: "0",
+        ...streamEvidence("stdout", run.stdout)
+      }
+    }
+  );
+};
+var checkInjectRuntime = (ctx) => {
+  const { opts, spawn, env } = ctx;
+  const title = "PreToolUse hook runtime";
+  const id = "inject-runtime";
+  const category = "delivery";
+  const fix = "reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor";
+  const unavailableFix = "install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor";
+  const cwd = opts.cwd ?? process.cwd();
+  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
+  if (settings.state !== "installed") {
+    const command2 = settings.commands[0];
+    if (settings.state === "outdated" && command2 !== void 0) {
+      return check(
+        id,
+        category,
+        title,
+        "skipped",
+        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`,
+        null,
+        false,
+        false,
+        {
+          evidence: {
+            settings_path: settings.settingsPath,
+            settings_state: settings.state,
+            configured_command: command2,
+            executable: "not_run",
+            exit_code: "not_run",
+            ...streamEvidence("stderr", "")
+          },
+          skipReason: "command_unrecognized"
+        }
+      );
+    }
+    const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      detail,
+      "commitlore inject install-claude-hook",
+      false,
+      void 0,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          executable: "not_run",
+          exit_code: "not_run",
+          ...streamEvidence("stderr", ""),
+          ...settings.problem === void 0 ? {} : { problem: settings.problem }
+        }
+      }
+    );
+  }
+  const command = settings.commands[0];
+  if (command !== CLAUDE_HOOK_COMMAND) {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      "not checked: the configured command is not recognised",
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          configured_command: command ?? "none",
+          executable: "not_run",
+          exit_code: "not_run",
+          ...streamEvidence("stderr", "")
+        },
+        skipReason: "command_unrecognized"
+      }
+    );
+  }
+  const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
+  if (path2 === void 0) {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      "no recorded path is available for a runtime probe",
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          settings_path: settings.settingsPath,
+          settings_state: settings.state,
+          executable: "not_run",
+          probe_path: "unavailable",
+          exit_code: "not_run",
+          ...streamEvidence("stderr", "")
+        },
+        skipReason: "probe_path_unavailable"
+      }
+    );
+  }
+  const payload = JSON.stringify({
+    session_id: "commitlore-doctor",
+    cwd,
+    hook_event_name: "PreToolUse",
+    tool_name: "Edit",
+    tool_input: { file_path: resolve5(cwd, path2) }
+  });
+  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
+  const executable = configured.slice(0, configured.indexOf(" "));
+  const args = configured.slice(executable.length + 1).split(" ");
+  const run = spawn(executable, args, {
+    shell: false,
+    encoding: "utf8",
+    cwd,
+    input: payload,
+    env: {
+      PATH: env["PATH"] ?? "/usr/bin:/bin",
+      HOME: env["HOME"] ?? ""
+    }
+  });
+  const result = evaluateInjectRun(run, { id, category, title, executable, path: path2, fix, unavailableFix });
+  if (result.status === "fail" && run.status === null && run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
+    return { ...result, needsAttention: false };
+  }
+  return result;
+};
+
+// src/commands/doctor/checks/capture-commit-msg-hook.ts
+import { existsSync as existsSync7, readFileSync as readFileSync9 } from "node:fs";
+import { resolve as resolve7 } from "node:path";
 
 // src/core/hook-target.ts
-import { lstatSync, readFileSync as readFileSync7, realpathSync, statSync } from "node:fs";
-import { dirname as dirname3, isAbsolute, join as join3, relative, resolve as resolve5, sep } from "node:path";
+import { lstatSync, readFileSync as readFileSync8, realpathSync, statSync as statSync2 } from "node:fs";
+import { dirname as dirname4, isAbsolute, join as join4, relative, resolve as resolve6, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
   try {
-    return statSync(path2).isFile();
+    return statSync2(path2).isFile();
   } catch {
     return false;
   }
 };
 var isExecutableFile = (path2) => {
   try {
-    const stat = statSync(path2);
+    const stat = statSync2(path2);
     return stat.isFile() && (stat.mode & 73) !== 0;
   } catch {
     return false;
@@ -16261,7 +16802,7 @@ var isSymlink = (path2) => {
 var classifyBinTarget = (path2) => path2.endsWith(".js") || path2.endsWith(".mjs") ? "script" : null;
 var recordedVersion = (binPath) => {
   try {
-    const manifest = readFileSync7(join3(findPackageRoot(dirname3(binPath)), "package.json"), "utf8");
+    const manifest = readFileSync8(join4(findPackageRoot(dirname4(binPath)), "package.json"), "utf8");
     const parsed = JSON.parse(manifest);
     return typeof parsed.version === "string" && parsed.version !== "" ? parsed.version : null;
   } catch {
@@ -16287,7 +16828,7 @@ var readRecordedHookTarget = (cwd) => {
   const problems = [];
   if (bin === "") problems.push("commitlore.bin is not recorded");
   else {
-    const binPath = resolve5(cwd, bin);
+    const binPath = resolve6(cwd, bin);
     const kind = classifyBinTarget(bin);
     if (kind === null) {
       problems.push("commitlore.bin is not a .js or .mjs file");
@@ -16303,7 +16844,7 @@ var readRecordedHookTarget = (cwd) => {
   }
   if (node === "") problems.push("commitlore.node is not recorded");
   else {
-    const nodePath = resolve5(cwd, node);
+    const nodePath = resolve6(cwd, node);
     if (!isExecutableFile(nodePath)) problems.push("commitlore.node is not an executable file");
     else if (realpathSync(nodePath) !== realpathSync(process.execPath)) {
       problems.push("commitlore.node differs from this CLI interpreter");
@@ -16315,6 +16856,986 @@ var describeRecordedHookTarget = (target) => [
   `commitlore.bin: ${target.bin || "(unset)"}`,
   `commitlore.node: ${target.node || "(unset)"}`
 ];
+
+// src/hooks/commit-msg.ts
+var HOOK_MARKER = "# commitlore:commit-msg:v1";
+var CHAINED_SUFFIX = ".commitlore-chained";
+var HOOK_NAME = "commit-msg";
+var CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
+var HOOK_MODE = 493;
+var UNRESOLVED_GATE = [
+  "# Passing silently here would report a clean record for a message nothing",
+  "# ever read.",
+  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+  'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
+  "exit 1"
+];
+var UNRESOLVED_CAPTURE = [
+  "# Not the validation gate: nothing was checked and rejected here, the",
+  "# checker is absent. Refusing would block a commit over a missing tool.",
+  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
+  'echo "  this hook did nothing; the commit was not blocked. Re-run: <path-to>/commitlore init" >&2',
+  "exit 0"
+];
+var stubText = (unresolved) => [
+  "#!/bin/sh",
+  HOOK_MARKER,
+  "# Installed by `commitlore hooks install`.",
+  "# Edits are lost on reinstall; `commitlore hooks uninstall` removes this file",
+  `# and restores any ${CHAINED_HOOK_NAME} hook saved beside it.`,
+  "set -e",
+  "",
+  "# Paths are taken apart with parameter expansion rather than dirname: a",
+  "# hook that needs a working PATH to find its own directory would die with",
+  "# 127 instead of reporting anything useful.",
+  'case "$0" in',
+  "  */*) hook_dir=${0%/*} ;;",
+  "  *) hook_dir=. ;;",
+  "esac",
+  `chained="$hook_dir/${CHAINED_HOOK_NAME}"`,
+  "",
+  "# git only runs an executable hook, so an unset execute bit means the",
+  "# preserved hook was already inert before commitlore arrived.",
+  'if [ -x "$chained" ]; then',
+  '  "$chained" "$@" || exit $?',
+  "fi",
+  "",
+  'if [ -n "${COMMITLORE_BIN:-}" ]; then',
+  "  # Same allowlist as the recorded commitlore.bin case below: any executable",
+  "  # here used to run unchecked, which is exactly the gap an env var is for.",
+  "  #",
+  "  # `-x` because this branch execs the file itself and has no recorded",
+  "  # interpreter to fall back on. A `.js` carrying a shebang but no execute",
+  "  # bit -- `dist/cli.js` is exactly that -- fails the exec, and a failed exec",
+  "  # terminates this shell non-zero, which blocks the commit or push the hook",
+  "  # sits next to. Falling through is what the comment above already promised",
+  "  # for a value that does not resolve (#428).",
+  '  case "$COMMITLORE_BIN" in',
+  "    *.mjs|*.js)",
+  '      if [ -x "$COMMITLORE_BIN" ]; then',
+  '        exec "$COMMITLORE_BIN" validate --message-file "$1"',
+  "      fi",
+  "      ;;",
+  "  esac",
+  "fi",
+  "",
+  "# Where `hooks install` was run from. A clone is a complete installation",
+  "# (ADR-0011), so the common case is a checkout that is on no PATH and in no",
+  "# node_modules \u2014 and the installer is the only thing that ever knew where it",
+  "# was. Recorded in local git config rather than in this file so the stub",
+  "# stays byte-identical wherever it came from, which is what `hooks status`",
+  "# compares against.",
+  "#",
+  "# Ahead of the PATH and node_modules searches below, because this is the only",
+  "# branch that also knows its *interpreter*. Those searches guess at an",
+  "# installation, and a guessed sibling used to win: a stale",
+  "# `node_modules/.bin/commitlore` in a parent directory shadowed the recorded",
+  "# path, and that shim's own first line is `exec node`, so it died with 127 in",
+  "# exactly the PATH-less environment this file exists to survive. A stale guess",
+  "# also validates commits with a different version than the one installed here.",
+  "recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)",
+  'if [ -n "$recorded" ]; then',
+  "  # What `hooks install` recorded as this install's trusted location: the",
+  "  # directory the recorded script has to sit under.",
+  "  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)",
+  '  case "$recorded" in',
+  "    *.mjs|*.js)",
+  "      # The interpreter is recorded as an absolute path too. A bare `node`",
+  "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
+  "      # same environment this whole branch exists to survive.",
+  "      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)",
+  "      # An extension match alone lets a config edit after install point this",
+  "      # at any .js file, anywhere. `doctor` has warned about a recorded path",
+  "      # outside the install root since the extension check was added; this is",
+  "      # that same fact enforced here instead of only reported. `-L` closes the",
+  "      # gap a directory-only containment check would leave open: a symlink",
+  "      # planted inside the root but pointing outside it.",
+  '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
+  "        # Both sides are resolved before they are compared. Matching a stored",
+  "        # string against a resolved one is what broke this on Windows: the",
+  "        # installer records a win32 path and the shell git runs hooks with",
+  "        # answers in POSIX form from `pwd -P`, so the case matched nothing --",
+  "        # not an attacker's path, and not the installer's own bundle either.",
+  "        #",
+  "        # The separator is normalised first because neither `dirname` nor",
+  "        # ${var%/*} finds a parent in a backslash-separated path; both yield",
+  "        # `.`, which resolves to the repository rather than to the install.",
+  `        recorded_slashed=$(printf %s "$recorded" | tr '\\\\' /)`,
+  `        root_slashed=$(printf %s "$recorded_root" | tr '\\\\' /)`,
+  '        case "$recorded_slashed" in',
+  "          */*) recorded_parent=${recorded_slashed%/*} ;;",
+  "          *) recorded_parent=. ;;",
+  "        esac",
+  '        recorded_dir=$(cd "$recorded_parent" 2>/dev/null && pwd -P) || recorded_dir=',
+  '        root_dir=$(cd "$root_slashed" 2>/dev/null && pwd -P) || root_dir=',
+  '        if [ -n "$recorded_dir" ] && [ -n "$root_dir" ]; then',
+  '          case "$recorded_dir" in',
+  '            "$root_dir"|"$root_dir"/*)',
+  '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
+  "              ;;",
+  "          esac",
+  "        fi",
+  "      fi",
+  "      ;;",
+  "  esac",
+  "fi",
+  "",
+  "if command -v commitlore >/dev/null 2>&1; then",
+  '  exec commitlore validate --message-file "$1"',
+  "fi",
+  "",
+  "# A local devDependency is not on PATH inside a hook, so resolve it the way",
+  "# node would: walk up from the working directory.",
+  "#",
+  "# The loop stops when stripping a component stops making progress, not when",
+  "# the result is empty. ${dir%/*} returns its input unchanged once no `/`",
+  "# remains, so a drive-letter root settles on `C:` and the walk never ends --",
+  "# measured on a Windows runner, where $PWD inside a hook is `C:/Users/...`",
+  "# and a real commit therefore never returned.",
+  "dir=$PWD",
+  'while [ -n "$dir" ]; do',
+  '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
+  '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
+  "  fi",
+  "  parent=${dir%/*}",
+  '  if [ "$parent" = "$dir" ]; then',
+  "    break",
+  "  fi",
+  "  dir=$parent",
+  "done",
+  "",
+  ...unresolved,
+  ""
+].join("\n");
+var commitMsgStub = () => stubText(UNRESOLVED_GATE);
+var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
+
+// src/commands/doctor/checks/capture-commit-msg-hook.ts
+var checkHook = (ctx, runtime) => {
+  const { opts, git: git2, env } = ctx;
+  const title = "commit-msg hook";
+  const id = "commit-msg-hook";
+  const category = "capture";
+  const install = "commitlore hooks install";
+  const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  if (located.code !== 0) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      "not inside a git repository",
+      install,
+      false,
+      void 0,
+      { evidence: { hook_path: "unavailable", bin: "not_recorded", node: "not_recorded" } }
+    );
+  }
+  const path2 = resolve7(opts.cwd ?? process.cwd(), located.stdout.trim());
+  const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
+  const override = env["COMMITLORE_BIN"];
+  const hookEvidence = {
+    hook_path: path2,
+    bin: target.bin || "(unset)",
+    node: target.node || "(unset)",
+    ...override === void 0 || override === "" ? {} : { commitlore_bin_override: override }
+  };
+  const targetDetail = [
+    ...describeRecordedHookTarget(target),
+    ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
+  ].join("; ");
+  if (!existsSync7(path2)) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `no commit-msg hook at ${path2}; ${targetDetail}`,
+      install,
+      false,
+      void 0,
+      { evidence: hookEvidence }
+    );
+  }
+  const contents = readFileSync9(path2, "utf8");
+  if (!contents.includes(HOOK_MARKER)) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `a commit-msg hook exists at ${path2} but does not invoke commitlore; ${targetDetail}`,
+      install,
+      false,
+      void 0,
+      { evidence: hookEvidence }
+    );
+  }
+  if (contents !== commitMsgStub()) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI; ${targetDetail}`,
+      install,
+      false,
+      void 0,
+      { evidence: hookEvidence }
+    );
+  }
+  const problems = [
+    ...target.problems,
+    ...override === void 0 || override === "" ? [] : classifyBinTarget(override) !== null ? ["COMMITLORE_BIN override is active"] : [
+      "COMMITLORE_BIN override is active, but is not a .js or .mjs file \u2014 the hook ignores it and falls through to the remaining resolution steps"
+    ]
+  ];
+  if (runtime !== void 0 && runtime.status !== "ok") {
+    const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
+    if (runtime.status === "skipped") {
+      return blocked(
+        runtime,
+        check(
+          id,
+          category,
+          title,
+          "skipped",
+          inherited,
+          install,
+          false,
+          false,
+          {
+            evidence: { ...hookEvidence, runtime_status: runtime.status },
+            skipReason: runtime.skipReason ?? "nothing_applicable"
+          }
+        )
+      );
+    }
+    return blocked(
+      runtime,
+      check(
+        id,
+        category,
+        title,
+        runtime.status,
+        inherited,
+        install,
+        false,
+        void 0,
+        { evidence: { ...hookEvidence, runtime_status: runtime.status } }
+      )
+    );
+  }
+  return problems.length === 0 ? check(
+    id,
+    category,
+    title,
+    "ok",
+    `installed at ${path2}; ${targetDetail}`,
+    null,
+    false,
+    void 0,
+    { evidence: hookEvidence }
+  ) : check(
+    id,
+    category,
+    title,
+    "warn",
+    `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`,
+    install,
+    false,
+    void 0,
+    { evidence: hookEvidence }
+  );
+};
+
+// src/commands/doctor/checks/capture-hook-runtime.ts
+import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { tmpdir as tmpdirPath } from "node:os";
+import { join as join5, resolve as resolve8 } from "node:path";
+var checkHookRuntime = (ctx) => {
+  const { opts, git: git2, spawn, env } = ctx;
+  const title = "hook runtime";
+  const id = "hook-runtime";
+  const category = "capture";
+  const fix = "commitlore hooks install";
+  const cwd = opts.cwd ?? process.cwd();
+  const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
+  if (located.code !== 0) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      "not inside a git repository",
+      fix,
+      false,
+      void 0,
+      {
+        evidence: {
+          hook_path: "unavailable",
+          exit_code: String(located.code),
+          ...streamEvidence("stderr", located.stderr)
+        }
+      }
+    );
+  }
+  const hook = resolve8(cwd, located.stdout.trim());
+  if (!existsSync8(hook)) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      "no hook installed \u2014 nothing to run",
+      null,
+      false,
+      void 0,
+      { evidence: { hook_path: hook } }
+    );
+  }
+  const probe = join5(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+  try {
+    writeFileSync4(probe, PROBE_MESSAGE);
+    const run = spawn("/bin/sh", [hook, probe], {
+      shell: false,
+      encoding: "utf8",
+      cwd,
+      // No node, and no PATH entry that could supply one. `git` must stay
+      // reachable: the hook reads its own config through it.
+      env: { PATH: "/usr/bin:/bin", HOME: env["HOME"] ?? "" }
+    });
+    if (run.error !== void 0) {
+      return check(
+        id,
+        category,
+        title,
+        "fail",
+        `could not run the hook: ${run.error.message}`,
+        fix,
+        false,
+        void 0,
+        {
+          evidence: {
+            hook_path: hook,
+            exit_code: String(run.status ?? "unavailable"),
+            error: run.error.message,
+            ...streamEvidence("stderr", run.stderr)
+          }
+        }
+      );
+    }
+    if (run.status !== 0) {
+      const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+      const nodeMissing = run.status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
+      const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+      let detail;
+      if (nodeMissing) {
+        detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
+      } else if (nodeThrew) {
+        detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
+      } else {
+        detail = `the hook exited ${String(run.status)} under the restricted PATH \u2014 cause unclear: ${said || "no output"}`;
+      }
+      return check(
+        id,
+        category,
+        title,
+        "fail",
+        detail,
+        fix,
+        false,
+        void 0,
+        {
+          evidence: {
+            hook_path: hook,
+            exit_code: String(run.status),
+            ...streamEvidence("stderr", run.stderr)
+          }
+        }
+      );
+    }
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      "the hook runs and validates without node on PATH",
+      null,
+      false,
+      void 0,
+      { evidence: { hook_path: hook, exit_code: "0" } }
+    );
+  } catch (error2) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `could not probe the hook: ${error2 instanceof Error ? error2.message : String(error2)}`,
+      fix,
+      false,
+      void 0,
+      {
+        evidence: {
+          hook_path: hook,
+          exit_code: "unavailable",
+          error: error2 instanceof Error ? error2.message : String(error2),
+          ...streamEvidence("stderr", "")
+        }
+      }
+    );
+  } finally {
+    rmSync2(probe, { force: true });
+  }
+};
+
+// src/commands/pending.ts
+var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
+var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
+var summarise = (record2, head) => ({
+  nonce: record2.nonce,
+  phase: record2.phase,
+  records: record2.records.length,
+  validation_result: record2.validation_result,
+  created_at: record2.created_at,
+  expires_at: record2.expires_at,
+  base_head: record2.base_head,
+  stale: headHasMovedPast(record2.base_head, head),
+  gc_eligible: gcEligible(record2)
+});
+var runPendingList = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const head = resolveHead(cwd);
+  const transactions = [];
+  const unreadable = [];
+  for (const nonce of listPendingNonces(cwd)) {
+    let record2 = null;
+    try {
+      record2 = readPending(nonce, { cwd });
+    } catch {
+      unreadable.push(nonce);
+      continue;
+    }
+    if (record2 === null) {
+      unreadable.push(nonce);
+      continue;
+    }
+    transactions.push(summarise(record2, head));
+  }
+  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
+  return { transactions, unreadable };
+};
+var resolvePrefix = (cwd, prefix) => {
+  const wanted = prefix.trim().toLowerCase();
+  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  if (candidates.length === 0) {
+    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
+  }
+  if (candidates.length > 1) {
+    return {
+      nonce: null,
+      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
+    };
+  }
+  const [only = ""] = candidates;
+  return { nonce: only, error: null };
+};
+var runPendingShow = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { transaction: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return { transaction: null, error: `${only} could not be read: ${detail}` };
+  }
+  if (record2 === null) {
+    return { transaction: null, error: `${only} could not be read as a transaction` };
+  }
+  const head = resolveHead(cwd);
+  return {
+    transaction: {
+      ...record2,
+      stale: headHasMovedPast(record2.base_head, head),
+      gc_eligible: gcEligible(record2)
+    },
+    error: null
+  };
+};
+var runPendingRemove = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
+  if (only === null) return { removed: null, phase: null, error: error2 };
+  let record2 = null;
+  try {
+    record2 = readPending(only, { cwd });
+  } catch (error3) {
+    const detail = error3 instanceof Error ? error3.message : String(error3);
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
+    };
+  }
+  if (record2 === null) {
+    return {
+      removed: null,
+      phase: null,
+      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
+    };
+  }
+  if (PROTECTED_PHASES2.has(record2.phase)) {
+    return {
+      removed: null,
+      phase: record2.phase,
+      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
+    };
+  }
+  if (!deletePending(only, { cwd })) {
+    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
+  }
+  return { removed: only, phase: record2.phase, error: null };
+};
+var age = (from, now) => {
+  const started = Date.parse(from);
+  if (Number.isNaN(started)) return "?";
+  const minutes = Math.max(0, Math.round((now - started) / 6e4));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+};
+var renderList = (result, now) => {
+  if (result.transactions.length === 0 && result.unreadable.length === 0) {
+    return "no pending capture transactions\n";
+  }
+  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
+  for (const row of result.transactions) {
+    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
+    lines.push(
+      [
+        row.nonce.slice(0, 8).padEnd(9),
+        row.phase.padEnd(9),
+        String(row.records).padEnd(8),
+        (row.validation_result ?? "-").padEnd(11),
+        age(row.created_at, now).padEnd(5),
+        row.base_head.slice(0, 8).padEnd(9),
+        flags
+      ].join(" ")
+    );
+  }
+  for (const nonce of result.unreadable) {
+    lines.push(`${nonce.slice(0, 8)} unreadable`);
+  }
+  return `${lines.join("\n")}
+`;
+};
+var register3 = (program3) => {
+  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
+  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
+    const result = runPendingList({});
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      return;
+    }
+    process.stdout.write(renderList(result, Date.now()));
+  });
+  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingShow({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.transaction === null) process.exitCode = 1;
+      return;
+    }
+    if (result.transaction === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not found"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
+`);
+  });
+  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
+    const result = runPendingRemove({ nonce });
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+      if (result.removed === null) process.exitCode = 1;
+      return;
+    }
+    if (result.removed === null) {
+      process.stderr.write(`commitlore pending: ${result.error ?? "not removed"}
+`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`removed ${result.removed} (${result.phase ?? "unknown"})
+`);
+  });
+};
+
+// src/commands/doctor/checks/capture-pending-backlog.ts
+var checkPendingBacklog = (ctx) => {
+  const title = "pending captures";
+  const id = "pending-backlog";
+  const category = "capture";
+  const cwd = ctx.opts.cwd ?? process.cwd();
+  let listing;
+  try {
+    listing = runPendingList({ cwd });
+  } catch {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      "no pending directory \u2014 nothing has been captured here yet",
+      null,
+      false,
+      void 0,
+      { evidence: { stranded: "0", staged_expired: "0", oldest: "none" } }
+    );
+  }
+  if (listing.unreadable.length > 0) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
+      "commitlore pending ls",
+      false,
+      void 0,
+      {
+        evidence: {
+          stranded: "0",
+          staged_expired: "0",
+          oldest: "none",
+          unreadable: String(listing.unreadable.length)
+        }
+      }
+    );
+  }
+  const stranded = listing.transactions.filter((transaction) => transaction.stale);
+  if (stranded.length === 0) {
+    const held = listing.transactions.length;
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      held === 0 ? "no captures are waiting" : `${String(held)} capture(s) waiting, all still able to apply`,
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          stranded: "0",
+          staged_expired: "0",
+          oldest: "none",
+          waiting: String(held)
+        }
+      }
+    );
+  }
+  const lost = stranded.filter((transaction) => transaction.phase === "staged");
+  const oldest = stranded.map((transaction) => transaction.created_at).sort()[0];
+  const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
+  return check(
+    id,
+    category,
+    title,
+    "warn",
+    `${detail}; oldest from ${oldest ?? "an unknown time"}. A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)`,
+    "commitlore pending ls",
+    false,
+    void 0,
+    {
+      evidence: {
+        stranded: String(stranded.length),
+        staged_expired: String(lost.length),
+        oldest: oldest ?? "unknown"
+      }
+    }
+  );
+};
+
+// src/commands/doctor/checks/delivery-inject-version.ts
+var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
+var checkInjectVersion = (ctx, dependencies) => {
+  const { opts, spawn, env } = ctx;
+  const title = "PreToolUse hook version";
+  const id = "inject-version";
+  const category = "delivery";
+  const cwd = opts.cwd ?? process.cwd();
+  const mine = packageVersion();
+  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
+  if (settings.state !== "installed") {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      `no installed hook to compare against ${mine}`,
+      null,
+      false,
+      false,
+      {
+        evidence: { executable: "not_run", theirs: "not_run", mine },
+        skipReason: "hook_not_installed"
+      }
+    );
+  }
+  const command = settings.commands[0];
+  if (command !== CLAUDE_HOOK_COMMAND) {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      "not checked: the configured command is not recognised",
+      null,
+      false,
+      false,
+      {
+        evidence: {
+          executable: "not_run",
+          theirs: "not_run",
+          mine,
+          configured_command: command ?? "none"
+        },
+        skipReason: "command_unrecognized"
+      }
+    );
+  }
+  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
+  const executable = configured.slice(0, configured.indexOf(" "));
+  const run = spawn(executable, ["--version"], {
+    shell: false,
+    encoding: "utf8",
+    cwd,
+    env: {
+      PATH: env["PATH"] ?? "/usr/bin:/bin",
+      HOME: env["HOME"] ?? ""
+    }
+  });
+  const reported = typeof run.stdout === "string" ? run.stdout : "";
+  const versionEvidence = {
+    executable,
+    theirs: boundedExcerpt(reported).firstLine || "unavailable",
+    mine,
+    exit_code: String(run.status ?? "unavailable"),
+    ...streamEvidence("stdout", reported)
+  };
+  if (run.status !== 0 || typeof run.stdout !== "string") {
+    const skipped = check(
+      id,
+      category,
+      title,
+      "skipped",
+      `${executable} did not report a version`,
+      null,
+      false,
+      false,
+      { evidence: versionEvidence, skipReason: "version_unreadable" }
+    );
+    const runtime = dependencies.get("inject-runtime");
+    return runtime === void 0 || runtime.status === "ok" ? skipped : blocked(runtime, skipped);
+  }
+  const theirs = run.stdout.trim();
+  if (!SEMVER_ISH.test(theirs)) {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      `${executable} answered --version with something that is not a version`,
+      null,
+      false,
+      false,
+      { evidence: versionEvidence, skipReason: "version_unreadable" }
+    );
+  }
+  if (theirs === mine) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      `the hook runs ${theirs}, the same build as this CLI`,
+      null,
+      false,
+      void 0,
+      { evidence: versionEvidence }
+    );
+  }
+  return check(
+    id,
+    category,
+    title,
+    "warn",
+    `the agent's hook runs ${theirs} but this CLI is ${mine} \u2014 every edit is graded by ${theirs}'s rules, not this one's`,
+    "update the installation the hook resolves to (for the plugin: /plugin marketplace update commitlore), then rerun: commitlore doctor",
+    false,
+    void 0,
+    { evidence: versionEvidence }
+  );
+};
+
+// src/mcp/lifecycle.ts
+import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync10, writeFileSync as writeFileSync5, statSync as statSync3 } from "node:fs";
+import { dirname as dirname5, join as join6 } from "node:path";
+var MAX_BYTES = 64 * 1024;
+var LIFECYCLE_FILE = "mcp-lifecycle.log";
+var lifecyclePath = (cwd = process.cwd()) => {
+  const result = execGit(["rev-parse", "--git-path", join6("commitlore", LIFECYCLE_FILE)], { cwd });
+  if (result.code !== 0) return null;
+  const path2 = result.stdout.trim();
+  return path2 === "" ? null : join6(cwd, path2);
+};
+var trim = (path2) => {
+  try {
+    if (statSync3(path2).size <= MAX_BYTES) return;
+    const lines = readFileSync10(path2, "utf8").split("\n");
+    writeFileSync5(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
+  } catch {
+  }
+};
+var write = (cwd, line2) => {
+  try {
+    const path2 = lifecyclePath(cwd);
+    if (path2 === null) return;
+    mkdirSync4(dirname5(path2), { recursive: true });
+    appendFileSync(path2, `${line2}
+`);
+    trim(path2);
+  } catch {
+  }
+};
+var stamp = (at) => `${at.toISOString().slice(0, 19)}Z`;
+var recordServerStart = (cwd = process.cwd(), at = /* @__PURE__ */ new Date()) => {
+  const entry = process.argv[1] ?? "unknown";
+  write(cwd, `started ${stamp(at)} pid ${String(process.pid)} ${packageVersion()} ${entry}`);
+  let done = false;
+  const exit = (how) => {
+    if (done) return;
+    done = true;
+    write(cwd, `exited  ${stamp(/* @__PURE__ */ new Date())} pid ${String(process.pid)} ${how}`);
+  };
+  process.once("exit", () => {
+    exit("clean");
+  });
+  process.stdin.once("end", () => {
+    exit("stdin closed");
+  });
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.once(signal, () => {
+      exit(signal);
+      process.exit(0);
+    });
+  }
+};
+var readLifecycle = (cwd = process.cwd()) => {
+  try {
+    const path2 = lifecyclePath(cwd);
+    if (path2 === null) return [];
+    return readFileSync10(path2, "utf8").split("\n").flatMap((line2) => {
+      const match = /^(started|exited)\s+(\S+)\s+pid\s+(\d+)\s*(.*)$/.exec(line2.trim());
+      if (match === null) return [];
+      return [
+        {
+          kind: match[1],
+          at: match[2] ?? "",
+          pid: Number(match[3]),
+          detail: (match[4] ?? "").trim()
+        }
+      ];
+    });
+  } catch {
+    return [];
+  }
+};
+var unfinishedRuns = (cwd = process.cwd()) => {
+  const entries = readLifecycle(cwd);
+  const exited = new Set(entries.filter((e) => e.kind === "exited").map((e) => e.pid));
+  return entries.filter((entry) => {
+    if (entry.kind !== "started" || exited.has(entry.pid)) return false;
+    try {
+      process.kill(entry.pid, 0);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+};
+
+// src/commands/doctor/checks/delivery-mcp-lifecycle.ts
+var checkMcpLifecycle = (ctx) => {
+  const title = "MCP server sessions";
+  const id = "mcp-lifecycle";
+  const category = "delivery";
+  const cwd = ctx.opts.cwd ?? process.cwd();
+  const unfinished = unfinishedRuns(cwd);
+  if (unfinished.length === 0) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      "every recorded MCP session ended cleanly, or is still running",
+      null,
+      false,
+      void 0,
+      { evidence: { unfinished_count: "0", last_pid: "none", last_at: "none" } }
+    );
+  }
+  const last = unfinished[unfinished.length - 1];
+  return check(
+    id,
+    category,
+    title,
+    "warn",
+    `${unfinished.length} MCP server session(s) started here and never recorded an exit \u2014 most recently pid ${String(last?.pid ?? 0)} at ${last?.at ?? "unknown"}. A killed server loses its tool registration in the client, which reports the same as a tool that never existed (#424)`,
+    "restart the client session; if this repeats, capture it with a client started under --debug",
+    false,
+    void 0,
+    {
+      evidence: {
+        unfinished_count: String(unfinished.length),
+        last_pid: String(last?.pid ?? 0),
+        last_at: last?.at ?? "unknown"
+      }
+    }
+  );
+};
+
+// src/commands/doctor/checks/history-history-depth.ts
+var checkHistoryDepth = (ctx) => hasShallowHistory(ctx.opts.cwd ?? process.cwd()) ? check(
+  "history-depth",
+  "history",
+  "history depth",
+  "warn",
+  "this clone has shallow history, so queries may be missing records that exist upstream",
+  "git fetch --unshallow",
+  false,
+  void 0,
+  { evidence: { shallow: "true" } }
+) : check(
+  "history-depth",
+  "history",
+  "history depth",
+  "ok",
+  "full history is available",
+  null,
+  false,
+  void 0,
+  { evidence: { shallow: "false" } }
+);
 
 // src/core/squash.ts
 var RECORD_ID_KEY4 = "Record-Id";
@@ -16328,7 +17849,7 @@ var CANDIDATE_LINE_RE = /^[A-Za-z][A-Za-z0-9-]*:/m;
 var DATE_SHAPE_RE2 = /^\d{4}-\d{2}-\d{2}$/;
 var SEMVER_CORE_RE = /^(\d+)\.(\d+)\.(\d+)/;
 var MAX_PARAGRAPH_DROPS = 8;
-var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var firstLine = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var trailerValue3 = (trailers, key) => trailers.find((trailer) => trailer.key === key)?.value;
 var recordIdOf2 = (record2) => record2.recordId ?? trailerValue3(record2.trailers, RECORD_ID_KEY4);
@@ -16371,7 +17892,7 @@ var collectRange = (range, opts = {}) => {
   }
   const result = execGit(
     ["log", "--reverse", "-z", `--format=${LOG_FORMAT2}`, "--end-of-options", range, "--"],
-    gitOptions2(opts)
+    gitOptions3(opts)
   );
   if (result.code !== 0) {
     throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine(result.stderr)}`);
@@ -16572,1104 +18093,274 @@ var attachToNotes = (targetSha, plan, opts = {}) => {
   });
 };
 
-// src/hooks/claude-settings.ts
-import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync8, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname4, join as join4 } from "node:path";
-var CLAUDE_HOOK_EVENT = "PreToolUse";
-var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
-var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
-var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
-var claudeSettingsPath = (cwd) => join4(cwd, ".claude", "settings.json");
-var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var failure = (settingsPath, message) => ({
-  code: 2,
-  stdout: "",
-  stderr: `commitlore: ${message}
-`,
-  changed: false,
-  status: { settingsPath, state: "unreadable", entries: 0, commands: [], problem: message }
-});
-var success = (status, lines, changed) => ({
-  code: 0,
-  stdout: `${lines.join("\n")}
-`,
-  stderr: "",
-  status,
-  changed
-});
-var load = (settingsPath) => {
-  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
-  let raw;
-  try {
-    raw = readFileSync8(settingsPath, "utf8");
-  } catch (error2) {
-    throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
-  }
-  if (raw.trim() === "") return { settings: {}, existed: true };
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error2) {
-    throw new Error(
-      `${settingsPath} is not valid JSON (${messageOf2(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
-    );
-  }
-  if (!isPlainObject(parsed)) {
-    throw new Error(`${settingsPath} does not contain a JSON object \u2014 refusing to overwrite it`);
-  }
-  const hooks = parsed["hooks"];
-  if (hooks !== void 0 && !isPlainObject(hooks)) {
-    throw new Error(`${settingsPath} has a "hooks" value that is not an object \u2014 refusing to edit it`);
-  }
-  if (isPlainObject(hooks)) {
-    const event = hooks[CLAUDE_HOOK_EVENT];
-    if (event !== void 0 && !Array.isArray(event)) {
-      throw new Error(
-        `${settingsPath} has a "hooks.${CLAUDE_HOOK_EVENT}" value that is not an array \u2014 refusing to edit it`
-      );
-    }
-  }
-  return { settings: parsed, existed: true };
-};
-var eventGroups = (settings) => {
-  const hooks = settings["hooks"];
-  if (!isPlainObject(hooks)) return [];
-  const event = hooks[CLAUDE_HOOK_EVENT];
-  return Array.isArray(event) ? event.filter(isPlainObject) : [];
-};
-var isOurs = (entry) => isPlainObject(entry) && typeof entry["command"] === "string" && entry["command"].includes(CLAUDE_HOOK_MARKER);
-var ourCommands = (settings) => eventGroups(settings).flatMap(
-  (group) => (Array.isArray(group.hooks) ? group.hooks : []).filter(isOurs).map((entry) => String(entry["command"]))
-);
-var stateOf = (commands, expected) => {
-  if (commands.length === 0) return "absent";
-  if (commands.length > 1) return "conflicting";
-  return commands[0] === expected ? "installed" : "outdated";
-};
-var readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
-  let loaded;
-  try {
-    loaded = load(settingsPath);
-  } catch (error2) {
-    return {
-      settingsPath,
-      state: "unreadable",
-      entries: 0,
-      commands: [],
-      problem: messageOf2(error2)
-    };
-  }
-  const commands = ourCommands(loaded.settings);
-  return {
-    settingsPath,
-    state: stateOf(commands, command),
-    entries: commands.length,
-    commands
-  };
-};
-var withoutOurs = (groups) => {
-  let removed = 0;
-  const kept = [];
-  for (const group of groups) {
-    if (!Array.isArray(group.hooks)) {
-      kept.push(group);
-      continue;
-    }
-    const entries = group.hooks.filter((entry) => !isOurs(entry));
-    const dropped = group.hooks.length - entries.length;
-    removed += dropped;
-    if (dropped > 0 && entries.length === 0) continue;
-    kept.push(dropped === 0 ? group : { ...group, hooks: entries });
-  }
-  return { groups: kept, removed };
-};
-var withGroups = (settings, groups) => {
-  const hooks = isPlainObject(settings["hooks"]) ? { ...settings["hooks"] } : {};
-  if (groups.length === 0) delete hooks[CLAUDE_HOOK_EVENT];
-  else hooks[CLAUDE_HOOK_EVENT] = groups;
-  const next = { ...settings };
-  if (Object.keys(hooks).length === 0) delete next["hooks"];
-  else next["hooks"] = hooks;
-  return next;
-};
-var writeAtomic = (settingsPath, settings) => {
-  mkdirSync3(dirname4(settingsPath), { recursive: true });
-  let mode;
-  try {
-    mode = statSync2(settingsPath).mode & 511;
-  } catch {
-    mode = void 0;
-  }
-  const temporary = `${settingsPath}.tmp-${process.pid}-${randomBytes3(4).toString("hex")}`;
-  const body = `${JSON.stringify(settings, null, 2)}
-`;
-  try {
-    writeFileSync3(temporary, body, mode === void 0 ? {} : { mode });
-    renameSync2(temporary, settingsPath);
-  } catch (error2) {
-    try {
-      unlinkSync3(temporary);
-    } catch {
-    }
-    throw new Error(`cannot write ${settingsPath}: ${messageOf2(error2)}`);
-  }
-};
-var validateCommand = (command) => {
-  if (!command.includes(CLAUDE_HOOK_MARKER)) {
-    throw new Error(
-      `the hook command must contain the marker ${JSON.stringify(CLAUDE_HOOK_MARKER)}, or uninstall would not be able to find it again`
-    );
-  }
-};
-var installClaudeHook = (input) => {
-  const { settingsPath } = input;
-  const command = input.command ?? CLAUDE_HOOK_COMMAND;
-  const matcher = input.matcher ?? CLAUDE_HOOK_MATCHER;
-  let loaded;
-  try {
-    validateCommand(command);
-    loaded = load(settingsPath);
-  } catch (error2) {
-    return failure(settingsPath, messageOf2(error2));
-  }
-  const before = ourCommands(loaded.settings);
-  const { groups } = withoutOurs(eventGroups(loaded.settings));
-  const next = withGroups(loaded.settings, [
-    ...groups,
-    { matcher, hooks: [{ type: "command", command }] }
-  ]);
-  const state = stateOf(before, command);
-  const unchanged = state === "installed" && JSON.stringify(next) === JSON.stringify(loaded.settings);
-  if (!unchanged) {
-    try {
-      writeAtomic(settingsPath, next);
-    } catch (error2) {
-      return failure(settingsPath, messageOf2(error2));
-    }
-  }
-  const headline = {
-    absent: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-    installed: `${CLAUDE_HOOK_EVENT} injection hook already installed: ${settingsPath} (unchanged)`,
-    outdated: `updated the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`,
-    conflicting: `collapsed ${before.length} duplicate injection hooks into one: ${settingsPath}`,
-    unreadable: `installed the ${CLAUDE_HOOK_EVENT} injection hook: ${settingsPath}`
-  }[state];
-  return success(readClaudeHookStatus(settingsPath, command), [
-    headline,
-    `  matcher: ${matcher}`,
-    `  command: ${command}`
-  ], !unchanged);
-};
-var uninstallClaudeHook = (input) => {
-  const { settingsPath } = input;
-  const command = input.command ?? CLAUDE_HOOK_COMMAND;
-  let loaded;
-  try {
-    loaded = load(settingsPath);
-  } catch (error2) {
-    return failure(settingsPath, messageOf2(error2));
-  }
-  if (!loaded.existed) {
-    return success(readClaudeHookStatus(settingsPath, command), [
-      `no settings file to clean: ${settingsPath}`
-    ], false);
-  }
-  const { groups, removed } = withoutOurs(eventGroups(loaded.settings));
-  if (removed === 0) {
-    return success(readClaudeHookStatus(settingsPath, command), [
-      `no commitlore injection hook in ${settingsPath}`
-    ], false);
-  }
-  try {
-    writeAtomic(settingsPath, withGroups(loaded.settings, groups));
-  } catch (error2) {
-    return failure(settingsPath, messageOf2(error2));
-  }
-  return success(readClaudeHookStatus(settingsPath, command), [
-    `removed ${removed} injection hook entr${removed === 1 ? "y" : "ies"}: ${settingsPath}`
-  ], true);
-};
-var claudeHookStatus = (input) => {
-  const status = readClaudeHookStatus(input.settingsPath, input.command ?? CLAUDE_HOOK_COMMAND);
-  if (status.state === "unreadable") {
-    return failure(input.settingsPath, status.problem ?? `cannot read ${input.settingsPath}`);
-  }
-  const described = {
-    absent: "not installed",
-    installed: "installed (commitlore)",
-    outdated: "installed (commitlore), command differs from this build",
-    conflicting: `installed ${status.entries} times \u2014 run install to collapse them`,
-    unreadable: "unreadable"
-  }[status.state];
-  return success(
-    status,
-    [
-      `settings: ${status.settingsPath}`,
-      `${CLAUDE_HOOK_EVENT} injection hook: ${described}`,
-      ...status.commands.map((command) => `  command: ${command}`)
-    ],
-    false
+// src/commands/doctor/checks/history-squash-conservation.ts
+var MAX_SQUASH_CANDIDATE_BRANCHES = 200;
+var squashCandidates = (ctx, head) => {
+  const { opts, git: git2 } = ctx;
+  const listed = git2(
+    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    gitOptions2(opts)
   );
-};
-
-// src/hooks/commit-msg.ts
-var HOOK_MARKER = "# commitlore:commit-msg:v1";
-var CHAINED_SUFFIX = ".commitlore-chained";
-var HOOK_NAME = "commit-msg";
-var CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
-var HOOK_MODE = 493;
-var UNRESOLVED_GATE = [
-  "# Passing silently here would report a clean record for a message nothing",
-  "# ever read.",
-  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
-  'echo "  set COMMITLORE_BIN, or re-run: <path-to>/commitlore hooks install" >&2',
-  "exit 1"
-];
-var UNRESOLVED_CAPTURE = [
-  "# Not the validation gate: nothing was checked and rejected here, the",
-  "# checker is absent. Refusing would block a commit over a missing tool.",
-  'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
-  'echo "  this hook did nothing; the commit was not blocked. Re-run: <path-to>/commitlore init" >&2',
-  "exit 0"
-];
-var stubText = (unresolved) => [
-  "#!/bin/sh",
-  HOOK_MARKER,
-  "# Installed by `commitlore hooks install`.",
-  "# Edits are lost on reinstall; `commitlore hooks uninstall` removes this file",
-  `# and restores any ${CHAINED_HOOK_NAME} hook saved beside it.`,
-  "set -e",
-  "",
-  "# Paths are taken apart with parameter expansion rather than dirname: a",
-  "# hook that needs a working PATH to find its own directory would die with",
-  "# 127 instead of reporting anything useful.",
-  'case "$0" in',
-  "  */*) hook_dir=${0%/*} ;;",
-  "  *) hook_dir=. ;;",
-  "esac",
-  `chained="$hook_dir/${CHAINED_HOOK_NAME}"`,
-  "",
-  "# git only runs an executable hook, so an unset execute bit means the",
-  "# preserved hook was already inert before commitlore arrived.",
-  'if [ -x "$chained" ]; then',
-  '  "$chained" "$@" || exit $?',
-  "fi",
-  "",
-  'if [ -n "${COMMITLORE_BIN:-}" ]; then',
-  "  # Same allowlist as the recorded commitlore.bin case below: any executable",
-  "  # here used to run unchecked, which is exactly the gap an env var is for.",
-  "  #",
-  "  # `-x` because this branch execs the file itself and has no recorded",
-  "  # interpreter to fall back on. A `.js` carrying a shebang but no execute",
-  "  # bit -- `dist/cli.js` is exactly that -- fails the exec, and a failed exec",
-  "  # terminates this shell non-zero, which blocks the commit or push the hook",
-  "  # sits next to. Falling through is what the comment above already promised",
-  "  # for a value that does not resolve (#428).",
-  '  case "$COMMITLORE_BIN" in',
-  "    *.mjs|*.js)",
-  '      if [ -x "$COMMITLORE_BIN" ]; then',
-  '        exec "$COMMITLORE_BIN" validate --message-file "$1"',
-  "      fi",
-  "      ;;",
-  "  esac",
-  "fi",
-  "",
-  "# Where `hooks install` was run from. A clone is a complete installation",
-  "# (ADR-0011), so the common case is a checkout that is on no PATH and in no",
-  "# node_modules \u2014 and the installer is the only thing that ever knew where it",
-  "# was. Recorded in local git config rather than in this file so the stub",
-  "# stays byte-identical wherever it came from, which is what `hooks status`",
-  "# compares against.",
-  "#",
-  "# Ahead of the PATH and node_modules searches below, because this is the only",
-  "# branch that also knows its *interpreter*. Those searches guess at an",
-  "# installation, and a guessed sibling used to win: a stale",
-  "# `node_modules/.bin/commitlore` in a parent directory shadowed the recorded",
-  "# path, and that shim's own first line is `exec node`, so it died with 127 in",
-  "# exactly the PATH-less environment this file exists to survive. A stale guess",
-  "# also validates commits with a different version than the one installed here.",
-  "recorded=$(git config --local --get commitlore.bin 2>/dev/null || true)",
-  'if [ -n "$recorded" ]; then',
-  "  # What `hooks install` recorded as this install's trusted location: the",
-  "  # directory the recorded script has to sit under.",
-  "  recorded_root=$(git config --local --get commitlore.root 2>/dev/null || true)",
-  '  case "$recorded" in',
-  "    *.mjs|*.js)",
-  "      # The interpreter is recorded as an absolute path too. A bare `node`",
-  "      # here dies with 127 whenever the hook's PATH lacks it, which is the",
-  "      # same environment this whole branch exists to survive.",
-  "      recorded_node=$(git config --local --get commitlore.node 2>/dev/null || true)",
-  "      # An extension match alone lets a config edit after install point this",
-  "      # at any .js file, anywhere. `doctor` has warned about a recorded path",
-  "      # outside the install root since the extension check was added; this is",
-  "      # that same fact enforced here instead of only reported. `-L` closes the",
-  "      # gap a directory-only containment check would leave open: a symlink",
-  "      # planted inside the root but pointing outside it.",
-  '      if [ -x "$recorded_node" ] && [ -n "$recorded_root" ] && [ ! -L "$recorded" ]; then',
-  "        # Both sides are resolved before they are compared. Matching a stored",
-  "        # string against a resolved one is what broke this on Windows: the",
-  "        # installer records a win32 path and the shell git runs hooks with",
-  "        # answers in POSIX form from `pwd -P`, so the case matched nothing --",
-  "        # not an attacker's path, and not the installer's own bundle either.",
-  "        #",
-  "        # The separator is normalised first because neither `dirname` nor",
-  "        # ${var%/*} finds a parent in a backslash-separated path; both yield",
-  "        # `.`, which resolves to the repository rather than to the install.",
-  `        recorded_slashed=$(printf %s "$recorded" | tr '\\\\' /)`,
-  `        root_slashed=$(printf %s "$recorded_root" | tr '\\\\' /)`,
-  '        case "$recorded_slashed" in',
-  "          */*) recorded_parent=${recorded_slashed%/*} ;;",
-  "          *) recorded_parent=. ;;",
-  "        esac",
-  '        recorded_dir=$(cd "$recorded_parent" 2>/dev/null && pwd -P) || recorded_dir=',
-  '        root_dir=$(cd "$root_slashed" 2>/dev/null && pwd -P) || root_dir=',
-  '        if [ -n "$recorded_dir" ] && [ -n "$root_dir" ]; then',
-  '          case "$recorded_dir" in',
-  '            "$root_dir"|"$root_dir"/*)',
-  '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
-  "              ;;",
-  "          esac",
-  "        fi",
-  "      fi",
-  "      ;;",
-  "  esac",
-  "fi",
-  "",
-  "if command -v commitlore >/dev/null 2>&1; then",
-  '  exec commitlore validate --message-file "$1"',
-  "fi",
-  "",
-  "# A local devDependency is not on PATH inside a hook, so resolve it the way",
-  "# node would: walk up from the working directory.",
-  "#",
-  "# The loop stops when stripping a component stops making progress, not when",
-  "# the result is empty. ${dir%/*} returns its input unchanged once no `/`",
-  "# remains, so a drive-letter root settles on `C:` and the walk never ends --",
-  "# measured on a Windows runner, where $PWD inside a hook is `C:/Users/...`",
-  "# and a real commit therefore never returned.",
-  "dir=$PWD",
-  'while [ -n "$dir" ]; do',
-  '  if [ -x "$dir/node_modules/.bin/commitlore" ]; then',
-  '    exec "$dir/node_modules/.bin/commitlore" validate --message-file "$1"',
-  "  fi",
-  "  parent=${dir%/*}",
-  '  if [ "$parent" = "$dir" ]; then',
-  "    break",
-  "  fi",
-  "  dir=$parent",
-  "done",
-  "",
-  ...unresolved,
-  ""
-].join("\n");
-var commitMsgStub = () => stubText(UNRESOLVED_GATE);
-var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
-
-// src/mcp/lifecycle.ts
-import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync9, writeFileSync as writeFileSync4, statSync as statSync3 } from "node:fs";
-import { dirname as dirname5, join as join5 } from "node:path";
-var MAX_BYTES = 64 * 1024;
-var LIFECYCLE_FILE = "mcp-lifecycle.log";
-var lifecyclePath = (cwd = process.cwd()) => {
-  const result = execGit(["rev-parse", "--git-path", join5("commitlore", LIFECYCLE_FILE)], { cwd });
-  if (result.code !== 0) return null;
-  const path2 = result.stdout.trim();
-  return path2 === "" ? null : join5(cwd, path2);
-};
-var trim = (path2) => {
-  try {
-    if (statSync3(path2).size <= MAX_BYTES) return;
-    const lines = readFileSync9(path2, "utf8").split("\n");
-    writeFileSync4(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
-  } catch {
+  if (listed.code !== 0) return { candidates: [], branchesSeen: 0, branchesChecked: 0 };
+  const allBranches = listed.stdout.split("\n").filter((line2) => line2 !== "");
+  const branches = allBranches.slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
+  const candidates = [];
+  for (const branch of branches) {
+    const resolved = git2(["rev-parse", "--verify", "--quiet", branch], gitOptions2(opts));
+    const sha = resolved.code === 0 ? resolved.stdout.trim() : "";
+    if (sha === "" || sha === head) continue;
+    if (git2(["merge-base", "--is-ancestor", sha, head], gitOptions2(opts)).code === 0) {
+      continue;
+    }
+    const merged = git2(["merge-base", sha, head], gitOptions2(opts));
+    if (merged.code !== 0) continue;
+    const base = merged.stdout.trim();
+    if (base === "" || base === sha) continue;
+    candidates.push({ branch, sha, base });
   }
-};
-var write = (cwd, line2) => {
-  try {
-    const path2 = lifecyclePath(cwd);
-    if (path2 === null) return;
-    mkdirSync4(dirname5(path2), { recursive: true });
-    appendFileSync(path2, `${line2}
-`);
-    trim(path2);
-  } catch {
-  }
-};
-var stamp = (at) => `${at.toISOString().slice(0, 19)}Z`;
-var recordServerStart = (cwd = process.cwd(), at = /* @__PURE__ */ new Date()) => {
-  const entry = process.argv[1] ?? "unknown";
-  write(cwd, `started ${stamp(at)} pid ${String(process.pid)} ${packageVersion()} ${entry}`);
-  let done = false;
-  const exit = (how) => {
-    if (done) return;
-    done = true;
-    write(cwd, `exited  ${stamp(/* @__PURE__ */ new Date())} pid ${String(process.pid)} ${how}`);
+  return {
+    candidates,
+    branchesSeen: allBranches.length,
+    branchesChecked: branches.length
   };
-  process.once("exit", () => {
-    exit("clean");
-  });
-  process.stdin.once("end", () => {
-    exit("stdin closed");
-  });
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.once(signal, () => {
-      exit(signal);
-      process.exit(0);
-    });
-  }
 };
-var readLifecycle = (cwd = process.cwd()) => {
-  try {
-    const path2 = lifecyclePath(cwd);
-    if (path2 === null) return [];
-    return readFileSync9(path2, "utf8").split("\n").flatMap((line2) => {
-      const match = /^(started|exited)\s+(\S+)\s+pid\s+(\d+)\s*(.*)$/.exec(line2.trim());
-      if (match === null) return [];
-      return [
-        {
-          kind: match[1],
-          at: match[2] ?? "",
-          pid: Number(match[3]),
-          detail: (match[4] ?? "").trim()
-        }
-      ];
-    });
-  } catch {
-    return [];
-  }
-};
-var unfinishedRuns = (cwd = process.cwd()) => {
-  const entries = readLifecycle(cwd);
-  const exited = new Set(entries.filter((e) => e.kind === "exited").map((e) => e.pid));
-  return entries.filter((entry) => {
-    if (entry.kind !== "started" || exited.has(entry.pid)) return false;
-    try {
-      process.kill(entry.pid, 0);
-      return false;
-    } catch {
-      return true;
-    }
-  });
-};
-
-// src/commands/pending.ts
-var PROTECTED_PHASES2 = /* @__PURE__ */ new Set(["staged", "applied"]);
-var gcEligible = (record2) => !PROTECTED_PHASES2.has(record2.phase);
-var summarise = (record2, head) => ({
-  nonce: record2.nonce,
-  phase: record2.phase,
-  records: record2.records.length,
-  validation_result: record2.validation_result,
-  created_at: record2.created_at,
-  expires_at: record2.expires_at,
-  base_head: record2.base_head,
-  stale: headHasMovedPast(record2.base_head, head),
-  gc_eligible: gcEligible(record2)
-});
-var runPendingList = (opts) => {
+var scanLimitDetail = (scan2) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? `; only the first ${MAX_SQUASH_CANDIDATE_BRANCHES} of ${scan2.branchesSeen} local branches were checked` : "";
+var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDATE_BRANCHES ? {
+  ...evidence,
+  branches_seen: String(scan2.branchesSeen),
+  branches_checked: String(scan2.branchesChecked)
+} : evidence;
+var checkSquashConservation = (ctx) => {
+  const { opts, git: git2 } = ctx;
+  const title = "squash conservation";
+  const id = "squash-conservation";
+  const category = "history";
   const cwd = opts.cwd ?? process.cwd();
-  const head = resolveHead(cwd);
-  const transactions = [];
-  const unreadable = [];
-  for (const nonce of listPendingNonces(cwd)) {
-    let record2 = null;
-    try {
-      record2 = readPending(nonce, { cwd });
-    } catch {
-      unreadable.push(nonce);
-      continue;
-    }
-    if (record2 === null) {
-      unreadable.push(nonce);
-      continue;
-    }
-    transactions.push(summarise(record2, head));
+  const head = git2(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions2(opts));
+  if (head.code !== 0) {
+    return check(
+      id,
+      category,
+      title,
+      "skipped",
+      "no HEAD yet \u2014 nothing to compare against",
+      null,
+      false,
+      false,
+      {
+        evidence: { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" },
+        skipReason: "unborn_head"
+      }
+    );
   }
-  transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  return { transactions, unreadable };
-};
-var resolvePrefix = (cwd, prefix) => {
-  const wanted = prefix.trim().toLowerCase();
-  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  const scan2 = squashCandidates(ctx, head.stdout.trim());
+  const { candidates } = scan2;
   if (candidates.length === 0) {
-    return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
-  }
-  if (candidates.length > 1) {
-    return {
-      nonce: null,
-      error: `ambiguous: ${JSON.stringify(wanted)} matched ${candidates.length} transactions (${candidates.map((nonce) => nonce.slice(0, 8)).join(", ")}); give more of the nonce`
-    };
-  }
-  const [only = ""] = candidates;
-  return { nonce: only, error: null };
-};
-var runPendingShow = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { transaction: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return { transaction: null, error: `${only} could not be read: ${detail}` };
-  }
-  if (record2 === null) {
-    return { transaction: null, error: `${only} could not be read as a transaction` };
-  }
-  const head = resolveHead(cwd);
-  return {
-    transaction: {
-      ...record2,
-      stale: headHasMovedPast(record2.base_head, head),
-      gc_eligible: gcEligible(record2)
-    },
-    error: null
-  };
-};
-var runPendingRemove = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  const { nonce: only, error: error2 } = resolvePrefix(cwd, opts.nonce);
-  if (only === null) return { removed: null, phase: null, error: error2 };
-  let record2 = null;
-  try {
-    record2 = readPending(only, { cwd });
-  } catch (error3) {
-    const detail = error3 instanceof Error ? error3.message : String(error3);
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read: ${detail}; its phase is unknown, so it is left in place`
-    };
-  }
-  if (record2 === null) {
-    return {
-      removed: null,
-      phase: null,
-      error: `${only} could not be read as a transaction; its phase is unknown, so it is left in place`
-    };
-  }
-  if (PROTECTED_PHASES2.has(record2.phase)) {
-    return {
-      removed: null,
-      phase: record2.phase,
-      error: `${only} is ${record2.phase}: the post-commit hook may still finalise it into a record, and removing it now would lose that. It is collected once the commit it belongs to lands.`
-    };
-  }
-  if (!deletePending(only, { cwd })) {
-    return { removed: null, phase: record2.phase, error: `${only} could not be removed` };
-  }
-  return { removed: only, phase: record2.phase, error: null };
-};
-var age = (from, now) => {
-  const started = Date.parse(from);
-  if (Number.isNaN(started)) return "?";
-  const minutes = Math.max(0, Math.round((now - started) / 6e4));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-};
-var renderList = (result, now) => {
-  if (result.transactions.length === 0 && result.unreadable.length === 0) {
-    return "no pending capture transactions\n";
-  }
-  const lines = ["NONCE     PHASE     RECORDS  VALIDATION  AGE   BASE      FLAGS"];
-  for (const row of result.transactions) {
-    const flags = [row.stale ? "stale" : "", row.gc_eligible ? "" : "never-collected"].filter((flag) => flag !== "").join(",");
-    lines.push(
-      [
-        row.nonce.slice(0, 8).padEnd(9),
-        row.phase.padEnd(9),
-        String(row.records).padEnd(8),
-        (row.validation_result ?? "-").padEnd(11),
-        age(row.created_at, now).padEnd(5),
-        row.base_head.slice(0, 8).padEnd(9),
-        flags
-      ].join(" ")
-    );
-  }
-  for (const nonce of result.unreadable) {
-    lines.push(`${nonce.slice(0, 8)} unreadable`);
-  }
-  return `${lines.join("\n")}
-`;
-};
-var register3 = (program3) => {
-  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
-  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
-    const result = runPendingList({});
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      return;
-    }
-    process.stdout.write(renderList(result, Date.now()));
-  });
-  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result = runPendingShow({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      if (result.transaction === null) process.exitCode = 1;
-      return;
-    }
-    if (result.transaction === null) {
-      process.stderr.write(`commitlore pending: ${result.error ?? "not found"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
-`);
-  });
-  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
-    const result = runPendingRemove({ nonce });
-    if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-      if (result.removed === null) process.exitCode = 1;
-      return;
-    }
-    if (result.removed === null) {
-      process.stderr.write(`commitlore pending: ${result.error ?? "not removed"}
-`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`removed ${result.removed} (${result.phase ?? "unknown"})
-`);
-  });
-};
-
-// src/commands/doctor.ts
-var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
-var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
-var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
-var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
-var gitOptions3 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
-var boundedExcerpt = (output) => {
-  const [firstLine5 = ""] = (output ?? "").split(/\r?\n/, 1);
-  return {
-    firstLine: firstLine5.slice(0, 200),
-    truncated: firstLine5.length > 200 ? "true" : "false"
-  };
-};
-var streamEvidence = (stream, output) => {
-  const excerpt = boundedExcerpt(output);
-  return {
-    [`${stream}_first_line`]: excerpt.firstLine,
-    [`${stream}_truncated`]: excerpt.truncated
-  };
-};
-var homeRelativePath = (value) => {
-  const home = process.env["HOME"];
-  if (home === void 0 || home === "") return value;
-  const escapedHome = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return value.replace(new RegExp(`${escapedHome}(?=$|/)`, "g"), "~");
-};
-var normaliseEvidence = (evidence) => Object.fromEntries(
-  Object.entries(evidence).map(([key, value]) => [key, homeRelativePath(value)])
-);
-var evidenceKey = (value) => value.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase() || "remote";
-var severityOf = (status) => status === "fail" ? "error" : status === "warn" ? "warning" : "info";
-function check(id, category, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) {
-  const evidence = extra.evidence ?? {};
-  if (Object.keys(evidence).length === 0) {
-    throw new Error(`doctor check ${id} has no evidence`);
-  }
-  return {
-    id,
-    title,
-    status,
-    needsAttention,
-    detail,
-    fix,
-    fixed,
-    category,
-    severity: severityOf(status),
-    evidence: normaliseEvidence(evidence),
-    optional: extra.optional ?? false,
-    ...extra.skipReason === void 0 ? {} : { skipReason: extra.skipReason }
-  };
-}
-var blocked = (dependency, row) => {
-  if (dependency.status === "ok") {
-    throw new Error(`doctor check ${row.id} cannot repeat an ok finding`);
-  }
-  return { ...row, blockedBy: dependency.id };
-};
-var checkRefspec = (opts) => {
-  const title = "notes fetch refspec";
-  const remotes = listRemotes(opts);
-  const remoteEvidence = { remotes: remotes.join(", ") || "none" };
-  if (remotes.length === 0) {
     return check(
-      "notes-refspec",
-      "transport",
+      id,
+      category,
       title,
-      "warn",
-      "no remote is configured, so records cannot be shared with anyone",
-      "add a remote, then rerun: commitlore doctor --fix",
-      false,
-      false,
-      { evidence: remoteEvidence }
-    );
-  }
-  let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-  let forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
-  let fixed = false;
-  if (opts.fix === true) {
-    for (const remote of remotes) {
-      const key = `remote.${remote}.fetch`;
-      const configured = fetchRefspecs(remote, opts);
-      if (configured.includes(EXACT_NOTES_REFSPEC)) {
-        const replaced = execGit(
-          ["config", "--replace-all", key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
-          gitOptions3(opts)
-        );
-        fixed = replaced.code === 0 || fixed;
-      } else if (configured.some(forcesNotes)) {
-        for (const entry of configured.filter(forcesNotes)) {
-          const replaced = execGit(
-            ["config", "--replace-all", key, NOTES_REFSPEC, `^${escapeConfigValuePattern(entry)}$`],
-            gitOptions3(opts)
-          );
-          fixed = replaced.code === 0 || fixed;
-        }
-      } else if (!configured.some(coversNotes)) {
-        const added = execGit(["config", "--add", key, NOTES_REFSPEC], gitOptions3(opts));
-        fixed = added.code === 0 || fixed;
-      }
-    }
-    missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-    forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
-  }
-  if (forced.length > 0) {
-    return check(
-      "notes-refspec",
-      "transport",
-      title,
-      "warn",
-      `${forced.join(", ")} fetches ${NOTES_REF} with a forced refspec, so an ordinary git fetch overwrites this clone's mirror \u2014 a record written here and not yet pushed is destroyed silently`,
-      forced.map((remote) => `git config --replace-all remote.${remote}.fetch '${NOTES_REFSPEC}' '^\\+refs/notes/'`).join("\n"),
-      fixed,
-      void 0,
-      { evidence: { ...remoteEvidence, forced: forced.join(", ") } }
-    );
-  }
-  if (missing.length > 0) {
-    return check(
-      "notes-refspec",
-      "transport",
-      title,
-      "warn",
-      `${missing.join(", ")} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
-      missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n"),
-      false,
-      void 0,
-      { evidence: { ...remoteEvidence, missing: missing.join(", ") } }
-    );
-  }
-  const failed = remotes.map((remote) => ({ remote, result: execGit(["fetch", "--dry-run", remote], gitOptions3(opts)) })).filter(({ result }) => result.code !== 0);
-  if (failed.length > 0) {
-    return check(
-      "notes-refspec",
-      "transport",
-      title,
-      "warn",
-      `could not verify (${failed.map(({ remote, result }) => `${remote}: ${result.stderr.trim().split("\n")[0] ?? "git fetch failed"}`).join("; ")})`,
-      failed.map(({ remote }) => `git fetch ${remote}`).join("\n"),
-      fixed,
-      void 0,
-      {
-        evidence: {
-          ...remoteEvidence,
-          ...Object.fromEntries(
-            failed.map(({ remote, result }) => [
-              `fetch_exit_code_${evidenceKey(remote)}`,
-              String(result.code)
-            ])
-          )
-        }
-      }
-    );
-  }
-  return check(
-    "notes-refspec",
-    "transport",
-    title,
-    "ok",
-    fixed ? `${NOTES_REF} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
-    fixed ? `git fetch ${remotes[0] ?? "origin"}` : null,
-    fixed,
-    void 0,
-    { evidence: remoteEvidence }
-  );
-};
-var checkPush = (opts) => {
-  const title = "notes push";
-  const remotes = listRemotes(opts);
-  const remote = remotes[0] ?? "origin";
-  const command = `git push ${remote} ${NOTES_REF}`;
-  const local = execGit(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions3(opts));
-  const localEvidence = {
-    remote,
-    local_sha: local.code === 0 ? local.stdout.trim() || "unknown" : "none"
-  };
-  if (local.code !== 0) {
-    return check(
-      "notes-push",
-      "transport",
-      title,
-      "ok",
-      `no local mirror yet \u2014 nothing to push (${command}, once there is)`,
+      "skipped",
+      `no local branch looks like the source of a squash \u2014 nothing to check${scanLimitDetail(scan2)}`,
       null,
       false,
-      void 0,
-      { evidence: { ...localEvidence, remote_sha: "not_queried" } }
-    );
-  }
-  const advertised = execGit(["ls-remote", remote, NOTES_REF], gitOptions3(opts));
-  if (advertised.code !== 0) {
-    return check(
-      "notes-push",
-      "transport",
-      title,
-      "warn",
-      `could not verify (${remote}: ${advertised.stderr.trim().split("\n")[0] ?? "git ls-remote failed"})`,
-      command,
       false,
-      void 0,
       {
-        evidence: {
-          ...localEvidence,
-          ls_remote_exit_code: String(advertised.code),
-          ...streamEvidence("ls_remote_stderr", advertised.stderr)
-        }
+        evidence: scanEvidence(scan2, { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" }),
+        skipReason: "nothing_applicable"
       }
     );
   }
-  const remoteSha = advertised.stdout.split(/\s/)[0] ?? "";
-  if (remoteSha === local.stdout.trim()) {
-    return check(
-      "notes-push",
-      "transport",
-      title,
-      "ok",
-      `${remote} has the current ${NOTES_REF}`,
-      null,
-      false,
-      void 0,
-      { evidence: { ...localEvidence, remote_sha: remoteSha || "none" } }
+  let known = null;
+  const lost = [];
+  let uncheckable = 0;
+  let checked = 0;
+  for (const candidate of candidates) {
+    let records;
+    try {
+      records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd });
+    } catch {
+      continue;
+    }
+    if (records.length === 0) continue;
+    checked += 1;
+    const ids = new Set(
+      records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
     );
-  }
-  return check(
-    "notes-push",
-    "transport",
-    title,
-    "warn",
-    `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
-    command,
-    false,
-    void 0,
-    { evidence: { ...localEvidence, remote_sha: remoteSha || "none" } }
-  );
-};
-var checkHook = (ctx) => {
-  const { opts } = ctx;
-  const title = "commit-msg hook";
-  const id = "commit-msg-hook";
-  const category = "capture";
-  const install = "commitlore hooks install";
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions3(opts));
-  if (located.code !== 0) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      "not inside a git repository",
-      install,
-      false,
-      void 0,
-      { evidence: { hook_path: "unavailable", bin: "not_recorded", node: "not_recorded" } }
-    );
-  }
-  const path2 = resolve6(opts.cwd ?? process.cwd(), located.stdout.trim());
-  const target = readRecordedHookTarget(opts.cwd ?? process.cwd());
-  const override = process.env["COMMITLORE_BIN"];
-  const hookEvidence = {
-    hook_path: path2,
-    bin: target.bin || "(unset)",
-    node: target.node || "(unset)",
-    ...override === void 0 || override === "" ? {} : { commitlore_bin_override: override }
-  };
-  const targetDetail = [
-    ...describeRecordedHookTarget(target),
-    ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
-  ].join("; ");
-  if (!existsSync7(path2)) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `no commit-msg hook at ${path2}; ${targetDetail}`,
-      install,
-      false,
-      void 0,
-      { evidence: hookEvidence }
-    );
-  }
-  const contents = readFileSync10(path2, "utf8");
-  if (!contents.includes(HOOK_MARKER)) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `a commit-msg hook exists at ${path2} but does not invoke commitlore; ${targetDetail}`,
-      install,
-      false,
-      void 0,
-      { evidence: hookEvidence }
-    );
-  }
-  if (contents !== commitMsgStub()) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI; ${targetDetail}`,
-      install,
-      false,
-      void 0,
-      { evidence: hookEvidence }
-    );
-  }
-  const problems = [
-    ...target.problems,
-    ...override === void 0 || override === "" ? [] : classifyBinTarget(override) !== null ? ["COMMITLORE_BIN override is active"] : [
-      "COMMITLORE_BIN override is active, but is not a .js or .mjs file \u2014 the hook ignores it and falls through to the remaining resolution steps"
-    ]
-  ];
-  const runtime = hookRuntimeOf(ctx);
-  if (runtime.status !== "ok") {
-    const inherited = `installed at ${path2}; ${targetDetail}; outcome: ${runtime.detail}`;
-    if (runtime.status === "skipped") {
-      return blocked(
-        runtime,
-        check(
-          id,
-          category,
-          title,
-          "skipped",
-          inherited,
-          install,
-          false,
-          false,
-          {
-            evidence: { ...hookEvidence, runtime_status: runtime.status },
-            skipReason: runtime.skipReason ?? "nothing_applicable"
-          }
-        )
+    if (ids.size === 0) {
+      uncheckable += 1;
+      continue;
+    }
+    if (known === null) {
+      known = new Set(
+        runQuery({ cwd, allHistory: true }).records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
       );
     }
-    return blocked(
-      runtime,
-      check(
-        id,
-        category,
-        title,
-        runtime.status,
-        inherited,
-        install,
-        false,
-        void 0,
-        { evidence: { ...hookEvidence, runtime_status: runtime.status } }
-      )
-    );
+    for (const recordId of ids) {
+      if (!known.has(recordId)) lost.push({ branch: candidate.branch, recordId });
+    }
   }
-  return problems.length === 0 ? check(
-    id,
-    category,
-    title,
-    "ok",
-    `installed at ${path2}; ${targetDetail}`,
-    null,
-    false,
-    void 0,
-    { evidence: hookEvidence }
-  ) : check(
-    id,
-    category,
-    title,
-    "warn",
-    `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`,
-    install,
-    false,
-    void 0,
-    { evidence: hookEvidence }
-  );
-};
-var checkGit = (opts) => {
-  const title = "git interpret-trailers";
-  const id = "git-trailers";
-  const category = "runtime";
-  const version2 = execGit(["--version"], gitOptions3(opts)).stdout.trim();
-  const upgrade = "install a git that supports interpret-trailers --parse (git >= 2.9)";
-  let trailers;
-  try {
-    trailers = parseCommitMessage(PROBE_MESSAGE);
-  } catch (error2) {
-    const reason = error2 instanceof Error ? error2.message : String(error2);
+  if (checked === 0) {
     return check(
       id,
       category,
       title,
-      "fail",
-      `${version2 || "git"} could not parse a probe: ${reason}`,
-      upgrade,
+      "skipped",
+      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable${scanLimitDetail(scan2)}`,
+      null,
       false,
-      void 0,
-      { evidence: { git_version: version2 || "unavailable", parsed: "unavailable" } }
+      false,
+      {
+        evidence: scanEvidence(scan2, {
+          candidates: String(candidates.length),
+          checked: "0",
+          uncheckable: String(uncheckable),
+          lost_count: "0"
+        }),
+        skipReason: "nothing_applicable"
+      }
     );
   }
-  const parsed = trailers.map((trailer) => `${trailer.key}: ${trailer.value}`).join(", ");
-  if (parsed !== "Limit: probe, Blast: local") {
+  if (lost.length > 0) {
+    const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch})`).join(", ");
+    const more = lost.length > 5 ? `, and ${lost.length - 5} more` : "";
     return check(
       id,
       category,
       title,
-      "fail",
-      `${version2} parsed the probe as [${parsed}]`,
-      upgrade,
+      "warn",
+      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan2)}`,
+      "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result",
       false,
       void 0,
-      { evidence: { git_version: version2 || "unavailable", parsed } }
+      {
+        evidence: scanEvidence(scan2, {
+          candidates: String(candidates.length),
+          checked: String(checked),
+          uncheckable: String(uncheckable),
+          lost_count: String(lost.length)
+        })
+      }
     );
   }
+  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan2)}` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan2)}`;
   return check(
     id,
     category,
     title,
     "ok",
-    `${version2} parses trailers as the spec expects`,
+    detail,
     null,
     false,
     void 0,
-    { evidence: { git_version: version2 || "unavailable", parsed } }
+    {
+      evidence: scanEvidence(scan2, {
+        candidates: String(candidates.length),
+        checked: String(checked),
+        uncheckable: String(uncheckable),
+        lost_count: "0"
+      })
+    }
   );
 };
-var checkRuntime = (opts) => {
+
+// src/commands/doctor/checks/index-index-health.ts
+var checkIndex = (ctx) => {
+  const { opts, git: git2, openIndex: openIndex2 } = ctx;
+  const cwd = opts.cwd ?? process.cwd();
+  let handle;
+  try {
+    handle = openIndex2({ cwd, readonly: true });
+  } catch {
+    return check(
+      "index-health",
+      "index",
+      "index health",
+      "warn",
+      "no index yet \u2014 queries fall back to scanning the history",
+      "commitlore index --rebuild",
+      false,
+      void 0,
+      {
+        evidence: {
+          trailers: "0",
+          commits: "0",
+          last_indexed_sha: "none",
+          head_sha: "not_queried",
+          fts: "unavailable"
+        }
+      }
+    );
+  }
+  try {
+    const info = indexInfo(handle);
+    const head = git2(["rev-parse", "HEAD"], gitOptions2(opts));
+    const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
+    const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
+    const indexEvidence = {
+      trailers: String(info.trailers),
+      commits: String(info.commits),
+      last_indexed_sha: info.lastIndexedSha || "none",
+      head_sha: head.code === 0 ? head.stdout.trim() || "none" : "unavailable",
+      fts: info.fts ? "true" : "false"
+    };
+    return behind ? check(
+      "index-health",
+      "index",
+      "index health",
+      "warn",
+      `${info.trailers} trailers over ${info.commits} commits, behind HEAD \u2014 ${fts}`,
+      "commitlore index",
+      false,
+      void 0,
+      { evidence: indexEvidence }
+    ) : check(
+      "index-health",
+      "index",
+      "index health",
+      "ok",
+      `${info.trailers} trailers over ${info.commits} commits, current with HEAD \u2014 ${fts}`,
+      null,
+      false,
+      void 0,
+      { evidence: indexEvidence }
+    );
+  } catch (error2) {
+    return check(
+      "index-health",
+      "index",
+      "index health",
+      "warn",
+      `index unreadable (${error2 instanceof Error ? error2.message : String(error2)}) \u2014 queries still work without it`,
+      "commitlore index --rebuild",
+      false,
+      void 0,
+      {
+        evidence: {
+          trailers: "unavailable",
+          commits: "unavailable",
+          last_indexed_sha: "unavailable",
+          head_sha: "unavailable",
+          fts: "unavailable"
+        }
+      }
+    );
+  } finally {
+    try {
+      closeIndex(handle);
+    } catch {
+    }
+  }
+};
+
+// src/commands/doctor/checks/runtime-cli-runtime.ts
+import { existsSync as existsSync9 } from "node:fs";
+var checkRuntime = (ctx) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const category = "runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync7(path2));
+  const entry = candidates.find((path2) => existsSync9(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -17689,10 +18380,10 @@ var checkRuntime = (opts) => {
       }
     );
   }
-  const run = spawnSync3(process.execPath, [entry, "--version"], {
+  const run = ctx.spawn(process.execPath, [entry, "--version"], {
     shell: false,
     encoding: "utf8",
-    ...gitOptions3(opts)
+    ...gitOptions2(ctx.opts)
   });
   if (run.error !== void 0) {
     return check(
@@ -17752,222 +18443,43 @@ var checkRuntime = (opts) => {
     }
   );
 };
-var checkHookRuntime = (opts) => {
-  const title = "hook runtime";
-  const id = "hook-runtime";
-  const category = "capture";
-  const fix = "commitlore hooks install";
-  const cwd = opts.cwd ?? process.cwd();
-  const located = execGit(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions3(opts));
-  if (located.code !== 0) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      "not inside a git repository",
-      fix,
-      false,
-      void 0,
-      {
-        evidence: {
-          hook_path: "unavailable",
-          exit_code: String(located.code),
-          ...streamEvidence("stderr", located.stderr)
-        }
-      }
-    );
-  }
-  const hook = resolve6(cwd, located.stdout.trim());
-  if (!existsSync7(hook)) {
-    return check(
-      id,
-      category,
-      title,
-      "ok",
-      "no hook installed \u2014 nothing to run",
-      null,
-      false,
-      void 0,
-      { evidence: { hook_path: hook } }
-    );
-  }
-  const probe = join6(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
+
+// src/commands/doctor/checks/runtime-git-trailers.ts
+var checkGit = (ctx) => {
+  const title = "git interpret-trailers";
+  const id = "git-trailers";
+  const category = "runtime";
+  const version2 = ctx.git(["--version"], gitOptions2(ctx.opts)).stdout.trim();
+  const upgrade = "install a git that supports interpret-trailers --parse (git >= 2.9)";
+  let trailers;
   try {
-    writeFileSync5(probe, PROBE_MESSAGE);
-    const run = spawnSync3("/bin/sh", [hook, probe], {
-      shell: false,
-      encoding: "utf8",
-      cwd,
-      // No node, and no PATH entry that could supply one. `git` must stay
-      // reachable: the hook reads its own config through it.
-      env: { PATH: "/usr/bin:/bin", HOME: process.env["HOME"] ?? "" }
-    });
-    if (run.error !== void 0) {
-      return check(
-        id,
-        category,
-        title,
-        "fail",
-        `could not run the hook: ${run.error.message}`,
-        fix,
-        false,
-        void 0,
-        {
-          evidence: {
-            hook_path: hook,
-            exit_code: String(run.status ?? "unavailable"),
-            error: run.error.message,
-            ...streamEvidence("stderr", run.stderr)
-          }
-        }
-      );
-    }
-    if (run.status !== 0) {
-      const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
-      const nodeMissing = run.status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
-      const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
-      let detail;
-      if (nodeMissing) {
-        detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
-      } else if (nodeThrew) {
-        detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
-      } else {
-        detail = `the hook exited ${String(run.status)} under the restricted PATH \u2014 cause unclear: ${said || "no output"}`;
-      }
-      return check(
-        id,
-        category,
-        title,
-        "fail",
-        detail,
-        fix,
-        false,
-        void 0,
-        {
-          evidence: {
-            hook_path: hook,
-            exit_code: String(run.status),
-            ...streamEvidence("stderr", run.stderr)
-          }
-        }
-      );
-    }
-    return check(
-      id,
-      category,
-      title,
-      "ok",
-      "the hook runs and validates without node on PATH",
-      null,
-      false,
-      void 0,
-      { evidence: { hook_path: hook, exit_code: "0" } }
-    );
+    trailers = parseCommitMessage(PROBE_MESSAGE);
   } catch (error2) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `could not probe the hook: ${error2 instanceof Error ? error2.message : String(error2)}`,
-      fix,
-      false,
-      void 0,
-      {
-        evidence: {
-          hook_path: hook,
-          exit_code: "unavailable",
-          error: error2 instanceof Error ? error2.message : String(error2),
-          ...streamEvidence("stderr", "")
-        }
-      }
-    );
-  } finally {
-    rmSync2(probe, { force: true });
-  }
-};
-var evaluateInjectRun = (run, ctx) => {
-  const { id, category, title, executable, path: path2, fix, unavailableFix } = ctx;
-  const executionEvidence = { executable, path: path2 };
-  if (run.status === null || run.status === void 0) {
-    if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
-      return check(
-        id,
-        category,
-        title,
-        "fail",
-        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
-        unavailableFix,
-        false,
-        void 0,
-        {
-          evidence: {
-            ...executionEvidence,
-            exit_code: "unavailable",
-            ...streamEvidence("stderr", run.stderr)
-          }
-        }
-      );
-    }
+    const reason = error2 instanceof Error ? error2.message : String(error2);
     return check(
       id,
       category,
       title,
       "fail",
-      `could not run the PreToolUse hook: ${run.error?.message ?? "no diagnosis"}`,
-      fix,
+      `${version2 || "git"} could not parse a probe: ${reason}`,
+      upgrade,
       false,
       void 0,
-      {
-        evidence: {
-          ...executionEvidence,
-          exit_code: "unavailable",
-          error: run.error?.message ?? "no diagnosis",
-          ...streamEvidence("stderr", run.stderr)
-        }
-      }
+      { evidence: { git_version: version2 || "unavailable", parsed: "unavailable" } }
     );
   }
-  if (run.status !== 0) {
-    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+  const parsed = trailers.map((trailer) => `${trailer.key}: ${trailer.value}`).join(", ");
+  if (parsed !== "Limit: probe, Blast: local") {
     return check(
       id,
       category,
       title,
       "fail",
-      `the PreToolUse hook exits ${String(run.status)}: ${said || "no diagnosis"}`,
-      fix,
+      `${version2} parsed the probe as [${parsed}]`,
+      upgrade,
       false,
       void 0,
-      {
-        evidence: {
-          ...executionEvidence,
-          exit_code: String(run.status),
-          ...streamEvidence("stderr", run.stderr)
-        }
-      }
-    );
-  }
-  if (`${run.stdout ?? ""}`.trim() === "") {
-    const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
-    return check(
-      id,
-      category,
-      title,
-      "fail",
-      `the PreToolUse hook returned no context for a known-good payload${said === "" ? "" : `: ${said}`}`,
-      fix,
-      false,
-      void 0,
-      {
-        evidence: {
-          ...executionEvidence,
-          exit_code: "0",
-          ...streamEvidence("stdout", run.stdout),
-          ...streamEvidence("stderr", run.stderr)
-        }
-      }
+      { evidence: { git_version: version2 || "unavailable", parsed } }
     );
   }
   return check(
@@ -17975,673 +18487,299 @@ var evaluateInjectRun = (run, ctx) => {
     category,
     title,
     "ok",
-    `the PreToolUse hook returned context for ${path2}`,
+    `${version2} parses trailers as the spec expects`,
     null,
     false,
     void 0,
-    {
-      evidence: {
-        ...executionEvidence,
-        exit_code: "0",
-        ...streamEvidence("stdout", run.stdout)
-      }
-    }
+    { evidence: { git_version: version2 || "unavailable", parsed } }
   );
 };
-var checkInjectRuntime = (opts) => {
-  const title = "PreToolUse hook runtime";
-  const id = "inject-runtime";
-  const category = "delivery";
-  const fix = "reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor";
-  const unavailableFix = "install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor";
-  const cwd = opts.cwd ?? process.cwd();
-  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
-  if (settings.state !== "installed") {
-    const command2 = settings.commands[0];
-    if (settings.state === "outdated" && command2 !== void 0) {
-      return check(
-        id,
-        category,
-        title,
-        "skipped",
-        `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`,
-        null,
-        false,
-        false,
-        {
-          evidence: {
-            settings_path: settings.settingsPath,
-            settings_state: settings.state,
-            configured_command: command2,
-            executable: "not_run",
-            exit_code: "not_run",
-            ...streamEvidence("stderr", "")
-          },
-          skipReason: "command_unrecognized"
-        }
-      );
-    }
-    const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      detail,
-      "commitlore inject install-claude-hook",
-      false,
-      void 0,
-      {
-        evidence: {
-          settings_path: settings.settingsPath,
-          settings_state: settings.state,
-          executable: "not_run",
-          exit_code: "not_run",
-          ...streamEvidence("stderr", ""),
-          ...settings.problem === void 0 ? {} : { problem: settings.problem }
-        }
-      }
-    );
-  }
-  const command = settings.commands[0];
-  if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      "not checked: the configured command is not recognised",
-      null,
-      false,
-      false,
-      {
-        evidence: {
-          settings_path: settings.settingsPath,
-          settings_state: settings.state,
-          configured_command: command ?? "none",
-          executable: "not_run",
-          exit_code: "not_run",
-          ...streamEvidence("stderr", "")
-        },
-        skipReason: "command_unrecognized"
-      }
-    );
-  }
-  const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
-  if (path2 === void 0) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      "no recorded path is available for a runtime probe",
-      null,
-      false,
-      false,
-      {
-        evidence: {
-          settings_path: settings.settingsPath,
-          settings_state: settings.state,
-          executable: "not_run",
-          probe_path: "unavailable",
-          exit_code: "not_run",
-          ...streamEvidence("stderr", "")
-        },
-        skipReason: "probe_path_unavailable"
-      }
-    );
-  }
-  const payload = JSON.stringify({
-    session_id: "commitlore-doctor",
-    cwd,
-    hook_event_name: "PreToolUse",
-    tool_name: "Edit",
-    tool_input: { file_path: resolve6(cwd, path2) }
-  });
-  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
-  const executable = configured.slice(0, configured.indexOf(" "));
-  const args = configured.slice(executable.length + 1).split(" ");
-  const run = spawnSync3(executable, args, {
-    shell: false,
-    encoding: "utf8",
-    cwd,
-    input: payload,
-    env: {
-      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-      HOME: process.env["HOME"] ?? ""
-    }
-  });
-  const result = evaluateInjectRun(run, { id, category, title, executable, path: path2, fix, unavailableFix });
-  if (result.status === "fail" && run.status === null && run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
-    return { ...result, needsAttention: false };
-  }
-  return result;
-};
-var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-var checkInjectVersion = (opts, dependencies) => {
-  const title = "PreToolUse hook version";
-  const id = "inject-version";
-  const category = "delivery";
-  const cwd = opts.cwd ?? process.cwd();
-  const mine = packageVersion();
-  const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
-  if (settings.state !== "installed") {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      `no installed hook to compare against ${mine}`,
-      null,
-      false,
-      false,
-      {
-        evidence: { executable: "not_run", theirs: "not_run", mine },
-        skipReason: "hook_not_installed"
-      }
-    );
-  }
-  const command = settings.commands[0];
-  if (command !== CLAUDE_HOOK_COMMAND) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      "not checked: the configured command is not recognised",
-      null,
-      false,
-      false,
-      {
-        evidence: {
-          executable: "not_run",
-          theirs: "not_run",
-          mine,
-          configured_command: command ?? "none"
-        },
-        skipReason: "command_unrecognized"
-      }
-    );
-  }
-  const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
-  const executable = configured.slice(0, configured.indexOf(" "));
-  const run = spawnSync3(executable, ["--version"], {
-    shell: false,
-    encoding: "utf8",
-    cwd,
-    env: {
-      PATH: process.env["PATH"] ?? "/usr/bin:/bin",
-      HOME: process.env["HOME"] ?? ""
-    }
-  });
-  const reported = typeof run.stdout === "string" ? run.stdout : "";
-  const versionEvidence = {
-    executable,
-    theirs: boundedExcerpt(reported).firstLine || "unavailable",
-    mine,
-    exit_code: String(run.status ?? "unavailable"),
-    ...streamEvidence("stdout", reported)
+
+// src/commands/doctor/checks/transport-notes-push.ts
+var checkPush = (ctx) => {
+  const { opts, git: git2 } = ctx;
+  const title = "notes push";
+  const remotes = listRemotes(opts);
+  const remote = remotes[0] ?? "origin";
+  const command = `git push ${remote} ${NOTES_REF}`;
+  const local = git2(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions2(opts));
+  const localEvidence = {
+    remote,
+    local_sha: local.code === 0 ? local.stdout.trim() || "unknown" : "none"
   };
-  if (run.status !== 0 || typeof run.stdout !== "string") {
-    const skipped = check(
-      id,
-      category,
-      title,
-      "skipped",
-      `${executable} did not report a version`,
-      null,
-      false,
-      false,
-      { evidence: versionEvidence, skipReason: "version_unreadable" }
-    );
-    const runtime = dependencies.get("inject-runtime");
-    return runtime === void 0 || runtime.status === "ok" ? skipped : blocked(runtime, skipped);
-  }
-  const theirs = run.stdout.trim();
-  if (!SEMVER_ISH.test(theirs)) {
+  if (local.code !== 0) {
     return check(
-      id,
-      category,
-      title,
-      "skipped",
-      `${executable} answered --version with something that is not a version`,
-      null,
-      false,
-      false,
-      { evidence: versionEvidence, skipReason: "version_unreadable" }
-    );
-  }
-  if (theirs === mine) {
-    return check(
-      id,
-      category,
+      "notes-push",
+      "transport",
       title,
       "ok",
-      `the hook runs ${theirs}, the same build as this CLI`,
+      `no local mirror yet \u2014 nothing to push (${command}, once there is)`,
       null,
       false,
       void 0,
-      { evidence: versionEvidence }
+      { evidence: { ...localEvidence, remote_sha: "not_queried" } }
+    );
+  }
+  const advertised = git2(["ls-remote", remote, NOTES_REF], gitOptions2(opts));
+  if (advertised.code !== 0) {
+    return check(
+      "notes-push",
+      "transport",
+      title,
+      "warn",
+      `could not verify (${remote}: ${advertised.stderr.trim().split("\n")[0] ?? "git ls-remote failed"})`,
+      command,
+      false,
+      void 0,
+      {
+        evidence: {
+          ...localEvidence,
+          ls_remote_exit_code: String(advertised.code),
+          ...streamEvidence("ls_remote_stderr", advertised.stderr)
+        }
+      }
+    );
+  }
+  const remoteSha = advertised.stdout.split(/\s/)[0] ?? "";
+  if (remoteSha === local.stdout.trim()) {
+    return check(
+      "notes-push",
+      "transport",
+      title,
+      "ok",
+      `${remote} has the current ${NOTES_REF}`,
+      null,
+      false,
+      void 0,
+      { evidence: { ...localEvidence, remote_sha: remoteSha || "none" } }
     );
   }
   return check(
-    id,
-    category,
+    "notes-push",
+    "transport",
     title,
     "warn",
-    `the agent's hook runs ${theirs} but this CLI is ${mine} \u2014 every edit is graded by ${theirs}'s rules, not this one's`,
-    "update the installation the hook resolves to (for the plugin: /plugin marketplace update commitlore), then rerun: commitlore doctor",
+    `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
+    command,
     false,
     void 0,
-    { evidence: versionEvidence }
+    { evidence: { ...localEvidence, remote_sha: remoteSha || "none" } }
   );
 };
-var checkMcpLifecycle = (opts) => {
-  const title = "MCP server sessions";
-  const id = "mcp-lifecycle";
-  const category = "delivery";
-  const cwd = opts.cwd ?? process.cwd();
-  const unfinished = unfinishedRuns(cwd);
-  if (unfinished.length === 0) {
+
+// src/commands/doctor/checks/transport-notes-refspec.ts
+var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
+var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
+var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
+var checkRefspec = (ctx) => {
+  const { opts, git: git2 } = ctx;
+  const title = "notes fetch refspec";
+  const remotes = listRemotes(opts);
+  const remoteEvidence = { remotes: remotes.join(", ") || "none" };
+  if (remotes.length === 0) {
     return check(
-      id,
-      category,
+      "notes-refspec",
+      "transport",
       title,
-      "ok",
-      "every recorded MCP session ended cleanly, or is still running",
-      null,
+      "warn",
+      "no remote is configured, so records cannot be shared with anyone",
+      "add a remote, then rerun: commitlore doctor --fix",
       false,
-      void 0,
-      { evidence: { unfinished_count: "0", last_pid: "none", last_at: "none" } }
+      false,
+      { evidence: remoteEvidence }
     );
   }
-  const last = unfinished[unfinished.length - 1];
+  let missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+  let forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
+  let fixed = false;
+  if (opts.fix === true) {
+    for (const remote of remotes) {
+      const key = `remote.${remote}.fetch`;
+      const configured = fetchRefspecs(remote, opts);
+      if (configured.includes(EXACT_NOTES_REFSPEC)) {
+        const replaced = git2(
+          ["config", "--replace-all", key, NOTES_REFSPEC, EXACT_NOTES_REFSPEC_PATTERN],
+          gitOptions2(opts)
+        );
+        fixed = replaced.code === 0 || fixed;
+      } else if (configured.some(forcesNotes)) {
+        for (const entry of configured.filter(forcesNotes)) {
+          const replaced = git2(
+            ["config", "--replace-all", key, NOTES_REFSPEC, `^${escapeConfigValuePattern(entry)}$`],
+            gitOptions2(opts)
+          );
+          fixed = replaced.code === 0 || fixed;
+        }
+      } else if (!configured.some(coversNotes)) {
+        const added = git2(["config", "--add", key, NOTES_REFSPEC], gitOptions2(opts));
+        fixed = added.code === 0 || fixed;
+      }
+    }
+    missing = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
+    forced = remotes.filter((remote) => fetchRefspecs(remote, opts).some(forcesNotes));
+  }
+  if (forced.length > 0) {
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "warn",
+      `${forced.join(", ")} fetches ${NOTES_REF} with a forced refspec, so an ordinary git fetch overwrites this clone's mirror \u2014 a record written here and not yet pushed is destroyed silently`,
+      forced.map((remote) => `git config --replace-all remote.${remote}.fetch '${NOTES_REFSPEC}' '^\\+refs/notes/'`).join("\n"),
+      fixed,
+      void 0,
+      { evidence: { ...remoteEvidence, forced: forced.join(", ") } }
+    );
+  }
+  if (missing.length > 0) {
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "warn",
+      `${missing.join(", ")} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
+      missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n"),
+      false,
+      void 0,
+      { evidence: { ...remoteEvidence, missing: missing.join(", ") } }
+    );
+  }
+  const failed = remotes.map((remote) => ({ remote, result: git2(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
+  if (failed.length > 0) {
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "warn",
+      `could not verify (${failed.map(({ remote, result }) => `${remote}: ${result.stderr.trim().split("\n")[0] ?? "git fetch failed"}`).join("; ")})`,
+      failed.map(({ remote }) => `git fetch ${remote}`).join("\n"),
+      fixed,
+      void 0,
+      {
+        evidence: {
+          ...remoteEvidence,
+          ...Object.fromEntries(
+            failed.map(({ remote, result }) => [
+              `fetch_exit_code_${evidenceKey(remote)}`,
+              String(result.code)
+            ])
+          )
+        }
+      }
+    );
+  }
   return check(
-    id,
-    category,
-    title,
-    "warn",
-    `${unfinished.length} MCP server session(s) started here and never recorded an exit \u2014 most recently pid ${String(last?.pid ?? 0)} at ${last?.at ?? "unknown"}. A killed server loses its tool registration in the client, which reports the same as a tool that never existed (#424)`,
-    "restart the client session; if this repeats, capture it with a client started under --debug",
-    false,
-    void 0,
-    {
-      evidence: {
-        unfinished_count: String(unfinished.length),
-        last_pid: String(last?.pid ?? 0),
-        last_at: last?.at ?? "unknown"
-      }
-    }
-  );
-};
-var checkPendingBacklog = (opts) => {
-  const title = "pending captures";
-  const id = "pending-backlog";
-  const category = "capture";
-  const cwd = opts.cwd ?? process.cwd();
-  let listing;
-  try {
-    listing = runPendingList({ cwd });
-  } catch {
-    return check(
-      id,
-      category,
-      title,
-      "ok",
-      "no pending directory \u2014 nothing has been captured here yet",
-      null,
-      false,
-      void 0,
-      { evidence: { stranded: "0", staged_expired: "0", oldest: "none" } }
-    );
-  }
-  if (listing.unreadable.length > 0) {
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
-      "commitlore pending ls",
-      false,
-      void 0,
-      {
-        evidence: {
-          stranded: "0",
-          staged_expired: "0",
-          oldest: "none",
-          unreadable: String(listing.unreadable.length)
-        }
-      }
-    );
-  }
-  const stranded = listing.transactions.filter((transaction) => transaction.stale);
-  if (stranded.length === 0) {
-    const held = listing.transactions.length;
-    return check(
-      id,
-      category,
-      title,
-      "ok",
-      held === 0 ? "no captures are waiting" : `${String(held)} capture(s) waiting, all still able to apply`,
-      null,
-      false,
-      void 0,
-      {
-        evidence: {
-          stranded: "0",
-          staged_expired: "0",
-          oldest: "none",
-          waiting: String(held)
-        }
-      }
-    );
-  }
-  const lost = stranded.filter((transaction) => transaction.phase === "staged");
-  const oldest = stranded.map((transaction) => transaction.created_at).sort()[0];
-  const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
-  return check(
-    id,
-    category,
-    title,
-    "warn",
-    `${detail}; oldest from ${oldest ?? "an unknown time"}. A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)`,
-    "commitlore pending ls",
-    false,
-    void 0,
-    {
-      evidence: {
-        stranded: String(stranded.length),
-        staged_expired: String(lost.length),
-        oldest: oldest ?? "unknown"
-      }
-    }
-  );
-};
-var checkIndex = (opts) => {
-  const cwd = opts.cwd ?? process.cwd();
-  let handle;
-  try {
-    handle = openIndex({ cwd, readonly: true });
-  } catch {
-    return check(
-      "index-health",
-      "index",
-      "index health",
-      "warn",
-      "no index yet \u2014 queries fall back to scanning the history",
-      "commitlore index --rebuild",
-      false,
-      void 0,
-      {
-        evidence: {
-          trailers: "0",
-          commits: "0",
-          last_indexed_sha: "none",
-          head_sha: "not_queried",
-          fts: "unavailable"
-        }
-      }
-    );
-  }
-  try {
-    const info = indexInfo(handle);
-    const head = execGit(["rev-parse", "HEAD"], gitOptions3(opts));
-    const behind = head.code === 0 && info.lastIndexedSha !== head.stdout.trim();
-    const fts = info.fts ? "FTS5" : "no FTS5 (value search falls back to LIKE)";
-    const indexEvidence = {
-      trailers: String(info.trailers),
-      commits: String(info.commits),
-      last_indexed_sha: info.lastIndexedSha || "none",
-      head_sha: head.code === 0 ? head.stdout.trim() || "none" : "unavailable",
-      fts: info.fts ? "true" : "false"
-    };
-    return behind ? check(
-      "index-health",
-      "index",
-      "index health",
-      "warn",
-      `${info.trailers} trailers over ${info.commits} commits, behind HEAD \u2014 ${fts}`,
-      "commitlore index",
-      false,
-      void 0,
-      { evidence: indexEvidence }
-    ) : check(
-      "index-health",
-      "index",
-      "index health",
-      "ok",
-      `${info.trailers} trailers over ${info.commits} commits, current with HEAD \u2014 ${fts}`,
-      null,
-      false,
-      void 0,
-      { evidence: indexEvidence }
-    );
-  } catch (error2) {
-    return check(
-      "index-health",
-      "index",
-      "index health",
-      "warn",
-      `index unreadable (${error2 instanceof Error ? error2.message : String(error2)}) \u2014 queries still work without it`,
-      "commitlore index --rebuild",
-      false,
-      void 0,
-      {
-        evidence: {
-          trailers: "unavailable",
-          commits: "unavailable",
-          last_indexed_sha: "unavailable",
-          head_sha: "unavailable",
-          fts: "unavailable"
-        }
-      }
-    );
-  } finally {
-    try {
-      closeIndex(handle);
-    } catch {
-    }
-  }
-};
-var checkHistoryDepth = (opts) => hasShallowHistory(opts.cwd ?? process.cwd()) ? check(
-  "history-depth",
-  "history",
-  "history depth",
-  "warn",
-  "this clone has shallow history, so queries may be missing records that exist upstream",
-  "git fetch --unshallow",
-  false,
-  void 0,
-  { evidence: { shallow: "true" } }
-) : check(
-  "history-depth",
-  "history",
-  "history depth",
-  "ok",
-  "full history is available",
-  null,
-  false,
-  void 0,
-  { evidence: { shallow: "false" } }
-);
-var MAX_SQUASH_CANDIDATE_BRANCHES = 200;
-var squashCandidates = (opts, head) => {
-  const listed = execGit(
-    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-    gitOptions3(opts)
-  );
-  if (listed.code !== 0) return [];
-  const branches = listed.stdout.split("\n").filter((line2) => line2 !== "").slice(0, MAX_SQUASH_CANDIDATE_BRANCHES);
-  const candidates = [];
-  for (const branch of branches) {
-    const resolved = execGit(["rev-parse", "--verify", "--quiet", branch], gitOptions3(opts));
-    const sha = resolved.code === 0 ? resolved.stdout.trim() : "";
-    if (sha === "" || sha === head) continue;
-    if (execGit(["merge-base", "--is-ancestor", sha, head], gitOptions3(opts)).code === 0) {
-      continue;
-    }
-    const merged = execGit(["merge-base", sha, head], gitOptions3(opts));
-    if (merged.code !== 0) continue;
-    const base = merged.stdout.trim();
-    if (base === "" || base === sha) continue;
-    candidates.push({ branch, sha, base });
-  }
-  return candidates;
-};
-var checkSquashConservation = (opts) => {
-  const title = "squash conservation";
-  const id = "squash-conservation";
-  const category = "history";
-  const cwd = opts.cwd ?? process.cwd();
-  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions3(opts));
-  if (head.code !== 0) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      "no HEAD yet \u2014 nothing to compare against",
-      null,
-      false,
-      false,
-      {
-        evidence: { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" },
-        skipReason: "unborn_head"
-      }
-    );
-  }
-  const candidates = squashCandidates(opts, head.stdout.trim());
-  if (candidates.length === 0) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      "no local branch looks like the source of a squash \u2014 nothing to check",
-      null,
-      false,
-      false,
-      {
-        evidence: { candidates: "0", checked: "0", uncheckable: "0", lost_count: "0" },
-        skipReason: "nothing_applicable"
-      }
-    );
-  }
-  let known = null;
-  const lost = [];
-  let uncheckable = 0;
-  let checked = 0;
-  for (const candidate of candidates) {
-    let records;
-    try {
-      records = collectRange(`${candidate.base}..${candidate.sha}`, { cwd });
-    } catch {
-      continue;
-    }
-    if (records.length === 0) continue;
-    checked += 1;
-    const ids = new Set(
-      records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
-    );
-    if (ids.size === 0) {
-      uncheckable += 1;
-      continue;
-    }
-    if (known === null) {
-      known = new Set(
-        runQuery({ cwd, allHistory: true }).records.map((record2) => record2.recordId).filter((recordId) => recordId !== void 0)
-      );
-    }
-    for (const recordId of ids) {
-      if (!known.has(recordId)) lost.push({ branch: candidate.branch, recordId });
-    }
-  }
-  if (checked === 0) {
-    return check(
-      id,
-      category,
-      title,
-      "skipped",
-      `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable`,
-      null,
-      false,
-      false,
-      {
-        evidence: {
-          candidates: String(candidates.length),
-          checked: "0",
-          uncheckable: String(uncheckable),
-          lost_count: "0"
-        },
-        skipReason: "nothing_applicable"
-      }
-    );
-  }
-  if (lost.length > 0) {
-    const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch})`).join(", ");
-    const more = lost.length > 5 ? `, and ${lost.length - 5} more` : "";
-    return check(
-      id,
-      category,
-      title,
-      "warn",
-      `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}`,
-      "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result",
-      false,
-      void 0,
-      {
-        evidence: {
-          candidates: String(candidates.length),
-          checked: String(checked),
-          uncheckable: String(uncheckable),
-          lost_count: String(lost.length)
-        }
-      }
-    );
-  }
-  const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD`;
-  return check(
-    id,
-    category,
+    "notes-refspec",
+    "transport",
     title,
     "ok",
-    detail,
-    null,
-    false,
+    fixed ? `${NOTES_REF} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
+    fixed ? `git fetch ${remotes[0] ?? "origin"}` : null,
+    fixed,
     void 0,
-    {
-      evidence: {
-        candidates: String(candidates.length),
-        checked: String(checked),
-        uncheckable: String(uncheckable),
-        lost_count: "0"
-      }
-    }
+    { evidence: remoteEvidence }
   );
 };
+
+// src/commands/doctor/registry.ts
 var hookRuntimeOf = (ctx) => {
   const cached2 = ctx.memo.get("hook-runtime");
   if (cached2 !== void 0) return cached2;
-  const computed = checkHookRuntime(ctx.opts);
+  const computed = checkHookRuntime(ctx);
   ctx.memo.set("hook-runtime", computed);
   return computed;
 };
+var selectedHookRuntimeOf = (ctx) => ctx.selectedIds?.has("hook-runtime") === false ? void 0 : hookRuntimeOf(ctx);
 var CHECK_REGISTRY = [
-  { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx.opts) },
-  { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx.opts) },
-  { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx.opts) },
-  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx) },
+  { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
+  { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
+  { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
+  { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },
   { id: "hook-runtime", title: "hook runtime", category: "capture", dependencies: [], optional: false, run: hookRuntimeOf },
-  { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx.opts) },
-  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx.opts, dependencies) },
-  { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx.opts) },
-  { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx.opts) },
-  { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx.opts) },
-  { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx.opts) },
-  { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx.opts) },
-  { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx.opts) }
+  { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx) },
+  { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
+  { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
+  { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
+  { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },
+  { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
+  { id: "index-health", title: "index health", category: "index", dependencies: [], optional: false, run: (ctx) => checkIndex(ctx) },
+  { id: "squash-conservation", title: "squash conservation", category: "history", dependencies: [], optional: false, run: (ctx) => checkSquashConservation(ctx) }
 ];
+var DoctorSelectionError = class extends Error {
+};
+var knownCategories = () => new Set(CHECK_REGISTRY.map((definition) => definition.category));
+var selectChecks = (opts) => {
+  const ids = opts.only === void 0 ? void 0 : [...new Set(opts.only)];
+  const category = opts.category;
+  if (ids === void 0 && category === void 0) return { definitions: CHECK_REGISTRY };
+  if (ids !== void 0) {
+    if (ids.length === 0 || ids.some((id) => id === "")) {
+      throw new DoctorSelectionError("--only must name at least one check id");
+    }
+    const unknown2 = ids.find((id) => !CHECK_REGISTRY.some((definition) => definition.id === id));
+    if (unknown2 !== void 0) throw new DoctorSelectionError(`unknown doctor check id: ${unknown2}`);
+  }
+  if (category !== void 0 && !knownCategories().has(category)) {
+    throw new DoctorSelectionError(`unknown doctor check category: ${category}`);
+  }
+  const definitions = CHECK_REGISTRY.filter(
+    (definition) => (ids === void 0 || ids.includes(definition.id)) && (category === void 0 || definition.category === category)
+  );
+  if (definitions.length === 0) {
+    throw new DoctorSelectionError("--only and --category do not select a common check");
+  }
+  return {
+    definitions,
+    selection: [...ids ?? [], ...category === void 0 ? [] : [category]]
+  };
+};
+
+// src/commands/doctor/render.ts
+var STATUS_WIDTH = 8;
+var DETAIL_INDENT = " ".repeat(STATUS_WIDTH);
+var formatCheckReport = (report, { verbose = false } = {}) => {
+  const lines = report.checks.flatMap((entry) => {
+    const head = `${entry.status.padEnd(STATUS_WIDTH)}${entry.title} \u2014 ${entry.detail}`;
+    const fixed = entry.fixed ? [`${DETAIL_INDENT}fixed by --fix`] : [];
+    const fix = entry.fix === null ? [] : entry.fix.split("\n").map((line2) => `${DETAIL_INDENT}fix: ${line2}`);
+    const diagnostics = verbose === false ? [] : [
+      ...Object.entries(entry.evidence).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${DETAIL_INDENT}evidence.${key}: ${value === "" ? "(empty)" : value}`),
+      ...entry.skipReason === void 0 ? [] : [`${DETAIL_INDENT}skipReason: ${entry.skipReason}`],
+      ...entry.durationMs === void 0 ? [] : [`${DETAIL_INDENT}durationMs: ${entry.durationMs}`]
+    ];
+    return [head, ...fixed, ...fix, ...diagnostics];
+  });
+  return `${lines.join("\n")}
+`;
+};
+var formatSummary = (report) => {
+  const { ok, warn: warn2, fail: fail3, skipped, durationMs } = report.summary;
+  return `${ok} ok, ${warn2} warnings, ${fail3} failed, ${skipped} skipped (${durationMs}ms)`;
+};
+var formatFixPlan = (report) => {
+  const checksById = new Map(report.checks.map((check2) => [check2.id, check2]));
+  const seenFixes = /* @__PURE__ */ new Set();
+  return report.fixPlan.flatMap((id, index) => {
+    const check2 = checksById.get(id);
+    if (check2 === void 0) return [];
+    const fix = check2.fix;
+    const showFix = fix !== null && !seenFixes.has(fix);
+    if (fix !== null) seenFixes.add(fix);
+    const renderedFix = showFix ? ` (${fix.replace(/\r?\n/g, " ")})` : "";
+    return [`${index + 1}. [${check2.status}] ${check2.id} \u2014 ${check2.detail}${renderedFix}`];
+  });
+};
+var formatReport = (report, options = {}) => {
+  const header2 = [report.headline, formatSummary(report), ...formatFixPlan(report)].join("\n");
+  return `${header2}
+${formatCheckReport(report, options)}`;
+};
+
+// src/commands/doctor/report.ts
+import { existsSync as existsSync10, readFileSync as readFileSync11 } from "node:fs";
+import { join as join7, resolve as resolve9, sep as sep2 } from "node:path";
+
+// src/commands/doctor/runner.ts
 var containedRun = (definition, ctx, dependencies) => {
   try {
     return definition.run(ctx, dependencies);
@@ -18656,7 +18794,10 @@ var containedRun = (definition, ctx, dependencies) => {
       null,
       false,
       true,
-      { evidence: { error: message.split("\n")[0] ?? "unknown error" } }
+      {
+        evidence: { error: message.split("\n")[0] ?? "unknown error" },
+        optional: definition.optional
+      }
     );
   }
 };
@@ -18686,48 +18827,125 @@ var collapseBlockedBy = (checks) => {
     return root.id === row.blockedBy ? row : { ...row, blockedBy: root.id };
   });
 };
-var runDoctor = (opts = {}) => {
-  const ctx = { opts, now: process.hrtime.bigint, memo: /* @__PURE__ */ new Map() };
+var runDoctor = (opts = {}, context) => {
+  const selection = selectChecks(opts);
+  const ctx = {
+    ...context ?? defaultDoctorContext(opts),
+    opts,
+    selectedIds: new Set(selection.definitions.map((definition) => definition.id))
+  };
   const completed = /* @__PURE__ */ new Map();
-  const checks = CHECK_REGISTRY.map((definition) => {
+  const checks = selection.definitions.map((definition) => {
     const dependencies = /* @__PURE__ */ new Map();
     for (const dependency of definition.dependencies) {
       const row2 = completed.get(dependency);
-      if (row2 === void 0) {
-        throw new Error(`doctor check ${definition.id} depends on ${dependency}, which has not run`);
-      }
-      dependencies.set(dependency, row2);
+      if (row2 !== void 0) dependencies.set(dependency, row2);
     }
     const started = ctx.now();
-    const row = containedRun(definition, ctx, dependencies);
+    const contained = containedRun(definition, ctx, dependencies);
+    const row = contained.optional === definition.optional ? contained : { ...contained, optional: definition.optional };
     const elapsed = Number((ctx.now() - started) / 1000000n);
     const timed = { ...row, durationMs: elapsed < 0 ? 0 : elapsed };
     completed.set(definition.id, timed);
     return timed;
   });
   const collapsed = collapseBlockedBy(checks);
+  return selection.selection === void 0 ? buildReport(collapsed) : buildReport(collapsed, { selection: selection.selection, totalChecks: CHECK_REGISTRY.length });
+};
+
+// src/commands/doctor/report.ts
+var computeFixPlan = (checks) => [
+  ...checks.filter((check2) => check2.status === "fail" && check2.blockedBy === void 0),
+  ...checks.filter((check2) => check2.status === "warn" && check2.blockedBy === void 0)
+].map((check2) => check2.id);
+var headlineWithoutAction = (status) => {
+  if (status === "ok") return "Doctor is healthy.";
+  if (status === "degraded") return "Doctor is usable; some checks could not be verified.";
+  return "Doctor failed; no actionable checks are available.";
+};
+var deriveHeadline = (args) => {
+  const nextId = args.fixPlan[0];
+  if (nextId === void 0) return headlineWithoutAction(args.status);
+  const next = args.checks.find((check2) => check2.id === nextId);
+  if (next === void 0) return headlineWithoutAction(args.status);
+  return `Next action [${next.id}]: ${next.detail}${next.fix === null ? "" : ` \u2014 ${next.fix}`}`;
+};
+var deriveStatus = (checks) => {
+  const required3 = checks.filter((check2) => !check2.optional);
+  if (required3.some((check2) => check2.status === "fail")) return "failed";
+  if (required3.some((check2) => check2.status === "warn" || check2.status === "skipped")) {
+    return "degraded";
+  }
+  return "ok";
+};
+var deriveInstallSource = ({
+  entryPath = installedPath("dist", "commitlore.mjs"),
+  packageRoot = PACKAGE_ROOT,
+  pluginRoot = process.env["CLAUDE_PLUGIN_ROOT"]
+} = {}) => {
+  if (pluginRoot !== void 0 && pluginRoot !== "") return "plugin";
+  const segments = resolve9(entryPath).split(sep2);
+  if (segments.includes("_npx")) return "npx";
+  if (segments.includes("node_modules")) return "npm";
+  try {
+    const manifest = JSON.parse(readFileSync11(join7(packageRoot, "package.json"), "utf8"));
+    if (manifest.name === "commitlore" && existsSync10(join7(packageRoot, ".git"))) return "source";
+  } catch {
+  }
+  return "unknown";
+};
+var summarize = (checks) => {
+  const summary2 = {
+    total: checks.length,
+    ok: 0,
+    warn: 0,
+    fail: 0,
+    skipped: 0,
+    durationMs: 0
+  };
+  for (const check2 of checks) {
+    summary2[check2.status] += 1;
+    summary2.durationMs += check2.durationMs ?? 0;
+  }
+  return summary2;
+};
+var buildReport = (checks, options = {}) => {
+  if (options.selection !== void 0 && options.selection.length === 0) {
+    throw new Error("doctor selection must not be empty");
+  }
+  if (options.selection !== void 0 && options.totalChecks === void 0) {
+    throw new Error("doctor selection requires the full registry size");
+  }
+  const status = deriveStatus(checks);
+  const fixPlan = computeFixPlan(checks);
+  const headline = deriveHeadline({ checks, fixPlan, status });
   return {
-    checks: collapsed,
-    exitCode: collapsed.some((entry) => entry.status === "fail") ? 1 : 0
+    schema: "commitlore_doctor.v2",
+    version: packageVersion(),
+    status,
+    installSource: deriveInstallSource(),
+    headline: options.selection === void 0 ? headline : `${checks.length} of ${options.totalChecks} checks run \u2014 ${headline}`,
+    summary: summarize(checks),
+    fixPlan,
+    ...options.selection === void 0 ? {} : { selection: [...options.selection] },
+    checks,
+    exitCode: checks.some((check2) => !check2.optional && check2.status === "fail") ? 1 : 0
   };
 };
-var STATUS_WIDTH = 8;
-var formatReport = (report) => {
-  const lines = report.checks.flatMap((entry) => {
-    const head = `${entry.status.padEnd(STATUS_WIDTH)}${entry.title} \u2014 ${entry.detail}`;
-    const fixed = entry.fixed ? [`${" ".repeat(STATUS_WIDTH)}fixed by --fix`] : [];
-    const fix = entry.fix === null ? [] : entry.fix.split("\n").map((line2) => `${" ".repeat(STATUS_WIDTH)}fix: ${line2}`);
-    return [head, ...fixed, ...fix];
-  });
-  return `${lines.join("\n")}
-`;
-};
 var register4 = (program3) => {
-  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").addHelpText("after", "\nExit codes: 0 every check passed or warned, 1 a check failed (SPEC \xA710).").action((options) => {
-    const report = runDoctor({ fix: options.fix === true });
+  program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").option("--verbose", "include diagnostic evidence, skip reasons, and durations for each check").option("--only <ids>", "run only these comma-separated check ids").option("--category <name>", "run only checks in this category").addHelpText(
+    "after",
+    "\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC \xA710)."
+  ).action((options) => {
+    const doctorOptions = { fix: options.fix === true };
+    if (options.only !== void 0) {
+      doctorOptions.only = options.only.split(",").map((id) => id.trim());
+    }
+    if (options.category !== void 0) doctorOptions.category = options.category;
+    const report = runDoctor(doctorOptions);
     process.stdout.write(
       options.json === true ? `${JSON.stringify(report, null, 2)}
-` : formatReport(report)
+` : formatReport(report, { verbose: options.verbose === true })
     );
     process.exitCode = report.exitCode;
   });
@@ -18737,21 +18955,21 @@ var register4 = (program3) => {
 import { randomBytes as randomBytes7 } from "node:crypto";
 import {
   chmodSync as chmodSync4,
-  existsSync as existsSync11,
+  existsSync as existsSync14,
   mkdirSync as mkdirSync8,
-  readFileSync as readFileSync14,
+  readFileSync as readFileSync15,
   realpathSync as realpathSync2,
   renameSync as renameSync6,
   statSync as statSync4,
   unlinkSync as unlinkSync4,
   writeFileSync as writeFileSync9
 } from "node:fs";
-import { join as join7, resolve as resolve10 } from "node:path";
+import { join as join8, resolve as resolve13 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes4 } from "node:crypto";
-import { chmodSync, existsSync as existsSync8, mkdirSync as mkdirSync5, readFileSync as readFileSync11, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
-import { resolve as resolve7 } from "node:path";
+import { chmodSync, existsSync as existsSync11, mkdirSync as mkdirSync5, readFileSync as readFileSync12, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { resolve as resolve10 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
 var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -18771,14 +18989,14 @@ var installPostCommitHook = (cwd = process.cwd()) => {
   try {
     const result = execGit(["rev-parse", "--git-path", `hooks/${POST_COMMIT_HOOK_NAME}`], { cwd });
     if (result.code !== 0) return hookFailure(result.stderr.trim() || "not a git repository");
-    hookPath = resolve7(cwd, result.stdout.trim());
-    mkdirSync5(resolve7(hookPath, ".."), { recursive: true });
+    hookPath = resolve10(cwd, result.stdout.trim());
+    mkdirSync5(resolve10(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync8(hookPath)) {
-      const current = readFileSync11(hookPath, "utf8");
+    if (existsSync11(hookPath)) {
+      const current = readFileSync12(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -18799,11 +19017,11 @@ var installPostCommitHook = (cwd = process.cwd()) => {
 var resolvePendingDir2 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
-  return resolve7(cwd, result.stdout.trim());
+  return resolve10(cwd, result.stdout.trim());
 };
 var readPendingFile = (filePath) => {
   try {
-    const content = readFileSync11(filePath, "utf8");
+    const content = readFileSync12(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -18842,7 +19060,7 @@ var allRecordIdsPresent = (commitMessage, records) => {
 };
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
-  if (!pendingDirPath || !existsSync8(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync11(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -18863,7 +19081,7 @@ var runPostCommitFinaliser = (cwd) => {
   if (msgResult.code !== 0) return;
   const commitMessage = msgResult.stdout;
   for (const file of files) {
-    const filePath = resolve7(pendingDirPath, file);
+    const filePath = resolve10(pendingDirPath, file);
     const pending = readPendingFile(filePath);
     if (!pending) continue;
     if (pending.phase !== "applied") continue;
@@ -18900,8 +19118,8 @@ var register5 = (program3) => {
 
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync9, mkdirSync as mkdirSync6, readFileSync as readFileSync12, renameSync as renameSync4, writeFileSync as writeFileSync7 } from "node:fs";
-import { resolve as resolve8 } from "node:path";
+import { chmodSync as chmodSync2, existsSync as existsSync12, mkdirSync as mkdirSync6, readFileSync as readFileSync13, renameSync as renameSync4, writeFileSync as writeFileSync7 } from "node:fs";
+import { resolve as resolve11 } from "node:path";
 
 // src/core/sync.ts
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
@@ -19005,14 +19223,14 @@ var installPrePushHook = (cwd = process.cwd()) => {
   try {
     const result = execGit(["rev-parse", "--git-path", `hooks/${PRE_PUSH_HOOK_NAME}`], { cwd });
     if (result.code !== 0) return hookFailure2(result.stderr.trim() || "not a git repository");
-    hookPath = resolve8(cwd, result.stdout.trim());
-    mkdirSync6(resolve8(hookPath, ".."), { recursive: true });
+    hookPath = resolve11(cwd, result.stdout.trim());
+    mkdirSync6(resolve11(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync9(hookPath)) {
-      const current = readFileSync12(hookPath, "utf8");
+    if (existsSync12(hookPath)) {
+      const current = readFileSync13(hookPath, "utf8");
       if (!current.includes(PRE_PUSH_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
       }
@@ -19048,8 +19266,8 @@ var register6 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync10, mkdirSync as mkdirSync7, readFileSync as readFileSync13, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
-import { resolve as resolve9 } from "node:path";
+import { chmodSync as chmodSync3, existsSync as existsSync13, mkdirSync as mkdirSync7, readFileSync as readFileSync14, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { resolve as resolve12 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
 var PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -19059,7 +19277,7 @@ var isRecordBlock = (trailers) => trailers.some((trailer) => RECORD_KEYS.has(tra
 var squashMessagePath = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "SQUASH_MSG"], { cwd });
   if (result.code !== 0) return null;
-  return resolve9(cwd, result.stdout.trim());
+  return resolve12(cwd, result.stdout.trim());
 };
 var squashCommitIds = (message) => {
   const ids = [];
@@ -19082,10 +19300,10 @@ var recordsFromSquashMessage = (cwd, message) => {
 };
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
-  if (squashPath === null || !existsSync10(squashPath)) return false;
-  const draft = readFileSync13(messageFile, "utf8");
+  if (squashPath === null || !existsSync13(squashPath)) return false;
+  const draft = readFileSync14(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
-  const blocks = recordsFromSquashMessage(cwd, readFileSync13(squashPath, "utf8"));
+  const blocks = recordsFromSquashMessage(cwd, readFileSync14(squashPath, "utf8"));
   if (blocks.length === 0) return false;
   const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync8(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
@@ -19094,7 +19312,7 @@ var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
 var prepareHookPath = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
   if (result.code !== 0) throw new Error(result.stderr.trim() || "not a git repository");
-  return resolve9(cwd, result.stdout.trim());
+  return resolve12(cwd, result.stdout.trim());
 };
 var hookSuccess3 = (line2) => ({ code: 0, stdout: `${line2}
 `, stderr: "" });
@@ -19110,13 +19328,13 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
   let path2;
   try {
     path2 = prepareHookPath(cwd);
-    mkdirSync7(resolve9(path2, ".."), { recursive: true });
+    mkdirSync7(resolve12(path2, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync10(path2)) {
-      const current = readFileSync13(path2, "utf8");
+    if (existsSync13(path2)) {
+      const current = readFileSync14(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure3(`${path2} is not a commitlore hook \u2014 left in place`);
       }
@@ -19135,11 +19353,11 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
 var resolvePendingDir3 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
-  return resolve9(cwd, result.stdout.trim());
+  return resolve12(cwd, result.stdout.trim());
 };
 var readPendingFile2 = (filePath) => {
   try {
-    const content = readFileSync13(filePath, "utf8");
+    const content = readFileSync14(filePath, "utf8");
     const parsed = JSON.parse(content);
     if (parsed["version"] !== 1) return null;
     return parsed;
@@ -19174,7 +19392,7 @@ var messageContainsRecordId = (message, records) => {
 };
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync10(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync13(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -19192,12 +19410,12 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const now = Date.now();
   let currentMessage;
   try {
-    currentMessage = readFileSync13(messageFile, "utf8");
+    currentMessage = readFileSync14(messageFile, "utf8");
   } catch {
     return;
   }
   for (const file of files) {
-    const filePath = resolve9(pendingDirPath, file);
+    const filePath = resolve12(pendingDirPath, file);
     const pending = readPendingFile2(filePath);
     if (!pending) continue;
     if (pending.phase !== "staged" && pending.phase !== "applied") continue;
@@ -19255,7 +19473,7 @@ var resolveHooksDir = (cwd) => {
   if (result.code !== 0) {
     throw new Error(`not a git repository (${firstLine2(result.stderr)})`);
   }
-  return resolve10(cwd, result.stdout.trim());
+  return resolve13(cwd, result.stdout.trim());
 };
 var isExecutable = (path2) => {
   try {
@@ -19265,10 +19483,10 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync11(hookPath)) return "absent";
+  if (!existsSync14(hookPath)) return "absent";
   let contents;
   try {
-    contents = readFileSync14(hookPath, "utf8");
+    contents = readFileSync15(hookPath, "utf8");
   } catch {
     return "foreign";
   }
@@ -19277,14 +19495,14 @@ var readHookState = (hookPath) => {
 };
 var readHookStatus = (cwd = process.cwd()) => {
   const hooksDir = resolveHooksDir(cwd);
-  const hookPath = join7(hooksDir, HOOK_NAME);
-  const chainedPath = join7(hooksDir, CHAINED_HOOK_NAME);
+  const hookPath = join8(hooksDir, HOOK_NAME);
+  const chainedPath = join8(hooksDir, CHAINED_HOOK_NAME);
   return {
     hooksDir,
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync11(chainedPath),
+    chained: existsSync14(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -19304,10 +19522,10 @@ var resolveEntryForRecord = (entry, cwd) => {
       return null;
     }
   };
-  if (entry.includes("/")) return existingFile(resolve10(cwd, entry));
+  if (entry.includes("/")) return existingFile(resolve13(cwd, entry));
   for (const dir of (process.env["PATH"] ?? "").split(":")) {
     if (dir === "") continue;
-    const found = existingFile(resolve10(dir, entry));
+    const found = existingFile(resolve13(dir, entry));
     if (found !== null) return found;
   }
   return null;
@@ -19379,12 +19597,12 @@ var CAPTURE_HOOKS = [
   }
 ];
 var removeCaptureHook = (hooksDir, hook) => {
-  const hookPath = join7(hooksDir, hook.name);
-  const chainedPath = join7(hooksDir, hook.chainedName);
-  if (!existsSync11(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+  const hookPath = join8(hooksDir, hook.name);
+  const chainedPath = join8(hooksDir, hook.chainedName);
+  if (!existsSync14(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
-    contents = readFileSync14(hookPath, "utf8");
+    contents = readFileSync15(hookPath, "utf8");
   } catch {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
@@ -19392,7 +19610,7 @@ var removeCaptureHook = (hooksDir, hook) => {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
   unlinkSync4(hookPath);
-  if (!existsSync11(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  if (!existsSync14(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
   renameSync6(chainedPath, hookPath);
   return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
 };
@@ -19516,7 +19734,7 @@ var runDoctorStep = (opts) => {
     step: "doctor",
     title: "doctor --fix",
     code,
-    lines: formatReport(report).trimEnd().split("\n"),
+    lines: formatCheckReport(report).trimEnd().split("\n"),
     detail: report
   };
 };
@@ -19739,9 +19957,9 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join8(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
-    const userCwd = resolve11(opts.cwd ?? process.cwd());
-    const tmpResolved = resolve11(tmpDir);
+    tmpDir = mkdtempSync(join9(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
+    const userCwd = resolve14(opts.cwd ?? process.cwd());
+    const tmpResolved = resolve14(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
@@ -19749,7 +19967,7 @@ var runDemo = async (opts = {}) => {
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
-    const targetFullPath = join8(tmpDir, targetPath);
+    const targetFullPath = join9(tmpDir, targetPath);
     mkdirSync9(dirname6(targetFullPath), { recursive: true });
     writeFileSync10(targetFullPath, "// session cache module\n");
     git(["add", "."], tmpDir);
@@ -19814,7 +20032,7 @@ var register10 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync15, writeFileSync as writeFileSync11 } from "node:fs";
+import { readFileSync as readFileSync16, writeFileSync as writeFileSync11 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -19825,7 +20043,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync15(path2, "utf8");
+    return readFileSync16(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -19910,7 +20128,7 @@ var register11 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync16 } from "node:fs";
+import { readFileSync as readFileSync17 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -19918,8 +20136,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync16(STDIN_FD, "utf8");
-  return readFileSync16(path2, "utf8");
+  if (path2 === "-") return readFileSync17(STDIN_FD, "utf8");
+  return readFileSync17(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -20110,12 +20328,12 @@ var register12 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync17, writeFileSync as writeFileSync12 } from "node:fs";
+import { readFileSync as readFileSync18, writeFileSync as writeFileSync12 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync17(path2, "utf8");
+    return readFileSync18(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -20302,8 +20520,8 @@ var register14 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync18, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname7, isAbsolute as isAbsolute2, join as join9, relative as relative2, resolve as resolve12, sep as sep2 } from "node:path";
+import { readFileSync as readFileSync19, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename2, dirname as dirname7, isAbsolute as isAbsolute2, join as join10, relative as relative2, resolve as resolve15, sep as sep3 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash7 } from "node:crypto";
@@ -20650,7 +20868,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync18(0, "utf8");
+    return readFileSync19(0, "utf8");
   } catch {
     return "";
   }
@@ -20673,13 +20891,13 @@ var repositoryRoot = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve12(target);
+  const absolute = resolve15(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
     try {
       const real = realpathSync3(current);
-      return tail.length === 0 ? real : join9(real, ...tail);
+      return tail.length === 0 ? real : join10(real, ...tail);
     } catch {
       const parent = dirname7(current);
       if (parent === current) return absolute;
@@ -20704,10 +20922,10 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve12(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve15(cwd, raw));
   const scoped = relative2(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
-  if (scoped === ".." || scoped.startsWith(`..${sep2}`) || isAbsolute2(scoped)) {
+  if (scoped === ".." || scoped.startsWith(`..${sep3}`) || isAbsolute2(scoped)) {
     throw new Error("file_path resolves outside the repository");
   }
   return scoped;
@@ -20835,7 +21053,7 @@ var register15 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve13, sep as sep3 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve16, sep as sep4 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -28155,7 +28373,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve14) => setTimeout(resolve14, pollInterval));
+        await new Promise((resolve17) => setTimeout(resolve17, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -28172,7 +28390,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve14, reject2) => {
+    return new Promise((resolve17, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -28250,7 +28468,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve14(parseResult.data);
+            resolve17(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -28511,12 +28729,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve14, reject2) => {
+    return new Promise((resolve17, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve14, interval);
+      const timeoutId = setTimeout(resolve17, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -29386,12 +29604,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve14) => {
+    return new Promise((resolve17) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve14();
+        resolve17();
       } else {
-        this._stdout.once("drain", resolve14);
+        this._stdout.once("drain", resolve17);
       }
     });
   }
@@ -29733,7 +29951,7 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source !== "notes").reverse(),
   ...records.filter((record2) => record2.source === "notes")
 ];
-var buildReport = (scan2, at) => {
+var buildReport2 = (scan2, at) => {
   const ordered = oldestFirst2(scan2.records);
   const states = foldLifecycle(ordered, { at });
   const stale = states.filter(isStale).map((state) => {
@@ -29821,7 +30039,7 @@ var register17 = (program3) => {
       const scan2 = collectRecords(
         options.allHistory === true ? { allHistory: true } : { allHistory: false }
       );
-      const report = buildReport(scan2, at);
+      const report = buildReport2(scan2, at);
       process.stdout.write(
         options.json === true ? `${JSON.stringify(report, null, 2)}
 ` : formatReport2(report)
@@ -29962,8 +30180,8 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve13(root, raw);
-  if (resolved !== root && !resolved.startsWith(`${root}${sep3}`)) {
+  const resolved = resolve16(root, raw);
+  if (resolved !== root && !resolved.startsWith(`${root}${sep4}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
   return relative3(root, resolved);
@@ -30166,7 +30384,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve13(opts.cwd ?? process.cwd());
+  const root = resolve16(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -30179,7 +30397,7 @@ var createServer = (opts = {}) => {
       const kind = kindArg(args);
       return asText(contextJson(root, kind, pathArg(root, args)));
     },
-    [STALE_TOOL]: () => asText(buildReport(collectRecords({ cwd: root }), /* @__PURE__ */ new Date())),
+    [STALE_TOOL]: () => asText(buildReport2(collectRecords({ cwd: root }), /* @__PURE__ */ new Date())),
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, "proposal");
       const path2 = pathArg(root, args);
@@ -30360,7 +30578,7 @@ var register18 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync19, writeFileSync as writeFileSync13 } from "node:fs";
+import { readFileSync as readFileSync20, writeFileSync as writeFileSync13 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -30401,7 +30619,7 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync19(path2, "utf8");
+    return readFileSync20(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -30545,7 +30763,7 @@ var register20 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync20 } from "node:fs";
+import { readFileSync as readFileSync21 } from "node:fs";
 
 // src/hooks/secret-rules.ts
 var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
@@ -30908,14 +31126,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync20(path2, "utf8");
+    return readFileSync21(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync20(0, "utf8");
+    return readFileSync21(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf6(error2)}`);
   }
@@ -31192,9 +31410,9 @@ var register21 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { existsSync as existsSync12, readFileSync as readFileSync21, rmSync as rmSync4, writeFileSync as writeFileSync14 } from "node:fs";
+import { existsSync as existsSync15, readFileSync as readFileSync22, rmSync as rmSync4, writeFileSync as writeFileSync14 } from "node:fs";
 import { homedir } from "node:os";
-import { join as join10 } from "node:path";
+import { join as join11 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
@@ -31257,17 +31475,17 @@ var withoutTomlBlock = (contents, wrapper) => {
 };
 var runUninstall = async (options = {}) => {
   const home = options.home ?? homedir();
-  const dataHome = options.dataHome ?? join10(home, ".local", "share");
+  const dataHome = options.dataHome ?? join11(home, ".local", "share");
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
   const removed = [];
   const kept = [];
-  const wrapper = join10(home, ".local", "bin", "commitlore");
-  if (existsSync12(wrapper)) {
+  const wrapper = join11(home, ".local", "bin", "commitlore");
+  if (existsSync15(wrapper)) {
     const contents = (() => {
       try {
-        return readFileSync21(wrapper, "utf8");
+        return readFileSync22(wrapper, "utf8");
       } catch {
         return "";
       }
@@ -31281,18 +31499,18 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
   }
-  const dataRoot = join10(dataHome, "commitlore");
-  if (existsSync12(dataRoot)) {
+  const dataRoot = join11(dataHome, "commitlore");
+  if (existsSync15(dataRoot)) {
     if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
   }
   for (const config2 of AGENT_CONFIGS) {
-    const path2 = join10(home, ...config2.homeRelativePath);
-    if (!existsSync12(path2)) continue;
+    const path2 = join11(home, ...config2.homeRelativePath);
+    if (!existsSync15(path2)) continue;
     let contents;
     try {
-      contents = readFileSync21(path2, "utf8");
+      contents = readFileSync22(path2, "utf8");
     } catch {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
@@ -31346,11 +31564,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync22(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync23(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync22(STDIN_FD2, "utf8");
+  return readFileSync23(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
