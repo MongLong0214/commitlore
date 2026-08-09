@@ -33,7 +33,7 @@
  *   first, so a long-lived checkout cannot accumulate an unbounded log from a
  *   server that starts on every session.
  */
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execGit } from '../core/git.js';
 import { packageVersion } from '../core/paths.js';
@@ -81,38 +81,75 @@ const write = (cwd, line) => {
 };
 /** ISO 8601, second precision — enough to line up against a client transcript. */
 const stamp = (at) => `${at.toISOString().slice(0, 19)}Z`;
+/** The error text is one physical log line and safe to mirror to stderr. */
+const errorMessage = (error) => {
+    const message = error instanceof Error ? error.message || error.name : String(error);
+    const singleLine = message.replace(/[\r\n]+/g, ' ').trim();
+    return singleLine === '' ? 'unknown error' : singleLine;
+};
 /**
- * Records that this server came up, and arranges for its exit to be recorded
- * too.
+ * Records a server start and classifies the eventual exit.
  *
- * The exit handlers are the point. A `started` line with no `exited` beside it
- * is a server that was killed — which is exactly the shape #424 describes and
- * exactly what nobody could establish afterwards.
+ * `output` is deliberately supplied by the caller alongside the stdio
+ * transport. The SDK writes protocol frames there but does not watch it for
+ * errors, so the listener here is what turns an output-pipe EPIPE into the
+ * ordinary client hangup it represents.
  */
-export const recordServerStart = (cwd = process.cwd(), at = new Date()) => {
+export const recordServerStart = (cwd = process.cwd(), at = new Date(), output = process.stdout) => {
     const entry = process.argv[1] ?? 'unknown';
     write(cwd, `started ${stamp(at)} pid ${String(process.pid)} ${packageVersion()} ${entry}`);
-    let done = false;
-    const exit = (how) => {
-        if (done)
-            return;
-        done = true;
-        write(cwd, `exited  ${stamp(new Date())} pid ${String(process.pid)} ${how}`);
+    // The lower number is only a fallback. A crash after stdin closes is still a
+    // crash, and a signal received while the client is closing is still a signal.
+    let reason;
+    const note = (detail, priority) => {
+        if (reason === undefined || priority >= reason.priority)
+            reason = { detail, priority };
+    };
+    const crash = (error) => {
+        const detail = `crashed: ${errorMessage(error)}`;
+        note(detail, 3);
+        // `process.exit()` does not wait for an asynchronous stderr pipe write.
+        // A synchronous descriptor write keeps the only human diagnostic from
+        // disappearing along with the process, and never touches protocol stdout.
+        try {
+            writeSync(2, `commitlore mcp: ${detail}\n`);
+        }
+        catch {
+            // The lifecycle record is still attempted below; neither breadcrumb may
+            // prevent process termination.
+        }
     };
     process.once('exit', () => {
-        exit('clean');
+        write(cwd, `exited  ${stamp(new Date())} pid ${String(process.pid)} ${reason?.detail ?? 'clean'}`);
     });
     // A client that goes away closes our stdin. That is the ordinary end of an
     // MCP session and is worth telling apart from a signal.
     process.stdin.once('end', () => {
-        exit('stdin closed');
+        note('stdin closed', 1);
+    });
+    output.once('error', (error) => {
+        if (error.code === 'EPIPE') {
+            note('client hung up', 2);
+            process.exit(0);
+        }
+        crash(error);
+        process.exit(1);
+    });
+    process.once('uncaughtException', (error) => {
+        crash(error);
+        process.exit(1);
+    });
+    process.once('unhandledRejection', (reason) => {
+        crash(reason);
+        process.exit(1);
     });
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
         process.once(signal, () => {
-            exit(signal);
+            note(signal, 2);
             process.exit(0);
         });
     }
+    return { crash };
 };
 /** Parses the log. Unreadable or absent reads as empty — it is a breadcrumb trail. */
 export const readLifecycle = (cwd = process.cwd()) => {
@@ -140,6 +177,8 @@ export const readLifecycle = (cwd = process.cwd()) => {
         return [];
     }
 };
+/** A completed server process whose final record says why it crashed. */
+export const crashedRuns = (cwd = process.cwd()) => readLifecycle(cwd).filter((entry) => entry.kind === 'exited' && entry.detail.startsWith('crashed: '));
 /**
  * Servers that started and never recorded an exit.
  *
