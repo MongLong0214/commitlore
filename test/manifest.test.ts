@@ -302,9 +302,9 @@ describe("plugin manifest: hooks/hooks.json's command resolves and produces outp
  * file nobody declared is invisible to it, because it is not on the list being
  * checked.
  *
- * `.serena/project.yml` reached v0.5.0 that way: a tool writes it into whatever
- * directory it is pointed at, a `git add -A` in a worktree swept it in, and the
- * released tree carried that worktree's name as somebody's project label.
+ * A tool's per-project config reached v0.5.0 that way: a tool writes it into
+ * whatever directory it is pointed at, a `git add -A` in a worktree swept it in,
+ * and the released tree carried that worktree's name as somebody's project label.
  *
  * This does not assert "no unexpected files". The tree legitimately holds `src/`,
  * `test/`, `bench/`, `spec/`, `docs/`, `dist/`, `skills/` and more, and a
@@ -318,7 +318,6 @@ describe("plugin manifest: hooks/hooks.json's command resolves and produces outp
 describe('plugin manifest: a clean clone carries no tool-local state (#334)', () => {
   /** Written by a tool into the directory it was pointed at, never by an author. */
   const TOOL_STATE = [
-    '.serena',
     '.idea',
     '.history',
     '.aider.chat.history.md',

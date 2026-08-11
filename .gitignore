@@ -20,9 +20,3 @@ bench/results/*.local.jsonl
 .claude/
 skills/
 skills-lock.json
-
-# Serena MCP writes a per-project config into whatever directory it was
-# pointed at. It carries that directory's name, so a copy committed from a
-# worktree ships somebody else's label -- which is how `project_name:
-# "t1124"` reached v0.5.0.
-.serena/
