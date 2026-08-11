@@ -100,22 +100,79 @@ export const buildEvaluatorRunArgs = (request: OciEvaluationRequest): string[] =
   return args;
 };
 
-export const dockerDaemonAvailable = (): boolean => {
+/**
+ * Why the runtime is not usable, when it is not.
+ *
+ * `timed-out` is deliberately not folded into `unreachable`. A probe that ran
+ * out of time did not learn that the daemon is absent; it learned nothing. Both
+ * refuse — refusing on "I do not know" is the whole point — but they are
+ * different facts, and an operator staring at a study that would not start
+ * needs to be told which one happened.
+ */
+export type RuntimeUnavailableReason = "unreachable" | "timed-out" | "not-installed";
+
+export type RuntimeProbe =
+  | { readonly available: true; readonly serverVersion: string }
+  | { readonly available: false; readonly reason: RuntimeUnavailableReason; readonly detail: string };
+
+/** How long the probe waits before it stops knowing anything. */
+const PROBE_TIMEOUT_MS = 20_000;
+
+/**
+ * Asks once whether the pinned runtime can be used, and reports what it found.
+ *
+ * The timeout is generous on purpose. At five seconds a cold or loaded daemon
+ * answered late often enough that one call could time out and the next could
+ * succeed — which is how the same question got two answers inside a single
+ * evaluation, and how a fail-closed guard came to disagree with the code it
+ * guards.
+ */
+export const probeEvaluatorRuntime = (): RuntimeProbe => {
   const result = spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], {
     encoding: "utf8",
-    timeout: 5_000,
+    timeout: PROBE_TIMEOUT_MS,
   });
-  return result.status === 0;
+  if (result.error !== undefined && (result.error as NodeJS.ErrnoException).code === "ENOENT") {
+    return { available: false, reason: "not-installed", detail: "docker is not on PATH" };
+  }
+  if (result.signal !== null) {
+    return {
+      available: false,
+      reason: "timed-out",
+      detail: `docker info did not answer within ${String(PROBE_TIMEOUT_MS)}ms`,
+    };
+  }
+  if (result.status !== 0) {
+    return { available: false, reason: "unreachable", detail: (result.stderr ?? "").trim() };
+  }
+  return { available: true, serverVersion: (result.stdout ?? "").trim() };
 };
+
+/**
+ * Thin boolean view of the probe, for callers that only branch on it.
+ *
+ * Anything deciding whether the fail-closed path *will* fire must use
+ * `probeEvaluatorRuntime` and pass the result to `runEvaluatorOci`. Calling
+ * this and then calling the runner asks the same question twice, and the two
+ * answers are not guaranteed to match.
+ */
+export const dockerDaemonAvailable = (): boolean => probeEvaluatorRuntime().available;
 
 /**
  * Runs one evaluation in the pinned image. Throws EvaluatorRuntimeUnavailable
  * when the daemon cannot be reached — never falls back to a weaker surface.
+ *
+ * `probe` exists so a caller that has already decided can hand that decision
+ * in rather than have it re-derived here. Re-deriving is what let a guard and
+ * the guarded call observe different runtimes.
  */
-export const runEvaluatorOci = (request: OciEvaluationRequest): { stdout: Buffer; stderr: string; exitCode: number | null } => {
-  if (!dockerDaemonAvailable()) {
+export const runEvaluatorOci = (
+  request: OciEvaluationRequest,
+  probe: RuntimeProbe = probeEvaluatorRuntime(),
+): { stdout: Buffer; stderr: string; exitCode: number | null } => {
+  if (!probe.available) {
     throw new EvaluatorRuntimeUnavailable(
-      "no reachable docker daemon — study evaluation requires the pinned image; refusing to downgrade",
+      `docker runtime ${probe.reason} (${probe.detail}) — study evaluation requires the pinned image; refusing to downgrade`,
     );
   }
   const result = spawnSync("docker", buildEvaluatorRunArgs(request), {

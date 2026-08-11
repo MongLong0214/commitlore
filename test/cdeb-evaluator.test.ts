@@ -30,7 +30,7 @@ import {
   buildEvaluatorRunArgs,
   combineImageIdentity,
   digestRef,
-  dockerDaemonAvailable,
+  probeEvaluatorRuntime,
   ENGINE_CONTEXT_FILES,
   evaluatorImageContextDigest,
   EvaluatorRuntimeUnavailable,
@@ -200,13 +200,19 @@ describe("OCI contract (§12.1/§12.2) — frozen argv, fail-closed absence", ()
   });
 
   it("refuses to evaluate when no daemon is reachable — never downgrades", () => {
-    if (dockerDaemonAvailable()) {
+    // One probe, used for both the decision to assert and the call being
+    // asserted on. Asking twice is what made this intermittent: a five-second
+    // probe could time out on the first call and succeed on the second, so the
+    // guard concluded "no daemon" and the runner then found one and did not
+    // throw. The property is fail-closed behaviour, not the machine's mood.
+    const probe = probeEvaluatorRuntime();
+    if (probe.available) {
       // On a machine with a live daemon this path executes the pinned argv
       // against whatever image is named; the fail-closed property under test
       // only has teeth where the daemon is absent.
       return;
     }
-    expect(() => runEvaluatorOci(request)).toThrow(EvaluatorRuntimeUnavailable);
+    expect(() => runEvaluatorOci(request, probe)).toThrow(EvaluatorRuntimeUnavailable);
   });
 });
 
@@ -308,5 +314,45 @@ describe("entrypoint infrastructure semantics (§10.3)", () => {
     );
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("overlap");
+  });
+});
+
+describe("runtime probe (#553): one question, one answer", () => {
+  const probeRequest = {
+    imageRef: "registry.example/cdeb-eval@sha256:" + "cd".repeat(32),
+    archivePath: "/host/runs/x/final-tree.tar.zst",
+    tasksDir: "/host/sealed",
+    taskId: "smoke-calc-fix",
+    claimedOid: "e".repeat(40),
+    imageDigest: TEST_IMAGE_DIGEST,
+  };
+
+  it("reports why it is unavailable, and never calls a timeout an absence", () => {
+    const probe = probeEvaluatorRuntime();
+    if (probe.available) {
+      expect(typeof probe.serverVersion).toBe("string");
+      return;
+    }
+    expect(["unreachable", "timed-out", "not-installed"]).toContain(probe.reason);
+    expect(probe.detail.length).toBeGreaterThan(0);
+  });
+
+  // The defect this closes: the guard and the guarded call each probed, and a
+  // slow daemon answered differently to each. A caller that has decided must be
+  // able to hand that decision in, or the two can never be made to agree.
+  it("refuses on an injected unavailable probe regardless of the machine", () => {
+    expect(() =>
+      runEvaluatorOci(probeRequest, { available: false, reason: "timed-out", detail: "injected" }),
+    ).toThrow(EvaluatorRuntimeUnavailable);
+  });
+
+  it("names the reason in what it throws, so an operator learns which happened", () => {
+    try {
+      runEvaluatorOci(probeRequest, { available: false, reason: "not-installed", detail: "docker is not on PATH" });
+      expect.unreachable("expected a refusal");
+    } catch (error) {
+      expect(String(error)).toContain("not-installed");
+      expect(String(error)).toContain("docker is not on PATH");
+    }
   });
 });
