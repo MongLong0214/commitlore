@@ -15996,6 +15996,19 @@ import { createHash as createHash3 } from "node:crypto";
 var PROVENANCE_KEY3 = "Provenance";
 var sha2562 = (input) => createHash3("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
+var recordIdSeed = (record2) => record2.trailers.filter((trailer) => trailer.key !== "Record-Id").map((trailer) => JSON.stringify([trailer.key, trailer.value])).sort().join("\n");
+var MINTED_ID_CHARS = 12;
+var mintRecordId = (record2, reservedIds) => {
+  const seed = recordIdSeed(record2);
+  let probe = 0;
+  while (true) {
+    const input = probe === 0 ? seed : `${seed}
+${probe}`;
+    const candidate = `r-${sha2562(input).slice(0, MINTED_ID_CHARS)}`;
+    if (!reservedIds.has(candidate)) return candidate;
+    probe += 1;
+  }
+};
 var captureCanonicalTuple = (trailers) => {
   const keys = trailers.filter((t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance").map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
   return keys;
@@ -16007,18 +16020,19 @@ var classifyResult = (accepted, rejected) => {
 };
 var loadCaptureVerificationHistory = (cwd) => {
   try {
-    const activeRecordIds = /* @__PURE__ */ new Set();
+    const recordIds = /* @__PURE__ */ new Set();
     const activeCanonicalTuples = /* @__PURE__ */ new Set();
-    const queryResult = runQuery({ cwd, noIndex: true });
+    const queryResult = runQuery({ cwd, noIndex: true, allHistory: true });
     for (const rec of queryResult.records) {
       const idTrailer = rec.trailers.find((t) => t.key === "Record-Id");
-      if (idTrailer) activeRecordIds.add(idTrailer.value);
+      if (idTrailer) recordIds.add(idTrailer.value);
+      if (rec.lifecycle !== "active") continue;
       const tuple = rec.trailers.filter(
         (t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance"
       ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
       activeCanonicalTuples.add(tuple);
     }
-    return { activeRecordIds, activeCanonicalTuples };
+    return { recordIds, activeCanonicalTuples };
   } catch {
     return null;
   }
@@ -16103,15 +16117,16 @@ var verifyCaptureRecords = (opts) => {
       persist(result2);
       return result2;
     }
-    const { activeRecordIds, activeCanonicalTuples } = history;
+    const reservedRecordIds = new Set(history.recordIds);
+    const { activeCanonicalTuples } = history;
     const verifyResult = verifyDraft(draft, { transcript, diff });
     for (const verified of verifyResult.accepted) {
       const id = recordIdOf(verified.record);
-      if (id && activeRecordIds.has(id)) {
+      if (id && reservedRecordIds.has(id)) {
         rejected.push({
           record: verified.record,
           reason: "duplicate-record-id",
-          detail: `Record-Id "${id}" already exists in active records`
+          detail: `Record-Id "${id}" already exists in repository history`
         });
         continue;
       }
@@ -16125,6 +16140,7 @@ var verifyCaptureRecords = (opts) => {
         continue;
       }
       accepted.push(verified);
+      if (id) reservedRecordIds.add(id);
     }
     if (resolvePolicy(cwd).policy.mode === "auto") {
       for (const verified of accepted) {
@@ -16134,6 +16150,12 @@ var verifyCaptureRecords = (opts) => {
         trailers.push({ key: PROVENANCE_KEY3, value: "drafted" });
         verified.record.trailers = trailers;
       }
+    }
+    for (const verified of accepted) {
+      if (recordIdOf(verified.record) !== void 0) continue;
+      const id = mintRecordId(verified.record, reservedRecordIds);
+      verified.record.trailers = [...verified.record.trailers, { key: "Record-Id", value: id }];
+      reservedRecordIds.add(id);
     }
     for (const rejectedRec of verifyResult.rejected) {
       rejected.push({
@@ -16444,25 +16466,23 @@ var readHistoricalRecords = (cwd) => {
   });
 };
 var verificationHistory = (records) => {
-  const realIds = /* @__PURE__ */ new Set();
+  const recordIds = /* @__PURE__ */ new Set();
   const stream = records.map((record2, index) => {
     const id = record2.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-    if (id !== void 0) realIds.add(id);
+    if (id !== void 0) recordIds.add(id);
     return {
       sha: record2.sha,
       committedAt: record2.committedAt,
       trailers: id === void 0 ? [{ key: "Record-Id", value: `${SYNTHETIC_HISTORY_ID}${record2.sha}:${index}` }, ...record2.trailers] : record2.trailers
     };
   });
-  const activeRecordIds = /* @__PURE__ */ new Set();
   const activeCanonicalTuples = /* @__PURE__ */ new Set();
   for (const state of foldLifecycle(stream, { at: /* @__PURE__ */ new Date() })) {
     if (state.lifecycle !== "active") continue;
-    if (realIds.has(state.recordId)) activeRecordIds.add(state.recordId);
     const tuple = captureCanonicalTuple(state.resolvedTrailers);
     if (tuple !== "") activeCanonicalTuples.add(tuple);
   }
-  return { activeRecordIds, activeCanonicalTuples };
+  return { recordIds, activeCanonicalTuples };
 };
 var historiesBeforeCommit = (cwd) => {
   const records = readHistoricalRecords(cwd);
