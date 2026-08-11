@@ -271,6 +271,18 @@ describe('#443 the CDEB recursive verifier', () => {
     expect(result.output).toMatch(/raw_stream_sha256 does not match provider NDJSON/);
   });
 
+  it('fails an archive that was fsynced but never received final-tree.json', () => {
+    const root = study('half-final-tree', []);
+    const runDir = join(root, 'cdeb-test-01', 'runs', 'repo-a__task-a__on__r1');
+    mkdirSync(runDir, { recursive: true });
+    // This is the crash window CDEB-07 recovers before resume.  It must not
+    // verify as a final tree merely because its archive bytes are complete.
+    writeFileSync(join(runDir, 'final-tree.tar.zst'), Buffer.from('not-a-committed-tree'));
+    const result = verify(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toMatch(/final tree archive and metadata must appear together/);
+  });
+
   it('accepts an unavailable usage row without inventing a numeric total', () => {
     const row = validRow({
       usage: {

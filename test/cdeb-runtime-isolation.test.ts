@@ -610,10 +610,14 @@ describe('pin manifest and gate token', () => {
 
   it('executeAgentRun captures the raw stream byte-for-byte, persists it, and identity-checks it', async () => {
     const stream = validStream();
+    const firstTurns: string[] = [];
     const streamingDocker: ContainerRuntimeCommands = {
       run: () => ({ stdout: '', stderr: '', exitCode: 0, timedOut: false }),
       runToSink: async (_args, sink) => {
-        sink.write(stream);
+        // Deliberately split a NDJSON event across chunks: CDEB-07's durable
+        // non-rerun marker must observe lines, not assume chunk boundaries.
+        sink.write(stream.slice(0, 37));
+        sink.write(stream.slice(37));
         sink.end();
         return { exitCode: 0, stderr: '', timedOut: false };
       },
@@ -626,6 +630,7 @@ describe('pin manifest and gate token', () => {
       prompt: 'task',
       outDir,
       providerEnv: {},
+      onFirstModelTurn: () => firstTurns.push('observed-before-stream-completes'),
     });
     const captured = readPersistedRawNdjson(outDir).toString('utf8');
     expect(captured).toBe(stream);
@@ -633,6 +638,7 @@ describe('pin manifest and gate token', () => {
     expect(outcome.ledger.usage.availability).toBe('measured');
     expect(outcome.exit_code).toBe(0);
     expect(outcome.provider_stream_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(firstTurns).toEqual(['observed-before-stream-completes']);
   });
 
   it('executeAgentRun turns mid-run model drift into a hard stop after capture', async () => {

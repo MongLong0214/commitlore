@@ -186,6 +186,70 @@ const checkProviderArtifact = (study, runDir, row) => {
   }
 };
 
+/**
+ * CDEB-07: a final tree is an archive PLUS its metadata commit record.  An
+ * archive without final-tree.json is deliberately not a tree that can verify;
+ * accepting it would turn a kill between the two writes into durable-looking
+ * evidence.  The metadata's digest binds the bytes and the row binds both
+ * object identity and digests.
+ */
+const checkFinalTreeArtifact = (study, runDir, row) => {
+  const archivePath = join(runDir, "final-tree.tar.zst");
+  const metadataPath = join(runDir, "final-tree.json");
+  const hasArchive = existsSync(archivePath);
+  const hasMetadata = existsSync(metadataPath);
+  if (!hasArchive && !hasMetadata) {
+    if (row !== null) fail(study, `${runDir}: row.json has no final tree artifact`);
+    return;
+  }
+  if (!hasArchive || !hasMetadata) {
+    fail(study, `${runDir}: final tree archive and metadata must appear together`);
+    return;
+  }
+  const metadata = readJson(study, metadataPath);
+  if (metadata === null || typeof metadata !== "object" || Array.isArray(metadata)) return;
+  const expectedKeys = [
+    "archive_sha256", "base_tree_oid", "canonical_diff_sha256", "final_tree_oid", "schema_version", "workspace_status_digest",
+  ].sort();
+  const actualKeys = Object.keys(metadata).sort();
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    fail(study, `${metadataPath}: final tree metadata has an unexpected shape`);
+    return;
+  }
+  if (metadata.schema_version !== 1) {
+    fail(study, `${metadataPath}: final tree metadata schema_version must be 1`);
+    return;
+  }
+  for (const key of ["base_tree_oid", "final_tree_oid"] ) {
+    if (typeof metadata[key] !== "string" || !/^[0-9a-f]{40}$/.test(metadata[key])) {
+      fail(study, `${metadataPath}: ${key} is not a git object id`);
+    }
+  }
+  for (const key of ["archive_sha256", "canonical_diff_sha256", "workspace_status_digest"]) {
+    if (typeof metadata[key] !== "string" || !/^[0-9a-f]{64}$/.test(metadata[key])) {
+      fail(study, `${metadataPath}: ${key} is not a sha256`);
+    }
+  }
+  const archiveDigest = createHash("sha256").update(readFileSync(archivePath)).digest("hex");
+  if (archiveDigest !== metadata.archive_sha256) {
+    fail(study, `${runDir}: final tree archive digest does not match metadata`);
+  }
+  if (row !== null) {
+    if (row.final_tree.final_tree_oid !== metadata.final_tree_oid) {
+      fail(study, `${runDir}: row final tree oid does not match final-tree.json`);
+    }
+    if (row.final_tree.archive_sha256 !== metadata.archive_sha256) {
+      fail(study, `${runDir}: row final tree archive digest does not match final-tree.json`);
+    }
+    if (row.final_tree.canonical_diff_sha256 !== metadata.canonical_diff_sha256) {
+      fail(study, `${runDir}: row canonical diff digest does not match final-tree.json`);
+    }
+    if (row.final_tree.workspace_status_digest !== metadata.workspace_status_digest) {
+      fail(study, `${runDir}: row workspace status digest does not match final-tree.json`);
+    }
+  }
+};
+
 const verifyStudy = (root, studyName) => {
   const study = studyName;
   const dir = join(root, studyName);
@@ -306,6 +370,7 @@ const verifyStudy = (root, studyName) => {
       const rowPath = join(runDir, "row.json");
       const row = existsSync(rowPath) ? verifyRow(rowPath) : null;
       checkProviderArtifact(study, runDir, row);
+      checkFinalTreeArtifact(study, runDir, row);
       const evalPath = join(runDir, "evaluator.json");
       if (existsSync(evalPath)) {
         validateAgainst(study, "evaluator", evalPath, readJson(study, evalPath));
