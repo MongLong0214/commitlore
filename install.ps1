@@ -24,11 +24,14 @@
         script does about it. Two active records on install.sh reject an
         installer that edits the user's environment behind their back, and a
         user-scope PATH write is the same act in Windows spelling.
-      - Post-install verification reports; it never decides the exit code.
+      - Runtime verification completes before the shim is activated. An incoming
+        checkout that cannot start is never reported as installed.
 
     Exit codes, identical to install.sh: 1 = missing or too-old prerequisite, or
-    bad usage (nothing was written), 2 = the source could not be fetched, 4 = the
-    install target is occupied by something this script did not put there.
+    bad usage (nothing was written), 2 = the source could not be fetched, 3 =
+    runtime verification ran and found an unusable checkout, 4 = the install
+    target is occupied by something this script did not put there, 5 = runtime
+    verification could not run on this machine.
 
     Windows support is not claimed by this file. It installs, and what it
     installs runs; whether the containment property #71 establishes holds on
@@ -74,6 +77,272 @@ function Stop-Install {
     exit $Code
 }
 
+# The full runtime inventory is data in the checkout it describes. A tag can
+# add an asset and its manifest together, so an installer fetched from a newer
+# ref never judges that tag against a list it could not contain.
+$RuntimeManifestPath = 'installer/runtime-manifest.txt'
+$RuntimeManifestFormat = 'commitlore-runtime-manifest-v1'
+
+# Check one asset against both the working tree and the pinned tree. The
+# manifest itself goes through this check before its contents are read, so
+# emptying or truncating it locally cannot reduce what the installer verifies.
+function Test-TrackedRuntimeFile {
+    param(
+        [string] $Root,
+        [string] $RelativePath,
+        [string] $Label
+    )
+    $path = Join-Path $Root ($RelativePath.Replace('/', '\'))
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return (New-VerificationResult 'failed' $path "the $Label requires a regular file there")
+    }
+    try {
+        $treeEntry = ((& git -C $Root ls-tree --name-only HEAD -- $RelativePath 2>$null | Out-String).Trim())
+        $gitCode = $LASTEXITCODE
+    } catch {
+        return (New-VerificationResult 'unavailable' $path "Git could not read the pinned checkout tree: $($_.Exception.Message)")
+    }
+    if ($gitCode -ne 0) {
+        return (New-VerificationResult 'unavailable' $path "Git could not read the pinned checkout tree (exit $gitCode)")
+    }
+    if ($treeEntry -cne $RelativePath) {
+        return (New-VerificationResult 'failed' $path "the pinned checkout does not record this $Label entry")
+    }
+    try {
+        $previousGitPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & git -C $Root diff --quiet HEAD -- $RelativePath > $null 2>$null
+        $gitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousGitPreference
+    } catch {
+        return (New-VerificationResult 'unavailable' $path "Git could not compare the pinned checkout ${Label}: $($_.Exception.Message)")
+    }
+    if ($gitCode -eq 0) {
+        return (New-VerificationResult 'passed' $path '')
+    }
+    if ($gitCode -eq 1) {
+        return (New-VerificationResult 'failed' $path "the $Label entry differs from the pinned checkout")
+    }
+    return (New-VerificationResult 'unavailable' $path "Git could not compare the pinned checkout $Label (exit $gitCode)")
+}
+
+# Releases before installer/runtime-manifest.txt cannot provide a full runtime
+# inventory. They are still checked for the bundle the installer can name on
+# its own, then receive the cross-version --version smoke test.
+function Test-LegacyRuntime {
+    param([string] $Root)
+    $legacy = Test-TrackedRuntimeFile $Root 'dist/commitlore.mjs' 'legacy runtime check'
+    if ($legacy.State -ne 'passed') { return $legacy }
+    return (New-VerificationResult 'passed' $Root '' '' 'legacy')
+}
+
+function Test-RuntimeManifest {
+    param([string] $Root)
+    $manifestPath = Join-Path $Root ($RuntimeManifestPath.Replace('/', '\'))
+
+    # `ls-tree` distinguishes an old tag (no path in the pinned tree) from a
+    # damaged checkout (the pinned tree has it but the file is missing locally).
+    try {
+        $manifestTreeEntry = ((& git -C $Root ls-tree --name-only HEAD -- $RuntimeManifestPath 2>$null | Out-String).Trim())
+        $gitCode = $LASTEXITCODE
+    } catch {
+        return (New-VerificationResult 'unavailable' $manifestPath "Git could not read the pinned checkout tree: $($_.Exception.Message)")
+    }
+    if ($gitCode -ne 0) {
+        return (New-VerificationResult 'unavailable' $manifestPath "Git could not read the pinned checkout tree (exit $gitCode)")
+    }
+    if ([string]::IsNullOrEmpty($manifestTreeEntry)) {
+        return (Test-LegacyRuntime $Root)
+    }
+    if ($manifestTreeEntry -cne $RuntimeManifestPath) {
+        return (New-VerificationResult 'failed' $manifestPath 'the pinned checkout records an unexpected runtime manifest path')
+    }
+
+    $manifest = Test-TrackedRuntimeFile $Root $RuntimeManifestPath 'runtime manifest'
+    if ($manifest.State -ne 'passed') { return $manifest }
+    try {
+        $manifestLines = @(Get-Content -LiteralPath $manifestPath -ErrorAction Stop)
+    } catch {
+        return (New-VerificationResult 'unavailable' $manifestPath "the runtime manifest could not be read: $($_.Exception.Message)")
+    }
+    if ($manifestLines.Count -eq 0) {
+        return (New-VerificationResult 'failed' $manifestPath 'the runtime manifest is empty')
+    }
+    if ($manifestLines[0] -cne $RuntimeManifestFormat) {
+        return (New-VerificationResult 'failed' $manifestPath "the runtime manifest format is not $RuntimeManifestFormat")
+    }
+    if ($manifestLines.Count -eq 1) {
+        return (New-VerificationResult 'failed' $manifestPath 'the runtime manifest must name at least one runtime asset')
+    }
+
+    $seen = @{}
+    for ($index = 1; $index -lt $manifestLines.Count; $index++) {
+        $relativePath = $manifestLines[$index]
+        if ([string]::IsNullOrEmpty($relativePath)) {
+            return (New-VerificationResult 'failed' $manifestPath 'the runtime manifest contains an empty asset entry')
+        }
+        # Each entry is a canonical repository-relative file path. In particular,
+        # no manifest may escape its checkout or use a second spelling of an asset.
+        if ($relativePath -notmatch '^[A-Za-z0-9._-][A-Za-z0-9._/-]*$' -or $relativePath -match '(^/|/$|//|(^|/)\.\.?(/|$))') {
+            return (New-VerificationResult 'failed' $manifestPath "the runtime manifest contains a non-canonical asset path: $relativePath")
+        }
+        if ($seen.ContainsKey($relativePath)) {
+            return (New-VerificationResult 'failed' $manifestPath "the runtime manifest repeats an asset path: $relativePath")
+        }
+        $seen[$relativePath] = $true
+        $asset = Test-TrackedRuntimeFile $Root $relativePath 'runtime manifest'
+        if ($asset.State -ne 'passed') { return $asset }
+    }
+    return (New-VerificationResult 'passed' $Root '' '' 'manifest')
+}
+
+function New-VerificationResult {
+    param(
+        [string] $State,
+        [string] $Path,
+        [string] $Detail,
+        [string] $Version = '',
+        [string] $Mode = ''
+    )
+    return [pscustomobject]@{
+        State = $State
+        Path = $Path
+        Detail = $Detail
+        Version = $Version
+        Mode = $Mode
+    }
+}
+
+# Smoke-test the checkout directly, while it is still only an incoming tree.
+# doctor --json can legitimately exit 1 for a repository that needs setup; its
+# JSON report proves the command ran. Exit 2 is the documented could-not-run
+# result and is distinguished from a runtime failure below.
+function Invoke-IncomingSmoke {
+    param(
+        [string] $Root,
+        [string] $NodePath
+    )
+
+    $entry = Join-Path $Root 'dist\commitlore.mjs'
+    $smokeDir = Join-Path ([System.IO.Path]::GetTempPath()) ("commitlore-smoke-{0}" -f $PID)
+    try {
+        New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
+    } catch {
+        return (New-VerificationResult 'unavailable' $entry "could not create smoke-test directory: $($_.Exception.Message)")
+    }
+
+    try {
+        try {
+            $previousSmokePreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $version = ((& $NodePath $entry --version 2>$null | Out-String).Trim())
+            $versionCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousSmokePreference
+        } catch {
+            return (New-VerificationResult 'unavailable' $entry "--version could not start: $($_.Exception.Message)")
+        }
+        if ($versionCode -ne 0) {
+            return (New-VerificationResult 'failed' $entry "--version ran and exited $versionCode")
+        }
+        if ([string]::IsNullOrEmpty($version)) {
+            return (New-VerificationResult 'failed' $entry '--version exited 0 without reporting a version')
+        }
+
+        $validMessage = Join-Path $smokeDir 'valid-message'
+        $invalidMessage = Join-Path $smokeDir 'invalid-message'
+        [System.IO.File]::WriteAllText($validMessage, "installer smoke test`n`nBlast: local`n", (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($invalidMessage, "installer smoke test`n`nBlast: invalid`n", (New-Object System.Text.UTF8Encoding($false)))
+
+        try {
+            $previousSmokePreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & $NodePath $entry validate --message-file $validMessage > $null 2>$null
+            $validCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousSmokePreference
+        } catch {
+            return (New-VerificationResult 'unavailable' $entry "validate could not start: $($_.Exception.Message)")
+        }
+        if ($validCode -ne 0) {
+            return (New-VerificationResult 'failed' $entry "validate of a valid record ran and exited $validCode")
+        }
+
+        try {
+            $previousSmokePreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & $NodePath $entry validate --message-file $invalidMessage > $null 2>$null
+            $invalidCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousSmokePreference
+        } catch {
+            return (New-VerificationResult 'unavailable' $entry "validate could not start: $($_.Exception.Message)")
+        }
+        if ($invalidCode -ne 1) {
+            return (New-VerificationResult 'failed' $entry "validate of an invalid record exited $invalidCode, want 1")
+        }
+
+        $doctorOutput = ''
+        $doctorLocationPushed = $false
+        try {
+            Push-Location -LiteralPath $Root
+            $doctorLocationPushed = $true
+            $previousSmokePreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $doctorOutput = (& $NodePath $entry doctor --json 2>$null | Out-String)
+            $doctorCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousSmokePreference
+        } catch {
+            return (New-VerificationResult 'unavailable' $entry "doctor --json could not start: $($_.Exception.Message)")
+        } finally {
+            if ($doctorLocationPushed) { Pop-Location }
+        }
+        if ($doctorCode -ne 0 -and $doctorCode -ne 1) {
+            if ($doctorCode -eq 2 -or $doctorCode -eq 126 -or $doctorCode -eq 127) {
+                return (New-VerificationResult 'unavailable' $entry "doctor --json could not run (exit $doctorCode)")
+            }
+            return (New-VerificationResult 'failed' $entry "doctor --json ran and exited $doctorCode")
+        }
+        if ($doctorOutput -notmatch '"schema"\s*:\s*"commitlore_doctor\.v2"') {
+            return (New-VerificationResult 'failed' $entry 'doctor --json did not emit a CommitLore doctor report')
+        }
+
+        return (New-VerificationResult 'passed' $entry '' $version)
+    } finally {
+        if (Test-Path -LiteralPath $smokeDir) {
+            Remove-Item -LiteralPath $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# A pre-manifest release also predates the current smoke-test contract. It may
+# not emit today's doctor schema (or expose every later command), so only prove
+# that the bundle the installer can name starts and reports its version. Tagged
+# releases that carry the manifest always take Invoke-IncomingSmoke above.
+function Invoke-LegacySmoke {
+    param(
+        [string] $Root,
+        [string] $NodePath
+    )
+    $entry = Join-Path $Root 'dist\commitlore.mjs'
+    try {
+        $previousSmokePreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $version = ((& $NodePath $entry --version 2>$null | Out-String).Trim())
+        $versionCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousSmokePreference
+    } catch {
+        return (New-VerificationResult 'unavailable' $entry "--version could not start: $($_.Exception.Message)")
+    }
+    if ($versionCode -ne 0) {
+        if ($versionCode -eq 126 -or $versionCode -eq 127) {
+            return (New-VerificationResult 'unavailable' $entry "--version could not start (exit $versionCode)")
+        }
+        return (New-VerificationResult 'failed' $entry "--version ran and exited $versionCode")
+    }
+    if ([string]::IsNullOrEmpty($version)) {
+        return (New-VerificationResult 'failed' $entry '--version exited 0 without reporting a version')
+    }
+    return (New-VerificationResult 'passed' $entry '' $version)
+}
+
 # --- 1. prerequisites, before anything is written ---------------------------
 #
 # Both are hard requirements rather than conveniences: the shim runs the bundle
@@ -111,8 +380,11 @@ if ($nodeMajor -lt $NodeMajorMin) {
 # here as a missing one, and this is the check that catches both.
 $gitRan = $false
 try {
-    & git --version > $null 2>&1
+    $previousGitPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & git --version > $null 2>$null
     $gitRan = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $previousGitPreference
 } catch {
     $gitRan = $false
 }
@@ -160,18 +432,75 @@ if (-not [string]::IsNullOrEmpty($Version)) {
 
 Write-Log "installing $Version"
 
-# --- 3. fetch the pinned checkout ------------------------------------------
+# --- 3. check the activation target before materializing anything -----------
 #
-# Into the user's local application data, keyed by tag, so an upgrade adds a
-# checkout beside the old one instead of mutating it. Cloned to a temporary name
-# and renamed, so a failed clone never leaves a half-checkout that looks
-# installed.
+# A foreign shim is rejected before a checkout is fetched. This preserves both
+# the foreign file and any prior working installation if the transaction cannot
+# reach its activation point.
 
 $dataRoot = Join-Path $env:LOCALAPPDATA 'commitlore'
-$checkout = Join-Path $dataRoot $Version
+$destDir = $env:COMMITLORE_INSTALL_DIR
+if ([string]::IsNullOrEmpty($destDir)) {
+    $destDir = Join-Path $dataRoot 'bin'
+}
+$dest = Join-Path $destDir 'commitlore.cmd'
 
-if (Test-Path -LiteralPath (Join-Path $checkout 'dist')) {
-    Write-Log "reusing the existing checkout at $checkout"
+# Refuse to clobber a file this script did not put there. A previous shim
+# carries the marker; a previous install prints a bare semver. Anything else is
+# somebody else's file and is left exactly where it is.
+if (Test-Path -LiteralPath $dest) {
+    $existing = ''
+    try {
+        $existing = (Get-Content -LiteralPath $dest -Raw -ErrorAction SilentlyContinue)
+    } catch {
+        $existing = ''
+    }
+    if ($null -eq $existing) { $existing = '' }
+    if ($existing.Contains($WrapperMarker)) {
+        Write-Log "upgrading the existing commitlore shim at $dest"
+    } else {
+        $existingVersion = ''
+        try {
+            $existingVersion = (& $dest --version 2>$null | Select-Object -First 1)
+        } catch {
+            $existingVersion = ''
+        }
+        if ($null -eq $existingVersion) { $existingVersion = '' }
+        $existingVersion = $existingVersion.Trim()
+        if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
+            Write-Log "replacing a previous commitlore install at $dest ($existingVersion -> $Version)"
+        } else {
+            Stop-Install "$dest already exists and is not a commitlore shim (got: ""$existingVersion"") -- refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
+        }
+    }
+}
+
+# --- 4. materialize and verify the pinned checkout -------------------------
+#
+# Into the user's local application data, keyed by tag, so an upgrade adds a
+# checkout beside the old one instead of mutating it. A source checkout is
+# always cloned into an incoming directory, then fully checked before it
+# receives its stable name or the shim can point at it.
+
+$checkout = Join-Path $dataRoot $Version
+$checkoutTmp = ''
+$candidate = ''
+$manifest = $null
+
+if (Test-Path -LiteralPath $checkout) {
+    if (-not (Test-Path -LiteralPath $checkout -PathType Container)) {
+        $manifest = New-VerificationResult 'failed' $checkout 'the existing checkout path is not a directory'
+    } else {
+        $manifest = Test-RuntimeManifest $checkout
+    }
+    if ($manifest.State -eq 'passed') {
+        $candidate = $checkout
+        if ($manifest.Mode -eq 'legacy') {
+            Write-Log "reusing the existing checkout at $checkout (legacy runtime check and --version smoke test; this release predates $RuntimeManifestPath)"
+        } else {
+            Write-Log "reusing the existing checkout at $checkout (runtime manifest verified)"
+        }
+    }
 } else {
     New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
     $checkoutTmp = Join-Path $dataRoot (".{0}.incoming.{1}" -f $Version, $PID)
@@ -216,18 +545,57 @@ if (Test-Path -LiteralPath (Join-Path $checkout 'dist')) {
         if ([string]::IsNullOrEmpty($reason)) { $reason = 'nothing' }
         Stop-Install "could not fetch $Version from $SourceUrl. git said: $reason. Nothing was installed." 2
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $checkoutTmp 'dist\commitlore.mjs'))) {
-        Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
-        Stop-Install "$Version does not carry dist/commitlore.mjs, so there is nothing to run. Nothing was installed." 2
+    $manifest = Test-RuntimeManifest $checkoutTmp
+    if ($manifest.State -eq 'passed') {
+        $candidate = $checkoutTmp
+        if ($manifest.Mode -eq 'legacy') {
+            Write-Log "$Version predates $RuntimeManifestPath; using the installer's legacy runtime check and --version smoke test"
+        }
     }
-    if (Test-Path -LiteralPath $checkout) {
-        Remove-Item -LiteralPath $checkout -Recurse -Force
-    }
-    Move-Item -LiteralPath $checkoutTmp -Destination $checkout
-    Write-Log "checked out $Version into $checkout"
 }
 
-# --- 4. install the shim ---------------------------------------------------
+if ([string]::IsNullOrEmpty($candidate)) {
+    if (-not [string]::IsNullOrEmpty($checkoutTmp) -and (Test-Path -LiteralPath $checkoutTmp)) {
+        Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($manifest.State -eq 'unavailable') {
+        Stop-Install "runtime verification could not run for ""$($manifest.Path)"": $($manifest.Detail). The existing shim at $dest was left unchanged." 5
+    }
+    Stop-Install "runtime verification ran and found an unusable path: ""$($manifest.Path)"" ($($manifest.Detail)). The existing shim at $dest was left unchanged." 3
+}
+
+if ($manifest.Mode -eq 'legacy') {
+    $smoke = Invoke-LegacySmoke $candidate $nodeBin
+} else {
+    $smoke = Invoke-IncomingSmoke $candidate $nodeBin
+}
+if ($smoke.State -ne 'passed') {
+    if (-not [string]::IsNullOrEmpty($checkoutTmp) -and (Test-Path -LiteralPath $checkoutTmp)) {
+        Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($smoke.State -eq 'unavailable') {
+        Stop-Install "runtime verification could not run for ""$($smoke.Path)"": $($smoke.Detail). The existing shim at $dest was left unchanged." 5
+    }
+    Stop-Install "runtime verification ran and found an unusable path: ""$($smoke.Path)"" ($($smoke.Detail)). The existing shim at $dest was left unchanged." 3
+}
+
+if ($candidate -eq $checkoutTmp) {
+    if (Test-Path -LiteralPath $checkout) {
+        Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
+        Stop-Install "could not materialize verified incoming checkout at $checkout because that path became occupied. The existing shim at $dest was left unchanged." 4
+    }
+    try {
+        Move-Item -LiteralPath $checkoutTmp -Destination $checkout
+    } catch {
+        Remove-Item -LiteralPath $checkoutTmp -Recurse -Force -ErrorAction SilentlyContinue
+        Stop-Install "could not materialize verified incoming checkout at $checkout. The existing shim at $dest was left unchanged." 3
+    }
+    $checkoutTmp = ''
+    $candidate = $checkout
+    Write-Log "checked out and verified $Version into $checkout"
+}
+
+# --- 5. activate the verified shim -----------------------------------------
 #
 # A .cmd shim rather than an extensionless file: cmd.exe and PowerShell both
 # find and run a .cmd from PATH, and an extensionless script is not executable
@@ -235,45 +603,9 @@ if (Test-Path -LiteralPath (Join-Path $checkout 'dist')) {
 # records the bundle and the interpreter in the repository's git config -- so the
 # shim is for the terminal, which is where a user types the name.
 
-$destDir = $env:COMMITLORE_INSTALL_DIR
-if ([string]::IsNullOrEmpty($destDir)) {
-    $destDir = Join-Path $dataRoot 'bin'
-}
-$dest = Join-Path $destDir 'commitlore.cmd'
-
-# Refuse to clobber a file this script did not put there. A previous shim
-# carries the marker; a previous install prints a bare semver. Anything else is
-# somebody else's file and is left exactly where it is.
-if (Test-Path -LiteralPath $dest) {
-    $existing = ''
-    try {
-        $existing = (Get-Content -LiteralPath $dest -Raw -ErrorAction SilentlyContinue)
-    } catch {
-        $existing = ''
-    }
-    if ($null -eq $existing) { $existing = '' }
-    if ($existing.Contains($WrapperMarker)) {
-        Write-Log "upgrading the existing commitlore shim at $dest"
-    } else {
-        $existingVersion = ''
-        try {
-            $existingVersion = (& $dest --version 2>$null | Select-Object -First 1)
-        } catch {
-            $existingVersion = ''
-        }
-        if ($null -eq $existingVersion) { $existingVersion = '' }
-        $existingVersion = $existingVersion.Trim()
-        if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
-            Write-Log "replacing a previous commitlore install at $dest ($existingVersion -> $Version)"
-        } else {
-            Stop-Install "$dest already exists and is not a commitlore shim (got: ""$existingVersion"") -- refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
-        }
-    }
-}
-
 New-Item -ItemType Directory -Force -Path $destDir | Out-Null
 
-$bundle = Join-Path $checkout 'dist\commitlore.mjs'
+$bundle = Join-Path $candidate 'dist\commitlore.mjs'
 # CRLF, written explicitly. cmd.exe mis-parses a batch file with LF endings in
 # ways that depend on the line -- a `set` can swallow the next line -- so the
 # endings are part of the file format here rather than a preference.
@@ -294,33 +626,18 @@ $shimText = ($shimLines -join "`r`n") + "`r`n"
 # shell installer's history; a move is the closest thing Windows offers to the
 # atomic rename that fixed it.
 $destTmp = "$dest.commitlore-install.$PID"
-[System.IO.File]::WriteAllText($destTmp, $shimText, (New-Object System.Text.UTF8Encoding($false)))
-Move-Item -LiteralPath $destTmp -Destination $dest -Force
+try {
+    [System.IO.File]::WriteAllText($destTmp, $shimText, (New-Object System.Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath $destTmp -Destination $dest -Force
+} catch {
+    if (Test-Path -LiteralPath $destTmp) {
+        Remove-Item -LiteralPath $destTmp -Force -ErrorAction SilentlyContinue
+    }
+    Stop-Install "could not activate verified checkout $candidate at $dest. The existing shim was left unchanged." 3
+}
 
 Write-Log "installed to $dest"
-
-# The install is complete by this point. Verification reports; it does not
-# decide. A single failure is retried once before it is reported, and a reported
-# failure still exits 0 -- an install that succeeded must not be failed by a
-# check that could not run.
-$installedVersion = ''
-foreach ($attempt in 1, 2) {
-    try {
-        $installedVersion = (& $dest --version 2>$null | Select-Object -First 1)
-    } catch {
-        $installedVersion = ''
-    }
-    if ($null -eq $installedVersion) { $installedVersion = '' }
-    $installedVersion = $installedVersion.Trim()
-    if (-not [string]::IsNullOrEmpty($installedVersion)) { break }
-    if ($attempt -eq 1) { Start-Sleep -Seconds 1 }
-}
-if (-not [string]::IsNullOrEmpty($installedVersion)) {
-    Write-Host $installedVersion
-} else {
-    Write-Log "installed, but unverified: ""$dest --version"" did not run in this shell."
-    Write-Log "the shim is in place; verify it yourself with: $dest --version"
-}
+Write-Host $smoke.Version
 
 # Printed, never written. Rewriting a user's environment from a piped installer
 # is ruled out on install.sh, and this is the same act in Windows spelling.
@@ -334,10 +651,10 @@ if (-not $onPath) {
     Write-Log "  [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';$destDir', 'User')"
 }
 
-# --- 5. detect and wire coding agents --------------------------------------
+# --- 6. detect and wire coding agents --------------------------------------
 #
 # Everything below is additive and best-effort: it never touches the exit codes
-# above (1-4 stay reserved for phase 1 -- the tool is already installed and
+# above (1-5 stay reserved for the transactional install -- the tool is already installed and
 # working by the time this runs), and every agent it wires is detect-then-act, in
 # the same order as install.sh:
 #

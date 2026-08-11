@@ -3,12 +3,13 @@
  *
  * PRD-F14 requirements 16-19.
  *
- * These are shape assertions, and shape is not the evidence. The evidence is the
- * `windows-latest` CI job that runs the script on a real runner: prerequisites,
- * checkout, shim, re-run, and a repository that ends up with a working hook.
- * What this file is for is the part a Windows runner cannot show cheaply --
- * that the two installers agree, clause by clause, on the decisions that were
- * already argued out for the shell one.
+ * These are shape assertions, and shape is not the evidence. This test runs on
+ * a non-Windows host, so it cannot establish PowerShell behavior. The evidence
+ * is the `windows-latest` CI job that runs the script on a real runner:
+ * prerequisites, checkout, shim, re-run, and a repository that ends up with a
+ * working hook. What this file is for is the part a Windows runner cannot show
+ * cheaply -- that the two installers agree, clause by clause, on the decisions
+ * that were already argued out for the shell one.
  *
  * Two of those decisions exist because this project shipped the defect they
  * forbid, and both are recorded on `install.sh`:
@@ -16,8 +17,8 @@
  *   - the installer never edits the user's environment. Printing the line is
  *     honest; writing it silently is what makes people distrust a piped
  *     installer. A user-scope `PATH` write is that same act in Windows spelling.
- *   - post-install verification never decides the exit code. An install that
- *     succeeded must not be failed by a check that could not run.
+ *   - runtime verification decides activation. A checkout that proves unusable
+ *     cannot be reported as a successful install.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -28,8 +29,67 @@ import { describe, expect, it } from 'vitest';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PS1 = join(REPO_ROOT, 'install.ps1');
 const SH = join(REPO_ROOT, 'install.sh');
+const RUNTIME_MANIFEST = join(REPO_ROOT, 'installer', 'runtime-manifest.txt');
 
 const body = (): string => readFileSync(PS1, 'utf8');
+
+/**
+ * A parse error reached CI because nothing here parses the file. PowerShell is
+ * not installed on most contributors' machines, so the suite checks shape and
+ * the `windows-latest` job is the only thing that ever executes the script —
+ * which is correct as a gate and slow as feedback.
+ *
+ * This catches one mechanically detectable class rather than pretending to be a
+ * parser. `"$Label: ..."` reads as a drive-qualified variable and fails to
+ * parse; `${Label}:` is the form that works. `$env:NAME` is the legitimate use
+ * of that syntax and is excluded.
+ */
+/**
+ * PowerShell promotes a native command's stderr to a terminating error under
+ * `$ErrorActionPreference = 'Stop'`, so a harmless warning aborts a run that
+ * succeeded. This repository has hit it twice: once when git's "--depth is
+ * ignored in local clones" killed a good clone, and again when Node's
+ * "ExperimentalWarning: SQLite is an experimental feature" — printed on every
+ * single invocation — made the installer's smoke test report that `validate`
+ * could not start, and refuse a working installation.
+ *
+ * The call site that learned it first left a comment explaining the trap. The
+ * next author did not read that comment, which is what comments cost. Only the
+ * exit code says whether a native command worked, so every invocation runs with
+ * the preference relaxed and is judged on its status.
+ */
+describe('install.ps1 does not let a native command\'s stderr abort a good run', () => {
+  it('every native invocation relaxes ErrorActionPreference first', () => {
+    const source = readFileSync(PS1, 'utf8');
+    const lines = source.split('\n');
+    const unguarded: string[] = [];
+
+    for (const [index, line] of lines.entries()) {
+      if (!/(?:^|[^`])&\s+\$(?:NodePath|git\b)/.test(line) && !/^\s*&\s+git\s/.test(line)) continue;
+      const window = lines.slice(Math.max(0, index - 6), index).join('\n');
+      if (!window.includes("$ErrorActionPreference = 'Continue'")) {
+        unguarded.push(`${String(index + 1)}: ${line.trim()}`);
+      }
+    }
+
+    expect(
+      unguarded,
+      "wrap native calls in $ErrorActionPreference = 'Continue' and judge them by $LASTEXITCODE",
+    ).toEqual([]);
+  });
+});
+
+describe('install.ps1 avoids drive-qualified variable references in strings', () => {
+  it('every interpolated variable followed by a colon is brace-delimited', () => {
+    const source = readFileSync(PS1, 'utf8');
+    const hazards = [...source.matchAll(/\$(?!env:)([A-Za-z_][A-Za-z0-9_]*):/g)].map((match) => {
+      const line = source.slice(0, match.index).split('\n').length;
+      return `${String(line)}: $${match[1] ?? ''}:`;
+    });
+
+    expect(hazards, 'use ${Name}: so PowerShell does not read Name as a drive').toEqual([]);
+  });
+});
 
 describe('T-1121 install.ps1 exists and matches install.sh clause for clause', () => {
   it('is ASCII only, like its shell twin', () => {
@@ -45,7 +105,9 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     const text = body();
     const nodeCheck = text.indexOf('NodeMajorMin = 22');
     const gitCheck = text.indexOf('git --version');
-    const firstWrite = text.indexOf('New-Item -ItemType Directory');
+    // Helper definitions appear first, but their writes run only after the
+    // prerequisites. This is the first write in the installation transaction.
+    const firstWrite = text.indexOf('New-Item -ItemType Directory -Force -Path $dataRoot');
     expect(nodeCheck).toBeGreaterThan(-1);
     expect(gitCheck).toBeGreaterThan(-1);
     expect(nodeCheck).toBeLessThan(firstWrite);
@@ -69,10 +131,13 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
 
   it('uses the same exit codes for the same conditions', () => {
     const text = body();
-    // 1 prerequisite or usage, 2 fetch, 4 occupied destination.
+    // 1 prerequisite or usage, 2 fetch, 3 verified-unusable, 4 occupied
+    // destination, 5 verification could not run.
     expect(text).toMatch(/Stop-Install "Node\.js \$NodeMajorMin or newer is required[\s\S]*?" 1/);
     expect(text).toMatch(/could not fetch \$Version[\s\S]*?" 2/);
+    expect(text).toMatch(/runtime verification ran and found an unusable path[\s\S]*?" 3/);
     expect(text).toMatch(/refusing to overwrite it[\s\S]*?" 4/);
+    expect(text).toMatch(/runtime verification could not run[\s\S]*?" 5/);
   });
 
   it('installs a pinned tag and never resolves a branch', () => {
@@ -123,18 +188,40 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(writes).toEqual([]);
   });
 
-  it('lets verification report without deciding the exit code', () => {
+  it('reads the checkout-owned runtime manifest and smoke-tests before activation', () => {
     const text = body();
-    expect(text).toContain('installed, but unverified');
-    // The retry, then exit 0 regardless.
-    expect(text).toContain('Start-Sleep -Seconds 1');
-    const lastExit = text.lastIndexOf('exit 0');
-    expect(lastExit).toBeGreaterThan(text.indexOf('installed, but unverified'));
+    expect(text).toContain("$RuntimeManifestPath = 'installer/runtime-manifest.txt'");
+    expect(text).toContain("$RuntimeManifestFormat = 'commitlore-runtime-manifest-v1'");
+    expect(text).toContain('Test-TrackedRuntimeFile $Root $RuntimeManifestPath');
+    expect(text).toContain('Get-Content -LiteralPath $manifestPath');
+    expect(text).toContain('Test-LegacyRuntime $Root');
+    expect(text).toContain('Invoke-LegacySmoke $candidate $nodeBin');
+    expect(readFileSync(SH, 'utf8')).toContain('RUNTIME_MANIFEST="installer/runtime-manifest.txt"');
+    for (const asset of [
+      'AGENTS.md',
+      'dist/commitlore.mjs',
+      'package.json',
+      'spec/SPEC.md',
+      'spec/schema/record.schema.json',
+      'hermes/skills/commitlore/DESCRIPTION.md',
+      'hermes/skills/commitlore/commits/SKILL.md',
+      'hermes/skills/commitlore/query/SKILL.md',
+      'hermes/skills/commitlore/setup/SKILL.md',
+    ]) {
+      expect(readFileSync(RUNTIME_MANIFEST, 'utf8')).toContain(asset);
+    }
+    expect(text).toContain('Invoke-IncomingSmoke $candidate $nodeBin');
+    expect(text).toContain('validate --message-file $validMessage');
+    expect(text).toContain('validate --message-file $invalidMessage');
+    expect(text).toContain('doctor --json');
+    expect(text.indexOf('Invoke-IncomingSmoke $candidate $nodeBin')).toBeLessThan(text.indexOf('$destTmp ='));
+    expect(text).not.toContain('installed, but unverified');
+    expect(text).not.toContain('Start-Sleep -Seconds 1');
   });
 
-  it('is re-runnable: an existing checkout and an existing shim are both upgrades', () => {
+  it('is re-runnable only after an existing checkout passes the runtime manifest', () => {
     const text = body();
-    expect(text).toContain('reusing the existing checkout at');
+    expect(text).toContain('reusing the existing checkout at $checkout (runtime manifest verified)');
     expect(text).toContain('upgrading the existing commitlore shim at');
     expect(text).toContain('already mentions commitlore -- left unchanged');
   });

@@ -413,6 +413,56 @@ jobs:
           if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
           if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
 
+      # This has to run on Windows rather than be inferred from the shape test:
+      # cmd.exe is the active wrapper, and the transaction is only established
+      # when its unchanged bytes survive both damaged-checkout attempts.
+      - name: Damaged installed bundles are refused without replacing the Windows shim
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          set "root=%TEMP%\commitlore-installer-transaction"
+          rmdir /s /q "%root%" 2>nul
+          set "LOCALAPPDATA=%root%"
+          set "COMMITLORE_INSTALL_DIR=%root%\bin"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-initial.log" 2>&1
+          if errorlevel 1 exit /b 1
+          set "shim=%root%\bin\commitlore.cmd"
+          set "bundle=%root%\commitlore\v9.9.9\dist\commitlore.mjs"
+          copy /y "%shim%" "%root%-shim-before.cmd" >nul
+          del "%bundle%"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-deleted.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%root%-deleted.log"
+          if not "%code%"=="3" (
+            echo ::error::expected exit 3 for a deleted bundle, got %code%
+            exit /b 1
+          )
+          findstr /C:"%bundle%" "%root%-deleted.log" >nul || (
+            echo ::error::the deleted bundle path was not named
+            exit /b 1
+          )
+          fc /b "%root%-shim-before.cmd" "%shim%" >nul || (
+            echo ::error::the shim changed after a deleted bundle was refused
+            exit /b 1
+          )
+          mkdir "%bundle%"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-directory.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%root%-directory.log"
+          if not "%code%"=="3" (
+            echo ::error::expected exit 3 for a bundle replaced by a directory, got %code%
+            exit /b 1
+          )
+          findstr /C:"%bundle%" "%root%-directory.log" >nul || (
+            echo ::error::the directory bundle path was not named
+            exit /b 1
+          )
+          fc /b "%root%-shim-before.cmd" "%shim%" >nul || (
+            echo ::error::the shim changed after a directory bundle was refused
+            exit /b 1
+          )
+
       # These two run under cmd, deliberately. A pwsh step on GitHub runs with
       # $ErrorActionPreference = 'Stop', which promotes a native command's stderr
       # to a terminating error -- so a step that captures the installer's own

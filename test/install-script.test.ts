@@ -11,14 +11,13 @@
  *
  *   - req 9: the wrapper is installed by atomic rename. An in-place overwrite of
  *     a file that may be executing forced a same-day patch release.
- *   - req 10: post-install verification never decides the exit code. That was
- *     the other half of the same defect: the install had succeeded and the
- *     script reported failure with exit 137.
+ *   - req 10: runtime verification decides whether activation may happen. The
+ *     old installer reported success after a bundle had already proved unusable.
  *   - req 11: the installer never edits a shell profile. An active ruled-out
  *     record on this file rejects it.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +27,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INSTALLER = join(REPO_ROOT, 'install.sh');
 const READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh-CN.md'];
+const RUNTIME_MANIFEST = join('installer', 'runtime-manifest.txt');
+const RUNTIME_MANIFEST_FORMAT = 'commitlore-runtime-manifest-v1';
 
 const scratch: string[] = [];
 const tempDir = (label: string): string => {
@@ -53,6 +54,33 @@ const git = (cwd: string, args: string[]): void => {
   });
 };
 
+const writeRuntimeManifest = (target: string, assets: string[]): void => {
+  const path = join(target, RUNTIME_MANIFEST);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${[RUNTIME_MANIFEST_FORMAT, ...assets].join('\n')}\n`);
+};
+
+/** The non-bundle files the installed CLI reads at runtime. */
+const copyRuntimeAssets = (
+  target: string,
+  options: { manifest?: string[] | false; includeHermes?: boolean } = {},
+): void => {
+  cpSync(join(REPO_ROOT, 'AGENTS.md'), join(target, 'AGENTS.md'));
+  cpSync(join(REPO_ROOT, 'spec'), join(target, 'spec'), { recursive: true });
+  if (options.includeHermes !== false) {
+    cpSync(join(REPO_ROOT, 'hermes'), join(target, 'hermes'), { recursive: true });
+  }
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'commitlore', version: '9.9.9' }));
+  if (options.manifest === false) return;
+  if (options.manifest !== undefined) {
+    writeRuntimeManifest(target, options.manifest);
+  } else {
+    const destination = join(target, RUNTIME_MANIFEST);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(join(REPO_ROOT, RUNTIME_MANIFEST), destination);
+  }
+};
+
 beforeAll(() => {
   sourceRepo = join(tempDir('source'), 'commitlore');
   mkdirSync(join(sourceRepo, 'dist'), { recursive: true });
@@ -60,8 +88,7 @@ beforeAll(() => {
   // read from this fixture package.json, so the installer's ordinary wrapper
   // verification remains deterministic without a network or another worktree.
   cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(sourceRepo, 'dist', 'commitlore.mjs'));
-  cpSync(join(REPO_ROOT, 'hermes'), join(sourceRepo, 'hermes'), { recursive: true });
-  writeFileSync(join(sourceRepo, 'package.json'), JSON.stringify({ name: 'commitlore', version: '9.9.9' }));
+  copyRuntimeAssets(sourceRepo);
   execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: sourceRepo });
   git(sourceRepo, ['add', '-A']);
   git(sourceRepo, ['commit', '--quiet', '-m', 'source']);
@@ -70,6 +97,7 @@ beforeAll(() => {
   brokenRepo = join(tempDir('broken'), 'commitlore');
   mkdirSync(join(brokenRepo, 'dist'), { recursive: true });
   writeFileSync(join(brokenRepo, 'dist', 'commitlore.mjs'), "process.exit(3);\n");
+  copyRuntimeAssets(brokenRepo);
   execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: brokenRepo });
   git(brokenRepo, ['add', '-A']);
   git(brokenRepo, ['commit', '--quiet', '-m', 'broken bundle']);
@@ -394,14 +422,139 @@ describe('T-1120 upgrade and verification', () => {
     expect(`${r.stdout}${r.stderr}`).toMatch(/refus|already exists|not .*commitlore/i);
   });
 
-  it('still exits 0 when post-install verification cannot complete', () => {
-    // req 10: verification may report, never decide. Forced by making the
-    // bundle unusable at the moment the installer checks it.
+  it('fails before activation when runtime verification runs and fails', () => {
+    // #541 flips the old expectation: a bundle that runs and exits 3 has
+    // conclusively failed verification, so reporting a successful install would
+    // promise a CLI that cannot start.
     const r = runInstaller({ extraEnv: { COMMITLORE_INSTALL_SOURCE: brokenRepo } });
+    expect(r.status).toBe(3);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/verification ran.*unusable/i);
+    expect(existsSync(r.wrapper)).toBe(false);
+  });
+
+  it('accepts an older tag whose own manifest names fewer runtime assets', () => {
+    // This source predates the Hermes bundle. Its manifest deliberately lists
+    // only the files that tag reads, and the checkout itself carries that
+    // smaller list. A newer installer must not demand newer Hermes files.
+    const olderRepo = join(tempDir('older-manifest'), 'commitlore');
+    const olderTag = 'v9.8.0';
+    mkdirSync(join(olderRepo, 'dist'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(olderRepo, 'dist', 'commitlore.mjs'));
+    copyRuntimeAssets(olderRepo, {
+      includeHermes: false,
+      manifest: ['AGENTS.md', 'dist/commitlore.mjs', 'package.json', 'spec/SPEC.md', 'spec/schema/record.schema.json'],
+    });
+    execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: olderRepo });
+    git(olderRepo, ['add', '-A']);
+    git(olderRepo, ['commit', '--quiet', '-m', 'older runtime manifest']);
+    git(olderRepo, ['tag', olderTag]);
+
+    const r = runInstaller({ args: [olderTag], extraEnv: { COMMITLORE_INSTALL_SOURCE: olderRepo } });
     expect(r.status).toBe(0);
-    expect(`${r.stdout}${r.stderr}`).toMatch(/unverified/i);
+    expect(existsSync(join(r.dataDir, olderTag, 'hermes'))).toBe(false);
     expect(existsSync(r.wrapper)).toBe(true);
   });
+
+  it('uses legacy bootstrap checks when the pinned tree predates the manifest', () => {
+    // No manifest in the pinned Git tree means an older release, not a reason
+    // to trust it silently. The installer checks the bundle it can name itself
+    // and runs its only cross-version smoke check: --version. This fixture has
+    // no current doctor/validate interface, as a genuinely old CLI may not.
+    const legacyRepo = join(tempDir('legacy-manifest'), 'commitlore');
+    const legacyTag = 'v9.7.0';
+    mkdirSync(join(legacyRepo, 'dist'), { recursive: true });
+    writeFileSync(
+      join(legacyRepo, 'dist', 'commitlore.mjs'),
+      "if (process.argv[2] === '--version') process.stdout.write('9.7.0\\n'); else process.exit(1);\n",
+    );
+    copyRuntimeAssets(legacyRepo, { manifest: false });
+    execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: legacyRepo });
+    git(legacyRepo, ['add', '-A']);
+    git(legacyRepo, ['commit', '--quiet', '-m', 'release before runtime manifest']);
+    git(legacyRepo, ['tag', legacyTag]);
+
+    const r = runInstaller({ args: [legacyTag], extraEnv: { COMMITLORE_INSTALL_SOURCE: legacyRepo } });
+    expect(r.status).toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toContain('predates installer/runtime-manifest.txt');
+    expect(existsSync(r.wrapper)).toBe(true);
+  });
+
+  it('refuses a manifest missing from a checkout whose pinned tree records it', () => {
+    // This is the damaged-checkout side of the missing-manifest rule. Unlike a
+    // legacy tag, HEAD names the manifest, so its disappearance is corruption.
+    const home = tempDir('missing-manifest');
+    const first = runInstaller({ home });
+    expect(first.status).toBe(0);
+    const wrapperBefore = readFileSync(first.wrapper, 'utf8');
+    const manifest = join(first.dataDir, TAG, RUNTIME_MANIFEST);
+    rmSync(manifest);
+
+    const rerun = runInstaller({ home });
+    expect(rerun.status).toBe(3);
+    expect(`${rerun.stdout}${rerun.stderr}`).toContain(manifest);
+    expect(readFileSync(first.wrapper, 'utf8')).toBe(wrapperBefore);
+  });
+
+  it('refuses a checkout that ships an empty manifest instead of trusting less', () => {
+    // The manifest is checkout-owned, but it cannot opt out of verification by
+    // committing only its format header. This exercises the parser after the
+    // manifest has already matched the pinned tree, not merely Git's dirty-tree
+    // detection for a locally edited file.
+    const emptyManifestRepo = join(tempDir('empty-manifest-source'), 'commitlore');
+    mkdirSync(join(emptyManifestRepo, 'dist'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(emptyManifestRepo, 'dist', 'commitlore.mjs'));
+    copyRuntimeAssets(emptyManifestRepo, { manifest: [] });
+    execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: emptyManifestRepo });
+    git(emptyManifestRepo, ['add', '-A']);
+    git(emptyManifestRepo, ['commit', '--quiet', '-m', 'empty runtime manifest']);
+    git(emptyManifestRepo, ['tag', TAG]);
+
+    const r = runInstaller({ extraEnv: { COMMITLORE_INSTALL_SOURCE: emptyManifestRepo } });
+    expect(r.status).toBe(3);
+    expect(`${r.stdout}${r.stderr}`).toContain('the runtime manifest must name at least one runtime asset');
+    expect(existsSync(r.wrapper)).toBe(false);
+  });
+
+  it('refuses a locally emptied manifest instead of letting it weaken verification', () => {
+    const home = tempDir('empty-manifest');
+    const first = runInstaller({ home });
+    expect(first.status).toBe(0);
+    const wrapperBefore = readFileSync(first.wrapper, 'utf8');
+    const manifest = join(first.dataDir, TAG, RUNTIME_MANIFEST);
+    writeFileSync(manifest, '');
+
+    const rerun = runInstaller({ home });
+    expect(rerun.status).toBe(3);
+    expect(`${rerun.stdout}${rerun.stderr}`).toContain(manifest);
+    expect(readFileSync(first.wrapper, 'utf8')).toBe(wrapperBefore);
+  });
+
+  for (const damage of ['deleted', 'replaced with a directory'] as const) {
+    it(`refuses a ${damage} installed bundle without changing the previous wrapper`, () => {
+      const home = tempDir(`damaged-${damage.replace(/\W+/g, '-')}`);
+      const first = runInstaller({ home });
+      expect(first.status).toBe(0);
+      const wrapperBefore = readFileSync(first.wrapper, 'utf8');
+      const bundle = join(first.dataDir, TAG, 'dist', 'commitlore.mjs');
+
+      if (damage === 'deleted') {
+        rmSync(bundle);
+      } else {
+        rmSync(bundle);
+        mkdirSync(bundle);
+      }
+
+      const rerun = runInstaller({ home });
+      expect(rerun.status).toBe(3);
+      expect(`${rerun.stdout}${rerun.stderr}`).toContain(bundle);
+      expect(readFileSync(first.wrapper, 'utf8')).toBe(wrapperBefore);
+      if (damage === 'deleted') {
+        expect(existsSync(bundle)).toBe(false);
+      } else {
+        expect(statSync(bundle).isDirectory()).toBe(true);
+      }
+    });
+  }
 });
 
 describe('#298 tag auto-resolution needs no sort extension', () => {
@@ -449,7 +602,12 @@ describe('#298 tag auto-resolution needs no sort extension', () => {
   it('resolves the newest tag when a double-digit major exists', () => {
     const repo = join(tempDir('majors'), 'commitlore');
     mkdirSync(join(repo, 'dist'), { recursive: true });
-    writeFileSync(join(repo, 'dist', 'commitlore.mjs'), "console.log('10.0.0');\n");
+    // Version resolution needs a real release-shaped checkout: the transaction
+    // now validates every runtime asset and runs its smoke commands before it
+    // activates the wrapper, so a one-line version stub is not an installable
+    // source repository.
+    cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(repo, 'dist', 'commitlore.mjs'));
+    copyRuntimeAssets(repo);
     execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: repo });
     git(repo, ['add', '-A']);
     git(repo, ['commit', '--quiet', '-m', 'src']);
