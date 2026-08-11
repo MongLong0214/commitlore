@@ -49,6 +49,7 @@ describe('commitlore CLI', () => {
     'parse', 'validate', 'hooks', 'index', 'context', 'limits',
     'ruled-out', 'warnings', 'stale', 'doctor', 'init', 'harvest',
     'harvest-verify', 'squash-preserve', 'guard', 'mcp', 'inject', 'backfill',
+    'auto',
   ];
   const UNLANDED: string[] = [];
 

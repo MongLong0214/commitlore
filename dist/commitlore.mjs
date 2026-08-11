@@ -13584,8 +13584,337 @@ var register = (program3) => {
   });
 };
 
+// src/core/capture-policy.ts
+import { createHash } from "node:crypto";
+import { existsSync as existsSync3, readFileSync as readFileSync3, writeFileSync } from "node:fs";
+import { join as join2 } from "node:path";
+var CAPTURE_MODES = ["auto", "suggest", "off"];
+var POLICY_DEFAULTS = {
+  mode: "auto",
+  // Off by default and deliberately so: a repository that never set this must
+  // capture exactly as it did before the setting existed (#511). Turning it on
+  // is a separate decision with its own evidence — shipping the switch is not
+  // flipping it.
+  unattended: false,
+  max_records_per_commit: 1,
+  require_verified_evidence: true
+};
+var POLICY_KEYS = [
+  "mode",
+  "unattended",
+  "max_records_per_commit",
+  "require_verified_evidence"
+];
+var POLICY_FILE_NAME = ".commitlore-policy.json";
+var sha256 = (input) => createHash("sha256").update(input).digest("hex");
+var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
+  JSON.stringify({
+    mode: policy.mode,
+    max_records_per_commit: policy.max_records_per_commit,
+    require_verified_evidence: policy.require_verified_evidence
+  })
+);
+var computePolicyFileIdentityHash = (contents) => sha256(contents);
+var defaultsResolution = (error2, path2) => ({
+  ok: error2 === null,
+  policy: POLICY_DEFAULTS,
+  identityHash: computePolicyIdentityHash(POLICY_DEFAULTS),
+  source: "defaults",
+  path: path2,
+  error: error2
+});
+var repoRoot = (cwd) => {
+  const res = execGit(["rev-parse", "--show-toplevel"], { cwd });
+  if (res.code !== 0) return null;
+  const root = res.stdout.trim();
+  return root.length > 0 ? root : null;
+};
+var validate = (raw) => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { error: `${POLICY_FILE_NAME} must contain a JSON object` };
+  }
+  const obj = raw;
+  const unknown2 = Object.keys(obj).filter(
+    (k) => !POLICY_KEYS.includes(k)
+  );
+  if (unknown2.length > 0) {
+    return {
+      error: `${POLICY_FILE_NAME} sets ${unknown2.length === 1 ? "an unknown key" : "unknown keys"}: ${unknown2.join(", ")}. Allowed keys are ${POLICY_KEYS.join(", ")}.`
+    };
+  }
+  const policy = { ...POLICY_DEFAULTS };
+  if ("mode" in obj) {
+    if (typeof obj.mode !== "string" || !CAPTURE_MODES.includes(obj.mode)) {
+      return {
+        error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(", ")} (got ${JSON.stringify(obj.mode)})`
+      };
+    }
+    policy.mode = obj.mode;
+  }
+  if ("max_records_per_commit" in obj) {
+    const v = obj.max_records_per_commit;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 32) {
+      return {
+        error: `${POLICY_FILE_NAME}: max_records_per_commit must be an integer between 1 and 32 (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.max_records_per_commit = v;
+  }
+  if ("unattended" in obj) {
+    const v = obj.unattended;
+    if (typeof v !== "boolean") {
+      return {
+        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.unattended = v;
+  }
+  if (policy.unattended && policy.mode !== "auto") {
+    return {
+      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`
+    };
+  }
+  if ("require_verified_evidence" in obj) {
+    const v = obj.require_verified_evidence;
+    if (typeof v !== "boolean") {
+      return {
+        error: `${POLICY_FILE_NAME}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.require_verified_evidence = v;
+  }
+  return { policy };
+};
+var resolvePolicy = (cwd) => {
+  const root = repoRoot(cwd);
+  if (root === null) return defaultsResolution(null, null);
+  const path2 = join2(root, POLICY_FILE_NAME);
+  if (!existsSync3(path2)) return defaultsResolution(null, null);
+  let contents;
+  try {
+    contents = readFileSync3(path2, "utf8");
+  } catch (err) {
+    return defaultsResolution(
+      `${POLICY_FILE_NAME} could not be read: ${err.message}`,
+      path2
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (err) {
+    return defaultsResolution(
+      `${POLICY_FILE_NAME} is not valid JSON: ${err.message}`,
+      path2
+    );
+  }
+  const checked = validate(parsed);
+  if ("error" in checked) return defaultsResolution(checked.error, path2);
+  return {
+    ok: true,
+    policy: checked.policy,
+    identityHash: computePolicyFileIdentityHash(contents),
+    source: "repository",
+    path: path2,
+    error: null
+  };
+};
+var capturePolicyPath = (cwd) => {
+  const root = repoRoot(cwd);
+  return root === null ? null : join2(root, POLICY_FILE_NAME);
+};
+var serializePolicyFile = (policy) => {
+  const ordered = {};
+  for (const key of POLICY_KEYS) ordered[key] = policy[key];
+  return `${JSON.stringify(ordered, null, 2)}
+`;
+};
+var setUnattendedCapture = (cwd, enabled) => {
+  const path2 = capturePolicyPath(cwd);
+  if (path2 === null) {
+    return { ok: false, path: null, error: "no git repository found here \u2014 run this inside a repository" };
+  }
+  if (existsSync3(path2)) {
+    let current;
+    try {
+      current = readFileSync3(path2, "utf8");
+    } catch (err) {
+      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be read: ${err.message}` };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(current);
+    } catch (err) {
+      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} is not valid JSON: ${err.message}` };
+    }
+    const checked = validate(parsed);
+    if ("error" in checked) {
+      return {
+        ok: false,
+        path: path2,
+        error: `${checked.error} Fix or remove the file and re-run; it has been left untouched.`
+      };
+    }
+    const previous = checked.policy;
+    const policy2 = enabled ? { ...previous, mode: "auto", unattended: true } : { ...previous, unattended: false };
+    if (previous.mode === policy2.mode && previous.unattended === policy2.unattended) {
+      return { ok: true, path: path2, changed: false, policy: policy2, previous };
+    }
+    try {
+      writeFileSync(path2, serializePolicyFile(policy2));
+    } catch (err) {
+      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+    }
+    return { ok: true, path: path2, changed: true, policy: policy2, previous };
+  }
+  if (!enabled) {
+    return { ok: true, path: path2, changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
+  }
+  const policy = { ...POLICY_DEFAULTS, mode: "auto", unattended: true };
+  try {
+    writeFileSync(path2, serializePolicyFile(policy));
+  } catch (err) {
+    return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+  }
+  return { ok: true, path: path2, changed: true, policy, previous: POLICY_DEFAULTS };
+};
+
+// src/commands/auto.ts
+var runAutoStatus = (cwd) => {
+  const path2 = capturePolicyPath(cwd);
+  if (path2 === null) return { outsideRepository: true };
+  const resolution = resolvePolicy(cwd);
+  if (resolution.path !== null && !resolution.ok) {
+    return {
+      ok: false,
+      unattended: null,
+      mode: null,
+      source: "repository",
+      path: path2,
+      error: resolution.error
+    };
+  }
+  return {
+    ok: true,
+    unattended: resolution.policy.unattended,
+    mode: resolution.policy.mode,
+    source: resolution.path !== null ? "repository" : "defaults",
+    path: path2,
+    error: null
+  };
+};
+var runAutoSet = (cwd, enabled) => {
+  const result = setUnattendedCapture(cwd, enabled);
+  if (!result.ok) {
+    if (result.path === null) return { outsideRepository: true };
+    return { ok: false, changed: false, path: result.path, mode: null, previousMode: null, error: result.error };
+  }
+  return {
+    ok: true,
+    changed: result.changed,
+    path: result.path,
+    mode: result.policy.mode,
+    previousMode: result.previous.mode,
+    error: null
+  };
+};
+var printStatus = (result, json) => {
+  if ("outsideRepository" in result) {
+    process.stderr.write("commitlore auto: no git repository found here \u2014 run this inside a repository\n");
+    process.exitCode = 2;
+    return;
+  }
+  if (json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+  } else if (!result.ok) {
+    process.stdout.write(`unattended capture: unknown \u2014 ${POLICY_FILE_NAME} exists but is rejected
+`);
+    process.stdout.write(`  ${result.error}
+`);
+    process.stdout.write("  fix or remove the file and re-run; until then capture runs on the defaults\n");
+  } else if (result.source === "defaults") {
+    process.stdout.write(`unattended capture: off
+`);
+    process.stdout.write(`  no ${POLICY_FILE_NAME} \u2014 the defaults apply (mode "auto", unattended false)
+`);
+    process.stdout.write("  enable with: commitlore auto on\n");
+  } else {
+    process.stdout.write(`unattended capture: ${result.unattended === true ? "on" : "off"}
+`);
+    process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")
+`);
+  }
+  if (!result.ok) process.exitCode = 1;
+};
+var printSet = (result, enabled, json) => {
+  if ("outsideRepository" in result) {
+    process.stderr.write("commitlore auto: no git repository found here \u2014 run this inside a repository\n");
+    process.exitCode = 2;
+    return;
+  }
+  if (json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+    if (!result.ok) process.exitCode = 2;
+    return;
+  }
+  if (!result.ok) {
+    process.stderr.write(`commitlore auto: ${result.error}
+`);
+    process.exitCode = 2;
+    return;
+  }
+  const word = enabled ? "on" : "off";
+  if (!result.changed) {
+    process.stdout.write(`unattended capture: ${word} \u2014 already set, nothing changed
+`);
+    return;
+  }
+  process.stdout.write(`unattended capture: ${word}
+`);
+  process.stdout.write(`  wrote ${result.path}
+`);
+  if (enabled && result.previousMode !== null && result.previousMode !== "auto") {
+    process.stdout.write(
+      `  mode moved from "${result.previousMode}" to "auto" \u2014 unattended capture is honoured only in auto mode
+`
+    );
+  }
+  if (enabled) {
+    process.stdout.write("  the file is committed with the repository \u2014 it applies to everyone who clones it\n");
+  }
+};
+var register2 = (program3) => {
+  const auto = program3.command("auto").description(`read and write the unattended-capture setting (${POLICY_FILE_NAME})`).option("--json", "emit structured JSON output (bare `auto` reports status)").addHelpText(
+    "after",
+    "\nUnattended capture consents once, for every commit, to prepare, verify and stage a record with nobody in the loop (ADR-0030, #511). The setting lives in " + POLICY_FILE_NAME + ' at the repository root \u2014 the same file `resolvePolicy` reads; this command is the only writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode only and a file the resolver would reject is never produced. The file is committed with the repository: turning it on applies to everyone who clones it.\n\nExit codes (SPEC \xA710): `status` \u2014 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` \u2014 0 written, or already in that state and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed).'
+  ).action((options) => {
+    printStatus(runAutoStatus(process.cwd()), options.json === true);
+  });
+  auto.command("status").description("report the current setting and where the file is").option("--json", "emit structured JSON output").addHelpText(
+    "after",
+    "\nExit codes (SPEC \xA710): 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository)."
+  ).action((options) => {
+    printStatus(runAutoStatus(process.cwd()), options.json === true);
+  });
+  auto.command("on").description('enable unattended capture (writes mode "auto" and unattended true)').option("--json", "emit structured JSON output").addHelpText(
+    "after",
+    "\nExit codes (SPEC \xA710): 0 written, or already on and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed)."
+  ).action((options) => {
+    printSet(runAutoSet(process.cwd(), true), true, options.json === true);
+  });
+  auto.command("off").description("disable unattended capture (keeps the mode the repository chose)").option("--json", "emit structured JSON output").addHelpText(
+    "after",
+    "\nExit codes (SPEC \xA710): 0 written, or already off and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed)."
+  ).action((options) => {
+    printSet(runAutoSet(process.cwd(), false), false, options.json === true);
+  });
+  for (const subcommand of auto.commands) subcommand.exitOverride();
+};
+
 // src/commands/capture.ts
-import { readFileSync as readFileSync6, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
 
 // src/core/capture-prepare.ts
 import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
@@ -15226,145 +15555,9 @@ var guard = (opts) => {
   };
 };
 
-// src/core/capture-policy.ts
-import { createHash } from "node:crypto";
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
-import { join as join2 } from "node:path";
-var CAPTURE_MODES = ["auto", "suggest", "off"];
-var POLICY_DEFAULTS = {
-  mode: "auto",
-  // Off by default and deliberately so: a repository that never set this must
-  // capture exactly as it did before the setting existed (#511). Turning it on
-  // is a separate decision with its own evidence — shipping the switch is not
-  // flipping it.
-  unattended: false,
-  max_records_per_commit: 1,
-  require_verified_evidence: true
-};
-var POLICY_KEYS = [
-  "mode",
-  "unattended",
-  "max_records_per_commit",
-  "require_verified_evidence"
-];
-var POLICY_FILE_NAME = ".commitlore-policy.json";
-var sha256 = (input) => createHash("sha256").update(input).digest("hex");
-var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
-  JSON.stringify({
-    mode: policy.mode,
-    max_records_per_commit: policy.max_records_per_commit,
-    require_verified_evidence: policy.require_verified_evidence
-  })
-);
-var computePolicyFileIdentityHash = (contents) => sha256(contents);
-var defaultsResolution = (error2, path2) => ({
-  ok: error2 === null,
-  policy: POLICY_DEFAULTS,
-  identityHash: computePolicyIdentityHash(POLICY_DEFAULTS),
-  source: "defaults",
-  path: path2,
-  error: error2
-});
-var repoRoot = (cwd) => {
-  const res = execGit(["rev-parse", "--show-toplevel"], { cwd });
-  if (res.code !== 0) return null;
-  const root = res.stdout.trim();
-  return root.length > 0 ? root : null;
-};
-var validate = (raw) => {
-  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { error: `${POLICY_FILE_NAME} must contain a JSON object` };
-  }
-  const obj = raw;
-  const unknown2 = Object.keys(obj).filter(
-    (k) => !POLICY_KEYS.includes(k)
-  );
-  if (unknown2.length > 0) {
-    return {
-      error: `${POLICY_FILE_NAME} sets ${unknown2.length === 1 ? "an unknown key" : "unknown keys"}: ${unknown2.join(", ")}. Allowed keys are ${POLICY_KEYS.join(", ")}.`
-    };
-  }
-  const policy = { ...POLICY_DEFAULTS };
-  if ("mode" in obj) {
-    if (typeof obj.mode !== "string" || !CAPTURE_MODES.includes(obj.mode)) {
-      return {
-        error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(", ")} (got ${JSON.stringify(obj.mode)})`
-      };
-    }
-    policy.mode = obj.mode;
-  }
-  if ("max_records_per_commit" in obj) {
-    const v = obj.max_records_per_commit;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 32) {
-      return {
-        error: `${POLICY_FILE_NAME}: max_records_per_commit must be an integer between 1 and 32 (got ${JSON.stringify(v)})`
-      };
-    }
-    policy.max_records_per_commit = v;
-  }
-  if ("unattended" in obj) {
-    const v = obj.unattended;
-    if (typeof v !== "boolean") {
-      return {
-        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`
-      };
-    }
-    policy.unattended = v;
-  }
-  if (policy.unattended && policy.mode !== "auto") {
-    return {
-      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`
-    };
-  }
-  if ("require_verified_evidence" in obj) {
-    const v = obj.require_verified_evidence;
-    if (typeof v !== "boolean") {
-      return {
-        error: `${POLICY_FILE_NAME}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`
-      };
-    }
-    policy.require_verified_evidence = v;
-  }
-  return { policy };
-};
-var resolvePolicy = (cwd) => {
-  const root = repoRoot(cwd);
-  if (root === null) return defaultsResolution(null, null);
-  const path2 = join2(root, POLICY_FILE_NAME);
-  if (!existsSync3(path2)) return defaultsResolution(null, null);
-  let contents;
-  try {
-    contents = readFileSync3(path2, "utf8");
-  } catch (err) {
-    return defaultsResolution(
-      `${POLICY_FILE_NAME} could not be read: ${err.message}`,
-      path2
-    );
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(contents);
-  } catch (err) {
-    return defaultsResolution(
-      `${POLICY_FILE_NAME} is not valid JSON: ${err.message}`,
-      path2
-    );
-  }
-  const checked = validate(parsed);
-  if ("error" in checked) return defaultsResolution(checked.error, path2);
-  return {
-    ok: true,
-    policy: checked.policy,
-    identityHash: computePolicyFileIdentityHash(contents),
-    source: "repository",
-    path: path2,
-    error: null
-  };
-};
-
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15393,7 +15586,7 @@ var atomicWriteJson = (filePath, data) => {
   const temporary = `${filePath}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
   const body = JSON.stringify(data, null, 2) + "\n";
   try {
-    writeFileSync(temporary, body);
+    writeFileSync2(temporary, body);
     renameSync(temporary, filePath);
   } catch (error2) {
     try {
@@ -16682,7 +16875,7 @@ commitlore capture: the built-in defaults were used for this capture
     rejected
   };
 };
-var register2 = (program3) => {
+var register3 = (program3) => {
   const capture = program3.command("capture").description(
     "prepare \u2192 verify \u2192 stage a record from a transcript and draft (no trailer syntax needed)"
   ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
@@ -16779,7 +16972,7 @@ var register2 = (program3) => {
         );
       }
       if (options.out && result.nonce) {
-        writeFileSync2(options.out, result.nonce + "\n");
+        writeFileSync3(options.out, result.nonce + "\n");
       }
       process.exitCode = 0;
     } catch (error2) {
@@ -16825,7 +17018,7 @@ var register2 = (program3) => {
 
 // src/commands/demo.ts
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync10, mkdirSync as mkdirSync9 } from "node:fs";
+import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync11, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname as dirname6, join as join9, resolve as resolve14 } from "node:path";
 
@@ -16862,12 +17055,16 @@ Provenance: authored
 CommitLore-Version: 2.0.0
 `;
 
+// src/commands/init.ts
+import { createInterface } from "node:readline";
+import { existsSync as existsSync15 } from "node:fs";
+
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -16999,7 +17196,7 @@ var writeAtomic = (settingsPath, settings) => {
   const body = `${JSON.stringify(settings, null, 2)}
 `;
   try {
-    writeFileSync3(temporary, body, mode === void 0 ? {} : { mode });
+    writeFileSync4(temporary, body, mode === void 0 ? {} : { mode });
     renameSync2(temporary, settingsPath);
   } catch (error2) {
     try {
@@ -17795,7 +17992,7 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
 var checkHookRuntime = (ctx) => {
@@ -17841,7 +18038,7 @@ var checkHookRuntime = (ctx) => {
   }
   const probe = join5(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
-    writeFileSync4(probe, PROBE_MESSAGE);
+    writeFileSync5(probe, PROBE_MESSAGE);
     const run = spawn("/bin/sh", [hook, probe], {
       shell: false,
       encoding: "utf8",
@@ -18077,7 +18274,7 @@ var renderList = (result, now) => {
   return `${lines.join("\n")}
 `;
 };
-var register3 = (program3) => {
+var register4 = (program3) => {
   const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
   pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
     const result = runPendingList({});
@@ -18333,7 +18530,7 @@ var checkInjectVersion = (ctx, dependencies) => {
 };
 
 // src/mcp/lifecycle.ts
-import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync10, statSync as statSync3, writeFileSync as writeFileSync5, writeSync } from "node:fs";
+import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync10, statSync as statSync3, writeFileSync as writeFileSync6, writeSync } from "node:fs";
 import { dirname as dirname5, join as join6 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
@@ -18347,7 +18544,7 @@ var trim = (path2) => {
   try {
     if (statSync3(path2).size <= MAX_BYTES) return;
     const lines = readFileSync10(path2, "utf8").split("\n");
-    writeFileSync5(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
+    writeFileSync6(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
   } catch {
   }
 };
@@ -19635,7 +19832,7 @@ var buildReport = (checks, options = {}) => {
     exitCode: checks.some((check2) => !check2.optional && check2.status === "fail") ? 1 : 0
   };
 };
-var register4 = (program3) => {
+var register5 = (program3) => {
   program3.command("doctor").description("check that this repository can carry and share CommitLore records").option("--fix", "apply the reversible local config fixes (notes fetch refspec)").option("--json", "emit the report as JSON").option("--verbose", "include diagnostic evidence, skip reasons, and durations for each check").option("--only <ids>", "run only these comma-separated check ids").option("--category <name>", "run only checks in this category").addHelpText(
     "after",
     "\nExit codes: 0 ran without a non-optional failure, 1 ran with a non-optional failure, 2 could not run (usage error; SPEC \xA710)."
@@ -19665,13 +19862,13 @@ import {
   renameSync as renameSync6,
   statSync as statSync4,
   unlinkSync as unlinkSync4,
-  writeFileSync as writeFileSync9
+  writeFileSync as writeFileSync10
 } from "node:fs";
 import { join as join8, resolve as resolve13 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes4 } from "node:crypto";
-import { chmodSync, existsSync as existsSync11, mkdirSync as mkdirSync5, readFileSync as readFileSync12, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { chmodSync, existsSync as existsSync11, mkdirSync as mkdirSync5, readFileSync as readFileSync12, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync7 } from "node:fs";
 import { resolve as resolve10 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -19683,7 +19880,7 @@ var hookFailure = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${line
 var postCommitStub = () => captureHookStub().replaceAll("commit-msg", POST_COMMIT_HOOK_NAME).replaceAll('validate --message-file "$1"', "post-commit");
 var writePostCommitHook = (path2) => {
   const temporary = `${path2}.tmp-${process.pid}-${randomBytes4(4).toString("hex")}`;
-  writeFileSync6(temporary, postCommitStub(), { mode: HOOK_MODE });
+  writeFileSync7(temporary, postCommitStub(), { mode: HOOK_MODE });
   chmodSync(temporary, HOOK_MODE);
   renameSync3(temporary, path2);
 };
@@ -19806,7 +20003,7 @@ var runPostCommitFinaliser = (cwd) => {
     return;
   }
 };
-var register5 = (program3) => {
+var register6 = (program3) => {
   program3.command("post-commit").description("internal hook command: finalise pending capture consumption after a successful commit").action(() => {
     try {
       runPostCommitFinaliser(process.cwd());
@@ -19821,7 +20018,7 @@ var register5 = (program3) => {
 
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync12, mkdirSync as mkdirSync6, readFileSync as readFileSync13, renameSync as renameSync4, writeFileSync as writeFileSync7 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync12, mkdirSync as mkdirSync6, readFileSync as readFileSync13, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve11 } from "node:path";
 
 // src/core/sync.ts
@@ -19917,7 +20114,7 @@ var hookFailure2 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${lin
 var prePushStub = () => captureHookStub().replaceAll("commit-msg", PRE_PUSH_HOOK_NAME).replaceAll('validate --message-file "$1"', 'pre-push "$@"');
 var writePrePushHook = (path2) => {
   const temporary = `${path2}.tmp-${process.pid}-${randomBytes5(4).toString("hex")}`;
-  writeFileSync7(temporary, prePushStub(), { mode: HOOK_MODE });
+  writeFileSync8(temporary, prePushStub(), { mode: HOOK_MODE });
   chmodSync2(temporary, HOOK_MODE);
   renameSync4(temporary, path2);
 };
@@ -19952,7 +20149,7 @@ var installPrePushHook = (cwd = process.cwd()) => {
   }
 };
 var describeSync = (results) => results.filter((result) => result.detail !== "" && result.outcome !== "nothing-to-do").map((result) => `commitlore: notes mirror (${result.remote}): ${result.detail}`);
-var register6 = (program3) => {
+var register7 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     try {
       const results = syncNotes(remote === void 0 || remote === "" ? {} : { remotes: [remote] });
@@ -19969,7 +20166,7 @@ var register6 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync13, mkdirSync as mkdirSync7, readFileSync as readFileSync14, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync13, mkdirSync as mkdirSync7, readFileSync as readFileSync14, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -20009,7 +20206,7 @@ var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const blocks = recordsFromSquashMessage(cwd, readFileSync14(squashPath, "utf8"));
   if (blocks.length === 0) return false;
   const separator = draft.endsWith("\n\n") ? "" : draft.endsWith("\n") ? "\n" : "\n\n";
-  writeFileSync8(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
+  writeFileSync9(messageFile, `${draft}${separator}${blocks.map((block) => serializeTrailers([...block])).join("\n")}`);
   return true;
 };
 var prepareHookPath = (cwd) => {
@@ -20023,7 +20220,7 @@ var hookFailure3 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${lin
 ` });
 var writePrepareHook = (path2) => {
   const temporary = `${path2}.tmp-${process.pid}-${randomBytes6(4).toString("hex")}`;
-  writeFileSync8(temporary, prepareCommitMsgStub(), { mode: HOOK_MODE });
+  writeFileSync9(temporary, prepareCommitMsgStub(), { mode: HOOK_MODE });
   chmodSync3(temporary, HOOK_MODE);
   renameSync5(temporary, path2);
 };
@@ -20132,7 +20329,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     const trailerBlock = buildTrailerBlock(pending.records);
     if (!trailerBlock) return;
     const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
-    writeFileSync8(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+    writeFileSync9(messageFile, `${currentMessage}${separator}${trailerBlock}`);
     const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
     try {
       markApplied(pending.nonce, recordHash, { cwd });
@@ -20141,7 +20338,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     return;
   }
 };
-var register7 = (program3) => {
+var register8 = (program3) => {
   program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
     preserveSquashRecords(messageFile);
     try {
@@ -20212,7 +20409,7 @@ var readHookStatus = (cwd = process.cwd()) => {
 };
 var writeStub = (hookPath) => {
   const temporary = `${hookPath}.tmp-${process.pid}-${randomBytes7(4).toString("hex")}`;
-  writeFileSync9(temporary, commitMsgStub(), { mode: HOOK_MODE });
+  writeFileSync10(temporary, commitMsgStub(), { mode: HOOK_MODE });
   chmodSync4(temporary, HOOK_MODE);
   renameSync6(temporary, hookPath);
 };
@@ -20379,7 +20576,7 @@ var emit = (result) => {
   if (result.stderr !== "") process.stderr.write(result.stderr);
   if (result.code !== 0) process.exitCode = result.code;
 };
-var register8 = (program3) => {
+var register9 = (program3) => {
   const hooks = program3.command("hooks").description(
     `manage commitlore's git hooks: the ${HOOK_NAME} hook that runs commitlore validate, and the two hooks init installs beside it`
   );
@@ -20526,9 +20723,84 @@ var runClaudeHookStep = (opts) => {
     detail: result
   };
 };
+var runPolicyStep = (opts) => {
+  const cwd = opts.cwd ?? process.cwd();
+  const choice = opts.unattended ?? "no-tty";
+  const path2 = capturePolicyPath(cwd);
+  if (path2 === null) {
+    return {
+      step: "policy",
+      title: "capture policy",
+      code: 2,
+      lines: ["no git repository found here \u2014 the policy step needs a repository"],
+      detail: { state: "no-repository", path: null, unattended: null, error: "no git repository" }
+    };
+  }
+  const resolution = resolvePolicy(cwd);
+  if (resolution.path !== null) {
+    if (resolution.ok) {
+      const { policy } = resolution;
+      return {
+        step: "policy",
+        title: "capture policy",
+        code: 0,
+        lines: [
+          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? "on" : "off"}) \u2014 left unchanged`
+        ],
+        detail: { state: "existing", path: path2, unattended: policy.unattended, error: null }
+      };
+    }
+    return {
+      step: "policy",
+      title: "capture policy",
+      code: 1,
+      lines: [`${POLICY_FILE_NAME} present but rejected \u2014 left unchanged`, resolution.error ?? "unknown error"],
+      detail: { state: "existing-rejected", path: path2, unattended: null, error: resolution.error }
+    };
+  }
+  if (choice === "enable") {
+    const result = setUnattendedCapture(cwd, true);
+    if (!result.ok) {
+      return {
+        step: "policy",
+        title: "capture policy",
+        code: 2,
+        lines: [result.error],
+        detail: { state: "write-failed", path: path2, unattended: null, error: result.error }
+      };
+    }
+    return {
+      step: "policy",
+      title: "capture policy",
+      code: 0,
+      lines: [
+        `unattended capture enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        "the file is committed with the repository \u2014 it applies to everyone who clones it"
+      ],
+      detail: { state: "enabled", path: path2, unattended: true, error: null }
+    };
+  }
+  const declineLine = {
+    decline: ["unattended capture: not enabled \u2014 declined at the prompt (enable later: commitlore auto on)"],
+    "no-answer": [
+      "unattended capture: not enabled \u2014 the prompt got no answer (enable later: commitlore auto on)"
+    ],
+    "no-tty": [
+      "unattended capture: not enabled \u2014 no interactive terminal to answer the prompt",
+      "run 'commitlore init --unattended' or 'commitlore auto on' to enable it"
+    ]
+  };
+  return {
+    step: "policy",
+    title: "capture policy",
+    code: 0,
+    lines: declineLine[choice],
+    detail: { state: choice === "decline" ? "declined" : choice, path: path2, unattended: false, error: null }
+  };
+};
 var runInit = (opts = {}) => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode };
 };
@@ -20537,6 +20809,7 @@ var STEP_LABEL = {
   trust: "Trust",
   index: "Index",
   "claude-hook": "Agent integration",
+  policy: "Capture policy",
   doctor: "Final check"
 };
 var STEP_HEADING = {
@@ -20544,16 +20817,42 @@ var STEP_HEADING = {
   hooks: "[1/4] hooks install",
   index: "[2/4] index --rebuild",
   "claude-hook": "[3/4] claude hook install",
+  // Unnumbered on purpose, the same way `trust` was added: the numbered four
+  // are pinned by T-1013's tests, and renumbering them would move a frozen
+  // contract for a step that does not need a number.
+  policy: "capture policy",
   doctor: "[4/4] doctor --fix (final check)"
 };
 var VERBOSE_INDENT = "        ";
+var policyOutcome = (step) => {
+  const detail = step.detail;
+  switch (detail.state) {
+    case "enabled":
+      return "unattended capture enabled (committed \u2014 applies to the whole team)";
+    case "declined":
+      return "unattended capture declined \u2014 enable later: commitlore auto on";
+    case "no-answer":
+      return "unattended capture not enabled \u2014 the prompt got no answer";
+    case "no-tty":
+      return "unattended capture not enabled \u2014 no interactive terminal";
+    case "existing":
+      return `unchanged \u2014 unattended capture ${detail.unattended === true ? "on" : "off"}`;
+    case "existing-rejected":
+      return "policy file rejected \u2014 left unchanged";
+    case "write-failed":
+      return "could not write the policy file";
+    case "no-repository":
+      return "no repository";
+  }
+};
+var stepLabel = (step) => step.step === "policy" ? `${STEP_LABEL.policy} \u2014 ${policyOutcome(step)}` : STEP_LABEL[step.step];
 var formatInitReport = (report) => {
   const failed = report.steps.filter((step) => step.code === 2);
   const needsAttention = report.steps.filter((step) => step.code === 1);
   const lines = [];
   if (failed.length === 0 && needsAttention.length === 0) {
     for (const step of report.steps) {
-      lines.push(`  \u2713 ${STEP_LABEL[step.step]}`);
+      lines.push(`  \u2713 ${stepLabel(step)}`);
     }
     lines.push("");
     lines.push("init: ready");
@@ -20565,7 +20864,7 @@ var formatInitReport = (report) => {
   } else {
     for (const step of report.steps) {
       if (step.code === 0) {
-        lines.push(`  \u2713 ${STEP_LABEL[step.step]}`);
+        lines.push(`  \u2713 ${stepLabel(step)}`);
       } else if (step.code === 2) {
         lines.push(`  \u2717 ${STEP_LABEL[step.step]} \u2014 ${step.title} could not run`);
         for (const detail of step.lines) {
@@ -20580,7 +20879,7 @@ var formatInitReport = (report) => {
     }
     lines.push("");
     if (failed.length > 0) {
-      lines.push(`init: ${failed.length}/4 step(s) could not run \u2014 ${failed.map((s) => s.title).join(", ")}`);
+      lines.push(`init: ${failed.length}/6 step(s) could not run \u2014 ${failed.map((s) => s.title).join(", ")}`);
     } else {
       lines.push(
         `init: ${needsAttention.length} step(s) need(s) attention \u2014 ${needsAttention.map((s) => s.title).join(", ")}`
@@ -20599,12 +20898,70 @@ var formatInitReportVerbose = (report) => {
   }
   return lines.join("\n") + "\n";
 };
-var register9 = (program3) => {
-  program3.command("init").description("one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix").option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").addHelpText(
+var parseYesNo = (answer) => {
+  const normalized = answer.trim().toLowerCase();
+  if (normalized === "" || normalized === "y" || normalized === "yes") return true;
+  if (normalized === "n" || normalized === "no") return false;
+  return null;
+};
+var askUnattended = async () => {
+  for (; ; ) {
+    const answer = await new Promise((resolveAnswer) => {
+      const readlineInterface = createInterface({ input: process.stdin, output: process.stdout });
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        readlineInterface.close();
+        resolveAnswer(value);
+      };
+      readlineInterface.question("Enable unattended capture? [Y/n] ", (line2) => settle(line2));
+      readlineInterface.on("close", () => settle(null));
+    });
+    if (answer === null) return null;
+    const parsed = parseYesNo(answer);
+    if (parsed !== null) return parsed;
+    process.stdout.write("Please answer y or n \u2014 a bare Enter accepts the default (yes).\n");
+  }
+};
+var resolveUnattendedChoice = async (options) => {
+  if (options.unattended === true) return "enable";
+  if (options.unattended === false) return "decline";
+  const existing = capturePolicyPath(process.cwd());
+  if (existing !== null && existsSync15(existing)) return "no-answer";
+  if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
+    process.stdout.write(
+      `Unattended capture prepares, verifies and stages a record on every commit without asking.
+The answer is written to ${POLICY_FILE_NAME} and committed \u2014 enabling it applies to everyone who clones this repository.
+`
+    );
+    let answer;
+    try {
+      answer = await askUnattended();
+    } catch {
+      answer = null;
+    }
+    return answer === null ? "no-answer" : answer ? "enable" : "decline";
+  }
+  return "no-tty";
+};
+var register10 = (program3) => {
+  program3.command("init").description(
+    "one-command onboarding: hooks install, trusted author, index --rebuild, claude hook install, capture policy, doctor --fix"
+  ).option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").option(
+    "--unattended",
+    "enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)"
+  ).option(
+    "--no-unattended",
+    "leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)"
+  ).addHelpText(
     "after",
-    "\nRuns four setup steps in sequence \u2014 hooks install, index --rebuild, claude hook install, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all four.\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not fix itself (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, or claude hook install could not run at all (SPEC \xA710)."
-  ).action((options) => {
-    const report = runInit(options.force === void 0 ? {} : { force: options.force });
+    "\nRuns six setup steps in sequence \u2014 hooks install, trusted author, index --rebuild, claude hook install, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to enable it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all six.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write could not run at all (SPEC \xA710)."
+  ).action(async (options) => {
+    const choice = await resolveUnattendedChoice(options);
+    const initOptions = options.force === void 0 ? {} : { force: options.force };
+    initOptions.unattended = choice;
+    const report = runInit(initOptions);
     let output;
     if (options.json === true) {
       output = `${JSON.stringify(report, null, 2)}
@@ -20672,13 +21029,13 @@ var runDemo = async (opts = {}) => {
     git(["config", "commit.gpgsign", "false"], tmpDir);
     const targetFullPath = join9(tmpDir, targetPath);
     mkdirSync9(dirname6(targetFullPath), { recursive: true });
-    writeFileSync10(targetFullPath, "export const calculatePrice = () => {};\n");
+    writeFileSync11(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
     if (opts.crashTest === true) {
       throw new Error("demo: simulated crash for testing cleanup");
     }
-    writeFileSync10(
+    writeFileSync11(
       targetFullPath,
       "export const calculatePrice = () => {};\nexport const calculateAdminQuote = () => {};\n"
     );
@@ -20724,7 +21081,7 @@ var runDemo = async (opts = {}) => {
     process.removeListener("SIGTERM", onSignal);
   }
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   program3.command("demo").description("run a self-contained lifecycle demo in a temporary repository (no network, no model)").action(async () => {
     const result = await runDemo();
     if (result.exitCode !== 0) {
@@ -20738,7 +21095,7 @@ var register10 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync16, writeFileSync as writeFileSync11 } from "node:fs";
+import { readFileSync as readFileSync16, writeFileSync as writeFileSync12 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -20758,7 +21115,7 @@ var readTextFile = (path2, label) => {
 var emit2 = (payload, out) => {
   if (out === void 0) return { stdout: payload, stderr: "", exitCode: 0 };
   try {
-    writeFileSync11(out, payload);
+    writeFileSync12(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -20821,7 +21178,7 @@ var runHarvest = (options) => {
 `, exitCode: USAGE_EXIT_CODE };
   }
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").addHelpText(
     "after",
     "\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft that is not a draft (SPEC \xA710)."
@@ -20975,7 +21332,7 @@ var runAsHook = async (options) => {
 `
   );
 };
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("guard").description("[experimental advisory] flag a proposal that may revive a ruled-out alternative \u2014 a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
@@ -21034,7 +21391,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync18, writeFileSync as writeFileSync12 } from "node:fs";
+import { readFileSync as readFileSync18, writeFileSync as writeFileSync13 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
@@ -21076,7 +21433,7 @@ var recordsPayload = (records) => `${JSON.stringify({ records }, null, 2)}
 var emit3 = (payload, out) => {
   if (out === void 0) return payload;
   try {
-    writeFileSync12(out, payload);
+    writeFileSync13(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -21117,7 +21474,7 @@ var runHarvestVerify = (options) => {
 `, exitCode: BAD_INPUT };
   }
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").addHelpText(
     "after",
     "\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, an unreadable path, a draft that is not a draft (SPEC \xA710)."
@@ -21202,7 +21559,7 @@ var runIndex = (options) => {
     closeIndex(handle);
   }
 };
-var register14 = (program3) => {
+var register15 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
     "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
@@ -21723,7 +22080,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register15 = (program3) => {
+var register16 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -30583,7 +30940,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register16 = (program3) => {
+var register17 = (program3) => {
   define(
     program3,
     "context",
@@ -30735,7 +31092,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register17 = (program3) => {
+var register18 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -31292,7 +31649,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -31305,7 +31662,7 @@ var register18 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync20, writeFileSync as writeFileSync13 } from "node:fs";
+import { readFileSync as readFileSync20, writeFileSync as writeFileSync14 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -31353,7 +31710,7 @@ var readDraft2 = (path2) => {
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync13(path2, text);
+    writeFileSync14(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf5(error2)}`);
   }
@@ -31431,7 +31788,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register19 = (program3) => {
+var register20 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -31478,7 +31835,7 @@ var runSync = (options = {}) => {
 `
   };
 };
-var register20 = (program3) => {
+var register21 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
@@ -31955,7 +32312,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register21 = (program3) => {
+var register22 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -31973,7 +32330,7 @@ var register21 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { existsSync as existsSync15, readFileSync as readFileSync22, rmSync as rmSync4, writeFileSync as writeFileSync14 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync22, rmSync as rmSync4, writeFileSync as writeFileSync15 } from "node:fs";
 import { homedir } from "node:os";
 import { join as join11 } from "node:path";
 
@@ -32045,7 +32402,7 @@ var runUninstall = async (options = {}) => {
   const removed = [];
   const kept = [];
   const wrapper = join11(home, ".local", "bin", "commitlore");
-  if (existsSync15(wrapper)) {
+  if (existsSync16(wrapper)) {
     const contents = (() => {
       try {
         return readFileSync22(wrapper, "utf8");
@@ -32063,14 +32420,14 @@ var runUninstall = async (options = {}) => {
     }
   }
   const dataRoot = join11(dataHome, "commitlore");
-  if (existsSync15(dataRoot)) {
+  if (existsSync16(dataRoot)) {
     if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
   }
   for (const config2 of AGENT_CONFIGS) {
     const path2 = join11(home, ...config2.homeRelativePath);
-    if (!existsSync15(path2)) continue;
+    if (!existsSync16(path2)) continue;
     let contents;
     try {
       contents = readFileSync22(path2, "utf8");
@@ -32082,7 +32439,7 @@ var runUninstall = async (options = {}) => {
     if (config2.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync14(path2, next2);
+      if (!dryRun) writeFileSync15(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
       continue;
@@ -32097,7 +32454,7 @@ var runUninstall = async (options = {}) => {
     }
     const next = withoutJsonEntry(parsed, config2.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync14(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync15(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -32186,28 +32543,29 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register20(program2);
-register6(program2);
 register21(program2);
-registerUninstall(program2);
-register8(program2);
-register14(program2);
-register16(program2);
-register17(program2);
-register4(program2);
-register9(program2);
-register11(program2);
-register13(program2);
-register19(program2);
 register7(program2);
-register5(program2);
-register12(program2);
+register22(program2);
+registerUninstall(program2);
+register9(program2);
 register15(program2);
-register(program2);
-register2(program2);
-register10(program2);
+register17(program2);
 register18(program2);
+register5(program2);
+register10(program2);
+register2(program2);
+register12(program2);
+register14(program2);
+register20(program2);
+register8(program2);
+register6(program2);
+register13(program2);
+register16(program2);
+register(program2);
 register3(program2);
+register11(program2);
+register19(program2);
+register4(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
