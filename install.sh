@@ -21,13 +21,10 @@
 # before anything is written rather than assumed.
 #
 # Exit codes: 1 = missing or too-old prerequisite, or bad usage (nothing was
-# written), 2 = the source could not be fetched, 4 = the install target is
-# occupied by something this script did not put there.
-#
-# Post-install verification never decides the exit code. An install that
-# succeeded is not retroactively failed by a check that could not run: that
-# was a real defect once, where the installer's own `--version` was killed by
-# a signal and its exit code became the script's.
+# written), 2 = the source could not be fetched, 3 = runtime verification ran
+# and found an unusable checkout, 4 = the install target is occupied by
+# something this script did not put there, 5 = runtime verification could not
+# run on this machine. Verification never activates an unchecked checkout.
 #
 # This script never edits a shell profile. If the wrapper's directory is not
 # on PATH it prints the line to add, which is the whole of what it does about
@@ -48,6 +45,250 @@ log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {
   printf 'commitlore-install: error: %s\n' "$1" >&2
   exit "${2:-1}"
+}
+
+# The full runtime inventory lives in the checkout it describes. A tag can add
+# an asset and its manifest together; an installer fetched from a newer ref
+# therefore never judges that tag against a list it could not contain.
+RUNTIME_MANIFEST="installer/runtime-manifest.txt"
+RUNTIME_MANIFEST_FORMAT="commitlore-runtime-manifest-v1"
+
+# Check one asset against both the working tree and the pinned tree. The
+# manifest itself goes through this check before its contents are read, so
+# emptying or truncating it locally cannot reduce what the installer verifies.
+verify_tracked_runtime_file() {
+  runtime_root="$1"
+  runtime_path="$2"
+  runtime_label="$3"
+  runtime_file="$runtime_root/$runtime_path"
+
+  if [ ! -f "$runtime_file" ]; then
+    verification_failed "$runtime_file" "the $runtime_label requires a regular file there"
+    return 1
+  fi
+  if runtime_tree_path="$(git -C "$runtime_root" ls-tree --name-only HEAD -- "$runtime_path" 2>/dev/null)"; then
+    :
+  else
+    runtime_status=$?
+    verification_unavailable "$runtime_file" "Git could not read the pinned checkout tree (exit $runtime_status)"
+    return 1
+  fi
+  if [ "$runtime_tree_path" != "$runtime_path" ]; then
+    verification_failed "$runtime_file" "the pinned checkout does not record this $runtime_label entry"
+    return 1
+  fi
+  if git -C "$runtime_root" diff --quiet HEAD -- "$runtime_path"; then
+    return 0
+  else
+    runtime_status=$?
+  fi
+  if [ "$runtime_status" -eq 1 ]; then
+    verification_failed "$runtime_file" "the $runtime_label entry differs from the pinned checkout"
+  else
+    verification_unavailable "$runtime_file" "Git could not compare the pinned checkout $runtime_label (exit $runtime_status)"
+  fi
+  return 1
+}
+
+# Releases before installer/runtime-manifest.txt cannot provide a full runtime
+# inventory. They are still checked for the bundle the installer can name on
+# its own, then receive the cross-version --version smoke test.
+verify_legacy_runtime() {
+  runtime_root="$1"
+  runtime_manifest_mode="legacy"
+  verify_tracked_runtime_file "$runtime_root" "dist/commitlore.mjs" "legacy runtime check"
+}
+
+verify_runtime_manifest() {
+  runtime_root="$1"
+  runtime_manifest_file="$runtime_root/$RUNTIME_MANIFEST"
+  verification_state="failed"
+  verification_path=""
+  verification_detail=""
+  runtime_manifest_mode=""
+
+  # `ls-tree` distinguishes an old tag (no path in the pinned tree) from a
+  # damaged checkout (the pinned tree has it but the file is missing locally).
+  if runtime_manifest_tree_path="$(git -C "$runtime_root" ls-tree --name-only HEAD -- "$RUNTIME_MANIFEST" 2>/dev/null)"; then
+    :
+  else
+    runtime_status=$?
+    verification_unavailable "$runtime_manifest_file" "Git could not read the pinned checkout tree (exit $runtime_status)"
+    return 1
+  fi
+  if [ -z "$runtime_manifest_tree_path" ]; then
+    verify_legacy_runtime "$runtime_root"
+    return $?
+  fi
+  if [ "$runtime_manifest_tree_path" != "$RUNTIME_MANIFEST" ]; then
+    verification_failed "$runtime_manifest_file" "the pinned checkout records an unexpected runtime manifest path"
+    return 1
+  fi
+  if ! verify_tracked_runtime_file "$runtime_root" "$RUNTIME_MANIFEST" "runtime manifest"; then
+    return 1
+  fi
+
+  runtime_manifest_line=0
+  runtime_manifest_assets=0
+  while IFS= read -r runtime_path || [ -n "$runtime_path" ]; do
+    runtime_manifest_line=$((runtime_manifest_line + 1))
+    if [ "$runtime_manifest_line" -eq 1 ]; then
+      if [ "$runtime_path" != "$RUNTIME_MANIFEST_FORMAT" ]; then
+        verification_failed "$runtime_manifest_file" "the runtime manifest format is not $RUNTIME_MANIFEST_FORMAT"
+        return 1
+      fi
+      continue
+    fi
+    if [ -z "$runtime_path" ]; then
+      verification_failed "$runtime_manifest_file" "the runtime manifest contains an empty asset entry"
+      return 1
+    fi
+    # Each entry is a canonical repository-relative file path. In particular,
+    # no manifest may escape its checkout or use a second spelling of an asset.
+    case "$runtime_path" in
+      /*|*/|.|..|./*|../*|*/./*|*/../*|*//*)
+        verification_failed "$runtime_manifest_file" "the runtime manifest contains a non-canonical asset path: $runtime_path"
+        return 1
+        ;;
+      *[!A-Za-z0-9._/-]*)
+        verification_failed "$runtime_manifest_file" "the runtime manifest contains an invalid asset path: $runtime_path"
+        return 1
+        ;;
+    esac
+    runtime_manifest_assets=$((runtime_manifest_assets + 1))
+    if ! verify_tracked_runtime_file "$runtime_root" "$runtime_path" "runtime manifest"; then
+      return 1
+    fi
+  done <"$runtime_manifest_file"
+
+  if [ "$runtime_manifest_line" -eq 0 ]; then
+    verification_failed "$runtime_manifest_file" "the runtime manifest is empty"
+    return 1
+  fi
+  if [ "$runtime_manifest_assets" -eq 0 ]; then
+    verification_failed "$runtime_manifest_file" "the runtime manifest must name at least one runtime asset"
+    return 1
+  fi
+  runtime_manifest_mode="manifest"
+  return 0
+}
+
+verification_failed() {
+  verification_state="failed"
+  verification_path="$1"
+  verification_detail="$2"
+  return 1
+}
+
+verification_unavailable() {
+  verification_state="unavailable"
+  verification_path="$1"
+  verification_detail="$2"
+  return 1
+}
+
+# Smoke-test the checkout directly, while it is still only an incoming tree.
+# `doctor --json` can legitimately exit 1 for a repository that needs setup;
+# its JSON report proves the command ran. Exit 2 is the documented "could not
+# run" result and is distinguished from a runtime failure below.
+verify_incoming_smoke() {
+  runtime_root="$1"
+  runtime_entry="$runtime_root/dist/commitlore.mjs"
+  smoke_dir="$work/smoke"
+  rm -rf "$smoke_dir"
+  mkdir -p "$smoke_dir"
+
+  if "$node_bin" "$runtime_entry" --version >"$smoke_dir/version.out" 2>"$smoke_dir/version.err"; then
+    verified_version="$(cat "$smoke_dir/version.out")"
+    if [ -z "$verified_version" ]; then
+      verification_failed "$runtime_entry" "--version exited 0 without reporting a version"
+      return 1
+    fi
+  else
+    smoke_status=$?
+    case "$smoke_status" in
+      126|127) verification_unavailable "$runtime_entry" "--version could not start (exit $smoke_status)" ;;
+      *) verification_failed "$runtime_entry" "--version ran and exited $smoke_status" ;;
+    esac
+    return 1
+  fi
+
+  printf 'installer smoke test\n\nBlast: local\n' >"$smoke_dir/valid-message"
+  if "$node_bin" "$runtime_entry" validate --message-file "$smoke_dir/valid-message" >"$smoke_dir/valid.out" 2>"$smoke_dir/valid.err"; then
+    :
+  else
+    smoke_status=$?
+    case "$smoke_status" in
+      126|127) verification_unavailable "$runtime_entry" "validate could not start (exit $smoke_status)" ;;
+      *) verification_failed "$runtime_entry" "validate of a valid record ran and exited $smoke_status" ;;
+    esac
+    return 1
+  fi
+
+  printf 'installer smoke test\n\nBlast: invalid\n' >"$smoke_dir/invalid-message"
+  if "$node_bin" "$runtime_entry" validate --message-file "$smoke_dir/invalid-message" >"$smoke_dir/invalid.out" 2>"$smoke_dir/invalid.err"; then
+    verification_failed "$runtime_entry" "validate accepted an invalid record"
+    return 1
+  else
+    smoke_status=$?
+  fi
+  if [ "$smoke_status" -ne 1 ]; then
+    case "$smoke_status" in
+      126|127) verification_unavailable "$runtime_entry" "validate could not start (exit $smoke_status)" ;;
+      *) verification_failed "$runtime_entry" "validate of an invalid record exited $smoke_status, want 1" ;;
+    esac
+    return 1
+  fi
+
+  if (cd "$runtime_root" && "$node_bin" ./dist/commitlore.mjs doctor --json >"$smoke_dir/doctor.json" 2>"$smoke_dir/doctor.err"); then
+    smoke_status=0
+  else
+    smoke_status=$?
+  fi
+  case "$smoke_status" in
+    0|1) ;;
+    2|126|127)
+      verification_unavailable "$runtime_entry" "doctor --json could not run (exit $smoke_status)"
+      return 1
+      ;;
+    *)
+      verification_failed "$runtime_entry" "doctor --json ran and exited $smoke_status"
+      return 1
+      ;;
+  esac
+  if ! grep -q '"schema": "commitlore_doctor.v2"' "$smoke_dir/doctor.json"; then
+    verification_failed "$runtime_entry" "doctor --json did not emit a CommitLore doctor report"
+    return 1
+  fi
+
+  return 0
+}
+
+# A pre-manifest release also predates the current smoke-test contract. It may
+# not emit today's doctor schema (or expose every later command), so only prove
+# that the bundle the installer can name starts and reports its version. Tagged
+# releases that carry the manifest always take verify_incoming_smoke above.
+verify_legacy_smoke() {
+  runtime_root="$1"
+  runtime_entry="$runtime_root/dist/commitlore.mjs"
+  smoke_dir="$work/legacy-smoke"
+  rm -rf "$smoke_dir"
+  mkdir -p "$smoke_dir"
+
+  if "$node_bin" "$runtime_entry" --version >"$smoke_dir/version.out" 2>"$smoke_dir/version.err"; then
+    verified_version="$(cat "$smoke_dir/version.out")"
+    if [ -z "$verified_version" ]; then
+      verification_failed "$runtime_entry" "--version exited 0 without reporting a version"
+      return 1
+    fi
+    return 0
+  fi
+  smoke_status=$?
+  case "$smoke_status" in
+    126|127) verification_unavailable "$runtime_entry" "--version could not start (exit $smoke_status)" ;;
+    *) verification_failed "$runtime_entry" "--version ran and exited $smoke_status" ;;
+  esac
+  return 1
 }
 
 # --- 1. prerequisites, before anything is written ---------------------------
@@ -109,55 +350,23 @@ fi
 
 log "installing $version"
 
-# Scratch space for the wiring phase's write-temp-then-rename config merges.
-# Created here, removed on exit, exactly as the previous script did.
+# Scratch space for verification and the wiring phase's write-temp-then-rename
+# config merges. Incoming and wrapper temporaries share its exit cleanup.
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+checkout_tmp=""
+dest_tmp=""
+cleanup_install() {
+  [ -z "$dest_tmp" ] || rm -f "$dest_tmp"
+  [ -z "$checkout_tmp" ] || rm -rf "$checkout_tmp"
+  rm -rf "$work"
+}
+trap cleanup_install EXIT
 
-# --- 3. fetch the pinned checkout ------------------------------------------
+# --- 3. check the activation target before materializing anything -----------
 #
-# Into the user's data directory, keyed by tag, so an upgrade adds a checkout
-# beside the old one instead of mutating it. Cloned to a temporary name and
-# renamed, so a failed clone never leaves a half-checkout that looks installed.
-
-data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
-checkout="$data_root/$version"
-
-if [ -d "$checkout/dist" ]; then
-  log "reusing the existing checkout at $checkout"
-else
-  mkdir -p "$data_root"
-  checkout_tmp="$data_root/.$version.incoming.$$"
-  rm -rf "$checkout_tmp"
-  cleanup_checkout_tmp() { rm -rf "$checkout_tmp"; }
-  trap cleanup_checkout_tmp EXIT
-  # Keep git's own reason. Swallowing it and printing a guess ("check the tag
-  # name and your network") sends a user looking in the wrong place whenever the
-  # cause is something else, which is most of the time.
-  clone_log="$(mktemp)"
-  if ! git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>"$clone_log"; then
-    # git puts the useful line first ("does not appear to be a git repository",
-    # "could not read Username", "dubious ownership") and the generic advice
-    # last, so the first fatal: line is what a reader needs. Falling back to the
-    # whole log keeps the case where there is no fatal: at all.
-    # `sed -n '/re/{p;q;}'` rather than `grep -m1`: -m is a GNU/BSD extension and
-    # this script is POSIX sh. Same reason sort -V was removed from the version
-    # resolution above.
-    clone_reason="$(sed -n '/^fatal:/{p;q;}' "$clone_log" 2>/dev/null || true)"
-    [ -n "$clone_reason" ] || clone_reason="$(tr '\n' ' ' <"$clone_log" | sed 's/  */ /g')"
-    rm -f "$clone_log"
-    die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
-  fi
-  rm -f "$clone_log"
-  [ -f "$checkout_tmp/dist/commitlore.mjs" ] \
-    || die "$version does not carry dist/commitlore.mjs, so there is nothing to run. Nothing was installed." 2
-  rm -rf "$checkout"
-  mv "$checkout_tmp" "$checkout"
-  trap - EXIT
-  log "checked out $version into $checkout"
-fi
-
-# --- 4. install the wrapper ------------------------------------------------
+# A foreign wrapper is rejected before a checkout is fetched. This preserves
+# both the foreign file and any prior working installation if the transaction
+# cannot reach its activation point.
 
 if [ -n "${COMMITLORE_INSTALL_DIR:-}" ]; then
   dest_dir="$COMMITLORE_INSTALL_DIR"
@@ -189,41 +398,123 @@ if [ -e "$dest" ]; then
   fi
 fi
 
+# --- 4. materialize and verify the pinned checkout -------------------------
+#
+# Into the user's data directory, keyed by tag, so an upgrade adds a checkout
+# beside the old one instead of mutating it. A source checkout is always cloned
+# into an incoming directory, then fully checked before it receives its stable
+# name or the wrapper can point at it.
+
+data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
+checkout="$data_root/$version"
+candidate=""
+
+if [ -e "$checkout" ]; then
+  if [ ! -d "$checkout" ]; then
+    verification_state="failed"
+    verification_path="$checkout"
+    verification_detail="the existing checkout path is not a directory"
+  elif ! verify_runtime_manifest "$checkout"; then
+    :
+  else
+    candidate="$checkout"
+    if [ "$runtime_manifest_mode" = "legacy" ]; then
+      log "reusing the existing checkout at $checkout (legacy runtime check and --version smoke test; this release predates $RUNTIME_MANIFEST)"
+    else
+      log "reusing the existing checkout at $checkout (runtime manifest verified)"
+    fi
+  fi
+else
+  mkdir -p "$data_root"
+  checkout_tmp="$data_root/.$version.incoming.$$"
+  rm -rf "$checkout_tmp"
+  # Keep git's own reason. Swallowing it and printing a guess ("check the tag
+  # name and your network") sends a user looking in the wrong place whenever the
+  # cause is something else, which is most of the time.
+  clone_log="$(mktemp)"
+  if ! git clone --quiet --depth 1 --branch "$version" "$SOURCE_URL" "$checkout_tmp" 2>"$clone_log"; then
+    # git puts the useful line first ("does not appear to be a git repository",
+    # "could not read Username", "dubious ownership") and the generic advice
+    # last, so the first fatal: line is what a reader needs. Falling back to the
+    # whole log keeps the case where there is no fatal: at all.
+    # `sed -n '/re/{p;q;}'` rather than `grep -m1`: -m is a GNU/BSD extension and
+    # this script is POSIX sh. Same reason sort -V was removed from the version
+    # resolution above.
+    clone_reason="$(sed -n '/^fatal:/{p;q;}' "$clone_log" 2>/dev/null || true)"
+    [ -n "$clone_reason" ] || clone_reason="$(tr '\n' ' ' <"$clone_log" | sed 's/  */ /g')"
+    rm -f "$clone_log"
+    die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
+  fi
+  rm -f "$clone_log"
+  if verify_runtime_manifest "$checkout_tmp"; then
+    candidate="$checkout_tmp"
+    if [ "$runtime_manifest_mode" = "legacy" ]; then
+      log "$version predates $RUNTIME_MANIFEST; using the installer's legacy runtime check and --version smoke test"
+    fi
+  fi
+fi
+
+if [ -z "$candidate" ]; then
+  if [ "$verification_state" = "unavailable" ]; then
+    die "runtime verification could not run for \"$verification_path\": $verification_detail. The existing wrapper at $dest was left unchanged." 5
+  fi
+  die "runtime verification ran and found an unusable path: \"$verification_path\" ($verification_detail). The existing wrapper at $dest was left unchanged." 3
+fi
+
+verification_smoke_ok="true"
+if [ "$runtime_manifest_mode" = "legacy" ]; then
+  verify_legacy_smoke "$candidate" || verification_smoke_ok="false"
+else
+  verify_incoming_smoke "$candidate" || verification_smoke_ok="false"
+fi
+if [ "$verification_smoke_ok" != "true" ]; then
+  if [ "$verification_state" = "unavailable" ]; then
+    die "runtime verification could not run for \"$verification_path\": $verification_detail. The existing wrapper at $dest was left unchanged." 5
+  else
+    die "runtime verification ran and found an unusable path: \"$verification_path\" ($verification_detail). The existing wrapper at $dest was left unchanged." 3
+  fi
+fi
+
+if [ "$candidate" = "$checkout_tmp" ]; then
+  if [ -e "$checkout" ]; then
+    die "could not materialize verified incoming checkout at $checkout because that path became occupied. The existing wrapper at $dest was left unchanged." 4
+  fi
+  if ! mv "$checkout_tmp" "$checkout"; then
+    die "could not materialize verified incoming checkout at $checkout. The existing wrapper at $dest was left unchanged." 3
+  fi
+  checkout_tmp=""
+  candidate="$checkout"
+  log "checked out and verified $version into $checkout"
+fi
+
+# --- 5. activate the verified wrapper --------------------------------------
+
 mkdir -p "$dest_dir"
 # Write beside the destination and rename. An in-place overwrite of a file that
 # may be executing is the defect that forced a same-day patch release; rename is
 # atomic, so a reader sees either the old wrapper or the new one.
 dest_tmp="$dest.commitlore-install.$$"
-cleanup_dest_tmp() { rm -f "$dest_tmp"; }
-trap cleanup_dest_tmp EXIT
-cat >"$dest_tmp" <<WRAPPER
+if ! cat >"$dest_tmp" <<WRAPPER
 #!/bin/sh
 $WRAPPER_MARKER
 # Installed by install.sh. Edits are lost on reinstall.
 NODE="$node_bin"
 [ -x "\$NODE" ] || NODE=node
-exec "\$NODE" "$checkout/dist/commitlore.mjs" "\$@"
+exec "\$NODE" "$candidate/dist/commitlore.mjs" "\$@"
 WRAPPER
-chmod +x "$dest_tmp"
-mv "$dest_tmp" "$dest"
-trap - EXIT
+then
+  die "could not prepare activation at $dest. Verified checkout $candidate was not activated." 3
+fi
+if ! chmod +x "$dest_tmp"; then
+  die "could not prepare activation at $dest. Verified checkout $candidate was not activated." 3
+fi
+if ! mv "$dest_tmp" "$dest"; then
+  die "could not activate verified checkout $candidate at $dest. The existing wrapper was left unchanged." 3
+fi
+dest_tmp=""
 
 log "installed to $dest"
-
-# The install is complete by this point. Verification reports; it does not
-# decide. A single failure is retried once before it is reported, and a
-# reported failure still exits 0 -- an install that succeeded must not be
-# failed by a check that could not run.
-if ! installed_version=$("$dest" --version 2>/dev/null); then
-  sleep 1
-  installed_version=$("$dest" --version 2>/dev/null) || installed_version=""
-fi
-if [ -n "$installed_version" ]; then
-  printf '%s\n' "$installed_version"
-else
-  log "installed, but unverified: \"$dest --version\" did not run in this shell."
-  log "the wrapper is in place; verify it yourself with: $dest --version"
-fi
+printf '%s\n' "$verified_version"
 
 path_file="$HOME/.profile"
 case "${SHELL:-}" in
@@ -243,10 +534,10 @@ case ":$PATH:" in
     ;;
 esac
 
-# --- 5. detect and wire coding agents --------------------------------------
+# --- 6. detect and wire coding agents --------------------------------------
 #
 # Everything below is additive and best-effort: it never touches the exit
-# codes above (1-4 stay reserved for phase 1 -- the binary is already
+# codes above (1-5 stay reserved for the transactional install -- the binary is already
 # installed and working by the time this runs), and every agent it wires is
 # detect-then-act, in the same order every time:
 #

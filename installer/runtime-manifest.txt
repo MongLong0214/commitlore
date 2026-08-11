@@ -1,0 +1,10 @@
+commitlore-runtime-manifest-v1
+AGENTS.md
+dist/commitlore.mjs
+package.json
+spec/SPEC.md
+spec/schema/record.schema.json
+hermes/skills/commitlore/DESCRIPTION.md
+hermes/skills/commitlore/commits/SKILL.md
+hermes/skills/commitlore/query/SKILL.md
+hermes/skills/commitlore/setup/SKILL.md
