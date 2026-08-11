@@ -23,6 +23,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { Writable } from "node:stream";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -1032,6 +1033,16 @@ export interface AgentRunParams {
   readonly outDir: string;
   readonly providerEnv: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
+  /**
+   * Called once, synchronously, as soon as the main agent's first provider
+   * `message_start` reaches the byte sink.  CDEB-07 uses this to durably mark
+   * the logical cell non-rerunnable before the rest of the stream arrives.
+   *
+   * This is deliberately an observation callback rather than a lifecycle
+   * policy: the runtime preserves the bytes exactly as before, while the
+   * orchestrator owns the retry state machine that consumes the observation.
+   */
+  readonly onFirstModelTurn?: () => void;
 }
 
 export interface AgentRunOutcome {
@@ -1046,6 +1057,66 @@ export interface AgentRunOutcome {
   /** Complete reconciled usage or an explicit unavailable state (§14.6). */
   readonly ledger: ProviderLedger;
 }
+
+/**
+ * Watches complete NDJSON lines without changing the byte stream.  A main
+ * agent turn is the provider's `stream_event/message_start` with no parent
+ * tool-use id; delegated turns are never allowed to unlock a retry boundary.
+ */
+const firstModelTurnObserver = (onFirstModelTurn: () => void): ((chunk: Buffer) => void) => {
+  let pending = Buffer.alloc(0);
+  let observed = false;
+  return (chunk: Buffer): void => {
+    if (observed) return;
+    pending = pending.length === 0 ? Buffer.from(chunk) : Buffer.concat([pending, chunk]);
+    while (!observed) {
+      const newline = pending.indexOf(0x0a);
+      if (newline === -1) return;
+      const line = pending.subarray(0, newline);
+      pending = pending.subarray(newline + 1);
+      let event: unknown;
+      try {
+        event = JSON.parse(line.toString("utf8"));
+      } catch {
+        continue;
+      }
+      if (typeof event !== "object" || event === null || Array.isArray(event)) continue;
+      const envelope = event as Record<string, unknown>;
+      const nested = envelope["event"];
+      if (typeof nested !== "object" || nested === null || Array.isArray(nested)) continue;
+      const nestedRecord = nested as Record<string, unknown>;
+      if (
+        envelope["type"] === "stream_event" &&
+        nestedRecord["type"] === "message_start" &&
+        (envelope["parent_tool_use_id"] === null || envelope["parent_tool_use_id"] === undefined)
+      ) {
+        // Persist the state checkpoint before forwarding this chunk into the
+        // raw sink.  If the process is killed next, CDEB-07 fails closed rather
+        // than treating a possible model answer as a retryable non-start.
+        onFirstModelTurn();
+        observed = true;
+      }
+    }
+  };
+};
+
+/** Wraps a writable sink solely to observe bytes; it never serializes them. */
+const observingSink = (sink: NodeJS.WritableStream, observe: (chunk: Buffer) => void): Writable =>
+  new Writable({
+    write(chunk, encoding, callback): void {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding);
+      try {
+        observe(bytes);
+        sink.write(bytes);
+        callback();
+      } catch (error) {
+        callback(error as Error);
+      }
+    },
+    final(callback): void {
+      sink.end(callback);
+    },
+  });
 
 /**
  * One measured run inside the pinned runtime, or a refusal. The gate token is
@@ -1112,7 +1183,10 @@ export const executeAgentRun = async (
   mkdirSync(params.outDir, { recursive: true });
   const streamPath = join(params.outDir, "provider.ndjson");
   const sink = createWriteStream(streamPath);
-  const result = await docker.runToSink(dockerRunArgs(spec), sink, {
+  const streamSink = params.onFirstModelTurn === undefined
+    ? sink
+    : observingSink(sink, firstModelTurnObserver(params.onFirstModelTurn));
+  const result = await docker.runToSink(dockerRunArgs(spec), streamSink, {
     timeoutMs: params.timeoutMs ?? 15 * 60 * 1000,
   });
   await new Promise<void>((resolve) => {
