@@ -33,6 +33,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGitOrThrow } from '../src/core/git.js';
+import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { runQuery, valuesOf, type GradedRecord } from '../src/core/query.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -356,6 +357,12 @@ describe('multiple paths where one has been renamed', () => {
   );
 
   it('warns that --follow cannot run, and still answers for the paths it can match literally', () => {
+    // `init` builds the index; without one every query also reports that it
+    // answered by full scan (#522), which is true and about something else.
+    const handle = openIndex({ cwd: dir });
+    rebuildIndex(handle, { reason: 'test fixture' });
+    closeIndex(handle);
+
     const result = runQuery({ cwd: dir, paths: ['b.ts', 'c.ts'] });
     expect(result.follow).toBe(false);
     expect(result.diagnostics).toHaveLength(1);
