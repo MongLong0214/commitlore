@@ -101,6 +101,13 @@ a slogan.*
 **[#402](https://github.com/MongLong0214/commitlore/issues/402) — `init` reported ready on an unfetched mirror without saying so.**
 The first screen a new user meets.
 
+**[#527](https://github.com/MongLong0214/commitlore/issues/527) — unattended capture was reported as enabled even though an ordinary Git commit could never start it.**
+The policy authorised an agent host to stage a verified record, but the hooks
+only applied and finalised a transaction that already existed. They cannot
+obtain the host transcript capture requires. `init`, `auto status` and `doctor`
+now name that prerequisite instead of treating the policy or pre-edit hook as
+an initiator.
+
 **[#400](https://github.com/MongLong0214/commitlore/issues/400) — `index --rebuild` reported unqualified success on a mirror it could not read**, and the docs said it always would.
 
 **[#345](https://github.com/MongLong0214/commitlore/issues/345) — a first-time visitor landed on `dev`, not on the released product.**

@@ -33,10 +33,12 @@ commitlore auto on
 writes the setting to `.commitlore-policy.json` (`commitlore init` asks about
 it once where no policy file exists yet, and `commitlore auto status` reports
 what is set). Where that is set — `mode "auto"` beside `unattended: true` —
-`commitlore capture --unattended` (or the MCP prepare tool's `unattended`
-argument) prepares, verifies and stages without any prompt, and the record
-reaches the commit through the hooks that already exist. Anywhere else the
-declaration is refused at prepare: consent is a repository setting, not a
+an agent host may call `commitlore capture --unattended` (or the MCP prepare
+tool with its `unattended` argument) to prepare, verify and stage without any
+prompt. The Git hooks then attach the staged record. They do not begin capture:
+an ordinary `git commit` has no session transcript, so it creates no pending
+transaction unless the host initiates capture before the commit. Anywhere else
+the declaration is refused at prepare: consent is a repository setting, not a
 caller's say-so (ADR-0030, #511). The setting is honoured in `auto` mode only
 — `suggest` exists to ask, and `off` captures nothing; `commitlore auto on`
 sets both coherently rather than producing a file the resolver rejects.

@@ -8,6 +8,7 @@
 import { checkHook } from './checks/capture-commit-msg-hook.js';
 import { checkHookRuntime } from './checks/capture-hook-runtime.js';
 import { checkPendingBacklog } from './checks/capture-pending-backlog.js';
+import { checkUnattendedCaptureInitiator } from './checks/capture-unattended-initiator.js';
 import { checkInjectRuntime } from './checks/delivery-inject-runtime.js';
 import { checkInjectVersion } from './checks/delivery-inject-version.js';
 import { checkMcpLifecycle } from './checks/delivery-mcp-lifecycle.js';
@@ -53,6 +54,7 @@ export const CHECK_REGISTRY = [
     { id: 'inject-runtime', title: 'PreToolUse hook runtime', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx) },
     { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
     { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
+    { id: 'unattended-initiator', title: 'unattended capture initiator', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
     { id: 'pending-backlog', title: 'pending captures', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
     { id: 'git-trailers', title: 'git interpret-trailers', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },
     { id: 'history-depth', title: 'history depth', category: 'history', dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
