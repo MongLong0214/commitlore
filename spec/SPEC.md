@@ -231,9 +231,11 @@ Records are graded on two axes, and the grade decides how `Warn:` is delivered:
 - **provenance** — `authored` | `drafted` | `inherited` | `reconstructed` | `unknown`
 - **lifecycle** — `active` | `superseded` | `expired`
 
-`Warn:` renders as an **instruction** only when provenance is `authored` and the commit's author is trusted for the repository. Otherwise it renders as a **claim** — surfaced as information, never as a directive. Records from outside contributors always render as claims.
+`Warn:` renders as an **instruction** only when provenance is `authored`, the record is active, and the commit's author string matches a string this repository configured for directives. Otherwise it renders as a **claim** — surfaced as information, never as a directive. In the default mode this is an unauthenticated, forgeable string match: the commit author chooses the string, so anyone able to write a commit can choose a configured one. A record from a contributor whose chosen string does not match renders as a claim; the match itself does not prove who wrote it.
 
-This is a minimum, not a solution: it makes trust auditable rather than assumed. Cryptographic signing extends the provenance axis without changing any consumer.
+`commitlore.requireSignedDirective=true` adds an opt-in authenticated boundary: an otherwise eligible directive additionally needs Git's `G` signature status, meaning Git verified it against the verifier's own trust store. Every other status — untrusted, bad, absent, expired, revoked or unable to check — is unverified and renders as a claim. A verified signature establishes neither the signer's authority to direct this repository nor the truth or safety of the record's content.
+
+This is a minimum, not a solution: the default makes a repository's policy auditable rather than silently assumed, while signature mode uses Git's existing verifier trust store without inventing key distribution.
 
 ---
 

@@ -76,8 +76,13 @@ export type IndexDatabase = DatabaseSync;
  *
  * v3 changes no column. It retires every index built before #335's classifier
  * gate, which is the only way those rows can be re-read.
+ *
+ * v4 adds `trailers.signature_status`, Git's `%G?` result for the commit read
+ * in the same batched pass as its trailers. Signature verification is an
+ * opt-in grading condition, so serving a v3 row without this fact could
+ * incorrectly promote a record after a repository enables that mode.
  */
-export declare const SCHEMA_VERSION = 3;
+export declare const SCHEMA_VERSION = 4;
 export declare const NOTES_REF = "refs/notes/commitlore";
 export type RecordSource = 'commit' | 'notes';
 /** One indexed trailer, with the commit context a consumer route needs. */
@@ -96,6 +101,8 @@ export interface IndexedTrailer extends Trailer {
     committedAt: string;
     committedTs: number;
     provenance: string | null;
+    /** Git's `%G?` output captured alongside the trailer batch. */
+    signatureStatus: string;
     source: RecordSource;
     /** Paths the commit touched, sorted. Empty for a commit with no diff. */
     paths: string[];

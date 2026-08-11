@@ -143,9 +143,13 @@ Ruled-out
                                     and rounding semantics differ between the two flows
 ```
 
-`[claim]` には意味があります。この record はリポジトリの信頼された作成者が書いた
-ものではないため、エージェントは命令ではなく情報として評価するよう伝えられます。
-信頼された作成者による record は `[directive]` として描画されます。delivery は
+`[claim]` には意味があります。この record の author string は、リポジトリが
+directive 用に設定した文字列と一致しないため、エージェントは命令ではなく情報として
+評価するよう伝えられます。既定の author-string mode の `[directive]` は、その文字列を
+制約として扱うというリポジトリの選択であり、身元の証明ではありません。commit author が
+文字列を選ぶため、commit を書ける者は誰でも偽装できます。
+`commitlore.requireSignedDirective=true` では、検証者の trust store で Git が検証した
+signature も必要です。その signature も権限や record の真実を証明しません。delivery は
 コンテキストを渡すものであり、編集を止めるものではありません。
 
 ## 自動になること、ならないこと
@@ -258,7 +262,7 @@ warnings
 
 解決済みの問いをエージェントが再び決めないようにすると主張するツールなら、自身で何を捕まえたかも示せるべきです。このツールはその一覧を公開で保ち、このプロジェクトがすでに公開していたもののうち、後から誤りだと分かった項目も含めています。
 
-- **どのインストールでも、README の主張が前提とした信頼 tier を生み出せなかった。** record はエージェントに `directive` または `claim` として届きます。インストール済みのどの surface も信頼された author を構成していなかったため、grade は全員に対して `claim` へ fail-closed しましたが、注入された凡例は誰も到達できない tier を示していました。以前の二つの benchmark は `claim` 等級の配信を測定していました ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **どのインストールでも、README の主張が前提とした信頼 tier を生み出せなかった。** record はエージェントに `directive` または `claim` として届きます。インストール済みのどの surface も directive author string を構成していなかったため、grade は全員に対して `claim` へ fail-closed しましたが、注入された凡例は誰も到達できない tier を示していました。以前の二つの benchmark は `claim` 等級の配信を測定していました ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
 - **登録された benchmark 分析は、一度に四つの異なる実験を読んでしまうところでした。** しかも停止規則が行数だったため、その混入によって研究は自身の完全性ゲートを*通過*していたでしょう ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
 - **result-schema gate は何からも実行されていませんでした。** そのため schema は runner より五フィールド遅れ、二日間誰も気付きませんでした ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
 - **出荷済みの pre-push hook はすべての `git push` を停止させました。** 40 秒間に hook が 1,240 回呼ばれました。関数は十一回テストされていたのに、hook path は一度もテストされていなかったからです ([#422](https://github.com/MongLong0214/commitlore/issues/422)).

@@ -92,8 +92,8 @@ describe('#406 a classifier change invalidates an index built before it', () => 
     handle.db
       .prepare(
         'INSERT INTO trailers' +
-          ' (commit_sha, seq, block, key, value, value_lc, committed_at, committed_ts, source)' +
-          " VALUES (?, 0, 0, ?, ?, ?, ?, ?, 'commit')",
+          ' (commit_sha, seq, block, key, value, value_lc, committed_at, committed_ts, signature_status, source)' +
+          " VALUES (?, 0, 0, ?, ?, ?, ?, ?, 'N', 'commit')",
       )
       .run(
         head,

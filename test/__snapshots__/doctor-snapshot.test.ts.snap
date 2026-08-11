@@ -9,6 +9,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "hook-runtime",
   "inject-runtime",
   "inject-version",
+  "directive-trust-mode",
   "mcp-lifecycle",
   "unattended-initiator",
   "pending-backlog",
@@ -21,7 +22,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target is missing 1`] = `
 "Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+10 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
@@ -35,6 +36,7 @@ ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
@@ -46,7 +48,7 @@ skipped squash conservation — no local branch looks like the source of a squas
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target resolves 1`] = `
 "Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+10 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
@@ -60,6 +62,7 @@ ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
@@ -81,6 +84,7 @@ ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
@@ -98,6 +102,7 @@ ok      hook runtime — the hook runs and validates without node on PATH
 warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
@@ -110,7 +115,7 @@ skipped squash conservation — no local branch looks like the source of a squas
 
 exports[`#470 doctor text report header > pins verbose diagnostics while the default adds no per-check lines 1`] = `
 "Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+10 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
@@ -154,6 +159,9 @@ skipped PreToolUse hook version — no installed hook to compare against <versio
         evidence.mine: <version>
         evidence.theirs: not_run
         skipReason: hook_not_installed
+        durationMs: <ms>
+ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
+        evidence.mode: author-string
         durationMs: <ms>
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
         evidence.last_at: none

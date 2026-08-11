@@ -140,8 +140,12 @@ Ruled-out
                                     and rounding semantics differ between the two flows
 ```
 
-`[claim]` 有实际含义：这条 record 并非由仓库的可信作者写入，所以代理会被告知把它
-当作信息权衡，而不是当作命令服从。可信作者写入的 record 会渲染为 `[directive]`。
+`[claim]` 有实际含义：这条 record 的 author string 没有匹配仓库为 directive 配置的
+字符串，所以代理会被告知把它当作信息权衡，而不是当作命令服从。默认 author-string
+mode 的 `[directive]` 仅表示仓库决定将该字符串视为约束，并不证明身份；commit author
+自己选择该字符串，任何能写入 commit 的人都可以伪造它。设置
+`commitlore.requireSignedDirective=true` 后，还需要 Git 按验证者自己的 trust store
+验证 signature。该 signature 同样不证明签名者有权指挥仓库，也不证明 record 的真实性。
 delivery 给代理的是上下文，并不阻止编辑。
 
 ## 哪些是自动的，哪些不是
@@ -247,7 +251,7 @@ warnings
 
 一个声称能阻止代理重新决定已尘埃落定的问题的工具，应当能够展示它在自身上捕获了什么。这个工具公开维护该清单，其中也包括本项目已经发布、后来被证明有误的内容。
 
-- **没有任何一种安装方式能产生 README 的主张所依赖的信任等级。** record 到达代理时会被评为 `directive` 或 `claim`。结果是，没有已安装的 surface 配置了可信 author，于是所有人的等级都 fail-closed 为 `claim`，而注入的图例却展示了没人能达到的 tier。此前两项 benchmark 测量的都是 `claim` 等级的送达（[#415](https://github.com/MongLong0214/commitlore/issues/415)）。
+- **没有任何一种安装方式能产生 README 的主张所依赖的信任等级。** record 到达代理时会被评为 `directive` 或 `claim`。结果是，没有已安装的 surface 配置 directive author string，于是所有人的等级都 fail-closed 为 `claim`，而注入的图例却展示了没人能达到的 tier。此前两项 benchmark 测量的都是 `claim` 等级的送达（[#415](https://github.com/MongLong0214/commitlore/issues/415)）。
 - **已登记的 benchmark 分析本会同时读取四项不同的实验。** 由于它的停止规则是行数，这种污染会让研究*通过*它自己的完整性关卡（[#441](https://github.com/MongLong0214/commitlore/issues/441)）。
 - **没有任何东西运行 result-schema gate。** 因此 schema 比 runner 落后五个字段，两天都没人发现（[#392](https://github.com/MongLong0214/commitlore/issues/392)）。
 - **一个已发布的 pre-push hook 会挂起每一次 `git push`。** 40 秒内调用 hook 1,240 次，因为函数被测试了十一次，而 hook path 一次也没有测试（[#422](https://github.com/MongLong0214/commitlore/issues/422)）。

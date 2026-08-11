@@ -24,8 +24,10 @@ Installing the CLI is in [install.md](install.md). Without the wrapper on
 for structured output, `--all-history` to include superseded and expired records
 (each labelled), `--at <instant>` to evaluate as of an ISO 8601 instant,
 `--limit <n>`, `--no-index` to answer from Git alone, and `--trusted-author
-<author>` (repeatable) to name an author whose records may render as
-instructions rather than as claims. `stale` takes `--json`, `--at` and
+<author>` (repeatable) to name an author string whose records may render as
+instructions rather than as claims. The default string match is forgeable by a
+commit author; `commitlore.requireSignedDirective=true` additionally requires
+Git's verified signature from this verifier's trust store. `stale` takes `--json`, `--at` and
 `--all-history`, which there means scanning the whole history rather than the
 most recent 1000 commits.
 
@@ -70,7 +72,7 @@ is in [protocol.md](protocol.md).
 
 | Command | What it does |
 |---|---|
-| `commitlore init` | one-command onboarding: `hooks install`, trusted author, `index --rebuild`, `AGENTS.md` capture guidance and agent integration, repository MCP registration, capture policy, `doctor --fix` |
+| `commitlore init` | one-command onboarding: `hooks install`, directive author string, `index --rebuild`, `AGENTS.md` capture guidance and agent integration, repository MCP registration, capture policy, `doctor --fix` |
 | `commitlore auto` | read and write the unattended-capture setting (`.commitlore-policy.json`): `status`, `on`, `off` |
 | `commitlore doctor` | checks that this repository can carry and share records |
 | `commitlore hooks` | `install`, `uninstall`, `status` for the Git hooks |
@@ -131,9 +133,11 @@ seeing what would happen first (`--dry-run`).
 
 When two clones have both written records, `sync` merges the union rather than
 picking a winner, because concatenating two sets of records loses nothing.
-**A merged note is graded `claim` until every identity that has written it is a
-trusted author** — a note two people wrote is attributed to both, and trust takes
-the floor (SPEC §7).
+**A merged note is graded `claim` until every writer's author string matches a
+configured directive string** — a note two people wrote is attributed to both,
+and the most restrictive grade takes the floor (SPEC §7). The default string
+match is forgeable by a commit author; in signature mode, every note-writing
+commit must also have Git's verified `G` status in this verifier's trust store.
 
 The fetch refspec is deliberately **not** forced. A forced one overwrites this
 clone's mirror on every fetch, which destroys a record written here and not yet

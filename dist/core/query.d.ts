@@ -83,14 +83,16 @@ export interface QueryOptions {
     /** Maximum records returned, applied after ordering. */
     limit?: number;
     /**
-     * Authors trusted for this repository (SPEC §7), as `inject` takes them.
+     * Author strings this repository configures for directives (SPEC §7), as `inject` takes them.
      *
      * Omitting it is the fail-closed answer, not the permissive one: a `Warn:`
      * from an author the caller cannot vouch for grades `claim`, never
      * `directive`. That is the same default `commitlore inject` has always had,
      * and the two routes disagreeing was the defect this option closes.
-     */
+    */
     trustedAuthors?: readonly string[];
+    /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+    requireSignedDirective?: boolean;
     cwd?: string;
 }
 /**
@@ -116,6 +118,8 @@ export interface GradedRecord extends Record {
     provenanceValue?: string;
     trust?: TrustGrade;
     identityCollision?: boolean;
+    /** Internal grading input; JSON renderers deliberately do not expose this cache fact. */
+    commitSignatures: ReadonlyMap<string, string>;
     matchedTrailerKeys?: string[];
     /** Payload key names retained only so a redacted record remains visible in its sections. */
     withheldTrailerKeys?: string[];

@@ -1,7 +1,7 @@
 /**
- * Who this repository trusts to write a directive (#415).
+ * The author strings this repository elects to treat as directive writers (#415).
  *
- * `gradeRecord` is fail-closed on an empty trusted-author list: with nobody
+ * `gradeRecord` is fail-closed on an empty configured-author list: with nobody
  * configured, every record grades `claim` and the `[directive]` tier is
  * unreachable. #415 measured that this is exactly what every installed surface
  * did — `CLAUDE_HOOK_COMMAND` is `commitlore inject --hook-input <marker>` and
@@ -14,22 +14,27 @@
  * tier is not decoration — it is how a record says "this is a constraint, not
  * an opinion", and the whole SPEC §7 trust model exists to draw that line.
  *
- * The default recorded at `init` is the identity of the person installing.
- * That follows the threat model rather than convenience: grading exists so a
- * malicious contributor's commit cannot carry an instruction to someone else's
- * agent. The person running `init` on their own machine is, by construction,
- * trusted by themselves — their own authored records become directives to their
- * own agent, and every other author's records stay `claim` exactly as before.
- * The fail-closed property is untouched for the attack it was built to stop.
+ * The default recorded at `init` is the email string of the person installing.
+ * That is useful local policy, not authentication: a commit author chooses its
+ * own author string, so anyone able to write a commit can forge a configured
+ * identity. In the default mode, a directive means this repository chose to
+ * treat that string as a constraint; it does not prove who authored the commit.
+ * The fail-closed property is untouched: with no configured strings, every
+ * record remains a claim.
  *
  * It stays a local git config value, so a repository can widen it (a team adds
  * its reviewers) or empty it (`git config --unset-all commitlore.trustedAuthor`
- * restores trust-nobody) without editing a hook command by hand.
+ * restores trust-nobody) without editing a hook command by hand. A repository
+ * that needs an authenticated boundary can additionally set
+ * `commitlore.requireSignedDirective=true`; Git must then report a verified
+ * signature from the verifier's own trust store before a record is directive.
  */
 import { execGit } from './git.js';
-/** Local git config key holding trusted author identities, one value each. */
+/** Local git config key holding directive author strings, one value each. */
 export const TRUSTED_AUTHOR_KEY = 'commitlore.trustedAuthor';
-/** Every trusted author this repository records. Empty means trust nobody. */
+/** Local opt-in: directives also require Git to report a verified signature. */
+export const REQUIRE_SIGNED_DIRECTIVE_KEY = 'commitlore.requireSignedDirective';
+/** Every directive author string this repository records. Empty means trust nobody. */
 export const configuredTrustedAuthors = (cwd) => {
     const result = execGit(['config', '--local', '--get-all', TRUSTED_AUTHOR_KEY], { cwd });
     if (result.code !== 0)
@@ -38,6 +43,20 @@ export const configuredTrustedAuthors = (cwd) => {
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line !== '');
+};
+/**
+ * Whether this repository requires a Git-verified signature for directives.
+ *
+ * The absence of the setting is deliberately `false`: author-string mode is
+ * the long-standing default, and an upgrade must not downgrade its records.
+ * Git's boolean parser owns the accepted spellings; an unreadable or malformed
+ * value does not accidentally enable a security claim.
+ */
+export const configuredSignedDirectivesRequired = (cwd, git = execGit) => {
+    const result = git(['config', '--local', '--bool', '--get', REQUIRE_SIGNED_DIRECTIVE_KEY], {
+        cwd,
+    });
+    return result.code === 0 && result.stdout.trim() === 'true';
 };
 /**
  * Records the installing user's git identity as this repository's trusted
@@ -54,7 +73,7 @@ export const seedTrustedAuthor = (cwd) => {
         return {
             recorded: false,
             author: existing[0] ?? null,
-            reason: `already trusts ${String(existing.length)} author(s) — left unchanged`,
+            reason: `already configures ${String(existing.length)} directive author string(s) — left unchanged`,
         };
     }
     const email = execGit(['config', '--get', 'user.email'], { cwd }).stdout.trim();
@@ -69,6 +88,10 @@ export const seedTrustedAuthor = (cwd) => {
     if (written.code !== 0) {
         return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
     }
-    return { recorded: true, author: email, reason: `records you author are now [directive]` };
+    return {
+        recorded: true,
+        author: email,
+        reason: `records matching your configured author string can now render [directive]`,
+    };
 };
 //# sourceMappingURL=trusted-authors.js.map

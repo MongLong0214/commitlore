@@ -190,6 +190,28 @@ describe('trust contract cases', () => {
       gradeRecord(record, { at, trustedAuthors: ['external-contributor@example.com'] }).trust,
     ).toBe('directive');
   });
+
+  it('accepts only Git status G when signed directives are required', () => {
+    const base: AuthoredRecord = {
+      sha: 'c1',
+      author: 'alice',
+      trailers: [
+        trailer('Record-Id', 'r-sigmode'),
+        trailer('Provenance', 'authored'),
+        trailer('Warn', 'Keep the write path behind the feature flag.'),
+      ],
+    };
+    const context = {
+      at: new Date('2026-01-12T00:00:00Z'),
+      trustedAuthors: ['alice'],
+      requireSignedDirective: true,
+    };
+
+    expect(gradeRecord({ ...base, signatureStatus: 'G' }, context).trust).toBe('directive');
+    for (const status of ['U', 'B', 'N', 'X', 'Y', 'R', 'E', '']) {
+      expect(gradeRecord({ ...base, signatureStatus: status }, context).trust, status).toBe('claim');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -552,7 +574,7 @@ describe('trusted authors', () => {
   it('trusts nobody when the list is missing', () => {
     const grade = gradeRecord(authored(WARN), { at: AT, author: 'alice' });
     expect(grade.trust).toBe('claim');
-    expect(grade.reason).toContain('no trusted authors');
+    expect(grade.reason).toContain('no directive author strings');
   });
 
   it('trusts nobody when the list is empty', () => {

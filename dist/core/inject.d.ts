@@ -126,6 +126,8 @@ export interface InjectOptions {
     cwd?: string;
     /** Authors whose records may render as instructions. Empty trusts nobody. */
     trustedAuthors?: readonly string[];
+    /** Opt-in: a directive also needs Git's verified `G` signature status. */
+    requireSignedDirective?: boolean;
     /** Answer from git alone, without the SQLite index. Same answers, slower. */
     noIndex?: boolean;
     /** Guarantees to remove. Bench instrumentation; every flag defaults to false. */

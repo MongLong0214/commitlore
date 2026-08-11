@@ -142,9 +142,13 @@ Ruled-out
                                     and rounding semantics differ between the two flows
 ```
 
-`[claim]`에는 의미가 있다. 이 record는 저장소의 신뢰된 작성자가 쓰지 않았으므로,
-에이전트는 명령이 아니라 정보로 평가해야 한다. 신뢰된 작성자가 남긴 record는
-`[directive]`로 렌더된다. delivery는 맥락을 주며, 편집을 막지 않는다.
+`[claim]`에는 의미가 있다. 이 record의 작성자 문자열이 저장소가 directive용으로
+설정한 문자열과 일치하지 않으므로, 에이전트는 명령이 아니라 정보로 평가해야 한다.
+기본 author-string 모드에서 `[directive]`는 저장소가 그 문자열을 제약으로 취급하기로
+정했다는 뜻일 뿐 신원 증명은 아니다. commit 작성자가 문자열을 고르므로 commit을 쓸 수
+있는 누구나 위조할 수 있다. `commitlore.requireSignedDirective=true`를 설정하면 Git이
+검증자의 trust store에 대해 확인한 서명도 필요하다. 그 서명 역시 권한이나 record의
+진실을 증명하지는 않는다. delivery는 맥락을 주며, 편집을 막지 않는다.
 
 ## 자동으로 되는 것과 아닌 것
 

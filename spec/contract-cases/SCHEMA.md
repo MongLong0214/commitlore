@@ -45,12 +45,12 @@ One of:
 | Value | SPEC route (§5) | What it evaluates |
 |---|---|---|
 | `stale-engine` | `Supersedes:` / `Expires:` / `Record-Id:` lifecycle fold | Given a record stream and an evaluation instant, what is each record's `lifecycle`? |
-| `trust-grade` | `Provenance:` trust grading (§7) | Given a record and a set of trusted authors, does `Warn:` render as `instruction` or `claim`? |
+| `trust-grade` | `Provenance:` trust grading (§7) | Given a record and configured author strings, does `Warn:` render as `instruction` or `claim`? |
 | `approval-gate` | `Blast:` / `Undo:` approval routing | Given a record's `Blast:`/`Undo:` values, is human approval required? |
 | `injection` | `Warn:` graded injection (§7) | End-to-end: what grade does the injection route actually deliver for a record? |
 
 `trust-grade` and `injection` both answer "instruction or claim", but from different ends of the
-pipeline: `trust-grade` cases isolate the grading rule itself (provenance, author trust);
+pipeline: `trust-grade` cases isolate the grading rule itself (provenance, configured author-string policy);
 `injection` cases assert the delivered outcome including invariants that must hold regardless of
 grading nuance (e.g. `reconstructed` provenance always ships as `claim`, full stop).
 
@@ -76,7 +76,7 @@ One synthetic commit.
 |---|---|---|---|
 | `sha` | string | yes | Arbitrary, unique within the case only (not a real git SHA) |
 | `committed_at` | ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`) | yes | Fixed, absolute. Never relative to "today" — cases must not depend on evaluation date |
-| `author` | string | only for `trust-grade` / `injection` cases | The trailer's commit **author** identity (SPEC §7 grades on author, never committer) |
+| `author` | string | only for `trust-grade` / `injection` cases | The trailer's commit **author** string (SPEC §7 grades the configured string match on author, never committer) |
 | `committer` | string | optional | The commit **committer** identity, when it differs from `author`. Present only in cases that specifically test author-vs-committer confusion |
 | `trailers` | array of `{key, value}` | yes | Must satisfy the value grammar in SPEC §3, unless the case intentionally exercises a violation — that MUST be called out in `description` |
 
@@ -92,7 +92,7 @@ is the source of truth.
 |---|---|---|---|
 | `route` | string | yes | All — MUST equal the file's top-level `route` |
 | `at` | ISO 8601 UTC | only for `stale-engine` | The evaluation instant the fold runs against (compared to `Expires:` dates) |
-| `trusted_authors` | array of string | only for `trust-grade` / `injection` | The set of author identities considered trusted for this scenario. Matched against `given[].author` — **never** `given[].committer` |
+| `trusted_authors` | array of string | only for `trust-grade` / `injection` | The configured directive author strings for this scenario. Matched against `given[].author` — **never** `given[].committer`; this is not identity authentication |
 
 ---
 

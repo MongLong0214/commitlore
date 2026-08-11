@@ -134,4 +134,5 @@ Nothing was added for this — `Supersedes:` and the fold already did it.
 
 **Never endorsing anything is the supported path.** A repository where nobody
 promotes serves every record as a `claim`, which is what an installed CommitLore
-serves today unless `--trusted-author` is configured.
+serves today unless a directive author string is configured; that default match
+is not identity proof, and signature mode additionally requires Git verification.

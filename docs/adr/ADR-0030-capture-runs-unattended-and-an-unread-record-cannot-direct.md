@@ -51,9 +51,11 @@ what should be true instead.
 
 The obvious objection to unattended capture is that it mints instructions nobody
 read. `gradeRecord` returns `directive` for a record that is `Provenance:
-authored`, active, from a trusted author, and free of injection patterns — and a
-commit the user made satisfies the authorship test whether or not they read the
-trailer block.
+authored`, active, from a configured author string, and free of injection
+patterns — and, in the opt-in signature mode, only after Git also verifies the
+signature in the verifier's trust store. In default author-string mode, the
+match is not identity proof because the commit author selected it; a commit the
+user made satisfies that policy test whether or not they read the trailer block.
 
 **That objection does not currently bite, and the reason is itself a defect.**
 `CLAUDE_HOOK_COMMAND` is `commitlore inject --hook-input <marker>`, with no
@@ -66,10 +68,11 @@ Two things follow.
 
 1. Removing the prompt **today** would produce `claim` records only. There is no
    security regression available in the shipped configuration.
-2. That safety is **accidental**. It holds because a feature is missing, and
-   #415 exists to decide whether to add it. The moment trusted authors become
-   configurable, unattended capture starts minting directives — and the fix
-   would then be retrofitted onto records already in history.
+2. That safety is **accidental**. At this ADR's adoption #415 still had to
+   decide whether configured author strings would make directives reachable;
+   once it did, unattended capture could mint directives and the fix would
+   otherwise be retrofitted onto records already in history. The current
+   signature opt-in adds a further condition without changing that finding.
 
 Building the guarantee while it costs nothing is the whole argument for doing it
 now rather than after.
@@ -178,9 +181,10 @@ matter who wrote the note. The mechanism that closed the forgery closes this too
 
 ## What this does not decide
 
-- **Whether trusted authors should be configurable at all** — that is #415, and
-  it is the decision that makes `directive` reachable. This ADR is written so
-  that answering #415 either way is safe.
+- **Whether configured author strings should make `directive` reachable at
+  all** — that was #415. This ADR was written so that answering it either way
+  was safe; the default remains an unauthenticated string policy, with Git
+  signature verification now available as an opt-in boundary.
 - **Whether the injection legend should stop advertising `[directive]` and
   `[blocked]`** when neither can occur. That changes injected bytes, which
   changes `cacheKey` and breaks the byte-identity `test/inject.test.ts` pins —

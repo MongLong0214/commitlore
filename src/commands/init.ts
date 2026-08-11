@@ -239,17 +239,17 @@ const runIndexStep = (opts: InitOptions): InitStep => {
 };
 
 /**
- * #415: with no trusted author recorded, grading fails closed and every record
+ * #415: with no directive author string recorded, grading fails closed and every record
  * the agent ever sees is `[claim]` — the `[directive]` tier the injected legend
  * advertises was unreachable on every install. Seeding the installer's own
- * identity makes it reachable without weakening the property it protects: a
- * different author's commit still grades `claim`.
+ * author string makes it reachable as explicit repository policy: a different
+ * string still grades `claim`, while a matching one is not identity proof.
  */
 const runTrustStep = (opts: InitOptions): InitStep => {
   const result = seedTrustedAuthor(opts.cwd ?? process.cwd());
   return {
     step: 'trust',
-    title: 'trusted author',
+    title: 'directive author string',
     code: 0,
     lines: [result.author === null ? result.reason : `${result.author} — ${result.reason}`],
     detail: result,
@@ -493,7 +493,7 @@ const STEP_LABEL: Record<StepName, string> = {
 
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export const STEP_HEADING: Record<StepName, string> = {
-  trust: 'trusted author',
+  trust: 'directive author string',
   hooks: '[1/4] hooks install',
   index: '[2/4] index --rebuild',
   'claude-hook': '[3/4] agent integration',
@@ -716,7 +716,7 @@ export const register = (program: Command): void => {
   program
     .command('init')
     .description(
-      'one-command onboarding: hooks install, trusted author, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix',
+      'one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix',
     )
     .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
     .option('--verbose', 'show step-by-step detail output instead of the result summary')
@@ -731,7 +731,7 @@ export const register = (program: Command): void => {
     )
     .addHelpText(
       'after',
-      '\nRuns seven setup steps in sequence — hooks install, trusted author, index --rebuild, agent ' +
+      '\nRuns seven setup steps in sequence — hooks install, directive author string, index --rebuild, agent ' +
         'integration, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +

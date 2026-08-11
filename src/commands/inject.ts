@@ -25,7 +25,10 @@ import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
 import { buildInjection, type InjectOptions, type Injection } from '../core/inject.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import {
+  configuredSignedDirectivesRequired,
+  configuredTrustedAuthors,
+} from '../core/trusted-authors.js';
 import {
   CLAUDE_HOOK_COMMAND,
   CLAUDE_HOOK_EVENT,
@@ -246,6 +249,7 @@ const injectOptions = (
   // shapes Commander hands over.
   const flagged = options.trustedAuthor ?? [];
   const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
+  const requireSignedDirective = configuredSignedDirectivesRequired(cwd);
   return {
     path,
     cwd,
@@ -253,6 +257,7 @@ const injectOptions = (
     ...(at === undefined ? {} : { at }),
     ...(budget === undefined ? {} : { budget }),
     ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
+    ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
   };
 };
 
@@ -378,7 +383,7 @@ export const register = (program: Command): void => {
     .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: HEAD commit instant)')
     .option(
       '--trusted-author <author>',
-      'an author whose records may render as instructions (repeatable)',
+      'an author string whose records may render as instructions (repeatable; not identity proof)',
       collect,
       [],
     )

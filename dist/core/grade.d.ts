@@ -6,8 +6,12 @@
  * including a fork PR author nobody has ever met — can write `Warn:` text that
  * an agent will read as if the repository itself said it. This module is the
  * minimum defence: every record is graded on the two axes of SPEC §7
- * (provenance × lifecycle) plus author trust, and `Warn:` only survives as a
- * `directive` when all three hold. Everything else degrades to `claim`
+ * (provenance × lifecycle) plus a configured author-string match, and `Warn:`
+ * only survives as a `directive` when all three hold. An author string is
+ * selected by the commit author, so this default is useful repository policy,
+ * not identity authentication: anyone who can write a commit can forge it.
+ * Repositories can opt into Git signature verification as a fourth condition.
+ * Everything else degrades to `claim`
  * (surfaced as information, never as an order) or `blocked` (kept out of the
  * injection payload entirely).
  *
@@ -37,8 +41,10 @@ export interface Grade {
     matchedTrailerKeys?: string[];
 }
 export interface GradeContext {
-    /** 이 저장소에서 신뢰되는 작성자. 로컬은 --trusted-authors, Action은 GitHub API. */
+    /** Author strings this repository has elected to treat as directive writers. */
     trustedAuthors?: readonly string[];
+    /** Opt-in: only Git's `G` (good, verifier-trusted) signature status can direct. */
+    requireSignedDirective?: boolean;
     /** 커밋 메타 — 작성자 판정에 쓴다 */
     author?: string;
     at: Date;
@@ -56,6 +62,8 @@ export interface GradeContext {
  */
 export interface AuthoredRecord extends StaleRecord {
     author?: string;
+    /** Git's `%G?` status for the commit that wrote this declaration. */
+    signatureStatus?: string;
 }
 export type InjectionFamily = 'tool-invocation' | 'policy-bypass' | 'privilege-escalation' | 'credential-exfiltration' | 'output-manipulation';
 export interface InjectionPattern {
@@ -124,12 +132,13 @@ export declare const normalizeForMatch: (text: string) => string;
  */
 export declare const scanInjection: (text: string) => string[];
 /**
- * Whether `author` is on the repository's trusted list.
+ * Whether `author` matches a repository-configured author string.
  *
- * Undefined or empty `trustedAuthors` trusts nobody. That default is the
+ * Undefined or empty `trustedAuthors` elects no strings. That default is the
  * feature: a caller that forgets to pass the list gets every record downgraded
  * to `claim`, which is loud and harmless — the opposite default would turn the
- * check off silently. There is no wildcard entry; `*` in the list matches an
+ * check off silently. This is not authentication: the commit author chose the
+ * string being matched. There is no wildcard entry; `*` in the list matches an
  * author literally called `*`.
  *
  * Comparison is exact after trimming, with `Name <email>` also matching on
@@ -211,7 +220,12 @@ export declare const authorsOf: (cwd: string, shas: readonly string[]) => Map<st
  * grades `claim`. Note paths are fanned out by git (`ab/cdef…`, sometimes
  * deeper), so the separators are stripped to recover the annotated sha.
  */
-export declare const noteAuthorsOf: (cwd: string) => Map<string, string[]>;
+export interface NoteAuthor {
+    readonly author: string;
+    /** `%G?` from the note-writing commit; only `G` is verifier-trusted. */
+    readonly signatureStatus: string;
+}
+export declare const noteAuthorsOf: (cwd: string) => Map<string, NoteAuthor[]>;
 /**
  * Who to grade a record's declarations by, per source.
  *
@@ -224,7 +238,7 @@ export declare const noteAuthorsOf: (cwd: string) => Map<string, string[]>;
  * A record whose only source is `notes` is therefore never graded by the
  * annotated commit's author, and a mirrored record cannot be promoted by the
  * friendlier of its two authorships. That downgrades a mirror written by a bot
- * identity to `claim` until the bot is listed as a trusted author, which is the
+ * identity to `claim` until the bot's author string is configured, which is the
  * fail-closed direction and is visible in the record's reason.
  *
  * A note carries every identity that has written it, not just the latest, so a
@@ -238,5 +252,7 @@ export declare const gradeDeclarations: (record: Record, declarations: {
     shas: readonly string[];
     sources: readonly ("commit" | "notes")[];
     commitAuthors: ReadonlyMap<string, string>;
-    noteAuthors: ReadonlyMap<string, readonly string[]>;
+    /** `%G?` read with the batched trailer pass, keyed by commit sha. */
+    commitSignatures: ReadonlyMap<string, string>;
+    noteAuthors: ReadonlyMap<string, readonly NoteAuthor[]>;
 }, ctx: GradeContext) => Grade;
