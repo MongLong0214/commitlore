@@ -9,6 +9,14 @@ import { type GuardAdvisory } from './pending.js';
 export interface PrepareCaptureOptions {
     cwd: string;
     transcript: string;
+    /**
+     * Declare that this capture runs without asking: the pipeline prepares,
+     * verifies and stages it with no person in the loop (ADR-0030, #511).
+     * Refused unless the repository opted in — `.commitlore-policy.json` with
+     * `"unattended": true` and mode `auto` — because consent is a repository
+     * setting, not a caller's say-so.
+     */
+    unattended?: boolean;
 }
 export interface PrepareResult {
     nonce: string;

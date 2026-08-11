@@ -19,6 +19,34 @@ Most commits should still carry no record. The agent instructions live in
 [`skills/commitlore-commits/`](../skills/commitlore-commits/), and the commit
 hook validates any record the agent adds.
 
+## Unattended capture — an opt-in
+
+Capture normally runs with the agent in the loop: it prepares, drafts and
+verifies, and the policy's `mode` decides whether anyone is asked before
+staging. A repository can go one step further and consent once, for every
+commit, to capture with nobody in the loop at all:
+
+```json
+{ "mode": "auto", "unattended": true }
+```
+
+in `.commitlore-policy.json`. Where that is set, `commitlore capture
+--unattended` (or the MCP prepare tool's `unattended` argument) prepares,
+verifies and stages without any prompt, and the record reaches the commit
+through the hooks that already exist. Anywhere else the declaration is refused
+at prepare: consent is a repository setting, not a caller's say-so (ADR-0030,
+#511). The setting is honoured in `auto` mode only — `suggest` exists to ask,
+and `off` captures nothing.
+
+Because the setting lives with the capture policy, the policy identity covers
+it: a file edited between stage and commit is detected like any other policy
+change (ADR-0021 §7). It is off unless a repository sets it; shipping the
+switch is not flipping it.
+
+What it does not change: every record staged without a person reading it is
+stamped `Provenance: drafted` and served as `[claim]`, never `[directive]`,
+and the commit-msg hook's credential scan still runs before the commit exists.
+
 ## Advanced: harvest
 
 `commitlore harvest` builds a prompt contract from a session transcript and a

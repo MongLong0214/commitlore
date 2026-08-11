@@ -111,6 +111,15 @@ export const prepareCaptureContext = (opts) => {
     if (policy.policy.mode === 'off') {
         throw new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`);
     }
+    // ADR-0030, #511. Declaring a capture unattended is claiming the repository
+    // consented to capture without asking; prepare is the one moment that can
+    // check the claim before anything is written. Refused without the consent:
+    // no transcript hashed, no candidate drafted, no pending file — the same
+    // shape as `off`'s refusal, for the same reason.
+    if (opts.unattended === true &&
+        !(policy.policy.mode === 'auto' && policy.policy.unattended)) {
+        throw new Error(`unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`);
+    }
     // 6. Build the prompt contract via buildHarvestPrompt
     const prompt = buildHarvestPrompt({ transcript, diff });
     // 7. Compute guard advisory — T-1109
@@ -130,6 +139,7 @@ export const prepareCaptureContext = (opts) => {
         staged_tree_oid: stagedTreeOid,
         policy_identity_hash: policyIdentityHash,
         guard_advisory: advisory,
+        ...(opts.unattended === true ? { unattended: true } : {}),
     });
     return {
         nonce,

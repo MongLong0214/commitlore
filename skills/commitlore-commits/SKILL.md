@@ -63,6 +63,15 @@ asking. Those records are stamped `Provenance: drafted`, which caps them at
 nobody read them. Say nothing about it; a record landing quietly is the pipeline
 working.
 
+Where the policy goes further — `"unattended": true` beside `"mode": "auto"`
+in `.commitlore-policy.json` — this step does not exist at all (#511). The
+repository consented once, for every commit: declare the capture unattended
+(CLI `--unattended`, or the MCP prepare tool's `unattended` argument), stage
+what came back `accepted`, and show nothing to anyone. Declare it only where
+the file opts in — `prepare` refuses the declaration anywhere else — and know
+that a host which stages without declaring still stages a record nobody read:
+the `drafted` stamp and its `claim` cap follow either way (ADR-0028).
+
 In `suggest`, show what came back and stage only what the user keeps:
 
 ```
@@ -101,8 +110,10 @@ unchanged. Break one and the commit proceeds carrying no record.
 
 The CLI runs steps 1, 3 and 5 in one process. There is no point inside it where
 a user can answer, so it stages without asking — reach for it only when the user
-has already agreed to record this one, and otherwise keep the MCP tools, where
-step 4 fits between verify and stage:
+has already agreed to record this one, or when the repository opted into
+unattended capture, in which case pass `--unattended`: prepare refuses the
+declaration where the policy does not consent. Otherwise keep the MCP tools,
+where step 4 fits between verify and stage:
 
 ```
 commitlore capture --transcript session.txt --draft draft.json
@@ -146,7 +157,7 @@ reprints this, so the table is mostly for reading records and for the fallback.
 | `Supersedes:` | `Record-Id` | yes | Retires an earlier record |
 | `Expires:` | `YYYY-MM-DD` \| free-text condition | no | When this record stops being active |
 | `Evidence:` | `path` \| `path#anchor` \| URL | yes | Link from a claim to its proof |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
 | `CommitLore-Version:` | semver | no | Protocol version this record targets |
 | `X-<Name>:` | free text | yes | Organization extension, never interpreted by the core |
 

@@ -85,6 +85,14 @@ const computeGuardAdvisory = (opts: {
 export interface PrepareCaptureOptions {
   cwd: string;
   transcript: string;
+  /**
+   * Declare that this capture runs without asking: the pipeline prepares,
+   * verifies and stages it with no person in the loop (ADR-0030, #511).
+   * Refused unless the repository opted in — `.commitlore-policy.json` with
+   * `"unattended": true` and mode `auto` — because consent is a repository
+   * setting, not a caller's say-so.
+   */
+  unattended?: boolean;
 }
 
 export interface PrepareResult {
@@ -156,6 +164,20 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     );
   }
 
+  // ADR-0030, #511. Declaring a capture unattended is claiming the repository
+  // consented to capture without asking; prepare is the one moment that can
+  // check the claim before anything is written. Refused without the consent:
+  // no transcript hashed, no candidate drafted, no pending file — the same
+  // shape as `off`'s refusal, for the same reason.
+  if (
+    opts.unattended === true &&
+    !(policy.policy.mode === 'auto' && policy.policy.unattended)
+  ) {
+    throw new Error(
+      `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`,
+    );
+  }
+
   // 6. Build the prompt contract via buildHarvestPrompt
   const prompt = buildHarvestPrompt({ transcript, diff });
 
@@ -177,6 +199,7 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     staged_tree_oid: stagedTreeOid,
     policy_identity_hash: policyIdentityHash,
     guard_advisory: advisory,
+    ...(opts.unattended === true ? { unattended: true } : {}),
   });
 
   return {

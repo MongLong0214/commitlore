@@ -70,6 +70,15 @@ export const CAPTURE_MODES: readonly CaptureMode[] = ['auto', 'suggest', 'off'];
 
 export interface CapturePolicy {
   mode: CaptureMode;
+  /**
+   * Consent to capture without asking (ADR-0030, #511). Off unless a
+   * repository sets it, and honoured only in `auto` mode: `suggest` exists to
+   * ask, `off` captures nothing, and a consent neither mode can honour is a
+   * configuration error rather than a silent no-op. The declaration a capture
+   * makes against it is checked in `capture-prepare.ts`; the grading cap that
+   * keeps an unread record from directing lives in `grade.ts`.
+   */
+  unattended: boolean;
   max_records_per_commit: number;
   require_verified_evidence: boolean;
 }
@@ -82,6 +91,11 @@ export interface CapturePolicy {
  */
 export const POLICY_DEFAULTS: CapturePolicy = {
   mode: 'auto',
+  // Off by default and deliberately so: a repository that never set this must
+  // capture exactly as it did before the setting existed (#511). Turning it on
+  // is a separate decision with its own evidence — shipping the switch is not
+  // flipping it.
+  unattended: false,
   max_records_per_commit: 1,
   require_verified_evidence: true,
 };
@@ -89,6 +103,7 @@ export const POLICY_DEFAULTS: CapturePolicy = {
 /** The only keys a policy file may set. An unknown key is rejected, not merged. */
 export const POLICY_KEYS = [
   'mode',
+  'unattended',
   'max_records_per_commit',
   'require_verified_evidence',
 ] as const;
@@ -114,6 +129,14 @@ const sha256 = (input: string): string => createHash('sha256').update(input).dig
  * `JSON.stringify` over an object literal whose keys are declared in
  * `POLICY_DEFAULTS`' order — the exact expression the three former call sites
  * used, preserved so that consolidation is a no-op on the digest.
+ *
+ * `unattended` is deliberately absent (#511). The setting can only be turned
+ * on by a policy file, and a file's identity is its own bytes — so every
+ * identity the setting can change is hashed already. Putting a fixed-false
+ * default into this digest too would refuse every capture in flight across the
+ * upgrade in every repository that never opted in: a policy change that never
+ * happened, the exact false positive this hash exists to avoid. If the default
+ * ever becomes `true`, this input must move with it.
  */
 export const computePolicyIdentityHash = (policy: CapturePolicy = POLICY_DEFAULTS): string =>
   sha256(
@@ -219,6 +242,26 @@ const validate = (
       };
     }
     policy.max_records_per_commit = v;
+  }
+
+  if ('unattended' in obj) {
+    const v = obj.unattended;
+    if (typeof v !== 'boolean') {
+      return {
+        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`,
+      };
+    }
+    policy.unattended = v;
+  }
+
+  // ADR-0030's guarantee is a property of `auto` mode (#511): a record staged
+  // without asking is stamped `drafted` there and only there. A consent the
+  // mode cannot honour is rejected rather than ignored, so a user never
+  // believes a setting applied.
+  if (policy.unattended && policy.mode !== 'auto') {
+    return {
+      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`,
+    };
   }
 
   if ('require_verified_evidence' in obj) {

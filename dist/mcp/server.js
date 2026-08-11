@@ -281,6 +281,11 @@ const TOOLS = [
                     type: 'string',
                     description: 'the session transcript to compute source hashes from',
                 },
+                unattended: {
+                    type: 'boolean',
+                    description: 'declare this capture unattended: nobody was asked before staging. Refused unless the ' +
+                        'repository opted in (.commitlore-policy.json: "unattended": true, mode "auto")',
+                },
             },
             required: ['transcript'],
             additionalProperties: false,
@@ -359,6 +364,14 @@ const stringArg = (args, name) => {
         throw new Error(`${name} must be a string`);
     return value;
 };
+const booleanArg = (args, name) => {
+    const value = args[name];
+    if (value === undefined || value === null)
+        return undefined;
+    if (typeof value !== 'boolean')
+        throw new Error(`${name} must be a boolean`);
+    return value;
+};
 const requiredString = (args, name) => {
     const value = stringArg(args, name);
     if (value === undefined || value.trim() === '') {
@@ -433,7 +446,12 @@ export const createServer = (opts = {}) => {
         },
         [PREPARE_CAPTURE_TOOL]: (args) => {
             const transcript = requiredString(args, 'transcript');
-            const result = prepareCaptureContext({ cwd: root, transcript });
+            const unattended = booleanArg(args, 'unattended');
+            const result = prepareCaptureContext({
+                cwd: root,
+                transcript,
+                ...(unattended === true ? { unattended: true } : {}),
+            });
             return asText({
                 nonce: result.nonce,
                 base_head: result.base_head,

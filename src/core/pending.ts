@@ -49,6 +49,12 @@ export interface PendingRecord {
   overlap_check: 'canonical_exact_only' | null;
   incomplete: boolean;
   guard_advisory?: GuardAdvisory | null;
+  /**
+   * Present — and only ever `true` — when the capture declared itself
+   * unattended and the repository's policy consented (#511). Absent otherwise,
+   * so a capture that made no declaration leaves byte-identical bytes on disk.
+   */
+  unattended?: boolean;
 }
 
 export class PendingFormatError extends Error {
@@ -151,6 +157,8 @@ export interface CreatePendingOptions {
   staged_tree_oid: string;
   policy_identity_hash: string;
   guard_advisory?: GuardAdvisory | null;
+  /** Set only when prepare accepted an unattended declaration (#511). */
+  unattended?: boolean;
 }
 
 /**
@@ -191,6 +199,9 @@ export const createPending = (opts: CreatePendingOptions): string => {
     overlap_check: null,
     incomplete: false,
     guard_advisory: opts.guard_advisory ?? null,
+    // Written only when true: the stored bytes of an ordinary capture must be
+    // exactly what they were before the setting existed (#511).
+    ...(opts.unattended === true ? { unattended: true } : {}),
   };
 
   const filePath = pendingFilePath(nonce, opts.cwd);

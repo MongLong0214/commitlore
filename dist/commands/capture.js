@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
+import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { execGitOrThrow } from '../core/git.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
@@ -44,7 +45,11 @@ export const runCapture = (opts) => {
     // and is still refused.
     const diff = diffPath ? readFileSync(diffPath, 'utf8') : execGitOrThrow(['diff', '--cached'], { cwd });
     // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
-    const prepareResult = prepareCaptureContext({ cwd, transcript });
+    const prepareResult = prepareCaptureContext({
+        cwd,
+        transcript,
+        ...(opts.unattended === true ? { unattended: true } : {}),
+    });
     if (prepareResult.policy_error !== null) {
         // The defaults ran. Say which policy actually applied rather than letting a
         // user assume their file did (T-1110, PRD-F13 requirement 10).
@@ -130,6 +135,8 @@ export const register = (program) => {
         .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
         .option('--out <path>', 'write the pending nonce to a file')
         .option('--json', 'emit structured JSON output')
+        .option('--unattended', 'declare this capture unattended: prepared, verified and staged without asking. ' +
+        `Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`)
         .action((options) => {
         if (options.transcript === undefined) {
             process.stderr.write("error: required option '--transcript <path>' not specified\n");
@@ -143,6 +150,8 @@ export const register = (program) => {
                 runOpts.diffPath = options.diff;
             if (options.draft !== undefined)
                 runOpts.draftPath = options.draft;
+            if (options.unattended === true)
+                runOpts.unattended = true;
             const result = runCapture(runOpts);
             if (options.json) {
                 process.stdout.write(JSON.stringify(result, null, 2) + '\n');
