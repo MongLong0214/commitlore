@@ -6,34 +6,9 @@
  * commit can begin that run.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { POLICY_FILE_NAME, resolvePolicy } from '../../../core/capture-policy.js';
-import { SERVER_NAME } from '../../../mcp/server.js';
+import { MCP_REGISTRATION_FILE, registersCommitloreMcpServer } from '../../../core/mcp-registration.js';
 import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
-
-/** What a host reads to obtain this repository's MCP servers. */
-const MCP_REGISTRATION_FILE = '.mcp.json';
-
-/**
- * Whether this repository registers the capture MCP server for a host to load.
- *
- * Deliberately shallow: an unreadable or malformed file is not a registration,
- * and a registration is not a call. Both stay false rather than optimistic.
- */
-const registersCaptureServer = (cwd: string): boolean => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(join(cwd, MCP_REGISTRATION_FILE), 'utf8'));
-  } catch {
-    return false;
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false;
-  const servers = (parsed as Record<string, unknown>)['mcpServers'];
-  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) return false;
-  return Object.hasOwn(servers, SERVER_NAME);
-};
 
 /**
  * #527: a policy file said unattended capture was enabled, while normal Git
@@ -106,7 +81,7 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
     );
   }
 
-  if (registersCaptureServer(cwd)) {
+  if (registersCommitloreMcpServer(cwd)) {
     return check(
       id,
       category,

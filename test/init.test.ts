@@ -26,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { readHookStatus } from '../src/commands/hooks.js';
+import { runDoctor } from '../src/commands/doctor.js';
 import { closeIndex, indexInfo, openIndex } from '../src/core/index-db.js';
 import { CHAINED_HOOK_NAME, HOOK_NAME } from '../src/hooks/commit-msg.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
@@ -145,13 +146,21 @@ const trailerCount = (repo: string): number => {
 };
 
 describe('commitlore init — the happy path', () => {
-  it('installs the hook and the index, and reports 0/0/0/0 codes on a repo with a working remote', () => {
+  it('installs every onboarding component and reports clean codes on a repo with a working remote', () => {
     const repo = repoWithRemote('happy');
 
     const report = runInitAsCli({ cwd: repo });
 
-    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'trust', 'index', 'claude-hook', 'policy', 'doctor']);
-    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(report.steps.map((s) => s.step)).toEqual([
+      'hooks',
+      'trust',
+      'index',
+      'claude-hook',
+      'mcp-registration',
+      'policy',
+      'doctor',
+    ]);
+    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(report.exitCode).toBe(0);
 
     expect(readHookStatus(repo).state).toBe('installed');
@@ -164,15 +173,20 @@ describe('commitlore init — the happy path', () => {
 
     const first = runInitAsCli({ cwd: repo });
     const hookBytesAfterFirst = readFileSync(hookPathOf(repo), 'utf8');
+    const mcpBytesAfterFirst = readFileSync(join(repo, '.mcp.json'), 'utf8');
     const second = runInitAsCli({ cwd: repo });
 
     expect(first.exitCode).toBe(0);
     expect(second.exitCode).toBe(0);
     expect(readFileSync(hookPathOf(repo), 'utf8')).toBe(hookBytesAfterFirst);
+    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toBe(mcpBytesAfterFirst);
 
     const hooksStep = second.steps.find((s) => s.step === 'hooks');
     expect(hooksStep?.lines.join('\n')).toContain('already installed');
     expect(hooksStep?.lines.join('\n')).toContain('unchanged');
+    const mcpStep = second.steps.find((s) => s.step === 'mcp-registration');
+    expect(mcpStep?.lines.join('\n')).toContain('already registers commitlore');
+    expect(mcpStep?.lines.join('\n')).toContain('left unchanged');
   });
 
   it('formats a human-readable report with a clean summary line when nothing needs attention', () => {
@@ -183,8 +197,106 @@ describe('commitlore init — the happy path', () => {
     expect(text).toContain('✓ Hooks');
     expect(text).toContain('✓ Index');
     expect(text).toContain('✓ Agent integration');
+    expect(text).toContain('✓ MCP registration');
     expect(text).toContain('✓ Final check');
     expect(text).toContain('init: ready');
+  });
+});
+
+describe('commitlore init — repository MCP registration', () => {
+  const initiatorStatus = (repo: string): string | undefined =>
+    runDoctor({ cwd: repo }).checks.find((check) => check.id === 'unattended-initiator')?.status;
+
+  const enableUnattended = (repo: string): void => {
+    writeFileSync(
+      join(repo, POLICY_FILE_NAME),
+      `${JSON.stringify({ mode: 'auto', unattended: true }, null, 2)}\n`,
+    );
+  };
+
+  it('creates a portable registration and clears doctor’s unattended-initiator warning', () => {
+    const repo = repoWithRemote('mcp-created');
+    enableUnattended(repo);
+
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(initiatorStatus(repo)).toBe('warn');
+
+    const report = runInitAsCli({ cwd: repo });
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+    const config = JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8')) as {
+      mcpServers?: Record<string, { command?: unknown; args?: unknown }>;
+    };
+
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('registered the capture server for repository-scoped hosts');
+    expect(registration?.lines.join('\n')).toContain('applies to everyone who clones');
+    expect(registration?.lines.join('\n')).toContain('hosts that keep MCP configuration outside the repository are unchanged');
+    expect(config.mcpServers?.commitlore).toEqual({ command: 'commitlore', args: ['mcp'] });
+    expect(initiatorStatus(repo)).toBe('ok');
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('merges into an existing .mcp.json without changing other servers or fields', () => {
+    const repo = repoWithRemote('mcp-merge');
+    const otherServer = [
+      '    "other-server": {',
+      '      "command": "other-mcp",',
+      '      "args": ["serve", "--safe"],',
+      '      "env": { "PRESERVE": "every-byte" }',
+      '    }',
+    ].join('\n');
+    const unrelated = '  "host-owned": { "keep": [1, 2, 3] }';
+    const original = ['{', '  "mcpServers": {', otherServer, '  },', unrelated, '}', ''].join('\n');
+    writeFileSync(join(repo, '.mcp.json'), original);
+
+    const report = runInitAsCli({ cwd: repo });
+    const after = readFileSync(join(repo, '.mcp.json'), 'utf8');
+    const parsed = JSON.parse(after) as {
+      mcpServers: Record<string, unknown>;
+      'host-owned': unknown;
+    };
+
+    expect(report.steps.find((step) => step.step === 'mcp-registration')?.code).toBe(0);
+    expect(after).toContain(otherServer);
+    expect(after).toContain(unrelated);
+    expect(parsed.mcpServers['other-server']).toEqual({
+      command: 'other-mcp',
+      args: ['serve', '--safe'],
+      env: { PRESERVE: 'every-byte' },
+    });
+    expect(parsed['host-owned']).toEqual({ keep: [1, 2, 3] });
+    expect(parsed.mcpServers.commitlore).toEqual({ command: 'commitlore', args: ['mcp'] });
+  });
+
+  it('leaves an existing commitlore entry byte-for-byte unchanged', () => {
+    const repo = repoWithRemote('mcp-existing');
+    const original =
+      '{"mcpServers":{"commitlore":{"command":"deliberate-wrapper","args":["custom-mcp"],"env":{"MODE":"operator-choice"}}},"host-owned":true}\n';
+    writeFileSync(join(repo, '.mcp.json'), original);
+
+    const report = runInitAsCli({ cwd: repo });
+
+    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toBe(original);
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('already registers commitlore');
+    expect(registration?.lines.join('\n')).toContain('left unchanged');
+  });
+
+  it('reports a registration failure but does not make the install fail', () => {
+    const repo = repoWithRemote('mcp-registration-failure');
+    mkdirSync(join(repo, '.mcp.json'));
+
+    const report = runInitAsCli({ cwd: repo });
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('could not register the capture server');
+    expect(registration?.lines.join('\n')).toContain('repository still installs');
+    expect(report.steps.find((step) => step.step === 'hooks')?.code).toBe(0);
+    expect(report.steps.find((step) => step.step === 'index')?.code).toBe(0);
+    expect(report.exitCode).toBe(0);
+    expect(formatInitReport(report)).toContain('MCP registration — not registered for repository-scoped hosts');
   });
 });
 
@@ -280,7 +392,7 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     const report = runInitAsCli({ cwd: repo });
 
     // Nothing here is a thrown exception: every step reports its own outcome.
-    expect(report.steps).toHaveLength(6);
+    expect(report.steps).toHaveLength(7);
     for (const step of report.steps) {
       expect(step.lines.length).toBeGreaterThan(0);
     }
@@ -290,7 +402,7 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
 describe('commitlore init — the capture policy step', () => {
   const policyPathOf = (repo: string): string => join(repo, POLICY_FILE_NAME);
 
-  it('authorises unattended capture where no policy file exists and names the missing initiator', () => {
+  it('authorises unattended capture where no policy file exists and registers its initiator', () => {
     const repo = repoWithRemote('policy-enable');
 
     const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
@@ -309,9 +421,9 @@ describe('commitlore init — the capture policy step', () => {
 
     const text = formatInitReport(report);
     expect(text).toContain('unattended policy enabled — agent host must initiate capture');
-    expect(text).toContain('unattended capture initiator');
-    expect(text).toContain('ordinary git commit cannot start it');
-    expect(report.exitCode).toBe(1);
+    expect(text).toContain('MCP registration — registered for repository-scoped hosts');
+    expect(text).toContain('init: ready');
+    expect(report.exitCode).toBe(0);
   });
 
   it('records a decline without writing a file', () => {

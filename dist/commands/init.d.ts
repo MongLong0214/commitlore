@@ -20,14 +20,17 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past.
+ * command marks failed, not a step it skips past. Repository MCP registration
+ * is deliberately advisory: failure is visible in its own line but does not
+ * make the installation fail, because doctor already reports its absence when
+ * unattended capture makes an initiator necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
  * `hooks install` reports "already installed ... (unchanged)", and an index
  * rebuild is a deterministic function of repository state) — running `init`
  * twice with nothing else changing degrades gracefully because with nothing
- * else changing, none of the three sub-invocations do.
+ * else changing, none of its sub-invocations do.
  */
 import type { Command } from 'commander';
 import { type DoctorReport } from './doctor.js';
@@ -39,6 +42,7 @@ import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js'
 import { type PostCommitHookResult } from '../hooks/post-commit.js';
 import { type PrePushHookResult } from '../hooks/pre-push.js';
 import { type TrustSeedResult } from '../core/trusted-authors.js';
+import { type McpRegistrationResult } from '../core/mcp-registration.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
@@ -61,7 +65,7 @@ export interface InitOptions {
  * anything, kept distinct so the output can state which one happened.
  */
 export type UnattendedChoice = 'enable' | 'decline' | 'no-tty' | 'no-answer';
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'trust' | 'policy';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy';
 export interface InitStep {
     step: StepName;
     title: string;
@@ -69,7 +73,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | TrustSeedResult | PolicyStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
@@ -98,7 +102,7 @@ export interface InitReport {
      * an index that still has none of the records kept in notes.
      */
     notesBefore: ReturnType<typeof notesAvailability>;
-    /** Worst of the three step codes — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
+    /** Worst step code — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
     exitCode: 0 | 1 | 2;
 }
 /**
@@ -106,8 +110,9 @@ export interface InitReport {
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
  * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
- * 4. Capture policy — asks about unattended capture, once, where no policy exists yet
- * 5. Doctor (final check) — verifies everything is working
+ * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
+ * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
+ * 6. Doctor (final check) — verifies everything is working
  *
  * Doctor runs last on purpose. `doctor` diagnoses the hook and the index among
  * its checks, and it does not install either: run it first and its own
