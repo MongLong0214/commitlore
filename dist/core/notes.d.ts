@@ -95,10 +95,11 @@ export declare const listRecordShas: (opts?: NotesOptions) => string[];
  * What a consumer route can conclude from an empty answer.
  *
  * - `present`    — the mirror ref exists here; an empty answer means empty
- * - `absent`     — no mirror ref, and every remote already fetches one, so
- *                  nobody has written records: an empty answer means empty
- * - `unfetched`  — no mirror ref, and a remote exists that does not fetch it.
- *                  Records may exist upstream. An empty answer means *unknown*.
+ * - `absent`     — no mirror ref, and local doctor evidence says every
+ *                  configured remote advertised none: an empty answer means empty
+ * - `unfetched`  — no mirror ref, and the remote state is not established
+ *                  locally. Records may exist upstream. An empty answer means
+ *                  *unknown*.
  *
  * The third case is the one that matters and the reason this exists. `git fetch`
  * does not fetch notes by default, so a plain `git clone` of a repository full
@@ -109,8 +110,21 @@ export declare const listRecordShas: (opts?: NotesOptions) => string[];
  * is what an agent runs.
  */
 export type NotesAvailability = 'present' | 'absent' | 'unfetched';
+/**
+ * A `doctor --fix` observation is scoped to one remote name and value-bound to
+ * its configured URL. Remote names may contain punctuation that is not valid
+ * in a git-config variable, so encode their UTF-8 bytes instead of interpolating
+ * the name into the key.
+ */
+export declare const notesAbsenceEvidenceKey: (remote: string) => string;
 export declare const listRemotes: (opts: NotesOptions) => string[];
 export declare const fetchRefspecs: (remote: string, opts: NotesOptions) => string[];
+/**
+ * Whether `doctor --fix` last established, for this exact configured remote,
+ * that it advertised no notes mirror. This is deliberately a local-config
+ * lookup: consumer routes must not put a network round trip before an edit.
+ */
+export declare const hasNotesAbsenceEvidence: (remote: string, opts?: NotesOptions) => boolean;
 /**
  * Whether a configured refspec lands the mirror where we read it.
  *
@@ -129,17 +143,10 @@ export declare const forcesNotes: (refspec: string) => boolean;
 /**
  * Whether this repository can answer for the notes mirror, and if not, why.
  *
- * Reads git config only — no network, no fetch. A repository with no remote at
- * all reports `absent`: there is nowhere for unseen records to be, so an empty
- * answer is a true empty.
- *
- * A configured refspec that has never been fetched through is indistinguishable
- * here from one that was fetched and found nothing, and the difference matters:
- * `doctor --fix` writes the refspec and fetches nothing, so the state it leaves
- * looks exactly like an upstream with no records. Reporting `unfetched` for both
- * was tried and rejected — it fires on every repository whose refspec was added
- * after cloning, and `incomplete` changes `guard`'s exit code. The honest fix
- * lives in `doctor`, which now says a fetch is still owed instead of letting
- * `ok` read as repaired.
+ * Reads local refs and config only — no network, no fetch. Config describes
+ * what this clone intends to fetch; it does not prove what a remote advertised.
+ * `doctor --fix` records a URL-bound absence observation after its remote probe.
+ * Without that observation (including no configured remote), absence is not
+ * evidence that there is nothing upstream, so the answer stays incomplete.
  */
 export declare const notesAvailability: (opts?: NotesOptions) => NotesAvailability;

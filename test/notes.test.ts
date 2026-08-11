@@ -195,7 +195,8 @@ describe('notes mirror', () => {
 
       const report = runDoctor({ cwd: cloneB, fix: true });
       const refspec = report.checks.find((entry) => entry.id === 'notes-refspec');
-      expect(refspec?.status).toBe('ok');
+      expect(refspec?.status).toBe('warn');
+      expect(refspec?.detail).toContain('advertises');
       expect(refspec?.fixed).toBe(true);
 
       git(cloneB, ['fetch', '--quiet', 'origin']);

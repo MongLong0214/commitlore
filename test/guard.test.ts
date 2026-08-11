@@ -42,6 +42,7 @@ import {
 } from '../src/commands/guard.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { DEFAULT_THRESHOLD, guard } from '../src/core/guard.js';
+import { NOTES_REFSPEC, notesAbsenceEvidenceKey } from '../src/core/notes.js';
 import { runQuery } from '../src/core/query.js';
 import { RECORD_ID_RE } from '../src/core/types.js';
 import { createTestRepo } from './git-fixtures.js';
@@ -168,6 +169,9 @@ const makeRepo = (seed: readonly RecordFixture[]): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-guard-'));
   temporaries.push(dir);
   createTestRepo({ path: dir });
+  execGitOrThrow(['remote', 'add', 'origin', '.'], { cwd: dir });
+  execGitOrThrow(['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC], { cwd: dir });
+  execGitOrThrow(['config', '--local', notesAbsenceEvidenceKey('origin'), '.'], { cwd: dir });
   for (const record of seed) commitFixture(dir, record);
   return dir;
 };

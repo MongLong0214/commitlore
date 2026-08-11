@@ -27,7 +27,7 @@ import { buildReport, collectRecords } from '../src/commands/stale.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import { closeIndex, ensureIndex, indexDbPath, scanTrailers } from '../src/core/index-db.js';
-import { writeRecord } from '../src/core/notes.js';
+import { NOTES_REFSPEC, notesAbsenceEvidenceKey, writeRecord } from '../src/core/notes.js';
 import { runQuery, valuesOf, type GradedRecord, type QueryOptions } from '../src/core/query.js';
 import { loadFixtures } from './fixtures.js';
 import { createTestRepo } from './git-fixtures.js';
@@ -57,7 +57,14 @@ afterAll(() => {
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-query-'));
   temporaries.push(dir);
-  return createTestRepo({ path: dir });
+  createTestRepo({ path: dir });
+  // Most fixtures here test query semantics rather than transport setup. Give
+  // them the same local absence evidence that `doctor --fix` leaves after
+  // checking an empty remote, so their answers are complete by construction.
+  execGitOrThrow(['remote', 'add', 'origin', '.'], { cwd: dir });
+  execGitOrThrow(['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC], { cwd: dir });
+  execGitOrThrow(['config', '--local', notesAbsenceEvidenceKey('origin'), '.'], { cwd: dir });
+  return dir;
 };
 
 const cloneRepo = (origin: string): string => {
@@ -1228,8 +1235,22 @@ describe('the four commands', () => {
     expect(runCommand(cloneRepo(dir), [command, AT, PINNED]).code).toBe(3);
   });
 
-  it.each(commands)('%s exits 0 in a readable repository with no records', (command) => {
+  it.each(commands)('%s exits 0 in a readable repository known to have no notes', (command) => {
     expect(runCommand(makeRepo(), [command, AT, PINNED]).code).toBe(0);
+  });
+
+  // A repository with no remote has nowhere for an unseen record to be, so an
+  // empty answer is a true empty. Warning here would point at an upstream that
+  // does not exist, and nothing could clear it: there is no remote to probe, so
+  // `doctor --fix` can never record evidence about one.
+  it.each(commands)('%s exits 0 and says nothing about upstream when there is no remote', (command) => {
+    const noRemote = mkdtempSync(join(tmpdir(), 'commitlore-query-no-remote-'));
+    temporaries.push(noRemote);
+    createTestRepo({ path: noRemote });
+
+    const run = runCommand(noRemote, [command, AT, PINNED]);
+    expect(run.code).toBe(0);
+    expect(run.stderr).not.toContain('may be missing records that exist upstream');
   });
 
   it.each(commands)('%s exits 2 when git cannot answer at all', (command) => {
@@ -1511,7 +1532,7 @@ describe('--json', () => {
       // Commit history was read, so this is ready rather than empty.
       history: 'ready',
       counts: { records: 0, limits: 0, ruledOut: 0, warnings: 0, other: 0 },
-      // No remote, so an empty answer here is a true empty and says so.
+      // The fixture carries the local doctor evidence for an empty remote.
       notes: 'absent',
       diagnostics: [],
       records: [],
