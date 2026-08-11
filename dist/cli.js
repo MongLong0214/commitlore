@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { register as registerBackfill } from './commands/backfill.js';
+import { register as registerAuto } from './commands/auto.js';
 import { register as registerCapture } from './commands/capture.js';
 import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
@@ -116,6 +117,7 @@ registerQuery(program);
 registerStale(program);
 registerDoctor(program);
 registerInit(program);
+registerAuto(program);
 registerHarvest(program);
 registerHarvestVerify(program);
 registerSquashPreserve(program);

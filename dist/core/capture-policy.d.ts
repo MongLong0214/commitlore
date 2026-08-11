@@ -135,3 +135,47 @@ export interface PolicyResolution {
  * ran.
  */
 export declare const resolvePolicy: (cwd: string) => PolicyResolution;
+/**
+ * Absolute path of the repository's policy file, or null outside a repository.
+ * The file itself may or may not exist; this is where it lives either way, so
+ * a status report can say where the setting is kept even before it is set.
+ */
+export declare const capturePolicyPath: (cwd: string) => string | null;
+export interface PolicyWriteSuccess {
+    ok: true;
+    /** Absolute path of the policy file. */
+    path: string;
+    /** False when the requested state was already in effect and nothing was written. */
+    changed: boolean;
+    /** The policy that applies after the call. */
+    policy: CapturePolicy;
+    /** The policy that applied before the call — the defaults when no file existed. */
+    previous: CapturePolicy;
+}
+export interface PolicyWriteFailure {
+    ok: false;
+    /** Absolute path of the policy file, or null outside a repository. */
+    path: string | null;
+    /** A named, actionable reason — the same words `resolvePolicy` would use. */
+    error: string;
+}
+export type PolicyWriteResult = PolicyWriteSuccess | PolicyWriteFailure;
+/**
+ * Turn unattended capture on or off by writing the policy file
+ * `resolvePolicy` reads (#511 added the setting; this is the only writer).
+ *
+ * Never throws. Coherence is enforced here rather than trusted to the caller:
+ * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
+ * the mode cannot honour is a configuration error the resolver rejects
+ * (ADR-0030, #511) — this function cannot produce a file it would reject.
+ * Disabling preserves whatever mode the repository chose.
+ *
+ * An existing file is merged, never replaced: every other key the repository
+ * set survives. A file the resolver rejects is refused rather than rewritten,
+ * because rewriting it would destroy whatever the user meant to put there
+ * before they can see it named. When no file exists, disabling writes nothing
+ * — the defaults already apply, and creating a file would move the repository
+ * from the default digest to a file digest while nothing about capture
+ * changed, which #511 pins against.
+ */
+export declare const setUnattendedCapture: (cwd: string, enabled: boolean) => PolicyWriteResult;

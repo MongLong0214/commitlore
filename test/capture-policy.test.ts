@@ -12,7 +12,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -22,6 +22,8 @@ import {
   POLICY_FILE_NAME,
   computePolicyIdentityHash,
   resolvePolicy,
+  capturePolicyPath,
+  setUnattendedCapture,
 } from '../src/core/capture-policy.js';
 
 /**
@@ -344,5 +346,110 @@ describe('#511 unattended capture is an opt-in', () => {
     expect(r.policy.mode).toBe('suggest');
     expect(r.policy.unattended).toBe(false);
     rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+});
+
+/**
+ * The writer `auto on/off` and `init` go through. The property under test is
+ * the one named in its contract: it cannot produce a file the resolver
+ * rejects, and it never changes more than the setting it was asked about.
+ */
+describe('setUnattendedCapture writes only what the resolver accepts', () => {
+  const policyPath = (): string => join(repo, POLICY_FILE_NAME);
+
+  it('names the repository-root path the resolver reads', () => {
+    // Git's own root, not the mkdtemp path: on macOS tmpdir is a symlink
+    // (/var/...) that `rev-parse --show-toplevel` resolves (/private/var/...).
+    const root = git('rev-parse', '--show-toplevel').trim();
+    expect(capturePolicyPath(repo)).toBe(join(root, POLICY_FILE_NAME));
+  });
+
+  it('enabling from the defaults writes mode "auto" beside unattended true', () => {
+    const result = setUnattendedCapture(repo, true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.changed).toBe(true);
+    expect(result.policy).toEqual({ ...POLICY_DEFAULTS, mode: 'auto', unattended: true });
+
+    const r = resolvePolicy(repo);
+    expect(r.error).toBeNull();
+    expect(r.policy.unattended).toBe(true);
+    expect(r.policy.mode).toBe('auto');
+    expect(r.identityHash).not.toBe(PINNED_DEFAULT_DIGEST);
+  });
+
+  it('enabling moves a non-auto mode to "auto" rather than writing a rejected file', () => {
+    for (const mode of ['suggest', 'off'] as const) {
+      writeFileSync(policyPath(), `{ "mode": "${mode}" }\n`);
+      const result = setUnattendedCapture(repo, true);
+      expect(result.ok, `mode ${mode}`).toBe(true);
+      if (!result.ok) return;
+      expect(result.previous.mode).toBe(mode);
+      const r = resolvePolicy(repo);
+      expect(r.error, `mode ${mode}`).toBeNull();
+      expect(r.policy.mode).toBe('auto');
+      expect(r.policy.unattended).toBe(true);
+    }
+    rmSync(policyPath(), { force: true });
+  });
+
+  it('disabling preserves the mode the repository chose', () => {
+    writeFileSync(policyPath(), `{ "mode": "suggest" }\n`);
+    const result = setUnattendedCapture(repo, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.policy.mode).toBe('suggest');
+    expect(result.policy.unattended).toBe(false);
+    const r = resolvePolicy(repo);
+    expect(r.error).toBeNull();
+    expect(r.policy.mode).toBe('suggest');
+  });
+
+  it('leaves an already-effective setting alone — the identity hash does not move', () => {
+    writeFileSync(policyPath(), `{ "mode": "suggest" }\n`);
+    const before = readFileSync(policyPath(), 'utf8');
+    const identityBefore = resolvePolicy(repo).identityHash;
+
+    const off = setUnattendedCapture(repo, false);
+    expect(off.ok).toBe(true);
+    if (off.ok) expect(off.changed).toBe(false);
+    expect(readFileSync(policyPath(), 'utf8')).toBe(before);
+    expect(resolvePolicy(repo).identityHash).toBe(identityBefore);
+
+    writeFileSync(policyPath(), `{ "unattended": true, "mode": "auto" }\n`);
+    const onBytes = readFileSync(policyPath(), 'utf8');
+    const on = setUnattendedCapture(repo, true);
+    expect(on.ok).toBe(true);
+    if (on.ok) expect(on.changed).toBe(false);
+    expect(readFileSync(policyPath(), 'utf8')).toBe(onBytes);
+  });
+
+  it('keeps every other key the repository set when it writes', () => {
+    writeFileSync(policyPath(), `{ "max_records_per_commit": 4, "require_verified_evidence": false }\n`);
+    const result = setUnattendedCapture(repo, true);
+    expect(result.ok).toBe(true);
+    const r = resolvePolicy(repo);
+    expect(r.error).toBeNull();
+    expect(r.policy.max_records_per_commit).toBe(4);
+    expect(r.policy.require_verified_evidence).toBe(false);
+    expect(r.policy.mode).toBe('auto');
+    expect(r.policy.unattended).toBe(true);
+  });
+
+  it('refuses a file the resolver rejects and leaves it untouched', () => {
+    writeFileSync(policyPath(), `{ "unattended": "yes" }\n`);
+    const before = readFileSync(policyPath(), 'utf8');
+    const result = setUnattendedCapture(repo, true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/unattended must be a boolean/);
+    expect(readFileSync(policyPath(), 'utf8')).toBe(before);
+  });
+
+  it('disabling with no file writes nothing — the default digest is protected', () => {
+    const result = setUnattendedCapture(repo, false);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.changed).toBe(false);
+    expect(resolvePolicy(repo).identityHash).toBe(PINNED_DEFAULT_DIGEST);
+    expect(existsSync(policyPath())).toBe(false);
   });
 });

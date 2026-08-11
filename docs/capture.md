@@ -26,17 +26,23 @@ verifies, and the policy's `mode` decides whether anyone is asked before
 staging. A repository can go one step further and consent once, for every
 commit, to capture with nobody in the loop at all:
 
-```json
-{ "mode": "auto", "unattended": true }
+```
+commitlore auto on
 ```
 
-in `.commitlore-policy.json`. Where that is set, `commitlore capture
---unattended` (or the MCP prepare tool's `unattended` argument) prepares,
-verifies and stages without any prompt, and the record reaches the commit
-through the hooks that already exist. Anywhere else the declaration is refused
-at prepare: consent is a repository setting, not a caller's say-so (ADR-0030,
-#511). The setting is honoured in `auto` mode only — `suggest` exists to ask,
-and `off` captures nothing.
+writes the setting to `.commitlore-policy.json` (`commitlore init` asks about
+it once where no policy file exists yet, and `commitlore auto status` reports
+what is set). Where that is set — `mode "auto"` beside `unattended: true` —
+`commitlore capture --unattended` (or the MCP prepare tool's `unattended`
+argument) prepares, verifies and stages without any prompt, and the record
+reaches the commit through the hooks that already exist. Anywhere else the
+declaration is refused at prepare: consent is a repository setting, not a
+caller's say-so (ADR-0030, #511). The setting is honoured in `auto` mode only
+— `suggest` exists to ask, and `off` captures nothing; `commitlore auto on`
+sets both coherently rather than producing a file the resolver rejects.
+
+The file is committed with the repository: turning it on applies to everyone
+who clones it.
 
 Because the setting lives with the capture policy, the policy identity covers
 it: a file edited between stage and commit is detected like any other policy

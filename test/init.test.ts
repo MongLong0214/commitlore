@@ -30,6 +30,7 @@ import { closeIndex, indexInfo, openIndex } from '../src/core/index-db.js';
 import { CHAINED_HOOK_NAME, HOOK_NAME } from '../src/hooks/commit-msg.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
 import { formatInitReport, runInit, type InitOptions, type InitReport } from '../src/commands/init.js';
+import { POLICY_FILE_NAME, resolvePolicy } from '../src/core/capture-policy.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -149,8 +150,8 @@ describe('commitlore init — the happy path', () => {
 
     const report = runInitAsCli({ cwd: repo });
 
-    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'trust', 'index', 'claude-hook', 'doctor']);
-    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0]);
+    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'trust', 'index', 'claude-hook', 'policy', 'doctor']);
+    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0, 0]);
     expect(report.exitCode).toBe(0);
 
     expect(readHookStatus(repo).state).toBe('installed');
@@ -279,10 +280,87 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     const report = runInitAsCli({ cwd: repo });
 
     // Nothing here is a thrown exception: every step reports its own outcome.
-    expect(report.steps).toHaveLength(5);
+    expect(report.steps).toHaveLength(6);
     for (const step of report.steps) {
       expect(step.lines.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('commitlore init — the capture policy step', () => {
+  const policyPathOf = (repo: string): string => join(repo, POLICY_FILE_NAME);
+
+  it('enables unattended capture where no policy file exists, and says so', () => {
+    const repo = repoWithRemote('policy-enable');
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('unattended capture enabled');
+    expect(policyStep?.lines.join('\n')).toContain('applies to everyone who clones');
+
+    // The file it wrote is one the resolver accepts, mode beside the setting.
+    const resolution = resolvePolicy(repo);
+    expect(resolution.error).toBeNull();
+    expect(resolution.policy.unattended).toBe(true);
+    expect(resolution.policy.mode).toBe('auto');
+
+    const text = formatInitReport(report);
+    expect(text).toContain('unattended capture enabled (committed — applies to the whole team)');
+  });
+
+  it('records a decline without writing a file', () => {
+    const repo = repoWithRemote('policy-decline');
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'decline' });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('declined at the prompt');
+    expect(existsSync(policyPathOf(repo))).toBe(false);
+  });
+
+  it('enables nothing where nobody answered, and states that', () => {
+    const repo = repoWithRemote('policy-no-answer');
+
+    const report = runInitAsCli({ cwd: repo });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('no interactive terminal');
+    expect(policyStep?.lines.join('\n')).toContain('commitlore auto on');
+    expect(existsSync(policyPathOf(repo))).toBe(false);
+  });
+
+  it('leaves an existing policy file unchanged, whatever the flags say', () => {
+    const repo = repoWithRemote('policy-existing');
+    const policyPath = policyPathOf(repo);
+    const original = `{ "mode": "suggest" }\n`;
+    writeFileSync(policyPath, original);
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    expect(readFileSync(policyPath, 'utf8')).toBe(original);
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('left unchanged');
+    expect(formatInitReport(report)).toContain('unchanged — unattended capture off');
+  });
+
+  it('names a rejected policy file and leaves it untouched', () => {
+    const repo = repoWithRemote('policy-rejected');
+    const policyPath = policyPathOf(repo);
+    const original = `{ "unattended": "yes" }\n`;
+    writeFileSync(policyPath, original);
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    expect(readFileSync(policyPath, 'utf8')).toBe(original);
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(1);
+    expect(policyStep?.lines.join('\n')).toContain('rejected');
+    expect(report.exitCode).toBe(1);
   });
 });
 

@@ -22,7 +22,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { execGit } from './git.js';
@@ -323,4 +323,136 @@ export const resolvePolicy = (cwd: string): PolicyResolution => {
     path,
     error: null,
   };
+};
+
+// ---------------------------------------------------------------------------
+// Writing the policy — the same file `resolvePolicy` reads, nowhere else
+// ---------------------------------------------------------------------------
+
+/**
+ * Absolute path of the repository's policy file, or null outside a repository.
+ * The file itself may or may not exist; this is where it lives either way, so
+ * a status report can say where the setting is kept even before it is set.
+ */
+export const capturePolicyPath = (cwd: string): string | null => {
+  const root = repoRoot(cwd);
+  return root === null ? null : join(root, POLICY_FILE_NAME);
+};
+
+export interface PolicyWriteSuccess {
+  ok: true;
+  /** Absolute path of the policy file. */
+  path: string;
+  /** False when the requested state was already in effect and nothing was written. */
+  changed: boolean;
+  /** The policy that applies after the call. */
+  policy: CapturePolicy;
+  /** The policy that applied before the call — the defaults when no file existed. */
+  previous: CapturePolicy;
+}
+
+export interface PolicyWriteFailure {
+  ok: false;
+  /** Absolute path of the policy file, or null outside a repository. */
+  path: string | null;
+  /** A named, actionable reason — the same words `resolvePolicy` would use. */
+  error: string;
+}
+
+export type PolicyWriteResult = PolicyWriteSuccess | PolicyWriteFailure;
+
+/**
+ * The canonical bytes for a policy file: `POLICY_KEYS` order, two-space
+ * indent, trailing newline. Every write goes through this, so the two writers
+ * that exist — `auto on/off` and `init` — cannot drift apart on shape, and a
+ * file this function produces is never rejected by `validate` above.
+ */
+const serializePolicyFile = (policy: CapturePolicy): string => {
+  const ordered: Record<string, unknown> = {};
+  for (const key of POLICY_KEYS) ordered[key] = policy[key];
+  return `${JSON.stringify(ordered, null, 2)}\n`;
+};
+
+/**
+ * Turn unattended capture on or off by writing the policy file
+ * `resolvePolicy` reads (#511 added the setting; this is the only writer).
+ *
+ * Never throws. Coherence is enforced here rather than trusted to the caller:
+ * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
+ * the mode cannot honour is a configuration error the resolver rejects
+ * (ADR-0030, #511) — this function cannot produce a file it would reject.
+ * Disabling preserves whatever mode the repository chose.
+ *
+ * An existing file is merged, never replaced: every other key the repository
+ * set survives. A file the resolver rejects is refused rather than rewritten,
+ * because rewriting it would destroy whatever the user meant to put there
+ * before they can see it named. When no file exists, disabling writes nothing
+ * — the defaults already apply, and creating a file would move the repository
+ * from the default digest to a file digest while nothing about capture
+ * changed, which #511 pins against.
+ */
+export const setUnattendedCapture = (cwd: string, enabled: boolean): PolicyWriteResult => {
+  const path = capturePolicyPath(cwd);
+  if (path === null) {
+    return { ok: false, path: null, error: 'no git repository found here — run this inside a repository' };
+  }
+
+  if (existsSync(path)) {
+    let current: string;
+    try {
+      current = readFileSync(path, 'utf8');
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} could not be read: ${(err as Error).message}` };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(current);
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} is not valid JSON: ${(err as Error).message}` };
+    }
+
+    const checked = validate(parsed);
+    if ('error' in checked) {
+      return {
+        ok: false,
+        path,
+        error: `${checked.error} Fix or remove the file and re-run; it has been left untouched.`,
+      };
+    }
+
+    const previous = checked.policy;
+    const policy: CapturePolicy = enabled
+      ? { ...previous, mode: 'auto', unattended: true }
+      : { ...previous, unattended: false };
+
+    // Compare the effective setting, not the file's bytes. A file that already
+    // means what was asked — a hand-written `{ "mode": "suggest" }` is already
+    // "off" — must not be rewritten, because a rewrite changes the policy
+    // identity hash while nothing about capture changed: the hook would report
+    // a policy change that never happened, the exact false positive the
+    // identity design exists to avoid (#511).
+    if (previous.mode === policy.mode && previous.unattended === policy.unattended) {
+      return { ok: true, path, changed: false, policy, previous };
+    }
+
+    try {
+      writeFileSync(path, serializePolicyFile(policy));
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${(err as Error).message}` };
+    }
+    return { ok: true, path, changed: true, policy, previous };
+  }
+
+  if (!enabled) {
+    return { ok: true, path, changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
+  }
+
+  const policy: CapturePolicy = { ...POLICY_DEFAULTS, mode: 'auto', unattended: true };
+  try {
+    writeFileSync(path, serializePolicyFile(policy));
+  } catch (err) {
+    return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${(err as Error).message}` };
+  }
+  return { ok: true, path, changed: true, policy, previous: POLICY_DEFAULTS };
 };
