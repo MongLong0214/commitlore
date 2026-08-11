@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve18.call(this, root, ref);
+      let _sch = resolve20.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve18(root, ref) {
+    function resolve20(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,55 +3642,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve18(baseURI, relativeURI, options) {
+    function resolve20(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative4, options, skipNormalization) {
+    function resolveComponent(base, relative5, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse4(serialize(base, options), options);
-        relative4 = parse4(serialize(relative4, options), options);
+        relative5 = parse4(serialize(relative5, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative4.scheme) {
-        target.scheme = relative4.scheme;
-        target.userinfo = relative4.userinfo;
-        target.host = relative4.host;
-        target.port = relative4.port;
-        target.path = removeDotSegments(relative4.path || "");
-        target.query = relative4.query;
+      if (!options.tolerant && relative5.scheme) {
+        target.scheme = relative5.scheme;
+        target.userinfo = relative5.userinfo;
+        target.host = relative5.host;
+        target.port = relative5.port;
+        target.path = removeDotSegments(relative5.path || "");
+        target.query = relative5.query;
       } else {
-        if (relative4.userinfo !== void 0 || relative4.host !== void 0 || relative4.port !== void 0) {
-          target.userinfo = relative4.userinfo;
-          target.host = relative4.host;
-          target.port = relative4.port;
-          target.path = removeDotSegments(relative4.path || "");
-          target.query = relative4.query;
+        if (relative5.userinfo !== void 0 || relative5.host !== void 0 || relative5.port !== void 0) {
+          target.userinfo = relative5.userinfo;
+          target.host = relative5.host;
+          target.port = relative5.port;
+          target.path = removeDotSegments(relative5.path || "");
+          target.query = relative5.query;
         } else {
-          if (!relative4.path) {
+          if (!relative5.path) {
             target.path = base.path;
-            if (relative4.query !== void 0) {
-              target.query = relative4.query;
+            if (relative5.query !== void 0) {
+              target.query = relative5.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative4.path[0] === "/") {
-              target.path = removeDotSegments(relative4.path);
+            if (relative5.path[0] === "/") {
+              target.path = removeDotSegments(relative5.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative4.path;
+                target.path = "/" + relative5.path;
               } else if (!base.path) {
-                target.path = relative4.path;
+                target.path = relative5.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative4.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative5.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative4.query;
+            target.query = relative5.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3698,7 +3698,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative4.fragment;
+      target.fragment = relative5.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve18,
+      resolve: resolve20,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync25 } from "node:fs";
+import { readFileSync as readFileSync26 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -22167,6 +22167,359 @@ var register14 = (program3) => {
   });
 };
 
+// src/commands/hermes.ts
+import { spawnSync as spawnSync4 } from "node:child_process";
+import { copyFileSync, existsSync as existsSync19, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
+import { homedir } from "node:os";
+import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve17 } from "node:path";
+
+// src/core/hermes-config.ts
+import { relative as relative2, resolve as resolve16, sep as sep3 } from "node:path";
+var HERMES_SERVER_KEY = "commitlore";
+var splitLines = (contents) => {
+  const lines = [];
+  let position = 0;
+  const matcher = /([^\r\n]*)(\r\n|\n|\r)/g;
+  let match;
+  while ((match = matcher.exec(contents)) !== null) {
+    lines.push({ text: match[1] ?? "", ending: match[2] ?? "" });
+    position = matcher.lastIndex;
+  }
+  if (position < contents.length) lines.push({ text: contents.slice(position), ending: "" });
+  return lines;
+};
+var joinLines = (lines) => lines.map((line2) => `${line2.text}${line2.ending}`).join("");
+var newlineOf = (contents) => contents.includes("\r\n") ? "\r\n" : "\n";
+var isTopLevelContent = (line2) => line2.length > 0 && !/^\s/.test(line2) && !line2.trimStart().startsWith("#");
+var headerFor = (key) => new RegExp(`^${key}:\\s*(?:#.*)?$`);
+var potentialHeaderFor = (key) => new RegExp(`^${key}:`);
+var findSection = (lines, key) => {
+  const start = lines.findIndex((line2) => headerFor(key).test(line2.text));
+  if (start === -1) return lines.some((line2) => potentialHeaderFor(key).test(line2.text)) ? "complex" : null;
+  let end = start + 1;
+  while (end < lines.length && !isTopLevelContent(lines[end]?.text ?? "")) end += 1;
+  return { start, end };
+};
+var insertBeforeLine = (contents, lineIndex, block) => {
+  const lines = splitLines(contents);
+  const offset = lines.slice(0, lineIndex).reduce((total, line2) => total + line2.text.length + line2.ending.length, 0);
+  const prefix = lineIndex === lines.length && contents.length > 0 && !/\r$|\n$/.test(contents) ? newlineOf(contents) : "";
+  return `${contents.slice(0, offset)}${prefix}${block}${contents.slice(offset)}`;
+};
+var removeLines = (contents, from, to) => {
+  const lines = splitLines(contents);
+  return joinLines([...lines.slice(0, from), ...lines.slice(to)]);
+};
+var yamlString = (value) => JSON.stringify(value);
+var scalarValue = (value) => {
+  const trimmed = value.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    return typeof parsed === "string" ? parsed : null;
+  } catch {
+    if (/^[^\s#][^#]*$/.test(trimmed)) return trimmed.trimEnd();
+    return null;
+  }
+};
+var childStart = (lines, section2, key) => {
+  const matcher = new RegExp(`^  ${key}:\\s*(?:#.*)?$`);
+  for (let index = section2.start + 1; index < section2.end; index += 1) {
+    if (matcher.test(lines[index]?.text ?? "")) return index;
+  }
+  return null;
+};
+var childEnd = (lines, start, sectionEnd) => {
+  let end = start + 1;
+  while (end < sectionEnd) {
+    const line2 = lines[end]?.text ?? "";
+    if (/^  [^\s#][^:]*:/.test(line2)) break;
+    end += 1;
+  }
+  return end;
+};
+var ownMcpBlockEnd = (lines, start, end, wrapperPath) => {
+  const wrappers = typeof wrapperPath === "string" ? [wrapperPath] : wrapperPath;
+  const expectedCommands = new Set(wrappers.map((path2) => `    command: ${yamlString(path2)}`));
+  const expected = ["  commitlore:", void 0, "    args:", "      - mcp", "    enabled: true"];
+  if (lines[start]?.text !== expected[0] || !expectedCommands.has(lines[start + 1]?.text ?? "") || lines[start + 2]?.text !== expected[2] || lines[start + 3]?.text !== expected[3] || lines[start + 4]?.text !== expected[4]) {
+    return null;
+  }
+  for (const line2 of lines.slice(start + 5, end)) {
+    const trimmed = line2.text.trim();
+    if (trimmed.length > 0 && !trimmed.startsWith("#")) return null;
+  }
+  return start + 5;
+};
+var hasOwnMcpEntry = (lines, start, end, wrapperPath) => ownMcpBlockEnd(lines, start, end, wrapperPath) !== null;
+var mcpBlock = (wrapperPath, newline) => [
+  "  commitlore:",
+  `    command: ${yamlString(wrapperPath)}`,
+  "    args:",
+  "      - mcp",
+  "    enabled: true",
+  ""
+].join(newline);
+var skillsBlock = (skillsDir, newline) => ["  external_dirs:", `    - ${yamlString(skillsDir)}`, ""].join(newline);
+var topLevelMcpBlock = (wrapperPath, newline) => [`mcp_servers:`, mcpBlock(wrapperPath, newline)].join(newline);
+var topLevelSkillsBlock = (skillsDir, newline) => [`skills:`, skillsBlock(skillsDir, newline)].join(newline);
+var isManagedHermesSkillsDir = (value, dataRoot, installedSkillsDir) => {
+  if (installedSkillsDir !== void 0 && resolve16(value) === resolve16(installedSkillsDir)) return true;
+  const rel = relative2(resolve16(dataRoot), resolve16(value));
+  const parts = rel.split(sep3);
+  return parts.length === 3 && parts[0] !== "" && parts[0] !== ".." && !parts[0]?.startsWith("..") && parts[1] === "hermes" && parts[2] === "skills";
+};
+var addHermesConfig = (contents, options) => {
+  const added = [];
+  const unchanged = [];
+  const blocked2 = [];
+  const newline = newlineOf(contents);
+  let next = contents;
+  {
+    const lines = splitLines(next);
+    const section2 = findSection(lines, "mcp_servers");
+    if (section2 === "complex") {
+      blocked2.push("mcp_servers is not a block-style YAML mapping, so it was left unchanged");
+    } else if (section2 === null) {
+      next = insertBeforeLine(next, lines.length, topLevelMcpBlock(options.wrapperPath, newline));
+      added.push("mcp");
+    } else {
+      const start = childStart(lines, section2, HERMES_SERVER_KEY);
+      if (start !== null) {
+        const end = childEnd(lines, start, section2.end);
+        if (hasOwnMcpEntry(lines, start, end, options.wrapperPath)) unchanged.push("mcp");
+        else blocked2.push("mcp_servers.commitlore already exists but does not point at this CommitLore install");
+      } else {
+        next = insertBeforeLine(next, section2.end, mcpBlock(options.wrapperPath, newline));
+        added.push("mcp");
+      }
+    }
+  }
+  {
+    const lines = splitLines(next);
+    const section2 = findSection(lines, "skills");
+    if (section2 === "complex") {
+      blocked2.push("skills is not a block-style YAML mapping, so it was left unchanged");
+    } else if (section2 === null) {
+      next = insertBeforeLine(next, lines.length, topLevelSkillsBlock(options.skillsDir, newline));
+      added.push("skills");
+    } else {
+      const start = childStart(lines, section2, "external_dirs");
+      if (start === null) {
+        next = insertBeforeLine(next, section2.end, skillsBlock(options.skillsDir, newline));
+        added.push("skills");
+      } else {
+        const end = childEnd(lines, start, section2.end);
+        let exact = false;
+        let replacement = null;
+        let unsupported = false;
+        for (let index = start + 1; index < end; index += 1) {
+          const line2 = lines[index]?.text ?? "";
+          const match = /^    -\s+(.+)$/.exec(line2);
+          if (match === null) {
+            if (line2.trim().length > 0 && !line2.trimStart().startsWith("#")) unsupported = true;
+            continue;
+          }
+          const value = scalarValue(match[1] ?? "");
+          if (value === options.skillsDir) exact = true;
+          if (value !== null && options.dataRoot !== void 0 && isManagedHermesSkillsDir(value, options.dataRoot) && value !== options.skillsDir) {
+            replacement = index;
+          }
+        }
+        if (unsupported) {
+          blocked2.push("skills.external_dirs is not a simple YAML list, so it was left unchanged");
+        } else if (exact) {
+          unchanged.push("skills");
+        } else if (replacement !== null) {
+          const rewritten = [...lines];
+          const old = rewritten[replacement];
+          if (old !== void 0) rewritten[replacement] = { text: `    - ${yamlString(options.skillsDir)}`, ending: old.ending };
+          next = joinLines(rewritten);
+          added.push("skills");
+        } else {
+          next = insertBeforeLine(next, end, `    - ${yamlString(options.skillsDir)}${newline}`);
+          added.push("skills");
+        }
+      }
+    }
+  }
+  return { contents: next, added, unchanged, blocked: blocked2 };
+};
+var removeHermesConfig = (contents, options) => {
+  const removed = [];
+  let next = contents;
+  {
+    const lines = splitLines(next);
+    const section2 = findSection(lines, "mcp_servers");
+    if (section2 !== null && section2 !== "complex") {
+      const start = childStart(lines, section2, HERMES_SERVER_KEY);
+      if (start !== null) {
+        const end = childEnd(lines, start, section2.end);
+        const ownEnd = ownMcpBlockEnd(lines, start, end, options.wrapperPath);
+        if (ownEnd !== null) {
+          next = removeLines(next, start, ownEnd);
+          removed.push("mcp");
+        }
+      }
+    }
+  }
+  {
+    const lines = splitLines(next);
+    const section2 = findSection(lines, "skills");
+    if (section2 !== null && section2 !== "complex") {
+      const start = childStart(lines, section2, "external_dirs");
+      if (start !== null) {
+        const end = childEnd(lines, start, section2.end);
+        const indexes = [];
+        for (let index = start + 1; index < end; index += 1) {
+          const match = /^    -\s+(.+)$/.exec(lines[index]?.text ?? "");
+          const value = match === null ? null : scalarValue(match[1] ?? "");
+          if (value !== null && isManagedHermesSkillsDir(value, options.dataRoot, options.installedSkillsDir)) {
+            indexes.push(index);
+          }
+        }
+        if (indexes.length > 0) {
+          next = joinLines(lines.filter((_, index) => !indexes.includes(index)));
+          removed.push("skills");
+        }
+      }
+    }
+  }
+  return { contents: next, removed };
+};
+
+// src/commands/hermes.ts
+var commandExists = (command) => {
+  const result = spawnSync4(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
+  return result.error === void 0;
+};
+var backupPathFor = (configPath) => {
+  const base = `${configPath}.commitlore-backup`;
+  if (!existsSync19(base)) return base;
+  for (let index = 1; ; index += 1) {
+    const candidate = `${base}.${index}`;
+    if (!existsSync19(candidate)) return candidate;
+  }
+};
+var atomicallyWrite = (path2, contents, mode) => {
+  const temporary = join12(dirname8(path2), `.${basename3(path2)}.commitlore-${process.pid}.tmp`);
+  try {
+    if (mode === void 0) writeFileSync16(temporary, contents, "utf8");
+    else writeFileSync16(temporary, contents, { encoding: "utf8", mode });
+    renameSync9(temporary, path2);
+  } catch (error2) {
+    throw error2;
+  }
+};
+var runVerification = (report, verified) => {
+  if (!commandExists("hermes")) {
+    report.push("unverified: Hermes is not on PATH, so start a fresh session to load the configured profile");
+    return;
+  }
+  const skills = spawnSync4("hermes", ["skills", "list", "--source", "all"], {
+    encoding: "utf8",
+    timeout: 15e3
+  });
+  const skillOutput = `${skills.stdout ?? ""}${skills.stderr ?? ""}`;
+  const names = ["commitlore-setup", "commitlore-query", "commitlore-commits"];
+  if (skills.status === 0 && names.every((name) => skillOutput.includes(name))) {
+    verified.push("fresh Hermes process lists the CommitLore skills");
+    report.push("verified: fresh Hermes process lists commitlore-setup, commitlore-query and commitlore-commits");
+  } else {
+    report.push("unverified: Hermes did not list every CommitLore skill; start a fresh session and run `hermes skills list --source all`");
+  }
+  const mcp = spawnSync4("hermes", ["mcp", "test", "commitlore"], {
+    encoding: "utf8",
+    timeout: 15e3
+  });
+  const mcpOutput = `${mcp.stdout ?? ""}${mcp.stderr ?? ""}`;
+  if (mcp.status === 0 && mcpOutput.includes("commitlore_before_change")) {
+    verified.push("Hermes MCP probe lists CommitLore tools");
+    report.push("verified: Hermes MCP probe lists CommitLore tools");
+  } else {
+    report.push("unverified: Hermes could not list the CommitLore MCP tools; run `hermes mcp test commitlore`");
+  }
+};
+var runHermesInstall = (options = {}) => {
+  const home = options.home ?? homedir();
+  const hermesHome = process.env["HERMES_HOME"];
+  const configPath = options.configPath ?? (hermesHome === void 0 ? join12(home, ".hermes", "config.yaml") : join12(hermesHome, "config.yaml"));
+  const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join12(home, ".local", "share");
+  const dataRoot = options.dataRoot ?? join12(dataHome, "commitlore");
+  const skillsDir = options.skillsDir ?? installedPath("hermes", "skills");
+  const detected = options.detected ?? (existsSync19(dirname8(configPath)) || commandExists("hermes"));
+  const report = [];
+  const verified = [];
+  if (!detected) {
+    return {
+      exitCode: 0,
+      report: ["Hermes not detected \u2014 left its profile untouched."],
+      changed: [],
+      verified
+    };
+  }
+  if (!existsSync19(skillsDir)) {
+    return {
+      exitCode: 2,
+      report: [`could not find the CommitLore Hermes skill bundle at ${skillsDir}`],
+      changed: [],
+      verified
+    };
+  }
+  const wrapperPath = options.wrapperPath ?? join12(home, ".local", "bin", "commitlore");
+  const before = existsSync19(configPath) ? readFileSync21(configPath, "utf8") : "";
+  const edit = addHermesConfig(before, {
+    wrapperPath,
+    skillsDir: resolve17(skillsDir),
+    dataRoot
+  });
+  if (edit.blocked.length > 0) {
+    for (const reason of edit.blocked) report.push(`could not configure: ${reason}`);
+    return { exitCode: 1, report, changed: [], verified };
+  }
+  if (edit.added.length > 0) {
+    try {
+      mkdirSync10(dirname8(configPath), { recursive: true });
+      if (existsSync19(configPath)) {
+        const backup = backupPathFor(configPath);
+        copyFileSync(configPath, backup);
+        report.push(`backed up: ${configPath} -> ${backup}`);
+      }
+      const mode = existsSync19(configPath) ? statSync7(configPath).mode : void 0;
+      atomicallyWrite(configPath, edit.contents, mode);
+      report.push(`configured: ${edit.added.join(" and ")} in ${configPath}`);
+    } catch (error2) {
+      return {
+        exitCode: 2,
+        report: [...report, `could not update ${configPath}: ${error2 instanceof Error ? error2.message : String(error2)}`],
+        changed: [],
+        verified
+      };
+    }
+  } else {
+    report.push("Hermes already configured (unchanged).");
+  }
+  if (options.verify === true) runVerification(report, verified);
+  return {
+    exitCode: 0,
+    report,
+    changed: edit.added,
+    verified
+  };
+};
+var register15 = (program3) => {
+  const hermes = program3.command("hermes").description("configure the active Hermes profile with CommitLore MCP tools and skills");
+  hermes.command("install").description("wire Hermes host configuration; repository setup remains `commitlore init`").option("--config <path>", "Hermes config.yaml path (defaults to the active profile)").option("--command <path>", "CommitLore wrapper Hermes should execute (defaults to ~/.local/bin/commitlore)").option("--data-root <path>", "CommitLore install data root, used when replacing an older skill bundle").option("--verify", "probe skill discovery and MCP tools after configuring").action((options) => {
+    const result = runHermesInstall({
+      ...options.config === void 0 ? {} : { configPath: options.config },
+      ...options.command === void 0 ? {} : { wrapperPath: options.command },
+      ...options.dataRoot === void 0 ? {} : { dataRoot: options.dataRoot },
+      verify: options.verify === true
+    });
+    for (const line2 of result.report) console.log(line2);
+    process.exitCode = result.exitCode;
+  });
+};
+
 // src/commands/index-cmd.ts
 var fail = (message) => {
   process.stderr.write(`commitlore: ${message}
@@ -22240,7 +22593,7 @@ var runIndex = (options) => {
     closeIndex(handle);
   }
 };
-var register15 = (program3) => {
+var register16 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
     "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
@@ -22264,8 +22617,8 @@ var register15 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync21, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename3, dirname as dirname8, isAbsolute as isAbsolute2, join as join12, relative as relative2, resolve as resolve16, sep as sep3 } from "node:path";
+import { readFileSync as readFileSync22, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename4, dirname as dirname9, isAbsolute as isAbsolute2, join as join13, relative as relative3, resolve as resolve18, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash7 } from "node:crypto";
@@ -22612,7 +22965,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync21(0, "utf8");
+    return readFileSync22(0, "utf8");
   } catch {
     return "";
   }
@@ -22635,17 +22988,17 @@ var repositoryRoot2 = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve16(target);
+  const absolute = resolve18(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
     try {
       const real = realpathSync3(current);
-      return tail.length === 0 ? real : join12(real, ...tail);
+      return tail.length === 0 ? real : join13(real, ...tail);
     } catch {
-      const parent = dirname8(current);
+      const parent = dirname9(current);
       if (parent === current) return absolute;
-      tail.unshift(basename3(current));
+      tail.unshift(basename4(current));
       current = parent;
     }
   }
@@ -22666,10 +23019,10 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot2(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve16(cwd, raw));
-  const scoped = relative2(canonical(root), target);
+  const target = canonical(isAbsolute2(raw) ? raw : resolve18(cwd, raw));
+  const scoped = relative3(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
-  if (scoped === ".." || scoped.startsWith(`..${sep3}`) || isAbsolute2(scoped)) {
+  if (scoped === ".." || scoped.startsWith(`..${sep4}`) || isAbsolute2(scoped)) {
     throw new Error("file_path resolves outside the repository");
   }
   return scoped;
@@ -22761,7 +23114,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register16 = (program3) => {
+var register17 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
     "--trusted-author <author>",
     "an author whose records may render as instructions (repeatable)",
@@ -22797,7 +23150,7 @@ var register16 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve17, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative4, resolve as resolve19, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -30117,7 +30470,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve18) => setTimeout(resolve18, pollInterval));
+        await new Promise((resolve20) => setTimeout(resolve20, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -30134,7 +30487,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve18, reject2) => {
+    return new Promise((resolve20, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -30212,7 +30565,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve18(parseResult.data);
+            resolve20(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -30473,12 +30826,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve18, reject2) => {
+    return new Promise((resolve20, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve18, interval);
+      const timeoutId = setTimeout(resolve20, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -31348,12 +31701,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve18) => {
+    return new Promise((resolve20) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve18();
+        resolve20();
       } else {
-        this._stdout.once("drain", resolve18);
+        this._stdout.once("drain", resolve20);
       }
     });
   }
@@ -31621,7 +31974,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register17 = (program3) => {
+var register18 = (program3) => {
   define(
     program3,
     "context",
@@ -31773,7 +32126,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -31924,11 +32277,11 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve17(root, raw);
-  if (resolved !== root && !resolved.startsWith(`${root}${sep4}`)) {
+  const resolved = resolve19(root, raw);
+  if (resolved !== root && !resolved.startsWith(`${root}${sep5}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
-  return relative3(root, resolved);
+  return relative4(root, resolved);
 };
 var contextUriPath = (uri) => {
   const bare = uri === CONTEXT_URI_PREFIX.slice(0, -1);
@@ -32138,7 +32491,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve17(opts.cwd ?? process.cwd());
+  const root = resolve19(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -32330,7 +32683,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register19 = (program3) => {
+var register20 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -32343,7 +32696,7 @@ var register19 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync22, writeFileSync as writeFileSync16 } from "node:fs";
+import { readFileSync as readFileSync23, writeFileSync as writeFileSync17 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -32384,14 +32737,14 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync22(path2, "utf8");
+    return readFileSync23(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync16(path2, text);
+    writeFileSync17(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
@@ -32469,7 +32822,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register20 = (program3) => {
+var register21 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -32516,7 +32869,7 @@ var runSync = (options = {}) => {
 `
   };
 };
-var register21 = (program3) => {
+var register22 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
@@ -32528,7 +32881,7 @@ var register21 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync23 } from "node:fs";
+import { readFileSync as readFileSync24 } from "node:fs";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -32727,14 +33080,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync23(path2, "utf8");
+    return readFileSync24(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync23(0, "utf8");
+    return readFileSync24(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf8(error2)}`);
   }
@@ -32993,7 +33346,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register22 = (program3) => {
+var register23 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -33011,10 +33364,10 @@ var register22 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync4 } from "node:child_process";
-import { existsSync as existsSync19, readFileSync as readFileSync24, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
-import { homedir } from "node:os";
-import { join as join13 } from "node:path";
+import { spawnSync as spawnSync5 } from "node:child_process";
+import { existsSync as existsSync20, readFileSync as readFileSync25, rmSync as rmSync5, writeFileSync as writeFileSync18 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join14 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
@@ -33034,6 +33387,12 @@ var AGENT_CONFIGS = [
     agent: "cursor",
     homeRelativePath: [".cursor", "mcp.json"],
     format: "json-mcpServers",
+    registration: "config-file"
+  },
+  {
+    agent: "hermes",
+    homeRelativePath: [".hermes", "config.yaml"],
+    format: "yaml-mcp_servers",
     registration: "config-file"
   },
   // Windsurf, under Codeium's config directory. Absent from the ticket's
@@ -33093,7 +33452,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync4(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync5(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -33108,18 +33467,18 @@ var listCodexMcp = (command) => {
 };
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
-  const home = options.home ?? homedir();
-  const dataHome = options.dataHome ?? join13(home, ".local", "share");
+  const home = options.home ?? homedir2();
+  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join14(home, "AppData", "Local") : join14(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
   const removed = [];
   const kept = [];
-  const wrapper = join13(home, ".local", "bin", "commitlore");
-  if (existsSync19(wrapper)) {
+  const wrapper = join14(home, ".local", "bin", "commitlore");
+  if (existsSync20(wrapper)) {
     const contents = (() => {
       try {
-        return readFileSync24(wrapper, "utf8");
+        return readFileSync25(wrapper, "utf8");
       } catch {
         return "";
       }
@@ -33133,8 +33492,8 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
   }
-  const dataRoot = join13(dataHome, "commitlore");
-  if (existsSync19(dataRoot)) {
+  const dataRoot = join14(dataHome, "commitlore");
+  if (existsSync20(dataRoot)) {
     if (!dryRun) rmSync5(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
@@ -33143,7 +33502,7 @@ var runUninstall = async (options = {}) => {
   const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
   const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
   if (codexConfig !== void 0 && codexList !== null) {
-    const path2 = join13(home, ...codexConfig.homeRelativePath);
+    const path2 = join14(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 codex mcp list could not verify its entry, so the config was left untouched`);
@@ -33157,7 +33516,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync4(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync5(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
@@ -33171,11 +33530,11 @@ var runUninstall = async (options = {}) => {
   }
   for (const config2 of AGENT_CONFIGS) {
     if (config2.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
-    const path2 = join13(home, ...config2.homeRelativePath);
-    if (!existsSync19(path2)) continue;
+    const path2 = join14(home, ...config2.homeRelativePath);
+    if (!existsSync20(path2)) continue;
     let contents;
     try {
-      contents = readFileSync24(path2, "utf8");
+      contents = readFileSync25(path2, "utf8");
     } catch {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
@@ -33184,9 +33543,21 @@ var runUninstall = async (options = {}) => {
     if (config2.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync17(path2, next2);
+      if (!dryRun) writeFileSync18(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
+      continue;
+    }
+    if (config2.format === "yaml-mcp_servers") {
+      const next2 = removeHermesConfig(contents, {
+        wrapperPath: [wrapper, join14(dataRoot, "bin", "commitlore.cmd")],
+        dataRoot,
+        installedSkillsDir: installedPath("hermes", "skills")
+      });
+      if (next2.removed.length === 0) continue;
+      if (!dryRun) writeFileSync18(path2, next2.contents);
+      removed.push(`${path2} (${next2.removed.join(" and ")} ${SERVER_KEY} entries)`);
+      report.push(`${say}: the ${next2.removed.join(" and ")} ${SERVER_KEY} entries in ${path2}`);
       continue;
     }
     let parsed;
@@ -33199,7 +33570,7 @@ var runUninstall = async (options = {}) => {
     }
     const next = withoutJsonEntry(parsed, config2.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync17(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync18(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -33229,11 +33600,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync25(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync26(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync25(STDIN_FD2, "utf8");
+  return readFileSync26(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -33288,28 +33659,29 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register21(program2);
-register7(program2);
 register22(program2);
+register7(program2);
+register23(program2);
 registerUninstall(program2);
 register9(program2);
-register15(program2);
-register17(program2);
+register16(program2);
 register18(program2);
+register19(program2);
 register5(program2);
 register10(program2);
 register2(program2);
 register12(program2);
 register14(program2);
-register20(program2);
+register15(program2);
+register21(program2);
 register8(program2);
 register6(program2);
 register13(program2);
-register16(program2);
+register17(program2);
 register(program2);
 register3(program2);
 register11(program2);
-register19(program2);
+register20(program2);
 register4(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",

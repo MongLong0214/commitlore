@@ -16,7 +16,12 @@ bench/results/*.local.jsonl
 .debug-journal.md
 
 # Agent skill installs — tooling, not product.
+#
+# Anchored: unanchored, `skills/` matches a directory of that name at any depth,
+# which swallowed `hermes/skills/` — a bundle this repository ships. The
+# installer would then have been released with nothing to install, which is the
+# same silent-incomplete-install failure twice over.
 .agents/
 .claude/
-skills/
+/skills/
 skills-lock.json

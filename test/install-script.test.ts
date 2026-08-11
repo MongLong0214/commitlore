@@ -18,7 +18,7 @@
  *     record on this file rejects it.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,12 +56,11 @@ const git = (cwd: string, args: string[]): void => {
 beforeAll(() => {
   sourceRepo = join(tempDir('source'), 'commitlore');
   mkdirSync(join(sourceRepo, 'dist'), { recursive: true });
-  // A stand-in bundle: prints a version, which is all the installer's own
-  // verification step asks of it.
-  writeFileSync(
-    join(sourceRepo, 'dist', 'commitlore.mjs'),
-    "#!/usr/bin/env node\nconsole.log('9.9.9');\n",
-  );
+  // The real bundle is needed for the Hermes host path below. Its version is
+  // read from this fixture package.json, so the installer's ordinary wrapper
+  // verification remains deterministic without a network or another worktree.
+  cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(sourceRepo, 'dist', 'commitlore.mjs'));
+  cpSync(join(REPO_ROOT, 'hermes'), join(sourceRepo, 'hermes'), { recursive: true });
   writeFileSync(join(sourceRepo, 'package.json'), JSON.stringify({ name: 'commitlore', version: '9.9.9' }));
   execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: sourceRepo });
   git(sourceRepo, ['add', '-A']);
@@ -82,6 +81,7 @@ const stubPath = (opts: {
   node?: 'current' | 'old' | 'absent';
   git?: boolean;
   codex?: 'mcp-success';
+  hermes?: boolean;
 }): string => {
   const bin = tempDir('bin');
   if (opts.node === 'current') {
@@ -115,6 +115,20 @@ esac
     );
     chmodSync(join(bin, 'codex'), 0o755);
   }
+  if (opts.hermes === true) {
+    writeFileSync(
+      join(bin, 'hermes'),
+      [
+        '#!/bin/sh',
+        'case "$1:$2" in',
+        '  --version:) echo hermes-test ;;',
+        '  skills:list) printf "commitlore-setup\\ncommitlore-query\\ncommitlore-commits\\n" ;;',
+        '  mcp:test) printf "commitlore_before_change\\n" ;;',
+        'esac',
+      ].join('\n') + '\n',
+    );
+    chmodSync(join(bin, 'hermes'), 0o755);
+  }
   return `${bin}:/usr/bin:/bin`;
 };
 
@@ -130,6 +144,7 @@ interface RunResult {
 const runInstaller = (opts: {
   node?: 'current' | 'old' | 'absent';
   git?: boolean;
+  hermes?: boolean;
   home?: string;
   extraEnv?: Record<string, string>;
   args?: string[];
@@ -139,7 +154,7 @@ const runInstaller = (opts: {
   const run = spawnSync('/bin/sh', [INSTALLER, ...(opts.args ?? [TAG])], {
     encoding: 'utf8',
     env: {
-      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex }),
+      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes }),
       HOME: home,
       COMMITLORE_INSTALL_SOURCE: sourceRepo,
       ...(opts.extraEnv ?? {}),
@@ -246,6 +261,40 @@ describe('Codex MCP registration uses the owning CLI when it is available', () =
     expect(result.status).toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('config-file fallback; codex CLI is unavailable');
     expect(readFileSync(config, 'utf8')).toContain('[mcp_servers.commitlore]');
+  });
+});
+
+describe('Hermes host setup in the shell installer', () => {
+  it('backs up and extends the active profile without touching approval policy', () => {
+    const home = tempDir('hermes');
+    const config = join(home, '.hermes', 'config.yaml');
+    const operatorConfig = [
+      'approvals:',
+      '  deny:',
+      '    - "*git push*--force*"',
+      'command_allowlist:',
+      '  - shell command via -c/-lc flag',
+      '',
+    ].join('\n');
+    mkdirSync(dirname(config), { recursive: true });
+    writeFileSync(config, operatorConfig);
+
+    const r = runInstaller({ home, hermes: true });
+
+    expect(r.status).toBe(0);
+    const after = readFileSync(config, 'utf8');
+    expect(after).toContain(operatorConfig);
+    expect(after).toContain(`command: ${JSON.stringify(r.wrapper)}`);
+    expect(after).toContain(JSON.stringify(realpathSync(join(r.dataDir, TAG, 'hermes', 'skills'))));
+    expect(readFileSync(`${config}.commitlore-backup`, 'utf8')).toBe(operatorConfig);
+    expect(`${r.stdout}${r.stderr}`).toContain('verified: fresh Hermes process lists');
+    expect(`${r.stdout}${r.stderr}`).toContain('verified: Hermes MCP probe lists CommitLore tools');
+
+    const beforeSecond = readFileSync(config, 'utf8');
+    const second = runInstaller({ home, hermes: true });
+    expect(second.status).toBe(0);
+    expect(readFileSync(config, 'utf8')).toBe(beforeSecond);
+    expect(`${second.stdout}${second.stderr}`).toContain('Hermes already configured (unchanged).');
   });
 });
 

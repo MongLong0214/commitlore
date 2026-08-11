@@ -19,6 +19,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_CONFIGS, SERVER_KEY, isCommitloreEntry } from '../core/agent-configs.js';
+import { removeHermesConfig } from '../core/hermes-config.js';
+import { installedPath } from '../core/paths.js';
 /** Written into the wrapper by both installers; its absence means it is not ours. */
 const WRAPPER_MARKER = '# commitlore:wrapper:v1';
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -98,7 +100,10 @@ const isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY &
     server.transport.args[0] === 'mcp';
 export const runUninstall = async (options = {}) => {
     const home = options.home ?? homedir();
-    const dataHome = options.dataHome ?? join(home, '.local', 'share');
+    const dataHome = options.dataHome ??
+        (process.platform === 'win32'
+            ? process.env['LOCALAPPDATA'] ?? join(home, 'AppData', 'Local')
+            : join(home, '.local', 'share'));
     const dryRun = options.dryRun === true;
     const say = dryRun ? 'would remove' : 'removed';
     const report = [];
@@ -192,6 +197,20 @@ export const runUninstall = async (options = {}) => {
                 writeFileSync(path, next);
             removed.push(`${path} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry in ${path}`);
+            continue;
+        }
+        if (config.format === 'yaml-mcp_servers') {
+            const next = removeHermesConfig(contents, {
+                wrapperPath: [wrapper, join(dataRoot, 'bin', 'commitlore.cmd')],
+                dataRoot,
+                installedSkillsDir: installedPath('hermes', 'skills'),
+            });
+            if (next.removed.length === 0)
+                continue;
+            if (!dryRun)
+                writeFileSync(path, next.contents);
+            removed.push(`${path} (${next.removed.join(' and ')} ${SERVER_KEY} entries)`);
+            report.push(`${say}: the ${next.removed.join(' and ')} ${SERVER_KEY} entries in ${path}`);
             continue;
         }
         let parsed;

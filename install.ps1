@@ -349,7 +349,9 @@ if (-not $onPath) {
 #
 # PowerShell parses and writes JSON natively, so unlike install.sh there is no
 # jq to be missing -- the "cannot merge without jq" branch has no counterpart
-# here. An unparseable config is still left untouched and reported.
+# here. An unparseable config is still left untouched and reported. Hermes is
+# YAML and has stricter byte-preservation requirements, so both installers
+# dispatch to the same `commitlore hermes install` helper for that one profile.
 
 Write-Log ''
 Write-Log 'Detecting coding agents...'
@@ -536,6 +538,27 @@ if (Test-AgentPresent 'windsurf' @((Join-Path $home_ '.codeium\windsurf'))) {
     Wire-McpServersJson 'windsurf' (Join-Path $home_ '.codeium\windsurf\mcp_config.json')
 } else {
     $notFound.Add('Windsurf') | Out-Null
+}
+
+# Hermes -- YAML active profile at ~/.hermes/config.yaml. The helper makes a
+# backup before a surgical edit, registers the MCP server, and adds the
+# installed bundle through skills.external_dirs (the supported read-only path).
+if (Test-AgentPresent 'hermes' @((Join-Path $home_ '.hermes'))) {
+    $hermesConfig = Join-Path $home_ '.hermes\config.yaml'
+    $hermesOk = $false
+    try {
+        & $dest hermes install --config $hermesConfig --command $dest --data-root $dataRoot --verify
+        $hermesOk = ($LASTEXITCODE -eq 0)
+    } catch {
+        $hermesOk = $false
+    }
+    if ($hermesOk) {
+        Add-Wired "hermes: configured MCP and the installed CommitLore skill bundle in $hermesConfig"
+    } else {
+        Add-Skipped 'hermes' 'host setup could not finish; its existing config was left intact where it could not be edited safely'
+    }
+} else {
+    $notFound.Add('Hermes') | Out-Null
 }
 
 # opencode -- different shape from the rest: the key is `mcp`, not `mcpServers`,
