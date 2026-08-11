@@ -238,8 +238,12 @@ Both directions are verified before the run:
 - **false positive** — the reference correct solution must not match
   `reproposed_if`;
 - **sensitivity** — a genuine re-proposal must match it;
-- **noise immunity** — nothing may match on agent-tooling files (`.serena/`) or
-  on unified-diff scaffolding alone.
+- **noise immunity** — nothing may match on agent-tooling files or on
+  unified-diff scaffolding alone. The rule was never about one tool: it is
+  about tooling that drops files into a workspace. The files present when
+  these rules were calibrated were `.serena/`; that tooling was retired on
+  2026-08-11, and the transcripts under `bench/results/` still carry what the
+  recorded runs saw.
 
 All ten tasks pass all three.
 

@@ -583,7 +583,10 @@ and both were caught firing:
 
 - **Agent tooling writes into the workspace.** Every live run so far has
   `.serena/.gitignore` and `.serena/project.yml` in its diff, in *both* arms —
-  about 10KB of YAML whose comments carry documentation URLs.
+  about 10KB of YAML whose comments carry documentation URLs. The tooling that
+  wrote them was retired on 2026-08-11, so runs after that date will not see
+  these files; the runs reported here did, and the check targets the class —
+  tooling that drops files into a workspace — not this one tool.
 - **Unified-diff scaffolding.** `--- a/scripts/check-engines.mjs` begins with a
   `-` and contains the filename, so a matcher written as "a line starting with
   `-` mentioning check-engines" — meaning *this line was deleted* — fires on the
@@ -1105,8 +1108,8 @@ Known limits:
   `cache_read_input_tokens`. Counting cache reads made one observed run report
   719,866 tokens and swallow the entire global cap.
 - Permission mode defaults to `acceptEdits`; override with `--permission-mode`.
-  Agent tooling may drop its own files (`.serena/`) into the workspace, which
-  land in the diff surface.
+  Agent tooling may drop its own files into the workspace, which land in the
+  diff surface.
 
 **`dry-run`** — fabricates a transcript from a seeded PRNG and writes a file into
 the workspace, so the whole pipeline (isolation, detection, budgets, JSONL,
