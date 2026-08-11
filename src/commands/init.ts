@@ -317,6 +317,11 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
         code: 0,
         lines: [
           `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? 'on' : 'off'}) — left unchanged`,
+          ...(policy.unattended
+            ? [
+                'unattended capture is authorised, not initiated — an agent host must supply the session transcript before commit; ordinary git commits cannot start it',
+              ]
+            : []),
         ],
         detail: { state: 'existing', path, unattended: policy.unattended, error: null },
       };
@@ -346,7 +351,8 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
       title: 'capture policy',
       code: 0,
       lines: [
-        `unattended capture enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        `unattended capture policy enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        'unattended capture is authorised, not initiated — an agent host must supply the session transcript before commit; ordinary git commits cannot start it',
         'the file is committed with the repository — it applies to everyone who clones it',
       ],
       detail: { state: 'enabled', path, unattended: true, error: null },
@@ -432,7 +438,7 @@ const policyOutcome = (step: InitStep): string => {
   const detail = step.detail as PolicyStepDetail;
   switch (detail.state) {
     case 'enabled':
-      return 'unattended capture enabled (committed — applies to the whole team)';
+      return 'unattended policy enabled — agent host must initiate capture (committed — applies to the whole team)';
     case 'declined':
       return 'unattended capture declined — enable later: commitlore auto on';
     case 'no-answer':
@@ -440,7 +446,9 @@ const policyOutcome = (step: InitStep): string => {
     case 'no-tty':
       return 'unattended capture not enabled — no interactive terminal';
     case 'existing':
-      return `unchanged — unattended capture ${detail.unattended === true ? 'on' : 'off'}`;
+      return detail.unattended === true
+        ? 'unchanged — unattended policy on; agent host must initiate capture'
+        : 'unchanged — unattended capture off';
     case 'existing-rejected':
       return 'policy file rejected — left unchanged';
     case 'write-failed':
@@ -592,7 +600,8 @@ const resolveUnattendedChoice = async (options: {
   if (existing !== null && existsSync(existing)) return 'no-answer';
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
-      'Unattended capture prepares, verifies and stages a record on every commit without asking.\n' +
+      'Unattended capture authorises an agent host to prepare, verify and stage a record without asking.\n' +
+        'It does not make ordinary git commits start capture: the host must provide the session transcript.\n' +
         `The answer is written to ${POLICY_FILE_NAME} and committed — enabling it applies to everyone who clones this repository.\n`,
     );
     let answer: boolean | null;
@@ -630,16 +639,18 @@ export const register = (program: Command): void => {
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +
         're-running with nothing else changed changes nothing else.' +
-        '\n\nUnattended capture: with no policy file yet, init asks whether to enable it — the default is ' +
+        '\n\nUnattended capture: with no policy file yet, init asks whether to authorise it — the default is ' +
         'yes, and a bare Enter accepts. The answer is written to ' + POLICY_FILE_NAME + ', which is ' +
-        'committed with the repository: enabling it applies to everyone who clones it. A policy file that ' +
+        'committed with the repository: enabling it applies to everyone who clones it. The policy does not ' +
+        'install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session ' +
+        'transcript before commit, because ordinary git commits cannot start capture. A policy file that ' +
         'already exists is reported and left unchanged, whatever the flags say. Without an interactive ' +
         'terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in ' +
         'explicitly.' +
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
         'still exist on their own for anyone who wants one piece rather than all six.' +
         '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
-        'fix itself, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
+        'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write ' +
         'could not run at all (SPEC §10).',
     )

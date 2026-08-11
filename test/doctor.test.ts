@@ -37,6 +37,7 @@ const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md',
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { runQuery } from '../src/core/query.js';
+import { POLICY_FILE_NAME } from '../src/core/capture-policy.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
@@ -545,7 +546,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    expect(report.checks).toHaveLength(13);
+    expect(report.checks).toHaveLength(14);
   });
 });
 
@@ -953,6 +954,7 @@ describe('doctor: report', () => {
       'inject-runtime',
       'inject-version',
       'mcp-lifecycle',
+      'unattended-initiator',
       'pending-backlog',
       'git-trailers',
       'history-depth',
@@ -975,7 +977,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(13);
+    expect(parsed.checks).toHaveLength(14);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -991,6 +993,24 @@ describe('doctor: report', () => {
     expect(text).toContain('notes fetch refspec');
     expect(text).toContain(`fix: git config --add remote.origin.fetch '${NOTES_REFSPEC}'`);
     expect(text).toContain('index health');
+  });
+});
+
+describe('#527 doctor: unattended capture initiator', () => {
+  it('warns when policy consent is mistaken for a commit trigger', () => {
+    const { repo } = repoWithRemote('doctor-unattended-initiator');
+    writeFileSync(join(repo, POLICY_FILE_NAME), '{ "unattended": true }\n');
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('ordinary git commit cannot start it');
+    expect(check?.fix).toContain('commitlore_prepare_capture');
+    expect(check?.evidence).toMatchObject({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator: 'agent-host-required',
+    });
   });
 });
 

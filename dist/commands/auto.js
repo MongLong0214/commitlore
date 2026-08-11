@@ -30,6 +30,7 @@ export const runAutoStatus = (cwd) => {
             source: 'repository',
             path,
             error: resolution.error,
+            unattendedStart: 'unknown',
         };
     }
     return {
@@ -39,6 +40,7 @@ export const runAutoStatus = (cwd) => {
         source: resolution.path !== null ? 'repository' : 'defaults',
         path,
         error: null,
+        unattendedStart: resolution.policy.unattended ? 'agent-host-required' : 'disabled',
     };
 };
 /** `auto on` / `auto off` — write the setting coherently, or say why not. */
@@ -74,15 +76,24 @@ const printStatus = (result, json) => {
         process.stdout.write(`unattended capture: unknown — ${POLICY_FILE_NAME} exists but is rejected\n`);
         process.stdout.write(`  ${result.error}\n`);
         process.stdout.write('  fix or remove the file and re-run; until then capture runs on the defaults\n');
+        process.stdout.write('  unattended start: unknown — a rejected policy cannot authorise an agent host\n');
     }
     else if (result.source === 'defaults') {
         process.stdout.write(`unattended capture: off\n`);
         process.stdout.write(`  no ${POLICY_FILE_NAME} — the defaults apply (mode "auto", unattended false)\n`);
         process.stdout.write('  enable with: commitlore auto on\n');
+        process.stdout.write('  unattended start: disabled by policy\n');
     }
     else {
-        process.stdout.write(`unattended capture: ${result.unattended === true ? 'on' : 'off'}\n`);
+        process.stdout.write(`unattended capture: ${result.unattended === true ? 'on — policy permits host-driven capture' : 'off'}\n`);
         process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")\n`);
+        if (result.unattended) {
+            process.stdout.write('  unattended start: an agent host must initiate capture; init installs no initiator\n');
+            process.stdout.write('  ordinary git commits only apply a staged transaction — configure the host to call commitlore_prepare_capture with its session transcript before commit\n');
+        }
+        else {
+            process.stdout.write('  unattended start: disabled by policy\n');
+        }
     }
     if (!result.ok)
         process.exitCode = 1;
@@ -106,16 +117,20 @@ const printSet = (result, enabled, json) => {
     }
     const word = enabled ? 'on' : 'off';
     if (!result.changed) {
-        process.stdout.write(`unattended capture: ${word} — already set, nothing changed\n`);
+        process.stdout.write(`unattended capture policy: ${word} — already set, nothing changed\n`);
+        if (enabled) {
+            process.stdout.write('  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n');
+        }
         return;
     }
-    process.stdout.write(`unattended capture: ${word}\n`);
+    process.stdout.write(`unattended capture policy: ${word}\n`);
     process.stdout.write(`  wrote ${result.path}\n`);
     if (enabled && result.previousMode !== null && result.previousMode !== 'auto') {
         process.stdout.write(`  mode moved from "${result.previousMode}" to "auto" — unattended capture is honoured only in auto mode\n`);
     }
     if (enabled) {
         process.stdout.write('  the file is committed with the repository — it applies to everyone who clones it\n');
+        process.stdout.write('  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n');
     }
 };
 // ---------------------------------------------------------------------------
@@ -126,8 +141,10 @@ export const register = (program) => {
         .command('auto')
         .description(`read and write the unattended-capture setting (${POLICY_FILE_NAME})`)
         .option('--json', 'emit structured JSON output (bare `auto` reports status)')
-        .addHelpText('after', '\nUnattended capture consents once, for every commit, to prepare, verify and stage a record ' +
-        'with nobody in the loop (ADR-0030, #511). The setting lives in ' + POLICY_FILE_NAME +
+        .addHelpText('after', '\nUnattended capture authorises an agent host to prepare, verify and stage a record ' +
+        'with nobody in the loop (ADR-0030, #511). It does not make ordinary `git commit` start ' +
+        'capture: the host must invoke `commitlore_prepare_capture` with its session transcript first. ' +
+        'The setting lives in ' + POLICY_FILE_NAME +
         ' at the repository root — the same file `resolvePolicy` reads; this command is the only ' +
         'writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode ' +
         'only and a file the resolver would reject is never produced. The file is committed with ' +

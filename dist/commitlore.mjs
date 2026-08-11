@@ -12190,7 +12190,7 @@ var buildRepairFeedback = (rejected) => {
 };
 
 // src/core/index-db.ts
-import { existsSync as existsSync3, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
 var cachedCtor = null;
@@ -12775,19 +12775,13 @@ var incrementalProblem = (handle, head, last) => {
 var updateIndex = (handle, opts = {}) => {
   requireWritable(handle);
   const started = Date.now();
-  const allowRebuild = opts.allowRebuild ?? true;
-  const rebuildOrRefuse = (reason) => {
-    if (!allowRebuild) throw new Error(reason);
-    return rebuildIndex(handle, { reason });
-  };
   const discarded = handle.discardedReason;
   if (discarded !== null) {
     handle.discardedReason = null;
-    return rebuildOrRefuse(discarded);
+    return rebuildIndex(handle, { reason: discarded });
   }
   const problem = healthProblem(handle.db);
   if (problem !== null) {
-    if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
     return rebuildIndex(handle, { reason: problem });
   }
@@ -12804,7 +12798,7 @@ var updateIndex = (handle, opts = {}) => {
   }
   const last = readMeta(handle.db, "last_indexed_sha");
   const blocker = incrementalProblem(handle, head, last);
-  if (blocker !== null) return rebuildOrRefuse(blocker);
+  if (blocker !== null) return rebuildIndex(handle, { reason: blocker });
   const stats = { ...emptyStats(handle, started), headSha: head };
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
@@ -12815,9 +12809,9 @@ var updateIndex = (handle, opts = {}) => {
       stats.trailersIndexed = counts.trailers;
       stats.pathsIndexed = counts.paths;
     } catch (error2) {
-      return rebuildOrRefuse(
-        `incremental insert conflicted with existing rows (${errorMessage(error2)})`
-      );
+      return rebuildIndex(handle, {
+        reason: `incremental insert conflicted with existing rows (${errorMessage(error2)})`
+      });
     }
     writeMeta(handle.db, "last_indexed_sha", head);
   }
@@ -12830,36 +12824,6 @@ var ensureIndex = (opts = {}) => {
   const handle = openIndex(opts);
   try {
     return { handle, stats: updateIndex(handle) };
-  } catch (error2) {
-    closeIndex(handle);
-    throw error2;
-  }
-};
-var openCurrentIndex = (opts = {}) => {
-  const cwd = opts.cwd ?? process.cwd();
-  if (!existsSync3(indexDbPath(cwd))) throw new Error("the index has no baseline commit");
-  const handle = openIndex(opts);
-  try {
-    if (handle.discardedReason !== null) throw new Error(handle.discardedReason);
-    const problem = healthProblem(handle.db);
-    if (problem !== null) throw new Error(problem);
-    const head = revParse(handle.cwd, "HEAD");
-    if (head !== null) {
-      const blocker = incrementalProblem(handle, head, readMeta(handle.db, "last_indexed_sha"));
-      if (blocker !== null) throw new Error(blocker);
-    }
-    updateIndex(handle, { allowRebuild: false });
-    const indexedHead = readMeta(handle.db, "last_indexed_sha");
-    if (indexedHead !== head) {
-      throw new Error(
-        `index is at ${indexedHead?.slice(0, 12) ?? "(no baseline)"} but HEAD is ${head?.slice(0, 12) ?? "(unborn)"}`
-      );
-    }
-    const notesRef = revParseRef(handle.cwd, NOTES_REF2);
-    if (readMeta(handle.db, "notes_ref_sha") !== notesRef) {
-      throw new Error("index does not match refs/notes/commitlore");
-    }
-    return handle;
   } catch (error2) {
     closeIndex(handle);
     throw error2;
@@ -12968,10 +12932,6 @@ var matchesQuery = (trailer, query) => {
   }
   return true;
 };
-var filterTrailers = (trailers, query = {}) => {
-  const matched = trailers.filter((trailer) => matchesQuery(trailer, query)).sort(compareTrailers);
-  return query.limit === void 0 ? matched : matched.slice(0, query.limit);
-};
 var toIndexedTrailers = (records) => records.flatMap((record2) => {
   const provenance = record2.trailers.find((t) => t.key === "Provenance")?.value ?? null;
   return record2.trailers.map((trailer, seq) => ({
@@ -12993,7 +12953,8 @@ var scanTrailers = (query = {}, opts = {}) => {
   const head = revParse(cwd, "HEAD");
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
   const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
-  return filterTrailers(toIndexedTrailers(records), query);
+  const matched = toIndexedTrailers(records).filter((trailer) => matchesQuery(trailer, query)).sort(compareTrailers);
+  return query.limit === void 0 ? matched : matched.slice(0, query.limit);
 };
 var indexInfo = (handle) => ({
   path: handle.path,
@@ -13625,7 +13586,7 @@ var register = (program3) => {
 
 // src/core/capture-policy.ts
 import { createHash } from "node:crypto";
-import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3, writeFileSync } from "node:fs";
 import { join as join2 } from "node:path";
 var CAPTURE_MODES = ["auto", "suggest", "off"];
 var POLICY_DEFAULTS = {
@@ -13728,7 +13689,7 @@ var resolvePolicy = (cwd) => {
   const root = repoRoot(cwd);
   if (root === null) return defaultsResolution(null, null);
   const path2 = join2(root, POLICY_FILE_NAME);
-  if (!existsSync4(path2)) return defaultsResolution(null, null);
+  if (!existsSync3(path2)) return defaultsResolution(null, null);
   let contents;
   try {
     contents = readFileSync3(path2, "utf8");
@@ -13773,7 +13734,7 @@ var setUnattendedCapture = (cwd, enabled) => {
   if (path2 === null) {
     return { ok: false, path: null, error: "no git repository found here \u2014 run this inside a repository" };
   }
-  if (existsSync4(path2)) {
+  if (existsSync3(path2)) {
     let current;
     try {
       current = readFileSync3(path2, "utf8");
@@ -13830,7 +13791,8 @@ var runAutoStatus = (cwd) => {
       mode: null,
       source: "repository",
       path: path2,
-      error: resolution.error
+      error: resolution.error,
+      unattendedStart: "unknown"
     };
   }
   return {
@@ -13839,7 +13801,8 @@ var runAutoStatus = (cwd) => {
     mode: resolution.policy.mode,
     source: resolution.path !== null ? "repository" : "defaults",
     path: path2,
-    error: null
+    error: null,
+    unattendedStart: resolution.policy.unattended ? "agent-host-required" : "disabled"
   };
 };
 var runAutoSet = (cwd, enabled) => {
@@ -13872,17 +13835,29 @@ var printStatus = (result, json) => {
     process.stdout.write(`  ${result.error}
 `);
     process.stdout.write("  fix or remove the file and re-run; until then capture runs on the defaults\n");
+    process.stdout.write("  unattended start: unknown \u2014 a rejected policy cannot authorise an agent host\n");
   } else if (result.source === "defaults") {
     process.stdout.write(`unattended capture: off
 `);
     process.stdout.write(`  no ${POLICY_FILE_NAME} \u2014 the defaults apply (mode "auto", unattended false)
 `);
     process.stdout.write("  enable with: commitlore auto on\n");
+    process.stdout.write("  unattended start: disabled by policy\n");
   } else {
-    process.stdout.write(`unattended capture: ${result.unattended === true ? "on" : "off"}
-`);
+    process.stdout.write(
+      `unattended capture: ${result.unattended === true ? "on \u2014 policy permits host-driven capture" : "off"}
+`
+    );
     process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")
 `);
+    if (result.unattended) {
+      process.stdout.write("  unattended start: an agent host must initiate capture; init installs no initiator\n");
+      process.stdout.write(
+        "  ordinary git commits only apply a staged transaction \u2014 configure the host to call commitlore_prepare_capture with its session transcript before commit\n"
+      );
+    } else {
+      process.stdout.write("  unattended start: disabled by policy\n");
+    }
   }
   if (!result.ok) process.exitCode = 1;
 };
@@ -13906,11 +13881,16 @@ var printSet = (result, enabled, json) => {
   }
   const word = enabled ? "on" : "off";
   if (!result.changed) {
-    process.stdout.write(`unattended capture: ${word} \u2014 already set, nothing changed
+    process.stdout.write(`unattended capture policy: ${word} \u2014 already set, nothing changed
 `);
+    if (enabled) {
+      process.stdout.write(
+        "  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n"
+      );
+    }
     return;
   }
-  process.stdout.write(`unattended capture: ${word}
+  process.stdout.write(`unattended capture policy: ${word}
 `);
   process.stdout.write(`  wrote ${result.path}
 `);
@@ -13922,12 +13902,15 @@ var printSet = (result, enabled, json) => {
   }
   if (enabled) {
     process.stdout.write("  the file is committed with the repository \u2014 it applies to everyone who clones it\n");
+    process.stdout.write(
+      "  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n"
+    );
   }
 };
 var register2 = (program3) => {
   const auto = program3.command("auto").description(`read and write the unattended-capture setting (${POLICY_FILE_NAME})`).option("--json", "emit structured JSON output (bare `auto` reports status)").addHelpText(
     "after",
-    "\nUnattended capture consents once, for every commit, to prepare, verify and stage a record with nobody in the loop (ADR-0030, #511). The setting lives in " + POLICY_FILE_NAME + ' at the repository root \u2014 the same file `resolvePolicy` reads; this command is the only writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode only and a file the resolver would reject is never produced. The file is committed with the repository: turning it on applies to everyone who clones it.\n\nExit codes (SPEC \xA710): `status` \u2014 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` \u2014 0 written, or already in that state and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed).'
+    "\nUnattended capture authorises an agent host to prepare, verify and stage a record with nobody in the loop (ADR-0030, #511). It does not make ordinary `git commit` start capture: the host must invoke `commitlore_prepare_capture` with its session transcript first. The setting lives in " + POLICY_FILE_NAME + ' at the repository root \u2014 the same file `resolvePolicy` reads; this command is the only writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode only and a file the resolver would reject is never produced. The file is committed with the repository: turning it on applies to everyone who clones it.\n\nExit codes (SPEC \xA710): `status` \u2014 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` \u2014 0 written, or already in that state and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed).'
   ).action((options) => {
     printStatus(runAutoStatus(process.cwd()), options.json === true);
   });
@@ -14770,32 +14753,20 @@ var normalizePaths = (opts) => {
   }
   return kept;
 };
-var scanSource = (cwd, diagnostics) => {
-  let rows;
-  let corpusPasses = 0;
-  return {
-    fetch: (query) => {
-      if (rows === void 0) {
-        rows = scanTrailers({}, { cwd });
-        corpusPasses += 1;
-      }
-      return filterTrailers(rows, query);
-    },
-    fromIndex: false,
-    corpusPasses: () => corpusPasses,
-    close: () => {
-    },
-    diagnostics
-  };
-};
+var scanSource = (cwd, diagnostics) => ({
+  fetch: (query) => scanTrailers(query, { cwd }),
+  fromIndex: false,
+  close: () => {
+  },
+  diagnostics
+});
 var openSource = (cwd, noIndex) => {
   if (noIndex) return scanSource(cwd, []);
   try {
-    const handle = openCurrentIndex({ cwd });
+    const { handle } = ensureIndex({ cwd });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
-      corpusPasses: () => 0,
       close: () => closeIndex(handle),
       diagnostics: []
     };
@@ -15092,10 +15063,11 @@ var runQuery = (opts = {}) => {
   const cutoff = at.getTime();
   if (Number.isNaN(cutoff)) throw new Error("runQuery: opts.at is not a valid Date");
   const paths = normalizePaths(opts);
-  const scope = resolveScope(cwd, paths);
   const source = openSource(cwd, opts.noIndex === true);
-  const diagnostics = [...source.diagnostics, ...scope.diagnostics];
+  const diagnostics = [...source.diagnostics];
   try {
+    const scope = resolveScope(cwd, paths);
+    diagnostics.push(...scope.diagnostics);
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
     const states = foldStates(source, at, cutoff);
     const commitRecords = groupByCommit(collectRows(source, scope.aliases));
@@ -15130,7 +15102,6 @@ var runQuery = (opts = {}) => {
       records: opts.limit === void 0 ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
       fromIndex: source.fromIndex,
       scanned: commitRecords.length,
-      corpusPasses: source.corpusPasses(),
       at,
       paths,
       aliases: scope.aliases,
@@ -15608,7 +15579,7 @@ var guard = (opts) => {
 
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15714,7 +15685,7 @@ var listPendingNonces = (cwd) => {
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
   const filePath = pendingFilePath(nonce, opts.cwd);
-  if (!existsSync5(filePath)) return null;
+  if (!existsSync4(filePath)) return null;
   let content;
   try {
     content = readFileSync4(filePath, "utf8");
@@ -16677,7 +16648,7 @@ var runCaptureShadow = (opts) => {
 };
 
 // src/core/pending-gc.ts
-import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var UNSTAMPED_RETENTION_MS = 24 * 60 * 60 * 1e3;
@@ -16707,7 +16678,7 @@ var gcPending = (cwd) => {
   const removed = [];
   const kept = [];
   const dir = resolvePendingDir(cwd);
-  if (!existsSync6(dir)) return { removed, kept };
+  if (!existsSync5(dir)) return { removed, kept };
   let files;
   try {
     files = readdirSync2(dir).filter((f) => f.endsWith(".json"));
@@ -17108,14 +17079,14 @@ CommitLore-Version: 2.0.0
 
 // src/commands/init.ts
 import { createInterface } from "node:readline";
-import { existsSync as existsSync16 } from "node:fs";
+import { existsSync as existsSync15 } from "node:fs";
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync7, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -17141,7 +17112,7 @@ var success = (status, lines, changed) => ({
   changed
 });
 var load = (settingsPath) => {
-  if (!existsSync7(settingsPath)) return { settings: {}, existed: false };
+  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
     raw = readFileSync7(settingsPath, "utf8");
@@ -17654,7 +17625,7 @@ var checkInjectRuntime = (ctx) => {
 };
 
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
-import { existsSync as existsSync8, readFileSync as readFileSync9 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync9 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 
 // src/core/hook-target.ts
@@ -17937,7 +17908,7 @@ var checkHook = (ctx, runtime) => {
     ...describeRecordedHookTarget(target),
     ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
   ].join("; ");
-  if (!existsSync8(path2)) {
+  if (!existsSync7(path2)) {
     return check(
       id,
       category,
@@ -18043,7 +18014,7 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { existsSync as existsSync9, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
 var checkHookRuntime = (ctx) => {
@@ -18074,7 +18045,7 @@ var checkHookRuntime = (ctx) => {
     );
   }
   const hook = resolve8(cwd, located.stdout.trim());
-  if (!existsSync9(hook)) {
+  if (!existsSync8(hook)) {
     return check(
       id,
       category,
@@ -18453,6 +18424,70 @@ var checkPendingBacklog = (ctx) => {
         stranded: String(stranded.length),
         staged_expired: String(lost.length),
         oldest: oldest ?? "unknown"
+      }
+    }
+  );
+};
+
+// src/commands/doctor/checks/capture-unattended-initiator.ts
+var checkUnattendedCaptureInitiator = (ctx) => {
+  const id = "unattended-initiator";
+  const title = "unattended capture initiator";
+  const category = "capture";
+  const cwd = ctx.opts.cwd ?? process.cwd();
+  const resolution = resolvePolicy(cwd);
+  if (!resolution.ok) {
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `${POLICY_FILE_NAME} is rejected, so doctor cannot determine whether an agent host may start unattended capture`,
+      "commitlore auto status",
+      false,
+      void 0,
+      {
+        evidence: {
+          policy: "rejected",
+          policy_error: resolution.error ?? "unknown",
+          ordinary_git_commit: "cannot-initiate"
+        }
+      }
+    );
+  }
+  if (!resolution.policy.unattended) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      "unattended capture is off; no host initiator is required",
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          policy: "off",
+          ordinary_git_commit: "cannot-initiate",
+          initiator: "not-applicable"
+        }
+      }
+    );
+  }
+  return check(
+    id,
+    category,
+    title,
+    "warn",
+    "unattended capture is authorised, but an ordinary git commit cannot start it: the installed hooks only apply or finalise an already staged transaction",
+    "configure an agent host to call commitlore_prepare_capture with its session transcript before git commit",
+    false,
+    void 0,
+    {
+      evidence: {
+        policy: "unattended",
+        ordinary_git_commit: "cannot-initiate",
+        initiator: "agent-host-required"
       }
     }
   );
@@ -19305,13 +19340,13 @@ var checkIndex = (ctx) => {
 };
 
 // src/commands/doctor/checks/runtime-cli-runtime.ts
-import { existsSync as existsSync10 } from "node:fs";
+import { existsSync as existsSync9 } from "node:fs";
 var checkRuntime = (ctx) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const category = "runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync10(path2));
+  const entry = candidates.find((path2) => existsSync9(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -19650,6 +19685,7 @@ var CHECK_REGISTRY = [
   { id: "inject-runtime", title: "PreToolUse hook runtime", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkInjectRuntime(ctx) },
   { id: "inject-version", title: "PreToolUse hook version", category: "delivery", dependencies: ["inject-runtime"], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
   { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
+  { id: "unattended-initiator", title: "unattended capture initiator", category: "capture", dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
   { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
   { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },
   { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
@@ -19727,7 +19763,7 @@ ${formatCheckReport(report, options)}`;
 };
 
 // src/commands/doctor/report.ts
-import { existsSync as existsSync11, readFileSync as readFileSync11 } from "node:fs";
+import { existsSync as existsSync10, readFileSync as readFileSync11 } from "node:fs";
 import { join as join7, resolve as resolve9, sep as sep2 } from "node:path";
 
 // src/commands/doctor/runner.ts
@@ -19840,7 +19876,7 @@ var deriveInstallSource = ({
   if (segments.includes("node_modules")) return "npm";
   try {
     const manifest = JSON.parse(readFileSync11(join7(packageRoot, "package.json"), "utf8"));
-    if (manifest.name === "commitlore" && existsSync11(join7(packageRoot, ".git"))) return "source";
+    if (manifest.name === "commitlore" && existsSync10(join7(packageRoot, ".git"))) return "source";
   } catch {
   }
   return "unknown";
@@ -19906,7 +19942,7 @@ var register5 = (program3) => {
 import { randomBytes as randomBytes7 } from "node:crypto";
 import {
   chmodSync as chmodSync4,
-  existsSync as existsSync15,
+  existsSync as existsSync14,
   mkdirSync as mkdirSync8,
   readFileSync as readFileSync15,
   realpathSync as realpathSync2,
@@ -19919,7 +19955,7 @@ import { join as join8, resolve as resolve13 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes4 } from "node:crypto";
-import { chmodSync, existsSync as existsSync12, mkdirSync as mkdirSync5, readFileSync as readFileSync12, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync7 } from "node:fs";
+import { chmodSync, existsSync as existsSync11, mkdirSync as mkdirSync5, readFileSync as readFileSync12, readdirSync as readdirSync3, renameSync as renameSync3, writeFileSync as writeFileSync7 } from "node:fs";
 import { resolve as resolve10 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -19946,7 +19982,7 @@ var installPostCommitHook = (cwd = process.cwd()) => {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync12(hookPath)) {
+    if (existsSync11(hookPath)) {
       const current = readFileSync12(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -20011,7 +20047,7 @@ var allRecordIdsPresent = (commitMessage, records) => {
 };
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
-  if (!pendingDirPath || !existsSync12(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync11(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -20069,7 +20105,7 @@ var register6 = (program3) => {
 
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync13, mkdirSync as mkdirSync6, readFileSync as readFileSync13, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync12, mkdirSync as mkdirSync6, readFileSync as readFileSync13, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve11 } from "node:path";
 
 // src/core/sync.ts
@@ -20180,7 +20216,7 @@ var installPrePushHook = (cwd = process.cwd()) => {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync13(hookPath)) {
+    if (existsSync12(hookPath)) {
       const current = readFileSync13(hookPath, "utf8");
       if (!current.includes(PRE_PUSH_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -20217,7 +20253,7 @@ var register7 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync14, mkdirSync as mkdirSync7, readFileSync as readFileSync14, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync13, mkdirSync as mkdirSync7, readFileSync as readFileSync14, readdirSync as readdirSync4, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -20251,7 +20287,7 @@ var recordsFromSquashMessage = (cwd, message) => {
 };
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
-  if (squashPath === null || !existsSync14(squashPath)) return false;
+  if (squashPath === null || !existsSync13(squashPath)) return false;
   const draft = readFileSync14(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
   const blocks = recordsFromSquashMessage(cwd, readFileSync14(squashPath, "utf8"));
@@ -20284,7 +20320,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync14(path2)) {
+    if (existsSync13(path2)) {
       const current = readFileSync14(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure3(`${path2} is not a commitlore hook \u2014 left in place`);
@@ -20343,7 +20379,7 @@ var messageContainsRecordId = (message, records) => {
 };
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync14(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync13(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -20434,7 +20470,7 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync15(hookPath)) return "absent";
+  if (!existsSync14(hookPath)) return "absent";
   let contents;
   try {
     contents = readFileSync15(hookPath, "utf8");
@@ -20453,7 +20489,7 @@ var readHookStatus = (cwd = process.cwd()) => {
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync15(chainedPath),
+    chained: existsSync14(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -20550,7 +20586,7 @@ var CAPTURE_HOOKS = [
 var removeCaptureHook = (hooksDir, hook) => {
   const hookPath = join8(hooksDir, hook.name);
   const chainedPath = join8(hooksDir, hook.chainedName);
-  if (!existsSync15(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+  if (!existsSync14(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
     contents = readFileSync15(hookPath, "utf8");
@@ -20561,7 +20597,7 @@ var removeCaptureHook = (hooksDir, hook) => {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
   unlinkSync4(hookPath);
-  if (!existsSync15(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  if (!existsSync14(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
   renameSync6(chainedPath, hookPath);
   return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
 };
@@ -20796,7 +20832,10 @@ var runPolicyStep = (opts) => {
         title: "capture policy",
         code: 0,
         lines: [
-          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? "on" : "off"}) \u2014 left unchanged`
+          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? "on" : "off"}) \u2014 left unchanged`,
+          ...policy.unattended ? [
+            "unattended capture is authorised, not initiated \u2014 an agent host must supply the session transcript before commit; ordinary git commits cannot start it"
+          ] : []
         ],
         detail: { state: "existing", path: path2, unattended: policy.unattended, error: null }
       };
@@ -20825,7 +20864,8 @@ var runPolicyStep = (opts) => {
       title: "capture policy",
       code: 0,
       lines: [
-        `unattended capture enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        `unattended capture policy enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        "unattended capture is authorised, not initiated \u2014 an agent host must supply the session transcript before commit; ordinary git commits cannot start it",
         "the file is committed with the repository \u2014 it applies to everyone who clones it"
       ],
       detail: { state: "enabled", path: path2, unattended: true, error: null }
@@ -20879,7 +20919,7 @@ var policyOutcome = (step) => {
   const detail = step.detail;
   switch (detail.state) {
     case "enabled":
-      return "unattended capture enabled (committed \u2014 applies to the whole team)";
+      return "unattended policy enabled \u2014 agent host must initiate capture (committed \u2014 applies to the whole team)";
     case "declined":
       return "unattended capture declined \u2014 enable later: commitlore auto on";
     case "no-answer":
@@ -20887,7 +20927,7 @@ var policyOutcome = (step) => {
     case "no-tty":
       return "unattended capture not enabled \u2014 no interactive terminal";
     case "existing":
-      return `unchanged \u2014 unattended capture ${detail.unattended === true ? "on" : "off"}`;
+      return detail.unattended === true ? "unchanged \u2014 unattended policy on; agent host must initiate capture" : "unchanged \u2014 unattended capture off";
     case "existing-rejected":
       return "policy file rejected \u2014 left unchanged";
     case "write-failed":
@@ -20979,10 +21019,11 @@ var resolveUnattendedChoice = async (options) => {
   if (options.unattended === true) return "enable";
   if (options.unattended === false) return "decline";
   const existing = capturePolicyPath(process.cwd());
-  if (existing !== null && existsSync16(existing)) return "no-answer";
+  if (existing !== null && existsSync15(existing)) return "no-answer";
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
-      `Unattended capture prepares, verifies and stages a record on every commit without asking.
+      `Unattended capture authorises an agent host to prepare, verify and stage a record without asking.
+It does not make ordinary git commits start capture: the host must provide the session transcript.
 The answer is written to ${POLICY_FILE_NAME} and committed \u2014 enabling it applies to everyone who clones this repository.
 `
     );
@@ -21007,7 +21048,7 @@ var register10 = (program3) => {
     "leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)"
   ).addHelpText(
     "after",
-    "\nRuns six setup steps in sequence \u2014 hooks install, trusted author, index --rebuild, claude hook install, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to enable it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all six.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write could not run at all (SPEC \xA710)."
+    "\nRuns six setup steps in sequence \u2014 hooks install, trusted author, index --rebuild, claude hook install, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all six.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write could not run at all (SPEC \xA710)."
   ).action(async (options) => {
     const choice = await resolveUnattendedChoice(options);
     const initOptions = options.force === void 0 ? {} : { force: options.force };
@@ -32381,7 +32422,7 @@ var register22 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { existsSync as existsSync17, readFileSync as readFileSync22, rmSync as rmSync4, writeFileSync as writeFileSync15 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync22, rmSync as rmSync4, writeFileSync as writeFileSync15 } from "node:fs";
 import { homedir } from "node:os";
 import { join as join11 } from "node:path";
 
@@ -32453,7 +32494,7 @@ var runUninstall = async (options = {}) => {
   const removed = [];
   const kept = [];
   const wrapper = join11(home, ".local", "bin", "commitlore");
-  if (existsSync17(wrapper)) {
+  if (existsSync16(wrapper)) {
     const contents = (() => {
       try {
         return readFileSync22(wrapper, "utf8");
@@ -32471,14 +32512,14 @@ var runUninstall = async (options = {}) => {
     }
   }
   const dataRoot = join11(dataHome, "commitlore");
-  if (existsSync17(dataRoot)) {
+  if (existsSync16(dataRoot)) {
     if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
   }
   for (const config2 of AGENT_CONFIGS) {
     const path2 = join11(home, ...config2.homeRelativePath);
-    if (!existsSync17(path2)) continue;
+    if (!existsSync16(path2)) continue;
     let contents;
     try {
       contents = readFileSync22(path2, "utf8");

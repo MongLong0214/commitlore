@@ -290,14 +290,15 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
 describe('commitlore init — the capture policy step', () => {
   const policyPathOf = (repo: string): string => join(repo, POLICY_FILE_NAME);
 
-  it('enables unattended capture where no policy file exists, and says so', () => {
+  it('authorises unattended capture where no policy file exists and names the missing initiator', () => {
     const repo = repoWithRemote('policy-enable');
 
     const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
 
     const policyStep = report.steps.find((s) => s.step === 'policy');
     expect(policyStep?.code).toBe(0);
-    expect(policyStep?.lines.join('\n')).toContain('unattended capture enabled');
+    expect(policyStep?.lines.join('\n')).toContain('unattended capture policy enabled');
+    expect(policyStep?.lines.join('\n')).toContain('ordinary git commits cannot start it');
     expect(policyStep?.lines.join('\n')).toContain('applies to everyone who clones');
 
     // The file it wrote is one the resolver accepts, mode beside the setting.
@@ -307,7 +308,10 @@ describe('commitlore init — the capture policy step', () => {
     expect(resolution.policy.mode).toBe('auto');
 
     const text = formatInitReport(report);
-    expect(text).toContain('unattended capture enabled (committed — applies to the whole team)');
+    expect(text).toContain('unattended policy enabled — agent host must initiate capture');
+    expect(text).toContain('unattended capture initiator');
+    expect(text).toContain('ordinary git commit cannot start it');
+    expect(report.exitCode).toBe(1);
   });
 
   it('records a decline without writing a file', () => {

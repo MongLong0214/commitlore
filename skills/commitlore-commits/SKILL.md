@@ -27,9 +27,12 @@ leaving. Answering `{"records": []}` is correct, and common.
 
 ## Capture
 
-Needs the `prepare-commit-msg` hook that `commitlore init` installs (see
-`commitlore-setup`); without it nothing staged reaches a commit message. Stage
-the change first — capture hashes `git diff --cached`.
+This skill is the host-side initiator when the host selects it for a commit
+request. The `prepare-commit-msg` hook that `commitlore init` installs only
+attaches an already staged transaction; an ordinary `git commit` never starts
+capture because it has no session transcript. Without the hook, nothing staged
+reaches a commit message. Stage the change first — capture hashes `git diff
+--cached`.
 
 **1. Prepare.** Write the relevant part of the session to a transcript, in the
 words actually exchanged rather than a summary: it is the source every quote is

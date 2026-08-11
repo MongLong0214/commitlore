@@ -30,6 +30,12 @@ export interface AutoStatusResult {
     path: string | null;
     /** The resolver's named reason when the file is rejected; null otherwise. */
     error: string | null;
+    /**
+     * Whether unattended capture can start from the ordinary Git commit the
+     * operator is about to make. A policy can authorise unattended capture, but
+     * it cannot produce the host transcript that prepare requires.
+     */
+    unattendedStart: 'disabled' | 'agent-host-required' | 'unknown';
 }
 export interface AutoSetResult {
     ok: boolean;
