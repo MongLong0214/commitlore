@@ -46,6 +46,7 @@ import {
   type CapabilityProbe,
 } from '../bench/cdeb/runtime/isolation.ts';
 import { runProbe } from '../bench/cdeb/freeze/runtime-probe.ts';
+import { readPersistedRawNdjson } from '../bench/cdeb/runtime/provider-ledger.ts';
 // @ts-expect-error -- plain ESM module without type declarations
 import { decideEgress, parseConnectTarget } from '../bench/cdeb/runtime/egress-proxy.mjs';
 import {
@@ -607,7 +608,7 @@ describe('pin manifest and gate token', () => {
     ).rejects.toThrowError(/not frozen/);
   });
 
-  it('executeAgentRun captures the raw stream byte-for-byte and identity-checks it', async () => {
+  it('executeAgentRun captures the raw stream byte-for-byte, persists it, and identity-checks it', async () => {
     const stream = validStream();
     const streamingDocker: ContainerRuntimeCommands = {
       run: () => ({ stdout: '', stderr: '', exitCode: 0, timedOut: false }),
@@ -626,9 +627,10 @@ describe('pin manifest and gate token', () => {
       outDir,
       providerEnv: {},
     });
-    const captured = readFileSync(join(outDir, 'provider.ndjson'), 'utf8');
+    const captured = readPersistedRawNdjson(outDir).toString('utf8');
     expect(captured).toBe(stream);
     expect(outcome.identity.observed_model_ids).toEqual([PIN_MODEL]);
+    expect(outcome.ledger.usage.availability).toBe('measured');
     expect(outcome.exit_code).toBe(0);
     expect(outcome.provider_stream_sha256).toMatch(/^[0-9a-f]{64}$/);
   });

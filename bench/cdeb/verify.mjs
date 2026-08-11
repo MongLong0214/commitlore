@@ -16,17 +16,20 @@
 //   - an unknown file anywhere in a study is a finding
 //   - a schema-invalid row, attempt, evaluator output or freeze manifest fails
 //   - a derived field that does not equal its recomputation fails
-//     (total_token_volume vs the raw category sum; decision_safe_success vs
-//     stop_reason/functional_pass/rejected_decision_revived — §14.7)
+//     (total_token_volume vs the raw category sum when usage is available;
+//     decision_safe_success vs stop_reason/functional_pass/rejected-decision
+//     revival — §14.7)
 //   - a duplicate logical_run_id fails
 //   - if randomization.json names the expected logical runs, a missing or
 //     extra row fails; RESULT.json with an incomplete matrix fails (§22.6)
 //
 // Exit 0: every study verifies, or there are no studies. Exit 1 otherwise.
 
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { zstdDecompressSync } from "node:zlib";
 
 // `ajv`'s default export ships the draft-07 meta-schema only; these schemas
 // declare draft 2020-12, which lives in its own entry point.
@@ -128,9 +131,11 @@ const checkExposure = (study, path, row) => {
  */
 const checkDerived = (study, path, row) => {
   const u = row.usage;
-  const sum = u.input_tokens + u.output_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;
-  if (u.total_token_volume !== sum) {
-    fail(study, `${path}: total_token_volume ${u.total_token_volume} != raw category sum ${sum}`);
+  if (u.availability === "measured") {
+    const sum = u.input_tokens + u.output_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;
+    if (u.total_token_volume !== sum) {
+      fail(study, `${path}: total_token_volume ${u.total_token_volume} != raw category sum ${sum}`);
+    }
   }
   const recomputed =
     row.stop_reason === "completed" &&
@@ -138,6 +143,46 @@ const checkDerived = (study, path, row) => {
     row.evaluation.rejected_decision_revived === false;
   if (row.decision_safe_success !== recomputed) {
     fail(study, `${path}: decision_safe_success ${row.decision_safe_success} != recomputed ${recomputed} from stop_reason/evaluation`);
+  }
+};
+
+/**
+ * CDEB-05: the row's digest names the raw, decompressed NDJSON bytes, not a
+ * convenient recompression. A per-run row without those bytes is not evidence
+ * that the provider stream it claims to summarize was retained.
+ */
+const checkProviderArtifact = (study, runDir, row) => {
+  const compressedPath = join(runDir, "provider.ndjson.zst");
+  const checksumPath = join(runDir, "provider.ndjson.sha256");
+  const hasCompressed = existsSync(compressedPath);
+  const hasChecksum = existsSync(checksumPath);
+  if (!hasCompressed && !hasChecksum) {
+    if (row !== null) fail(study, `${runDir}: row.json has no provider NDJSON artifact`);
+    return;
+  }
+  if (!hasCompressed || !hasChecksum) {
+    fail(study, `${runDir}: provider NDJSON artifact and checksum must appear together`);
+    return;
+  }
+  let raw;
+  try {
+    raw = zstdDecompressSync(readFileSync(compressedPath));
+  } catch (error) {
+    fail(study, `${compressedPath}: cannot decompress provider NDJSON: ${error.message}`);
+    return;
+  }
+  const sidecar = readFileSync(checksumPath, "utf8");
+  const sidecarMatch = sidecar.match(/^([0-9a-f]{64})  provider\.ndjson\n$/);
+  if (sidecarMatch?.[1] === undefined) {
+    fail(study, `${checksumPath}: malformed provider NDJSON checksum`);
+    return;
+  }
+  const digest = createHash("sha256").update(raw).digest("hex");
+  if (digest !== sidecarMatch[1]) {
+    fail(study, `${runDir}: provider NDJSON checksum does not match decompressed bytes`);
+  }
+  if (row !== null && digest !== row.usage.raw_stream_sha256) {
+    fail(study, `${runDir}: row usage raw_stream_sha256 does not match provider NDJSON`);
   }
 };
 
@@ -192,7 +237,7 @@ const verifyStudy = (root, studyName) => {
 
   const verifyRow = (path) => {
     const row = readJson(study, path);
-    if (!validateAgainst(study, "result", path, row)) return;
+    if (!validateAgainst(study, "result", path, row)) return null;
     checkDerived(study, path, row);
     checkExposure(study, path, row);
     if (seenIds.has(row.logical_run_id)) {
@@ -219,7 +264,20 @@ const verifyStudy = (root, studyName) => {
       if (row.dist_digest !== freeze.dist_digest) {
         fail(study, `${path}: dist_digest does not match the freeze`);
       }
+      if (row.requested_model !== freeze.requested_model) {
+        fail(study, `${path}: requested_model does not match the freeze`);
+      }
+      if (
+        row.observed_model_ids.length !== 1 ||
+        row.observed_model_ids[0] !== freeze.observed_model_id
+      ) {
+        fail(
+          study,
+          `${path}: observed_model_ids ${JSON.stringify(row.observed_model_ids)} do not exactly match the freeze's observed_model_id`,
+        );
+      }
     }
+    return row;
   };
 
   const rowsDir = join(dir, "rows");
@@ -246,7 +304,8 @@ const verifyStudy = (root, studyName) => {
         if (!RUN_ENTRIES.has(entry)) fail(study, `runs/${runName}/${entry}: unknown entry`);
       }
       const rowPath = join(runDir, "row.json");
-      if (existsSync(rowPath)) verifyRow(rowPath);
+      const row = existsSync(rowPath) ? verifyRow(rowPath) : null;
+      checkProviderArtifact(study, runDir, row);
       const evalPath = join(runDir, "evaluator.json");
       if (existsSync(evalPath)) {
         validateAgainst(study, "evaluator", evalPath, readJson(study, evalPath));
