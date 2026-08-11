@@ -93,9 +93,14 @@ cd your-repository
 commitlore init
 ```
 
-`init` installs the hooks, rebuilds the index, installs the Claude hook, and
-runs `doctor --fix`. The installer detects supported coding agents and registers
-the local MCP server where it can do so safely.
+`init` installs the hooks, rebuilds the index, writes or refreshes only
+CommitLore's marked section in `AGENTS.md`, installs the Claude hook, and runs
+`doctor --fix`. The marked section carries the shared pre-edit and capture
+procedure for every agent that follows `AGENTS.md`; an existing file keeps all
+of its other lines. The installer detects supported coding agents and registers
+the local MCP server where it can do so safely. When the Codex CLI is present,
+that registration uses its MCP commands; the config-file path is only the
+CLI-absent fallback and the installer reports which path it used.
 
 ## Uninstall
 
@@ -104,8 +109,10 @@ commitlore uninstall
 ```
 
 Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
-checkout, and the MCP entry it added to each agent config. It removes nothing it
-did not write, and names what it leaves:
+checkout, and the MCP entry it added to each agent config. When the Codex CLI
+is available, it removes the entry through that CLI after confirming it points
+at this install; otherwise it uses the same config-file fallback. It removes
+nothing it did not write, and names what it leaves:
 
 | Left behind | Removed by |
 |---|---|

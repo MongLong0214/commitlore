@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve17.call(this, root, ref);
+      let _sch = resolve18.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve17(root, ref) {
+    function resolve18(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve17(baseURI, relativeURI, options) {
+    function resolve18(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve17,
+      resolve: resolve18,
       resolveComponent,
       equal,
       serialize,
@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync24 } from "node:fs";
+import { readFileSync as readFileSync25 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -17119,9 +17119,9 @@ var register3 = (program3) => {
 
 // src/commands/demo.ts
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync as rmSync3, writeFileSync as writeFileSync12, mkdirSync as mkdirSync9 } from "node:fs";
+import { mkdtempSync, rmSync as rmSync4, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname6, join as join10, resolve as resolve14 } from "node:path";
+import { dirname as dirname7, join as join11, resolve as resolve15 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -17158,7 +17158,7 @@ CommitLore-Version: 2.0.0
 
 // src/commands/init.ts
 import { createInterface } from "node:readline";
-import { existsSync as existsSync17 } from "node:fs";
+import { existsSync as existsSync18 } from "node:fs";
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 import { resolve as resolve5 } from "node:path";
@@ -21157,8 +21157,95 @@ var seedTrustedAuthor = (cwd) => {
   return { recorded: true, author: email2, reason: `records you author are now [directive]` };
 };
 
-// src/commands/init.ts
+// src/core/agents-guidance.ts
+import { existsSync as existsSync17, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
+import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve14 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
+var AGENTS_SECTION_END = "<!-- commitlore:end -->";
 var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var shippedAgentsPath = () => {
+  const source = fileURLToPath2(import.meta.url);
+  const here = dirname6(source);
+  return basename2(here) === "dist" ? resolve14(here, "..", "AGENTS.md") : resolve14(here, "..", "..", "AGENTS.md");
+};
+var readCommitloreAgentsSection = () => {
+  const contents = readFileSync17(shippedAgentsPath(), "utf8");
+  const start = contents.indexOf(AGENTS_SECTION_BEGIN);
+  const end = contents.indexOf(AGENTS_SECTION_END);
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error(`the shipped AGENTS.md has no complete ${AGENTS_SECTION_BEGIN} section`);
+  }
+  return contents.slice(start, end + AGENTS_SECTION_END.length).trimEnd() + "\n";
+};
+var markerCount = (contents, marker) => contents.split(marker).length - 1;
+var replaceFile = (path2, contents) => {
+  const mode = statSync6(path2).mode & 511;
+  const temporary = `${path2}.commitlore-incoming-${process.pid}`;
+  try {
+    writeFileSync12(temporary, contents, { mode });
+    renameSync8(temporary, path2);
+  } catch (error2) {
+    try {
+      if (existsSync17(temporary)) rmSync3(temporary, { force: true });
+    } catch {
+    }
+    throw error2;
+  }
+};
+var installAgentsGuidance = (cwd) => {
+  const path2 = join10(cwd, "AGENTS.md");
+  let section2;
+  try {
+    section2 = readCommitloreAgentsSection();
+  } catch (error2) {
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
+  }
+  if (!existsSync17(path2)) {
+    try {
+      writeFileSync12(path2, section2);
+      return { state: "created", path: path2, error: null };
+    } catch (error2) {
+      return { state: "write-failed", path: path2, error: messageOf5(error2) };
+    }
+  }
+  let contents;
+  try {
+    contents = readFileSync17(path2, "utf8");
+  } catch (error2) {
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
+  }
+  const begins = markerCount(contents, AGENTS_SECTION_BEGIN);
+  const ends = markerCount(contents, AGENTS_SECTION_END);
+  if (begins !== ends || begins > 1) {
+    return {
+      state: "invalid",
+      path: path2,
+      error: `expected zero or one complete ${AGENTS_SECTION_BEGIN} section, found ${begins} begin and ${ends} end marker(s)`
+    };
+  }
+  let next;
+  let state;
+  if (begins === 0) {
+    next = `${contents}${contents.endsWith("\n") ? "\n" : "\n\n"}${section2}`;
+    state = "added";
+  } else {
+    const start = contents.indexOf(AGENTS_SECTION_BEGIN);
+    const end = contents.indexOf(AGENTS_SECTION_END) + AGENTS_SECTION_END.length;
+    next = `${contents.slice(0, start)}${section2.trimEnd()}${contents.slice(end)}`;
+    state = "updated";
+  }
+  if (next === contents) return { state: "unchanged", path: path2, error: null };
+  try {
+    replaceFile(path2, next);
+    return { state, path: path2, error: null };
+  } catch (error2) {
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
+  }
+};
+
+// src/commands/init.ts
+var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
@@ -21193,7 +21280,7 @@ var runIndexStep = (opts) => {
   try {
     handle = openIndex({ cwd });
   } catch (error2) {
-    const message = `could not open the index: ${messageOf5(error2)}`;
+    const message = `could not open the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -21214,7 +21301,7 @@ var runIndexStep = (opts) => {
       detail: { ok: true, message, stats }
     };
   } catch (error2) {
-    const message = `could not rebuild the index: ${messageOf5(error2)}`;
+    const message = `could not rebuild the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -21239,21 +21326,30 @@ var runTrustStep = (opts) => {
     detail: result
   };
 };
-var runClaudeHookStep = (opts) => {
+var runAgentIntegrationStep = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
+  const guidance = installAgentsGuidance(cwd);
   const result = installClaudeHook({ settingsPath });
-  const lines = result.stdout.trimEnd().split("\n").filter((line2) => line2.length > 0);
+  const guidanceLine = {
+    created: `created AGENTS.md with the CommitLore capture instructions`,
+    added: `added the marked CommitLore capture instructions to AGENTS.md`,
+    updated: `updated the marked CommitLore capture instructions in AGENTS.md`,
+    unchanged: `AGENTS.md already carries the current marked CommitLore capture instructions (unchanged)`,
+    invalid: `AGENTS.md has an unsafe CommitLore marker layout and was left unchanged: ${guidance.error ?? "unknown marker error"}`,
+    "write-failed": `could not install the CommitLore capture instructions in AGENTS.md: ${guidance.error ?? "unknown write error"}`
+  };
+  const lines = [guidanceLine[guidance.state], ...result.stdout.trimEnd().split("\n").filter((line2) => line2.length > 0)];
   if (result.stderr) {
     lines.push(...result.stderr.trimEnd().split("\n").filter((line2) => line2.length > 0));
   }
-  const code = result.code === 0 ? 0 : result.status?.state === "unreadable" && result.status.problem?.includes("cannot read") ? 0 : 2;
+  const code = guidance.state === "invalid" || guidance.state === "write-failed" ? 2 : result.code === 0 ? 0 : result.status?.state === "unreadable" && result.status.problem?.includes("cannot read") ? 0 : 2;
   return {
     step: "claude-hook",
-    title: "claude hook install",
+    title: "agent integration",
     code,
     lines: lines.length > 0 ? lines : [result.stderr.trim() || "failed with no diagnostic"],
-    detail: result
+    detail: { guidance, claude: result }
   };
 };
 var runMcpRegistrationStep = (opts) => {
@@ -21370,7 +21466,7 @@ var runPolicyStep = (opts) => {
 };
 var runInit = (opts = {}) => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode };
 };
@@ -21387,7 +21483,7 @@ var STEP_HEADING = {
   trust: "trusted author",
   hooks: "[1/4] hooks install",
   index: "[2/4] index --rebuild",
-  "claude-hook": "[3/4] claude hook install",
+  "claude-hook": "[3/4] agent integration",
   "mcp-registration": "repository MCP registration",
   // Unnumbered on purpose, the same way `trust` was added: the numbered four
   // are pinned by T-1013's tests, and renumbering them would move a frozen
@@ -21512,7 +21608,7 @@ var resolveUnattendedChoice = async (options) => {
   if (options.unattended === true) return "enable";
   if (options.unattended === false) return "decline";
   const existing = capturePolicyPath(process.cwd());
-  if (existing !== null && existsSync17(existing)) return "no-answer";
+  if (existing !== null && existsSync18(existing)) return "no-answer";
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
       `Unattended capture authorises an agent host to prepare, verify and stage a record without asking.
@@ -21532,7 +21628,7 @@ The answer is written to ${POLICY_FILE_NAME} and committed \u2014 enabling it ap
 };
 var register10 = (program3) => {
   program3.command("init").description(
-    "one-command onboarding: hooks install, trusted author, index --rebuild, claude hook install, repository MCP registration, capture policy, doctor --fix"
+    "one-command onboarding: hooks install, trusted author, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix"
   ).option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").option(
     "--unattended",
     "enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)"
@@ -21541,7 +21637,7 @@ var register10 = (program3) => {
     "leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)"
   ).addHelpText(
     "after",
-    "\nRuns seven setup steps in sequence \u2014 hooks install, trusted author, index --rebuild, claude hook install, repository MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration writes the repository-scoped " + MCP_REGISTRATION_FILE + " only; it does not configure hosts that keep their own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write could not run at all (SPEC \xA710). A repository MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator."
+    "\nRuns seven setup steps in sequence \u2014 hooks install, trusted author, index --rebuild, agent integration, repository MCP registration, capture policy, then doctor --fix as a final check \u2014 and reports each one's own outcome rather than a single pass/fail. A step this command could not complete is named, never absorbed into a success message (see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so re-running with nothing else changed changes nothing else.\n\nUnattended capture: with no policy file yet, init asks whether to authorise it \u2014 the default is yes, and a bare Enter accepts. The answer is written to " + POLICY_FILE_NAME + ", which is committed with the repository: enabling it applies to everyone who clones it. The policy does not install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session transcript before commit, because ordinary git commits cannot start capture. A policy file that already exists is reported and left unchanged, whatever the flags say. Without an interactive terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in explicitly.\n\nMCP registration writes the repository-scoped " + MCP_REGISTRATION_FILE + " only; it does not configure hosts that keep their own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` still exist on their own for anyone who wants one piece rather than all seven.\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure \u2014 read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write could not run at all (SPEC \xA710). Agent integration writes or refreshes only CommitLore's marked section in AGENTS.md; every other line stays untouched. A repository MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator."
   ).action(async (options) => {
     const choice = await resolveUnattendedChoice(options);
     const initOptions = options.force === void 0 ? {} : { force: options.force };
@@ -21589,7 +21685,7 @@ var runDemo = async (opts = {}) => {
   const cleanup = () => {
     if (tmpDir !== void 0) {
       try {
-        rmSync3(tmpDir, { recursive: true, force: true });
+        rmSync4(tmpDir, { recursive: true, force: true });
       } catch {
       }
       tmpDir = void 0;
@@ -21602,25 +21698,25 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join10(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
-    const userCwd = resolve14(opts.cwd ?? process.cwd());
-    const tmpResolved = resolve14(tmpDir);
+    tmpDir = mkdtempSync(join11(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
+    const userCwd = resolve15(opts.cwd ?? process.cwd());
+    const tmpResolved = resolve15(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
-    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname6(tmpDir));
+    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname7(tmpDir));
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
-    const targetFullPath = join10(tmpDir, targetPath);
-    mkdirSync9(dirname6(targetFullPath), { recursive: true });
-    writeFileSync12(targetFullPath, "export const calculatePrice = () => {};\n");
+    const targetFullPath = join11(tmpDir, targetPath);
+    mkdirSync9(dirname7(targetFullPath), { recursive: true });
+    writeFileSync13(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
     if (opts.crashTest === true) {
       throw new Error("demo: simulated crash for testing cleanup");
     }
-    writeFileSync12(
+    writeFileSync13(
       targetFullPath,
       "export const calculatePrice = () => {};\nexport const calculateAdminQuote = () => {};\n"
     );
@@ -21680,7 +21776,7 @@ var register11 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync17, writeFileSync as writeFileSync13 } from "node:fs";
+import { readFileSync as readFileSync18, writeFileSync as writeFileSync14 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -21691,7 +21787,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync17(path2, "utf8");
+    return readFileSync18(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -21700,7 +21796,7 @@ var readTextFile = (path2, label) => {
 var emit2 = (payload, out) => {
   if (out === void 0) return { stdout: payload, stderr: "", exitCode: 0 };
   try {
-    writeFileSync13(out, payload);
+    writeFileSync14(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -21776,7 +21872,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync18 } from "node:fs";
+import { readFileSync as readFileSync19 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -21784,8 +21880,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync18(STDIN_FD, "utf8");
-  return readFileSync18(path2, "utf8");
+  if (path2 === "-") return readFileSync19(STDIN_FD, "utf8");
+  return readFileSync19(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -21976,12 +22072,12 @@ var register13 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync19, writeFileSync as writeFileSync14 } from "node:fs";
+import { readFileSync as readFileSync20, writeFileSync as writeFileSync15 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync19(path2, "utf8");
+    return readFileSync20(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -22018,7 +22114,7 @@ var recordsPayload = (records) => `${JSON.stringify({ records }, null, 2)}
 var emit3 = (payload, out) => {
   if (out === void 0) return payload;
   try {
-    writeFileSync14(out, payload);
+    writeFileSync15(out, payload);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot write --out: ${detail}`);
@@ -22168,8 +22264,8 @@ var register15 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync20, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename2, dirname as dirname7, isAbsolute as isAbsolute2, join as join11, relative as relative2, resolve as resolve15, sep as sep3 } from "node:path";
+import { readFileSync as readFileSync21, realpathSync as realpathSync3 } from "node:fs";
+import { basename as basename3, dirname as dirname8, isAbsolute as isAbsolute2, join as join12, relative as relative2, resolve as resolve16, sep as sep3 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash7 } from "node:crypto";
@@ -22516,7 +22612,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync20(0, "utf8");
+    return readFileSync21(0, "utf8");
   } catch {
     return "";
   }
@@ -22539,17 +22635,17 @@ var repositoryRoot2 = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve15(target);
+  const absolute = resolve16(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
     try {
       const real = realpathSync3(current);
-      return tail.length === 0 ? real : join11(real, ...tail);
+      return tail.length === 0 ? real : join12(real, ...tail);
     } catch {
-      const parent = dirname7(current);
+      const parent = dirname8(current);
       if (parent === current) return absolute;
-      tail.unshift(basename2(current));
+      tail.unshift(basename3(current));
       current = parent;
     }
   }
@@ -22570,7 +22666,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot2(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve15(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve16(cwd, raw));
   const scoped = relative2(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep3}`) || isAbsolute2(scoped)) {
@@ -22701,7 +22797,7 @@ var register16 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve16, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve17, sep as sep4 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -30021,7 +30117,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve17) => setTimeout(resolve17, pollInterval));
+        await new Promise((resolve18) => setTimeout(resolve18, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -30038,7 +30134,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve17, reject2) => {
+    return new Promise((resolve18, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -30116,7 +30212,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve17(parseResult.data);
+            resolve18(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -30377,12 +30473,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve17, reject2) => {
+    return new Promise((resolve18, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve17, interval);
+      const timeoutId = setTimeout(resolve18, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -31252,12 +31348,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve17) => {
+    return new Promise((resolve18) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve17();
+        resolve18();
       } else {
-        this._stdout.once("drain", resolve17);
+        this._stdout.once("drain", resolve18);
       }
     });
   }
@@ -31828,7 +31924,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve16(root, raw);
+  const resolved = resolve17(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep4}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -32042,7 +32138,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve16(opts.cwd ?? process.cwd());
+  const root = resolve17(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -32247,11 +32343,11 @@ var register19 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync21, writeFileSync as writeFileSync15 } from "node:fs";
+import { readFileSync as readFileSync22, writeFileSync as writeFileSync16 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
-var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
 var usageError = (message) => ({
@@ -32288,16 +32384,16 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync21(path2, "utf8");
+    return readFileSync22(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync15(path2, text);
+    writeFileSync16(path2, text);
   } catch (error2) {
-    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf6(error2)}`);
+    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var runSquashPreserve = (input = {}) => {
@@ -32316,7 +32412,7 @@ var runSquashPreserve = (input = {}) => {
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
   } catch (error2) {
-    return usageError(messageOf6(error2));
+    return usageError(messageOf7(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
@@ -32345,7 +32441,7 @@ var runSquashPreserve = (input = {}) => {
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf6(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf7(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -32432,7 +32528,7 @@ var register21 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync22 } from "node:fs";
+import { readFileSync as readFileSync23 } from "node:fs";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -32450,7 +32546,7 @@ ${USAGE2}
   secrets: [],
   checks: []
 });
-var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
 var CONTINUATION = /^[ \t]/;
@@ -32631,16 +32727,16 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync22(path2, "utf8");
+    return readFileSync23(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync22(0, "utf8");
+    return readFileSync23(0, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read the commit message from stdin: ${messageOf7(error2)}`);
+    throw new Error(`cannot read the commit message from stdin: ${messageOf8(error2)}`);
   }
 };
 var collectSources2 = (input, cwd) => {
@@ -32786,7 +32882,7 @@ var checkReferences = (input, sources, cwd) => {
       check: {
         class: "reference",
         status: "not-checked",
-        reason: `repository scan failed: ${firstLine5(messageOf7(error2))}`
+        reason: `repository scan failed: ${firstLine5(messageOf8(error2))}`
       },
       violations: []
     };
@@ -32838,7 +32934,7 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
-    return usageError2(messageOf7(error2));
+    return usageError2(messageOf8(error2));
   }
   const references = checkReferences(input, sources, cwd);
   const alreadyReported = new Set(shapeViolations.map(violationIdentity));
@@ -32915,15 +33011,31 @@ var register22 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { existsSync as existsSync18, readFileSync as readFileSync23, rmSync as rmSync4, writeFileSync as writeFileSync16 } from "node:fs";
+import { spawnSync as spawnSync4 } from "node:child_process";
+import { existsSync as existsSync19, readFileSync as readFileSync24, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
 import { homedir } from "node:os";
-import { join as join12 } from "node:path";
+import { join as join13 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
-  { agent: "codex", homeRelativePath: [".codex", "config.toml"], format: "toml-mcp_servers" },
-  { agent: "gemini-cli", homeRelativePath: [".gemini", "settings.json"], format: "json-mcpServers" },
-  { agent: "cursor", homeRelativePath: [".cursor", "mcp.json"], format: "json-mcpServers" },
+  {
+    agent: "codex",
+    homeRelativePath: [".codex", "config.toml"],
+    format: "toml-mcp_servers",
+    registration: "cli-or-config-fallback"
+  },
+  {
+    agent: "gemini-cli",
+    homeRelativePath: [".gemini", "settings.json"],
+    format: "json-mcpServers",
+    registration: "config-file"
+  },
+  {
+    agent: "cursor",
+    homeRelativePath: [".cursor", "mcp.json"],
+    format: "json-mcpServers",
+    registration: "config-file"
+  },
   // Windsurf, under Codeium's config directory. Absent from the ticket's
   // measured inventory, which lists four configs; both installers write five.
   // The bidirectional assertion found it, which is the reason that assertion
@@ -32931,12 +33043,14 @@ var AGENT_CONFIGS = [
   {
     agent: "windsurf",
     homeRelativePath: [".codeium", "windsurf", "mcp_config.json"],
-    format: "json-mcpServers"
+    format: "json-mcpServers",
+    registration: "config-file"
   },
   {
     agent: "opencode",
     homeRelativePath: [".config", "opencode", "opencode.json"],
-    format: "json-mcp"
+    format: "json-mcp",
+    registration: "config-file"
   }
 ];
 var SERVER_KEY = "commitlore";
@@ -32978,25 +33092,40 @@ var withoutTomlBlock = (contents, wrapper) => {
   if (from > 0 && (lines[from - 1] ?? "x").trim() === "") from -= 1;
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
+var listCodexMcp = (command) => {
+  const listed = spawnSync4(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  if (listed.error?.code === "ENOENT") {
+    return { state: "absent", servers: [] };
+  }
+  if (listed.error !== void 0 || listed.status !== 0) return { state: "unavailable", servers: [] };
+  try {
+    const parsed = JSON.parse(listed.stdout);
+    if (!Array.isArray(parsed)) return { state: "invalid", servers: [] };
+    return { state: "listed", servers: parsed.filter(isRecord2) };
+  } catch {
+    return { state: "invalid", servers: [] };
+  }
+};
+var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
   const home = options.home ?? homedir();
-  const dataHome = options.dataHome ?? join12(home, ".local", "share");
+  const dataHome = options.dataHome ?? join13(home, ".local", "share");
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
   const removed = [];
   const kept = [];
-  const wrapper = join12(home, ".local", "bin", "commitlore");
-  if (existsSync18(wrapper)) {
+  const wrapper = join13(home, ".local", "bin", "commitlore");
+  if (existsSync19(wrapper)) {
     const contents = (() => {
       try {
-        return readFileSync23(wrapper, "utf8");
+        return readFileSync24(wrapper, "utf8");
       } catch {
         return "";
       }
     })();
     if (contents.includes(WRAPPER_MARKER)) {
-      if (!dryRun) rmSync4(wrapper, { force: true });
+      if (!dryRun) rmSync5(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
     } else {
@@ -33004,18 +33133,49 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
   }
-  const dataRoot = join12(dataHome, "commitlore");
-  if (existsSync18(dataRoot)) {
-    if (!dryRun) rmSync4(dataRoot, { recursive: true, force: true });
+  const dataRoot = join13(dataHome, "commitlore");
+  if (existsSync19(dataRoot)) {
+    if (!dryRun) rmSync5(dataRoot, { recursive: true, force: true });
     removed.push(dataRoot);
     report.push(`${say}: ${dataRoot}`);
   }
+  const codexConfig = AGENT_CONFIGS.find((config2) => config2.agent === "codex");
+  const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
+  const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
+  if (codexConfig !== void 0 && codexList !== null) {
+    const path2 = join13(home, ...codexConfig.homeRelativePath);
+    if (codexList.state === "unavailable" || codexList.state === "invalid") {
+      kept.push(path2);
+      report.push(`kept: ${path2} \u2014 codex mcp list could not verify its entry, so the config was left untouched`);
+    } else if (codexList.state === "listed") {
+      const named = codexList.servers.find((server) => server.name === SERVER_KEY);
+      if (named !== void 0 && !isInstalledCodexServer(named, wrapper)) {
+        kept.push(path2);
+        report.push(`kept: ${path2} \u2014 its ${SERVER_KEY} server is not this install, so codex mcp remove was not called`);
+      } else if (named !== void 0) {
+        if (dryRun) {
+          removed.push(`${path2} (${SERVER_KEY} entry)`);
+          report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+        } else {
+          const removedByCli = spawnSync4(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          if (removedByCli.error === void 0 && removedByCli.status === 0) {
+            removed.push(`${path2} (${SERVER_KEY} entry)`);
+            report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+          } else {
+            kept.push(path2);
+            report.push(`kept: ${path2} \u2014 codex mcp remove could not remove its entry, so the config was left untouched`);
+          }
+        }
+      }
+    }
+  }
   for (const config2 of AGENT_CONFIGS) {
-    const path2 = join12(home, ...config2.homeRelativePath);
-    if (!existsSync18(path2)) continue;
+    if (config2.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
+    const path2 = join13(home, ...config2.homeRelativePath);
+    if (!existsSync19(path2)) continue;
     let contents;
     try {
-      contents = readFileSync23(path2, "utf8");
+      contents = readFileSync24(path2, "utf8");
     } catch {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
@@ -33024,7 +33184,7 @@ var runUninstall = async (options = {}) => {
     if (config2.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync16(path2, next2);
+      if (!dryRun) writeFileSync17(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
       continue;
@@ -33039,7 +33199,7 @@ var runUninstall = async (options = {}) => {
     }
     const next = withoutJsonEntry(parsed, config2.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync16(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync17(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -33069,11 +33229,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync24(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync25(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync24(STDIN_FD2, "utf8");
+  return readFileSync25(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {

@@ -43,6 +43,7 @@ import { type PostCommitHookResult } from '../hooks/post-commit.js';
 import { type PrePushHookResult } from '../hooks/pre-push.js';
 import { type TrustSeedResult } from '../core/trusted-authors.js';
 import { type McpRegistrationResult } from '../core/mcp-registration.js';
+import { type AgentsGuidanceResult } from '../core/agents-guidance.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
@@ -73,7 +74,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
@@ -88,6 +89,10 @@ interface PolicyStepDetail {
     unattended: boolean | null;
     /** The named reason when the step could not leave a clean state behind. */
     error: string | null;
+}
+interface AgentIntegrationStepDetail {
+    readonly guidance: AgentsGuidanceResult;
+    readonly claude: ClaudeHookResult;
 }
 export interface InitReport {
     steps: InitStep[];
@@ -109,7 +114,7 @@ export interface InitReport {
  * Order of execution:
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
- * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
+ * 3. Agent integration — refreshes AGENTS.md and wires the Claude PreToolUse hook
  * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
  * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
  * 6. Doctor (final check) — verifies everything is working

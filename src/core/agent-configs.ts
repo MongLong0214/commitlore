@@ -1,7 +1,9 @@
 /**
- * Where each coding agent keeps its MCP config, and what `install.sh` and
- * `install.ps1` wrote into it. `commitlore uninstall` reads this to decide what
- * it may remove; nothing else in `src/` knows these paths.
+ * Where each coding agent keeps its MCP config. `install.sh` and `install.ps1`
+ * use Codex's own MCP CLI when it exists; that CLI owns the write but persists
+ * the same Codex config that the installers edit only as their CLI-absent
+ * fallback. `commitlore uninstall` reads this table to decide what it may
+ * remove; nothing else in `src/` knows these paths.
  *
  * One table, because two copies of this knowledge drift apart without failing:
  * an installer grows an agent the uninstall never learns about and the entry is
@@ -18,18 +20,37 @@
  */
 export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp';
 
+/** Which interface owns registration for this config. */
+export type RegistrationPath = 'cli-or-config-fallback' | 'config-file';
+
 export interface AgentConfig {
   /** The name the installers report this agent by. */
   readonly agent: string;
   /** Path segments below the user's home directory. */
   readonly homeRelativePath: readonly string[];
   readonly format: ConfigFormat;
+  readonly registration: RegistrationPath;
 }
 
 export const AGENT_CONFIGS: readonly AgentConfig[] = [
-  { agent: 'codex', homeRelativePath: ['.codex', 'config.toml'], format: 'toml-mcp_servers' },
-  { agent: 'gemini-cli', homeRelativePath: ['.gemini', 'settings.json'], format: 'json-mcpServers' },
-  { agent: 'cursor', homeRelativePath: ['.cursor', 'mcp.json'], format: 'json-mcpServers' },
+  {
+    agent: 'codex',
+    homeRelativePath: ['.codex', 'config.toml'],
+    format: 'toml-mcp_servers',
+    registration: 'cli-or-config-fallback',
+  },
+  {
+    agent: 'gemini-cli',
+    homeRelativePath: ['.gemini', 'settings.json'],
+    format: 'json-mcpServers',
+    registration: 'config-file',
+  },
+  {
+    agent: 'cursor',
+    homeRelativePath: ['.cursor', 'mcp.json'],
+    format: 'json-mcpServers',
+    registration: 'config-file',
+  },
   // Windsurf, under Codeium's config directory. Absent from the ticket's
   // measured inventory, which lists four configs; both installers write five.
   // The bidirectional assertion found it, which is the reason that assertion
@@ -38,11 +59,13 @@ export const AGENT_CONFIGS: readonly AgentConfig[] = [
     agent: 'windsurf',
     homeRelativePath: ['.codeium', 'windsurf', 'mcp_config.json'],
     format: 'json-mcpServers',
+    registration: 'config-file',
   },
   {
     agent: 'opencode',
     homeRelativePath: ['.config', 'opencode', 'opencode.json'],
     format: 'json-mcp',
+    registration: 'config-file',
   },
 ];
 

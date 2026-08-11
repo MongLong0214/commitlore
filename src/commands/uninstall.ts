@@ -15,6 +15,7 @@
  *   cache belongs to Claude Code. Both are named, neither is touched.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +32,8 @@ export interface UninstallOptions {
   /** `XDG_DATA_HOME`, when the installer honoured it. */
   readonly dataHome?: string;
   readonly dryRun?: boolean;
+  /** Test seam for a Codex CLI executable; ordinary invocations use `codex`. */
+  readonly codexCommand?: string;
 }
 
 export interface UninstallResult {
@@ -94,6 +97,49 @@ const withoutTomlBlock = (contents: string, wrapper: string): string | null => {
   return [...lines.slice(0, from), ...lines.slice(end)].join('\n');
 };
 
+interface CodexMcpServer {
+  readonly name?: unknown;
+  readonly transport?: {
+    readonly type?: unknown;
+    readonly command?: unknown;
+    readonly args?: unknown;
+  };
+}
+
+interface CodexMcpListResult {
+  readonly state: 'absent' | 'unavailable' | 'listed' | 'invalid';
+  readonly servers: readonly CodexMcpServer[];
+}
+
+/**
+ * Codex owns its config format, so use its CLI to remove an entry it recognises.
+ * The explicit shape check preserves uninstall's central restraint: a user can
+ * independently name another server `commitlore`, and `mcp remove` alone has
+ * no way to distinguish that server from the one this installer registered.
+ */
+const listCodexMcp = (command: string): CodexMcpListResult => {
+  const listed = spawnSync(command, ['mcp', 'list', '--json'], { encoding: 'utf8' });
+  if ((listed.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+    return { state: 'absent', servers: [] };
+  }
+  if (listed.error !== undefined || listed.status !== 0) return { state: 'unavailable', servers: [] };
+  try {
+    const parsed: unknown = JSON.parse(listed.stdout);
+    if (!Array.isArray(parsed)) return { state: 'invalid', servers: [] };
+    return { state: 'listed', servers: parsed.filter(isRecord) as CodexMcpServer[] };
+  } catch {
+    return { state: 'invalid', servers: [] };
+  }
+};
+
+const isInstalledCodexServer = (server: CodexMcpServer, wrapper: string): boolean =>
+  server.name === SERVER_KEY &&
+  server.transport?.type === 'stdio' &&
+  server.transport.command === wrapper &&
+  Array.isArray(server.transport.args) &&
+  server.transport.args.length === 1 &&
+  server.transport.args[0] === 'mcp';
+
 export const runUninstall = async (options: UninstallOptions = {}): Promise<UninstallResult> => {
   const home = options.home ?? homedir();
   const dataHome = options.dataHome ?? join(home, '.local', 'share');
@@ -130,7 +176,42 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
     report.push(`${say}: ${dataRoot}`);
   }
 
+  const codexConfig = AGENT_CONFIGS.find((config) => config.agent === 'codex');
+  // `home` is an in-process test seam, not an alternate Codex home. A real
+  // invocation has no `home` option and therefore lets Codex select and edit
+  // its own config. Tests can opt into the same path with `codexCommand`.
+  const codexCommand = options.codexCommand ?? (options.home === undefined ? 'codex' : undefined);
+  const codexList = codexCommand === undefined ? null : listCodexMcp(codexCommand);
+  if (codexConfig !== undefined && codexList !== null) {
+    const path = join(home, ...codexConfig.homeRelativePath);
+    if (codexList.state === 'unavailable' || codexList.state === 'invalid') {
+      kept.push(path);
+      report.push(`kept: ${path} — codex mcp list could not verify its entry, so the config was left untouched`);
+    } else if (codexList.state === 'listed') {
+      const named = codexList.servers.find((server) => server.name === SERVER_KEY);
+      if (named !== undefined && !isInstalledCodexServer(named, wrapper)) {
+        kept.push(path);
+        report.push(`kept: ${path} — its ${SERVER_KEY} server is not this install, so codex mcp remove was not called`);
+      } else if (named !== undefined) {
+        if (dryRun) {
+          removed.push(`${path} (${SERVER_KEY} entry)`);
+          report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+        } else {
+          const removedByCli = spawnSync(codexCommand!, ['mcp', 'remove', SERVER_KEY], { encoding: 'utf8' });
+          if (removedByCli.error === undefined && removedByCli.status === 0) {
+            removed.push(`${path} (${SERVER_KEY} entry)`);
+            report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+          } else {
+            kept.push(path);
+            report.push(`kept: ${path} — codex mcp remove could not remove its entry, so the config was left untouched`);
+          }
+        }
+      }
+    }
+  }
+
   for (const config of AGENT_CONFIGS) {
+    if (config.agent === 'codex' && codexList !== null && codexList.state !== 'absent') continue;
     const path = join(home, ...config.homeRelativePath);
     if (!existsSync(path)) continue;
     let contents: string;

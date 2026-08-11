@@ -20,6 +20,8 @@ export interface UninstallOptions {
     /** `XDG_DATA_HOME`, when the installer honoured it. */
     readonly dataHome?: string;
     readonly dryRun?: boolean;
+    /** Test seam for a Codex CLI executable; ordinary invocations use `codex`. */
+    readonly codexCommand?: string;
 }
 export interface UninstallResult {
     readonly exitCode: number;

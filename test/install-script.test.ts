@@ -78,7 +78,11 @@ beforeAll(() => {
 });
 
 /** A PATH holding a shell and the tools the case wants, and nothing else. */
-const stubPath = (opts: { node?: 'current' | 'old' | 'absent'; git?: boolean }): string => {
+const stubPath = (opts: {
+  node?: 'current' | 'old' | 'absent';
+  git?: boolean;
+  codex?: 'mcp-success';
+}): string => {
   const bin = tempDir('bin');
   if (opts.node === 'current') {
     writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec ${process.execPath} "$@"\n`);
@@ -97,6 +101,20 @@ const stubPath = (opts: { node?: 'current' | 'old' | 'absent'; git?: boolean }):
     writeFileSync(join(bin, 'git'), `#!/bin/sh\nexec ${realGit} "$@"\n`);
   }
   chmodSync(join(bin, 'git'), 0o755);
+  if (opts.codex === 'mcp-success') {
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!/bin/sh
+printf '%s\\n' "$*" >>"$COMMITLORE_CODEX_CALLS"
+case "$1:$2" in
+  mcp:list) printf '[]\\n' ;;
+  mcp:add) exit 0 ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(join(bin, 'codex'), 0o755);
+  }
   return `${bin}:/usr/bin:/bin`;
 };
 
@@ -115,12 +133,13 @@ const runInstaller = (opts: {
   home?: string;
   extraEnv?: Record<string, string>;
   args?: string[];
+  codex?: 'mcp-success';
 }): RunResult => {
   const home = opts.home ?? tempDir('home');
   const run = spawnSync('/bin/sh', [INSTALLER, ...(opts.args ?? [TAG])], {
     encoding: 'utf8',
     env: {
-      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git }),
+      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex }),
       HOME: home,
       COMMITLORE_INSTALL_SOURCE: sourceRepo,
       ...(opts.extraEnv ?? {}),
@@ -196,6 +215,37 @@ describe('T-1120 a successful install produces a checkout and a thin wrapper', (
     for (const rc of ['.bashrc', '.zshrc', '.profile', '.bash_profile']) {
       expect(existsSync(join(r.home, rc)), `${rc} must not be created`).toBe(false);
     }
+  });
+});
+
+describe('Codex MCP registration uses the owning CLI when it is available', () => {
+  it('registers through codex mcp list and add, without hand-writing its config', () => {
+    const home = tempDir('codex-cli-home');
+    const calls = join(tempDir('codex-cli-calls'), 'calls.txt');
+
+    const result = runInstaller({
+      home,
+      codex: 'mcp-success',
+      extraEnv: { COMMITLORE_CODEX_CALLS: calls },
+    });
+
+    expect(result.status).toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain('registered commitlore with codex mcp add');
+    expect(readFileSync(calls, 'utf8')).toContain('mcp list --json');
+    expect(readFileSync(calls, 'utf8')).toContain('mcp add commitlore --');
+    expect(existsSync(join(home, '.codex', 'config.toml'))).toBe(false);
+  });
+
+  it('uses the config-file fallback only when an existing Codex home has no CLI', () => {
+    const home = tempDir('codex-fallback-home');
+    mkdirSync(join(home, '.codex'), { recursive: true });
+
+    const result = runInstaller({ home });
+    const config = join(home, '.codex', 'config.toml');
+
+    expect(result.status).toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain('config-file fallback; codex CLI is unavailable');
+    expect(readFileSync(config, 'utf8')).toContain('[mcp_servers.commitlore]');
   });
 });
 

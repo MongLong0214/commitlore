@@ -1,3 +1,4 @@
+<!-- commitlore:begin -->
 # Working in a repository that uses CommitLore
 
 This file is read by coding agents that follow the `AGENTS.md` convention —
@@ -52,10 +53,35 @@ evidence is a legitimate reason to revisit a decision, and "I forgot" is not.
 A record can be superseded or expired. Anything you are shown has already had
 those filtered out, so what reaches you is active.
 
-## When you make a decision worth keeping
+## Before you commit a decision
 
-Write it into the commit message as trailers. Bottom of the message, after a
-blank line:
+After staging a change that embodies a decision the diff cannot recover — a
+constraint, rejected alternative, warning, or verification gap — capture it
+from the session transcript before committing:
+
+1. **Prepare.** Call `commitlore_prepare_capture { transcript }` with the
+   relevant conversation in the words actually exchanged. It returns a nonce
+   and the drafting contract.
+2. **Verify.** Draft only what that contract permits, then call
+   `commitlore_verify_capture { nonce, draft, transcript, diff }`, where
+   `diff` is the staged `git diff --cached` bytes. Use only what verification
+   accepts.
+3. **Stage.** Call `commitlore_stage_capture { nonce }`. If it reports no
+   staged record, leave it alone.
+4. **Commit normally.** Write the ordinary message only; the
+   `prepare-commit-msg` hook attaches the staged record.
+
+Rules:
+
+- A record with no `evidence` citing the transcript is discarded.
+- A trailer whose claim the transcript does not support is discarded.
+- Drop the trailer; never invent a citation. A record that says more than the
+  conversation supports is worse than no record.
+
+## The record vocabulary
+
+The capture prompt gives the full vocabulary. It is included here for reading
+records and the manual fallback; do not paste this block into a captured commit.
 
 ```
 Ruled-out: <alternative> | <why it lost>
@@ -71,7 +97,8 @@ Only `Ruled-out:` requires the `|` separator. Every key is optional — a commit
 with no record is a commit that recorded nothing, which is fine and correct for
 a typo fix. Noise costs more than it returns.
 
-`commitlore validate --message-file <file>` checks a message before it lands, and
-exits non-zero with a structured reason if the vocabulary is wrong.
+`commitlore validate --message-file <file>` checks a message before it lands,
+and exits non-zero with a structured reason if the vocabulary is wrong.
 
 Full vocabulary: `spec/SPEC.md` §3.
+<!-- commitlore:end -->
