@@ -70,6 +70,27 @@ const cursorConfig = (wrapper: string): string =>
     2,
   )}\n`;
 
+/** Hermes keeps YAML comments and unrelated settings intact on removal. */
+const hermesConfig = (wrapper: string, skillsDir: string): string =>
+  [
+    'approvals:',
+    '  deny:',
+    '    - "*git push*--force*"',
+    'mcp_servers:',
+    '  commitlore:',
+    `    command: ${JSON.stringify(wrapper)}`,
+    '    args:',
+    '      - mcp',
+    '    enabled: true',
+    '  other:',
+    '    command: other-mcp',
+    'skills:',
+    '  external_dirs:',
+    `    - ${JSON.stringify(skillsDir)}`,
+    '    - "/operator/skills"',
+    '',
+  ].join('\n');
+
 describe('T-1123 uninstall removes what the installer wrote', () => {
   it('removes the wrapper, the checkout and our entry', async () => {
     const h = makeHome();
@@ -139,6 +160,24 @@ describe('T-1123 uninstall removes what the installer wrote', () => {
     expect(readFileSync(path, 'utf8'), 'a config we could not parse was rewritten').toBe(broken);
     expect(result.report.join('\n')).toMatch(/could not|parse/i);
     expect(result.exitCode).toBe(0);
+  });
+
+  it('removes its Hermes YAML entries without rewriting operator policy or other servers', async () => {
+    const h = makeHome();
+    const path = h.path('.hermes', 'config.yaml');
+    const skillsDir = join(h.checkout, 'hermes', 'skills');
+    const before = hermesConfig(h.wrapper, skillsDir);
+    write(path, before);
+
+    const result = await runUninstall({ home: h.home });
+    const after = readFileSync(path, 'utf8');
+
+    expect(result.removed.join('\n')).toContain('.hermes');
+    expect(after).toContain('    - "*git push*--force*"');
+    expect(after).toContain('  other:\n    command: other-mcp');
+    expect(after).toContain('    - "/operator/skills"');
+    expect(after).not.toContain(h.wrapper);
+    expect(after).not.toContain(skillsDir);
   });
 });
 

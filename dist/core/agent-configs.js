@@ -30,6 +30,12 @@ export const AGENT_CONFIGS = [
         format: 'json-mcpServers',
         registration: 'config-file',
     },
+    {
+        agent: 'hermes',
+        homeRelativePath: ['.hermes', 'config.yaml'],
+        format: 'yaml-mcp_servers',
+        registration: 'config-file',
+    },
     // Windsurf, under Codeium's config directory. Absent from the ticket's
     // measured inventory, which lists four configs; both installers write five.
     // The bidirectional assertion found it, which is the reason that assertion
@@ -67,7 +73,8 @@ export const isCommitloreEntry = (format, entry, wrapperPath) => {
         const command = entry['command'];
         return (Array.isArray(command) && command.length === 2 && command[0] === wrapperPath && command[1] === 'mcp');
     }
-    // { command: <wrapper>, args: ["mcp"] }
+    // { command: <wrapper>, args: ["mcp"] } — TOML, JSON mcpServers and
+    // Hermes' YAML mcp_servers spell this common server shape the same way.
     const args = entry['args'];
     return (entry['command'] === wrapperPath &&
         Array.isArray(args) &&

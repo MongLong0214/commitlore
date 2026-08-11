@@ -13,12 +13,12 @@
  */
 
 /**
- * The three shapes the installers write. They are not interchangeable: opencode
+ * The four shapes the installers write. They are not interchangeable: opencode
  * nests under `mcp` and spells the command as an array, so a recogniser written
  * for `mcpServers` alone leaves an opencode entry behind — silently, because a
  * removal that finds nothing looks exactly like a removal with nothing to do.
  */
-export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp';
+export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp' | 'yaml-mcp_servers';
 
 /** Which interface owns registration for this config. */
 export type RegistrationPath = 'cli-or-config-fallback' | 'config-file';
@@ -49,6 +49,12 @@ export const AGENT_CONFIGS: readonly AgentConfig[] = [
     agent: 'cursor',
     homeRelativePath: ['.cursor', 'mcp.json'],
     format: 'json-mcpServers',
+    registration: 'config-file',
+  },
+  {
+    agent: 'hermes',
+    homeRelativePath: ['.hermes', 'config.yaml'],
+    format: 'yaml-mcp_servers',
     registration: 'config-file',
   },
   // Windsurf, under Codeium's config directory. Absent from the ticket's
@@ -99,7 +105,8 @@ export const isCommitloreEntry = (
     );
   }
 
-  // { command: <wrapper>, args: ["mcp"] }
+  // { command: <wrapper>, args: ["mcp"] } — TOML, JSON mcpServers and
+  // Hermes' YAML mcp_servers spell this common server shape the same way.
   const args = entry['args'];
   return (
     entry['command'] === wrapperPath &&

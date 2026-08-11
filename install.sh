@@ -272,6 +272,10 @@ esac
 # opencode is the one exception to *that*: its config key is `mcp`, not
 # `mcpServers`, and its `command` is an argv array rather than
 # command+args -- see its own comment below.
+# Hermes is the other exception: its active profile is YAML at
+# `$HOME/.hermes/config.yaml`, and its externally owned skills are declared
+# beside that MCP block. `commitlore hermes install` owns the surgical YAML
+# edit so the two platform installers cannot drift on what uninstall removes.
 
 log ""
 log "Detecting coding agents..."
@@ -417,6 +421,19 @@ wire_cursor() { wire_mcp_servers_json "cursor" "$HOME/.cursor/mcp.json"; }
 has_windsurf() { command -v windsurf >/dev/null 2>&1 || [ -d "$HOME/.codeium/windsurf" ] || [ -d "/Applications/Windsurf.app" ]; }
 wire_windsurf() { wire_mcp_servers_json "windsurf" "$HOME/.codeium/windsurf/mcp_config.json"; }
 
+# Hermes -- its active profile reads `mcp_servers` and `skills.external_dirs`
+# from YAML. The helper backs up an existing config before a byte-preserving
+# edit, then verifies a fresh Hermes process when the executable is on PATH.
+has_hermes() { command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ]; }
+wire_hermes() {
+  config_path="$HOME/.hermes/config.yaml"
+  if "$dest" hermes install --config "$config_path" --command "$dest" --data-root "$data_root" --verify; then
+    record_wired "hermes: configured MCP and the installed CommitLore skill bundle in $config_path"
+  else
+    record_skipped "hermes" "host setup could not finish; its existing config was left intact where it could not be edited safely"
+  fi
+}
+
 # opencode -- different shape from the rest: the key is `mcp`, not
 # `mcpServers`, and `command` is an argv array alongside a `type`/`enabled`
 # pair. https://opencode.ai/docs/mcp-servers/ (config path: https://opencode.ai/docs/config/)
@@ -475,6 +492,7 @@ for spec in \
   "Gemini CLI:has_gemini:wire_gemini" \
   "Cursor:has_cursor:wire_cursor" \
   "Windsurf:has_windsurf:wire_windsurf" \
+  "Hermes:has_hermes:wire_hermes" \
   "opencode:has_opencode:wire_opencode"; do
   agent_name="${spec%%:*}"
   agent_rest="${spec#*:}"

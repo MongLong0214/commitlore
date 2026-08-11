@@ -29,12 +29,14 @@ const ps1 = (): string => readFileSync(join(REPO_ROOT, 'install.ps1'), 'utf8');
 
 describe('T-1123 the config table names every agent both installers wire', () => {
   it('covers every agent the installers wire, and nothing else', () => {
-    // Five, not the four the ticket's measured inventory lists. Both installers
-    // wire Windsurf, and the bidirectional assertion below is what found it.
+    // Six, not the four the ticket's measured inventory lists. Both installers
+    // wire Windsurf and Hermes, and the bidirectional assertion below is what
+    // finds this kind of silent installer/uninstall disagreement.
     expect(AGENT_CONFIGS.map((c) => c.agent).sort()).toEqual([
       'codex',
       'cursor',
       'gemini-cli',
+      'hermes',
       'opencode',
       'windsurf',
     ]);
@@ -61,7 +63,7 @@ describe('T-1123 the config table names every agent both installers wire', () =>
   });
 
   it('knows about every config path the shell installer writes', () => {
-    const written = [...sh().matchAll(/\$HOME\/((?:\.|config\/)[\w./-]*\.(?:toml|json))/g)].map(
+    const written = [...sh().matchAll(/\$HOME\/((?:\.|config\/)[\w./-]*\.(?:toml|json|yaml))/g)].map(
       (m) => m[1],
     );
     expect(written.length, 'no config paths found in install.sh — the pattern went stale').toBeGreaterThan(0);
@@ -85,6 +87,7 @@ describe('T-1123 an entry is recognised by its shape, not by its name', () => {
     const written: Record<string, unknown> = {
       'toml-mcp_servers': { command: WRAPPER, args: ['mcp'] },
       'json-mcpServers': { command: WRAPPER, args: ['mcp'] },
+      'yaml-mcp_servers': { command: WRAPPER, args: ['mcp'], enabled: true },
       // opencode's shape is its own: the command is an array, and there are two
       // more keys. A recogniser written only for the shape above silently leaves
       // this one behind.
@@ -125,5 +128,14 @@ describe('T-1123 an entry is recognised by its shape, not by its name', () => {
     expect(
       isCommitloreEntry('json-mcpServers', { command: WRAPPER, args: ['mcp'] }, '/opt/other/commitlore'),
     ).toBe(false);
+  });
+
+  it('dispatches Hermes through the shared host command in both installers', () => {
+    // The YAML updater has to preserve comments and unrelated operator policy,
+    // so it lives in the CLI rather than growing two subtly different parsers.
+    // This is still bidirectional: deleting either dispatch leaves the table
+    // describing a config its corresponding installer never writes.
+    expect(sh()).toContain('hermes install --config "$config_path" --command "$dest" --data-root "$data_root" --verify');
+    expect(ps1()).toContain('hermes install --config $hermesConfig --command $dest --data-root $dataRoot --verify');
   });
 });

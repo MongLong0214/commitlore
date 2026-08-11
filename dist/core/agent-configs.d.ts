@@ -12,12 +12,12 @@
  * asserts this against both installers in both directions.
  */
 /**
- * The three shapes the installers write. They are not interchangeable: opencode
+ * The four shapes the installers write. They are not interchangeable: opencode
  * nests under `mcp` and spells the command as an array, so a recogniser written
  * for `mcpServers` alone leaves an opencode entry behind — silently, because a
  * removal that finds nothing looks exactly like a removal with nothing to do.
  */
-export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp';
+export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp' | 'yaml-mcp_servers';
 /** Which interface owns registration for this config. */
 export type RegistrationPath = 'cli-or-config-fallback' | 'config-file';
 export interface AgentConfig {
