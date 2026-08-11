@@ -515,6 +515,20 @@ if (Test-AgentPresent 'codex' @((Join-Path $home_ '.codex'))) {
             }
         }
     }
+
+# Codex's plugin API owns the plugin cache and marketplace. The packaged plugin
+# supplies its own MCP server and capture skill, while the marker lets uninstall
+# remove only the plugin this installer placed.
+    $ok = $false
+    try {
+        & $dest plugin install-codex > $null 2>&1
+        $ok = ($LASTEXITCODE -eq 0)
+    } catch { $ok = $false }
+    if ($ok) {
+        Add-Wired 'codex: installed the commitlore plugin (marketplace: commitlore)'
+    } else {
+        Add-Skipped 'codex' "could not install the commitlore plugin -- run manually: $dest plugin install-codex"
+    }
 } else {
     $notFound.Add('Codex') | Out-Null
 }

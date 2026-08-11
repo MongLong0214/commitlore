@@ -87,9 +87,10 @@ interface MarketplaceManifest {
 }
 
 describe('plugin manifest: every declared file parses in a clean clone', () => {
-  it.each([
+ it.each([
     '.claude-plugin/plugin.json',
     '.claude-plugin/marketplace.json',
+    '.codex-plugin/plugin.json',
     '.mcp.json',
     'hooks/hooks.json',
     'package.json',
@@ -100,8 +101,8 @@ describe('plugin manifest: every declared file parses in a clean clone', () => {
 });
 
 describe('plugin manifest: version matches package.json', () => {
-  it('plugin.json declares the same version as package.json', () => {
-    const manifest = readJson(clonePath('.claude-plugin/plugin.json')) as PluginManifest;
+  it.each(['.claude-plugin/plugin.json', '.codex-plugin/plugin.json'])('%s declares the same version as package.json', (relPath) => {
+    const manifest = readJson(clonePath(relPath)) as PluginManifest;
     const pkg = readJson(clonePath('package.json')) as { version?: unknown };
     expect(manifest.version).toBe(pkg.version);
   });
@@ -149,6 +150,8 @@ describe('plugin manifest: declared and conventional paths exist in a clean clon
   // silently remove from a real clone while staying invisible in the
   // working tree.
   it.each([
+    '.codex-plugin/plugin.json',
+    'skills/commitlore-codex/SKILL.md',
     'hooks/hooks.json',
     '.mcp.json',
     'dist/commitlore.mjs',
@@ -166,6 +169,22 @@ describe('plugin manifest: entry points are runnable from a clean clone', () => 
     });
     expect(run.status).toBe(0);
     expect(run.stdout.trim()).toBe(manifest.version);
+  });
+
+  it('the Codex MCP declaration resolves the plugin-local bundle', () => {
+    const manifest = readJson(clonePath('.codex-plugin/plugin.json')) as PluginManifest;
+    const mcp = readJson(clonePath('.mcp.json')) as {
+      mcpServers: { commitlore: { command: string; args: string[]; cwd: string } };
+    };
+    const server = mcp.mcpServers.commitlore;
+    const run = spawnSync(server.command, [server.args[0]!, '--version'], {
+      cwd: clonePath(server.cwd),
+      encoding: 'utf8',
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout.trim()).toBe(manifest.version);
+    expect(manifest.mcpServers).toBe('./.mcp.json');
   });
 
   it('scripts/commitlore-run.sh resolves the plugin entry point via CLAUDE_PLUGIN_ROOT', () => {

@@ -64,9 +64,17 @@ you want it to work.
 
 That is the whole plugin: the MCP server, the pre-edit hook and the skills. It puts no `commitlore` on `PATH`, so the `commitlore …` commands below come from `install.sh` / `install.ps1` and need that install as well.
 
-**Codex** — install the CommitLore plugin, then use the same repository setup
-below. Its plugin supplies both delivery and capture; the CLI below provides
-the repository commands.
+**Codex** — install the native plugin with one command:
+
+```bash
+commitlore plugin install-codex
+```
+
+It registers the marketplace and plugin through Codex's own CLI, never by
+editing its configuration or cache, and the install script below runs the same
+command when it finds Codex. Start a new Codex session afterwards: the plugin's
+skill and MCP server are loaded at session start, not on install. The CLI below
+provides the repository commands.
 
 Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
 

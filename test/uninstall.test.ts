@@ -210,6 +210,63 @@ esac
   });
 });
 
+describe('Codex plugin removal uses the owning CLI only with an ownership marker', () => {
+  it('removes the Codex plugin through Codex only when its ownership marker is present', async () => {
+    const h = makeHome();
+    const marker = h.path('.local', 'share', 'commitlore', 'codex-plugin.json');
+    write(
+      marker,
+      `${JSON.stringify(
+        {
+          version: 1,
+          selector: 'commitlore@commitlore',
+          source: 'MongLong0214/commitlore',
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const calls: string[][] = [];
+
+    const result = await runUninstall({
+      home: h.home,
+      runCodex: (args) => {
+        calls.push([...args]);
+        return args.join(' ') === 'plugin list'
+          ? {
+              status: 0,
+              stdout: 'PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/plugin\n',
+              stderr: '',
+            }
+          : { status: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(calls).toEqual([
+      ['plugin', 'list'],
+      ['plugin', 'remove', 'commitlore@commitlore'],
+    ]);
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(h.checkout)).toBe(false);
+    expect(result.report.join('\n')).toContain('removed: Codex plugin commitlore@commitlore');
+  });
+
+  it('keeps its checkout marker when Codex cannot confirm plugin removal', async () => {
+    const h = makeHome();
+    const marker = h.path('.local', 'share', 'commitlore', 'codex-plugin.json');
+    write(marker, '{"version":1,"selector":"commitlore@commitlore","source":"MongLong0214/commitlore"}\n');
+
+    const result = await runUninstall({
+      home: h.home,
+      runCodex: () => ({ status: 2, stdout: '', stderr: '' }),
+    });
+
+    expect(existsSync(marker)).toBe(true);
+    expect(existsSync(h.checkout)).toBe(true);
+    expect(result.report.join('\n')).toContain('Codex could not list installed plugins');
+  });
+});
+
 describe('T-1123 uninstall is safe to repeat and safe to rehearse', () => {
   it('--dry-run changes nothing', async () => {
     const h = makeHome();

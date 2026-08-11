@@ -35,8 +35,9 @@
 #
 # A second phase runs after the wrapper is in place (see "detect and wire
 # coding agents" below): it looks for which coding agents are on this machine
-# and registers commitlore's MCP server with each one it finds. That phase
-# never fails the script.
+# and registers CommitLore with each one it finds. Codex receives its native
+# plugin (including the MCP server and skill); other hosts receive an MCP entry.
+# That phase never fails the script.
 set -eu
 
 REPO="MongLong0214/commitlore"
@@ -363,7 +364,7 @@ wire_claude_code() {
 # TOML while the CLI is present invites drift when Codex changes its format.
 # https://developers.openai.com/codex/mcp
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
-wire_codex() {
+wire_codex_mcp() {
   if command -v codex >/dev/null 2>&1; then
     codex_servers="$(codex mcp list --json 2>/dev/null || true)"
     case "$codex_servers" in
@@ -404,6 +405,22 @@ wire_codex() {
       record_skipped "codex" "could not write $config_path"
     fi
   fi
+}
+
+# Codex's plugin API owns the plugin cache and marketplace. The packaged plugin
+# supplies its own MCP server and capture skill, while the marker lets uninstall
+# remove only the plugin this installer placed.
+wire_codex_plugin() {
+  if "$dest" plugin install-codex >/dev/null 2>&1; then
+    record_wired "codex: installed the commitlore plugin (marketplace: commitlore)"
+  else
+    record_skipped "codex" "could not install the commitlore plugin -- run manually: $dest plugin install-codex"
+  fi
+}
+
+wire_codex() {
+  wire_codex_mcp
+  wire_codex_plugin
 }
 
 # Gemini CLI -- same mcpServers shape as Claude Desktop.

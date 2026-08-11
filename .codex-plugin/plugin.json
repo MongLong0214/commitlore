@@ -1,0 +1,44 @@
+{
+  "name": "commitlore",
+  "version": "0.7.1",
+  "description": "Decision memory from Git history, with verified capture for coding sessions.",
+  "author": {
+    "name": "MongLong0214",
+    "url": "https://github.com/MongLong0214"
+  },
+  "homepage": "https://github.com/MongLong0214/commitlore#readme",
+  "repository": "https://github.com/MongLong0214/commitlore",
+  "license": "MIT",
+  "keywords": [
+    "git",
+    "trailers",
+    "decisions",
+    "memory",
+    "context",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CommitLore",
+    "shortDescription": "Preserve verified engineering decisions in Git",
+    "longDescription": "CommitLore gives Codex decision context from Git history and a verified capture route for constraints, ruled-out alternatives, and warnings that a diff cannot retain.",
+    "developerName": "MongLong0214",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/MongLong0214/commitlore",
+    "privacyPolicyURL": "https://github.com/MongLong0214/commitlore/blob/dev/LICENSE",
+    "termsOfServiceURL": "https://github.com/MongLong0214/commitlore/blob/dev/LICENSE",
+    "defaultPrompt": [
+      "Read the decision context for the files I am about to change",
+      "Capture the decision behind this commit with verified evidence",
+      "Check whether this implementation approach was already ruled out"
+    ],
+    "brandColor": "#0F766E",
+    "screenshots": []
+  }
+}

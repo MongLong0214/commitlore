@@ -7720,7 +7720,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync26 } from "node:fs";
+import { readFileSync as readFileSync27 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -9452,14 +9452,14 @@ Expecting one of '${allowedValues.join("', '")}'`);
    * @return {Command} `this` command for chaining
    * @private
    */
-  _optionEx(config2, flags, description, fn, defaultValue) {
+  _optionEx(config3, flags, description, fn, defaultValue) {
     if (typeof flags === "object" && flags instanceof Option) {
       throw new Error(
         "To add an Option object use addOption() instead of option() or requiredOption()"
       );
     }
     const option = this.createOption(flags, description);
-    option.makeOptionMandatory(!!config2.mandatory);
+    option.makeOptionMandatory(!!config3.mandatory);
     if (typeof fn === "function") {
       option.default(defaultValue).argParser(fn);
     } else if (fn instanceof RegExp) {
@@ -10445,9 +10445,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
       this._outputConfiguration.writeErr("\n");
       this.outputHelp({ error: true });
     }
-    const config2 = errorOptions || {};
-    const exitCode = config2.exitCode || 1;
-    const code = config2.code || "commander.error";
+    const config3 = errorOptions || {};
+    const exitCode = config3.exitCode || 1;
+    const code = config3.code || "commander.error";
     this._exit(exitCode, code, message);
   }
   /**
@@ -23815,8 +23815,8 @@ function prefixIssues(path2, issues) {
 function unwrapMessage(message) {
   return typeof message === "string" ? message : message?.message;
 }
-function finalizeIssue(iss, ctx, config2) {
-  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+function finalizeIssue(iss, ctx, config3) {
+  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config3.customError?.(iss)) ?? unwrapMessage(config3.localeError?.(iss)) ?? "Invalid input";
   const { inst: _inst, continue: _continue, input: _input, ...rest } = iss;
   rest.path ?? (rest.path = []);
   rest.message = message;
@@ -32695,8 +32695,210 @@ var register20 = (program3) => {
   });
 };
 
+// src/core/codex-plugin.ts
+import { spawnSync as spawnSync5 } from "node:child_process";
+import { existsSync as existsSync20, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join14 } from "node:path";
+
+// src/core/agent-configs.ts
+var AGENT_CONFIGS = [
+  {
+    kind: "mcp",
+    agent: "codex",
+    homeRelativePath: [".codex", "config.toml"],
+    format: "toml-mcp_servers",
+    registration: "cli-or-config-fallback"
+  },
+  {
+    kind: "codex-plugin",
+    agent: "codex",
+    marketplace: "commitlore",
+    plugin: "commitlore",
+    marketplaceSource: "MongLong0214/commitlore",
+    dataRelativePath: ["commitlore", "codex-plugin.json"]
+  },
+  {
+    kind: "mcp",
+    agent: "gemini-cli",
+    homeRelativePath: [".gemini", "settings.json"],
+    format: "json-mcpServers",
+    registration: "config-file"
+  },
+  {
+    kind: "mcp",
+    agent: "cursor",
+    homeRelativePath: [".cursor", "mcp.json"],
+    format: "json-mcpServers",
+    registration: "config-file"
+  },
+  {
+    kind: "mcp",
+    agent: "hermes",
+    homeRelativePath: [".hermes", "config.yaml"],
+    format: "yaml-mcp_servers",
+    registration: "config-file"
+  },
+  // Windsurf, under Codeium's config directory. Absent from the ticket's
+  // measured inventory, which lists four configs; both installers write five.
+  // The bidirectional assertion found it, which is the reason that assertion
+  // reads the installers instead of trusting a list.
+  {
+    kind: "mcp",
+    agent: "windsurf",
+    homeRelativePath: [".codeium", "windsurf", "mcp_config.json"],
+    format: "json-mcpServers",
+    registration: "config-file"
+  },
+  {
+    kind: "mcp",
+    agent: "opencode",
+    homeRelativePath: [".config", "opencode", "opencode.json"],
+    format: "json-mcp",
+    registration: "config-file"
+  }
+];
+var isMcpAgentConfig = (config3) => config3.kind === "mcp";
+var isCodexPluginConfig = (config3) => config3.kind === "codex-plugin";
+var SERVER_KEY = "commitlore";
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var isCommitloreEntry = (format, entry, wrapperPath) => {
+  if (!isRecord(entry)) return false;
+  if (format === "json-mcp") {
+    const command = entry["command"];
+    return Array.isArray(command) && command.length === 2 && command[0] === wrapperPath && command[1] === "mcp";
+  }
+  const args = entry["args"];
+  return entry["command"] === wrapperPath && Array.isArray(args) && args.length === 1 && args[0] === "mcp";
+};
+
+// src/core/codex-plugin.ts
+var MARKER_VERSION = 1;
+var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join14(homedir2(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join14(homedir2(), ".local", "share");
+var runCodexCommand = (args) => {
+  const result = spawnSync5("codex", args, { encoding: "utf8", timeout: 3e4 });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    ...result.error === void 0 ? {} : { error: result.error }
+  };
+};
+var config2 = () => {
+  const found = AGENT_CONFIGS.find(isCodexPluginConfig);
+  if (found === void 0) throw new Error("Codex plugin installation is missing from the agent configuration table");
+  return found;
+};
+var codexPluginSelector = (plugin = config2()) => `${plugin.plugin}@${plugin.marketplace}`;
+var codexPluginInstallCommand = () => "commitlore plugin install-codex";
+var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join14(dataHome, ...plugin.dataRelativePath);
+var successful = (result) => result.status === 0 && result.error === void 0;
+var marketplaceIsConfigured = (output, plugin) => output.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `));
+var codexPluginIsInstalled = (output, plugin = config2()) => output.split("\n").some((line2) => line2.trim().startsWith(codexPluginSelector(plugin)) && line2.includes("installed,"));
+var markerFor = (plugin) => ({
+  version: MARKER_VERSION,
+  selector: codexPluginSelector(plugin),
+  source: plugin.marketplaceSource
+});
+var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
+  const markerPath = codexPluginMarkerPath(plugin, dataHome);
+  if (!existsSync20(markerPath)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync23(markerPath, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const marker = parsed;
+    const expected = markerFor(plugin);
+    return marker.version === expected.version && marker.selector === expected.selector && marker.source === expected.source ? expected : null;
+  } catch {
+    return null;
+  }
+};
+var removeCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
+  rmSync5(codexPluginMarkerPath(plugin, dataHome), { force: true });
+};
+var writeCodexPluginMarker = (plugin, dataHome) => {
+  const markerPath = codexPluginMarkerPath(plugin, dataHome);
+  mkdirSync11(join14(markerPath, ".."), { recursive: true });
+  writeFileSync17(markerPath, `${JSON.stringify(markerFor(plugin), null, 2)}
+`);
+};
+var installCodexPlugin = (options = {}) => {
+  const plugin = config2();
+  const dataHome = options.dataHome ?? defaultDataHome();
+  const run = options.run ?? runCodexCommand;
+  const report = [];
+  const marketplaces = run(["plugin", "marketplace", "list"]);
+  if (!successful(marketplaces)) {
+    return {
+      exitCode: 2,
+      report: [
+        "could not list Codex plugin marketplaces; no plugin installation was recorded",
+        `retry with: ${codexPluginInstallCommand()}`
+      ]
+    };
+  }
+  if (!marketplaceIsConfigured(marketplaces.stdout, plugin)) {
+    const added = run(["plugin", "marketplace", "add", plugin.marketplaceSource]);
+    if (!successful(added)) {
+      return {
+        exitCode: 2,
+        report: [
+          `could not add the ${plugin.marketplace} Codex marketplace; no plugin installation was recorded`,
+          `retry with: ${codexPluginInstallCommand()}`
+        ]
+      };
+    }
+    report.push(`configured Codex marketplace: ${plugin.marketplace}`);
+  }
+  const listed = run(["plugin", "list"]);
+  if (!successful(listed)) {
+    return {
+      exitCode: 2,
+      report: [
+        "could not list Codex plugins; no plugin installation was recorded",
+        `retry with: ${codexPluginInstallCommand()}`
+      ]
+    };
+  }
+  if (!codexPluginIsInstalled(listed.stdout, plugin)) {
+    const added = run(["plugin", "add", codexPluginSelector(plugin)]);
+    if (!successful(added)) {
+      return {
+        exitCode: 2,
+        report: [
+          `could not install ${codexPluginSelector(plugin)}; no plugin installation was recorded`,
+          `retry with: ${codexPluginInstallCommand()}`
+        ]
+      };
+    }
+    report.push(`installed Codex plugin: ${codexPluginSelector(plugin)}`);
+  } else {
+    report.push(`Codex plugin already installed: ${codexPluginSelector(plugin)}`);
+  }
+  writeCodexPluginMarker(plugin, dataHome);
+  report.push("start a new Codex session to load the CommitLore skill and MCP tools");
+  return { exitCode: 0, report };
+};
+
+// src/commands/plugin.ts
+var register21 = (program3) => {
+  const plugin = program3.command("plugin").description("manage CommitLore coding-agent plugins");
+  plugin.command("install-codex").description("install or repair the CommitLore Codex plugin through the Codex CLI").option("--print", "print the one command instead of running it").addHelpText(
+    "after",
+    "\nRegisters the CommitLore marketplace and installs commitlore@commitlore only when each is absent. It never edits Codex configuration or cache files directly. Exit codes: 0 installed or already installed, 2 Codex could not complete the operation."
+  ).action((options) => {
+    if (options.print === true) {
+      console.log(codexPluginInstallCommand());
+      return;
+    }
+    const result = installCodexPlugin();
+    for (const line2 of result.report) console.log(line2);
+    process.exitCode = result.exitCode;
+  });
+};
+
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync23, writeFileSync as writeFileSync17 } from "node:fs";
+import { readFileSync as readFileSync24, writeFileSync as writeFileSync18 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -32737,14 +32939,14 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync23(path2, "utf8");
+    return readFileSync24(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync17(path2, text);
+    writeFileSync18(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
@@ -32822,7 +33024,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register21 = (program3) => {
+var register22 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
@@ -32869,7 +33071,7 @@ var runSync = (options = {}) => {
 `
   };
 };
-var register22 = (program3) => {
+var register23 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
@@ -32881,7 +33083,7 @@ var register22 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync24 } from "node:fs";
+import { readFileSync as readFileSync25 } from "node:fs";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -33080,14 +33282,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync24(path2, "utf8");
+    return readFileSync25(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync24(0, "utf8");
+    return readFileSync25(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf8(error2)}`);
   }
@@ -33346,7 +33548,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register23 = (program3) => {
+var register24 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
@@ -33364,67 +33566,10 @@ var register23 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync5 } from "node:child_process";
-import { existsSync as existsSync20, readFileSync as readFileSync25, rmSync as rmSync5, writeFileSync as writeFileSync18 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { join as join14 } from "node:path";
-
-// src/core/agent-configs.ts
-var AGENT_CONFIGS = [
-  {
-    agent: "codex",
-    homeRelativePath: [".codex", "config.toml"],
-    format: "toml-mcp_servers",
-    registration: "cli-or-config-fallback"
-  },
-  {
-    agent: "gemini-cli",
-    homeRelativePath: [".gemini", "settings.json"],
-    format: "json-mcpServers",
-    registration: "config-file"
-  },
-  {
-    agent: "cursor",
-    homeRelativePath: [".cursor", "mcp.json"],
-    format: "json-mcpServers",
-    registration: "config-file"
-  },
-  {
-    agent: "hermes",
-    homeRelativePath: [".hermes", "config.yaml"],
-    format: "yaml-mcp_servers",
-    registration: "config-file"
-  },
-  // Windsurf, under Codeium's config directory. Absent from the ticket's
-  // measured inventory, which lists four configs; both installers write five.
-  // The bidirectional assertion found it, which is the reason that assertion
-  // reads the installers instead of trusting a list.
-  {
-    agent: "windsurf",
-    homeRelativePath: [".codeium", "windsurf", "mcp_config.json"],
-    format: "json-mcpServers",
-    registration: "config-file"
-  },
-  {
-    agent: "opencode",
-    homeRelativePath: [".config", "opencode", "opencode.json"],
-    format: "json-mcp",
-    registration: "config-file"
-  }
-];
-var SERVER_KEY = "commitlore";
-var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var isCommitloreEntry = (format, entry, wrapperPath) => {
-  if (!isRecord(entry)) return false;
-  if (format === "json-mcp") {
-    const command = entry["command"];
-    return Array.isArray(command) && command.length === 2 && command[0] === wrapperPath && command[1] === "mcp";
-  }
-  const args = entry["args"];
-  return entry["command"] === wrapperPath && Array.isArray(args) && args.length === 1 && args[0] === "mcp";
-};
-
-// src/commands/uninstall.ts
+import { spawnSync as spawnSync6 } from "node:child_process";
+import { existsSync as existsSync21, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join15 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
 var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var withoutJsonEntry = (parsed, format, wrapper) => {
@@ -33452,7 +33597,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync5(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync6(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -33467,24 +33612,25 @@ var listCodexMcp = (command) => {
 };
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
-  const home = options.home ?? homedir2();
-  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join14(home, "AppData", "Local") : join14(home, ".local", "share"));
+  const home = options.home ?? homedir3();
+  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join15(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join15(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
   const removed = [];
   const kept = [];
-  const wrapper = join14(home, ".local", "bin", "commitlore");
-  if (existsSync20(wrapper)) {
+  const runCodex = options.runCodex ?? runCodexCommand;
+  const wrapper = join15(home, ".local", "bin", "commitlore");
+  if (existsSync21(wrapper)) {
     const contents = (() => {
       try {
-        return readFileSync25(wrapper, "utf8");
+        return readFileSync26(wrapper, "utf8");
       } catch {
         return "";
       }
     })();
     if (contents.includes(WRAPPER_MARKER)) {
-      if (!dryRun) rmSync5(wrapper, { force: true });
+      if (!dryRun) rmSync6(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
     } else {
@@ -33492,17 +33638,60 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
   }
-  const dataRoot = join14(dataHome, "commitlore");
-  if (existsSync20(dataRoot)) {
-    if (!dryRun) rmSync5(dataRoot, { recursive: true, force: true });
-    removed.push(dataRoot);
-    report.push(`${say}: ${dataRoot}`);
+  let retainDataRoot = false;
+  for (const config3 of AGENT_CONFIGS.filter(isCodexPluginConfig)) {
+    const markerPath = codexPluginMarkerPath(config3, dataHome);
+    if (!existsSync21(markerPath)) continue;
+    if (readCodexPluginMarker(config3, dataHome) === null) {
+      retainDataRoot = true;
+      kept.push(markerPath);
+      report.push(`kept: ${markerPath} \u2014 it is not a CommitLore Codex-plugin marker`);
+      continue;
+    }
+    const selector = codexPluginSelector(config3);
+    if (dryRun) {
+      removed.push(`${selector} (Codex plugin)`);
+      report.push(`${say}: Codex plugin ${selector}`);
+      continue;
+    }
+    const listed = runCodex(["plugin", "list"]);
+    if (listed.status !== 0 || listed.error !== void 0) {
+      retainDataRoot = true;
+      kept.push(markerPath);
+      report.push(`kept: Codex plugin ${selector} \u2014 Codex could not list installed plugins`);
+      continue;
+    }
+    if (codexPluginIsInstalled(listed.stdout, config3)) {
+      const result = runCodex(["plugin", "remove", selector]);
+      if (result.status !== 0 || result.error !== void 0) {
+        retainDataRoot = true;
+        kept.push(markerPath);
+        report.push(`kept: Codex plugin ${selector} \u2014 Codex could not remove it`);
+        continue;
+      }
+      report.push(`removed: Codex plugin ${selector}`);
+    } else {
+      report.push(`Codex plugin already absent: ${selector}`);
+    }
+    removeCodexPluginMarker(config3, dataHome);
+    removed.push(`${selector} (Codex plugin)`);
   }
-  const codexConfig = AGENT_CONFIGS.find((config2) => config2.agent === "codex");
+  const dataRoot = join15(dataHome, "commitlore");
+  if (existsSync21(dataRoot)) {
+    if (retainDataRoot) {
+      kept.push(dataRoot);
+      report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
+    } else {
+      if (!dryRun) rmSync6(dataRoot, { recursive: true, force: true });
+      removed.push(dataRoot);
+      report.push(`${say}: ${dataRoot}`);
+    }
+  }
+  const codexConfig = AGENT_CONFIGS.filter(isMcpAgentConfig).find((config3) => config3.agent === "codex");
   const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
   const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
   if (codexConfig !== void 0 && codexList !== null) {
-    const path2 = join14(home, ...codexConfig.homeRelativePath);
+    const path2 = join15(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 codex mcp list could not verify its entry, so the config was left untouched`);
@@ -33516,7 +33705,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync5(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync6(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
@@ -33528,34 +33717,35 @@ var runUninstall = async (options = {}) => {
       }
     }
   }
-  for (const config2 of AGENT_CONFIGS) {
-    if (config2.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
-    const path2 = join14(home, ...config2.homeRelativePath);
-    if (!existsSync20(path2)) continue;
+  for (const config3 of AGENT_CONFIGS) {
+    if (!isMcpAgentConfig(config3)) continue;
+    if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
+    const path2 = join15(home, ...config3.homeRelativePath);
+    if (!existsSync21(path2)) continue;
     let contents;
     try {
-      contents = readFileSync25(path2, "utf8");
+      contents = readFileSync26(path2, "utf8");
     } catch {
       kept.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
       continue;
     }
-    if (config2.format === "toml-mcp_servers") {
+    if (config3.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync18(path2, next2);
+      if (!dryRun) writeFileSync19(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
       continue;
     }
-    if (config2.format === "yaml-mcp_servers") {
+    if (config3.format === "yaml-mcp_servers") {
       const next2 = removeHermesConfig(contents, {
-        wrapperPath: [wrapper, join14(dataRoot, "bin", "commitlore.cmd")],
+        wrapperPath: [wrapper, join15(dataRoot, "bin", "commitlore.cmd")],
         dataRoot,
         installedSkillsDir: installedPath("hermes", "skills")
       });
       if (next2.removed.length === 0) continue;
-      if (!dryRun) writeFileSync18(path2, next2.contents);
+      if (!dryRun) writeFileSync19(path2, next2.contents);
       removed.push(`${path2} (${next2.removed.join(" and ")} ${SERVER_KEY} entries)`);
       report.push(`${say}: the ${next2.removed.join(" and ")} ${SERVER_KEY} entries in ${path2}`);
       continue;
@@ -33568,9 +33758,9 @@ var runUninstall = async (options = {}) => {
       report.push(`kept: ${path2} \u2014 it could not be parsed as JSON, so it was left untouched`);
       continue;
     }
-    const next = withoutJsonEntry(parsed, config2.format, wrapper);
+    const next = withoutJsonEntry(parsed, config3.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync18(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync19(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -33580,6 +33770,7 @@ var runUninstall = async (options = {}) => {
   report.push("  per-repository hooks and index \u2014 run `commitlore hooks uninstall` in each repository");
   report.push("  the Claude Code agent hook \u2014 run `commitlore inject uninstall-claude-hook`");
   report.push("  the Claude Code plugin \u2014 remove it with `/plugin uninstall commitlore@commitlore`");
+  report.push("  a Codex plugin not installed by this command \u2014 remove it with `codex plugin remove commitlore@commitlore`");
   return {
     exitCode: 0,
     report,
@@ -33588,7 +33779,7 @@ var runUninstall = async (options = {}) => {
   };
 };
 var registerUninstall = (program3) => {
-  program3.command("uninstall").description("Remove what install.sh or install.ps1 wrote: the wrapper, the checkout and the MCP entries").option("--dry-run", "report what would be removed and change nothing").option("--json", "emit the result as JSON").action(async (options) => {
+  program3.command("uninstall").description("Remove what install.sh or install.ps1 wrote: the wrapper, checkout, agent entries and Codex plugin").option("--dry-run", "report what would be removed and change nothing").option("--json", "emit the result as JSON").action(async (options) => {
     const result = await runUninstall(options.dryRun === true ? { dryRun: true } : {});
     if (options.json === true) console.log(JSON.stringify(result.json, null, 2));
     else for (const line2 of result.report) console.log(line2);
@@ -33600,11 +33791,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync26(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync27(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync26(STDIN_FD2, "utf8");
+  return readFileSync27(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -33659,9 +33850,9 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register22(program2);
-register7(program2);
 register23(program2);
+register7(program2);
+register24(program2);
 registerUninstall(program2);
 register9(program2);
 register16(program2);
@@ -33673,7 +33864,7 @@ register2(program2);
 register12(program2);
 register14(program2);
 register15(program2);
-register21(program2);
+register22(program2);
 register8(program2);
 register6(program2);
 register13(program2);
@@ -33683,6 +33874,7 @@ register3(program2);
 register11(program2);
 register20(program2);
 register4(program2);
+register21(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
