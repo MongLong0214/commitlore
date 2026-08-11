@@ -13,7 +13,7 @@
     "product_commit", "dist_digest", "hook_proxy_sha256", "byte_identity_verified",
     "evaluator_image_digests", "analysis_source_digest", "bootstrap_seed", "calibrated_overhead",
     "qualification_manifest_sha256", "runtime_qualification_summary", "delivery_qualification_summary",
-    "claim_thresholds", "expected_logical_runs"
+    "claim_thresholds", "expected_logical_runs", "analysis_inputs"
   ],
   "properties": {
     "schema_version": { "const": 1 },
@@ -86,7 +86,22 @@
         "min_finite_replicates": { "const": 9900 }
       }
     },
-    "expected_logical_runs": { "const": 180 }
+    "expected_logical_runs": { "const": 180 },
+    "analysis_inputs": {
+      "description": "The complete analyzer matrix, named in the freeze rather than discovered from the result directory. Filenames are opaque so the public freeze does not reveal sealed task IDs (§18.2).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_files"],
+      "properties": {
+        "row_files": {
+          "type": "array",
+          "minItems": 180,
+          "maxItems": 180,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^rows/[a-z0-9][a-z0-9._-]*\\.json$" }
+        }
+      }
+    }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },

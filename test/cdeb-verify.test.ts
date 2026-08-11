@@ -162,6 +162,9 @@ const validFreeze = (overrides: Record<string, unknown> = {}): Record<string, un
     min_finite_replicates: 9900,
   },
   expected_logical_runs: 180,
+  analysis_inputs: {
+    row_files: Array.from({ length: 180 }, (_unused, index) => `rows/block-${String(index).padStart(3, '0')}.json`),
+  },
   ...overrides,
 });
 
