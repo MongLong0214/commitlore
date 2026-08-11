@@ -93,6 +93,14 @@ const computeGuardAdvisory = (opts: {
 export interface PrepareCaptureOptions {
   cwd: string;
   transcript: string;
+  /**
+   * Declare that this capture runs without asking: the pipeline prepares,
+   * verifies and stages it with no person in the loop (ADR-0030, #511).
+   * Refused unless the repository opted in — `.commitlore-policy.json` with
+   * `"unattended": true` and mode `auto` — because consent is a repository
+   * setting, not a caller's say-so.
+   */
+  unattended?: boolean;
 }
 
 /** A historical index snapshot supplied by the read-only shadow runner. */
@@ -152,6 +160,7 @@ const prepareValues = (opts: {
   snapshot?: HistoricalCaptureSnapshot;
   readOnly: boolean;
   skipGuard?: boolean;
+  unattended?: boolean;
 }): PreparedValues => {
   const { cwd, transcript, snapshot } = opts;
 
@@ -178,6 +187,21 @@ const prepareValues = (opts: {
   if (policy.policy.mode === 'off') {
     throw new Error(
       `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`,
+    );
+  }
+
+  // ADR-0030, #511. Declaring a capture unattended is claiming the repository
+  // consented to capture without asking; prepare is the one moment that can
+  // check the claim before anything is written. Refused without the consent —
+  // no pending file, nothing staged — the same shape as `off`'s refusal, for
+  // the same reason. The read-only shadow never declares unattended, so a
+  // repository's opt-in changes nothing about what shadow writes: nothing.
+  if (
+    opts.unattended === true &&
+    !(policy.policy.mode === 'auto' && policy.policy.unattended)
+  ) {
+    throw new Error(
+      `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`,
     );
   }
 
@@ -229,6 +253,7 @@ export const prepareCaptureContext = (opts: PrepareCaptureOptions): PrepareResul
     staged_tree_oid: prepared.staged_tree_oid,
     policy_identity_hash: prepared.policy_identity_hash,
     guard_advisory: prepared.guard_advisory,
+    ...(opts.unattended === true ? { unattended: true } : {}),
   });
 
   return {

@@ -15233,11 +15233,17 @@ import { join as join2 } from "node:path";
 var CAPTURE_MODES = ["auto", "suggest", "off"];
 var POLICY_DEFAULTS = {
   mode: "auto",
+  // Off by default and deliberately so: a repository that never set this must
+  // capture exactly as it did before the setting existed (#511). Turning it on
+  // is a separate decision with its own evidence — shipping the switch is not
+  // flipping it.
+  unattended: false,
   max_records_per_commit: 1,
   require_verified_evidence: true
 };
 var POLICY_KEYS = [
   "mode",
+  "unattended",
   "max_records_per_commit",
   "require_verified_evidence"
 ];
@@ -15295,6 +15301,20 @@ var validate = (raw) => {
       };
     }
     policy.max_records_per_commit = v;
+  }
+  if ("unattended" in obj) {
+    const v = obj.unattended;
+    if (typeof v !== "boolean") {
+      return {
+        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`
+      };
+    }
+    policy.unattended = v;
+  }
+  if (policy.unattended && policy.mode !== "auto") {
+    return {
+      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`
+    };
   }
   if ("require_verified_evidence" in obj) {
     const v = obj.require_verified_evidence;
@@ -15424,7 +15444,10 @@ var makePreparedPending = (opts) => {
     validation_result: null,
     overlap_check: null,
     incomplete: false,
-    guard_advisory: opts.guard_advisory ?? null
+    guard_advisory: opts.guard_advisory ?? null,
+    // Written only when true: the stored bytes of an ordinary capture must be
+    // exactly what they were before the setting existed (#511).
+    ...opts.unattended === true ? { unattended: true } : {}
   };
 };
 var createPending = (opts) => {
@@ -15620,6 +15643,11 @@ var prepareValues = (opts) => {
       `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
     );
   }
+  if (opts.unattended === true && !(policy.policy.mode === "auto" && policy.policy.unattended)) {
+    throw new Error(
+      `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
+    );
+  }
   const diffPaths = extractPathsFromDiff(diff);
   const advisory = opts.skipGuard === true ? null : computeGuardAdvisory({
     proposal: transcript,
@@ -15647,7 +15675,8 @@ var prepareCaptureContext = (opts) => {
     staged_diff_hash: prepared.staged_diff_hash,
     staged_tree_oid: prepared.staged_tree_oid,
     policy_identity_hash: prepared.policy_identity_hash,
-    guard_advisory: prepared.guard_advisory
+    guard_advisory: prepared.guard_advisory,
+    ...opts.unattended === true ? { unattended: true } : {}
   });
   return {
     nonce,
@@ -16592,7 +16621,11 @@ var runCapture = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
   const transcript = readFileSync6(transcriptPath, "utf8");
   const diff = diffPath ? readFileSync6(diffPath, "utf8") : execGitOrThrow(["diff", "--cached"], { cwd });
-  const prepareResult = prepareCaptureContext({ cwd, transcript });
+  const prepareResult = prepareCaptureContext({
+    cwd,
+    transcript,
+    ...opts.unattended === true ? { unattended: true } : {}
+  });
   if (prepareResult.policy_error !== null) {
     process.stderr.write(
       `commitlore capture: ${prepareResult.policy_error}
@@ -16652,7 +16685,10 @@ commitlore capture: the built-in defaults were used for this capture
 var register2 = (program3) => {
   const capture = program3.command("capture").description(
     "prepare \u2192 verify \u2192 stage a record from a transcript and draft (no trailer syntax needed)"
-  ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").action((options) => {
+  ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
+    "--unattended",
+    `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
+  ).action((options) => {
     if (options.shadow === true) {
       if (options.since === void 0) {
         process.stderr.write("error: required option '--since <rev>' not specified with --shadow\n");
@@ -16693,6 +16729,7 @@ var register2 = (program3) => {
       const runOpts = { transcriptPath: options.transcript, cwd };
       if (options.diff !== void 0) runOpts.diffPath = options.diff;
       if (options.draft !== void 0) runOpts.draftPath = options.draft;
+      if (options.unattended === true) runOpts.unattended = true;
       const result = runCapture(runOpts);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + "\n");
@@ -30963,6 +31000,10 @@ var TOOLS = [
         transcript: {
           type: "string",
           description: "the session transcript to compute source hashes from"
+        },
+        unattended: {
+          type: "boolean",
+          description: 'declare this capture unattended: nobody was asked before staging. Refused unless the repository opted in (.commitlore-policy.json: "unattended": true, mode "auto")'
         }
       },
       required: ["transcript"],
@@ -31036,6 +31077,12 @@ var stringArg = (args, name) => {
   if (typeof value !== "string") throw new Error(`${name} must be a string`);
   return value;
 };
+var booleanArg = (args, name) => {
+  const value = args[name];
+  if (value === void 0 || value === null) return void 0;
+  if (typeof value !== "boolean") throw new Error(`${name} must be a boolean`);
+  return value;
+};
 var requiredString = (args, name) => {
   const value = stringArg(args, name);
   if (value === void 0 || value.trim() === "") {
@@ -31097,7 +31144,12 @@ var createServer = (opts = {}) => {
     },
     [PREPARE_CAPTURE_TOOL]: (args) => {
       const transcript = requiredString(args, "transcript");
-      const result = prepareCaptureContext({ cwd: root, transcript });
+      const unattended = booleanArg(args, "unattended");
+      const result = prepareCaptureContext({
+        cwd: root,
+        transcript,
+        ...unattended === true ? { unattended: true } : {}
+      });
       return asText({
         nonce: result.nonce,
         base_head: result.base_head,

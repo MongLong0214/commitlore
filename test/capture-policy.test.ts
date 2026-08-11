@@ -273,3 +273,76 @@ describe('ADR-0030 capture modes', () => {
     rmSync(join(repo, POLICY_FILE_NAME), { force: true });
   });
 });
+
+/**
+ * #511: unattended capture is an opt-in. The switch lives with the capture
+ * policy (ADR-0030 decision 5, revised to default off), it is honoured in
+ * `auto` mode only, and a repository that never set it keeps the exact
+ * identity it had before the switch existed.
+ */
+describe('#511 unattended capture is an opt-in', () => {
+  it('is off unless a repository sets it', () => {
+    expect(resolvePolicy(repo).policy.unattended).toBe(false);
+  });
+
+  it('stays out of the default identity: a repository that never opted in keeps its digest', () => {
+    // The setting can only be turned on by a policy file, and a file's
+    // identity is its own bytes — so every identity the setting can change is
+    // hashed already. Putting a fixed-false default into the digest too would
+    // refuse every capture in flight across the upgrade in every repository
+    // that never opted in: a policy change that never happened, the exact
+    // false positive the hash exists to avoid.
+    expect(computePolicyIdentityHash({ ...POLICY_DEFAULTS, unattended: true })).toBe(
+      PINNED_DEFAULT_DIGEST,
+    );
+    expect(resolvePolicy(repo).identityHash).toBe(PINNED_DEFAULT_DIGEST);
+  });
+
+  it('accepts the opt-in from a policy file and hashes the file that carries it', () => {
+    const contents = `{ "mode": "auto", "unattended": true }\n`;
+    writeFileSync(join(repo, POLICY_FILE_NAME), contents);
+    const r = resolvePolicy(repo);
+    expect(r.error).toBeNull();
+    expect(r.policy.unattended).toBe(true);
+    expect(r.identityHash).toBe(createHash('sha256').update(contents).digest('hex'));
+    expect(r.identityHash).not.toBe(PINNED_DEFAULT_DIGEST);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  it('toggling the opt-in changes the identity the hook compares between stage and commit', () => {
+    writeFileSync(join(repo, POLICY_FILE_NAME), `{ "unattended": true }\n`);
+    const optedIn = resolvePolicy(repo).identityHash;
+    writeFileSync(join(repo, POLICY_FILE_NAME), `{ "unattended": false }\n`);
+    expect(resolvePolicy(repo).identityHash).not.toBe(optedIn);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  it('rejects a non-boolean opt-in', () => {
+    writeFileSync(join(repo, POLICY_FILE_NAME), `{ "unattended": "yes" }\n`);
+    const r = resolvePolicy(repo);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/unattended must be a boolean/);
+    expect(r.policy.unattended).toBe(false);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  it('rejects the opt-in outside auto mode, rather than ignoring it', () => {
+    for (const mode of ['suggest', 'off'] as const) {
+      writeFileSync(join(repo, POLICY_FILE_NAME), `{ "mode": "${mode}", "unattended": true }\n`);
+      const r = resolvePolicy(repo);
+      expect(r.ok, `mode ${mode} accepted the opt-in`).toBe(false);
+      expect(r.error).toMatch(/requires mode "auto"/);
+      expect(r.policy.unattended).toBe(false);
+    }
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+
+  it('accepts an explicit off beside a non-auto mode', () => {
+    writeFileSync(join(repo, POLICY_FILE_NAME), `{ "mode": "suggest", "unattended": false }\n`);
+    const r = resolvePolicy(repo);
+    expect(r.error).toBeNull();
+    expect(r.policy.mode).toBe('suggest');
+    expect(r.policy.unattended).toBe(false);
+    rmSync(join(repo, POLICY_FILE_NAME), { force: true });
+  });
+});

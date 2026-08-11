@@ -97,6 +97,16 @@ const prepareValues = (opts) => {
     if (policy.policy.mode === 'off') {
         throw new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`);
     }
+    // ADR-0030, #511. Declaring a capture unattended is claiming the repository
+    // consented to capture without asking; prepare is the one moment that can
+    // check the claim before anything is written. Refused without the consent —
+    // no pending file, nothing staged — the same shape as `off`'s refusal, for
+    // the same reason. The read-only shadow never declares unattended, so a
+    // repository's opt-in changes nothing about what shadow writes: nothing.
+    if (opts.unattended === true &&
+        !(policy.policy.mode === 'auto' && policy.policy.unattended)) {
+        throw new Error(`unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`);
+    }
     const diffPaths = extractPathsFromDiff(diff);
     const advisory = opts.skipGuard === true
         ? null
@@ -141,6 +151,7 @@ export const prepareCaptureContext = (opts) => {
         staged_tree_oid: prepared.staged_tree_oid,
         policy_identity_hash: prepared.policy_identity_hash,
         guard_advisory: prepared.guard_advisory,
+        ...(opts.unattended === true ? { unattended: true } : {}),
     });
     return {
         nonce,

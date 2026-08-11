@@ -57,6 +57,15 @@ export type CaptureMode = 'auto' | 'suggest' | 'off';
 export declare const CAPTURE_MODES: readonly CaptureMode[];
 export interface CapturePolicy {
     mode: CaptureMode;
+    /**
+     * Consent to capture without asking (ADR-0030, #511). Off unless a
+     * repository sets it, and honoured only in `auto` mode: `suggest` exists to
+     * ask, `off` captures nothing, and a consent neither mode can honour is a
+     * configuration error rather than a silent no-op. The declaration a capture
+     * makes against it is checked in `capture-prepare.ts`; the grading cap that
+     * keeps an unread record from directing lives in `grade.ts`.
+     */
+    unattended: boolean;
     max_records_per_commit: number;
     require_verified_evidence: boolean;
 }
@@ -68,7 +77,7 @@ export interface CapturePolicy {
  */
 export declare const POLICY_DEFAULTS: CapturePolicy;
 /** The only keys a policy file may set. An unknown key is rejected, not merged. */
-export declare const POLICY_KEYS: readonly ["mode", "max_records_per_commit", "require_verified_evidence"];
+export declare const POLICY_KEYS: readonly ["mode", "unattended", "max_records_per_commit", "require_verified_evidence"];
 /**
  * One location, deliberately. PRD-F13 requirement 11 allows either a stated
  * precedence between a repository-local and a user-global file, or a single
@@ -83,6 +92,14 @@ export declare const POLICY_FILE_NAME = ".commitlore-policy.json";
  * `JSON.stringify` over an object literal whose keys are declared in
  * `POLICY_DEFAULTS`' order — the exact expression the three former call sites
  * used, preserved so that consolidation is a no-op on the digest.
+ *
+ * `unattended` is deliberately absent (#511). The setting can only be turned
+ * on by a policy file, and a file's identity is its own bytes — so every
+ * identity the setting can change is hashed already. Putting a fixed-false
+ * default into this digest too would refuse every capture in flight across the
+ * upgrade in every repository that never opted in: a policy change that never
+ * happened, the exact false positive this hash exists to avoid. If the default
+ * ever becomes `true`, this input must move with it.
  */
 export declare const computePolicyIdentityHash: (policy?: CapturePolicy) => string;
 /**

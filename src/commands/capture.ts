@@ -22,6 +22,7 @@ import type { Command } from 'commander';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
+import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { runCaptureShadow, type CaptureShadowResult } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
 import { parseDraft, type DraftRejection } from '../core/harvest.js';
@@ -38,6 +39,7 @@ interface CaptureOptions {
   draft?: string;
   out?: string;
   json?: boolean;
+  unattended?: boolean;
   shadow?: boolean;
   since?: string;
 }
@@ -126,6 +128,11 @@ export const runCapture = (opts: {
   diffPath?: string;
   draftPath?: string;
   cwd: string;
+  /**
+   * Declare the whole run unattended (#511). Refused by prepare unless the
+   * repository opted in — the CLI never decides consent on its own.
+   */
+  unattended?: boolean;
 }): CaptureResult => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
 
@@ -141,7 +148,11 @@ export const runCapture = (opts: {
   const diff = diffPath ? readFileSync(diffPath, 'utf8') : execGitOrThrow(['diff', '--cached'], { cwd });
 
   // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
-  const prepareResult = prepareCaptureContext({ cwd, transcript });
+  const prepareResult = prepareCaptureContext({
+    cwd,
+    transcript,
+    ...(opts.unattended === true ? { unattended: true } : {}),
+  });
   if (prepareResult.policy_error !== null) {
     // The defaults ran. Say which policy actually applied rather than letting a
     // user assume their file did (T-1110, PRD-F13 requirement 10).
@@ -240,6 +251,11 @@ export const register = (program: Command): void => {
     .option('--shadow', 'measure historical capture candidates without writing anything')
     .option('--since <rev>', 'exclusive historical lower bound for --shadow')
     .option('--json', 'emit structured JSON output')
+    .option(
+      '--unattended',
+      'declare this capture unattended: prepared, verified and staged without asking. ' +
+        `Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`,
+    )
     .action((options: CaptureOptions) => {
       if (options.shadow === true) {
         if (options.since === undefined) {
@@ -281,9 +297,11 @@ export const register = (program: Command): void => {
           diffPath?: string;
           draftPath?: string;
           cwd: string;
+          unattended?: boolean;
         } = { transcriptPath: options.transcript, cwd };
         if (options.diff !== undefined) runOpts.diffPath = options.diff;
         if (options.draft !== undefined) runOpts.draftPath = options.draft;
+        if (options.unattended === true) runOpts.unattended = true;
 
         const result = runCapture(runOpts);
 

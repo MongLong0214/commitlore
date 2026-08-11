@@ -9,7 +9,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync, execFileSync } from 'node:child_process';
+import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 
 import { createTestRepo } from './git-fixtures.js';
@@ -364,6 +364,73 @@ describe('commitlore capture', () => {
       const staged = listStagedPending(cwd);
       expect(staged.length).toBe(1);
     });
+  });
+});
+
+describe('commitlore capture --unattended (#511)', () => {
+  it('is refused where the repository did not opt in, and stages nothing', () => {
+    const cwd = makeRepo();
+    const { transcriptPath, diffPath, draftPath } = makeFixtures(cwd);
+
+    // spawnSync rather than the execFileSync helper above: the refusal exits 0
+    // (capture never blocks) and names itself on stderr, which execFileSync
+    // only surfaces for a non-zero exit.
+    const result = spawnSync(
+      'node',
+      [
+        CLI,
+        'capture',
+        '--transcript',
+        transcriptPath,
+        '--diff',
+        diffPath,
+        '--draft',
+        draftPath,
+        '--unattended',
+      ],
+      { cwd, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } },
+    );
+
+    // Capture never blocks a commit: the refusal is named on stderr, exit 0,
+    // and nothing is staged or left behind.
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('unattended capture is off for this repository');
+    expect(result.stdout).not.toContain('staged:');
+    expect(listPending(cwd)).toEqual([]);
+  });
+
+  it('stages where the repository opted in, and records the declaration in the transaction', () => {
+    const cwd = makeRepo();
+    writeFileSync(join(cwd, '.commitlore-policy.json'), '{ "unattended": true }\n');
+    const { transcriptPath, diffPath, draftPath } = makeFixtures(cwd);
+
+    const result = runCapture(
+      [
+        '--transcript',
+        transcriptPath,
+        '--diff',
+        diffPath,
+        '--draft',
+        draftPath,
+        '--unattended',
+      ],
+      { cwd },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/^staged: [0-9a-f]{32}/);
+    const pendingFiles = listPending(cwd);
+    expect(pendingFiles.length).toBe(1);
+    const gitDir = execSync('git rev-parse --git-path commitlore/pending', {
+      cwd,
+      encoding: 'utf8',
+    }).trim();
+    const stored = JSON.parse(readFileSync(join(cwd, gitDir, pendingFiles[0]), 'utf8')) as {
+      unattended?: boolean;
+      phase: string;
+    };
+    expect(stored.unattended).toBe(true);
+    expect(stored.phase).toBe('staged');
   });
 });
 

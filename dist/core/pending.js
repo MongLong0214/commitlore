@@ -129,6 +129,9 @@ export const makePreparedPending = (opts) => {
         overlap_check: null,
         incomplete: false,
         guard_advisory: opts.guard_advisory ?? null,
+        // Written only when true: the stored bytes of an ordinary capture must be
+        // exactly what they were before the setting existed (#511).
+        ...(opts.unattended === true ? { unattended: true } : {}),
     };
 };
 /**
