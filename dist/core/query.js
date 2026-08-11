@@ -44,7 +44,7 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
-import { closeIndex, ensureIndex, queryTrailers, scanTrailers, } from './index-db.js';
+import { closeIndex, filterTrailers, openCurrentIndex, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
@@ -84,28 +84,45 @@ const normalizePaths = (opts) => {
     }
     return kept;
 };
-const scanSource = (cwd, diagnostics) => ({
-    fetch: (query) => scanTrailers(query, { cwd }),
-    fromIndex: false,
-    close: () => { },
-    diagnostics,
-});
+const scanSource = (cwd, diagnostics) => {
+    let rows;
+    let corpusPasses = 0;
+    return {
+        fetch: (query) => {
+            if (rows === undefined) {
+                // The lifecycle fold is repository-wide, so a correct no-index answer
+                // must inspect the whole history. Materialize it once, then apply each
+                // lifecycle/display alias predicate in memory; re-reading git for each
+                // fetch made a single path query parse that corpus repeatedly.
+                rows = scanTrailers({}, { cwd });
+                corpusPasses += 1;
+            }
+            return filterTrailers(rows, query);
+        },
+        fromIndex: false,
+        corpusPasses: () => corpusPasses,
+        close: () => { },
+        diagnostics,
+    };
+};
 /**
- * Opens the index, falling back to the scan path on any failure.
+ * Opens a current index, falling back to the scan path on any failure.
  *
- * The index is derived and disposable (ADR-0003), so a missing native module,
- * a read-only checkout, or a file this build cannot open are all reasons to
- * answer more slowly — never reasons to refuse to answer. The fallback is
- * reported, because "slower" and "wrong" must not look alike from the outside.
+ * The index is derived and disposable (ADR-0003), so a missing, stale or
+ * invalid file is not a reason to refuse an answer. Nor may it make a
+ * before-change query wait for an unbounded full rebuild: `index` and `init`
+ * own that work. The fallback is reported, because "slower" and "wrong" must
+ * not look alike from the outside.
  */
 const openSource = (cwd, noIndex) => {
     if (noIndex)
         return scanSource(cwd, []);
     try {
-        const { handle } = ensureIndex({ cwd });
+        const handle = openCurrentIndex({ cwd });
         return {
             fetch: (query) => queryTrailers(handle, query),
             fromIndex: true,
+            corpusPasses: () => 0,
             close: () => closeIndex(handle),
             diagnostics: [],
         };
@@ -588,11 +605,10 @@ export const runQuery = (opts = {}) => {
     if (Number.isNaN(cutoff))
         throw new Error('runQuery: opts.at is not a valid Date');
     const paths = normalizePaths(opts);
+    const scope = resolveScope(cwd, paths);
     const source = openSource(cwd, opts.noIndex === true);
-    const diagnostics = [...source.diagnostics];
+    const diagnostics = [...source.diagnostics, ...scope.diagnostics];
     try {
-        const scope = resolveScope(cwd, paths);
-        diagnostics.push(...scope.diagnostics);
         if (opts.explainEmptyResult === true)
             diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
         const states = foldStates(source, at, cutoff);
@@ -633,6 +649,7 @@ export const runQuery = (opts = {}) => {
             records: opts.limit === undefined ? records : records.slice(0, Math.max(0, Math.trunc(opts.limit))),
             fromIndex: source.fromIndex,
             scanned: commitRecords.length,
+            corpusPasses: source.corpusPasses(),
             at,
             paths,
             aliases: scope.aliases,

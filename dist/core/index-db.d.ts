@@ -213,6 +213,7 @@ export declare const rebuildIndex: (handle: IndexHandle, opts?: {
  */
 export declare const updateIndex: (handle: IndexHandle, opts?: {
     force?: boolean;
+    allowRebuild?: boolean;
 }) => IndexStats;
 /** Opens the index and brings it up to date. The one call a query command needs. */
 export declare const ensureIndex: (opts?: OpenIndexOptions) => {
@@ -220,11 +221,35 @@ export declare const ensureIndex: (opts?: OpenIndexOptions) => {
     stats: IndexStats;
 };
 /**
+ * Opens an index for a consumer query, catching it up but never rebuilding it.
+ *
+ * The distinction is the whole point of #522. An incremental update reads
+ * `last_indexed_sha..HEAD`, so its cost is the commits made since the last
+ * query — on a repository being worked in, a handful. A full rebuild reads the
+ * entire history: 186 seconds on a 21,000-commit repository, which a
+ * before-change hook cannot wait for and which a caller's timeout will kill,
+ * leaving the next edit to start cold again.
+ *
+ * So this refuses exactly the unbounded case and keeps the bounded one. Not
+ * catching up at all would be the same defect wearing different clothes: an
+ * index one commit behind would be unusable, and every query after every commit
+ * would fall back to reading the whole history — worse, in steady state, than
+ * what this set out to fix. The incremental range is always a subset of that
+ * history, so taking it is never the slower choice.
+ *
+ * Refusing is an error rather than a stale read. The caller falls back to git,
+ * which remains the authority, and no answer ever comes from a cache that
+ * missed a commit or a notes update.
+ */
+export declare const openCurrentIndex: (opts?: OpenIndexOptions) => IndexHandle;
+/**
  * Reads the index. Answers exactly what `scanTrailers` answers for the same
  * query — the SQL below is the fast spelling of the predicate in
  * `matchesQuery`, and `test/index-db.test.ts` holds the two to it.
  */
 export declare const queryTrailers: (handle: IndexHandle, query?: TrailerQuery) => IndexedTrailer[];
+/** Applies the scan path's predicate to already-materialized trailer rows. */
+export declare const filterTrailers: (trailers: readonly IndexedTrailer[], query?: TrailerQuery) => IndexedTrailer[];
 /**
  * Answers a query with no database at all, by walking `git rev-list` and
  * reading the same batched `git log` the indexer reads. Slower on a large

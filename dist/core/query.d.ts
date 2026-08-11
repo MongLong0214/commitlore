@@ -128,6 +128,8 @@ export interface QueryResult {
     fromIndex: boolean;
     /** Commit records read before filtering — what the answer was drawn from. */
     scanned: number;
+    /** Complete history scans attempted for this query; zero when the index answered. */
+    corpusPasses: number;
     /** The instant everything was evaluated against. */
     at: Date;
     /** The paths the caller asked for, normalized. */
