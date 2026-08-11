@@ -17,10 +17,11 @@
 **あなたのコーディングエージェントは、チームがすでに却下した案を何度も提案します。**
 
 CommitLore はその決定を Git に残し、ファイルを編集する前に、まだ有効なものだけを
-エージェントに渡します — **ホスティングサービスなしで、リポジトリの外へ 1 バイトも
-出すことなく**。
+エージェントに渡します。
 
-1,160 回の登録済み実行で、却下済みの案を再提案する割合は **18.8%** から **2.8%** になりました。エージェントが実際に見るものは、以下の例です。
+CommitLore にホスティングサービスはなく、record は Git に保管します。MCP サーバー
+または hook がコンテキストを返した後は、host が自身のポリシーでそのコンテキストを
+扱います。CommitLore はそのデータフローを制御しません。
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -29,11 +30,13 @@ CommitLore はその決定を Git に残し、ファイルを編集する前に�
 <details>
 <summary><strong>目次</strong></summary>
 
-- [一つの例で見る問題](#コードは残った決定は残らなかった)
 - [インストール](#インストール)
+- [エージェントが受け取るもの](#実際に動かす)
+- [自動になること、ならないこと](#自動になることならないこと)
 - [これが役に立たない場合](#これが役に立たない場合)
+- [一つの例で見る問題](#コードは残った決定は残らなかった)
 - [詳しく言うと何なのか](#詳しく言うと何なのか)
-- [実際に動かす](#実際に動かす)
+- [パス問い合わせを見る](#パス問い合わせを見る)
 - [このリポジトリ自体がデモ](#このリポジトリ自体がデモです)
 - [パス範囲と検索](#検索はレコードを見つけられるパス範囲は覆された意思決定を除外する)
 - [仕組み](#仕組み)
@@ -48,45 +51,9 @@ CommitLore はその決定を Git に残し、ファイルを編集する前に�
 
 </details>
 
-## コードは残った。決定は残らなかった。
-
-*同じ悪い案を二度レビューしない。*
-
-
-**CommitLore なしの場合。** 新しいセッションが入力の似た2つの関数を見て、一方を再利用します。
-
-```ts
-calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
-```
-
-チームにはフラグが1つ、ラッパーが1つ、そしてその関数が担うつもりのなかったユースケースを
-守る互換ブランチが1つ増えます。レビュアーは「それは既に却下した」と2度目を書きます。
-
-**CommitLore ありの場合。** 編集の前に、エージェントはこれを受け取ります:
-
-```
-commitlore: active records for src/pricing.ts
-
-Limit
-  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
-
-Ruled-out
-  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
-                                    and rounding semantics differ between the two flows
-```
-
-`[claim]` は実際に機能しています: この record はリポジトリの信頼された作成者が書いた
-ものではないため、エージェントは命令ではなく情報として扱うよう伝えられます。信頼された
-作成者による record は `[directive]` として描画されます。
-
-モジュール境界が、レビューコメントとして後から届くのではなく、エージェントが変更を提案する
-**前に**その目の前に置かれます。
-
-この数字が示さないことは、二つ下の節にある[これが役に立たない場合](#これが役に立たない場合)で説明しています。インストールした後ではなく、その前に読む価値があります。
-
 ## インストール
 
-一度インストールします。コーディングエージェントは引き継ぐ価値のある意思決定を記録でき、CommitLore はそれを検証して Git に保存します。
+一度インストールします。host integration を入れ、使うリポジトリを初期化します。
 
 **Claude Code** — プラグイン一つで MCP サーバー、編集前のコンテキストフック、スキルが登録されます:
 
@@ -97,6 +64,10 @@ Ruled-out
 
 プラグインが持つのはここまでで、MCP サーバー、編集前フック、スキルです。`commitlore` を `PATH` に置くことはないので、以下の `commitlore …` コマンドは `install.sh` / `install.ps1` から来るものであり、そのインストールも必要です。
 
+**Codex** — CommitLore plugin をインストールしてから、以下と同じ repository setup を
+行います。plugin が delivery と capture を提供し、下の CLI が repository command を
+提供します。
+
 どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
 
 **その他のコーディングエージェント** — CLI をインストールします:
@@ -105,13 +76,21 @@ Ruled-out
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
 ```
 
+**Hermes** — CLI をインストールした後、host integration を設定します:
+
+```bash
+commitlore hermes install
+```
+
 どの host に対応しているか、各インストール経路が何を必要とするか: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 **前のエージェントが得た判断を、次のエージェントに渡しましょう。**
 
 ### 次に、各リポジトリで
 
-検証フックとローカル index を使う各リポジトリで、続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを検出し、安全に可能な場所でローカル MCP server を登録します。
+検証フック、ローカル index、リポジトリ所有の agent procedure を使う各リポジトリで、
+続けて `commitlore init` を実行します。installer は対応するコーディングエージェントを
+検出し、安全に可能な場所でローカル MCP server を登録します。
 
 ```bash
 cd your-repository
@@ -123,8 +102,7 @@ commitlore context .
 
 - 普段どおりコミットします。ほとんどのコミットには record がありません。
 - record がある場合、commit-msg hook が検証します。record を作成することはありません。
-- エージェントは MCP で意思決定コンテキストを照会するか、`PreToolUse` hook から受け取ります。
-- path を変更する前に、active limit、ruled-out alternative、warning、verification gap を確認します。
+- delivery と capture は別の layer です。次の節で host ごとの二つの layer を正確に説明します。
 
 コーディングエージェントとの作業を続けます。変更に diff が保存できない意思決定コンテキストがあるときは、エージェントに CommitLore record をコミットへ含めるよう頼んでください。
 
@@ -145,7 +123,44 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+## 実際に動かす
 
+`src/pricing.ts` を編集する前に、エージェントは説明ではなく record そのものである
+この payload を受け取ります:
+
+```
+commitlore: active records for src/pricing.ts
+
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
+```
+
+`[claim]` には意味があります。この record はリポジトリの信頼された作成者が書いた
+ものではないため、エージェントは命令ではなく情報として評価するよう伝えられます。
+信頼された作成者による record は `[directive]` として描画されます。delivery は
+コンテキストを渡すものであり、編集を止めるものではありません。
+
+## 自動になること、ならないこと
+
+**Delivery** は path を編集する前に record がエージェントへ届くことです。
+**Capture** は決定が検証済みの commit-time flow に入れることです。二つは別の layer です:
+
+| Host | Delivery | Capture |
+|---|---|---|
+| Claude Code | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
+| Codex | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
+| Hermes | **はい — `commitlore hermes install`.** | **はい — `commitlore hermes install`.** |
+| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init` が編集前 delivery instruction を書きます。host が従う場合も従わない場合もあります。 | **procedure であり自動ではありません。** host が従う場合も従わない場合もあります。 |
+
+「はい」は layer がインストールされるという意味であり、すべての commit に record が
+付くという意味ではありません。自動 integration は最初の三行だけです。その他の
+`AGENTS.md` host では二つの手順は hook ではなく instruction です。host が capture を
+開始し、candidate が検証を通ってから commit hook が付加します。commit-msg hook は
+record があれば検証しますが、新しく作ることはありません。
 
 ## これが役に立たない場合
 
@@ -163,6 +178,33 @@ node commitlore/dist/commitlore.mjs --version
 - M4 は guard の効果を検証していません。row に `guard_exposure` がないため treatment exposure を検証できません: [#122](https://github.com/MongLong0214/commitlore/issues/122)。
 - Guard（ruled-out alternative matching）は実験的参考情報です: precision 44.8%（95% Wilson CI 32.7%–57.5%）、recall 22.0%、417-decision corpus 基準（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空の guard 結果は、提案がすべての ruled-out alternative を回避したという保証ではありません — recall 22% では、見逃しが一般的です。
 
+完全な方法、除外、arm ごとの truncation split は [bench/VERDICT-M5.md](bench/VERDICT-M5.md) と
+[示していないこと](docs/evidence.md) にあります。delivery の方法と retrieval の根拠は
+[bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md) にあります。
+
+## コードは残った。決定は残らなかった。
+
+*同じ悪い案を二度レビューしない。*
+
+**CommitLore なしの場合。** 新しいセッションが入力の似た2つの関数を見て、一方を再利用します。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+チームにはフラグが1つ、ラッパーが1つ、そしてその関数が担うつもりのなかったユースケースを
+守る互換ブランチが1つ増えます。レビュアーは「それは既に却下した」と2度目を書きます。
+
+**CommitLore ありの場合。** 編集の前に、エージェントは上で示した active record を
+受け取り、レビューコメントから再構成した指示を受け取るのではありません。
+
+モジュール境界が、レビューコメントとして後から届くのではなく、エージェントが変更を提案する
+**前に**その目の前に置かれます。
+
+1,160 回の登録済み実行で、却下済みの案を再提案する割合は **18.8%** から **2.8%**
+になりました。この数字が示さないことは、上の
+[これが役に立たない場合](#これが役に立たない場合)にあります。
+
 ## 詳しく言うと、何なのか
 
 **コーディングエージェントのための Git ネイティブな decision layer。**
@@ -178,9 +220,12 @@ CommitLore はその工学的判断を Git に保存し、次の編集の前に*
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有し、共に移動する、レビュー可能な意思決定コンテキストだけです。
+ホスト型メモリサービスも、ベンダー固有のチャット履歴もありません。リポジトリが所有する、
+レビュー可能な意思決定コンテキストだけです。commit trailer は commit と共に移動しますが、
+notes-backed record は通常の clone には来ません。Git は既定で `refs/notes/*` を
+fetch しないため、clone の後に notes fetch を構成する必要があります。
 
-## 実際に動かす
+## パス問い合わせを見る
 
 
 

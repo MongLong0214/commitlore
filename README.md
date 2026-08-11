@@ -16,11 +16,11 @@
 
 **Your coding agent keeps re-proposing things your team already rejected.**
 CommitLore keeps those decisions in Git and hands the agent the ones still in
-force, before it edits the file — **without a hosted service, and without a
-single byte leaving your repository**.
+force, before it edits the file.
 
-Across 1,160 registered runs, that took re-proposing a ruled-out approach from
-**18.8%** down to **2.8%**. The example below is what the agent actually sees.
+CommitLore has no hosted service; it keeps its records in Git. Once its MCP
+server or hook returns context, the host handles that context under its own
+policy; CommitLore does not control that data flow.
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -29,11 +29,13 @@ Across 1,160 registered runs, that took re-proposing a ruled-out approach from
 <details>
 <summary><strong>Contents</strong></summary>
 
-- [The problem, in one example](#the-code-survived-the-decision-didnt)
 - [Install](#install)
+- [What the agent receives](#see-it-work)
+- [What happens automatically](#what-happens-automatically-and-what-does-not)
 - [When this will not help you](#when-this-will-not-help-you)
+- [The problem, in one example](#the-code-survived-the-decision-didnt)
 - [What it is, in full](#what-it-is-in-full)
-- [See it work](#see-it-work)
+- [A path query](#see-a-path-query)
 - [This repository as its own demo](#the-repository-is-the-demo)
 - [Path scope vs. retrieval](#retrieval-can-find-records-path-scope-keeps-reversed-decisions-out)
 - [How it works](#how-it-works)
@@ -48,67 +50,10 @@ Across 1,160 registered runs, that took re-proposing a ruled-out approach from
 
 </details>
 
-## The code survived. The decision didn't.
-
-*Stop re-reviewing the same bad idea.*
-
-
-**Without CommitLore.** A new session sees two functions with similar inputs and
-reuses one.
-
-```ts
-calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
-```
-
-The team now has another flag, another wrapper, and another compatibility branch
-protecting a use case the function was never meant to own. The reviewer writes
-"we already rejected this" for the second time.
-
-**With CommitLore.** Before editing, the agent receives:
-
-```
-commitlore: active records for src/pricing.ts
-
-Limit
-  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
-
-Ruled-out
-  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
-                                    and rounding semantics differ between the two flows
-```
-
-`[claim]` is doing real work: this record was not written by a trusted author of
-the repository, so the agent is told to treat it as information rather than as an
-order. A record that *was* signed by a trusted author renders as `[directive]`.
-
-The module boundary is in front of the agent before it proposes the change,
-rather than in a review comment after.
-
-**Whether it acts on that is now measured.** Across 1,160 registered runs, an
-agent handed the repository's active records re-proposed a ruled-out approach in
-**2.8%** of them (16/580). Without them: **18.8%** (109/579).
-
-| arm | re-proposed a ruled-out approach |
-|---|---:|
-| the agent alone | **18.8%** (109/579) |
-| **with CommitLore** | **2.8%** (16/580) |
-
-**The threshold was registered before the run**, and the preregistration
-predicted a *smaller* effect than it got — that prediction, with its stated
-probabilities, is in
-[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2, and it was
-wrong. The significance test, the interval and the registered threshold are in
-[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here: a statistic
-retyped into prose drifts from the log that produced it, and this repository
-gates against exactly that (`scripts/check-readme-numbers.mjs`).
-
-What that number does **not** show is two sections down, under
-[when this will not help you](#when-this-will-not-help-you). It is worth the
-scroll before you install rather than after.
-
 ## Install
 
-Install once. Your coding agent can record the decisions worth carrying forward, while CommitLore validates and preserves them in Git.
+Install once. Install the host integration and initialise the repository where
+you want it to work.
 
 **Claude Code** — one plugin registers the MCP server, the pre-edit context hook and the skills:
 
@@ -119,6 +64,10 @@ Install once. Your coding agent can record the decisions worth carrying forward,
 
 That is the whole plugin: the MCP server, the pre-edit hook and the skills. It puts no `commitlore` on `PATH`, so the `commitlore …` commands below come from `install.sh` / `install.ps1` and need that install as well.
 
+**Codex** — install the CommitLore plugin, then use the same repository setup
+below. Its plugin supplies both delivery and capture; the CLI below provides
+the repository commands.
+
 Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
@@ -127,13 +76,22 @@ Prerequisites for either path: Node.js 22+ and Git. The script checks both befor
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
 ```
 
+**Hermes** — after installing the CLI, configure its host integration:
+
+```bash
+commitlore hermes install
+```
+
 Which hosts are supported, and what each install path requires: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 **Give your next agent the judgment your last one earned.**
 
 ### Then, in each repository
 
-Then run `commitlore init` in each repository where you want validation hooks and a local index. The installer detects supported coding agents and registers the local MCP server where it can do so safely.
+Then run `commitlore init` in each repository where you want validation hooks,
+a local index, and the repository-owned agent procedure. The installer detects
+supported coding agents and registers the local MCP server where it can do so
+safely.
 
 ```bash
 cd your-repository
@@ -145,8 +103,8 @@ After that:
 
 - Commit normally. Most commits carry no record.
 - If a record is present, the commit-msg hook validates it; it never creates one.
-- Agents query decision context through MCP or receive it from the `PreToolUse` hook.
-- Before changing a path, they see its active limits, ruled-out alternatives, warnings, and verification gaps.
+- Delivery and capture are different layers; the next section says exactly
+  which hosts have each one.
 
 Keep working through your coding agent. When a change contains decision context the diff cannot preserve, ask the agent to include a CommitLore record in the commit.
 
@@ -166,6 +124,47 @@ node commitlore/dist/commitlore.mjs --version
 ```
 
 </details>
+
+## See it work
+
+Before editing `src/pricing.ts`, the agent receives this payload — the record,
+not a description of one:
+
+```
+commitlore: active records for src/pricing.ts
+
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
+```
+
+`[claim]` matters: the record was not written by a trusted author of the
+repository, so the agent is told to weigh it as information, not obey it as an
+order. A record signed by a trusted author renders as `[directive]`. Delivery
+gives the agent context; it does not block the edit.
+
+## What happens automatically — and what does not
+
+**Delivery** means the record reaches the agent before it edits a path.
+**Capture** means a decision can enter the verified commit-time flow. They are
+separate layers:
+
+| Host | Delivery | Capture |
+|---|---|---|
+| Claude Code | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
+| Codex | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
+| Hermes | **Yes — `commitlore hermes install`.** | **Yes — `commitlore hermes install`.** |
+| Other `AGENTS.md`-convention hosts | **Procedure, not automatic.** `commitlore init` writes the pre-edit delivery instruction; the host may or may not follow it. | **Procedure, not automatic.** The host may or may not follow it. |
+
+“Yes” means the layer is installed, not that every commit gains a record.
+Most commits should carry none. Only the first three rows run integrations
+automatically. On other `AGENTS.md` hosts, both steps are instructions, not
+hooks. A host still has to start capture, and the candidate must pass
+verification before the commit hook attaches it. The commit-msg hook validates
+a record when present; it never invents one.
 
 ## When this will not help you
 
@@ -195,7 +194,47 @@ Read this before installing, not after.
 
 The full method, the exclusions and the per-arm truncation split are in
 [bench/VERDICT-M5.md](bench/VERDICT-M5.md) and
-[what it does not show](docs/evidence.md).
+[what it does not show](docs/evidence.md). Delivery methodology and the
+retrieval evidence are in [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
+
+## The code survived. The decision didn't.
+
+*Stop re-reviewing the same bad idea.*
+
+**Without CommitLore.** A new session sees two functions with similar inputs and
+reuses one.
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+The team now has another flag, another wrapper, and another compatibility branch
+protecting a use case the function was never meant to own. The reviewer writes
+"we already rejected this" for the second time.
+
+**With CommitLore.** Before editing, the agent receives the active record shown
+above, rather than an instruction reconstructed from a review comment.
+
+The module boundary is in front of the agent before it proposes the change,
+rather than in a review comment after.
+
+**Whether it acts on that is now measured.** Across 1,160 registered runs, an
+agent handed the repository's active records re-proposed a ruled-out approach in
+**2.8%** of them (16/580). Without them: **18.8%** (109/579).
+
+| arm | re-proposed a ruled-out approach |
+|---|---:|
+| the agent alone | **18.8%** (109/579) |
+| **with CommitLore** | **2.8%** (16/580) |
+
+**The threshold was registered before the run**, and the preregistration
+predicted a *smaller* effect than it got — that prediction, with its stated
+probabilities, is in
+[bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2, and it was
+wrong. The significance test, the interval and the registered threshold are in
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here: a statistic
+retyped into prose drifts from the log that produced it, and this repository
+gates against exactly that (`scripts/check-readme-numbers.mjs`).
 
 ## What it is, in full
 
@@ -215,10 +254,10 @@ superseded or expired does not reach the agent as if it still stood.
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
 No hosted memory service. No vendor-specific chat history. Just reviewable
-decision context, owned by and portable with the repository.
+decision context, owned by the repository. Commit trailers travel with their
+commits; notes-backed records need the notes fetch configured after a clone.
 
-## See it work
-
+## See a path query
 
 **A fresh agent. Zero chat history. It is still handed why the obvious fix was rejected.** Query a path before changing it:
 
@@ -330,8 +369,11 @@ authority is Git rather than a service:
 - **Reviewable.** A decision arrives as a commit trailer in a pull request, where
   it can be argued with before it becomes authority.
 - **Owned by the repository.** No account, no vendor, nothing to lose access to.
-- **Travels with a clone.** A new machine, a new contributor, or a new agent gets
-  the decisions with the code.
+- **Commit trailers travel with a clone.** A record in
+  `refs/notes/commitlore` does not arrive in an ordinary clone: Git does not
+  fetch `refs/notes/*` by default. `commitlore init` configures that mirror;
+  [the sharing documentation](docs/cli.md#sharing-records-with-a-team) explains
+  the remaining fetch and push boundary.
 
 ## What makes it different
 
