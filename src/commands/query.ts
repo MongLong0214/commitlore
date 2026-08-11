@@ -32,7 +32,10 @@ import {
   type TrustGrade,
 } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import {
+  configuredSignedDirectivesRequired,
+  configuredTrustedAuthors,
+} from '../core/trusted-authors.js';
 import { splitRuledOut } from '../core/trailers.js';
 import { STRUCTURAL_TRAILER_KEYS, type Lifecycle, type Trailer } from '../core/types.js';
 
@@ -192,6 +195,7 @@ const queryOptions = (
   // This route has no cwd of its own; it reads the repository it was invoked
   // in, the same one `runQuery` resolves against.
   const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
+  const requireSignedDirective = configuredSignedDirectivesRequired(process.cwd());
   return {
     paths,
     allHistory: options.allHistory === true,
@@ -201,6 +205,7 @@ const queryOptions = (
       // not set this: a new file has no history and that is not a finding.
       explainEmptyResult: true,
     ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
+    ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
     ...(keys === undefined ? {} : { keys }),
     ...(at === undefined ? {} : { at }),
     ...(limit === undefined ? {} : { limit }),
@@ -535,7 +540,7 @@ const define = (
     .option('--limit <n>', 'return at most n records')
     .option(
       '--trusted-author <author>',
-      'an author whose records may render as instructions (repeatable)',
+      'an author string whose records may render as instructions (repeatable; not identity proof)',
       collect,
       [],
     )

@@ -310,6 +310,7 @@ const groupByCommit = (rows) => {
                 mirrored: false,
                 committedAt: row.committedAt,
                 committedTs: row.committedTs,
+                signatureStatus: row.signatureStatus,
                 trailers: [{ key: row.key, value: row.value }],
                 paths: [...row.paths],
             });
@@ -496,7 +497,7 @@ const parseProvenance = (value) => {
  * index does not store it: one `git show -s` over the surviving shas costs a
  * single spawn and cannot go stale against the commits it just read.
  */
-const gradeMerged = (merged, cwd, at, trustedAuthors) => {
+const gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) => {
     if (merged.length === 0)
         return;
     const authors = authorsOf(cwd, merged.flatMap((record) => record.shas));
@@ -507,7 +508,17 @@ const gradeMerged = (merged, cwd, at, trustedAuthors) => {
         : new Map();
     for (const record of merged) {
         const shas = record.shas.length > 0 ? record.shas : [record.sha];
-        const resolved = gradeDeclarations({ trailers: record.trailers }, { shas, sources: record.sources, commitAuthors: authors, noteAuthors }, { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) });
+        const resolved = gradeDeclarations({ trailers: record.trailers }, {
+            shas,
+            sources: record.sources,
+            commitAuthors: authors,
+            commitSignatures: record.commitSignatures,
+            noteAuthors,
+        }, {
+            at,
+            ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
+            ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+        });
         record.trust = resolved.trust;
         if (resolved.matchedTrailerKeys !== undefined) {
             record.matchedTrailerKeys = resolved.matchedTrailerKeys;
@@ -561,6 +572,9 @@ const mergeByIdentity = (records, states) => {
             committedTs: latest.committedTs,
             lifecycle: state?.lifecycle ?? 'active',
             flags: state?.flags ?? [],
+            commitSignatures: new Map(group
+                .filter((record) => record.source === 'commit')
+                .map((record) => [record.sha, record.signatureStatus])),
             // `trust` is filled in by `gradeMerged` once the commit authors are
             // known. Left unset here rather than defaulted: a record that has not
             // been graded and a record graded `directive` must not look alike.
@@ -622,7 +636,7 @@ export const runQuery = (opts = {}) => {
             .filter((record) => carriesKey(record, opts.keys))
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
-        gradeMerged(records, cwd, at, opts.trustedAuthors);
+        gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true);
         for (const record of records) {
             if (record.identityCollision !== true)
                 continue;

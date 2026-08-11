@@ -329,11 +329,12 @@ describe('cacheKey', () => {
       inject({ budget: 123 }),
       inject({ at: new Date('2026-01-15T00:00:00Z') }),
       inject({ trustedAuthors: [] }),
+      inject({ requireSignedDirective: true }),
       inject({ noIndex: false }),
     ];
 
     for (const variant of variants) expect(variant.cacheKey).not.toBe(base.cacheKey);
-    expect(new Set([base, ...variants].map((entry) => entry.cacheKey)).size).toBe(6);
+    expect(new Set([base, ...variants].map((entry) => entry.cacheKey)).size).toBe(7);
   });
 
   it('ignores the order of trustedAuthors, which cannot change the output', () => {
@@ -1204,7 +1205,7 @@ describe('ablation: the baseline does not move', () => {
   it('hashes exactly the seven inputs it hashed before ablations existed', () => {
     const baseline = inject();
     const canonical = JSON.stringify([
-      'commitlore-inject/2',
+      'commitlore-inject/3',
       baseline.head,
       baseline.path,
       baseline.budgetTokens,

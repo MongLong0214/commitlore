@@ -149,10 +149,16 @@ Ruled-out
                                     and rounding semantics differ between the two flows
 ```
 
-`[claim]` matters: the record was not written by a trusted author of the
-repository, so the agent is told to weigh it as information, not obey it as an
-order. A record signed by a trusted author renders as `[directive]`. Delivery
-gives the agent context; it does not block the edit.
+`[claim]` matters: its author string did not match one this repository
+configured for directives, so the agent is told to weigh it as information, not
+obey it as an order. In the default author-string mode, `[directive]` means the
+repository chose to treat that string as a constraint — not that the identity is
+proven, because the commit author chose the string and anyone able to write a
+commit can forge it. A repository can opt into Git's authenticated boundary with
+`git config --local commitlore.requireSignedDirective true`; then `[directive]`
+also requires Git to verify the signature against this verifier's trust store.
+That signature still does not establish the signer's authority or the record's
+truth. Delivery gives the agent context; it does not block the edit.
 
 ## What happens automatically — and what does not
 
@@ -192,9 +198,12 @@ Read this before installing, not after.
   ([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). An empty
   guard result does not mean a proposal avoids every ruled-out alternative — at
   22% recall, a miss is the common case.
-- **Nothing is verified cryptographically yet.** Author verification,
-  repository-wide coverage, symbol anchors and an interactive record builder are
-  open: [#28](https://github.com/MongLong0214/commitlore/issues/28),
+- **Signature verification is opt-in, not key distribution.** Default mode
+  matches a forgeable author string. Setting
+  `commitlore.requireSignedDirective=true` also requires Git's verified
+  signature status from this verifier's trust store; that verifies neither a
+  person's authority nor the record's truth. Repository-wide coverage, symbol anchors,
+  and an interactive record builder remain open:
   [#32](https://github.com/MongLong0214/commitlore/issues/32),
   [#33](https://github.com/MongLong0214/commitlore/issues/33),
   [#34](https://github.com/MongLong0214/commitlore/issues/34).
@@ -296,7 +305,7 @@ to show what it caught in itself. This one keeps that list in public, including
 the entries where the thing that turned out to be false was something this
 project had already published:
 
-- **No install could produce the trust tier the README's claims rested on.** Records reach an agent graded `directive` or `claim`. It turned out no installed surface configured a trusted author, so grading failed closed to `claim` for everyone — while the injected legend advertised the tier nobody could reach. Both prior benchmarks had measured `claim`-graded delivery ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **No install could produce the trust tier the README's claims rested on.** Records reach an agent graded `directive` or `claim`. It turned out no installed surface configured a directive author string, so grading failed closed to `claim` for everyone — while the injected legend advertised the tier nobody could reach. Both prior benchmarks had measured `claim`-graded delivery ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
 - **The registered benchmark analysis would have read four different experiments at once** — and because its stopping rule was a row count, the contamination would have made the study *pass* its own completeness gate ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
 - **The result-schema gate was not run by anything**, so the schema drifted five fields behind the runner and nobody noticed for two days ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
 - **A shipped pre-push hook hung every `git push`** — 1,240 hook invocations in 40 seconds — because the function had been tested eleven times and the hook path zero times ([#422](https://github.com/MongLong0214/commitlore/issues/422)).

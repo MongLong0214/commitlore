@@ -6,7 +6,7 @@
 A single canonical spec that produces the same behavior regardless of who implements it. Canonicalize the vocabulary enums to prevent behavioral divergence between implementations (D1) at the source.
 
 ## Non-goals
-Finalizing symbol-anchoring syntax (Backlog), signature-field details (Backlog — reserve only the provenance axis).
+Finalizing symbol-anchoring syntax (Backlog); signature status now comes from Git's `%G?` verifier result when a repository opts into signed directives.
 
 ## User stories
 - As an implementer, I can build a parser from only the JSON Schema and fixtures and pass the conformance suite.

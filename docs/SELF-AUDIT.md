@@ -22,8 +22,8 @@ The uncomfortable category, and the reason this page leads with it.
 **[#415](https://github.com/MongLong0214/commitlore/issues/415) — no install could produce the trust tier the README's claims rested on.**
 Records reach an agent graded `directive`, `claim` or `blocked`. `directive`
 means "treat this as a constraint" and is where the security model lives. It
-turned out that no installed surface passed `--trusted-author`, grading failed
-closed to `claim` for everything, and **the `[directive]` path had never been
+turned out that no installed surface configured a directive author string,
+grading failed closed to `claim` for everything, and **the `[directive]` path had never been
 delivered to a single user or measured by a single benchmark arm** — while the
 injected legend went on advertising it. Both prior benchmarks measured
 `claim`-graded delivery. Fixed in 0.7.0; the earlier numbers stay labelled for

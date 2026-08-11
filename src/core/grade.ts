@@ -6,8 +6,12 @@
  * including a fork PR author nobody has ever met — can write `Warn:` text that
  * an agent will read as if the repository itself said it. This module is the
  * minimum defence: every record is graded on the two axes of SPEC §7
- * (provenance × lifecycle) plus author trust, and `Warn:` only survives as a
- * `directive` when all three hold. Everything else degrades to `claim`
+ * (provenance × lifecycle) plus a configured author-string match, and `Warn:`
+ * only survives as a `directive` when all three hold. An author string is
+ * selected by the commit author, so this default is useful repository policy,
+ * not identity authentication: anyone who can write a commit can forge it.
+ * Repositories can opt into Git signature verification as a fourth condition.
+ * Everything else degrades to `claim`
  * (surfaced as information, never as an order) or `blocked` (kept out of the
  * injection payload entirely).
  *
@@ -58,8 +62,10 @@ export interface Grade {
 }
 
 export interface GradeContext {
-  /** 이 저장소에서 신뢰되는 작성자. 로컬은 --trusted-authors, Action은 GitHub API. */
+  /** Author strings this repository has elected to treat as directive writers. */
   trustedAuthors?: readonly string[];
+  /** Opt-in: only Git's `G` (good, verifier-trusted) signature status can direct. */
+  requireSignedDirective?: boolean;
   /** 커밋 메타 — 작성자 판정에 쓴다 */
   author?: string;
   at: Date;
@@ -78,6 +84,8 @@ export interface GradeContext {
  */
 export interface AuthoredRecord extends StaleRecord {
   author?: string;
+  /** Git's `%G?` status for the commit that wrote this declaration. */
+  signatureStatus?: string;
 }
 
 export type InjectionFamily =
@@ -659,12 +667,13 @@ const identitiesOf = (author: string): string[] => {
 };
 
 /**
- * Whether `author` is on the repository's trusted list.
+ * Whether `author` matches a repository-configured author string.
  *
- * Undefined or empty `trustedAuthors` trusts nobody. That default is the
+ * Undefined or empty `trustedAuthors` elects no strings. That default is the
  * feature: a caller that forgets to pass the list gets every record downgraded
  * to `claim`, which is loud and harmless — the opposite default would turn the
- * check off silently. There is no wildcard entry; `*` in the list matches an
+ * check off silently. This is not authentication: the commit author chose the
+ * string being matched. There is no wildcard entry; `*` in the list matches an
  * author literally called `*`.
  *
  * Comparison is exact after trimming, with `Name <email>` also matching on
@@ -699,7 +708,7 @@ const grade = (input: GradeInput, ctx: GradeContext): Grade => {
   const lifecycle = lifecycleOf(record, ctx.at, folded);
   const matched = scanRecord(record);
 
-  // Checked first and unconditionally: a payload written by a trusted author is
+  // Checked first and unconditionally: a payload whose author string matches is
   // still a payload, whether they were compromised or careless.
   if (matched.patterns.length > 0) {
     return {
@@ -730,13 +739,19 @@ const grade = (input: GradeInput, ctx: GradeContext): Grade => {
     return claim(`provenance is ${provenance}, and only authored records can direct an agent`);
   }
   if (author === undefined) {
-    return claim('no commit author is known, so authorship cannot be trusted');
+    return claim('no commit author is known, so no configured author string can match');
   }
   if (ctx.trustedAuthors === undefined || ctx.trustedAuthors.length === 0) {
-    return claim(`no trusted authors are configured, so ${quoted(author)} is an outside contributor`);
+    return claim(`no directive author strings are configured, so ${quoted(author)} cannot direct`);
   }
   if (!isTrustedAuthor(author, ctx.trustedAuthors)) {
-    return claim(`author ${quoted(author)} is not a trusted author of this repository`);
+    return claim(`author ${quoted(author)} does not match a configured author string`);
+  }
+  const signatureStatus = (record as AuthoredRecord).signatureStatus;
+  if (ctx.requireSignedDirective === true && signatureStatus !== 'G') {
+    return claim(
+      `commit signature status ${quoted(signatureStatus ?? 'unavailable')} is not Git-verified by this verifier`,
+    );
   }
   if (lifecycle !== 'active') {
     return claim(`record is ${lifecycle} and no longer directs anything`);
@@ -746,7 +761,10 @@ const grade = (input: GradeInput, ctx: GradeContext): Grade => {
     provenance,
     lifecycle,
     trust: 'directive',
-    reason: `authored by trusted author ${quoted(author)}, active, no injection pattern matched`,
+    reason:
+      ctx.requireSignedDirective === true
+        ? `authored by configured author string ${quoted(author)}, Git signature verified, active, no injection pattern matched`
+        : `authored by configured author string ${quoted(author)}, active, no injection pattern matched (author strings are unauthenticated)`,
   };
 };
 
@@ -833,7 +851,7 @@ const AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
  * `%x01`/`%x00` rather than the literal bytes: `spawnSync` refuses an argument
  * containing a NUL, and these reach git as text and come back as bytes.
  */
-const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>';
+const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
 
 /**
  * Maps each commit to its **author** identity, `Name <email>`.
@@ -893,8 +911,14 @@ export const authorsOf = (cwd: string, shas: readonly string[]): Map<string, str
  * grades `claim`. Note paths are fanned out by git (`ab/cdef…`, sometimes
  * deeper), so the separators are stripped to recover the annotated sha.
  */
-export const noteAuthorsOf = (cwd: string): Map<string, string[]> => {
-  const authors = new Map<string, string[]>();
+export interface NoteAuthor {
+  readonly author: string;
+  /** `%G?` from the note-writing commit; only `G` is verifier-trusted. */
+  readonly signatureStatus: string;
+}
+
+export const noteAuthorsOf = (cwd: string): Map<string, NoteAuthor[]> => {
+  const authors = new Map<string, NoteAuthor[]>();
   const result = execGit(
     ['log', AUTHOR_FORMAT, '--name-only', '--no-renames', '--no-color', NOTES_REF],
     { cwd },
@@ -905,18 +929,26 @@ export const noteAuthorsOf = (cwd: string): Map<string, string[]> => {
 
   for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
     if (chunk === '') continue;
-    const [head = '', ...rest] = chunk.split(AUTHOR_FIELD_SEP);
+    const [head = '', authorField = '', statusAndPaths = ''] = chunk.split(AUTHOR_FIELD_SEP);
     if (head.trim() === '') continue;
-    const [author = '', ...pathLines] = (rest[0] ?? '').split('\n');
-    const noteAuthor = author.trim();
+    const [status = '', ...pathLines] = statusAndPaths.split('\n');
+    const noteAuthor = authorField.trim();
     if (noteAuthor === '') continue;
+    const writer: NoteAuthor = { author: noteAuthor, signatureStatus: status.trim() };
 
     for (const line of pathLines) {
       const annotated = line.trim().replace(/\//g, '');
       if (!AUTHOR_SHA_RE.test(annotated)) continue;
       const seen = authors.get(annotated);
-      if (seen === undefined) authors.set(annotated, [noteAuthor]);
-      else if (!seen.includes(noteAuthor)) seen.push(noteAuthor);
+      if (seen === undefined) authors.set(annotated, [writer]);
+      else if (
+        !seen.some(
+          (existing) =>
+            existing.author === writer.author && existing.signatureStatus === writer.signatureStatus,
+        )
+      ) {
+        seen.push(writer);
+      }
     }
   }
 
@@ -935,7 +967,7 @@ export const noteAuthorsOf = (cwd: string): Map<string, string[]> => {
  * A record whose only source is `notes` is therefore never graded by the
  * annotated commit's author, and a mirrored record cannot be promoted by the
  * friendlier of its two authorships. That downgrades a mirror written by a bot
- * identity to `claim` until the bot is listed as a trusted author, which is the
+ * identity to `claim` until the bot's author string is configured, which is the
  * fail-closed direction and is visible in the record's reason.
  *
  * A note carries every identity that has written it, not just the latest, so a
@@ -951,11 +983,13 @@ export const gradeDeclarations = (
     shas: readonly string[];
     sources: readonly ('commit' | 'notes')[];
     commitAuthors: ReadonlyMap<string, string>;
-    noteAuthors: ReadonlyMap<string, readonly string[]>;
+    /** `%G?` read with the batched trailer pass, keyed by commit sha. */
+    commitSignatures: ReadonlyMap<string, string>;
+    noteAuthors: ReadonlyMap<string, readonly NoteAuthor[]>;
   },
   ctx: GradeContext,
 ): Grade => {
-  const { shas, sources, commitAuthors, noteAuthors } = declarations;
+  const { shas, sources, commitAuthors, commitSignatures, noteAuthors } = declarations;
   // An empty `sources` predates the field; treat it as a commit declaration so
   // an older caller keeps the behaviour it had.
   const fromNotes = sources.includes('notes');
@@ -969,19 +1003,20 @@ export const gradeDeclarations = (
   const base: GradeContext = {
     at: ctx.at,
     ...(ctx.trustedAuthors === undefined ? {} : { trustedAuthors: ctx.trustedAuthors }),
+    ...(ctx.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
   };
   let worst: Grade | undefined;
-  const consider = (author: string | undefined): void => {
-    const one = gradeRecord({ ...record, author } as Record, base);
+  const consider = (author: string | undefined, signatureStatus: string | undefined): void => {
+    const one = gradeRecord({ ...record, author, signatureStatus } as Record, base);
     worst = worst === undefined ? one : restrictGrade(worst, one);
   };
 
   for (const sha of shas) {
-    if (fromCommit) consider(commitAuthors.get(sha));
+    if (fromCommit) consider(commitAuthors.get(sha), commitSignatures.get(sha));
     if (!fromNotes) continue;
     const writers = noteAuthors.get(sha);
-    if (writers === undefined || writers.length === 0) consider(undefined);
-    else for (const writer of writers) consider(writer);
+    if (writers === undefined || writers.length === 0) consider(undefined, undefined);
+    else for (const writer of writers) consider(writer.author, writer.signatureStatus);
   }
 
   return worst ?? gradeRecord(record, ctx);

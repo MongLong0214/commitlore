@@ -142,14 +142,16 @@ export interface QueryOptions {
   /** Maximum records returned, applied after ordering. */
   limit?: number;
   /**
-   * Authors trusted for this repository (SPEC §7), as `inject` takes them.
+   * Author strings this repository configures for directives (SPEC §7), as `inject` takes them.
    *
    * Omitting it is the fail-closed answer, not the permissive one: a `Warn:`
    * from an author the caller cannot vouch for grades `claim`, never
    * `directive`. That is the same default `commitlore inject` has always had,
    * and the two routes disagreeing was the defect this option closes.
-   */
+  */
   trustedAuthors?: readonly string[];
+  /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+  requireSignedDirective?: boolean;
   cwd?: string;
 }
 
@@ -176,6 +178,8 @@ export interface GradedRecord extends Record {
   provenanceValue?: string;
   trust?: TrustGrade;
   identityCollision?: boolean;
+  /** Internal grading input; JSON renderers deliberately do not expose this cache fact. */
+  commitSignatures: ReadonlyMap<string, string>;
   matchedTrailerKeys?: string[];
   /** Payload key names retained only so a redacted record remains visible in its sections. */
   withheldTrailerKeys?: string[];
@@ -464,6 +468,7 @@ interface CommitRecord {
   mirrored: boolean;
   committedAt: string;
   committedTs: number;
+  signatureStatus: string;
   trailers: Trailer[];
   paths: string[];
 }
@@ -518,6 +523,7 @@ const groupByCommit = (rows: readonly IndexedTrailer[]): CommitRecord[] => {
         mirrored: false,
         committedAt: row.committedAt,
         committedTs: row.committedTs,
+        signatureStatus: row.signatureStatus,
         trailers: [{ key: row.key, value: row.value }],
         paths: [...row.paths],
       });
@@ -716,6 +722,7 @@ const gradeMerged = (
   cwd: string,
   at: Date,
   trustedAuthors: readonly string[] | undefined,
+  requireSignedDirective: boolean,
 ): void => {
   if (merged.length === 0) return;
   const authors = authorsOf(
@@ -726,13 +733,23 @@ const gradeMerged = (
   // with no notes pays nothing for the check (#409).
   const noteAuthors = merged.some((record) => record.sources.includes('notes'))
     ? noteAuthorsOf(cwd)
-    : new Map<string, string[]>();
+    : new Map();
   for (const record of merged) {
     const shas = record.shas.length > 0 ? record.shas : [record.sha];
     const resolved = gradeDeclarations(
       { trailers: record.trailers } as Record,
-      { shas, sources: record.sources, commitAuthors: authors, noteAuthors },
-      { at, ...(trustedAuthors === undefined ? {} : { trustedAuthors }) },
+      {
+        shas,
+        sources: record.sources,
+        commitAuthors: authors,
+        commitSignatures: record.commitSignatures,
+        noteAuthors,
+      },
+      {
+        at,
+        ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
+        ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+      },
     );
     record.trust = resolved.trust;
     if (resolved.matchedTrailerKeys !== undefined) {
@@ -788,6 +805,11 @@ const mergeByIdentity = (
       committedTs: latest.committedTs,
       lifecycle: state?.lifecycle ?? 'active',
       flags: state?.flags ?? [],
+      commitSignatures: new Map(
+        group
+          .filter((record) => record.source === 'commit')
+          .map((record) => [record.sha, record.signatureStatus]),
+      ),
       // `trust` is filled in by `gradeMerged` once the commit authors are
       // known. Left unset here rather than defaulted: a record that has not
       // been graded and a record graded `directive` must not look alike.
@@ -854,7 +876,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       .filter((record) => carriesKey(record, opts.keys))
       .sort(compareRecords);
     // After the filters, so the one `git show` prices only the records that survive.
-    gradeMerged(records, cwd, at, opts.trustedAuthors);
+    gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true);
     for (const record of records) {
       if (record.identityCollision !== true) continue;
       record.trust = 'blocked';

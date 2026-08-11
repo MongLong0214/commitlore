@@ -38,6 +38,7 @@ import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { runQuery } from '../src/core/query.js';
 import { POLICY_FILE_NAME } from '../src/core/capture-policy.js';
+import { REQUIRE_SIGNED_DIRECTIVE_KEY } from '../src/core/trusted-authors.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
@@ -546,7 +547,10 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    expect(report.checks).toHaveLength(14);
+    // 15 since the signature-mode check joined the registry. The count is
+    // asserted so a check cannot be dropped without someone noticing; when it
+    // moves, it should move because a check was deliberately added or removed.
+    expect(report.checks).toHaveLength(15);
   });
 });
 
@@ -953,6 +957,7 @@ describe('doctor: report', () => {
       'hook-runtime',
       'inject-runtime',
       'inject-version',
+      'directive-trust-mode',
       'mcp-lifecycle',
       'unattended-initiator',
       'pending-backlog',
@@ -970,6 +975,25 @@ describe('doctor: report', () => {
     expect(report.exitCode).toBe(0);
   });
 
+  it('reports either supported directive trust mode without a warning', () => {
+    const { repo } = repoWithRemote('doctor-directive-trust-mode');
+
+    const defaultMode = runDoctor({ cwd: repo }).checks.find(
+      (entry) => entry.id === 'directive-trust-mode',
+    );
+    expect(defaultMode?.status).toBe('ok');
+    expect(defaultMode?.detail).toContain('author-string mode');
+    expect(defaultMode?.detail).toContain('forge');
+
+    git(repo, ['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'true']);
+    const signatureMode = runDoctor({ cwd: repo }).checks.find(
+      (entry) => entry.id === 'directive-trust-mode',
+    );
+    expect(signatureMode?.status).toBe('ok');
+    expect(signatureMode?.detail).toContain('signature mode');
+    expect(signatureMode?.detail).toContain('trust store');
+  });
+
   it('serializes to JSON that parses back with a status per check', () => {
     const { repo } = repoWithRemote('doctor-json');
 
@@ -977,7 +1001,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(14);
+    expect(parsed.checks).toHaveLength(15);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

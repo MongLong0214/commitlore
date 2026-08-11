@@ -21,7 +21,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { execGit } from '../core/git.js';
 import { buildInjection } from '../core/inject.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_EVENT, claudeHookStatus, claudeSettingsPath, installClaudeHook, uninstallClaudeHook, } from '../hooks/claude-settings.js';
 // ---------------------------------------------------------------------------
 // Option parsing
@@ -189,6 +189,7 @@ const injectOptions = (path, options, cwd) => {
     // shapes Commander hands over.
     const flagged = options.trustedAuthor ?? [];
     const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
+    const requireSignedDirective = configuredSignedDirectivesRequired(cwd);
     return {
         path,
         cwd,
@@ -196,6 +197,7 @@ const injectOptions = (path, options, cwd) => {
         ...(at === undefined ? {} : { at }),
         ...(budget === undefined ? {} : { budget }),
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
+        ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
     };
 };
 const emitInjection = (injection, options) => {
@@ -295,7 +297,7 @@ export const register = (program) => {
         .option('--budget <tokens>', 'token budget for the payload (default: 800)')
         .option('--json', 'emit the projection object, including its cache key')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: HEAD commit instant)')
-        .option('--trusted-author <author>', 'an author whose records may render as instructions (repeatable)', collect, [])
+        .option('--trusted-author <author>', 'an author string whose records may render as instructions (repeatable; not identity proof)', collect, [])
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .option('--hook-input', `read a ${CLAUDE_HOOK_EVENT} payload on stdin and answer as hook JSON`)
         .addHelpText('after', '\nExit codes: 0 ran (empty output means the path has nothing to say, and --hook-input never fails), ' +

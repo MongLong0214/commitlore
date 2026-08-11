@@ -9,7 +9,7 @@
 
 **Implementation outline**
 - `grade.ts`: record → `{provenance, lifecycle, trust: 'directive'|'claim'|'blocked'}`.
-  - provenance: trailer `Provenance:` + commit metadata (author and merge path). External-contribution decision: commit author is outside the list of repository users with push access (`--trusted-authors` setting locally, GitHub API in Action) → always claim.
+  - provenance: trailer `Provenance:` + commit metadata (author and merge path). A non-matching configured author string renders claim; a matching string is selected by the commit author and is not authentication unless opt-in signature mode also verifies it.
   - reconstructed/unknown → always claim.
 - Injection heuristics: tool-call inducement, policy-bypass, or privilege-escalation patterns in Warn values (rules based on 5 fixture types) → `blocked` (exclude from injection + warning list).
 - Formally include the grade field in the query and injection output schema (final T-204/T-402 interface).

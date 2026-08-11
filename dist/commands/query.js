@@ -19,7 +19,7 @@
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { splitRuledOut } from '../core/trailers.js';
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
@@ -132,6 +132,7 @@ const queryOptions = (paths, options, keys) => {
     // This route has no cwd of its own; it reads the repository it was invoked
     // in, the same one `runQuery` resolves against.
     const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
+    const requireSignedDirective = configuredSignedDirectivesRequired(process.cwd());
     return {
         paths,
         allHistory: options.allHistory === true,
@@ -141,6 +142,7 @@ const queryOptions = (paths, options, keys) => {
         // not set this: a new file has no history and that is not a finding.
         explainEmptyResult: true,
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
+        ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
         ...(keys === undefined ? {} : { keys }),
         ...(at === undefined ? {} : { at }),
         ...(limit === undefined ? {} : { limit }),
@@ -354,7 +356,7 @@ const define = (program, name, description, keys, render) => {
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: now)')
         .option('--limit <n>', 'return at most n records')
-        .option('--trusted-author <author>', 'an author whose records may render as instructions (repeatable)', collect, [])
+        .option('--trusted-author <author>', 'an author string whose records may render as instructions (repeatable; not identity proof)', collect, [])
         .addHelpText('after', '\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), ' +
         '3 answered, but the notes mirror has not been fetched (SPEC §10).')
         .action((paths, options) => {

@@ -114,8 +114,13 @@ const loadDatabaseCtor = () => {
  *
  * v3 changes no column. It retires every index built before #335's classifier
  * gate, which is the only way those rows can be re-read.
+ *
+ * v4 adds `trailers.signature_status`, Git's `%G?` result for the commit read
+ * in the same batched pass as its trailers. Signature verification is an
+ * opt-in grading condition, so serving a v3 row without this fact could
+ * incorrectly promote a record after a repository enables that mode.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const NOTES_REF = 'refs/notes/commitlore';
 /** Commits per `git log` invocation. Bounds peak output size, not correctness. */
 const LOG_BATCH = 1024;
@@ -161,6 +166,7 @@ CREATE TABLE IF NOT EXISTS trailers (
   committed_at TEXT    NOT NULL,
   committed_ts INTEGER NOT NULL,
   provenance   TEXT,
+  signature_status TEXT NOT NULL,
   source       TEXT    NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS trailers_identity ON trailers (commit_sha, source, block, seq);
@@ -405,7 +411,7 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
 const readCommitRecords = (cwd, shas, excluded) => {
     const records = [];
     for (const batch of chunked(shas, LOG_BATCH)) {
-        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00${TRAILERS_ATOM}%x00`, []);
+        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`, []);
         if (result.code !== 0) {
             throw Object.assign(new Error(`git log failed: ${result.stderr.trim()}`), {
                 code: result.code,
@@ -415,7 +421,7 @@ const readCommitRecords = (cwd, shas, excluded) => {
         const batchRecords = [];
         for (const record of splitRecords(result.stdout)) {
             const fields = record.split(FIELD_SEP);
-            const [sha, rawTs, committedAt, trailerField] = fields;
+            const [sha, rawTs, committedAt, signatureStatus, trailerField] = fields;
             if (sha === undefined || rawTs === undefined || committedAt === undefined)
                 continue;
             // The raw count decides whether this commit is worth a full-message
@@ -431,6 +437,7 @@ const readCommitRecords = (cwd, shas, excluded) => {
                 block: 0,
                 committedAt,
                 committedTs: Number.parseInt(rawTs, 10),
+                signatureStatus: signatureStatus?.trim() ?? '',
                 source: 'commit',
                 trailers: stripConventional(rawTrailers, excluded),
                 paths: [],
@@ -511,7 +518,7 @@ const readNoteRecords = (cwd, reachable, excluded) => {
         return [];
     const records = [];
     for (const batch of chunked(commits, LOG_BATCH)) {
-        const result = gitLogByShas(cwd, batch, '%x01%H%x00%ct%x00%cI%x00%N%x00', [
+        const result = gitLogByShas(cwd, batch, '%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00', [
             `--notes=${NOTES_REF}`,
         ]);
         if (result.code !== 0) {
@@ -523,7 +530,7 @@ const readNoteRecords = (cwd, reachable, excluded) => {
         const batchRecords = [];
         for (const record of splitRecords(result.stdout)) {
             const fields = record.split(FIELD_SEP);
-            const [sha, rawTs, committedAt, noteText] = fields;
+            const [sha, rawTs, committedAt, signatureStatus, noteText] = fields;
             if (sha === undefined || rawTs === undefined || committedAt === undefined)
                 continue;
             if (noteText === undefined || noteText.trim() === '')
@@ -540,6 +547,7 @@ const readNoteRecords = (cwd, reachable, excluded) => {
                     block,
                     committedAt,
                     committedTs: Number.parseInt(rawTs, 10),
+                    signatureStatus: signatureStatus?.trim() ?? '',
                     source: 'notes',
                     trailers,
                     paths: [],
@@ -835,8 +843,8 @@ const resetIndexFile = (handle) => {
  */
 const insertRecords = (handle, records) => {
     const insertTrailer = handle.db.prepare(`INSERT INTO trailers
-       (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+       (commit_sha, block, seq, key, value, value_lc, committed_at, committed_ts, provenance, signature_status, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insertFts = handle.fts
         ? handle.db.prepare('INSERT INTO trailers_fts (rowid, value_lc) VALUES (?, ?)')
         : null;
@@ -847,7 +855,7 @@ const insertRecords = (handle, records) => {
             const provenance = record.trailers.find((trailer) => trailer.key === 'Provenance')?.value ?? null;
             record.trailers.forEach((trailer, seq) => {
                 const valueLc = trailer.value.toLowerCase();
-                const inserted = insertTrailer.run(record.sha, record.block, seq, trailer.key, trailer.value, valueLc, record.committedAt, record.committedTs, provenance, record.source);
+                const inserted = insertTrailer.run(record.sha, record.block, seq, trailer.key, trailer.value, valueLc, record.committedAt, record.committedTs, provenance, record.signatureStatus, record.source);
                 insertFts?.run(inserted.lastInsertRowid, valueLc);
                 counts.trailers += 1;
             });
@@ -1198,7 +1206,7 @@ export const queryTrailers = (handle, query = {}) => {
         params.push(query.limit);
     const rows = handle.db
         .prepare(`SELECT t.id, t.commit_sha, t.block, t.seq, t.key, t.value, t.committed_at, t.committed_ts,
-              t.provenance, t.source
+              t.provenance, t.signature_status, t.source
          FROM trailers t
          ${where}
         ORDER BY t.committed_ts DESC, t.commit_sha ASC, t.source ASC, t.block ASC, t.seq ASC
@@ -1214,6 +1222,7 @@ export const queryTrailers = (handle, query = {}) => {
         committedAt: row.committed_at,
         committedTs: row.committed_ts,
         provenance: row.provenance,
+        signatureStatus: row.signature_status,
         source: row.source === 'notes' ? 'notes' : 'commit',
         paths: paths.get(row.commit_sha) ?? [],
     }));
@@ -1257,6 +1266,7 @@ const toIndexedTrailers = (records) => records.flatMap((record) => {
         committedAt: record.committedAt,
         committedTs: record.committedTs,
         provenance,
+        signatureStatus: record.signatureStatus,
         source: record.source,
         paths: record.paths,
     }));

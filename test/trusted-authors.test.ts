@@ -25,7 +25,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { execGit } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import {
+  REQUIRE_SIGNED_DIRECTIVE_KEY,
   TRUSTED_AUTHOR_KEY,
+  configuredSignedDirectivesRequired,
   configuredTrustedAuthors,
   seedTrustedAuthor,
 } from '../src/core/trusted-authors.js';
@@ -79,6 +81,7 @@ const injected = (): string =>
     cwd: repo,
     noIndex: true,
     trustedAuthors: configuredTrustedAuthors(repo),
+    requireSignedDirective: configuredSignedDirectivesRequired(repo),
   }).text;
 
 describe('#415 trusted authors after a plain install', () => {
@@ -136,6 +139,22 @@ describe('#415 trusted authors after a plain install', () => {
     expect(injected()).toMatch(/\[directive\]\s+r-trust01/);
 
     execGit(['config', '--unset-all', TRUSTED_AUTHOR_KEY], { cwd: repo });
+    expect(injected()).toMatch(/\[claim\]\s+r-trust01/);
+  });
+
+  it('leaves verified signatures opt-in and downgrades an unsigned forged author string', () => {
+    commitRecord(INSTALLER, RECORD);
+    seedTrustedAuthor(repo);
+
+    // Default author-string mode preserves the established behaviour: the
+    // commit's author selected the configured string, so it is a directive.
+    expect(configuredSignedDirectivesRequired(repo)).toBe(false);
+    expect(injected()).toMatch(/\[directive\]\s+r-trust01/);
+
+    execGit(['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'true'], { cwd: repo });
+    expect(configuredSignedDirectivesRequired(repo)).toBe(true);
+    // This is a real commit whose author string matches the configured email;
+    // it carries no signature, so opt-in signature mode must demote it.
     expect(injected()).toMatch(/\[claim\]\s+r-trust01/);
   });
 });
@@ -207,6 +226,15 @@ describe('#415 through the command line, which is the only path the hook uses', 
 
   it('keeps the two routes agreeing when nothing is configured', () => {
     commitRecord(INSTALLER, RECORD);
+
+    expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
+    expect(cli(['context', 'session.ts'], repo)).toMatch(/r-trust01\s+\S+\s+\[claim\]/);
+  });
+
+  it('keeps the two routes at claim for an unsigned configured author in signature mode', () => {
+    commitRecord(INSTALLER, RECORD);
+    seedTrustedAuthor(repo);
+    execGit(['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'true'], { cwd: repo });
 
     expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
     expect(cli(['context', 'session.ts'], repo)).toMatch(/r-trust01\s+\S+\s+\[claim\]/);
