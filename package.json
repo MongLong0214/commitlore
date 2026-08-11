@@ -22,7 +22,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
     "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
-    "bench:cdeb:verify": "node bench/cdeb/verify.mjs"
+    "bench:cdeb:verify": "node bench/cdeb/verify.mjs",
+    "bench:cdeb:analyze": "node --experimental-strip-types bench/cdeb/analyze.ts"
   },
   "keywords": [
     "git",
