@@ -1207,6 +1207,8 @@ Behavioral outcome은 유효하지만 terminal provider usage가 복구 불가�
 - token-efficiency claim은 NOT MEASURABLE
 - token을 0으로 두거나 추정하지 않음
 - 해당 run을 token denominator에서 제거하지 않음
+- canonical row의 `usage`는 `availability: "unavailable"`와 gap reason만 기록하며,
+  raw category나 `total_token_volume` field를 함께 기록하지 않음
 
 Graceful timeout path는 terminal usage를 얻도록 구현하고 fault-injection test를 통과해야 한다.
 
@@ -1668,6 +1670,7 @@ runs/<logical-run-id>/
   },
 
   "usage": {
+    "availability": "measured",
     "input_tokens": 12000,
     "output_tokens": 4100,
     "cache_creation_input_tokens": 5000,

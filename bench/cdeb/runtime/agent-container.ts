@@ -45,6 +45,7 @@ import {
   toolPolicyDigest,
   verifyStreamIdentity,
 } from "./isolation.ts";
+import { persistRawNdjson, readProviderLedger, type ProviderLedger } from "./provider-ledger.ts";
 import type { ProbeRuntime, ProbeRunParams, ProbeRunResult } from "../freeze/runtime-probe.ts";
 
 // ---------------------------------------------------------------------------
@@ -1035,11 +1036,15 @@ export interface AgentRunParams {
 
 export interface AgentRunOutcome {
   readonly exit_code: number | null;
+  /** Compressed raw NDJSON artifact (`provider.ndjson.zst`), never rewritten. */
   readonly provider_stream_path: string;
+  /** SHA-256 of the uncompressed, byte-exact NDJSON stream. */
   readonly provider_stream_sha256: string;
   readonly stderr: string;
   readonly timed_out: boolean;
   readonly identity: StreamIdentity;
+  /** Complete reconciled usage or an explicit unavailable state (§14.6). */
+  readonly ledger: ProviderLedger;
 }
 
 /**
@@ -1048,9 +1053,12 @@ export interface AgentRunOutcome {
  * authorizes nothing here — and the stream the run produces is identity-
  * checked before anything downstream may read it as measurement.
  *
- * The raw NDJSON lands byte-for-byte in `<outDir>/provider.ndjson`; CDEB-05
- * owns parsing it into a ledger. This function owns that the bytes exist, are
- * hashed, and came from the model that was pinned.
+ * Stdout first lands in a short-lived raw sink so no bytes pass through a
+ * string transform. CDEB-05 then persists it byte-exactly as
+ * `<outDir>/provider.ndjson.zst`, records the raw digest, and returns either a
+ * reconciled ledger or an explicit unavailable state. A timeout is not an
+ * excuse to synthesize a total: when SIGTERM lets the CLI emit terminal usage,
+ * the parser uses it; when it does not, the outcome says unavailable.
  */
 export const executeAgentRun = async (
   docker: ContainerRuntimeCommands,
@@ -1112,11 +1120,14 @@ export const executeAgentRun = async (
     else sink.on("close", () => resolve());
   });
 
-  // The bytes are hashed after the run, exactly as captured: nothing touches
-  // the stream between the container's stdout and this file.
+  // The sink is binary and CDEB-05 persists the exact bytes before any parser
+  // sees text. A malformed stream stays inspectable even if identity checking
+  // subsequently refuses its run.
   const streamBytes = readFileSync(streamPath);
+  const artifact = persistRawNdjson(params.outDir, streamBytes);
+  rmSync(streamPath, { force: true });
+  const ledger = readProviderLedger({ requested_model: pin.requested_model, raw_ndjson: streamBytes });
   const streamText = streamBytes.toString("utf8");
-  const providerStreamSha256 = createHash("sha256").update(streamBytes).digest("hex");
   const identity = verifyStreamIdentity(streamText, {
     expected_observed_model: pin.expected_observed_model ?? "",
     agent_cli_version: pin.agent_cli_version ?? "",
@@ -1126,11 +1137,12 @@ export const executeAgentRun = async (
 
   return {
     exit_code: result.exitCode,
-    provider_stream_path: streamPath,
-    provider_stream_sha256: providerStreamSha256,
+    provider_stream_path: artifact.compressed_path,
+    provider_stream_sha256: artifact.raw_stream_sha256,
     stderr: result.stderr,
     timed_out: result.timedOut,
     identity,
+    ledger,
   };
 };
 
@@ -1218,4 +1230,3 @@ export const pinnedProbeRuntime = (
   };
   return { name: "pinned-container", run };
 };
-
