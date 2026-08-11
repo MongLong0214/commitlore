@@ -159,7 +159,8 @@ describe('T-1123 uninstall removes what the installer wrote', () => {
 
     expect(readFileSync(path, 'utf8'), 'a config we could not parse was rewritten').toBe(broken);
     expect(result.report.join('\n')).toMatch(/could not|parse/i);
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode).toBe(1);
+    expect(result.json.failures).toContain(path);
   });
 
   it('removes its Hermes YAML entries without rewriting operator policy or other servers', async () => {
@@ -264,6 +265,7 @@ describe('Codex plugin removal uses the owning CLI only with an ownership marker
     expect(existsSync(marker)).toBe(true);
     expect(existsSync(h.checkout)).toBe(true);
     expect(result.report.join('\n')).toContain('Codex could not list installed plugins');
+    expect(result.exitCode).toBe(1);
   });
 });
 

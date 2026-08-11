@@ -65,6 +65,8 @@ export interface UninstallResult {
   readonly json: {
     readonly removed: readonly string[];
     readonly kept: readonly string[];
+    /** Entries this uninstall could not complete after identifying them. */
+    readonly failures: readonly string[];
     readonly dryRun: boolean;
   };
 }
@@ -175,22 +177,25 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
   const report: string[] = [];
   const removed: string[] = [];
   const kept: string[] = [];
+  const failures: string[] = [];
   const runCodex = options.runCodex ?? runCodexCommand;
 
   const wrapper = join(home, '.local', 'bin', 'commitlore');
   if (existsSync(wrapper)) {
-    const contents = (() => {
-      try {
-        return readFileSync(wrapper, 'utf8');
-      } catch {
-        return '';
-      }
-    })();
+    let contents: string;
+    try {
+      contents = readFileSync(wrapper, 'utf8');
+    } catch {
+      kept.push(wrapper);
+      failures.push(wrapper);
+      report.push(`kept: ${wrapper} — it could not be read, so it was left untouched`);
+      contents = '';
+    }
     if (contents.includes(WRAPPER_MARKER)) {
       if (!dryRun) rmSync(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
-    } else {
+    } else if (!failures.includes(wrapper)) {
       kept.push(wrapper);
       report.push(`kept: ${wrapper} — it carries no commitlore marker, so it was not written by this installer`);
     }
@@ -221,6 +226,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
     if (listed.status !== 0 || listed.error !== undefined) {
       retainDataRoot = true;
       kept.push(markerPath);
+      failures.push(markerPath);
       report.push(`kept: Codex plugin ${selector} — Codex could not list installed plugins`);
       continue;
     }
@@ -230,6 +236,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
       if (result.status !== 0 || result.error !== undefined) {
         retainDataRoot = true;
         kept.push(markerPath);
+        failures.push(markerPath);
         report.push(`kept: Codex plugin ${selector} — Codex could not remove it`);
         continue;
       }
@@ -263,6 +270,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
     const path = join(home, ...codexConfig.homeRelativePath);
     if (codexList.state === 'unavailable' || codexList.state === 'invalid') {
       kept.push(path);
+      failures.push(path);
       report.push(`kept: ${path} — codex mcp list could not verify its entry, so the config was left untouched`);
     } else if (codexList.state === 'listed') {
       const named = codexList.servers.find((server) => server.name === SERVER_KEY);
@@ -280,6 +288,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
           } else {
             kept.push(path);
+            failures.push(path);
             report.push(`kept: ${path} — codex mcp remove could not remove its entry, so the config was left untouched`);
           }
         }
@@ -297,6 +306,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
       contents = readFileSync(path, 'utf8');
     } catch {
       kept.push(path);
+      failures.push(path);
       report.push(`kept: ${path} — it could not be read, so it was left untouched`);
       continue;
     }
@@ -330,6 +340,7 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
       // Untouched on purpose. Rewriting a file we could not parse is how an
       // uninstall destroys a config it was only supposed to edit one key of.
       kept.push(path);
+      failures.push(path);
       report.push(`kept: ${path} — it could not be parsed as JSON, so it was left untouched`);
       continue;
     }
@@ -350,10 +361,10 @@ export const runUninstall = async (options: UninstallOptions = {}): Promise<Unin
   report.push('  a Codex plugin not installed by this command — remove it with `codex plugin remove commitlore@commitlore`');
 
   return {
-    exitCode: 0,
+    exitCode: failures.length === 0 ? 0 : 1,
     report,
     removed,
-    json: { removed, kept, dryRun },
+    json: { removed, kept, failures, dryRun },
   };
 };
 

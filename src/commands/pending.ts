@@ -50,6 +50,10 @@ export interface PendingListResult {
   transactions: PendingSummary[];
   /** Present when a file exists but cannot be read as a transaction. */
   unreadable: string[];
+  /** Whether the pending directory was read, absent, or could not be inspected. */
+  state: 'ready' | 'absent' | 'unreadable';
+  /** Filesystem error code when `state` is `unreadable`; otherwise null. */
+  error: string | null;
 }
 
 export interface PendingShowResult {
@@ -102,8 +106,13 @@ export const runPendingList = (opts: { cwd?: string }): PendingListResult => {
   const head = resolveHead(cwd);
   const transactions: PendingSummary[] = [];
   const unreadable: string[] = [];
+  const listed = listPendingNonces(cwd);
 
-  for (const nonce of listPendingNonces(cwd)) {
+  if (listed.state === 'unreadable') {
+    return { transactions, unreadable, state: listed.state, error: listed.error };
+  }
+
+  for (const nonce of listed.nonces) {
     let record: PendingRecord | null = null;
     try {
       record = readPending(nonce, { cwd });
@@ -121,7 +130,7 @@ export const runPendingList = (opts: { cwd?: string }): PendingListResult => {
   }
 
   transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  return { transactions, unreadable };
+  return { transactions, unreadable, state: listed.state, error: listed.error };
 };
 
 /**
@@ -131,7 +140,11 @@ export const runPendingList = (opts: { cwd?: string }): PendingListResult => {
  */
 const resolvePrefix = (cwd: string, prefix: string): { nonce: string | null; error: string | null } => {
   const wanted = prefix.trim().toLowerCase();
-  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  const listed = listPendingNonces(cwd);
+  if (listed.state === 'unreadable') {
+    return { nonce: null, error: `pending state could not be read (${listed.error ?? 'unknown'})` };
+  }
+  const candidates = listed.nonces.filter((nonce) => nonce.startsWith(wanted));
 
   if (candidates.length === 0) {
     return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
@@ -237,6 +250,9 @@ const age = (from: string, now: number): string => {
 };
 
 const renderList = (result: PendingListResult, now: number): string => {
+  if (result.state === 'unreadable') {
+    return `pending state could not be read (${result.error ?? 'unknown'}); no conclusion can be drawn\n`;
+  }
   if (result.transactions.length === 0 && result.unreadable.length === 0) {
     return 'no pending capture transactions\n';
   }
@@ -276,9 +292,11 @@ export const register = (program: Command): void => {
       const result = runPendingList({});
       if (options.json === true) {
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        if (result.state === 'unreadable') process.exitCode = 1;
         return;
       }
       process.stdout.write(renderList(result, Date.now()));
+      if (result.state === 'unreadable') process.exitCode = 1;
     });
 
   pending

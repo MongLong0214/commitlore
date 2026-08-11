@@ -55,6 +55,7 @@ import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 export const SERVER_NAME = 'commitlore';
 /** Used when the package manifest cannot be read — a version is not an answer. */
 const FALLBACK_VERSION = '0.0.0';
@@ -165,6 +166,7 @@ export const contextUriPath = (uri) => {
  */
 const contextJson = (root, kind, path) => {
     const keys = KEYS_BY_KIND[kind];
+    const trustedAuthors = configuredTrustedAuthors(root);
     const result = withholdBlocked(runQuery({
         // The agent's query surface answers like `context`: an empty result must
         // say whether the path was ever in the history (#307).
@@ -172,6 +174,7 @@ const contextJson = (root, kind, path) => {
         cwd: root,
         ...(path === '' ? {} : { paths: [path] }),
         ...(keys === undefined ? {} : { keys }),
+        ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
     }));
     for (const diagnostic of result.diagnostics)
         warn(diagnostic);
@@ -419,10 +422,12 @@ export const createServer = (opts = {}) => {
         [GUARD_TOOL]: (args) => {
             const proposal = requiredString(args, 'proposal');
             const path = pathArg(root, args);
+            const trustedAuthors = configuredTrustedAuthors(root);
             const result = guard({
                 proposal,
                 cwd: root,
                 ...(path === undefined ? {} : { paths: [path] }),
+                ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
             });
             // Empty matches are approval only when the availability fields say the
             // repository and its notes were actually checked.
@@ -438,18 +443,22 @@ export const createServer = (opts = {}) => {
         [BEFORE_CHANGE_TOOL]: (args) => {
             const path = pathArg(root, args);
             const proposal = stringArg(args, 'proposal');
+            const trustedAuthors = configuredTrustedAuthors(root);
             return asText(beforeChange({
                 path: path === '' ? '.' : path,
                 ...(proposal === undefined ? {} : { proposal }),
                 cwd: root,
+                ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
             }));
         },
         [PREPARE_CAPTURE_TOOL]: (args) => {
             const transcript = requiredString(args, 'transcript');
             const unattended = booleanArg(args, 'unattended');
+            const trustedAuthors = configuredTrustedAuthors(root);
             const result = prepareCaptureContext({
                 cwd: root,
                 transcript,
+                ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
                 ...(unattended === true ? { unattended: true } : {}),
             });
             return asText({

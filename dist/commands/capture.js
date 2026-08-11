@@ -21,6 +21,7 @@ import { stageCaptureRecord } from '../core/capture-stage.js';
 import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { runCaptureShadow } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
 /** Render historical measurement output without ever echoing a blocked secret. */
@@ -79,6 +80,7 @@ export const runCapture = (opts) => {
     const prepareResult = prepareCaptureContext({
         cwd,
         transcript,
+        ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         ...(opts.unattended === true ? { unattended: true } : {}),
     });
     if (prepareResult.policy_error !== null) {
@@ -210,6 +212,7 @@ export const register = (program) => {
                 runOpts.diffPath = options.diff;
             if (options.draft !== undefined)
                 runOpts.draftPath = options.draft;
+            runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
             if (options.unattended === true)
                 runOpts.unattended = true;
             const result = runCapture(runOpts);

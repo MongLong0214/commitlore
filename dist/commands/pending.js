@@ -31,7 +31,11 @@ export const runPendingList = (opts) => {
     const head = resolveHead(cwd);
     const transactions = [];
     const unreadable = [];
-    for (const nonce of listPendingNonces(cwd)) {
+    const listed = listPendingNonces(cwd);
+    if (listed.state === 'unreadable') {
+        return { transactions, unreadable, state: listed.state, error: listed.error };
+    }
+    for (const nonce of listed.nonces) {
         let record = null;
         try {
             record = readPending(nonce, { cwd });
@@ -49,7 +53,7 @@ export const runPendingList = (opts) => {
         transactions.push(summarise(record, head));
     }
     transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-    return { transactions, unreadable };
+    return { transactions, unreadable, state: listed.state, error: listed.error };
 };
 /**
  * The single transaction a nonce prefix names, or why it names none. Shared by
@@ -58,7 +62,11 @@ export const runPendingList = (opts) => {
  */
 const resolvePrefix = (cwd, prefix) => {
     const wanted = prefix.trim().toLowerCase();
-    const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+    const listed = listPendingNonces(cwd);
+    if (listed.state === 'unreadable') {
+        return { nonce: null, error: `pending state could not be read (${listed.error ?? 'unknown'})` };
+    }
+    const candidates = listed.nonces.filter((nonce) => nonce.startsWith(wanted));
     if (candidates.length === 0) {
         return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
     }
@@ -158,6 +166,9 @@ const age = (from, now) => {
     return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
 };
 const renderList = (result, now) => {
+    if (result.state === 'unreadable') {
+        return `pending state could not be read (${result.error ?? 'unknown'}); no conclusion can be drawn\n`;
+    }
     if (result.transactions.length === 0 && result.unreadable.length === 0) {
         return 'no pending capture transactions\n';
     }
@@ -193,9 +204,13 @@ export const register = (program) => {
         const result = runPendingList({});
         if (options.json === true) {
             process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+            if (result.state === 'unreadable')
+                process.exitCode = 1;
             return;
         }
         process.stdout.write(renderList(result, Date.now()));
+        if (result.state === 'unreadable')
+            process.exitCode = 1;
     });
     pending
         .command('show')

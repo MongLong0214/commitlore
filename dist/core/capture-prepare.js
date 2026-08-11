@@ -55,6 +55,7 @@ const computeGuardAdvisory = (opts) => {
             ...(opts.paths.length > 0 ? { paths: opts.paths } : {}),
             cwd: opts.cwd,
             ...(opts.readOnly === true ? { noIndex: true } : {}),
+            ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         });
         return {
             matches: result.matches.map(renderGuardMatch),
@@ -115,6 +116,7 @@ const prepareValues = (opts) => {
             paths: diffPaths,
             cwd,
             ...(opts.readOnly ? { readOnly: true } : {}),
+            ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         });
     return {
         base_head: baseHead,

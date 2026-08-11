@@ -498,6 +498,7 @@ export const guard = (opts) => {
         ...(opts.at === undefined ? {} : { at: opts.at }),
         ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
         ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
+        ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     });
     const availability = {
         history: result.history,

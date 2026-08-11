@@ -41,6 +41,17 @@ export const checkPendingBacklog = (ctx) => {
     catch {
         return check(id, category, title, 'ok', 'no pending directory — nothing has been captured here yet', null, false, undefined, { evidence: { stranded: '0', staged_expired: '0', oldest: 'none' } });
     }
+    if (listing.state === 'unreadable') {
+        return check(id, category, title, 'fail', `pending state could not be read (${listing.error ?? 'unknown'}); no conclusion can be drawn about waiting captures`, 'restore read access to .git/commitlore/pending, then run commitlore pending ls', false, true, {
+            evidence: {
+                state: 'unreadable',
+                error: listing.error ?? 'unknown',
+                stranded: 'unknown',
+                staged_expired: 'unknown',
+                oldest: 'unknown',
+            },
+        });
+    }
     if (listing.unreadable.length > 0) {
         return check(id, category, title, 'warn', `${listing.unreadable.length} pending file(s) cannot be read as a transaction`, 'commitlore pending ls', false, undefined, {
             evidence: {

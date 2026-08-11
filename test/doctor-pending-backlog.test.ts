@@ -15,7 +15,7 @@
  * than calling it pending.
  */
 
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -111,6 +111,22 @@ const advance = (): void => {
 describe('#458 doctor: pending captures', () => {
   it('reports ok when nothing has been captured here', () => {
     expect(backlogCheck().status).toBe('ok');
+  });
+
+  it('fails when the pending state cannot be read, rather than calling it empty', () => {
+    const dir = join(repo, '.git', 'commitlore', 'pending');
+    mkdirSync(dir, { recursive: true });
+    chmodSync(dir, 0o000);
+    try {
+      const report = runDoctor({ cwd: repo });
+      const check = report.checks.find((entry) => entry.id === 'pending-backlog');
+      expect(check).toMatchObject({ status: 'fail', evidence: { state: 'unreadable', error: 'EACCES' } });
+      expect(check?.detail).toMatch(/pending state could not be read/i);
+      expect(check?.detail).not.toMatch(/no captures are waiting/i);
+      expect(report).toMatchObject({ status: 'failed', exitCode: 1 });
+    } finally {
+      chmodSync(dir, 0o700);
+    }
   });
 
   it('reports ok while a capture can still apply — a waiting capture is not a lost one', () => {

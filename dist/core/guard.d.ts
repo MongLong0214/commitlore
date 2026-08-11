@@ -130,6 +130,8 @@ export interface GuardOptions {
     at?: Date;
     cwd?: string;
     noIndex?: boolean;
+    /** Authors whose records may render as directives. The caller supplies trust. */
+    trustedAuthors?: readonly string[];
     /**
      * Refuse to flag on a `Record-Id:` reference alone.
      *

@@ -40,6 +40,10 @@ export interface PendingListResult {
     transactions: PendingSummary[];
     /** Present when a file exists but cannot be read as a transaction. */
     unreadable: string[];
+    /** Whether the pending directory was read, absent, or could not be inspected. */
+    state: 'ready' | 'absent' | 'unreadable';
+    /** Filesystem error code when `state` is `unreadable`; otherwise null. */
+    error: string | null;
 }
 export interface PendingShowResult {
     transaction: (PendingRecord & {

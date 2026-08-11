@@ -225,22 +225,55 @@ export const createPending = (opts: CreatePendingOptions): string => {
  * The nonces of every pending transaction in this repository, sorted oldest name
  * first so a listing is stable between runs.
  *
- * Returns an empty list when the directory does not exist: a repository that has
- * never captured has nothing pending, which is an answer rather than an error
- * (#311).
+ * A missing directory means a repository has never captured and therefore has
+ * nothing pending. An unreadable directory is deliberately distinct: callers
+ * must not turn an unknown pending state into an empty one.
  */
-export const listPendingNonces = (cwd: string): string[] => {
+export type PendingDirectoryState = 'ready' | 'absent' | 'unreadable';
+
+export interface PendingNonceList {
+  state: PendingDirectoryState;
+  nonces: string[];
+  /** A stable filesystem error code when the pending directory could not be read. */
+  error: string | null;
+}
+
+const errorCode = (error: unknown): string =>
+  typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : 'unknown';
+
+export const listPendingNonces = (cwd: string): PendingNonceList => {
+  // Resolving the path and reading it are different questions, and collapsing
+  // them puts "this is not a repository" in the same bucket as "the directory
+  // is there and I was refused". The first is an absence — there is no pending
+  // state where there is no repository — and the second is the unknown this
+  // state exists to report. A git that cannot answer produces no errno either,
+  // so the collapsed form reported `unreadable` with the error `unknown`.
+  let dir: string;
+  try {
+    dir = pendingDir(cwd);
+  } catch {
+    return { state: 'absent', nonces: [], error: null };
+  }
+
   let entries: string[];
   try {
-    entries = readdirSync(pendingDir(cwd));
-  } catch {
-    return [];
+    entries = readdirSync(dir);
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === 'ENOENT') return { state: 'absent', nonces: [], error: null };
+    return { state: 'unreadable', nonces: [], error: code };
   }
-  return entries
-    .filter((name) => name.endsWith('.json'))
-    .map((name) => name.slice(0, -'.json'.length))
-    .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
-    .sort();
+  return {
+    state: 'ready',
+    nonces: entries
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => name.slice(0, -'.json'.length))
+      .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
+      .sort(),
+    error: null,
+  };
 };
 
 export interface ReadPendingOptions {

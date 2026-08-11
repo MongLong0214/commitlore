@@ -123,6 +123,7 @@ export const beforeChange = (opts) => {
         const queryResult = withholdBlocked(runQuery({
             cwd,
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
+            ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         }));
         activeDecisions = extractActiveDecisions(queryResult);
     }
@@ -135,6 +136,7 @@ export const beforeChange = (opts) => {
                 proposal: opts.proposal,
                 cwd,
                 ...(path === '' || path === '.' ? {} : { paths: [path] }),
+                ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
             });
             matches = guardResult.matches.map(renderGuardMatch);
             confidence = 'experimental';
