@@ -5,34 +5,9 @@
  * check owns the deliberately separate question of whether an ordinary Git
  * commit can begin that run.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { POLICY_FILE_NAME, resolvePolicy } from '../../../core/capture-policy.js';
-import { SERVER_NAME } from '../../../mcp/server.js';
+import { MCP_REGISTRATION_FILE, registersCommitloreMcpServer } from '../../../core/mcp-registration.js';
 import { check } from '../model.js';
-/** What a host reads to obtain this repository's MCP servers. */
-const MCP_REGISTRATION_FILE = '.mcp.json';
-/**
- * Whether this repository registers the capture MCP server for a host to load.
- *
- * Deliberately shallow: an unreadable or malformed file is not a registration,
- * and a registration is not a call. Both stay false rather than optimistic.
- */
-const registersCaptureServer = (cwd) => {
-    let parsed;
-    try {
-        parsed = JSON.parse(readFileSync(join(cwd, MCP_REGISTRATION_FILE), 'utf8'));
-    }
-    catch {
-        return false;
-    }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-        return false;
-    const servers = parsed['mcpServers'];
-    if (typeof servers !== 'object' || servers === null || Array.isArray(servers))
-        return false;
-    return Object.hasOwn(servers, SERVER_NAME);
-};
 /**
  * #527: a policy file said unattended capture was enabled, while normal Git
  * commits never made a pending transaction.
@@ -81,7 +56,7 @@ export const checkUnattendedCaptureInitiator = (ctx) => {
             },
         });
     }
-    if (registersCaptureServer(cwd)) {
+    if (registersCommitloreMcpServer(cwd)) {
         return check(id, category, title, 'ok', `${MCP_REGISTRATION_FILE} registers the capture server, so a host loading it can start unattended capture; ` +
             'an ordinary git commit outside that host still cannot', null, false, undefined, {
             evidence: {

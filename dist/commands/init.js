@@ -20,14 +20,17 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past.
+ * command marks failed, not a step it skips past. Repository MCP registration
+ * is deliberately advisory: failure is visible in its own line but does not
+ * make the installation fail, because doctor already reports its absence when
+ * unattended capture makes an initiator necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
  * `hooks install` reports "already installed ... (unchanged)", and an index
  * rebuild is a deterministic function of repository state) — running `init`
  * twice with nothing else changing degrades gracefully because with nothing
- * else changing, none of the three sub-invocations do.
+ * else changing, none of its sub-invocations do.
  */
 import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
@@ -41,6 +44,7 @@ import { installPrepareCommitMsgHook } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook } from '../hooks/post-commit.js';
 import { installPrePushHook } from '../hooks/pre-push.js';
 import { seedTrustedAuthor } from '../core/trusted-authors.js';
+import { MCP_REGISTRATION_FILE, registerCommitloreMcpServer, } from '../core/mcp-registration.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -172,6 +176,49 @@ const runClaudeHookStep = (opts) => {
     };
 };
 /**
+ * Make this repository advertise the capture tools a repository-scoped MCP
+ * host can load. The registration is intentionally advisory: a malformed or
+ * unwritable file leaves the repository degraded, not broken, and doctor owns
+ * the warning when unattended capture makes an initiator necessary. The other
+ * install steps still run and this one never raises init's exit status on its
+ * own.
+ */
+const runMcpRegistrationStep = (opts) => {
+    const result = registerCommitloreMcpServer(opts.cwd ?? process.cwd());
+    if (!result.ok) {
+        return {
+            step: 'mcp-registration',
+            title: 'MCP registration',
+            code: 0,
+            lines: [
+                `could not register the capture server: ${result.error}`,
+                'the repository still installs; doctor reports a missing initiator when unattended capture needs one',
+            ],
+            detail: result,
+        };
+    }
+    const headline = {
+        created: `registered the capture server for repository-scoped hosts: wrote ${MCP_REGISTRATION_FILE}`,
+        merged: `registered the capture server for repository-scoped hosts in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
+        'already-registered': `${MCP_REGISTRATION_FILE} already registers commitlore — left unchanged`,
+    }[result.state];
+    return {
+        step: 'mcp-registration',
+        title: 'MCP registration',
+        code: 0,
+        lines: [
+            headline,
+            ...(result.changed
+                ? [
+                    'the file is committed with the repository — it applies to everyone who clones it',
+                    'hosts that keep MCP configuration outside the repository are unchanged',
+                ]
+                : []),
+        ],
+        detail: result,
+    };
+};
+/**
  * The unattended-capture decision (#511 added the switch; this is where a
  * repository acquires it without anyone hand-editing JSON).
  *
@@ -279,8 +326,9 @@ const runPolicyStep = (opts) => {
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
  * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
- * 4. Capture policy — asks about unattended capture, once, where no policy exists yet
- * 5. Doctor (final check) — verifies everything is working
+ * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
+ * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
+ * 6. Doctor (final check) — verifies everything is working
  *
  * Doctor runs last on purpose. `doctor` diagnoses the hook and the index among
  * its checks, and it does not install either: run it first and its own
@@ -294,7 +342,7 @@ const runPolicyStep = (opts) => {
  */
 export const runInit = (opts = {}) => {
     const notesBefore = notesAvailability(cwdOption(opts));
-    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
+    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
     return { steps, notesBefore, exitCode: exitCode };
 };
@@ -304,6 +352,7 @@ const STEP_LABEL = {
     trust: 'Trust',
     index: 'Index',
     'claude-hook': 'Agent integration',
+    'mcp-registration': 'MCP registration',
     policy: 'Capture policy',
     doctor: 'Final check',
 };
@@ -313,6 +362,7 @@ export const STEP_HEADING = {
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
     'claude-hook': '[3/4] claude hook install',
+    'mcp-registration': 'repository MCP registration',
     // Unnumbered on purpose, the same way `trust` was added: the numbered four
     // are pinned by T-1013's tests, and renumbering them would move a frozen
     // contract for a step that does not need a number.
@@ -349,7 +399,25 @@ const policyOutcome = (step) => {
             return 'no repository';
     }
 };
-const stepLabel = (step) => step.step === 'policy' ? `${STEP_LABEL.policy} — ${policyOutcome(step)}` : STEP_LABEL[step.step];
+/** The repository-owned MCP step's outcome in the concise result report. */
+const mcpRegistrationOutcome = (step) => {
+    const detail = step.detail;
+    if (!detail.ok)
+        return 'not registered for repository-scoped hosts — doctor will report it when unattended capture needs an initiator';
+    switch (detail.state) {
+        case 'created':
+            return 'registered for repository-scoped hosts (committed — applies to the whole team)';
+        case 'merged':
+            return 'registered alongside existing servers for repository-scoped hosts (committed — applies to the whole team)';
+        case 'already-registered':
+            return 'already registered for repository-scoped hosts — left unchanged';
+    }
+};
+const stepLabel = (step) => step.step === 'policy'
+    ? `${STEP_LABEL.policy} — ${policyOutcome(step)}`
+    : step.step === 'mcp-registration'
+        ? `${STEP_LABEL['mcp-registration']} — ${mcpRegistrationOutcome(step)}`
+        : STEP_LABEL[step.step];
 /**
  * Result-oriented default output: a concise summary telling the user what is
  * ready and what is not. Internal command names are absent. Failures and
@@ -398,7 +466,7 @@ export const formatInitReport = (report) => {
         }
         lines.push('');
         if (failed.length > 0) {
-            lines.push(`init: ${failed.length}/6 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
+            lines.push(`init: ${failed.length}/7 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
         }
         else {
             lines.push(`init: ${needsAttention.length} step(s) need(s) attention — ${needsAttention.map((s) => s.title).join(', ')}`);
@@ -500,14 +568,14 @@ const resolveUnattendedChoice = async (options) => {
 export const register = (program) => {
     program
         .command('init')
-        .description('one-command onboarding: hooks install, trusted author, index --rebuild, claude hook install, capture policy, doctor --fix')
+        .description('one-command onboarding: hooks install, trusted author, index --rebuild, claude hook install, repository MCP registration, capture policy, doctor --fix')
         .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
         .option('--verbose', 'show step-by-step detail output instead of the result summary')
         .option('--json', 'emit the report as JSON')
         .option('--unattended', 'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--no-unattended', 'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)')
-        .addHelpText('after', '\nRuns six setup steps in sequence — hooks install, trusted author, index --rebuild, claude hook ' +
-        'install, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
+        .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, trusted author, index --rebuild, claude hook ' +
+        'install, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +
         're-running with nothing else changed changes nothing else.' +
@@ -519,12 +587,14 @@ export const register = (program) => {
         'already exists is reported and left unchanged, whatever the flags say. Without an interactive ' +
         'terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in ' +
         'explicitly.' +
+        '\n\nMCP registration writes the repository-scoped ' + MCP_REGISTRATION_FILE + ' only; it does not configure hosts that keep their ' +
+        'own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.' +
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
-        'still exist on their own for anyone who wants one piece rather than all six.' +
+        'still exist on their own for anyone who wants one piece rather than all seven.' +
         '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write ' +
-        'could not run at all (SPEC §10).')
+        'could not run at all (SPEC §10). A repository MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator.')
         .action(async (options) => {
         const choice = await resolveUnattendedChoice(options);
         const initOptions = options.force === undefined ? {} : { force: options.force };

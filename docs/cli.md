@@ -70,7 +70,7 @@ is in [protocol.md](protocol.md).
 
 | Command | What it does |
 |---|---|
-| `commitlore init` | one-command onboarding: `hooks install`, trusted author, `index --rebuild`, claude hook install, capture policy, `doctor --fix` |
+| `commitlore init` | one-command onboarding: `hooks install`, trusted author, `index --rebuild`, claude hook install, repository MCP registration, capture policy, `doctor --fix` |
 | `commitlore auto` | read and write the unattended-capture setting (`.commitlore-policy.json`): `status`, `on`, `off` |
 | `commitlore doctor` | checks that this repository can carry and share records |
 | `commitlore hooks` | `install`, `uninstall`, `status` for the Git hooks |
