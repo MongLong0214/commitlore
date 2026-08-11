@@ -366,10 +366,26 @@ wire_claude_code() {
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
 wire_codex_mcp() {
   if command -v codex >/dev/null 2>&1; then
-    codex_servers="$(codex mcp list --json 2>/dev/null || true)"
-    case "$codex_servers" in
-      *'"name": "commitlore"'*)
-        record_skipped "codex" "commitlore is already registered (checked with codex mcp list) -- left unchanged"
+    # A registration named `commitlore` is not evidence of a working one. A
+    # machine here carried an entry pointing at a wrapper in a temp directory
+    # left by an install from months earlier, and a name-only check called it
+    # correct -- so every session got a server that was not what the name said.
+    # Ownership is decided by the wrapper an entry points at, never by the key
+    # it sits under, which is the rule `agent-configs.ts` already states for
+    # removal.
+    codex_existing="$(codex mcp get commitlore 2>/dev/null || true)"
+    case "$codex_existing" in
+      "")
+        ;;
+      *"command: $dest"*)
+        record_skipped "codex" "commitlore already points at this install -- left unchanged"
+        return
+        ;;
+      *"$data_root"*)
+        codex mcp remove commitlore >/dev/null 2>&1 || true
+        ;;
+      *)
+        record_skipped "codex" "an mcp server named commitlore points somewhere this install did not write -- left untouched"
         return
         ;;
     esac
