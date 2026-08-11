@@ -6,8 +6,34 @@
  * commit can begin that run.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { POLICY_FILE_NAME, resolvePolicy } from '../../../core/capture-policy.js';
+import { SERVER_NAME } from '../../../mcp/server.js';
 import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
+
+/** What a host reads to obtain this repository's MCP servers. */
+const MCP_REGISTRATION_FILE = '.mcp.json';
+
+/**
+ * Whether this repository registers the capture MCP server for a host to load.
+ *
+ * Deliberately shallow: an unreadable or malformed file is not a registration,
+ * and a registration is not a call. Both stay false rather than optimistic.
+ */
+const registersCaptureServer = (cwd: string): boolean => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(join(cwd, MCP_REGISTRATION_FILE), 'utf8'));
+  } catch {
+    return false;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false;
+  const servers = (parsed as Record<string, unknown>)['mcpServers'];
+  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) return false;
+  return Object.hasOwn(servers, SERVER_NAME);
+};
 
 /**
  * #527: a policy file said unattended capture was enabled, while normal Git
@@ -19,11 +45,19 @@ import { check, type Category, type DoctorCheck, type DoctorContext } from '../m
  * is not one either: it injects context before an edit and never invokes a
  * capture tool.
  *
- * There is no repository-owned host registration surface to probe. Host skill
- * selection and host MCP calls happen outside Git and are intentionally not
- * fabricated from a diff (ADR-0028). So when the policy is on, doctor reports
- * the missing prerequisite instead of using the policy, an MCP lifecycle log,
- * or the injection hook as a proxy for it.
+ * There is one repository-owned surface worth reading: a repository-scoped
+ * `.mcp.json` registering this MCP server, which is what the plugin ships and
+ * what a host loads to obtain `commitlore_prepare_capture` at all. Registration
+ * is not proof that a host called it, and this check says so rather than
+ * implying it — but the distinction between "wired, unobserved" and "not wired"
+ * is the difference between a warning an operator can clear and one that fires
+ * forever on a correctly configured repository. A permanent unclearable warning
+ * teaches people to ignore the surface that carries the real ones.
+ *
+ * The policy file, an MCP lifecycle log and the injection hook are still not
+ * proxies for it: consent is not a trigger, a past session is not this
+ * repository's configuration, and the pre-edit integration never invokes a
+ * capture tool.
  */
 export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck => {
   const id = 'unattended-initiator';
@@ -67,6 +101,30 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
           policy: 'off',
           ordinary_git_commit: 'cannot-initiate',
           initiator: 'not-applicable',
+        },
+      },
+    );
+  }
+
+  if (registersCaptureServer(cwd)) {
+    return check(
+      id,
+      category,
+      title,
+      'ok',
+      `${MCP_REGISTRATION_FILE} registers the capture server, so a host loading it can start unattended capture; ` +
+        'an ordinary git commit outside that host still cannot',
+      null,
+      false,
+      undefined,
+      {
+        evidence: {
+          policy: 'unattended',
+          ordinary_git_commit: 'cannot-initiate',
+          initiator: 'mcp-server-registered',
+          // Registration is configuration, not observation: nothing here
+          // proves a host has ever called the tool.
+          verified: 'registration-only',
         },
       },
     );

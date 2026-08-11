@@ -1143,3 +1143,49 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     });
   });
 });
+
+describe('#527 unattended capture initiator', () => {
+  const enableUnattended = (repo: string): void => {
+    writeFileSync(
+      join(repo, '.commitlore-policy.json'),
+      `${JSON.stringify({ mode: 'auto', unattended: true }, null, 2)}\n`,
+    );
+  };
+
+  it('warns while nothing in the repository can start a capture', () => {
+    const repo = initRepo('unattended-no-initiator');
+    enableUnattended(repo);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('an ordinary git commit cannot start it');
+  });
+
+  // The warning has to be clearable, or it fires forever on exactly the
+  // repositories that are configured correctly and teaches operators to
+  // ignore the surface that carries the real ones.
+  it('clears once the repository registers the capture server, and says it checked only registration', () => {
+    const repo = initRepo('unattended-registered');
+    enableUnattended(repo);
+    writeFileSync(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({ mcpServers: { commitlore: { command: 'node', args: ['x', 'mcp'] } } }, null, 2)}\n`,
+    );
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.evidence?.['verified']).toBe('registration-only');
+  });
+
+  it('does not accept a malformed registration as an initiator', () => {
+    const repo = initRepo('unattended-malformed');
+    enableUnattended(repo);
+    writeFileSync(join(repo, '.mcp.json'), '{ not json');
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+  });
+});

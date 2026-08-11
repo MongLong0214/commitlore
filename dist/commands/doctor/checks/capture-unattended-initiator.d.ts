@@ -16,10 +16,18 @@ import { type DoctorCheck, type DoctorContext } from '../model.js';
  * is not one either: it injects context before an edit and never invokes a
  * capture tool.
  *
- * There is no repository-owned host registration surface to probe. Host skill
- * selection and host MCP calls happen outside Git and are intentionally not
- * fabricated from a diff (ADR-0028). So when the policy is on, doctor reports
- * the missing prerequisite instead of using the policy, an MCP lifecycle log,
- * or the injection hook as a proxy for it.
+ * There is one repository-owned surface worth reading: a repository-scoped
+ * `.mcp.json` registering this MCP server, which is what the plugin ships and
+ * what a host loads to obtain `commitlore_prepare_capture` at all. Registration
+ * is not proof that a host called it, and this check says so rather than
+ * implying it — but the distinction between "wired, unobserved" and "not wired"
+ * is the difference between a warning an operator can clear and one that fires
+ * forever on a correctly configured repository. A permanent unclearable warning
+ * teaches people to ignore the surface that carries the real ones.
+ *
+ * The policy file, an MCP lifecycle log and the injection hook are still not
+ * proxies for it: consent is not a trigger, a past session is not this
+ * repository's configuration, and the pre-edit integration never invokes a
+ * capture tool.
  */
 export declare const checkUnattendedCaptureInitiator: (ctx: DoctorContext) => DoctorCheck;
