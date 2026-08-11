@@ -37,6 +37,7 @@ import {
   installClaudeHook,
   uninstallClaudeHook,
 } from '../src/hooks/claude-settings.js';
+import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { createTestRepo } from './git-fixtures.js';
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,16 @@ const fixtureRepo = (): string => {
 };
 
 const REPO = fixtureRepo();
+
+// A real install builds the index (`init` step 2/4), and a query on a repository
+// without one now reports that it is answering by full scan (#522). The fixture
+// mirrors the installed state so these cases still measure what they name --
+// notably that a hook firing on a recordless path costs the agent nothing.
+{
+  const handle = openIndex({ cwd: REPO });
+  rebuildIndex(handle, { reason: 'test fixture' });
+  closeIndex(handle);
+}
 
 /** After every record has been declared and both retirements have taken effect. */
 const AT = new Date('2026-02-01T00:00:00Z');

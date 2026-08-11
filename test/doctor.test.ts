@@ -260,6 +260,11 @@ describe('doctor: notes fetch refspec', () => {
 describe('commitlore-query skill', () => {
   it('documents that multi-path queries answer literal paths and report skipped rename following', () => {
     const repo = initRepo('query-skill-multiple-paths');
+    // `init` builds the index; without one the query reports that it answered
+    // by full scan (#522), which is a true diagnostic about a different thing.
+    const handle = openIndex({ cwd: repo });
+    rebuildIndex(handle, { reason: 'test fixture' });
+    closeIndex(handle);
     const result = runQuery({ cwd: repo, paths: ['a.ts', 'b.ts'] });
     const skill = readFileSync(QUERY_SKILL, 'utf8');
 

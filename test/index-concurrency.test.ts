@@ -1,14 +1,15 @@
 /**
  * #420: the PreToolUse hook fires per edit, so several `commitlore inject`
- * processes overlap whenever an agent touches files in quick succession. Each
- * calls `ensureIndex`, which writes.
+ * processes overlap whenever an agent touches files in quick succession. A
+ * current index must remain usable to all of them under SQLite contention.
  *
- * With no `busy_timeout`, SQLite fails a contended connection immediately and
+ * With no `busy_timeout`, SQLite fails a contended reader immediately and
  * `openSource` answers from a full scan instead. The answer stays correct — the
  * fallback is the fail-safe design working — but at 100,000 commits an indexed
  * `context` is 496 ms p50 against 86,673 ms for the scan (`docs/evidence.md`),
- * so losing the index to contention that would have cleared in milliseconds is
- * expensive, and it prints a diagnostic on a path meant to be silent.
+ * so losing a current index to contention that would have cleared in
+ * milliseconds is expensive. A missing index is a separate #522 case: queries
+ * scan git and leave explicit `index`/`init` to build the derived file.
  *
  * Two things are asserted, and they fail for different reasons:
  *
@@ -88,7 +89,7 @@ const inject = async (cwd: string, file: string): Promise<{ stdout: string; stde
   }
 };
 
-describe('#420 concurrent injections use the index instead of falling back to a scan', () => {
+describe('#420 concurrent injections keep using a current index', () => {
   it('answers identically under contention, and keeps using the index', async () => {
     const dir = repoWithRecords('concurrency');
     const files = Array.from({ length: FANOUT }, (_, i) => `f${i + 1}.ts`);
@@ -99,8 +100,8 @@ describe('#420 concurrent injections use the index instead of falling back to a 
     for (const file of files) reference.push((await inject(dir, file)).stdout);
     expect(reference.every((text) => text.length > 0)).toBe(true);
 
-    // Cold start: no index at all, every process racing to build one.
-    rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+    // The same valid index is read concurrently. The busy timeout must keep a
+    // temporary checkpoint from turning an indexed read into a scan.
     const concurrent = await Promise.all(files.map((file) => inject(dir, file)));
 
     concurrent.forEach((result, index) => {
@@ -119,7 +120,7 @@ describe('#420 concurrent injections use the index instead of falling back to a 
     ).toEqual([]);
   }, 120_000);
 
-  it('leaves the index healthy after the race', async () => {
+  it('leaves a cold index absent after concurrent fallback scans', async () => {
     const dir = repoWithRecords('concurrency-health');
     const files = Array.from({ length: FANOUT }, (_, i) => `f${i + 1}.ts`);
 
@@ -131,7 +132,7 @@ describe('#420 concurrent injections use the index instead of falling back to a 
       checks: { id: string; status: string; detail: string }[];
     };
     const health = report.checks.find((entry) => entry.id === 'index-health');
-    expect(health?.status, health?.detail).toBe('ok');
-    expect(health?.detail).toContain(`${COMMITS} commits`);
+    expect(health?.status, health?.detail).toBe('warn');
+    expect(health?.detail).toContain('no index yet');
   }, 120_000);
 });

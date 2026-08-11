@@ -13,9 +13,11 @@
  * repository the tests run in.
  */
 
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { Command } from 'commander';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -24,7 +26,7 @@ import { formatContext, register, toJson } from '../src/commands/query.js';
 import { buildReport, collectRecords } from '../src/commands/stale.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
-import { scanTrailers } from '../src/core/index-db.js';
+import { closeIndex, ensureIndex, indexDbPath, scanTrailers } from '../src/core/index-db.js';
 import { writeRecord } from '../src/core/notes.js';
 import { runQuery, valuesOf, type GradedRecord, type QueryOptions } from '../src/core/query.js';
 import { loadFixtures } from './fixtures.js';
@@ -43,6 +45,10 @@ const GIT_CONFIG = [
 ];
 
 const temporaries: string[] = [];
+
+const SYNTHETIC_REPO = fileURLToPath(
+  new URL('../scripts/make-synthetic-repo.mjs', import.meta.url),
+);
 
 afterAll(() => {
   for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
@@ -197,6 +203,37 @@ const generalRepo = (): string => {
     ]),
     { 'src/auth/session.ts': 'session' },
   );
+  return dir;
+};
+
+const warmIndex = (cwd: string): void => {
+  const { handle } = ensureIndex({ cwd });
+  closeIndex(handle);
+};
+
+/** A large enough history to make repeated corpus walks visible without timing them. */
+const syntheticRepo = (commits: number): string => {
+  const dir = mkdtempSync(join(tmpdir(), 'commitlore-query-synthetic-'));
+  temporaries.push(dir);
+  const result = spawnSync(
+    process.execPath,
+    [
+      SYNTHETIC_REPO,
+      '--out',
+      dir,
+      '--commits',
+      String(commits),
+      '--trailer-ratio',
+      '0.01',
+      '--prose-ratio',
+      '0.05',
+      '--quiet',
+    ],
+    { encoding: 'utf8', shell: false },
+  );
+  if (result.status !== 0) {
+    throw new Error(`make-synthetic-repo failed (${result.status}): ${result.stderr}`);
+  }
   return dir;
 };
 
@@ -563,6 +600,7 @@ describe('D4: a record survives two renames', () => {
 
 describe('multiple paths', () => {
   const dir = generalRepo();
+  warmIndex(dir);
 
   it('warns that renames are not followed, and answers anyway', () => {
     const result = runQuery({ cwd: dir, paths: ['src/auth', 'src/cache'] });
@@ -976,6 +1014,7 @@ describe('merged-record trust', () => {
 
 describe('the --no-index fallback answers identically', () => {
   const repos = { general: generalRepo(), rename: renameRepo(), stale: staleRepo() };
+  for (const dir of Object.values(repos)) warmIndex(dir);
 
   const MATRIX: QueryOptions[] = [
     {},
@@ -1012,6 +1051,50 @@ describe('the --no-index fallback answers identically', () => {
       });
     }
   }
+});
+
+describe('#522 cold path queries', () => {
+  it('scans a substantial history once and never rebuilds the index while answering', () => {
+    const dir = syntheticRepo(1024);
+
+    // Establish the answer through the normal correctness path, then remove
+    // the derived file to reproduce a genuinely cold before-change query.
+    warmIndex(dir);
+    const indexed = runQuery({ cwd: dir, path: 'src', limit: 1 });
+    rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+    const cold = runQuery({ cwd: dir, path: 'src', limit: 1 });
+
+    expect(cold.records).toEqual(indexed.records);
+    expect(cold.fromIndex).toBe(false);
+    // This is the regression bound: folding lifecycle state and applying the
+    // path alias both reuse one materialized corpus, independent of --limit.
+    expect(cold.corpusPasses).toBe(1);
+    expect(existsSync(indexDbPath(dir))).toBe(false);
+  }, 120_000);
+
+  // Refusing the unbounded rebuild must not turn into refusing the bounded
+  // catch-up. An index that is merely behind by the commits just made is the
+  // ordinary state of a repository being worked in; if that fell back, every
+  // query after every commit would read the whole history — worse in steady
+  // state than the defect this set out to fix.
+  it('catches an index up over the new commits instead of falling back to the corpus', () => {
+    const dir = syntheticRepo(1024);
+    warmIndex(dir);
+
+    writeFileSync(join(dir, 'src', 'later.ts'), 'export const later = true;\n');
+    execGitOrThrow([...GIT_CONFIG, 'add', 'src/later.ts'], { cwd: dir });
+    execGitOrThrow([...GIT_CONFIG, 'commit', '-q', '--no-verify', '--cleanup=verbatim', '-F', '-'], {
+      cwd: dir,
+      stdin: 'feat: later\n\nLimit: only the newest commit\nRecord-Id: r-later01\nProvenance: authored\n',
+    });
+
+    const after = runQuery({ cwd: dir, path: 'src', limit: 1 });
+
+    expect(after.fromIndex).toBe(true);
+    expect(after.corpusPasses).toBe(0);
+    expect(after.records.some((record) => record.recordId === 'r-later01')).toBe(true);
+  }, 120_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -1069,6 +1152,7 @@ const PINNED = '2026-01-20T00:00:00Z';
 
 describe('the four commands', () => {
   const dir = generalRepo();
+  warmIndex(dir);
   const commands = ['context', 'limits', 'ruled-out', 'warnings'] as const;
 
   it('limits reports only Limit:', () => {
@@ -1184,6 +1268,7 @@ describe('the four commands', () => {
 
 describe('trust presentation on every consumer route', () => {
   const { dir, blockedSha } = gradedConsumerRepo();
+  warmIndex(dir);
   const commands = ['limits', 'ruled-out', 'context', 'warnings'] as const;
   const trusted = ['--trusted-author', 'test@example.invalid'];
 
@@ -1288,6 +1373,7 @@ const normalize = (payload: unknown): unknown => {
 
 describe('--json', () => {
   const dir = staleRepo();
+  warmIndex(dir);
 
   it('emits the stable schema', () => {
     const result = runQuery({

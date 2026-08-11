@@ -78,7 +78,8 @@ describe('#406 a classifier change invalidates an index built before it', () => 
 
   it('discards an index stamped with an older schema version', () => {
     const dir = repoWithNoiseTrailer('classifier-stale');
-    ensureIndex(dir);
+    const indexed = ensureIndex({ cwd: dir });
+    closeIndex(indexed.handle);
 
     const head = git(dir, ['rev-parse', 'HEAD']).trim();
 
@@ -130,18 +131,15 @@ describe('#406 a classifier change invalidates an index built before it', () => 
       'a record cached under the previous classifier was served as current',
     ).toEqual([]);
 
-    // And the index must have been *rebuilt*, not bypassed. This is the half of
-    // #406 about `doctor`: it reported the stale cache `ok` because it compares
-    // the cache against HEAD and never against the classifier. A read that
-    // quietly fell back to a git scan would leave the bad file on disk and
-    // `doctor` would still be describing it.
-    expect(result.fromIndex, 'the answer came from a scan, leaving the stale file in place').toBe(
-      true,
-    );
-    const healed = openIndex({ cwd: dir, readonly: true });
-    expect(indexInfo(healed).schemaVersion).toBe(String(SCHEMA_VERSION));
-    expect(indexInfo(healed).trailers).toBe(0);
-    closeIndex(healed);
+    // #522 changes the serving boundary: a consumer query must not turn this
+    // derived-file repair into an unbounded rebuild. It refuses the stale file,
+    // answers from git once, and leaves explicit `index`/`init` to heal it.
+    expect(result.fromIndex).toBe(false);
+    expect(result.corpusPasses).toBe(1);
+    const staleAfterQuery = openIndex({ cwd: dir, readonly: true });
+    expect(indexInfo(staleAfterQuery).schemaVersion).toBe('2');
+    expect(indexInfo(staleAfterQuery).trailers).toBe(1);
+    closeIndex(staleAfterQuery);
   });
 
   /**
