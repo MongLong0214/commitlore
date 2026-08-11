@@ -28,6 +28,14 @@
  * The 0.6 fraction is not a guess. Completed pilot runs topped out at 0.48 of
  * budget and the failing task sat at 1.00, so good and bad separate anywhere
  * between; 0.6 touches neither end.
+ *
+ * Those pilot runs were measured under a hook matcher the product does not
+ * ship (`Edit|Write|MultiEdit|NotebookEdit`, which never fires on `Read`,
+ * instead of the shipping `Read|Edit|Write`), so the 0.48/1.00 split is
+ * UNVERIFIED against the surface the study measures — the ON arm it screened
+ * was lighter than the shipping one. 0.6 stays frozen as the screen; whether
+ * the split needs re-measuring is a separate decision this fix does not make
+ * (PRD §4.6).
  */
 
 import { createHash } from "node:crypto";
@@ -36,7 +44,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CLI_ENTRY } from "../../hooks-settings.ts";
+import { CLAUDE_HOOK_MATCHER, CLI_ENTRY } from "../../hooks-settings.ts";
 
 /** Fraction of the per-task budget a probe must finish within (PRD §4.6). */
 export const RUNTIME_FRACTION = 0.6;
@@ -83,7 +91,7 @@ const armSettings = (dir: string, condition: ProbeCondition): string => {
       ? {
           PreToolUse: [
             {
-              matcher: "Edit|Write|MultiEdit|NotebookEdit",
+              matcher: CLAUDE_HOOK_MATCHER,
               hooks: [{ type: "command", command: `node ${JSON.stringify(CLI_ENTRY)} inject --hook-input` }],
             },
           ],
