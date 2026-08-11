@@ -42,6 +42,12 @@ COPY dist/ /opt/commitlore/dist/
 #   node /opt/cdeb/egress-proxy.mjs
 COPY bench/cdeb/runtime/egress-proxy.mjs /opt/cdeb/egress-proxy.mjs
 
+# CDEB-04's observer is TypeScript only because the pinned Node runtime strips
+# its erasable types.  It is copied with the parser it imports; the settings
+# command invokes this wrapper, which in turn invokes the shipping dist CLI.
+COPY bench/cdeb/runtime/exposure.ts /opt/cdeb/exposure.ts
+COPY bench/cdeb/runtime/shipping-proxy.ts /opt/cdeb/shipping-proxy.ts
+
 # Isolated HOME (§7.2): created empty, owned by nobody's history. The run
 # spec sets HOME here and mounts nothing over it; the container is discarded
 # after each logical run, so nothing in it can reach the next one.
@@ -49,3 +55,8 @@ RUN mkdir -p /home/agent
 
 WORKDIR /repo
 ENV HOME=/home/agent
+# `node:sqlite` emits a PID-bearing runtime warning.  The pinned runtime
+# suppresses Node warnings for both a direct shipping invocation and the child
+# the proxy starts; otherwise two equivalent hook processes cannot have equal
+# stderr bytes solely because their process IDs differ.
+ENV NODE_NO_WARNINGS=1
