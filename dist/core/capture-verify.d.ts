@@ -49,7 +49,9 @@ export interface VerifyCaptureResult {
 }
 /** The duplicate-check view used by capture verification. */
 export interface CaptureVerificationHistory {
-    activeRecordIds: Set<string>;
+    /** Every identity declared in repository history, including retired records. */
+    recordIds: Set<string>;
+    /** Canonical tuples of active records, which are the only duplicate content. */
     activeCanonicalTuples: Set<string>;
 }
 /**
@@ -72,7 +74,7 @@ export declare const loadCaptureVerificationHistory: (cwd: string) => CaptureVer
  *
  * Delegates to `verifyDraft` for each record, then performs:
  * - Source hash verification (transcript/diff match what prepare stored)
- * - Duplicate Record-Id detection against active records
+ * - Duplicate Record-Id detection against every historical identity
  * - Canonical duplicate detection
  * - Notes availability check (unfetched → incomplete)
  *

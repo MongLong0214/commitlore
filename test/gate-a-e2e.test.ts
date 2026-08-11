@@ -184,12 +184,12 @@ const runGit = (cwd: string, args: string[]): { stdout: string; stderr: string; 
 const TRANSCRIPT_CONTENT = 'The team decided to use SQLite instead of PostgreSQL for local storage.';
 
 /** Create a valid draft JSON that will pass verification against TRANSCRIPT_CONTENT. */
-const makeValidDraft = (recordId: string): object => ({
+const makeValidDraft = (recordId?: string): object => ({
   records: [
     {
       trailers: [
         { key: 'Ruled-out', value: 'PostgreSQL | SQLite chosen for local storage simplicity' },
-        { key: 'Record-Id', value: recordId },
+        ...(recordId === undefined ? [] : [{ key: 'Record-Id', value: recordId }]),
       ],
       evidence: [
         {
@@ -206,7 +206,7 @@ const makeValidDraft = (recordId: string): object => ({
 /** Run the full CLI capture pipeline: write files, invoke capture command. */
 const runCapturePipeline = (
   cwd: string,
-  recordId: string,
+  recordId?: string,
 ): { nonce: string | null; staged: boolean; stderr: string } => {
   const transcriptPath = join(cwd, '.commitlore-transcript.tmp');
   const draftPath = join(cwd, '.commitlore-draft.tmp');
@@ -371,7 +371,7 @@ describe('Scenario 1: CLI capture full chain', () => {
     runGit(repo, ['add', 'feature.ts']);
 
     // Run capture pipeline
-    const capture = runCapturePipeline(repo, 'r-e2escenario1');
+    const capture = runCapturePipeline(repo);
     expect(capture.staged, 'capture must stage successfully').toBe(true);
     expect(capture.nonce, 'nonce must be returned').toMatch(/^[0-9a-f]{32}$/);
 
@@ -379,9 +379,11 @@ describe('Scenario 1: CLI capture full chain', () => {
     const commitResult = runGit(repo, ['commit', '-m', 'feat: add feature']);
     expect(commitResult.status, `git commit failed: ${commitResult.stderr}`).toBe(0);
 
-    // Verify the commit message contains our Record-Id
+    // The draft omitted Record-Id, so the complete capture path must mint one
+    // before the ordinary Git commit applies its pending record.
     const logResult = runGit(repo, ['log', '-1', '--format=%B']);
-    expect(logResult.stdout).toContain('Record-Id: r-e2escenario1');
+    const minted = /^Record-Id: (r-[a-z0-9]{6,})$/m.exec(logResult.stdout)?.[1];
+    expect(minted).toMatch(/^r-[a-z0-9]{6,}$/);
 
     // Verify the pending file was consumed
     const pendingFiles = readPendingFiles(repo);
@@ -394,7 +396,7 @@ describe('Scenario 1: CLI capture full chain', () => {
 
     // Verify record is queryable via CLI context
     const queryResult = runCli(repo, ['context', '--json']);
-    expect(queryResult.stdout).toContain('r-e2escenario1');
+    expect(queryResult.stdout).toContain(minted);
   });
 });
 

@@ -72,6 +72,22 @@ const validDraft = (quote: string): DraftRecord => ({
   ],
 });
 
+/** A valid draft that relies on the capture pipeline to supply its identity. */
+const validDraftWithoutRecordId = (quote: string): DraftRecord => ({
+  trailers: [{ key: 'Limit', value: 'Do not use shared mutable state for config' }],
+  evidence: [
+    {
+      key: 'Limit',
+      source: 'transcript',
+      quote,
+      locator: 'L1-L2',
+    },
+  ],
+});
+
+const recordId = (record: DraftRecord): string | undefined =>
+  record.trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
+
 /** A draft record whose quote does NOT exist in the transcript (fabricated). */
 const fabricatedDraft = (): DraftRecord => ({
   trailers: [
@@ -139,6 +155,103 @@ describe('verifyCaptureRecords', () => {
 
     expect(result.accepted).toHaveLength(1);
     expect(result.validation_result).toBe('pass');
+  });
+
+  it('mints a grammar-valid Record-Id for an accepted draft that omitted one', () => {
+    const transcript = 'We decided: Do not use shared mutable state for config because it causes race conditions.';
+    const diff = '';
+    const nonce = prepare(cwd, transcript, diff);
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [validDraftWithoutRecordId('Do not use shared mutable state for config because it causes race conditions')],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(result.accepted).toHaveLength(1);
+    expect(recordId(result.accepted[0]!.record)).toMatch(/^r-[a-z0-9]{6,}$/);
+  });
+
+  it('mints the same Record-Id when an unchanged draft is prepared again', () => {
+    const transcript = 'We decided: Do not use shared mutable state for config because it causes race conditions.';
+    const diff = '';
+    const quote = 'Do not use shared mutable state for config because it causes race conditions';
+
+    const first = verifyCaptureRecords({
+      nonce: prepare(cwd, transcript, diff),
+      draft: [validDraftWithoutRecordId(quote)],
+      transcript,
+      diff,
+      cwd,
+    });
+    const second = verifyCaptureRecords({
+      nonce: prepare(cwd, transcript, diff),
+      draft: [validDraftWithoutRecordId(quote)],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(recordId(first.accepted[0]!.record)).toBe(recordId(second.accepted[0]!.record));
+  });
+
+  it('preserves a Record-Id supplied by an accepted draft', () => {
+    const transcript = 'We decided: Do not use shared mutable state for config because it causes race conditions.';
+    const diff = '';
+    const nonce = prepare(cwd, transcript, diff);
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [validDraft('Do not use shared mutable state for config because it causes race conditions')],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(recordId(result.accepted[0]!.record)).toBe('r-test123abc');
+  });
+
+  it('deterministically probes past an identity already present in history', () => {
+    const transcript = 'We decided: Do not use shared mutable state for config because it causes race conditions.';
+    const diff = '';
+    const quote = 'Do not use shared mutable state for config because it causes race conditions';
+    const first = verifyCaptureRecords({
+      nonce: prepare(cwd, transcript, diff),
+      draft: [validDraftWithoutRecordId(quote)],
+      transcript,
+      diff,
+      cwd,
+    });
+    const collidingId = recordId(first.accepted[0]!.record);
+
+    writeFileSync(join(cwd, '.record-message'), `Reserve an identity\n\nLimit: unrelated historical record\nRecord-Id: ${collidingId}\n`);
+    execSync('git commit --allow-empty -F .record-message', { cwd, stdio: 'ignore' });
+
+    const second = verifyCaptureRecords({
+      nonce: prepare(cwd, transcript, diff),
+      draft: [validDraftWithoutRecordId(quote)],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(second.accepted).toHaveLength(1);
+    expect(recordId(second.accepted[0]!.record)).not.toBe(collidingId);
+    expect(recordId(second.accepted[0]!.record)).toMatch(/^r-[a-z0-9]{6,}$/);
+  });
+
+  it('does not mint an identity for a rejected draft', () => {
+    const transcript = 'Normal conversation about nothing.';
+    const diff = '';
+    const nonce = prepare(cwd, transcript, diff);
+    const rejected = validDraftWithoutRecordId('This sentence was never said by anyone in any conversation');
+
+    const result = verifyCaptureRecords({ nonce, draft: [rejected], transcript, diff, cwd });
+
+    expect(result.accepted).toHaveLength(0);
+    expect(recordId(rejected)).toBeUndefined();
   });
 
   // === Security property: all rejected → empty, never throws ===

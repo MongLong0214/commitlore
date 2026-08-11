@@ -96,13 +96,13 @@ const readHistoricalRecords = (cwd) => {
         return [{ sha, committedAt, trailers }];
     });
 };
-/** Build exactly the two active-record sets the ordinary verifier accepts. */
+/** Build the historical identity and active-content sets the ordinary verifier accepts. */
 const verificationHistory = (records) => {
-    const realIds = new Set();
+    const recordIds = new Set();
     const stream = records.map((record, index) => {
         const id = record.trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
         if (id !== undefined)
-            realIds.add(id);
+            recordIds.add(id);
         return {
             sha: record.sha,
             committedAt: record.committedAt,
@@ -111,18 +111,15 @@ const verificationHistory = (records) => {
                 : record.trailers,
         };
     });
-    const activeRecordIds = new Set();
     const activeCanonicalTuples = new Set();
     for (const state of foldLifecycle(stream, { at: new Date() })) {
         if (state.lifecycle !== 'active')
             continue;
-        if (realIds.has(state.recordId))
-            activeRecordIds.add(state.recordId);
         const tuple = captureCanonicalTuple(state.resolvedTrailers);
         if (tuple !== '')
             activeCanonicalTuples.add(tuple);
     }
-    return { activeRecordIds, activeCanonicalTuples };
+    return { recordIds, activeCanonicalTuples };
 };
 /** The ordinary verifier sees only records made before the commit being replayed. */
 const historiesBeforeCommit = (cwd) => {
