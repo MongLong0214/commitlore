@@ -32929,6 +32929,11 @@ var isCommitloreEntry = (format, entry, wrapperPath) => {
 // src/core/codex-plugin.ts
 var MARKER_VERSION = 1;
 var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join14(homedir2(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join14(homedir2(), ".local", "share");
+var codexSaid = (result) => {
+  const said = (result.stderr.trim() || result.stdout.trim()).split("\n")[0]?.trim() ?? "";
+  if (said === "") return [];
+  return [`codex said: ${said}`];
+};
 var runCodexCommand = (args) => {
   const result = spawnSync5("codex", args, { encoding: "utf8", timeout: 3e4 });
   return {
@@ -32987,6 +32992,7 @@ var installCodexPlugin = (options = {}) => {
       exitCode: 2,
       report: [
         "could not list Codex plugin marketplaces; no plugin installation was recorded",
+        ...codexSaid(marketplaces),
         `retry with: ${codexPluginInstallCommand()}`
       ]
     };
@@ -32998,6 +33004,7 @@ var installCodexPlugin = (options = {}) => {
         exitCode: 2,
         report: [
           `could not add the ${plugin.marketplace} Codex marketplace; no plugin installation was recorded`,
+          ...codexSaid(added),
           `retry with: ${codexPluginInstallCommand()}`
         ]
       };
@@ -33010,6 +33017,7 @@ var installCodexPlugin = (options = {}) => {
       exitCode: 2,
       report: [
         "could not list Codex plugins; no plugin installation was recorded",
+        ...codexSaid(listed),
         `retry with: ${codexPluginInstallCommand()}`
       ]
     };
@@ -33021,6 +33029,7 @@ var installCodexPlugin = (options = {}) => {
         exitCode: 2,
         report: [
           `could not install ${codexPluginSelector(plugin)}; no plugin installation was recorded`,
+          ...codexSaid(added),
           `retry with: ${codexPluginInstallCommand()}`
         ]
       };
