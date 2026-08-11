@@ -62,8 +62,13 @@ CommitLore 没有托管服务；它把 record 保存在 Git 中。其 MCP 服务
 
 插件所含仅此而已：MCP 服务器、编辑前钩子与技能。它不会把 `commitlore` 放到 `PATH` 上，因此下面的 `commitlore …` 命令来自 `install.sh` / `install.ps1`，还需要那一步安装。
 
-**Codex** — 安装 CommitLore plugin，然后运行下方相同的 repository setup。plugin
-提供 delivery 与 capture；下方的 CLI 提供 repository command。
+**Codex** — 原生插件只需一条命令即可安装:
+
+```bash
+commitlore plugin install-codex
+```
+
+它通过 Codex 自己的 CLI 注册 marketplace 与 plugin，绝不直接修改其配置或缓存。下面的标准安装脚本在检测到 Codex 时也会执行同一条命令。安装后请开启新的 Codex session —— plugin 的 skill 与 MCP server 在 session 启动时加载，而不是在安装时。下面的 CLI 提供 repository 命令。
 
 两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
 

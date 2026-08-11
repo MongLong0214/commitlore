@@ -35,8 +35,9 @@
 #
 # A second phase runs after the wrapper is in place (see "detect and wire
 # coding agents" below): it looks for which coding agents are on this machine
-# and registers commitlore's MCP server with each one it finds. That phase
-# never fails the script.
+# and registers CommitLore with each one it finds. Codex receives its native
+# plugin (including the MCP server and skill); other hosts receive an MCP entry.
+# That phase never fails the script.
 set -eu
 
 REPO="MongLong0214/commitlore"
@@ -363,12 +364,28 @@ wire_claude_code() {
 # TOML while the CLI is present invites drift when Codex changes its format.
 # https://developers.openai.com/codex/mcp
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
-wire_codex() {
+wire_codex_mcp() {
   if command -v codex >/dev/null 2>&1; then
-    codex_servers="$(codex mcp list --json 2>/dev/null || true)"
-    case "$codex_servers" in
-      *'"name": "commitlore"'*)
-        record_skipped "codex" "commitlore is already registered (checked with codex mcp list) -- left unchanged"
+    # A registration named `commitlore` is not evidence of a working one. A
+    # machine here carried an entry pointing at a wrapper in a temp directory
+    # left by an install from months earlier, and a name-only check called it
+    # correct -- so every session got a server that was not what the name said.
+    # Ownership is decided by the wrapper an entry points at, never by the key
+    # it sits under, which is the rule `agent-configs.ts` already states for
+    # removal.
+    codex_existing="$(codex mcp get commitlore 2>/dev/null || true)"
+    case "$codex_existing" in
+      "")
+        ;;
+      *"command: $dest"*)
+        record_skipped "codex" "commitlore already points at this install -- left unchanged"
+        return
+        ;;
+      *"$data_root"*)
+        codex mcp remove commitlore >/dev/null 2>&1 || true
+        ;;
+      *)
+        record_skipped "codex" "an mcp server named commitlore points somewhere this install did not write -- left untouched"
         return
         ;;
     esac
@@ -404,6 +421,22 @@ wire_codex() {
       record_skipped "codex" "could not write $config_path"
     fi
   fi
+}
+
+# Codex's plugin API owns the plugin cache and marketplace. The packaged plugin
+# supplies its own MCP server and capture skill, while the marker lets uninstall
+# remove only the plugin this installer placed.
+wire_codex_plugin() {
+  if "$dest" plugin install-codex >/dev/null 2>&1; then
+    record_wired "codex: installed the commitlore plugin (marketplace: commitlore)"
+  else
+    record_skipped "codex" "could not install the commitlore plugin -- run manually: $dest plugin install-codex"
+  fi
+}
+
+wire_codex() {
+  wire_codex_mcp
+  wire_codex_plugin
 }
 
 # Gemini CLI -- same mcpServers shape as Claude Desktop.

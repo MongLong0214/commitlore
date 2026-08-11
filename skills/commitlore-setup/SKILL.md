@@ -1,6 +1,7 @@
 ---
 name: commitlore-setup
-description: Use when a git repository needs CommitLore wired up for the first time, or when its hook/notes configuration looks broken. Runs the diagnostic, installs the commit-msg validation hook, fixes the notes fetch refspec so records survive a clone or fetch, and builds the local record index. Trigger phrases include "set up commitlore in this repo", "install the commitlore hook", "commitlore doctor is warning", "why isn't commitlore capturing commits here", "wire up commit trailers", "commitlore 저장소에 붙여줘", "commitlore 훅 설치해줘".
+description: >-
+  Use when a git repository needs CommitLore wired up for the first time, or when its hook/notes configuration looks broken. Runs the diagnostic, installs the commit-msg validation hook, fixes the notes fetch refspec so records survive a clone or fetch, and builds the local record index. Trigger phrases include "set up commitlore in this repo", "install the commitlore hook", "commitlore doctor is warning", "why isn't commitlore capturing commits here", "wire up commit trailers", "commitlore 저장소에 붙여줘", "commitlore 훅 설치해줘".
 ---
 
 # CommitLore setup

@@ -1,9 +1,9 @@
 /**
- * Where each coding agent keeps its MCP config. `install.sh` and `install.ps1`
- * use Codex's own MCP CLI when it exists; that CLI owns the write but persists
- * the same Codex config that the installers edit only as their CLI-absent
- * fallback. `commitlore uninstall` reads this table to decide what it may
- * remove; nothing else in `src/` knows these paths.
+ * Where each coding agent installation stores the state `install.sh` and
+ * `install.ps1` create. Codex's direct MCP registration uses its own CLI when
+ * possible and a config-file fallback otherwise; its plugin uses the separate
+ * client-owned plugin API. `commitlore uninstall` reads this table to decide
+ * what it may remove; nothing else in `src/` knows these paths or selectors.
  *
  * One table, because two copies of this knowledge drift apart without failing:
  * an installer grows an agent the uninstall never learns about and the entry is
@@ -13,17 +13,19 @@
  */
 
 /**
- * The four shapes the installers write. They are not interchangeable: opencode
- * nests under `mcp` and spells the command as an array, so a recogniser written
- * for `mcpServers` alone leaves an opencode entry behind — silently, because a
- * removal that finds nothing looks exactly like a removal with nothing to do.
+ * The four MCP shapes the installers write. They are not interchangeable:
+ * opencode nests under `mcp` and spells the command as an array, so a recogniser
+ * written for `mcpServers` alone leaves an opencode entry behind — silently,
+ * because a removal that finds nothing looks exactly like a removal with
+ * nothing to do.
  */
 export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp' | 'yaml-mcp_servers';
 
 /** Which interface owns registration for this config. */
 export type RegistrationPath = 'cli-or-config-fallback' | 'config-file';
 
-export interface AgentConfig {
+export interface McpAgentConfig {
+  readonly kind: 'mcp';
   /** The name the installers report this agent by. */
   readonly agent: string;
   /** Path segments below the user's home directory. */
@@ -32,26 +34,56 @@ export interface AgentConfig {
   readonly registration: RegistrationPath;
 }
 
+/**
+ * Codex owns the plugin cache and marketplace, so the plugin route uses its
+ * CLI rather than edit either. The marker is ours: it is the only proof that
+ * this installer — rather than a user — installed this plugin, and it is what
+ * makes removal conservative and repeatable.
+ */
+export interface CodexPluginConfig {
+  readonly kind: 'codex-plugin';
+  readonly agent: 'codex';
+  readonly marketplace: string;
+  readonly plugin: string;
+  readonly marketplaceSource: string;
+  /** Relative to the platform's CLI data directory. */
+  readonly dataRelativePath: readonly string[];
+}
+
+export type AgentConfig = McpAgentConfig | CodexPluginConfig;
+
 export const AGENT_CONFIGS: readonly AgentConfig[] = [
   {
+    kind: 'mcp',
     agent: 'codex',
     homeRelativePath: ['.codex', 'config.toml'],
     format: 'toml-mcp_servers',
     registration: 'cli-or-config-fallback',
   },
   {
+    kind: 'codex-plugin',
+    agent: 'codex',
+    marketplace: 'commitlore',
+    plugin: 'commitlore',
+    marketplaceSource: 'MongLong0214/commitlore',
+    dataRelativePath: ['commitlore', 'codex-plugin.json'],
+  },
+  {
+    kind: 'mcp',
     agent: 'gemini-cli',
     homeRelativePath: ['.gemini', 'settings.json'],
     format: 'json-mcpServers',
     registration: 'config-file',
   },
   {
+    kind: 'mcp',
     agent: 'cursor',
     homeRelativePath: ['.cursor', 'mcp.json'],
     format: 'json-mcpServers',
     registration: 'config-file',
   },
   {
+    kind: 'mcp',
     agent: 'hermes',
     homeRelativePath: ['.hermes', 'config.yaml'],
     format: 'yaml-mcp_servers',
@@ -62,18 +94,25 @@ export const AGENT_CONFIGS: readonly AgentConfig[] = [
   // The bidirectional assertion found it, which is the reason that assertion
   // reads the installers instead of trusting a list.
   {
+    kind: 'mcp',
     agent: 'windsurf',
     homeRelativePath: ['.codeium', 'windsurf', 'mcp_config.json'],
     format: 'json-mcpServers',
     registration: 'config-file',
   },
   {
+    kind: 'mcp',
     agent: 'opencode',
     homeRelativePath: ['.config', 'opencode', 'opencode.json'],
     format: 'json-mcp',
     registration: 'config-file',
   },
 ];
+
+export const isMcpAgentConfig = (config: AgentConfig): config is McpAgentConfig => config.kind === 'mcp';
+
+export const isCodexPluginConfig = (config: AgentConfig): config is CodexPluginConfig =>
+  config.kind === 'codex-plugin';
 
 /** The key both installers write the server under, in every format. */
 export const SERVER_KEY = 'commitlore';

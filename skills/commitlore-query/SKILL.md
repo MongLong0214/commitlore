@@ -1,6 +1,7 @@
 ---
 name: commitlore-query
-description: Use when about to read, edit, or reason about a file and it would help to know its recorded decision history — active constraints, alternatives already ruled out, warnings left by a previous author, or which records have gone stale. Reads CommitLore records for a path or the whole repo without re-deriving them from raw git log. Trigger phrases include "what does commitlore know about this file", "why was X ruled out here", "any warnings on this path", "check for stale records", "has this approach been tried before", "이 파일에 대한 commitlore 기록 보여줘", "여기서 뭐가 기각됐는지 확인해줘".
+description: >-
+  Use when about to read, edit, or reason about a file and it would help to know its recorded decision history — active constraints, alternatives already ruled out, warnings left by a previous author, or which records have gone stale. Reads CommitLore records for a path or the whole repo without re-deriving them from raw git log. Trigger phrases include "what does commitlore know about this file", "why was X ruled out here", "any warnings on this path", "check for stale records", "has this approach been tried before", "이 파일에 대한 commitlore 기록 보여줘", "여기서 뭐가 기각됐는지 확인해줘".
 ---
 
 # CommitLore query

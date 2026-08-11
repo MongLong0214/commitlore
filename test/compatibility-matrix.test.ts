@@ -118,8 +118,8 @@ describe('T-1122 the compatibility statement exists and is the authoritative one
 describe('T-1122 the install paths table names paths that exist', () => {
   const rows = (): string[][] => tableUnder(doc, '## Install paths');
 
-  it('names exactly the three paths, in the order a reader should try them', () => {
-    expect(keysOf(rows())).toEqual(['Plugin', 'Shell script', 'PowerShell script']);
+  it('names exactly the four paths, in the order a reader should try them', () => {
+    expect(keysOf(rows())).toEqual(['Codex plugin', 'Plugin', 'Shell script', 'PowerShell script']);
   });
 
   it('every script it names is committed', () => {
@@ -130,18 +130,24 @@ describe('T-1122 the install paths table names paths that exist', () => {
     }
   });
 
-  it('the plugin row derives its commands from the two manifests', () => {
-    const row = rows().find(([p]) => /plugin/i.test(p));
+  it('the Claude plugin row derives its command from the marketplace manifest', () => {
+    const row = rows().find(([p]) => p === 'Plugin');
     const market = readJson(join(REPO_ROOT, '.claude-plugin/marketplace.json')) as MarketplaceManifest;
     const entry = market.plugins?.[0];
     expect(unticked(row![1])).toContain(`/plugin install ${String(entry?.name)}@${String(market.name)}`);
+  });
+
+  it('the Codex plugin row names the idempotent command and the Codex manifest it loads', () => {
+    const row = rows().find(([p]) => p === 'Codex plugin');
+    expect(unticked(row![1])).toBe('commitlore plugin install-codex');
+    expect(existsSync(join(REPO_ROOT, '.codex-plugin', 'plugin.json'))).toBe(true);
   });
 
   it('no table outside ## Hosts carries a host status word', () => {
     // The forbidden claim is "Windows is supported", not "Windows is supported
     // in one particular table". Checking only ## Hosts left the document able to
     // make it anywhere else.
-    for (const heading of ['## Install paths', '## Prerequisites', '## Plugin capabilities']) {
+    for (const heading of ['## Install paths', '## Prerequisites', '## Codex plugin', '## Plugin capabilities']) {
       for (const row of tableUnder(doc, heading)) {
         for (const cell of row) {
           expect(
@@ -151,6 +157,30 @@ describe('T-1122 the install paths table names paths that exist', () => {
         }
       }
     }
+  });
+});
+
+describe('Codex plugin documentation is backed by the Codex manifest', () => {
+  const rows = (): string[][] => tableUnder(doc, '## Codex plugin');
+
+  it('names exactly the Codex MCP server, capture skill, and identity', () => {
+    expect(keysOf(rows())).toEqual(['MCP server', 'capture skill', 'plugin identity']);
+  });
+
+  it('matches the Codex manifest and the MCP server it declares', () => {
+    const manifest = readJson(join(REPO_ROOT, '.codex-plugin', 'plugin.json')) as PluginManifest & {
+      mcpServers?: unknown;
+    };
+    const mcp = readJson(join(REPO_ROOT, '.mcp.json')) as McpManifest;
+    const valueOf = (name: string): string => rows().find(([capability]) => capability === name)?.[2] ?? '';
+
+    expect(manifest.mcpServers).toBe('./.mcp.json');
+    expect(valueOf('MCP server')).toContain(
+      [mcp.mcpServers?.commitlore?.command, ...((mcp.mcpServers?.commitlore?.args as string[]) ?? [])].join(' '),
+    );
+    expect(valueOf('capture skill')).toContain('transcript-backed capture');
+    expect(valueOf('plugin identity')).toContain(`\`${String(manifest.name)}\``);
+    expect(manifest.version).toBe(readJson(join(REPO_ROOT, 'package.json')).version);
   });
 });
 

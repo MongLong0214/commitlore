@@ -80,7 +80,7 @@ beforeAll(() => {
 const stubPath = (opts: {
   node?: 'current' | 'old' | 'absent';
   git?: boolean;
-  codex?: 'mcp-success';
+  codex?: 'mcp-success' | 'mcp-stale-ours' | 'mcp-foreign';
   hermes?: boolean;
 }): string => {
   const bin = tempDir('bin');
@@ -101,6 +101,28 @@ const stubPath = (opts: {
     writeFileSync(join(bin, 'git'), `#!/bin/sh\nexec ${realGit} "$@"\n`);
   }
   chmodSync(join(bin, 'git'), 0o755);
+  if (opts.codex === 'mcp-stale-ours' || opts.codex === 'mcp-foreign') {
+    // `mcp get` answers with an entry that already exists. For 'mcp-stale-ours'
+    // it points inside the CommitLore data root, the shape an install of ours
+    // leaves behind; for 'mcp-foreign' it points somewhere we never wrote.
+    const pointsAt =
+      opts.codex === 'mcp-stale-ours'
+        ? '"$HOME"/.local/share/commitlore/v0.0.1/bin/commitlore'
+        : '/opt/somebody-elses/commitlore';
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!/bin/sh
+printf '%s\\n' "$*" >>"$COMMITLORE_CODEX_CALLS"
+case "$1:$2" in
+  mcp:get) printf 'commitlore\\n  enabled: true\\n  command: %s\\n' ${pointsAt} ;;
+  mcp:remove) exit 0 ;;
+  mcp:add) exit 0 ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(join(bin, 'codex'), 0o755);
+  }
   if (opts.codex === 'mcp-success') {
     writeFileSync(
       join(bin, 'codex'),
@@ -108,6 +130,8 @@ const stubPath = (opts: {
 printf '%s\\n' "$*" >>"$COMMITLORE_CODEX_CALLS"
 case "$1:$2" in
   mcp:list) printf '[]\\n' ;;
+  mcp:get) exit 1 ;;
+  mcp:remove) exit 0 ;;
   mcp:add) exit 0 ;;
   *) exit 1 ;;
 esac
@@ -246,7 +270,10 @@ describe('Codex MCP registration uses the owning CLI when it is available', () =
 
     expect(result.status).toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('registered commitlore with codex mcp add');
-    expect(readFileSync(calls, 'utf8')).toContain('mcp list --json');
+    // The ownership question is asked of the entry, not of the list: a
+    // registration named `commitlore` can point anywhere, and one here
+    // pointed at a wrapper in a temp directory from an install months old.
+    expect(readFileSync(calls, 'utf8')).toContain('mcp get commitlore');
     expect(readFileSync(calls, 'utf8')).toContain('mcp add commitlore --');
     expect(existsSync(join(home, '.codex', 'config.toml'))).toBe(false);
   });
@@ -261,6 +288,44 @@ describe('Codex MCP registration uses the owning CLI when it is available', () =
     expect(result.status).toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('config-file fallback; codex CLI is unavailable');
     expect(readFileSync(config, 'utf8')).toContain('[mcp_servers.commitlore]');
+  });
+});
+
+describe('Codex registration is judged by where it points, not by its name', () => {
+  // A machine here carried an `mcp_servers.commitlore` entry aimed at a wrapper
+  // in a temp directory, left by an install from months earlier. The name-only
+  // check called it correct and skipped, so every session got a server that was
+  // not what the name said, and reinstalling never repaired it.
+  it('repairs an entry left by an earlier install of ours', () => {
+    const home = tempDir('codex-stale-home');
+    const calls = join(tempDir('codex-stale-calls'), 'calls.txt');
+
+    const result = runInstaller({
+      home,
+      codex: 'mcp-stale-ours',
+      extraEnv: { COMMITLORE_CODEX_CALLS: calls },
+    });
+
+    expect(result.status).toBe(0);
+    const invoked = readFileSync(calls, 'utf8');
+    expect(invoked).toContain('mcp remove commitlore');
+    expect(invoked).toContain('mcp add commitlore --');
+    expect(`${result.stdout}${result.stderr}`).toContain('registered commitlore with codex mcp add');
+  });
+
+  it('leaves a server this install did not write alone, and says so', () => {
+    const home = tempDir('codex-foreign-home');
+    const calls = join(tempDir('codex-foreign-calls'), 'calls.txt');
+
+    const result = runInstaller({
+      home,
+      codex: 'mcp-foreign',
+      extraEnv: { COMMITLORE_CODEX_CALLS: calls },
+    });
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(calls, 'utf8')).not.toContain('mcp remove');
+    expect(`${result.stdout}${result.stderr}`).toContain('points somewhere this install did not write');
   });
 });
 

@@ -64,8 +64,13 @@ CommitLore에는 호스팅 서비스가 없고 record를 Git에 보관합니다.
 
 플러그인이 담는 것은 여기까지다: MCP 서버, 편집 전 훅, 스킬. `commitlore`를 `PATH`에 올리지는 않으므로, 아래의 `commitlore …` 명령은 `install.sh` / `install.ps1`에서 오고 그 설치까지 필요하다.
 
-**Codex** — CommitLore plugin을 설치한 뒤 아래와 같은 repository setup을 한다.
-plugin이 delivery와 capture를 제공하고, 아래 CLI가 repository command를 제공한다.
+**Codex** — 네이티브 플러그인은 한 명령으로 설치한다:
+
+```bash
+commitlore plugin install-codex
+```
+
+Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache를 직접 고치지 않는다. 아래의 표준 설치 스크립트도 Codex를 감지하면 같은 명령을 실행한다. 설치 뒤에는 새 Codex session을 시작한다 — plugin의 skill과 MCP server는 설치 시점이 아니라 session 시작 시점에 로드된다. 아래 CLI가 repository command를 제공한다.
 
 두 경로 모두의 전제 조건: Node.js 22+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 

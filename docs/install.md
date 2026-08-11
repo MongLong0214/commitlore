@@ -13,6 +13,26 @@ The copy-paste commands, pinned to the current release, are in the
 `package.json` by `test/readme.test.ts`, so it is the one place a pin cannot go
 stale unnoticed.
 
+## The Codex plugin
+
+```sh
+commitlore plugin install-codex
+```
+
+That one command asks Codex to add CommitLore's marketplace when needed and
+install `commitlore@commitlore`. It is safe to re-run: it checks Codex's own
+marketplace and plugin lists first, never edits `config.toml` or the plugin cache
+itself, and writes a small ownership marker only after Codex reports success.
+
+`install.sh` and `install.ps1` run this same command automatically when they
+detect Codex, so their normal one-liner remains one command for a new machine.
+Start a **new Codex session** after installation; that is the boundary at which
+Codex discovers the skill and starts the plugin's MCP server.
+
+The Codex plugin carries the MCP server in `.mcp.json`, declared by
+`.codex-plugin/plugin.json`, plus the Codex capture skill. It puts no new manual
+MCP block in `~/.codex/config.toml`.
+
 ## The Claude Code plugin
 
 ```
@@ -109,9 +129,11 @@ commitlore uninstall
 ```
 
 Removes what `install.sh` or `install.ps1` wrote — the wrapper, the pinned
-checkout, and the MCP entry it added to each agent config. When the Codex CLI
-is available, it removes the entry through that CLI after confirming it points
-at this install; otherwise it uses the same config-file fallback. It removes
+checkout, MCP entries it added to agent configs, and a Codex plugin only when
+`commitlore plugin install-codex` recorded that it installed it. When the Codex
+CLI is available, it removes the direct MCP entry through that CLI after
+confirming it points at this install; otherwise it uses the same config-file
+fallback. It removes
 nothing it did not write, and names what it leaves:
 
 | Left behind | Removed by |
@@ -119,6 +141,7 @@ nothing it did not write, and names what it leaves:
 | the per-repository hooks: `commit-msg`, `prepare-commit-msg`, `post-commit` | `commitlore hooks uninstall` |
 | the agent hook | `commitlore inject uninstall-claude-hook` |
 | the Claude Code plugin | `/plugin uninstall commitlore@commitlore` |
+| a Codex plugin installed independently | `codex plugin remove commitlore@commitlore` |
 
 `commitlore uninstall --dry-run` reports what would be removed and changes
 nothing. `commitlore hooks uninstall` restores any hook CommitLore replaced, and
