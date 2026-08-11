@@ -17,6 +17,7 @@
  * - Default maximum is one record per commit.
  */
 import { type VerifiedRecord } from './harvest-verify.js';
+import { type PendingRecord } from './pending.js';
 import type { DraftRecord } from './harvest.js';
 export interface VerifyCaptureOptions {
     nonce: string;
@@ -24,6 +25,15 @@ export interface VerifyCaptureOptions {
     transcript: string;
     diff: string;
     cwd: string;
+    /**
+     * An in-memory prepared transaction. Shadow uses this instead of reading a
+     * pending file it deliberately never created.
+     */
+    pending?: PendingRecord;
+    /** Do not persist verification back to `.git/commitlore/pending`. */
+    readOnly?: boolean;
+    /** A read-only snapshot of active records, reusable across a historical run. */
+    history?: CaptureVerificationHistory | null;
 }
 export interface CaptureRejection {
     record: DraftRecord;
@@ -37,6 +47,26 @@ export interface VerifyCaptureResult {
     incomplete: boolean;
     overlap_check: 'canonical_exact_only';
 }
+/** The duplicate-check view used by capture verification. */
+export interface CaptureVerificationHistory {
+    activeRecordIds: Set<string>;
+    activeCanonicalTuples: Set<string>;
+}
+/**
+ * Canonical identity tuple for de-duplication: lowercased key + value, no scope
+ * (scope is path, handled by the query layer). Two records with the same
+ * canonical tuple are duplicates regardless of Record-Id.
+ */
+export declare const captureCanonicalTuple: (trailers: readonly {
+    key: string;
+    value: string;
+}[]) => string;
+/**
+ * Read the active records exactly as verification does, without touching the
+ * derived index. A caller with a known read-only history can provide it through
+ * `VerifyCaptureOptions.history` instead.
+ */
+export declare const loadCaptureVerificationHistory: (cwd: string) => CaptureVerificationHistory | null;
 /**
  * Verifies capture records against the transcript and diff.
  *
@@ -50,3 +80,12 @@ export interface VerifyCaptureResult {
  * Never blocks: an empty or incomplete result is a valid outcome, not an error.
  */
 export declare const verifyCaptureRecords: (opts: VerifyCaptureOptions) => VerifyCaptureResult;
+/**
+ * Run the ordinary verifier against an in-memory transaction without writing a
+ * verification result. This is intentionally a thin wrapper, so shadow keeps
+ * every source, evidence, duplicate, and policy check the live path uses.
+ */
+export declare const verifyCaptureRecordsReadOnly: (opts: Omit<VerifyCaptureOptions, "nonce" | "pending" | "readOnly"> & {
+    nonce: string;
+    pending: PendingRecord;
+}) => VerifyCaptureResult;

@@ -15,6 +15,7 @@
  * Structured for subcommand extension (T-1019 will add `capture gc`).
  */
 import type { Command } from 'commander';
+import { type CaptureShadowResult } from '../core/capture-shadow.js';
 import type { GuardAdvisory } from '../core/pending.js';
 /** Why a drafted record did not survive. Empty when everything was accepted. */
 export interface CaptureRejectionReport {
@@ -41,6 +42,8 @@ interface CaptureResult {
      */
     rejected?: CaptureRejectionReport[];
 }
+/** Render historical measurement output without ever echoing a blocked secret. */
+export declare const formatCaptureShadow: (result: CaptureShadowResult) => string;
 /**
  * Run the full capture pipeline: prepare → verify → stage.
  *
