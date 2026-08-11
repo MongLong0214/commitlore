@@ -180,8 +180,10 @@ Read this before installing, not after.
 
 - **The measurement is of the weaker tier.** Every record in the 1,160-run study
   rendered `[claim]`, which tells the agent to weigh the record rather than obey
-  it. The `[directive]` tier became reachable only afterwards, so the number
-  above is the floor, measured — not the ceiling, claimed.
+  it. The `[directive]` tier became reachable only afterwards, and nothing here
+  measured it — the study's own verdict says this number "does not transfer to
+  the stronger one". Whether a directive does better, worse, or the same is
+  unmeasured in both directions.
 - **One model, one harness, ten constructed fixtures.** The oracle reads the
   final implementation state, so it shows that agents which received records
   re-proposed less often. It does not show that any of them read anything.
