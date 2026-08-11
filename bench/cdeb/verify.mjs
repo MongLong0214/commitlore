@@ -27,7 +27,7 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zstdDecompressSync } from "node:zlib";
 
@@ -273,12 +273,14 @@ const verifyStudy = (root, studyName) => {
   const freezePath = join(dir, "public-freeze.json");
   let expectedRuns = null;
   let freeze = null;
+  let freezeNamedRows = null;
   if (!existsSync(freezePath)) {
     fail(study, "public-freeze.json is missing — rows without a freeze manifest commit to nothing");
   } else {
     freeze = readJson(study, freezePath);
     if (freeze !== null && validateAgainst(study, "study", freezePath, freeze)) {
       expectedRuns = freeze.expected_logical_runs;
+      freezeNamedRows = new Set(freeze.analysis_inputs.row_files);
     }
   }
   if (!existsSync(join(dir, "randomization.json"))) {
@@ -297,17 +299,38 @@ const verifyStudy = (root, studyName) => {
     }
   }
 
-  const seenIds = new Map(); // logical_run_id -> path
+  const seenIds = new Map(); // logical_run_id -> { path, row }
+
+  const isRunRow = (path) => {
+    const normalized = relative(dir, path).split("\\").join("/");
+    return /^runs\/[^/]+\/row\.json$/.test(normalized);
+  };
+
+  const isFreezeNamedRow = (path) => {
+    if (freezeNamedRows === null) return false;
+    const normalized = relative(dir, path).split("\\").join("/");
+    return freezeNamedRows.has(normalized);
+  };
 
   const verifyRow = (path) => {
     const row = readJson(study, path);
     if (!validateAgainst(study, "result", path, row)) return null;
     checkDerived(study, path, row);
     checkExposure(study, path, row);
-    if (seenIds.has(row.logical_run_id)) {
-      fail(study, `duplicate logical_run_id ${row.logical_run_id} in ${path} and ${seenIds.get(row.logical_run_id)}`);
+    const existing = seenIds.get(row.logical_run_id);
+    if (existing !== undefined) {
+      // CDEB-09 publishes a byte-identical per-run audit copy and the opaque,
+      // freeze-named analyzer input. They are one logical observation, not a
+      // duplicate row. Any different bytes, two run rows, or an unregistered
+      // rows/ file remains a duplicate finding.
+      const pairedViews =
+        (isRunRow(path) && isFreezeNamedRow(existing.path)) ||
+        (isRunRow(existing.path) && isFreezeNamedRow(path));
+      if (!pairedViews || JSON.stringify(existing.row) !== JSON.stringify(row)) {
+        fail(study, `duplicate logical_run_id ${row.logical_run_id} in ${path} and ${existing.path}`);
+      }
     } else {
-      seenIds.set(row.logical_run_id, path);
+      seenIds.set(row.logical_run_id, { path, row });
     }
     if (expectedIds !== null && !expectedIds.has(row.logical_run_id)) {
       fail(study, `${path}: logical_run_id ${row.logical_run_id} is not in the randomization's expected set`);
