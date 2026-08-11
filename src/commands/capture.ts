@@ -25,6 +25,7 @@ import { stageCaptureRecord } from '../core/capture-stage.js';
 import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { runCaptureShadow, type CaptureShadowResult } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 import { parseDraft, type DraftRejection } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
 import type { GuardAdvisory } from '../core/pending.js';
@@ -128,6 +129,8 @@ export const runCapture = (opts: {
   diffPath?: string;
   draftPath?: string;
   cwd: string;
+  /** Authors whose guard-advisory records may render as directives. */
+  trustedAuthors?: readonly string[];
   /**
    * Declare the whole run unattended (#511). Refused by prepare unless the
    * repository opted in — the CLI never decides consent on its own.
@@ -151,6 +154,7 @@ export const runCapture = (opts: {
   const prepareResult = prepareCaptureContext({
     cwd,
     transcript,
+    ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     ...(opts.unattended === true ? { unattended: true } : {}),
   });
   if (prepareResult.policy_error !== null) {
@@ -297,10 +301,12 @@ export const register = (program: Command): void => {
           diffPath?: string;
           draftPath?: string;
           cwd: string;
+          trustedAuthors?: readonly string[];
           unattended?: boolean;
         } = { transcriptPath: options.transcript, cwd };
         if (options.diff !== undefined) runOpts.diffPath = options.diff;
         if (options.draft !== undefined) runOpts.draftPath = options.draft;
+        runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
         if (options.unattended === true) runOpts.unattended = true;
 
         const result = runCapture(runOpts);

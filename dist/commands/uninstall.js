@@ -112,24 +112,27 @@ export const runUninstall = async (options = {}) => {
     const report = [];
     const removed = [];
     const kept = [];
+    const failures = [];
     const runCodex = options.runCodex ?? runCodexCommand;
     const wrapper = join(home, '.local', 'bin', 'commitlore');
     if (existsSync(wrapper)) {
-        const contents = (() => {
-            try {
-                return readFileSync(wrapper, 'utf8');
-            }
-            catch {
-                return '';
-            }
-        })();
+        let contents;
+        try {
+            contents = readFileSync(wrapper, 'utf8');
+        }
+        catch {
+            kept.push(wrapper);
+            failures.push(wrapper);
+            report.push(`kept: ${wrapper} — it could not be read, so it was left untouched`);
+            contents = '';
+        }
         if (contents.includes(WRAPPER_MARKER)) {
             if (!dryRun)
                 rmSync(wrapper, { force: true });
             removed.push(wrapper);
             report.push(`${say}: ${wrapper}`);
         }
-        else {
+        else if (!failures.includes(wrapper)) {
             kept.push(wrapper);
             report.push(`kept: ${wrapper} — it carries no commitlore marker, so it was not written by this installer`);
         }
@@ -158,6 +161,7 @@ export const runUninstall = async (options = {}) => {
         if (listed.status !== 0 || listed.error !== undefined) {
             retainDataRoot = true;
             kept.push(markerPath);
+            failures.push(markerPath);
             report.push(`kept: Codex plugin ${selector} — Codex could not list installed plugins`);
             continue;
         }
@@ -166,6 +170,7 @@ export const runUninstall = async (options = {}) => {
             if (result.status !== 0 || result.error !== undefined) {
                 retainDataRoot = true;
                 kept.push(markerPath);
+                failures.push(markerPath);
                 report.push(`kept: Codex plugin ${selector} — Codex could not remove it`);
                 continue;
             }
@@ -200,6 +205,7 @@ export const runUninstall = async (options = {}) => {
         const path = join(home, ...codexConfig.homeRelativePath);
         if (codexList.state === 'unavailable' || codexList.state === 'invalid') {
             kept.push(path);
+            failures.push(path);
             report.push(`kept: ${path} — codex mcp list could not verify its entry, so the config was left untouched`);
         }
         else if (codexList.state === 'listed') {
@@ -221,6 +227,7 @@ export const runUninstall = async (options = {}) => {
                     }
                     else {
                         kept.push(path);
+                        failures.push(path);
                         report.push(`kept: ${path} — codex mcp remove could not remove its entry, so the config was left untouched`);
                     }
                 }
@@ -241,6 +248,7 @@ export const runUninstall = async (options = {}) => {
         }
         catch {
             kept.push(path);
+            failures.push(path);
             report.push(`kept: ${path} — it could not be read, so it was left untouched`);
             continue;
         }
@@ -276,6 +284,7 @@ export const runUninstall = async (options = {}) => {
             // Untouched on purpose. Rewriting a file we could not parse is how an
             // uninstall destroys a config it was only supposed to edit one key of.
             kept.push(path);
+            failures.push(path);
             report.push(`kept: ${path} — it could not be parsed as JSON, so it was left untouched`);
             continue;
         }
@@ -296,10 +305,10 @@ export const runUninstall = async (options = {}) => {
     report.push('  the Claude Code plugin — remove it with `/plugin uninstall commitlore@commitlore`');
     report.push('  a Codex plugin not installed by this command — remove it with `codex plugin remove commitlore@commitlore`');
     return {
-        exitCode: 0,
+        exitCode: failures.length === 0 ? 0 : 1,
         report,
         removed,
-        json: { removed, kept, dryRun },
+        json: { removed, kept, failures, dryRun },
     };
 };
 export const registerUninstall = (program) => {

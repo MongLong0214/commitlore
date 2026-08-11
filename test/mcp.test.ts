@@ -622,6 +622,58 @@ describe('the context resource', () => {
 });
 
 describe('commitlore_query', () => {
+  it('uses the configured trusted authors on every MCP context route', async () => {
+    const trusted = makeRepo();
+    commitAt(
+      trusted,
+      '2026-02-01T00:00:00Z',
+      [
+        'Record the trusted route',
+        '',
+        'Warn: preserve the verified ordering',
+        'Record-Id: r-mcpdirect',
+        'Provenance: authored',
+      ].join('\n'),
+      { 'src/trusted.ts': 'export const trusted = true;' },
+    );
+    execGitOrThrow(['config', '--local', '--add', 'commitlore.trustedAuthor', 'test@example.invalid'], {
+      cwd: trusted,
+    });
+    const trustedStub = startStub(trusted);
+
+    try {
+      await handshake(trustedStub);
+      const response = await trustedStub.request('tools/call', {
+        name: 'commitlore_query',
+        arguments: { kind: 'context', path: 'src/trusted.ts' },
+      });
+      const mcpRecords = toolJson(response)['records'] as Record<string, unknown>[];
+      expect(mcpRecords.find((record) => record['recordId'] === 'r-mcpdirect')?.['trust']).toBe('directive');
+
+      const cliJson = runCli(trusted, ['context', '--json', 'src/trusted.ts']) as {
+        records: Array<Record<string, unknown>>;
+      };
+      expect(cliJson.records.find((record) => record['recordId'] === 'r-mcpdirect')?.['trust']).toBe('directive');
+
+      const cliText = spawnSync(process.execPath, [CLI, 'context', 'src/trusted.ts'], {
+        shell: false,
+        encoding: 'utf8',
+        cwd: trusted,
+      });
+      expect(cliText.status).toBe(0);
+      expect(cliText.stdout).toMatch(/r-mcpdirect\s+\S+\s+\[directive\]/);
+
+      const before = await trustedStub.request('tools/call', {
+        name: 'commitlore_before_change',
+        arguments: { path: 'src/trusted.ts' },
+      });
+      const active = toolJson(before)['active_decisions'] as Record<string, unknown>[];
+      expect(active.find((record) => record['recordId'] === 'r-mcpdirect')?.['trust']).toBe('directive');
+    } finally {
+      await trustedStub.close();
+    }
+  });
+
   it('answers with the same schema as `commitlore context --json`', async () => {
     const response = await stub.request('tools/call', {
       name: 'commitlore_query',

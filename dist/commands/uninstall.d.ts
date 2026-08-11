@@ -35,6 +35,8 @@ export interface UninstallResult {
     readonly json: {
         readonly removed: readonly string[];
         readonly kept: readonly string[];
+        /** Entries this uninstall could not complete after identifying them. */
+        readonly failures: readonly string[];
         readonly dryRun: boolean;
     };
 }

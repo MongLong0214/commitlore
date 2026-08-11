@@ -13,7 +13,7 @@
  *    with `expires_at: null` was never collected at all.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -63,6 +63,24 @@ describe('#311 pending transactions are reviewable with the CLI', () => {
     execFileSync('git', ['init', '--quiet'], { cwd });
     execFileSync('git', ['-c', 'user.email=t@e.invalid', '-c', 'user.name=T', 'commit', '--quiet', '--allow-empty', '-m', 'seed'], { cwd });
     expect(runPendingList({ cwd }).transactions).toEqual([]);
+  });
+
+  it('reports an unreadable pending directory as unknown, not empty', () => {
+    const { cwd } = repoWithTransaction();
+    const pendingDir = join(cwd, '.git', 'commitlore', 'pending');
+    chmodSync(pendingDir, 0o000);
+    try {
+      const result = runPendingList({ cwd });
+      expect(result).toMatchObject({
+        state: 'unreadable',
+        transactions: [],
+        unreadable: [],
+      });
+      expect(result.error).toBe('EACCES');
+      expect(runPendingShow({ cwd, nonce: 'a' }).error).toMatch(/pending state could not be read/i);
+    } finally {
+      chmodSync(pendingDir, 0o700);
+    }
   });
 
   it('marks a transaction stale once HEAD has moved past its base', () => {

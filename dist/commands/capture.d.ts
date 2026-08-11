@@ -56,6 +56,8 @@ export declare const runCapture: (opts: {
     diffPath?: string;
     draftPath?: string;
     cwd: string;
+    /** Authors whose guard-advisory records may render as directives. */
+    trustedAuthors?: readonly string[];
     /**
      * Declare the whole run unattended (#511). Refused by prepare unless the
      * repository opted in — the CLI never decides consent on its own.

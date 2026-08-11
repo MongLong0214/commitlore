@@ -146,27 +146,42 @@ export const createPending = (opts) => {
     atomicWriteJson(filePath, record);
     return nonce;
 };
-/**
- * The nonces of every pending transaction in this repository, sorted oldest name
- * first so a listing is stable between runs.
- *
- * Returns an empty list when the directory does not exist: a repository that has
- * never captured has nothing pending, which is an answer rather than an error
- * (#311).
- */
+const errorCode = (error) => typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : 'unknown';
 export const listPendingNonces = (cwd) => {
-    let entries;
+    // Resolving the path and reading it are different questions, and collapsing
+    // them puts "this is not a repository" in the same bucket as "the directory
+    // is there and I was refused". The first is an absence — there is no pending
+    // state where there is no repository — and the second is the unknown this
+    // state exists to report. A git that cannot answer produces no errno either,
+    // so the collapsed form reported `unreadable` with the error `unknown`.
+    let dir;
     try {
-        entries = readdirSync(pendingDir(cwd));
+        dir = pendingDir(cwd);
     }
     catch {
-        return [];
+        return { state: 'absent', nonces: [], error: null };
     }
-    return entries
-        .filter((name) => name.endsWith('.json'))
-        .map((name) => name.slice(0, -'.json'.length))
-        .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
-        .sort();
+    let entries;
+    try {
+        entries = readdirSync(dir);
+    }
+    catch (error) {
+        const code = errorCode(error);
+        if (code === 'ENOENT')
+            return { state: 'absent', nonces: [], error: null };
+        return { state: 'unreadable', nonces: [], error: code };
+    }
+    return {
+        state: 'ready',
+        nonces: entries
+            .filter((name) => name.endsWith('.json'))
+            .map((name) => name.slice(0, -'.json'.length))
+            .filter((nonce) => /^[0-9a-f]{32}$/.test(nonce))
+            .sort(),
+        error: null,
+    };
 };
 /**
  * Reads a pending transaction by nonce.

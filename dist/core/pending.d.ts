@@ -104,11 +104,18 @@ export declare const createPending: (opts: CreatePendingOptions) => string;
  * The nonces of every pending transaction in this repository, sorted oldest name
  * first so a listing is stable between runs.
  *
- * Returns an empty list when the directory does not exist: a repository that has
- * never captured has nothing pending, which is an answer rather than an error
- * (#311).
+ * A missing directory means a repository has never captured and therefore has
+ * nothing pending. An unreadable directory is deliberately distinct: callers
+ * must not turn an unknown pending state into an empty one.
  */
-export declare const listPendingNonces: (cwd: string) => string[];
+export type PendingDirectoryState = 'ready' | 'absent' | 'unreadable';
+export interface PendingNonceList {
+    state: PendingDirectoryState;
+    nonces: string[];
+    /** A stable filesystem error code when the pending directory could not be read. */
+    error: string | null;
+}
+export declare const listPendingNonces: (cwd: string) => PendingNonceList;
 export interface ReadPendingOptions {
     cwd: string;
 }

@@ -9,6 +9,8 @@ import { type GuardAdvisory, type PendingRecord } from './pending.js';
 export interface PrepareCaptureOptions {
     cwd: string;
     transcript: string;
+    /** Authors whose guard-advisory records may render as directives. */
+    trustedAuthors?: readonly string[];
     /**
      * Declare that this capture runs without asking: the pipeline prepares,
      * verifies and stages it with no person in the loop (ADR-0030, #511).

@@ -60,6 +60,8 @@ export interface BeforeChangeOptions {
   path: string;
   proposal?: string;
   cwd?: string;
+  /** Authors whose active records may direct the caller. */
+  trustedAuthors?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +178,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
       runQuery({
         cwd,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
+        ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       }),
     );
     activeDecisions = extractActiveDecisions(queryResult);
@@ -191,6 +194,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
         proposal: opts.proposal,
         cwd,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
+        ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       });
       matches = guardResult.matches.map(renderGuardMatch);
       confidence = 'experimental';

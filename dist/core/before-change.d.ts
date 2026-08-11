@@ -47,6 +47,8 @@ export interface BeforeChangeOptions {
     path: string;
     proposal?: string;
     cwd?: string;
+    /** Authors whose active records may direct the caller. */
+    trustedAuthors?: readonly string[];
 }
 /**
  * The unified before-change query. Returns exactly five fields.

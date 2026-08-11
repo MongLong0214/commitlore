@@ -23,6 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { DEFAULT_THRESHOLD, guard, renderGuardMatch, } from '../core/guard.js';
 import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 /** Exit status when at least one ruled-out alternative matched (SPEC §10: a finding). */
 export const FLAGGED_EXIT_CODE = 1;
 /** Usage error: a broken invocation, not a finding (SPEC §10). */
@@ -214,6 +215,7 @@ const runAsHook = async (options) => {
         threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
         at: evaluationInstant(options.at) ?? new Date(),
         noIndex: options.index === false,
+        trustedAuthors: configuredTrustedAuthors(process.cwd()),
         // A hook fires on compliance too, so the citation signal is off here for the
         // reason it exists: naming a record is what obeying one looks like.
         requireContent: true,
@@ -258,6 +260,7 @@ export const register = (program) => {
                 threshold,
                 at,
                 noIndex: options.index === false,
+                trustedAuthors: configuredTrustedAuthors(process.cwd()),
                 ...(options.requireContent === true ? { requireContent: true } : {}),
             });
             process.stderr.write(scopeCaveat(paths));

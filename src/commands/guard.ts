@@ -34,6 +34,7 @@ import {
   type RenderedGuardMatch,
 } from '../core/guard.js';
 import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
+import { configuredTrustedAuthors } from '../core/trusted-authors.js';
 
 /** Exit status when at least one ruled-out alternative matched (SPEC §10: a finding). */
 export const FLAGGED_EXIT_CODE = 1;
@@ -301,6 +302,7 @@ const runAsHook = async (options: GuardCommandOptions): Promise<void> => {
     threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
     at: evaluationInstant(options.at) ?? new Date(),
     noIndex: options.index === false,
+    trustedAuthors: configuredTrustedAuthors(process.cwd()),
     // A hook fires on compliance too, so the citation signal is off here for the
     // reason it exists: naming a record is what obeying one looks like.
     requireContent: true,
@@ -365,6 +367,7 @@ export const register = (program: Command): void => {
           threshold,
           at,
           noIndex: options.index === false,
+          trustedAuthors: configuredTrustedAuthors(process.cwd()),
           ...(options.requireContent === true ? { requireContent: true } : {}),
         });
 

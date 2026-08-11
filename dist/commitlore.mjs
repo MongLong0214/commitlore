@@ -15606,7 +15606,8 @@ var guard = (opts) => {
     ...opts.paths === void 0 ? {} : { paths: opts.paths },
     ...opts.at === void 0 ? {} : { at: opts.at },
     ...opts.cwd === void 0 ? {} : { cwd: opts.cwd },
-    ...opts.noIndex === void 0 ? {} : { noIndex: opts.noIndex }
+    ...opts.noIndex === void 0 ? {} : { noIndex: opts.noIndex },
+    ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
   });
   const availability = {
     history: result.history,
@@ -15732,14 +15733,27 @@ var createPending = (opts) => {
   atomicWriteJson(filePath, record2);
   return nonce;
 };
+var errorCode = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 && typeof error2.code === "string" ? error2.code : "unknown";
 var listPendingNonces = (cwd) => {
+  let dir;
+  try {
+    dir = pendingDir(cwd);
+  } catch {
+    return { state: "absent", nonces: [], error: null };
+  }
   let entries;
   try {
-    entries = readdirSync(pendingDir(cwd));
-  } catch {
-    return [];
+    entries = readdirSync(dir);
+  } catch (error2) {
+    const code = errorCode(error2);
+    if (code === "ENOENT") return { state: "absent", nonces: [], error: null };
+    return { state: "unreadable", nonces: [], error: code };
   }
-  return entries.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -".json".length)).filter((nonce) => /^[0-9a-f]{32}$/.test(nonce)).sort();
+  return {
+    state: "ready",
+    nonces: entries.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -".json".length)).filter((nonce) => /^[0-9a-f]{32}$/.test(nonce)).sort(),
+    error: null
+  };
 };
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
@@ -15879,7 +15893,8 @@ var computeGuardAdvisory = (opts) => {
       proposal: opts.proposal,
       ...opts.paths.length > 0 ? { paths: opts.paths } : {},
       cwd: opts.cwd,
-      ...opts.readOnly === true ? { noIndex: true } : {}
+      ...opts.readOnly === true ? { noIndex: true } : {},
+      ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
     });
     return {
       matches: result.matches.map(renderGuardMatch),
@@ -15927,7 +15942,8 @@ var prepareValues = (opts) => {
     proposal: transcript,
     paths: diffPaths,
     cwd,
-    ...opts.readOnly ? { readOnly: true } : {}
+    ...opts.readOnly ? { readOnly: true } : {},
+    ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
   });
   return {
     base_head: baseHead,
@@ -16726,6 +16742,37 @@ var runCaptureShadow = (opts) => {
   };
 };
 
+// src/core/trusted-authors.ts
+var TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
+var configuredTrustedAuthors = (cwd) => {
+  const result = execGit(["config", "--local", "--get-all", TRUSTED_AUTHOR_KEY], { cwd });
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
+};
+var seedTrustedAuthor = (cwd) => {
+  const existing = configuredTrustedAuthors(cwd);
+  if (existing.length > 0) {
+    return {
+      recorded: false,
+      author: existing[0] ?? null,
+      reason: `already trusts ${String(existing.length)} author(s) \u2014 left unchanged`
+    };
+  }
+  const email2 = execGit(["config", "--get", "user.email"], { cwd }).stdout.trim();
+  if (email2 === "") {
+    return {
+      recorded: false,
+      author: null,
+      reason: "no git user.email on this machine, so records stay [claim] until an author is set"
+    };
+  }
+  const written = execGit(["config", "--local", "--add", TRUSTED_AUTHOR_KEY, email2], { cwd });
+  if (written.code !== 0) {
+    return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
+  }
+  return { recorded: true, author: email2, reason: `records you author are now [directive]` };
+};
+
 // src/core/pending-gc.ts
 import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
@@ -16918,6 +16965,7 @@ var runCapture = (opts) => {
   const prepareResult = prepareCaptureContext({
     cwd,
     transcript,
+    ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors },
     ...opts.unattended === true ? { unattended: true } : {}
   });
   if (prepareResult.policy_error !== null) {
@@ -17023,6 +17071,7 @@ var register3 = (program3) => {
       const runOpts = { transcriptPath: options.transcript, cwd };
       if (options.diff !== void 0) runOpts.diffPath = options.diff;
       if (options.draft !== void 0) runOpts.draftPath = options.draft;
+      runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
       if (options.unattended === true) runOpts.unattended = true;
       const result = runCapture(runOpts);
       if (options.json) {
@@ -18252,7 +18301,11 @@ var runPendingList = (opts) => {
   const head = resolveHead(cwd);
   const transactions = [];
   const unreadable = [];
-  for (const nonce of listPendingNonces(cwd)) {
+  const listed = listPendingNonces(cwd);
+  if (listed.state === "unreadable") {
+    return { transactions, unreadable, state: listed.state, error: listed.error };
+  }
+  for (const nonce of listed.nonces) {
     let record2 = null;
     try {
       record2 = readPending(nonce, { cwd });
@@ -18267,11 +18320,15 @@ var runPendingList = (opts) => {
     transactions.push(summarise(record2, head));
   }
   transactions.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  return { transactions, unreadable };
+  return { transactions, unreadable, state: listed.state, error: listed.error };
 };
 var resolvePrefix = (cwd, prefix) => {
   const wanted = prefix.trim().toLowerCase();
-  const candidates = listPendingNonces(cwd).filter((nonce) => nonce.startsWith(wanted));
+  const listed = listPendingNonces(cwd);
+  if (listed.state === "unreadable") {
+    return { nonce: null, error: `pending state could not be read (${listed.error ?? "unknown"})` };
+  }
+  const candidates = listed.nonces.filter((nonce) => nonce.startsWith(wanted));
   if (candidates.length === 0) {
     return { nonce: null, error: `no pending transaction matches ${JSON.stringify(wanted)}` };
   }
@@ -18351,6 +18408,10 @@ var age = (from, now) => {
   return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`;
 };
 var renderList = (result, now) => {
+  if (result.state === "unreadable") {
+    return `pending state could not be read (${result.error ?? "unknown"}); no conclusion can be drawn
+`;
+  }
   if (result.transactions.length === 0 && result.unreadable.length === 0) {
     return "no pending capture transactions\n";
   }
@@ -18382,9 +18443,11 @@ var register4 = (program3) => {
     if (options.json === true) {
       process.stdout.write(`${JSON.stringify(result, null, 2)}
 `);
+      if (result.state === "unreadable") process.exitCode = 1;
       return;
     }
     process.stdout.write(renderList(result, Date.now()));
+    if (result.state === "unreadable") process.exitCode = 1;
   });
   pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
     const result = runPendingShow({ nonce });
@@ -18442,6 +18505,27 @@ var checkPendingBacklog = (ctx) => {
       false,
       void 0,
       { evidence: { stranded: "0", staged_expired: "0", oldest: "none" } }
+    );
+  }
+  if (listing.state === "unreadable") {
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      `pending state could not be read (${listing.error ?? "unknown"}); no conclusion can be drawn about waiting captures`,
+      "restore read access to .git/commitlore/pending, then run commitlore pending ls",
+      false,
+      true,
+      {
+        evidence: {
+          state: "unreadable",
+          error: listing.error ?? "unknown",
+          stranded: "unknown",
+          staged_expired: "unknown",
+          oldest: "unknown"
+        }
+      }
     );
   }
   if (listing.unreadable.length > 0) {
@@ -21126,37 +21210,6 @@ var register9 = (program3) => {
   });
 };
 
-// src/core/trusted-authors.ts
-var TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
-var configuredTrustedAuthors = (cwd) => {
-  const result = execGit(["config", "--local", "--get-all", TRUSTED_AUTHOR_KEY], { cwd });
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
-};
-var seedTrustedAuthor = (cwd) => {
-  const existing = configuredTrustedAuthors(cwd);
-  if (existing.length > 0) {
-    return {
-      recorded: false,
-      author: existing[0] ?? null,
-      reason: `already trusts ${String(existing.length)} author(s) \u2014 left unchanged`
-    };
-  }
-  const email2 = execGit(["config", "--get", "user.email"], { cwd }).stdout.trim();
-  if (email2 === "") {
-    return {
-      recorded: false,
-      author: null,
-      reason: "no git user.email on this machine, so records stay [claim] until an author is set"
-    };
-  }
-  const written = execGit(["config", "--local", "--add", TRUSTED_AUTHOR_KEY, email2], { cwd });
-  if (written.code !== 0) {
-    return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
-  }
-  return { recorded: true, author: email2, reason: `records you author are now [directive]` };
-};
-
 // src/core/agents-guidance.ts
 import { existsSync as existsSync17, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
 import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve14 } from "node:path";
@@ -22000,6 +22053,7 @@ var runAsHook = async (options) => {
     threshold: matchThreshold(options.threshold) ?? DEFAULT_THRESHOLD,
     at: evaluationInstant(options.at) ?? /* @__PURE__ */ new Date(),
     noIndex: options.index === false,
+    trustedAuthors: configuredTrustedAuthors(process.cwd()),
     // A hook fires on compliance too, so the citation signal is off here for the
     // reason it exists: naming a record is what obeying one looks like.
     requireContent: true
@@ -22046,6 +22100,7 @@ var register13 = (program3) => {
         threshold,
         at,
         noIndex: options.index === false,
+        trustedAuthors: configuredTrustedAuthors(process.cwd()),
         ...options.requireContent === true ? { requireContent: true } : {}
       });
       process.stderr.write(scopeCaveat(paths));
@@ -32208,7 +32263,8 @@ var beforeChange = (opts) => {
     const queryResult = withholdBlocked(
       runQuery({
         cwd,
-        ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+        ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
+        ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       })
     );
     activeDecisions = extractActiveDecisions(queryResult);
@@ -32220,7 +32276,8 @@ var beforeChange = (opts) => {
       const guardResult = guard({
         proposal: opts.proposal,
         cwd,
-        ...path2 === "" || path2 === "." ? {} : { paths: [path2] }
+        ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
+        ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       });
       matches = guardResult.matches.map(renderGuardMatch);
       confidence = "experimental";
@@ -32297,6 +32354,7 @@ var contextUriPath = (uri) => {
 };
 var contextJson = (root, kind, path2) => {
   const keys = KEYS_BY_KIND[kind];
+  const trustedAuthors = configuredTrustedAuthors(root);
   const result = withholdBlocked(
     runQuery({
       // The agent's query surface answers like `context`: an empty result must
@@ -32304,7 +32362,8 @@ var contextJson = (root, kind, path2) => {
       explainEmptyResult: true,
       cwd: root,
       ...path2 === "" ? {} : { paths: [path2] },
-      ...keys === void 0 ? {} : { keys }
+      ...keys === void 0 ? {} : { keys },
+      ...trustedAuthors.length === 0 ? {} : { trustedAuthors }
     })
   );
   for (const diagnostic of result.diagnostics) warn(diagnostic);
@@ -32508,10 +32567,12 @@ var createServer = (opts = {}) => {
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, "proposal");
       const path2 = pathArg(root, args);
+      const trustedAuthors = configuredTrustedAuthors(root);
       const result = guard({
         proposal,
         cwd: root,
-        ...path2 === void 0 ? {} : { paths: [path2] }
+        ...path2 === void 0 ? {} : { paths: [path2] },
+        ...trustedAuthors.length === 0 ? {} : { trustedAuthors }
       });
       return asText({
         proposal_checked: !result.incomplete,
@@ -32525,20 +32586,24 @@ var createServer = (opts = {}) => {
     [BEFORE_CHANGE_TOOL]: (args) => {
       const path2 = pathArg(root, args);
       const proposal = stringArg(args, "proposal");
+      const trustedAuthors = configuredTrustedAuthors(root);
       return asText(
         beforeChange({
           path: path2 === "" ? "." : path2,
           ...proposal === void 0 ? {} : { proposal },
-          cwd: root
+          cwd: root,
+          ...trustedAuthors.length === 0 ? {} : { trustedAuthors }
         })
       );
     },
     [PREPARE_CAPTURE_TOOL]: (args) => {
       const transcript = requiredString(args, "transcript");
       const unattended = booleanArg(args, "unattended");
+      const trustedAuthors = configuredTrustedAuthors(root);
       const result = prepareCaptureContext({
         cwd: root,
         transcript,
+        ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
         ...unattended === true ? { unattended: true } : {}
       });
       return asText({
@@ -33619,21 +33684,24 @@ var runUninstall = async (options = {}) => {
   const report = [];
   const removed = [];
   const kept = [];
+  const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
   const wrapper = join15(home, ".local", "bin", "commitlore");
   if (existsSync21(wrapper)) {
-    const contents = (() => {
-      try {
-        return readFileSync26(wrapper, "utf8");
-      } catch {
-        return "";
-      }
-    })();
+    let contents;
+    try {
+      contents = readFileSync26(wrapper, "utf8");
+    } catch {
+      kept.push(wrapper);
+      failures.push(wrapper);
+      report.push(`kept: ${wrapper} \u2014 it could not be read, so it was left untouched`);
+      contents = "";
+    }
     if (contents.includes(WRAPPER_MARKER)) {
       if (!dryRun) rmSync6(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
-    } else {
+    } else if (!failures.includes(wrapper)) {
       kept.push(wrapper);
       report.push(`kept: ${wrapper} \u2014 it carries no commitlore marker, so it was not written by this installer`);
     }
@@ -33658,6 +33726,7 @@ var runUninstall = async (options = {}) => {
     if (listed.status !== 0 || listed.error !== void 0) {
       retainDataRoot = true;
       kept.push(markerPath);
+      failures.push(markerPath);
       report.push(`kept: Codex plugin ${selector} \u2014 Codex could not list installed plugins`);
       continue;
     }
@@ -33666,6 +33735,7 @@ var runUninstall = async (options = {}) => {
       if (result.status !== 0 || result.error !== void 0) {
         retainDataRoot = true;
         kept.push(markerPath);
+        failures.push(markerPath);
         report.push(`kept: Codex plugin ${selector} \u2014 Codex could not remove it`);
         continue;
       }
@@ -33694,6 +33764,7 @@ var runUninstall = async (options = {}) => {
     const path2 = join15(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
+      failures.push(path2);
       report.push(`kept: ${path2} \u2014 codex mcp list could not verify its entry, so the config was left untouched`);
     } else if (codexList.state === "listed") {
       const named = codexList.servers.find((server) => server.name === SERVER_KEY);
@@ -33711,6 +33782,7 @@ var runUninstall = async (options = {}) => {
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
           } else {
             kept.push(path2);
+            failures.push(path2);
             report.push(`kept: ${path2} \u2014 codex mcp remove could not remove its entry, so the config was left untouched`);
           }
         }
@@ -33727,6 +33799,7 @@ var runUninstall = async (options = {}) => {
       contents = readFileSync26(path2, "utf8");
     } catch {
       kept.push(path2);
+      failures.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be read, so it was left untouched`);
       continue;
     }
@@ -33755,6 +33828,7 @@ var runUninstall = async (options = {}) => {
       parsed = JSON.parse(contents);
     } catch {
       kept.push(path2);
+      failures.push(path2);
       report.push(`kept: ${path2} \u2014 it could not be parsed as JSON, so it was left untouched`);
       continue;
     }
@@ -33772,10 +33846,10 @@ var runUninstall = async (options = {}) => {
   report.push("  the Claude Code plugin \u2014 remove it with `/plugin uninstall commitlore@commitlore`");
   report.push("  a Codex plugin not installed by this command \u2014 remove it with `codex plugin remove commitlore@commitlore`");
   return {
-    exitCode: 0,
+    exitCode: failures.length === 0 ? 0 : 1,
     report,
     removed,
-    json: { removed, kept, dryRun }
+    json: { removed, kept, failures, dryRun }
   };
 };
 var registerUninstall = (program3) => {

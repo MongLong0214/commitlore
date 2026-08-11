@@ -167,6 +167,8 @@ export interface GuardOptions {
   at?: Date;
   cwd?: string;
   noIndex?: boolean;
+  /** Authors whose records may render as directives. The caller supplies trust. */
+  trustedAuthors?: readonly string[];
   /**
    * Refuse to flag on a `Record-Id:` reference alone.
    *
@@ -659,6 +661,7 @@ export const guard = (opts: GuardOptions): GuardResult => {
     ...(opts.at === undefined ? {} : { at: opts.at }),
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
     ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
+    ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
   });
   const availability = {
     history: result.history,

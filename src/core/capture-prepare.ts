@@ -63,6 +63,7 @@ const computeGuardAdvisory = (opts: {
   paths: readonly string[];
   cwd: string;
   readOnly?: boolean;
+  trustedAuthors?: readonly string[];
 }): GuardAdvisory => {
   try {
     const result = guard({
@@ -70,6 +71,7 @@ const computeGuardAdvisory = (opts: {
       ...(opts.paths.length > 0 ? { paths: opts.paths } : {}),
       cwd: opts.cwd,
       ...(opts.readOnly === true ? { noIndex: true } : {}),
+      ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     });
     return {
       matches: result.matches.map(renderGuardMatch),
@@ -93,6 +95,8 @@ const computeGuardAdvisory = (opts: {
 export interface PrepareCaptureOptions {
   cwd: string;
   transcript: string;
+  /** Authors whose guard-advisory records may render as directives. */
+  trustedAuthors?: readonly string[];
   /**
    * Declare that this capture runs without asking: the pipeline prepares,
    * verifies and stages it with no person in the loop (ADR-0030, #511).
@@ -161,6 +165,7 @@ const prepareValues = (opts: {
   readOnly: boolean;
   skipGuard?: boolean;
   unattended?: boolean;
+  trustedAuthors?: readonly string[];
 }): PreparedValues => {
   const { cwd, transcript, snapshot } = opts;
 
@@ -213,6 +218,7 @@ const prepareValues = (opts: {
         paths: diffPaths,
         cwd,
         ...(opts.readOnly ? { readOnly: true } : {}),
+        ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       });
 
   return {
