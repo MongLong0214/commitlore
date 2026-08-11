@@ -37,6 +37,15 @@ export interface VerifyCaptureOptions {
   transcript: string;
   diff: string;
   cwd: string;
+  /**
+   * An in-memory prepared transaction. Shadow uses this instead of reading a
+   * pending file it deliberately never created.
+   */
+  pending?: PendingRecord;
+  /** Do not persist verification back to `.git/commitlore/pending`. */
+  readOnly?: boolean;
+  /** A read-only snapshot of active records, reusable across a historical run. */
+  history?: CaptureVerificationHistory | null;
 }
 
 export interface CaptureRejection {
@@ -51,6 +60,12 @@ export interface VerifyCaptureResult {
   validation_result: 'pass' | 'partial' | 'empty';
   incomplete: boolean;
   overlap_check: 'canonical_exact_only';
+}
+
+/** The duplicate-check view used by capture verification. */
+export interface CaptureVerificationHistory {
+  activeRecordIds: Set<string>;
+  activeCanonicalTuples: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +84,8 @@ const recordIdOf = (record: DraftRecord): string | undefined =>
  * (scope is path, handled by the query layer). Two records with the same
  * canonical tuple are duplicates regardless of Record-Id.
  */
-const canonicalTuple = (record: DraftRecord): string => {
-  const keys = record.trailers
+export const captureCanonicalTuple = (trailers: readonly { key: string; value: string }[]): string => {
+  const keys = trailers
     .filter((t) => t.key !== 'Record-Id' && t.key !== 'Evidence' && t.key !== 'Provenance')
     .map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`)
     .sort()
@@ -86,6 +101,38 @@ const classifyResult = (
   if (accepted.length === 0) return 'empty';
   if (rejected.length === 0) return 'pass';
   return 'partial';
+};
+
+/**
+ * Read the active records exactly as verification does, without touching the
+ * derived index. A caller with a known read-only history can provide it through
+ * `VerifyCaptureOptions.history` instead.
+ */
+export const loadCaptureVerificationHistory = (cwd: string): CaptureVerificationHistory | null => {
+  try {
+    const activeRecordIds: Set<string> = new Set();
+    const activeCanonicalTuples: Set<string> = new Set();
+    const queryResult = runQuery({ cwd, noIndex: true });
+    for (const rec of queryResult.records) {
+      const idTrailer = rec.trailers.find((t) => t.key === 'Record-Id');
+      if (idTrailer) activeRecordIds.add(idTrailer.value);
+
+      const tuple = rec.trailers
+        .filter(
+          (t) =>
+            t.key !== 'Record-Id' &&
+            t.key !== 'Evidence' &&
+            t.key !== 'Provenance',
+        )
+        .map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`)
+        .sort()
+        .join('|');
+      activeCanonicalTuples.add(tuple);
+    }
+    return { activeRecordIds, activeCanonicalTuples };
+  } catch {
+    return null;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -109,10 +156,13 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
 
   const accepted: VerifiedRecord[] = [];
   const rejected: CaptureRejection[] = [];
+  const persist = (result: VerifyCaptureResult): void => {
+    if (opts.readOnly !== true) storeVerificationResult(nonce, cwd, result);
+  };
 
   try {
     // 1. Re-read prepared transaction and verify source hashes
-    const pending = readPending(nonce, { cwd });
+    const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
       // No transaction found — return empty (never throw)
       return {
@@ -144,7 +194,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: false,
         overlap_check: 'canonical_exact_only',
       };
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
       return result;
     }
 
@@ -163,7 +213,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: false,
         overlap_check: 'canonical_exact_only',
       };
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
       return result;
     }
 
@@ -177,34 +227,13 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: true,
         overlap_check: 'canonical_exact_only',
       };
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
       return result;
     }
 
     // 3. Load active records for duplicate checking
-    let activeRecordIds: Set<string> = new Set();
-    let activeCanonicalTuples: Set<string> = new Set();
-    try {
-      const queryResult = runQuery({ cwd, noIndex: true });
-      for (const rec of queryResult.records) {
-        // Collect Record-Id values
-        const idTrailer = rec.trailers.find((t) => t.key === 'Record-Id');
-        if (idTrailer) activeRecordIds.add(idTrailer.value);
-
-        // Collect canonical tuples
-        const tuple = rec.trailers
-          .filter(
-            (t) =>
-              t.key !== 'Record-Id' &&
-              t.key !== 'Evidence' &&
-              t.key !== 'Provenance',
-          )
-          .map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`)
-          .sort()
-          .join('|');
-        activeCanonicalTuples.add(tuple);
-      }
-    } catch {
+    const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd) : opts.history;
+    if (history === null) {
       // If we can't read active records, we cannot be sure → incomplete
       const result: VerifyCaptureResult = {
         accepted: [],
@@ -213,9 +242,10 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: true,
         overlap_check: 'canonical_exact_only',
       };
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
       return result;
     }
+    const { activeRecordIds, activeCanonicalTuples } = history;
 
     // 4. Delegate to verifyDraft for evidence/grammar checking
     const verifyResult = verifyDraft(draft, { transcript, diff });
@@ -235,7 +265,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
       }
 
       // Check canonical duplicate
-      const tuple = canonicalTuple(verified.record);
+      const tuple = captureCanonicalTuple(verified.record.trailers);
       if (tuple && activeCanonicalTuples.has(tuple)) {
         rejected.push({
           record: verified.record,
@@ -285,7 +315,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
       overlap_check: 'canonical_exact_only',
     };
 
-    storeVerificationResult(nonce, cwd, result);
+    persist(result);
     return result;
   } catch {
     // Never throws — return empty on any unhandled error
@@ -298,13 +328,25 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
     };
     // Best-effort store
     try {
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
     } catch {
       // Ignore — we must never throw
     }
     return result;
   }
 };
+
+/**
+ * Run the ordinary verifier against an in-memory transaction without writing a
+ * verification result. This is intentionally a thin wrapper, so shadow keeps
+ * every source, evidence, duplicate, and policy check the live path uses.
+ */
+export const verifyCaptureRecordsReadOnly = (
+  opts: Omit<VerifyCaptureOptions, 'nonce' | 'pending' | 'readOnly'> & {
+    nonce: string;
+    pending: PendingRecord;
+  },
+): VerifyCaptureResult => verifyCaptureRecords({ ...opts, readOnly: true });
 
 // ---------------------------------------------------------------------------
 // Internal: store verification result in pending transaction

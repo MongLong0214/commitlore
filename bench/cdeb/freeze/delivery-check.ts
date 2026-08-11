@@ -61,9 +61,10 @@ const sha256 = (input: string): string => createHash("sha256").update(input).dig
  * The hook payload a `PreToolUse` event carries for an edit.
  *
  * `Edit` rather than `Read`: §4.9 asks whether the record reaches an agent
- * *about to change* the path, and the shipping matcher is scoped to mutating
- * tools. A payload the matcher would not have selected proves nothing about the
- * arm being measured.
+ * *about to change* the path. The shipping matcher (`Read|Edit|Write`) covers
+ * both; `Edit` is the payload that exercises the case being asked about. A
+ * payload the matcher would not have selected proves nothing about the arm
+ * being measured.
  */
 const hookPayload = (path: string): string =>
   JSON.stringify({

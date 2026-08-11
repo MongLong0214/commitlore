@@ -84,6 +84,18 @@ export interface CreatePendingOptions {
     unattended?: boolean;
 }
 /**
+ * The in-memory form of a newly prepared transaction.
+ *
+ * `createPending` persists this exact shape. Read-only callers such as capture
+ * shadow use the same transaction input without first creating a file they
+ * would have to clean up afterwards.
+ */
+export declare const makePreparedPending: (opts: CreatePendingOptions & {
+    nonce: string;
+    base_head: string;
+    created_at?: string;
+}) => PendingRecord;
+/**
  * Creates a pending transaction in `prepared` phase.
  * Returns the nonce (32 hex chars).
  */

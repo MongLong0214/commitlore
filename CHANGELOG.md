@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The agent tooling whose local config shipped in 0.5.0 as `.serena/` is no
+  longer used, and the configuration that kept it out of future runs is
+  retired with it: the ignore entry, the manifest-test guard, and the
+  task-level comments that named it. The bench evidence still names the
+  directory, because that is what the recorded runs saw (#514).
+
 ## 0.7.1
 
 ### `[directive]` did not work in 0.7.0

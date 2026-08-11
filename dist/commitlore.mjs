@@ -13588,7 +13588,7 @@ var register = (program3) => {
 import { readFileSync as readFileSync6, writeFileSync as writeFileSync2 } from "node:fs";
 
 // src/core/capture-prepare.ts
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
 
 // src/core/grade.ts
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
@@ -15415,17 +15415,15 @@ var headHasMovedPast = (baseHead, head) => {
   if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
   return baseHead !== head;
 };
-var createPending = (opts) => {
-  const nonce = randomBytes(16).toString("hex");
-  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
-  if (!baseHead || !/^[0-9a-f]{40}$/.test(baseHead)) {
+var makePreparedPending = (opts) => {
+  validateNonce(opts.nonce);
+  if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
     throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const record2 = {
+  return {
     version: 1,
-    nonce,
-    created_at: now,
+    nonce: opts.nonce,
+    created_at: opts.created_at ?? (/* @__PURE__ */ new Date()).toISOString(),
     // CEO amendment 1: expires_at is null while phase is prepared or verified
     expires_at: null,
     phase: "prepared",
@@ -15436,7 +15434,7 @@ var createPending = (opts) => {
     applied_record_hash: null,
     consumed_at: null,
     consumed_by: null,
-    base_head: baseHead,
+    base_head: opts.base_head,
     staged_diff_hash: opts.staged_diff_hash,
     staged_tree_oid: opts.staged_tree_oid,
     policy_identity_hash: opts.policy_identity_hash,
@@ -15451,6 +15449,11 @@ var createPending = (opts) => {
     // exactly what they were before the setting existed (#511).
     ...opts.unattended === true ? { unattended: true } : {}
   };
+};
+var createPending = (opts) => {
+  const nonce = randomBytes(16).toString("hex");
+  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd: opts.cwd }).trim();
+  const record2 = makePreparedPending({ ...opts, nonce, base_head: baseHead });
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, record2);
   return nonce;
@@ -15601,7 +15604,8 @@ var computeGuardAdvisory = (opts) => {
     const result = guard({
       proposal: opts.proposal,
       ...opts.paths.length > 0 ? { paths: opts.paths } : {},
-      cwd: opts.cwd
+      cwd: opts.cwd,
+      ...opts.readOnly === true ? { noIndex: true } : {}
     });
     return {
       matches: result.matches.map(renderGuardMatch),
@@ -15616,20 +15620,24 @@ var computeGuardAdvisory = (opts) => {
     };
   }
 };
-var prepareCaptureContext = (opts) => {
-  const { cwd, transcript } = opts;
-  const baseHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
-  if (!/^[0-9a-f]{40}$/.test(baseHead)) {
+var isObjectId = (value) => /^[0-9a-f]{40}$/.test(value);
+var prepareValues = (opts) => {
+  const { cwd, transcript, snapshot } = opts;
+  const baseHead = snapshot?.base_head ?? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
+  if (!isObjectId(baseHead)) {
     throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
-  const diff = execGitOrThrow(["diff", "--cached"], { cwd });
+  const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
-  const stagedTreeOid = execGitOrThrow(["write-tree"], { cwd }).trim();
-  const transcriptHash = createHash2("sha256").update(transcript).digest("hex");
-  const sourceHashes = { transcript: transcriptHash, diff: stagedDiffHash };
+  const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
+  if (!isObjectId(stagedTreeOid)) {
+    throw new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?");
+  }
+  const sourceHashes = {
+    transcript: createHash2("sha256").update(transcript).digest("hex"),
+    diff: stagedDiffHash
+  };
   const policy = resolvePolicy(cwd);
-  const policyIdentityHash = policy.identityHash;
-  const policyError = policy.error;
   if (policy.policy.mode === "off") {
     throw new Error(
       `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
@@ -15640,32 +15648,72 @@ var prepareCaptureContext = (opts) => {
       `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
     );
   }
-  const prompt = buildHarvestPrompt({ transcript, diff });
   const diffPaths = extractPathsFromDiff(diff);
-  const advisory = computeGuardAdvisory({
+  const advisory = opts.skipGuard === true ? null : computeGuardAdvisory({
     proposal: transcript,
     paths: diffPaths,
-    cwd
-  });
-  const nonce = createPending({
     cwd,
-    source_hashes: sourceHashes,
+    ...opts.readOnly ? { readOnly: true } : {}
+  });
+  return {
+    base_head: baseHead,
     staged_diff_hash: stagedDiffHash,
     staged_tree_oid: stagedTreeOid,
-    policy_identity_hash: policyIdentityHash,
+    policy_identity_hash: policy.identityHash,
+    source_hashes: sourceHashes,
+    prompt: buildHarvestPrompt({ transcript, diff }),
     guard_advisory: advisory,
+    policy_error: policy.error
+  };
+};
+var prepareCaptureContext = (opts) => {
+  const { cwd } = opts;
+  const prepared = prepareValues({ ...opts, readOnly: false });
+  const nonce = createPending({
+    cwd,
+    source_hashes: prepared.source_hashes,
+    staged_diff_hash: prepared.staged_diff_hash,
+    staged_tree_oid: prepared.staged_tree_oid,
+    policy_identity_hash: prepared.policy_identity_hash,
+    guard_advisory: prepared.guard_advisory,
     ...opts.unattended === true ? { unattended: true } : {}
   });
   return {
     nonce,
-    base_head: baseHead,
-    staged_diff_hash: stagedDiffHash,
-    staged_tree_oid: stagedTreeOid,
-    policy_identity_hash: policyIdentityHash,
-    source_hashes: sourceHashes,
-    prompt,
-    policy_error: policyError,
-    guard_advisory: advisory
+    base_head: prepared.base_head,
+    staged_diff_hash: prepared.staged_diff_hash,
+    staged_tree_oid: prepared.staged_tree_oid,
+    policy_identity_hash: prepared.policy_identity_hash,
+    source_hashes: prepared.source_hashes,
+    prompt: prepared.prompt,
+    policy_error: prepared.policy_error,
+    guard_advisory: prepared.guard_advisory
+  };
+};
+var prepareCaptureContextReadOnly = (opts) => {
+  const prepared = prepareValues({ ...opts, readOnly: true });
+  const nonce = randomBytes2(16).toString("hex");
+  const pending = makePreparedPending({
+    cwd: opts.cwd,
+    nonce,
+    base_head: prepared.base_head,
+    source_hashes: prepared.source_hashes,
+    staged_diff_hash: prepared.staged_diff_hash,
+    staged_tree_oid: prepared.staged_tree_oid,
+    policy_identity_hash: prepared.policy_identity_hash,
+    guard_advisory: prepared.guard_advisory
+  });
+  return {
+    nonce,
+    base_head: prepared.base_head,
+    staged_diff_hash: prepared.staged_diff_hash,
+    staged_tree_oid: prepared.staged_tree_oid,
+    policy_identity_hash: prepared.policy_identity_hash,
+    source_hashes: prepared.source_hashes,
+    prompt: prepared.prompt,
+    policy_error: prepared.policy_error,
+    guard_advisory: prepared.guard_advisory,
+    pending
   };
 };
 
@@ -15674,8 +15722,8 @@ import { createHash as createHash3 } from "node:crypto";
 var PROVENANCE_KEY3 = "Provenance";
 var sha2562 = (input) => createHash3("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
-var canonicalTuple = (record2) => {
-  const keys = record2.trailers.filter((t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance").map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
+var captureCanonicalTuple = (trailers) => {
+  const keys = trailers.filter((t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance").map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
   return keys;
 };
 var classifyResult = (accepted, rejected) => {
@@ -15683,12 +15731,33 @@ var classifyResult = (accepted, rejected) => {
   if (rejected.length === 0) return "pass";
   return "partial";
 };
+var loadCaptureVerificationHistory = (cwd) => {
+  try {
+    const activeRecordIds = /* @__PURE__ */ new Set();
+    const activeCanonicalTuples = /* @__PURE__ */ new Set();
+    const queryResult = runQuery({ cwd, noIndex: true });
+    for (const rec of queryResult.records) {
+      const idTrailer = rec.trailers.find((t) => t.key === "Record-Id");
+      if (idTrailer) activeRecordIds.add(idTrailer.value);
+      const tuple = rec.trailers.filter(
+        (t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance"
+      ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
+      activeCanonicalTuples.add(tuple);
+    }
+    return { activeRecordIds, activeCanonicalTuples };
+  } catch {
+    return null;
+  }
+};
 var verifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
   const rejected = [];
+  const persist = (result) => {
+    if (opts.readOnly !== true) storeVerificationResult(nonce, cwd, result);
+  };
   try {
-    const pending = readPending(nonce, { cwd });
+    const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
       return {
         accepted: [],
@@ -15715,7 +15784,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      storeVerificationResult(nonce, cwd, result2);
+      persist(result2);
       return result2;
     }
     if (pending.source_hashes.diff !== diffHash) {
@@ -15733,7 +15802,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      storeVerificationResult(nonce, cwd, result2);
+      persist(result2);
       return result2;
     }
     const notes = notesAvailability({ cwd });
@@ -15745,22 +15814,11 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      storeVerificationResult(nonce, cwd, result2);
+      persist(result2);
       return result2;
     }
-    let activeRecordIds = /* @__PURE__ */ new Set();
-    let activeCanonicalTuples = /* @__PURE__ */ new Set();
-    try {
-      const queryResult = runQuery({ cwd, noIndex: true });
-      for (const rec of queryResult.records) {
-        const idTrailer = rec.trailers.find((t) => t.key === "Record-Id");
-        if (idTrailer) activeRecordIds.add(idTrailer.value);
-        const tuple = rec.trailers.filter(
-          (t) => t.key !== "Record-Id" && t.key !== "Evidence" && t.key !== "Provenance"
-        ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
-        activeCanonicalTuples.add(tuple);
-      }
-    } catch {
+    const history = opts.history === void 0 ? loadCaptureVerificationHistory(cwd) : opts.history;
+    if (history === null) {
       const result2 = {
         accepted: [],
         rejected: [],
@@ -15768,9 +15826,10 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      storeVerificationResult(nonce, cwd, result2);
+      persist(result2);
       return result2;
     }
+    const { activeRecordIds, activeCanonicalTuples } = history;
     const verifyResult = verifyDraft(draft, { transcript, diff });
     for (const verified of verifyResult.accepted) {
       const id = recordIdOf(verified.record);
@@ -15782,7 +15841,7 @@ var verifyCaptureRecords = (opts) => {
         });
         continue;
       }
-      const tuple = canonicalTuple(verified.record);
+      const tuple = captureCanonicalTuple(verified.record.trailers);
       if (tuple && activeCanonicalTuples.has(tuple)) {
         rejected.push({
           record: verified.record,
@@ -15817,7 +15876,7 @@ var verifyCaptureRecords = (opts) => {
       incomplete: false,
       overlap_check: "canonical_exact_only"
     };
-    storeVerificationResult(nonce, cwd, result);
+    persist(result);
     return result;
   } catch {
     const result = {
@@ -15828,12 +15887,13 @@ var verifyCaptureRecords = (opts) => {
       overlap_check: "canonical_exact_only"
     };
     try {
-      storeVerificationResult(nonce, cwd, result);
+      persist(result);
     } catch {
     }
     return result;
   }
 };
+var verifyCaptureRecordsReadOnly = (opts) => verifyCaptureRecords({ ...opts, readOnly: true });
 var storeVerificationResult = (nonce, cwd, result) => {
   const evidenceHash = sha2562(JSON.stringify(result.accepted.map((a) => a.record)));
   storeVerification(nonce, {
@@ -15885,6 +15945,491 @@ var stageCaptureRecord = (opts) => {
   const success3 = stagePending(nonce, stageOpts);
   if (!success3) return null;
   return nonce;
+};
+
+// src/hooks/secret-rules.ts
+var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
+var TEMPLATE_MARKERS = /<[^>]{0,64}>|\{\{|\$\{|\.\.\.|…/;
+var REPEATED_RUN = /(.)\1{5,}/;
+var isPlaceholder = (candidate) => PLACEHOLDER_WORDS.test(candidate) || TEMPLATE_MARKERS.test(candidate) || REPEATED_RUN.test(candidate);
+var SECRET_RULES = [
+  {
+    id: "aws-access-key-id",
+    description: "AWS access key id",
+    // gitleaks: aws-access-token. The prefix set is AWS's own (AKIA long-term,
+    // ASIA temporary, ABIA bearer, ACCA context, A3T… service-specific).
+    pattern: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g,
+    confidence: "high"
+  },
+  {
+    id: "aws-secret-access-key",
+    description: "AWS secret access key",
+    // No prefix exists to key on — 40 base64 characters alone would match half
+    // the hashes in a message — so the identifier is required. Quotes are
+    // optional here because the shell-export form (`AWS_SECRET_ACCESS_KEY=…`)
+    // is how this value actually leaks, and the 40-character shape carries the
+    // rule on its own.
+    pattern: /(?<![A-Za-z])aws[_-]?secret[_-]?(?:access[_-]?)?key["']?\s{0,8}[:=]\s{0,8}["']?(?<check>[A-Za-z0-9/+=]{40})/gi,
+    confidence: "high"
+  },
+  {
+    id: "github-token",
+    description: "GitHub personal access, OAuth, app or refresh token",
+    // gitleaks: github-pat (ghp_), github-oauth (gho_), github-app-token
+    // (ghu_/ghs_), github-refresh-token (ghr_). One rule, because the remedy
+    // and the urgency are identical for all five.
+    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "github-fine-grained-pat",
+    description: "GitHub fine-grained personal access token",
+    // gitleaks pins the tail at 82; the floor is loosened to 60 so a future
+    // length change degrades into a hit rather than into silence.
+    pattern: /\bgithub_pat_[A-Za-z0-9_]{60,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "openai-api-key",
+    description: "OpenAI API key",
+    // Two shapes, and the split is what keeps this rule quiet. The legacy form
+    // is `sk-` plus alphanumerics only: allowing `-` in the tail would match
+    // any branch-name-shaped word starting with `sk-`. The project/service
+    // forms do allow `-`, so they are gated behind their own prefixes instead.
+    pattern: /\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,255}|[A-Za-z0-9]{32,255})/g,
+    confidence: "high"
+  },
+  {
+    id: "anthropic-api-key",
+    description: "Anthropic API key",
+    // gitleaks: anthropic-api-key (`sk-ant-api03-…`, `sk-ant-admin01-…`). The
+    // key-class segment is left open so a new class is still detected. Cannot
+    // collide with the OpenAI rule above: `ant` is three characters, short of
+    // that rule's 32-character alphanumeric floor.
+    pattern: /\bsk-ant-[A-Za-z0-9]{2,32}-[A-Za-z0-9_-]{20,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "slack-token",
+    description: "Slack API token",
+    // gitleaks: slack-bot-token and friends, collapsed to the shared prefix.
+    pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,255}/g,
+    confidence: "high"
+  },
+  {
+    id: "private-key-block",
+    description: "PEM private key block",
+    // The header alone is the finding. A commit message that quotes the BEGIN
+    // line has already told everyone where the key is, whether or not the body
+    // came along.
+    pattern: /-----BEGIN[A-Z0-9 ]{0,32}PRIVATE KEY(?: BLOCK)?-----/g,
+    confidence: "high"
+  },
+  {
+    id: "url-embedded-credentials",
+    description: "credentials embedded in a URL",
+    // `scheme://user:password@host`. The password is the `check` group so a
+    // documented `https://user:<password>@host` stays quiet, and every part is
+    // bounded so a long line cannot make the engine walk it repeatedly.
+    // `[^\s:@/]` for the user and `[^\s@/]` for the password are what keep
+    // `postgres://cache.internal:5432/db` out: the port is followed by `/`,
+    // never by `@`.
+    pattern: /\b[a-z][a-z0-9+.-]{1,31}:\/\/[^\s:@/]{1,64}:(?<check>[^\s@/]{3,128})@[^\s/]{1,255}/gi,
+    confidence: "high"
+  },
+  {
+    id: "generic-credential-assignment",
+    description: "a secret-looking name assigned a credential-shaped value",
+    // The catch-all, and the only rule that can fire on ordinary English — so
+    // it is `medium`, and it demands three things at once: a credential-ish
+    // name, an assignment, and a quoted value with no whitespace in it. That
+    // last requirement is what separates `password: "hunter2seventeen"` from
+    // `password: "must be rotated"`, and it is why prose about tokens and
+    // secrets passes. The leading lookbehind, rather than `\b`, is so
+    // `DATABASE_PASSWORD="…"` is caught (`_` is a word character, so `\b`
+    // would not match) while `retokenize: "…"` is not.
+    pattern: /(?<![A-Za-z])(?:api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|credentials?|password|passwd|secret|token)["']?\s{0,8}[:=]\s{0,8}["'](?<check>[^"'\s]{8,200})["']/gi,
+    confidence: "medium"
+  }
+];
+
+// src/core/secret-guard.ts
+var CONFIDENCE_RANK = { high: 2, medium: 1 };
+var REDACT_PREFIX = 4;
+var COMMENT_CHAR = "#";
+var SCISSORS = /^#\s{0,8}-{3,}\s{0,8}>8\s{0,8}-{3,}/;
+var redact = (text) => `${text.slice(0, Math.min(REDACT_PREFIX, Math.max(text.length - 1, 0)))}\u2026`;
+var scannedLines = (message) => {
+  const kept = [];
+  for (const [index, raw] of message.split("\n").entries()) {
+    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (SCISSORS.test(text)) break;
+    if (text.startsWith(COMMENT_CHAR)) continue;
+    kept.push({ line: index + 1, text });
+  }
+  return kept;
+};
+var hitsFor = (rule, source) => {
+  const found = [];
+  for (const match of source.text.matchAll(rule.pattern)) {
+    const text = match[0];
+    if (isPlaceholder(match.groups?.["check"] ?? text)) continue;
+    const start = match.index ?? 0;
+    found.push({ rule, line: source.line, start, end: start + text.length, redacted: redact(text) });
+  }
+  return found;
+};
+var overlaps = (a, b) => a.line === b.line && a.start < b.end && b.start < a.end;
+var dropShadowed = (hits) => hits.filter(
+  (hit) => !hits.some(
+    (other) => other !== hit && overlaps(hit, other) && CONFIDENCE_RANK[other.rule.confidence] > CONFIDENCE_RANK[hit.rule.confidence]
+  )
+);
+var scanForSecrets = (message, opts) => {
+  const floor = CONFIDENCE_RANK[opts?.minConfidence ?? "medium"];
+  const hits = scannedLines(message).flatMap(
+    (source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source))
+  );
+  return dropShadowed(hits).filter((hit) => CONFIDENCE_RANK[hit.rule.confidence] >= floor).sort((a, b) => a.line - b.line || a.start - b.start || a.rule.id.localeCompare(b.rule.id)).map((hit) => ({
+    ruleId: hit.rule.id,
+    description: hit.rule.description,
+    line: hit.line,
+    redacted: hit.redacted,
+    confidence: hit.rule.confidence
+  }));
+};
+var formatFindings = (findings) => {
+  if (findings.length === 0) return "";
+  return [
+    ...findings.map(
+      (finding) => `${finding.line}: ${finding.ruleId} (${finding.confidence}) \u2014 ${finding.description} \u2014 ${finding.redacted}`
+    ),
+    "Remove the value from the message. If it has already left this machine, rotate it \u2014 rewriting history does not reach existing clones.",
+    ""
+  ].join("\n");
+};
+
+// src/core/capture-shadow.ts
+var MAX_DIFF_BYTES2 = 64 * 1024;
+var DIFF_MAX_BUFFER2 = 256 * 1024 * 1024;
+var RECORD_SEP3 = "";
+var FIELD_SEP3 = "\0";
+var TRAILER_SEP2 = "";
+var KV_SEP2 = "";
+var RECORD_HEADER_RE2 = /^[0-9a-f]{40,64}\0/;
+var SYNTHETIC_HISTORY_ID = "\0shadow-history:";
+var SHADOW_APPROXIMATION = "Historical commits have no live capture transcript. Shadow substitutes the committed message and the commit's first-parent patch, then its conservative draft adapter nominates only explicit decision language. Duplicate checks use commit-message records visible earlier in the Git history walk and the policy resolved now, not a historical policy snapshot. This is an approximation, not a replay of the historical agent judgment.";
+var SHADOW_READ_ONLY_GUARANTEE = "Prepare and verify run in memory. Shadow does not call createPending (which creates a pending file), storeVerification (which advances it), or stageCaptureRecord (which stages it); guard and duplicate checks use Git scans instead of the derived index. Its non-blocking guard advisory is omitted because it cannot change whether a candidate is recorded.";
+var gitOutput = (args, cwd) => {
+  const result = execGit(args, { cwd, maxBuffer: DIFF_MAX_BUFFER2 });
+  if (result.code !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim()}`);
+  }
+  return result.stdout;
+};
+var splitGitRecords = (stdout) => {
+  const records = [];
+  for (const chunk of stdout.split(RECORD_SEP3)) {
+    if (RECORD_HEADER_RE2.test(chunk)) {
+      records.push(chunk);
+      continue;
+    }
+    const previous = records.length - 1;
+    if (previous !== -1) records[previous] = `${records[previous]}${RECORD_SEP3}${chunk}`;
+  }
+  return records;
+};
+var parseTrailerField2 = (field) => {
+  if (field === "") return [];
+  return field.split(TRAILER_SEP2).map((entry) => {
+    const at = entry.indexOf(KV_SEP2);
+    return at === -1 ? { key: entry, value: "" } : { key: entry.slice(0, at), value: entry.slice(at + 1) };
+  });
+};
+var readHistoricalRecords = (cwd) => {
+  const notes = execGit(["notes", "--ref=refs/notes/commitlore", "list"], { cwd });
+  if (notes.code !== 0 || notes.stdout.trim() !== "") return null;
+  const output = gitOutput(
+    [
+      "-c",
+      "trailer.separators=:",
+      "log",
+      "--reverse",
+      "--no-notes",
+      "--format=%x01%H%x00%cI%x00%(trailers:only=true,unfold=true,key_value_separator=%x1f,separator=%x1e)%x00",
+      "HEAD"
+    ],
+    cwd
+  );
+  return splitGitRecords(output).flatMap((record2) => {
+    const [sha, committedAt, trailerField = ""] = record2.split(FIELD_SEP3);
+    if (sha === void 0 || committedAt === void 0) return [];
+    const trailers = parseTrailerField2(trailerField).filter((trailer) => !isConventionalTrailerKey(trailer.key));
+    if (!trailers.some((trailer) => isCommitLoreKey(trailer.key))) return [];
+    return [{ sha, committedAt, trailers }];
+  });
+};
+var verificationHistory = (records) => {
+  const realIds = /* @__PURE__ */ new Set();
+  const stream = records.map((record2, index) => {
+    const id = record2.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id !== void 0) realIds.add(id);
+    return {
+      sha: record2.sha,
+      committedAt: record2.committedAt,
+      trailers: id === void 0 ? [{ key: "Record-Id", value: `${SYNTHETIC_HISTORY_ID}${record2.sha}:${index}` }, ...record2.trailers] : record2.trailers
+    };
+  });
+  const activeRecordIds = /* @__PURE__ */ new Set();
+  const activeCanonicalTuples = /* @__PURE__ */ new Set();
+  for (const state of foldLifecycle(stream, { at: /* @__PURE__ */ new Date() })) {
+    if (state.lifecycle !== "active") continue;
+    if (realIds.has(state.recordId)) activeRecordIds.add(state.recordId);
+    const tuple = captureCanonicalTuple(state.resolvedTrailers);
+    if (tuple !== "") activeCanonicalTuples.add(tuple);
+  }
+  return { activeRecordIds, activeCanonicalTuples };
+};
+var historiesBeforeCommit = (cwd) => {
+  const records = readHistoricalRecords(cwd);
+  if (records === null) return null;
+  const bySha = /* @__PURE__ */ new Map();
+  for (const record2 of records) {
+    const entries = bySha.get(record2.sha) ?? [];
+    entries.push(record2);
+    bySha.set(record2.sha, entries);
+  }
+  const shas = gitOutput(["rev-list", "--reverse", "HEAD"], cwd).split("\n").filter((sha) => /^[0-9a-f]{40}$/.test(sha));
+  const prior = [];
+  const histories = /* @__PURE__ */ new Map();
+  for (const sha of shas) {
+    histories.set(sha, verificationHistory(prior));
+    prior.push(...bySha.get(sha) ?? []);
+  }
+  return histories;
+};
+var truncateDiff2 = (diff) => {
+  if (diff.length <= MAX_DIFF_BYTES2) return diff;
+  const cut = diff.slice(0, MAX_DIFF_BYTES2);
+  const safe = /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+  return `${safe}
+[commitlore: historical patch truncated at ${MAX_DIFF_BYTES2} bytes]
+`;
+};
+var historicalCommits = (cwd, since) => {
+  const resolved = gitOutput(
+    ["rev-parse", "--verify", "--quiet", "--end-of-options", `${since}^{commit}`],
+    cwd
+  ).trim();
+  if (!/^[0-9a-f]{40}$/.test(resolved)) {
+    throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
+  }
+  const range = `${resolved}..HEAD`;
+  const metadata = gitOutput(
+    [
+      "log",
+      "--reverse",
+      "--no-notes",
+      "--format=%x01%H%x00%s%x00%P%x00%T%x00%B%x00",
+      "--end-of-options",
+      range
+    ],
+    cwd
+  );
+  const patches = gitOutput(
+    [
+      "log",
+      "--reverse",
+      "--no-notes",
+      "--patch",
+      "--diff-merges=first-parent",
+      "--format=%x01%H%x00",
+      "--end-of-options",
+      range
+    ],
+    cwd
+  );
+  const patchesBySha = /* @__PURE__ */ new Map();
+  for (const record2 of splitGitRecords(patches)) {
+    const separator = record2.indexOf(FIELD_SEP3);
+    if (separator === -1) continue;
+    const sha = record2.slice(0, separator);
+    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    patchesBySha.set(sha, truncateDiff2(record2.slice(separator + 1)));
+  }
+  return splitGitRecords(metadata).flatMap((record2) => {
+    const [sha, subject, parents, tree, message] = record2.split(FIELD_SEP3);
+    if (sha === void 0 || subject === void 0 || parents === void 0 || tree === void 0 || message === void 0) return [];
+    const baseHead = parents.split(" ")[0] ?? "";
+    if (!/^[0-9a-f]{40}$/.test(sha)) return [];
+    if (!/^[0-9a-f]{40}$/.test(baseHead) || !/^[0-9a-f]{40}$/.test(tree)) {
+      return [{ sha, subject: displaySubject(subject), sources: null }];
+    }
+    const diff = patchesBySha.get(sha) ?? "";
+    return [{
+      sha,
+      subject: displaySubject(subject),
+      sources: {
+        transcript: message,
+        diff,
+        snapshot: { base_head: baseHead, staged_diff: diff, staged_tree_oid: tree }
+      }
+    }];
+  });
+};
+var sourceLine = (source, quote, locator) => ({
+  key: "Limit",
+  source,
+  quote,
+  locator
+});
+var recordIdFor = (sha) => `r-shadow${sha.slice(0, 16)}`;
+var displaySubject = (subject) => scanForSecrets(subject).length === 0 ? subject : "[subject withheld: secret-guard match]";
+var directDecision = (sha, diff) => {
+  let hunk = "";
+  for (const line2 of diff.split("\n")) {
+    if (line2.startsWith("@@")) {
+      hunk = line2;
+      continue;
+    }
+    if (!line2.startsWith("+") || line2.startsWith("+++")) continue;
+    const content = line2.slice(1);
+    const match = /^(Limit|Ruled-out|Warn|Unverified):\s+(.+)$/.exec(content);
+    if (match === null) continue;
+    const [, key = "", value = ""] = match;
+    if (key === "" || value === "" || hunk === "") continue;
+    return {
+      record: {
+        trailers: [
+          { key, value },
+          { key: "Record-Id", value: recordIdFor(sha) }
+        ],
+        evidence: [{ ...sourceLine("diff", value, hunk), key }]
+      },
+      reason: "the historical patch contains an explicit decision trailer-shaped line"
+    };
+  }
+  return null;
+};
+var DECISION_CUE = /\b(?:decided|decide|chose|chosen|ruled out|rejected|must not|do not|don't|never|cannot|can't|constraint|limited by|because)\b/i;
+var isKnownTrailerLine = (line2) => KNOWN_KEYS.some((key) => line2.startsWith(`${key}:`));
+var inferredDecision = (sha, transcript, diff) => {
+  const transcriptLines = transcript.split("\n");
+  for (const [index, line2] of transcriptLines.entries()) {
+    const text = line2.trim();
+    if (text === "" || isKnownTrailerLine(text) || text.length > 500 || !DECISION_CUE.test(text)) continue;
+    return {
+      record: {
+        trailers: [
+          { key: "Limit", value: text },
+          { key: "Record-Id", value: recordIdFor(sha) }
+        ],
+        evidence: [sourceLine("transcript", text, `L${index + 1}-L${index + 1}`)]
+      },
+      reason: "the historical commit message contains explicit decision language"
+    };
+  }
+  let hunk = "";
+  for (const line2 of diff.split("\n")) {
+    if (line2.startsWith("@@")) {
+      hunk = line2;
+      continue;
+    }
+    if (!line2.startsWith("+") || line2.startsWith("+++") || hunk === "") continue;
+    const text = line2.slice(1).trim();
+    if (text === "" || isKnownTrailerLine(text) || text.length > 500 || !DECISION_CUE.test(text)) continue;
+    return {
+      record: {
+        trailers: [
+          { key: "Limit", value: text },
+          { key: "Record-Id", value: recordIdFor(sha) }
+        ],
+        evidence: [sourceLine("diff", line2.slice(1), hunk)]
+      },
+      reason: "the historical patch contains explicit decision language"
+    };
+  }
+  return null;
+};
+var candidateFor = (sha, transcript, diff) => directDecision(sha, diff) ?? inferredDecision(sha, transcript, diff);
+var silence = (sha, subject, reason) => ({
+  sha,
+  subject,
+  would_record: false,
+  secret_guard: "not-run",
+  silence_reason: reason
+});
+var shadowOne = (cwd, commit, history) => {
+  const { sha, subject, sources } = commit;
+  if (sources === null) {
+    return silence(sha, subject, "capture requires a base HEAD; this root commit has no parent to replay");
+  }
+  let prepared;
+  try {
+    prepared = prepareCaptureContextReadOnly({
+      cwd,
+      transcript: sources.transcript,
+      snapshot: sources.snapshot,
+      skipGuard: true
+    });
+  } catch (error2) {
+    return silence(sha, subject, error2 instanceof Error ? error2.message : String(error2));
+  }
+  const candidate = candidateFor(sha, sources.transcript, sources.diff);
+  const reviewed = parseDraft(
+    JSON.stringify({ records: candidate === null ? [] : [candidate.record] })
+  );
+  const verified = verifyCaptureRecordsReadOnly({
+    nonce: prepared.nonce,
+    pending: prepared.pending,
+    draft: reviewed.records,
+    transcript: sources.transcript,
+    diff: sources.diff,
+    cwd,
+    history
+  });
+  if (verified.accepted.length === 0) {
+    const parsed = reviewed.rejected[0];
+    const rejected = verified.rejected[0];
+    return silence(
+      sha,
+      subject,
+      candidate === null ? 'the shadow draft contained {"records": []}: no explicit decision language survived in the historical message or patch' : parsed !== void 0 ? `draft parser rejected it (${parsed.rule}): ${parsed.detail}` : rejected !== void 0 ? `verifier rejected it (${rejected.reason}): ${rejected.detail}` : verified.incomplete ? "verifier could not form a complete read-only duplicate history (a populated notes mirror is not omitted)" : "verifier returned an empty result"
+    );
+  }
+  const record2 = serializeTrailers(verified.accepted[0].record.trailers);
+  const findings = scanForSecrets(record2);
+  if (findings.length > 0) {
+    return {
+      sha,
+      subject,
+      would_record: true,
+      secret_guard: "blocked",
+      secret_findings: findings
+    };
+  }
+  return { sha, subject, would_record: true, secret_guard: "clear", record: record2 };
+};
+var runCaptureShadow = (opts) => {
+  const histories = historiesBeforeCommit(opts.cwd);
+  const commits = historicalCommits(opts.cwd, opts.since).map(
+    (commit) => shadowOne(opts.cwd, commit, histories?.get(commit.sha) ?? null)
+  );
+  const wouldRecord = commits.filter((commit) => commit.would_record).length;
+  const blocked2 = commits.filter((commit) => commit.secret_guard === "blocked").length;
+  const silenceCount = commits.length - wouldRecord;
+  return {
+    commits,
+    summary: {
+      commits_examined: commits.length,
+      would_record: wouldRecord,
+      blocked: blocked2,
+      silence: silenceCount,
+      silence_rate: commits.length === 0 ? 0 : silenceCount / commits.length,
+      approximation: SHADOW_APPROXIMATION,
+      read_only: SHADOW_READ_ONLY_GUARANTEE
+    }
+  };
 };
 
 // src/core/pending-gc.ts
@@ -16038,6 +16583,40 @@ var gcPending = (cwd) => {
 };
 
 // src/commands/capture.ts
+var formatCaptureShadow = (result) => {
+  const lines = [
+    "commitlore capture --shadow",
+    `approximation: ${result.summary.approximation}`,
+    ""
+  ];
+  for (const commit of result.commits) {
+    lines.push(`${commit.sha.slice(0, 12)} ${commit.subject === "" ? "(no subject)" : commit.subject}`);
+    if (!commit.would_record) {
+      lines.push("  would record: no", `  reason: ${commit.silence_reason ?? "no record survived"}`, "");
+      continue;
+    }
+    lines.push("  would record: yes");
+    if (commit.secret_guard === "blocked") {
+      const findings = (commit.secret_findings ?? []).map((finding) => `${finding.ruleId} at line ${finding.line}`).join(", ");
+      lines.push(`  secret-guard: BLOCKED${findings === "" ? "" : ` (${findings})`}`, "  record: withheld", "");
+      continue;
+    }
+    lines.push("  secret-guard: clear", "  record:");
+    for (const line2 of (commit.record ?? "").trimEnd().split("\n")) lines.push(`    ${line2}`);
+    lines.push("");
+  }
+  const percent = (result.summary.silence_rate * 100).toFixed(1);
+  lines.push(
+    "summary:",
+    `  silence rate: ${result.summary.silence}/${result.summary.commits_examined} (${percent}%)`,
+    `  commits examined: ${result.summary.commits_examined}`,
+    `  would produce a record: ${result.summary.would_record}`,
+    `  secret-guard would block: ${result.summary.blocked}`,
+    `  ${result.summary.read_only}`
+  );
+  return `${lines.join("\n")}
+`;
+};
 var runCapture = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
   const transcript = readFileSync6(transcriptPath, "utf8");
@@ -16106,10 +16685,40 @@ commitlore capture: the built-in defaults were used for this capture
 var register2 = (program3) => {
   const capture = program3.command("capture").description(
     "prepare \u2192 verify \u2192 stage a record from a transcript and draft (no trailer syntax needed)"
-  ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--json", "emit structured JSON output").option(
+  ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
     "--unattended",
     `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
   ).action((options) => {
+    if (options.shadow === true) {
+      if (options.since === void 0) {
+        process.stderr.write("error: required option '--since <rev>' not specified with --shadow\n");
+        process.exitCode = 2;
+        return;
+      }
+      if (options.out !== void 0) {
+        process.stderr.write("commitlore capture: --out cannot be used with --shadow because shadow writes nothing\n");
+        process.exitCode = 2;
+        return;
+      }
+      if (options.transcript !== void 0 || options.diff !== void 0 || options.draft !== void 0) {
+        process.stderr.write("commitlore capture: --shadow reads historical commits; do not pass --transcript, --diff, or --draft\n");
+        process.exitCode = 2;
+        return;
+      }
+      try {
+        const result = runCaptureShadow({ cwd: process.cwd(), since: options.since });
+        process.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}
+` : formatCaptureShadow(result));
+        process.exitCode = 0;
+      } catch (error2) {
+        process.stderr.write(
+          `commitlore capture --shadow: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+        );
+        process.exitCode = 2;
+      }
+      return;
+    }
     if (options.transcript === void 0) {
       process.stderr.write("error: required option '--transcript <path>' not specified\n");
       process.exitCode = 2;
@@ -30882,170 +31491,6 @@ var register20 = (program3) => {
 
 // src/commands/validate.ts
 import { readFileSync as readFileSync21 } from "node:fs";
-
-// src/hooks/secret-rules.ts
-var PLACEHOLDER_WORDS = /example|sample|placeholder|redacted|change[_-]?me|dummy|fake|your[_-]?|insert[_-]?|not[_-]?a?[_-]?real|test[_-]?(?:key|token|secret)/i;
-var TEMPLATE_MARKERS = /<[^>]{0,64}>|\{\{|\$\{|\.\.\.|…/;
-var REPEATED_RUN = /(.)\1{5,}/;
-var isPlaceholder = (candidate) => PLACEHOLDER_WORDS.test(candidate) || TEMPLATE_MARKERS.test(candidate) || REPEATED_RUN.test(candidate);
-var SECRET_RULES = [
-  {
-    id: "aws-access-key-id",
-    description: "AWS access key id",
-    // gitleaks: aws-access-token. The prefix set is AWS's own (AKIA long-term,
-    // ASIA temporary, ABIA bearer, ACCA context, A3T… service-specific).
-    pattern: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g,
-    confidence: "high"
-  },
-  {
-    id: "aws-secret-access-key",
-    description: "AWS secret access key",
-    // No prefix exists to key on — 40 base64 characters alone would match half
-    // the hashes in a message — so the identifier is required. Quotes are
-    // optional here because the shell-export form (`AWS_SECRET_ACCESS_KEY=…`)
-    // is how this value actually leaks, and the 40-character shape carries the
-    // rule on its own.
-    pattern: /(?<![A-Za-z])aws[_-]?secret[_-]?(?:access[_-]?)?key["']?\s{0,8}[:=]\s{0,8}["']?(?<check>[A-Za-z0-9/+=]{40})/gi,
-    confidence: "high"
-  },
-  {
-    id: "github-token",
-    description: "GitHub personal access, OAuth, app or refresh token",
-    // gitleaks: github-pat (ghp_), github-oauth (gho_), github-app-token
-    // (ghu_/ghs_), github-refresh-token (ghr_). One rule, because the remedy
-    // and the urgency are identical for all five.
-    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "github-fine-grained-pat",
-    description: "GitHub fine-grained personal access token",
-    // gitleaks pins the tail at 82; the floor is loosened to 60 so a future
-    // length change degrades into a hit rather than into silence.
-    pattern: /\bgithub_pat_[A-Za-z0-9_]{60,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "openai-api-key",
-    description: "OpenAI API key",
-    // Two shapes, and the split is what keeps this rule quiet. The legacy form
-    // is `sk-` plus alphanumerics only: allowing `-` in the tail would match
-    // any branch-name-shaped word starting with `sk-`. The project/service
-    // forms do allow `-`, so they are gated behind their own prefixes instead.
-    pattern: /\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,255}|[A-Za-z0-9]{32,255})/g,
-    confidence: "high"
-  },
-  {
-    id: "anthropic-api-key",
-    description: "Anthropic API key",
-    // gitleaks: anthropic-api-key (`sk-ant-api03-…`, `sk-ant-admin01-…`). The
-    // key-class segment is left open so a new class is still detected. Cannot
-    // collide with the OpenAI rule above: `ant` is three characters, short of
-    // that rule's 32-character alphanumeric floor.
-    pattern: /\bsk-ant-[A-Za-z0-9]{2,32}-[A-Za-z0-9_-]{20,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "slack-token",
-    description: "Slack API token",
-    // gitleaks: slack-bot-token and friends, collapsed to the shared prefix.
-    pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,255}/g,
-    confidence: "high"
-  },
-  {
-    id: "private-key-block",
-    description: "PEM private key block",
-    // The header alone is the finding. A commit message that quotes the BEGIN
-    // line has already told everyone where the key is, whether or not the body
-    // came along.
-    pattern: /-----BEGIN[A-Z0-9 ]{0,32}PRIVATE KEY(?: BLOCK)?-----/g,
-    confidence: "high"
-  },
-  {
-    id: "url-embedded-credentials",
-    description: "credentials embedded in a URL",
-    // `scheme://user:password@host`. The password is the `check` group so a
-    // documented `https://user:<password>@host` stays quiet, and every part is
-    // bounded so a long line cannot make the engine walk it repeatedly.
-    // `[^\s:@/]` for the user and `[^\s@/]` for the password are what keep
-    // `postgres://cache.internal:5432/db` out: the port is followed by `/`,
-    // never by `@`.
-    pattern: /\b[a-z][a-z0-9+.-]{1,31}:\/\/[^\s:@/]{1,64}:(?<check>[^\s@/]{3,128})@[^\s/]{1,255}/gi,
-    confidence: "high"
-  },
-  {
-    id: "generic-credential-assignment",
-    description: "a secret-looking name assigned a credential-shaped value",
-    // The catch-all, and the only rule that can fire on ordinary English — so
-    // it is `medium`, and it demands three things at once: a credential-ish
-    // name, an assignment, and a quoted value with no whitespace in it. That
-    // last requirement is what separates `password: "hunter2seventeen"` from
-    // `password: "must be rotated"`, and it is why prose about tokens and
-    // secrets passes. The leading lookbehind, rather than `\b`, is so
-    // `DATABASE_PASSWORD="…"` is caught (`_` is a word character, so `\b`
-    // would not match) while `retokenize: "…"` is not.
-    pattern: /(?<![A-Za-z])(?:api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|credentials?|password|passwd|secret|token)["']?\s{0,8}[:=]\s{0,8}["'](?<check>[^"'\s]{8,200})["']/gi,
-    confidence: "medium"
-  }
-];
-
-// src/core/secret-guard.ts
-var CONFIDENCE_RANK = { high: 2, medium: 1 };
-var REDACT_PREFIX = 4;
-var COMMENT_CHAR = "#";
-var SCISSORS = /^#\s{0,8}-{3,}\s{0,8}>8\s{0,8}-{3,}/;
-var redact = (text) => `${text.slice(0, Math.min(REDACT_PREFIX, Math.max(text.length - 1, 0)))}\u2026`;
-var scannedLines = (message) => {
-  const kept = [];
-  for (const [index, raw] of message.split("\n").entries()) {
-    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    if (SCISSORS.test(text)) break;
-    if (text.startsWith(COMMENT_CHAR)) continue;
-    kept.push({ line: index + 1, text });
-  }
-  return kept;
-};
-var hitsFor = (rule, source) => {
-  const found = [];
-  for (const match of source.text.matchAll(rule.pattern)) {
-    const text = match[0];
-    if (isPlaceholder(match.groups?.["check"] ?? text)) continue;
-    const start = match.index ?? 0;
-    found.push({ rule, line: source.line, start, end: start + text.length, redacted: redact(text) });
-  }
-  return found;
-};
-var overlaps = (a, b) => a.line === b.line && a.start < b.end && b.start < a.end;
-var dropShadowed = (hits) => hits.filter(
-  (hit) => !hits.some(
-    (other) => other !== hit && overlaps(hit, other) && CONFIDENCE_RANK[other.rule.confidence] > CONFIDENCE_RANK[hit.rule.confidence]
-  )
-);
-var scanForSecrets = (message, opts) => {
-  const floor = CONFIDENCE_RANK[opts?.minConfidence ?? "medium"];
-  const hits = scannedLines(message).flatMap(
-    (source) => SECRET_RULES.flatMap((rule) => hitsFor(rule, source))
-  );
-  return dropShadowed(hits).filter((hit) => CONFIDENCE_RANK[hit.rule.confidence] >= floor).sort((a, b) => a.line - b.line || a.start - b.start || a.rule.id.localeCompare(b.rule.id)).map((hit) => ({
-    ruleId: hit.rule.id,
-    description: hit.rule.description,
-    line: hit.line,
-    redacted: hit.redacted,
-    confidence: hit.rule.confidence
-  }));
-};
-var formatFindings = (findings) => {
-  if (findings.length === 0) return "";
-  return [
-    ...findings.map(
-      (finding) => `${finding.line}: ${finding.ruleId} (${finding.confidence}) \u2014 ${finding.description} \u2014 ${finding.redacted}`
-    ),
-    "Remove the value from the message. If it has already left this machine, rotate it \u2014 rewriting history does not reach existing clones.",
-    ""
-  ].join("\n");
-};
-
-// src/commands/validate.ts
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",

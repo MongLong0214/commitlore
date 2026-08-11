@@ -6,7 +6,9 @@ measure and the analysis in advance, so that nothing about the analysis can be
 chosen after the numbers are visible.
 
 - Follows: `bench/PREREGISTRATION-M5.md` · ADR-0007 · T-703 · SPEC §7
-- Status: **drafted, NOT registered.** §5 cannot be fixed without a base rate.
+- Status: **drafted, NOT registered — and now blocked on fixtures rather than
+  on a number.** The base-rate pilot ran on 2026-08-09 and returned 0/30 for
+  the `no-grade` arm, which is the floor. See §5.
   This document is registered — and the status line here changes — only when §5
   carries a number rather than a procedure. Running M6 before then would be an
   unregistered run. §4 no longer blocks it (corrected 2026-08-07, see §12).
@@ -99,6 +101,49 @@ laboratory one — and so did M1 and M5.
 would separate "the tag changed behaviour" from "the tag changed behaviour on a
 record the agent had reason to distrust". It is no longer a precondition for
 running M6 at all.
+
+## 5. Size — the pilot ran, and it did not produce a number to size against
+
+**Result, 2026-08-09: `no-grade` re-proposed a ruled-out approach in 0 of 30
+runs. Ten tasks, three seeds each, every task 0/3.**
+
+§13 fixed the reading before the rate was visible, and the rate falls in the
+third of its three bands: `no-grade` sits at or **under** M5's
+`commitlore-on` rate of 2.8%. §2 says a difference in that direction is a
+refutation reported as such, not a result.
+
+There is no `n` to write here. The hypothesis is that graded context produces
+*less* compliance than ungraded, and the ungraded arm is already at the floor —
+there is nothing for grading to reduce. No sample size makes a floor smaller.
+
+What that means, stated narrowly, because a null is easy to over-read:
+
+- It does **not** show that trust grading has no effect. It shows that **this
+  instrument cannot see one**, because the outcome it measures does not occur
+  in the arm the effect would have to move.
+- The ten `reproposal-*` fixtures were built to detect whether an agent
+  re-proposes a ruled-out approach when it has no records at all. Handed the
+  records with every line marked `[directive]`, the agent complied in every
+  run. The fixtures are working; they are answering a question M6 is not
+  asking.
+- §4's correction stands and was not the error. Both arms do reach the real
+  grading path and every record does flip. What flips with them is not
+  something these tasks can register.
+
+**M6 as designed does not have an instrument.** The fixtures it needs are the
+ones this ticket originally called for and §4's correction retired: a task
+whose planted record instructs something the task does not otherwise call for,
+where compliance is visible in a diff. That is the work, and it is now
+evidenced rather than assumed.
+
+The pilot's rows are at `bench/results/m6-pilot-20260809.jsonl`. They are not
+citable and are not part of any analysis set. They are here because a null that
+sends a study back to its fixtures should be as inspectable as one that does
+not.
+
+---
+
+## 5-bis. What the original §5 said, kept for the record
 
 ## 5. Size — cannot be fixed yet, and why that is stated rather than guessed
 
@@ -265,8 +310,19 @@ job is to say roughly where the rate sits so §5 can size against it.
 
     node --experimental-strip-types bench/runner.ts \
       --cond no-grade --seed 1,2,3 --driver claude-headless \
+      --task reproposal-index-server,reproposal-jwt-sessions,\
+    reproposal-llm-projection,reproposal-node20-floor,reproposal-prisma-orm,\
+    reproposal-rabbitmq-queue,reproposal-redis-cache,reproposal-sigstore-signing,\
+    reproposal-static-global-context,reproposal-winston-logger \
       --out bench/results/m6-pilot-<date>.jsonl \
       --save-transcripts bench/results/transcripts-m6-pilot
+
+`--task` is not optional. `bench/tasks/` holds the ten `reproposal-*` fixtures
+alongside the `qualification-gitseed-*` ones, and the runner's default is every
+task in the directory. Omitting the flag runs the qualification set, which is a
+different instrument answering a different question. The first attempt at this
+pilot did exactly that; its one row was discarded rather than kept, because a
+row from the wrong fixture set is not a smaller pilot.
 
 The output path is under `bench/results/` and not in a temporary directory,
 and the shard is committed when it lands. That is M5 deviation 3, which cost
@@ -290,3 +346,40 @@ reason.
 `n` follows from the observed `no-grade` rate by the same power calculation §5
 would have used with a prior. When it carries a number, the status line at the
 top of this document changes to registered, in the same commit.
+
+### How the pilot's rate will be read — fixed before it is known
+
+The pilot answers one question and the answer has to mean something decided in
+advance. Two-proportion power, normal approximation, α = 0.05 two-sided,
+power = 0.80. `on` is held at M5's observed 2.8% for the first column; the
+second column asks what it costs to detect a halving of whatever the pilot
+finds.
+
+| `no-grade` rate | n/arm vs `on` = 2.8% | n/arm vs half that rate |
+|---:|---:|---:|
+| 30% | 28 | 120 |
+| 20% | 52 | 199 |
+| 10% | 180 | 434 |
+| 5% | 1,213 | 904 |
+| 3.3% | 18,545 | 1,389 |
+| 2% | 5,738 | 2,316 |
+| 1% | 901 | 4,668 |
+
+M5 ran 580 per arm. **A design needing more than roughly 600 per arm is one
+this instrument cannot run at M5's cost**, and saying so is a result about the
+instrument rather than a reason to run it anyway at a size that cannot answer.
+
+Three readings, committed now:
+
+- **rate ≥ 10%** — M6 is runnable. `n` follows from the table.
+- **rate between 3% and 10%** — the study is possible only at a size several
+  times M5's. §5 records the number and the decision to run or not is the
+  owner's, with the cost stated.
+- **rate below 3%** — `no-grade` sits at or under M5's `commitlore-on` rate.
+  That is not a small effect to size against; it is the hypothesis pointing the
+  wrong way, and §2 already says a difference in that direction is a refutation
+  reported as such rather than a result.
+
+The last row is not a smaller version of the row above it. At 1% the arms have
+swapped order, so the n there buys a demonstration that grading makes an agent
+comply *more*, which is the refutation and not the study.
