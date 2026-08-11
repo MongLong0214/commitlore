@@ -4,7 +4,7 @@
  * It owns the reversible fetch-configuration diagnosis and fix because no
  * sibling check may alter transport configuration on its behalf.
  */
-import { NOTES_REF, NOTES_REFSPEC, coversNotes, forcesNotes, listRemotes, fetchRefspecs } from '../../../core/notes.js';
+import { NOTES_REF, NOTES_REFSPEC, coversNotes, forcesNotes, listRemotes, fetchRefspecs, notesAbsenceEvidenceKey, } from '../../../core/notes.js';
 import { check, evidenceKey, gitOptions } from '../model.js';
 const EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
@@ -17,6 +17,23 @@ const EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
  * in place beside a new one.
  */
 const escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
+const firstLine = (output) => output.trim().split('\n')[0] ?? '';
+/** A stale absence observation must never survive an unsuccessful verification. */
+const clearAbsenceEvidence = (remote, ctx) => ctx.git(['config', '--local', '--unset-all', notesAbsenceEvidenceKey(remote)], gitOptions(ctx.opts)).code === 0;
+/**
+ * Store precisely what made an absent-mirror answer safe: this remote name was
+ * checked while it resolved to this URL, and it advertised no notes ref.
+ */
+const recordAbsenceEvidence = (remote, ctx) => {
+    const url = ctx.git(['config', '--get', `remote.${remote}.url`], gitOptions(ctx.opts));
+    if (url.code !== 0 || url.stdout.trim() === '')
+        return false;
+    const key = notesAbsenceEvidenceKey(remote);
+    const current = ctx.git(['config', '--local', '--get', key], gitOptions(ctx.opts));
+    if (current.code === 0 && current.stdout.trim() === url.stdout.trim())
+        return false;
+    return ctx.git(['config', '--local', '--replace-all', key, url.stdout.trim()], gitOptions(ctx.opts)).code === 0;
+};
 export const checkRefspec = (ctx) => {
     const { opts, git } = ctx;
     const title = 'notes fetch refspec';
@@ -66,6 +83,10 @@ export const checkRefspec = (ctx) => {
         .map((remote) => ({ remote, result: git(['fetch', '--dry-run', remote], gitOptions(opts)) }))
         .filter(({ result }) => result.code !== 0);
     if (failed.length > 0) {
+        // A previous observation says nothing about a remote that cannot be
+        // verified now. `--fix` removes it so the read path returns to fail-closed.
+        if (opts.fix === true)
+            failed.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
         return check('notes-refspec', 'transport', title, 'warn', `could not verify (${failed
             .map(({ remote, result }) => `${remote}: ${result.stderr.trim().split('\n')[0] ?? 'git fetch failed'}`)
             .join('; ')})`, failed.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed, undefined, {
@@ -78,13 +99,53 @@ export const checkRefspec = (ctx) => {
             },
         });
     }
-    // A refspec written by `--fix` has not been fetched through yet, and this
-    // check is the last thing the operator reads before believing the mirror is
-    // sorted. Without the second sentence `ok` plus `fixed by --fix` reads as
-    // "repaired", while every query still answers from a mirror that was never
-    // retrieved -- the configuration is right and the records are still missing.
-    return check('notes-refspec', 'transport', title, 'ok', fixed
-        ? `${NOTES_REF} is now covered for ${remotes.join(', ')} — nothing has been fetched through it yet`
-        : `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`, fixed ? `git fetch ${remotes[0] ?? 'origin'}` : null, fixed, undefined, { evidence: remoteEvidence });
+    const local = git(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
+    if (local.code === 0) {
+        return check('notes-refspec', 'transport', title, 'ok', `git fetch succeeds for ${remotes.join(', ')} and covers ${NOTES_REF}`, null, fixed, undefined, { evidence: { ...remoteEvidence, local_sha: local.stdout.trim() || 'unknown' } });
+    }
+    const advertised = remotes.map((remote) => ({
+        remote,
+        result: git(['ls-remote', remote, NOTES_REF], gitOptions(opts)),
+    }));
+    const unavailable = advertised.filter(({ result }) => result.code !== 0);
+    if (unavailable.length > 0) {
+        if (opts.fix === true)
+            unavailable.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
+        return check('notes-refspec', 'transport', title, 'warn', `could not verify whether ${NOTES_REF} exists upstream (${unavailable
+            .map(({ remote, result }) => `${remote}: ${firstLine(result.stderr) || 'git ls-remote failed'}`)
+            .join('; ')})`, unavailable.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed, undefined, {
+            evidence: {
+                ...remoteEvidence,
+                ...Object.fromEntries(unavailable.map(({ remote, result }) => [
+                    `ls_remote_exit_code_${evidenceKey(remote)}`,
+                    String(result.code),
+                ])),
+            },
+        });
+    }
+    const withNotes = advertised.filter(({ result }) => result.stdout.trim() !== '');
+    if (withNotes.length > 0) {
+        if (opts.fix === true)
+            withNotes.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
+        return check('notes-refspec', 'transport', title, 'warn', `${withNotes.map(({ remote }) => remote).join(', ')} advertises ${NOTES_REF}, but it is not fetched here`, withNotes.map(({ remote }) => `git fetch ${remote}`).join('\n'), fixed, undefined, {
+            evidence: {
+                ...remoteEvidence,
+                ...Object.fromEntries(withNotes.map(({ remote, result }) => [
+                    `remote_sha_${evidenceKey(remote)}`,
+                    result.stdout.trim().split(/\s+/)[0] ?? 'unknown',
+                ])),
+            },
+        });
+    }
+    let recorded = false;
+    if (opts.fix === true) {
+        recorded = remotes.map((remote) => recordAbsenceEvidence(remote, ctx)).some(Boolean);
+        fixed = fixed || recorded;
+    }
+    // The remote probe found no mirror. Only `--fix` stores that fact for query
+    // routes, which must remain read-only and must not perform this probe.
+    return check('notes-refspec', 'transport', title, 'ok', opts.fix === true
+        ? `${remotes.join(', ')} advertises no ${NOTES_REF}; there is nothing to fetch`
+        : `${remotes.join(', ')} advertises no ${NOTES_REF}; run commitlore doctor --fix to record that for queries`, opts.fix === true ? null : 'commitlore doctor --fix', fixed, undefined, { evidence: { ...remoteEvidence, remote_advertises: 'false' } });
 };
 //# sourceMappingURL=transport-notes-refspec.js.map

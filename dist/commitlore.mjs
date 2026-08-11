@@ -11385,6 +11385,7 @@ var listRecordShas = (opts = {}) => {
     return object3;
   }).filter((object3) => object3.length > 0);
 };
+var notesAbsenceEvidenceKey = (remote) => `commitlore.notesabsence.r${Buffer.from(remote, "utf8").toString("hex")}`;
 var listRemotes = (opts) => {
   const result = execGit(["remote"], gitOptions(opts));
   if (result.code !== 0) return [];
@@ -11394,6 +11395,12 @@ var fetchRefspecs = (remote, opts) => {
   const result = execGit(["config", "--get-all", `remote.${remote}.fetch`], gitOptions(opts));
   if (result.code !== 0) return [];
   return result.stdout.split("\n").filter((line2) => line2.length > 0);
+};
+var hasNotesAbsenceEvidence = (remote, opts = {}) => {
+  const url = execGit(["config", "--get", `remote.${remote}.url`], gitOptions(opts));
+  if (url.code !== 0 || url.stdout.trim() === "") return false;
+  const observed = execGit(["config", "--local", "--get", notesAbsenceEvidenceKey(remote)], gitOptions(opts));
+  return observed.code === 0 && observed.stdout.trim() === url.stdout.trim();
 };
 var coversNotes = (refspec) => {
   const [, destination = ""] = refspec.replace(/^\+/, "").split(":");
@@ -11407,7 +11414,8 @@ var notesAvailability = (opts = {}) => {
   const remotes = listRemotes(opts);
   if (remotes.length === 0) return "absent";
   const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-  return uncovered.length > 0 ? "unfetched" : "absent";
+  if (uncovered.length > 0) return "unfetched";
+  return remotes.every((remote) => hasNotesAbsenceEvidence(remote, opts)) ? "absent" : "unfetched";
 };
 
 // src/core/backfill.ts
@@ -17382,10 +17390,10 @@ import { spawnSync as spawnSync3 } from "node:child_process";
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var boundedExcerpt = (output) => {
-  const [firstLine5 = ""] = (output ?? "").split(/\r?\n/, 1);
+  const [firstLine6 = ""] = (output ?? "").split(/\r?\n/, 1);
   return {
-    firstLine: firstLine5.slice(0, 200),
-    truncated: firstLine5.length > 200 ? "true" : "false"
+    firstLine: firstLine6.slice(0, 200),
+    truncated: firstLine6.length > 200 ? "true" : "false"
   };
 };
 var streamEvidence = (stream, output) => {
@@ -29212,6 +29220,16 @@ var checkPush = (ctx) => {
 var EXACT_NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 var EXACT_NOTES_REFSPEC_PATTERN = `^\\${EXACT_NOTES_REFSPEC}$`;
 var escapeConfigValuePattern = (value) => value.replace(/[\\.*+?[\]^$(){}|]/g, (character) => `\\${character}`);
+var firstLine2 = (output) => output.trim().split("\n")[0] ?? "";
+var clearAbsenceEvidence = (remote, ctx) => ctx.git(["config", "--local", "--unset-all", notesAbsenceEvidenceKey(remote)], gitOptions2(ctx.opts)).code === 0;
+var recordAbsenceEvidence = (remote, ctx) => {
+  const url = ctx.git(["config", "--get", `remote.${remote}.url`], gitOptions2(ctx.opts));
+  if (url.code !== 0 || url.stdout.trim() === "") return false;
+  const key = notesAbsenceEvidenceKey(remote);
+  const current = ctx.git(["config", "--local", "--get", key], gitOptions2(ctx.opts));
+  if (current.code === 0 && current.stdout.trim() === url.stdout.trim()) return false;
+  return ctx.git(["config", "--local", "--replace-all", key, url.stdout.trim()], gitOptions2(ctx.opts)).code === 0;
+};
 var checkRefspec = (ctx) => {
   const { opts, git: git2 } = ctx;
   const title = "notes fetch refspec";
@@ -29287,6 +29305,7 @@ var checkRefspec = (ctx) => {
   }
   const failed = remotes.map((remote) => ({ remote, result: git2(["fetch", "--dry-run", remote], gitOptions2(opts)) })).filter(({ result }) => result.code !== 0);
   if (failed.length > 0) {
+    if (opts.fix === true) failed.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
     return check(
       "notes-refspec",
       "transport",
@@ -29309,16 +29328,87 @@ var checkRefspec = (ctx) => {
       }
     );
   }
+  const local = git2(["rev-parse", "--verify", "--quiet", NOTES_REF], gitOptions2(opts));
+  if (local.code === 0) {
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "ok",
+      `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
+      null,
+      fixed,
+      void 0,
+      { evidence: { ...remoteEvidence, local_sha: local.stdout.trim() || "unknown" } }
+    );
+  }
+  const advertised = remotes.map((remote) => ({
+    remote,
+    result: git2(["ls-remote", remote, NOTES_REF], gitOptions2(opts))
+  }));
+  const unavailable = advertised.filter(({ result }) => result.code !== 0);
+  if (unavailable.length > 0) {
+    if (opts.fix === true) unavailable.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "warn",
+      `could not verify whether ${NOTES_REF} exists upstream (${unavailable.map(({ remote, result }) => `${remote}: ${firstLine2(result.stderr) || "git ls-remote failed"}`).join("; ")})`,
+      unavailable.map(({ remote }) => `git fetch ${remote}`).join("\n"),
+      fixed,
+      void 0,
+      {
+        evidence: {
+          ...remoteEvidence,
+          ...Object.fromEntries(
+            unavailable.map(({ remote, result }) => [
+              `ls_remote_exit_code_${evidenceKey(remote)}`,
+              String(result.code)
+            ])
+          )
+        }
+      }
+    );
+  }
+  const withNotes = advertised.filter(({ result }) => result.stdout.trim() !== "");
+  if (withNotes.length > 0) {
+    if (opts.fix === true) withNotes.forEach(({ remote }) => clearAbsenceEvidence(remote, ctx));
+    return check(
+      "notes-refspec",
+      "transport",
+      title,
+      "warn",
+      `${withNotes.map(({ remote }) => remote).join(", ")} advertises ${NOTES_REF}, but it is not fetched here`,
+      withNotes.map(({ remote }) => `git fetch ${remote}`).join("\n"),
+      fixed,
+      void 0,
+      {
+        evidence: {
+          ...remoteEvidence,
+          ...Object.fromEntries(withNotes.map(({ remote, result }) => [
+            `remote_sha_${evidenceKey(remote)}`,
+            result.stdout.trim().split(/\s+/)[0] ?? "unknown"
+          ]))
+        }
+      }
+    );
+  }
+  let recorded = false;
+  if (opts.fix === true) {
+    recorded = remotes.map((remote) => recordAbsenceEvidence(remote, ctx)).some(Boolean);
+    fixed = fixed || recorded;
+  }
   return check(
     "notes-refspec",
     "transport",
     title,
     "ok",
-    fixed ? `${NOTES_REF} is now covered for ${remotes.join(", ")} \u2014 nothing has been fetched through it yet` : `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
-    fixed ? `git fetch ${remotes[0] ?? "origin"}` : null,
+    opts.fix === true ? `${remotes.join(", ")} advertises no ${NOTES_REF}; there is nothing to fetch` : `${remotes.join(", ")} advertises no ${NOTES_REF}; run commitlore doctor --fix to record that for queries`,
+    opts.fix === true ? null : "commitlore doctor --fix",
     fixed,
     void 0,
-    { evidence: remoteEvidence }
+    { evidence: { ...remoteEvidence, remote_advertises: "false" } }
   );
 };
 
@@ -30096,7 +30186,7 @@ var register10 = (program3) => {
 
 // src/commands/hooks.ts
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine2 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure3 = (message) => ({
   code: 2,
   stdout: "",
@@ -30113,7 +30203,7 @@ var success2 = (status, lines) => ({
 var resolveHooksDir = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "hooks"], { cwd });
   if (result.code !== 0) {
-    throw new Error(`not a git repository (${firstLine2(result.stderr)})`);
+    throw new Error(`not a git repository (${firstLine3(result.stderr)})`);
   }
   return resolve14(cwd, result.stdout.trim());
 };
@@ -31849,7 +31939,7 @@ var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
 var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
 var usageError = (message) => ({
   code: 2,
@@ -31865,7 +31955,7 @@ var countCommits = (range, cwd) => {
     cwd === void 0 ? {} : { cwd }
   );
   if (result.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine3(result.stderr)}`);
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine4(result.stderr)}`);
   }
   return Number(result.stdout.trim());
 };
@@ -32048,13 +32138,13 @@ ${USAGE2}
   checks: []
 });
 var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
+var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
 var CONTINUATION = /^[ \t]/;
 var LEADING_WHITESPACE = /^[ \t]+/;
 var isComment = (line2) => line2.startsWith("#");
 var MERGE_TITLE = /^Merge (pull request #\d+ from \S+|branch '[^']+'|remote-tracking branch '[^']+'|tag '[^']+')(?: into \S+)?$/;
-var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine4(message));
+var looksLikeMergeTitle = (message) => MERGE_TITLE.test(firstLine5(message));
 var matchTrailersAt = (lines, start, trailers) => {
   const found = [];
   let cursor = start;
@@ -32208,21 +32298,21 @@ var locateReferenceViolations = (source, trailers, violations) => {
 var resolveCommit2 = (ref, cwd) => {
   const result = execGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], { cwd });
   if (result.code !== 0) {
-    throw new Error(`cannot resolve commit ${JSON.stringify(ref)}: ${firstLine4(result.stderr)}`);
+    throw new Error(`cannot resolve commit ${JSON.stringify(ref)}: ${firstLine5(result.stderr)}`);
   }
   return result.stdout.trim();
 };
 var readCommitSource = (sha, cwd) => {
   const result = execGit(["log", "-1", "--format=%B", sha, "--"], { cwd });
   if (result.code !== 0) {
-    throw new Error(`cannot read commit ${sha}: ${firstLine4(result.stderr)}`);
+    throw new Error(`cannot read commit ${sha}: ${firstLine5(result.stderr)}`);
   }
   return { sha, message: result.stdout };
 };
 var readRange = (range, cwd) => {
   const result = execGit(["rev-list", "--reverse", "--end-of-options", range, "--"], { cwd });
   if (result.code !== 0) {
-    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine4(result.stderr)}`);
+    throw new Error(`cannot walk range ${JSON.stringify(range)}: ${firstLine5(result.stderr)}`);
   }
   return result.stdout.split("\n").filter((sha) => sha.length > 0).map((sha) => readCommitSource(sha, cwd));
 };
@@ -32287,7 +32377,7 @@ var recordsFor = (source, cwd) => {
 var reachableShas = (revision, cwd) => {
   const result = execGit(["rev-list", revision], { cwd });
   if (result.code !== 0) {
-    throw new Error(firstLine4(result.stderr) || `cannot walk revision ${revision}`);
+    throw new Error(firstLine5(result.stderr) || `cannot walk revision ${revision}`);
   }
   return new Set(result.stdout.trim().split("\n").filter(Boolean));
 };
@@ -32383,7 +32473,7 @@ var checkReferences = (input, sources, cwd) => {
       check: {
         class: "reference",
         status: "not-checked",
-        reason: `repository scan failed: ${firstLine4(messageOf6(error2))}`
+        reason: `repository scan failed: ${firstLine5(messageOf6(error2))}`
       },
       violations: []
     };

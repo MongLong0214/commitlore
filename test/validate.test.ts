@@ -15,7 +15,22 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { CHECK_CLASS_NEEDS, runValidate } from '../src/commands/validate.js';
-import { writeRecord } from '../src/core/notes.js';
+import { notesAbsenceEvidenceKey, writeRecord } from '../src/core/notes.js';
+
+/**
+ * A refspec says what a clone would fetch, never what the remote has, so on its
+ * own it leaves notes availability unknown and every reference check reads
+ * `not-checked` for a reason unrelated to what these cases measure (#512).
+ * `doctor --fix` records the remote probe; a fixture records the same evidence.
+ */
+const recordNotesProbe = (cwd: string): void => {
+  const url = execFileSync('git', ['config', '--get', 'remote.origin.url'], {
+    cwd,
+    env: GIT_ENV,
+    encoding: 'utf8',
+  }).trim();
+  execFileSync('git', ['config', '--local', notesAbsenceEvidenceKey('origin'), url], { cwd, env: GIT_ENV });
+};
 import { loadFixtures } from './fixtures.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -504,6 +519,7 @@ describe('validate — check classes and reference integrity', () => {
       ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
       { cwd: shallow, env: GIT_ENV },
     );
+    recordNotesProbe(shallow);
     const shallowMessage = join(shallow, 'message.txt');
     writeFileSync(shallowMessage, message);
 
@@ -516,6 +532,7 @@ describe('validate — check classes and reference integrity', () => {
       ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
       { cwd: full, env: GIT_ENV },
     );
+    recordNotesProbe(full);
     const fullMessage = join(full, 'message.txt');
     writeFileSync(fullMessage, message);
 

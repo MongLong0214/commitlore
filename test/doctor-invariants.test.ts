@@ -266,9 +266,10 @@ describe('#461 doctor invariants', () => {
     }
   });
 
-  it('writes only remote fetch refspecs under --fix', () => {
-    // #63: --fix has already shipped one defect through this surface. A second
-    // write surface growing here is what this pins.
+  it('writes only remote fetch refspecs and notes-absence evidence under --fix', () => {
+    // #63: --fix has already shipped one defect through this surface. The
+    // URL-bound absence evidence is the one additional local fact queries may
+    // rely on; a third write surface must still fail this fence.
     const repo = populatedRepo('fix');
     const configBefore = localConfig(repo);
     const before = inventory(repo);
@@ -279,8 +280,8 @@ describe('#461 doctor invariants', () => {
       .split('\n')
       .filter((line) => line.trim() !== '' && !configBefore.includes(line));
     for (const line of added) {
-      expect(line, `--fix wrote a config key outside remote.<name>.fetch: ${line}`).toMatch(
-        /^remote\.[^.]+\.fetch=/,
+      expect(line, `--fix wrote an undocumented config key: ${line}`).toMatch(
+        /^(remote\.[^.]+\.fetch|commitlore\.notesabsence\.r[0-9a-f]+)=/,
       );
     }
 
