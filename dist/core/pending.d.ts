@@ -40,6 +40,12 @@ export interface PendingRecord {
     overlap_check: 'canonical_exact_only' | null;
     incomplete: boolean;
     guard_advisory?: GuardAdvisory | null;
+    /**
+     * Present — and only ever `true` — when the capture declared itself
+     * unattended and the repository's policy consented (#511). Absent otherwise,
+     * so a capture that made no declaration leaves byte-identical bytes on disk.
+     */
+    unattended?: boolean;
 }
 export declare class PendingFormatError extends Error {
     constructor(message: string);
@@ -74,7 +80,21 @@ export interface CreatePendingOptions {
     staged_tree_oid: string;
     policy_identity_hash: string;
     guard_advisory?: GuardAdvisory | null;
+    /** Set only when prepare accepted an unattended declaration (#511). */
+    unattended?: boolean;
 }
+/**
+ * The in-memory form of a newly prepared transaction.
+ *
+ * `createPending` persists this exact shape. Read-only callers such as capture
+ * shadow use the same transaction input without first creating a file they
+ * would have to clean up afterwards.
+ */
+export declare const makePreparedPending: (opts: CreatePendingOptions & {
+    nonce: string;
+    base_head: string;
+    created_at?: string;
+}) => PendingRecord;
 /**
  * Creates a pending transaction in `prepared` phase.
  * Returns the nonce (32 hex chars).

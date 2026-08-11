@@ -1153,3 +1153,84 @@ describe('commitlore_stage_capture mutation oracles', () => {
     expect(response.result?.['isError']).toBe(true);
   });
 });
+
+// ===========================================================================
+// #511 — the unattended declaration over MCP
+//
+// Unattended capture is an opt-in: `prepare` refuses the declaration unless
+// the repository's policy consented (".commitlore-policy.json" with
+// `"unattended": true` and mode `auto`). The refusal must surface as an
+// `isError` answer the agent can read, and a consented repository's
+// transaction must record the declaration.
+// ===========================================================================
+
+describe('commitlore_prepare_capture unattended declaration (#511)', () => {
+  let repo: string;
+  let stub: Stub;
+
+  beforeAll(async () => {
+    repo = makeRepo();
+    writeFileSync(join(repo, 'svc.ts'), 'export const n = 1;\n');
+    execGitOrThrow([...GIT_CONFIG, '-C', repo, 'add', '-A'], { cwd: repo });
+    stub = startStub(repo);
+    await handshake(stub);
+  }, 120_000);
+
+  afterAll(() => {
+    stub?.close();
+  });
+
+  it('refuses the declaration where the repository did not opt in', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: 'a session nobody asked about', unattended: true },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    const content = (response.result?.['content'] ?? []) as ContentBlock[];
+    expect(content[0]?.text).toContain('unattended capture is off for this repository');
+  });
+
+  it('leaves no transaction behind after the refusal', async () => {
+    const gitDir = execGitOrThrow(['rev-parse', '--git-path', 'commitlore/pending'], {
+      cwd: repo,
+    }).trim();
+    const pendingDir = join(repo, gitDir);
+    if (existsSync(pendingDir)) {
+      expect(readdirSync(pendingDir).filter((f) => f.endsWith('.json'))).toEqual([]);
+    }
+  });
+
+  it('accepts the declaration where the policy consented, and records it', async () => {
+    writeFileSync(join(repo, '.commitlore-policy.json'), '{ "unattended": true }\n');
+    try {
+      const response = await stub.request('tools/call', {
+        name: 'commitlore_prepare_capture',
+        arguments: { transcript: 'a session the repository consented to', unattended: true },
+      });
+      expect(response.result?.['isError']).toBeUndefined();
+      const result = toolJson(response);
+      const nonce = result['nonce'];
+      expect(nonce).toMatch(/^[0-9a-f]{32}$/);
+
+      const gitDir = execGitOrThrow(['rev-parse', '--git-path', 'commitlore/pending'], {
+        cwd: repo,
+      }).trim();
+      const stored = JSON.parse(
+        readFileSync(join(repo, gitDir, `${nonce}.json`), 'utf8'),
+      ) as { unattended?: boolean };
+      expect(stored.unattended).toBe(true);
+    } finally {
+      rmSync(join(repo, '.commitlore-policy.json'), { force: true });
+    }
+  });
+
+  it('rejects a non-boolean declaration at the boundary', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: 'a session', unattended: 'yes' },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    const content = (response.result?.['content'] ?? []) as ContentBlock[];
+    expect(content[0]?.text).toContain('unattended must be a boolean');
+  });
+});

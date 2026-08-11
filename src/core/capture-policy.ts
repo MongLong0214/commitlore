@@ -22,7 +22,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { execGit } from './git.js';
@@ -70,6 +70,15 @@ export const CAPTURE_MODES: readonly CaptureMode[] = ['auto', 'suggest', 'off'];
 
 export interface CapturePolicy {
   mode: CaptureMode;
+  /**
+   * Consent to capture without asking (ADR-0030, #511). Off unless a
+   * repository sets it, and honoured only in `auto` mode: `suggest` exists to
+   * ask, `off` captures nothing, and a consent neither mode can honour is a
+   * configuration error rather than a silent no-op. The declaration a capture
+   * makes against it is checked in `capture-prepare.ts`; the grading cap that
+   * keeps an unread record from directing lives in `grade.ts`.
+   */
+  unattended: boolean;
   max_records_per_commit: number;
   require_verified_evidence: boolean;
 }
@@ -82,6 +91,11 @@ export interface CapturePolicy {
  */
 export const POLICY_DEFAULTS: CapturePolicy = {
   mode: 'auto',
+  // Off by default and deliberately so: a repository that never set this must
+  // capture exactly as it did before the setting existed (#511). Turning it on
+  // is a separate decision with its own evidence — shipping the switch is not
+  // flipping it.
+  unattended: false,
   max_records_per_commit: 1,
   require_verified_evidence: true,
 };
@@ -89,6 +103,7 @@ export const POLICY_DEFAULTS: CapturePolicy = {
 /** The only keys a policy file may set. An unknown key is rejected, not merged. */
 export const POLICY_KEYS = [
   'mode',
+  'unattended',
   'max_records_per_commit',
   'require_verified_evidence',
 ] as const;
@@ -114,6 +129,14 @@ const sha256 = (input: string): string => createHash('sha256').update(input).dig
  * `JSON.stringify` over an object literal whose keys are declared in
  * `POLICY_DEFAULTS`' order — the exact expression the three former call sites
  * used, preserved so that consolidation is a no-op on the digest.
+ *
+ * `unattended` is deliberately absent (#511). The setting can only be turned
+ * on by a policy file, and a file's identity is its own bytes — so every
+ * identity the setting can change is hashed already. Putting a fixed-false
+ * default into this digest too would refuse every capture in flight across the
+ * upgrade in every repository that never opted in: a policy change that never
+ * happened, the exact false positive this hash exists to avoid. If the default
+ * ever becomes `true`, this input must move with it.
  */
 export const computePolicyIdentityHash = (policy: CapturePolicy = POLICY_DEFAULTS): string =>
   sha256(
@@ -221,6 +244,26 @@ const validate = (
     policy.max_records_per_commit = v;
   }
 
+  if ('unattended' in obj) {
+    const v = obj.unattended;
+    if (typeof v !== 'boolean') {
+      return {
+        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`,
+      };
+    }
+    policy.unattended = v;
+  }
+
+  // ADR-0030's guarantee is a property of `auto` mode (#511): a record staged
+  // without asking is stamped `drafted` there and only there. A consent the
+  // mode cannot honour is rejected rather than ignored, so a user never
+  // believes a setting applied.
+  if (policy.unattended && policy.mode !== 'auto') {
+    return {
+      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`,
+    };
+  }
+
   if ('require_verified_evidence' in obj) {
     const v = obj.require_verified_evidence;
     if (typeof v !== 'boolean') {
@@ -280,4 +323,136 @@ export const resolvePolicy = (cwd: string): PolicyResolution => {
     path,
     error: null,
   };
+};
+
+// ---------------------------------------------------------------------------
+// Writing the policy — the same file `resolvePolicy` reads, nowhere else
+// ---------------------------------------------------------------------------
+
+/**
+ * Absolute path of the repository's policy file, or null outside a repository.
+ * The file itself may or may not exist; this is where it lives either way, so
+ * a status report can say where the setting is kept even before it is set.
+ */
+export const capturePolicyPath = (cwd: string): string | null => {
+  const root = repoRoot(cwd);
+  return root === null ? null : join(root, POLICY_FILE_NAME);
+};
+
+export interface PolicyWriteSuccess {
+  ok: true;
+  /** Absolute path of the policy file. */
+  path: string;
+  /** False when the requested state was already in effect and nothing was written. */
+  changed: boolean;
+  /** The policy that applies after the call. */
+  policy: CapturePolicy;
+  /** The policy that applied before the call — the defaults when no file existed. */
+  previous: CapturePolicy;
+}
+
+export interface PolicyWriteFailure {
+  ok: false;
+  /** Absolute path of the policy file, or null outside a repository. */
+  path: string | null;
+  /** A named, actionable reason — the same words `resolvePolicy` would use. */
+  error: string;
+}
+
+export type PolicyWriteResult = PolicyWriteSuccess | PolicyWriteFailure;
+
+/**
+ * The canonical bytes for a policy file: `POLICY_KEYS` order, two-space
+ * indent, trailing newline. Every write goes through this, so the two writers
+ * that exist — `auto on/off` and `init` — cannot drift apart on shape, and a
+ * file this function produces is never rejected by `validate` above.
+ */
+const serializePolicyFile = (policy: CapturePolicy): string => {
+  const ordered: Record<string, unknown> = {};
+  for (const key of POLICY_KEYS) ordered[key] = policy[key];
+  return `${JSON.stringify(ordered, null, 2)}\n`;
+};
+
+/**
+ * Turn unattended capture on or off by writing the policy file
+ * `resolvePolicy` reads (#511 added the setting; this is the only writer).
+ *
+ * Never throws. Coherence is enforced here rather than trusted to the caller:
+ * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
+ * the mode cannot honour is a configuration error the resolver rejects
+ * (ADR-0030, #511) — this function cannot produce a file it would reject.
+ * Disabling preserves whatever mode the repository chose.
+ *
+ * An existing file is merged, never replaced: every other key the repository
+ * set survives. A file the resolver rejects is refused rather than rewritten,
+ * because rewriting it would destroy whatever the user meant to put there
+ * before they can see it named. When no file exists, disabling writes nothing
+ * — the defaults already apply, and creating a file would move the repository
+ * from the default digest to a file digest while nothing about capture
+ * changed, which #511 pins against.
+ */
+export const setUnattendedCapture = (cwd: string, enabled: boolean): PolicyWriteResult => {
+  const path = capturePolicyPath(cwd);
+  if (path === null) {
+    return { ok: false, path: null, error: 'no git repository found here — run this inside a repository' };
+  }
+
+  if (existsSync(path)) {
+    let current: string;
+    try {
+      current = readFileSync(path, 'utf8');
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} could not be read: ${(err as Error).message}` };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(current);
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} is not valid JSON: ${(err as Error).message}` };
+    }
+
+    const checked = validate(parsed);
+    if ('error' in checked) {
+      return {
+        ok: false,
+        path,
+        error: `${checked.error} Fix or remove the file and re-run; it has been left untouched.`,
+      };
+    }
+
+    const previous = checked.policy;
+    const policy: CapturePolicy = enabled
+      ? { ...previous, mode: 'auto', unattended: true }
+      : { ...previous, unattended: false };
+
+    // Compare the effective setting, not the file's bytes. A file that already
+    // means what was asked — a hand-written `{ "mode": "suggest" }` is already
+    // "off" — must not be rewritten, because a rewrite changes the policy
+    // identity hash while nothing about capture changed: the hook would report
+    // a policy change that never happened, the exact false positive the
+    // identity design exists to avoid (#511).
+    if (previous.mode === policy.mode && previous.unattended === policy.unattended) {
+      return { ok: true, path, changed: false, policy, previous };
+    }
+
+    try {
+      writeFileSync(path, serializePolicyFile(policy));
+    } catch (err) {
+      return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${(err as Error).message}` };
+    }
+    return { ok: true, path, changed: true, policy, previous };
+  }
+
+  if (!enabled) {
+    return { ok: true, path, changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
+  }
+
+  const policy: CapturePolicy = { ...POLICY_DEFAULTS, mode: 'auto', unattended: true };
+  try {
+    writeFileSync(path, serializePolicyFile(policy));
+  } catch (err) {
+    return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${(err as Error).message}` };
+  }
+  return { ok: true, path, changed: true, policy, previous: POLICY_DEFAULTS };
 };

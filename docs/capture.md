@@ -15,9 +15,48 @@ cannot explain:
 > Commit this change. Add a CommitLore record only if the diff cannot recover an
 > important constraint, rejected alternative, warning, or verification gap.
 
-Most commits should still carry no record. The agent instructions live in
-[`skills/commitlore-commits/`](../skills/commitlore-commits/), and the commit
+Most commits should still carry no record. `commitlore init` writes the marked
+CommitLore section of `AGENTS.md`, so any agent that follows that convention
+receives the same prepare → verify → stage procedure without replacing the
+repository's own instructions. Claude Code also receives the fuller
+[`skills/commitlore-commits/`](../skills/commitlore-commits/) workflow. The
 hook validates any record the agent adds.
+
+## Unattended capture — an opt-in
+
+Capture normally runs with the agent in the loop: it prepares, drafts and
+verifies, and the policy's `mode` decides whether anyone is asked before
+staging. A repository can go one step further and consent once, for every
+commit, to capture with nobody in the loop at all:
+
+```
+commitlore auto on
+```
+
+writes the setting to `.commitlore-policy.json` (`commitlore init` asks about
+it once where no policy file exists yet, and `commitlore auto status` reports
+what is set). Where that is set — `mode "auto"` beside `unattended: true` —
+an agent host may call `commitlore capture --unattended` (or the MCP prepare
+tool with its `unattended` argument) to prepare, verify and stage without any
+prompt. The Git hooks then attach the staged record. They do not begin capture:
+an ordinary `git commit` has no session transcript, so it creates no pending
+transaction unless the host initiates capture before the commit. Anywhere else
+the declaration is refused at prepare: consent is a repository setting, not a
+caller's say-so (ADR-0030, #511). The setting is honoured in `auto` mode only
+— `suggest` exists to ask, and `off` captures nothing; `commitlore auto on`
+sets both coherently rather than producing a file the resolver rejects.
+
+The file is committed with the repository: turning it on applies to everyone
+who clones it.
+
+Because the setting lives with the capture policy, the policy identity covers
+it: a file edited between stage and commit is detected like any other policy
+change (ADR-0021 §7). It is off unless a repository sets it; shipping the
+switch is not flipping it.
+
+What it does not change: every record staged without a person reading it is
+stamped `Provenance: drafted` and served as `[claim]`, never `[directive]`,
+and the commit-msg hook's credential scan still runs before the commit exists.
 
 ## Advanced: harvest
 

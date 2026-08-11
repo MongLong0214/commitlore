@@ -20,35 +20,70 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past.
+ * command marks failed, not a step it skips past. Repository MCP registration
+ * is deliberately advisory: failure is visible in its own line but does not
+ * make the installation fail, because doctor already reports its absence when
+ * unattended capture makes an initiator necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
  * `hooks install` reports "already installed ... (unchanged)", and an index
  * rebuild is a deterministic function of repository state) — running `init`
  * twice with nothing else changing degrades gracefully because with nothing
- * else changing, none of the three sub-invocations do.
+ * else changing, none of its sub-invocations do.
  */
 
 import type { Command } from 'commander';
+import { createInterface } from 'node:readline';
+import { existsSync } from 'node:fs';
 
-import { formatReport, runDoctor, type DoctorReport } from './doctor.js';
+import { formatCheckReport, runDoctor, type DoctorReport } from './doctor.js';
 import { installHook, type HookResult } from './hooks.js';
 import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
+import {
+  POLICY_FILE_NAME,
+  capturePolicyPath,
+  resolvePolicy,
+  setUnattendedCapture,
+} from '../core/capture-policy.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 import { installPrePushHook, type PrePushHookResult } from '../hooks/pre-push.js';
 import { seedTrustedAuthor, type TrustSeedResult } from '../core/trusted-authors.js';
+import {
+  MCP_REGISTRATION_FILE,
+  registerCommitloreMcpServer,
+  type McpRegistrationResult,
+} from '../core/mcp-registration.js';
+import { installAgentsGuidance, type AgentsGuidanceResult } from '../core/agents-guidance.js';
 
 export interface InitOptions {
   cwd?: string;
   /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
   force?: boolean;
+  /**
+   * What to do about unattended capture when the repository has **no** policy
+   * file yet. An existing policy file is never changed regardless (#511's
+   * consent is the team's, not this command's to revise).
+   *
+   * Absent when the caller leaves the decision to `init` — which then behaves
+   * like `no-tty`: a caller that did not state a choice must not be answered
+   * for (see `runPolicyStep`).
+   */
+  unattended?: UnattendedChoice;
 }
 
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'trust';
+/**
+ * The answers the policy step understands. `enable` and `decline` are what a
+ * person said — at the prompt, or through `--unattended` / `--no-unattended`.
+ * `no-tty` and `no-answer` are what a run records when nobody could say
+ * anything, kept distinct so the output can state which one happened.
+ */
+export type UnattendedChoice = 'enable' | 'decline' | 'no-tty' | 'no-answer';
+
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy';
 
 export interface InitStep {
   step: StepName;
@@ -57,13 +92,36 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | TrustSeedResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 
 interface IndexStepDetail {
   ok: boolean;
   message: string;
   stats?: IndexStats;
+}
+
+interface PolicyStepDetail {
+  state:
+    | 'enabled'
+    | 'declined'
+    | 'no-answer'
+    | 'no-tty'
+    | 'existing'
+    | 'existing-rejected'
+    | 'write-failed'
+    | 'no-repository';
+  /** Where the policy lives or would live; null outside a repository. */
+  path: string | null;
+  /** The unattended setting in effect, when a valid policy is in effect. */
+  unattended: boolean | null;
+  /** The named reason when the step could not leave a clean state behind. */
+  error: string | null;
+}
+
+interface AgentIntegrationStepDetail {
+  readonly guidance: AgentsGuidanceResult;
+  readonly claude: ClaudeHookResult;
 }
 
 export interface InitReport {
@@ -79,7 +137,7 @@ export interface InitReport {
    * an index that still has none of the records kept in notes.
    */
   notesBefore: ReturnType<typeof notesAvailability>;
-  /** Worst of the three step codes — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
+  /** Worst step code — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
   exitCode: 0 | 1 | 2;
 }
 
@@ -107,7 +165,7 @@ const runDoctorStep = (opts: InitOptions): InitStep => {
     step: 'doctor',
     title: 'doctor --fix',
     code,
-    lines: formatReport(report).trimEnd().split('\n'),
+    lines: formatCheckReport(report).trimEnd().split('\n'),
     detail: report,
   };
 };
@@ -198,12 +256,27 @@ const runTrustStep = (opts: InitOptions): InitStep => {
   };
 };
 
-const runClaudeHookStep = (opts: InitOptions): InitStep => {
+/**
+ * The shared AGENTS.md block is the host-neutral capture initiator.  Keep it
+ * beside the existing Claude-specific hook in one integration step: init's
+ * compact report is a frozen surface, while both are agent wiring that should
+ * report their own outcome instead of hiding a failed guidance write.
+ */
+const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
+  const guidance = installAgentsGuidance(cwd);
   const result = installClaudeHook({ settingsPath });
 
-  const lines = result.stdout.trimEnd().split('\n').filter((line) => line.length > 0);
+  const guidanceLine: Record<AgentsGuidanceResult['state'], string> = {
+    created: `created AGENTS.md with the CommitLore capture instructions`,
+    added: `added the marked CommitLore capture instructions to AGENTS.md`,
+    updated: `updated the marked CommitLore capture instructions in AGENTS.md`,
+    unchanged: `AGENTS.md already carries the current marked CommitLore capture instructions (unchanged)`,
+    invalid: `AGENTS.md has an unsafe CommitLore marker layout and was left unchanged: ${guidance.error ?? 'unknown marker error'}`,
+    'write-failed': `could not install the CommitLore capture instructions in AGENTS.md: ${guidance.error ?? 'unknown write error'}`,
+  };
+  const lines = [guidanceLine[guidance.state], ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0)];
   if (result.stderr) {
     lines.push(...result.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
   }
@@ -211,7 +284,9 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
   // If the hook is already installed (unchanged), treat as success with code 0.
   // If there's an error but it's just about missing settings, that's not a failure — Claude Code may not be on this machine.
   const code: 0 | 1 | 2 =
-    result.code === 0
+    guidance.state === 'invalid' || guidance.state === 'write-failed'
+      ? 2
+      : result.code === 0
       ? 0
       : result.status?.state === 'unreadable' && result.status.problem?.includes('cannot read')
         ? 0
@@ -219,10 +294,163 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
 
   return {
     step: 'claude-hook',
-    title: 'claude hook install',
+    title: 'agent integration',
     code,
     lines: lines.length > 0 ? lines : [result.stderr.trim() || 'failed with no diagnostic'],
+    detail: { guidance, claude: result },
+  };
+};
+
+/**
+ * Make this repository advertise the capture tools a repository-scoped MCP
+ * host can load. The registration is intentionally advisory: a malformed or
+ * unwritable file leaves the repository degraded, not broken, and doctor owns
+ * the warning when unattended capture makes an initiator necessary. The other
+ * install steps still run and this one never raises init's exit status on its
+ * own.
+ */
+const runMcpRegistrationStep = (opts: InitOptions): InitStep => {
+  const result = registerCommitloreMcpServer(opts.cwd ?? process.cwd());
+  if (!result.ok) {
+    return {
+      step: 'mcp-registration',
+      title: 'MCP registration',
+      code: 0,
+      lines: [
+        `could not register the capture server: ${result.error}`,
+        'the repository still installs; doctor reports a missing initiator when unattended capture needs one',
+      ],
+      detail: result,
+    };
+  }
+
+  const headline = {
+    created: `registered the capture server for repository-scoped hosts: wrote ${MCP_REGISTRATION_FILE}`,
+    merged: `registered the capture server for repository-scoped hosts in ${MCP_REGISTRATION_FILE}, preserving its existing servers`,
+    'already-registered': `${MCP_REGISTRATION_FILE} already registers commitlore — left unchanged`,
+  }[result.state];
+  return {
+    step: 'mcp-registration',
+    title: 'MCP registration',
+    code: 0,
+    lines: [
+      headline,
+      ...(result.changed
+        ? [
+            'the file is committed with the repository — it applies to everyone who clones it',
+            'hosts that keep MCP configuration outside the repository are unchanged',
+          ]
+        : []),
+    ],
     detail: result,
+  };
+};
+
+/**
+ * The unattended-capture decision (#511 added the switch; this is where a
+ * repository acquires it without anyone hand-editing JSON).
+ *
+ * Two rules this step exists to enforce on itself:
+ *
+ * - **A policy file that is already there is never changed.** `init` gets
+ *   re-run to repair a hook; the team's capture policy must not flip as a
+ *   side effect. The step reports what is there and leaves it, and that
+ *   includes a file the resolver rejects — the step names the error instead
+ *   of rewriting whatever the user meant to put there.
+ * - **The outcome is always stated in the output.** A repository that
+ *   acquires a capture policy without the operator being told is the failure
+ *   this whole feature has been careful to avoid.
+ *
+ * No TTY and no flag: this step does **not** enable. Consent to capture with
+ * nobody in the loop should be an answer somebody gave, and a script that ran
+ * `init` for the hooks did not answer this question. The policy file is
+ * committed with the repository, so defaulting yes where nobody sees the
+ * prompt would hand a CI run a team-wide flip the next time anyone commits
+ * the tree. A script that wants the setting has one flag: `--unattended`.
+ */
+const runPolicyStep = (opts: InitOptions): InitStep => {
+  const cwd = opts.cwd ?? process.cwd();
+  const choice: UnattendedChoice = opts.unattended ?? 'no-tty';
+  const path = capturePolicyPath(cwd);
+
+  if (path === null) {
+    return {
+      step: 'policy',
+      title: 'capture policy',
+      code: 2,
+      lines: ['no git repository found here — the policy step needs a repository'],
+      detail: { state: 'no-repository', path: null, unattended: null, error: 'no git repository' },
+    };
+  }
+
+  const resolution = resolvePolicy(cwd);
+  if (resolution.path !== null) {
+    if (resolution.ok) {
+      const { policy } = resolution;
+      return {
+        step: 'policy',
+        title: 'capture policy',
+        code: 0,
+        lines: [
+          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? 'on' : 'off'}) — left unchanged`,
+          ...(policy.unattended
+            ? [
+                'unattended capture is authorised, not initiated — an agent host must supply the session transcript before commit; ordinary git commits cannot start it',
+              ]
+            : []),
+        ],
+        detail: { state: 'existing', path, unattended: policy.unattended, error: null },
+      };
+    }
+    return {
+      step: 'policy',
+      title: 'capture policy',
+      code: 1,
+      lines: [`${POLICY_FILE_NAME} present but rejected — left unchanged`, resolution.error ?? 'unknown error'],
+      detail: { state: 'existing-rejected', path, unattended: null, error: resolution.error },
+    };
+  }
+
+  if (choice === 'enable') {
+    const result = setUnattendedCapture(cwd, true);
+    if (!result.ok) {
+      return {
+        step: 'policy',
+        title: 'capture policy',
+        code: 2,
+        lines: [result.error],
+        detail: { state: 'write-failed', path, unattended: null, error: result.error },
+      };
+    }
+    return {
+      step: 'policy',
+      title: 'capture policy',
+      code: 0,
+      lines: [
+        `unattended capture policy enabled: wrote ${POLICY_FILE_NAME} (mode "auto")`,
+        'unattended capture is authorised, not initiated — an agent host must supply the session transcript before commit; ordinary git commits cannot start it',
+        'the file is committed with the repository — it applies to everyone who clones it',
+      ],
+      detail: { state: 'enabled', path, unattended: true, error: null },
+    };
+  }
+
+  const declineLine: Record<Exclude<UnattendedChoice, 'enable'>, string[]> = {
+    decline: ['unattended capture: not enabled — declined at the prompt (enable later: commitlore auto on)'],
+    'no-answer': [
+      'unattended capture: not enabled — the prompt got no answer (enable later: commitlore auto on)',
+    ],
+    'no-tty': [
+      'unattended capture: not enabled — no interactive terminal to answer the prompt',
+      "run 'commitlore init --unattended' or 'commitlore auto on' to enable it",
+    ],
+  };
+  return {
+    step: 'policy',
+    title: 'capture policy',
+    code: 0,
+    lines: declineLine[choice],
+    detail: { state: choice === 'decline' ? 'declined' : choice, path, unattended: false, error: null },
   };
 };
 
@@ -230,8 +458,10 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
  * Order of execution:
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
- * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
- * 4. Doctor (final check) — verifies everything is working
+ * 3. Agent integration — refreshes AGENTS.md and wires the Claude PreToolUse hook
+ * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
+ * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
+ * 6. Doctor (final check) — verifies everything is working
  *
  * Doctor runs last on purpose. `doctor` diagnoses the hook and the index among
  * its checks, and it does not install either: run it first and its own
@@ -245,7 +475,7 @@ const runClaudeHookStep = (opts: InitOptions): InitStep => {
  */
 export const runInit = (opts: InitOptions = {}): InitReport => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runDoctorStep(opts)];
+  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode: exitCode as 0 | 1 | 2 };
 };
@@ -256,6 +486,8 @@ const STEP_LABEL: Record<StepName, string> = {
   trust: 'Trust',
   index: 'Index',
   'claude-hook': 'Agent integration',
+  'mcp-registration': 'MCP registration',
+  policy: 'Capture policy',
   doctor: 'Final check',
 };
 
@@ -264,11 +496,67 @@ export const STEP_HEADING: Record<StepName, string> = {
   trust: 'trusted author',
   hooks: '[1/4] hooks install',
   index: '[2/4] index --rebuild',
-  'claude-hook': '[3/4] claude hook install',
+  'claude-hook': '[3/4] agent integration',
+  'mcp-registration': 'repository MCP registration',
+  // Unnumbered on purpose, the same way `trust` was added: the numbered four
+  // are pinned by T-1013's tests, and renumbering them would move a frozen
+  // contract for a step that does not need a number.
+  policy: 'capture policy',
   doctor: '[4/4] doctor --fix (final check)',
 };
 
 export const VERBOSE_INDENT = '        ';
+
+/**
+ * The policy step's outcome in one clause. A clean run prints one line per
+ * step and no detail lines, so the step's own line carries what happened —
+ * "enabled" must be visible in the output, not merely inferable (#511's
+ * consent rule: a repository never acquires the setting without being told).
+ */
+const policyOutcome = (step: InitStep): string => {
+  const detail = step.detail as PolicyStepDetail;
+  switch (detail.state) {
+    case 'enabled':
+      return 'unattended policy enabled — agent host must initiate capture (committed — applies to the whole team)';
+    case 'declined':
+      return 'unattended capture declined — enable later: commitlore auto on';
+    case 'no-answer':
+      return 'unattended capture not enabled — the prompt got no answer';
+    case 'no-tty':
+      return 'unattended capture not enabled — no interactive terminal';
+    case 'existing':
+      return detail.unattended === true
+        ? 'unchanged — unattended policy on; agent host must initiate capture'
+        : 'unchanged — unattended capture off';
+    case 'existing-rejected':
+      return 'policy file rejected — left unchanged';
+    case 'write-failed':
+      return 'could not write the policy file';
+    case 'no-repository':
+      return 'no repository';
+  }
+};
+
+/** The repository-owned MCP step's outcome in the concise result report. */
+const mcpRegistrationOutcome = (step: InitStep): string => {
+  const detail = step.detail as McpRegistrationResult;
+  if (!detail.ok) return 'not registered for repository-scoped hosts — doctor will report it when unattended capture needs an initiator';
+  switch (detail.state) {
+    case 'created':
+      return 'registered for repository-scoped hosts (committed — applies to the whole team)';
+    case 'merged':
+      return 'registered alongside existing servers for repository-scoped hosts (committed — applies to the whole team)';
+    case 'already-registered':
+      return 'already registered for repository-scoped hosts — left unchanged';
+  }
+};
+
+const stepLabel = (step: InitStep): string =>
+  step.step === 'policy'
+    ? `${STEP_LABEL.policy} — ${policyOutcome(step)}`
+    : step.step === 'mcp-registration'
+      ? `${STEP_LABEL['mcp-registration']} — ${mcpRegistrationOutcome(step)}`
+      : STEP_LABEL[step.step];
 
 /**
  * Result-oriented default output: a concise summary telling the user what is
@@ -284,7 +572,7 @@ export const formatInitReport = (report: InitReport): string => {
   if (failed.length === 0 && needsAttention.length === 0) {
     // All clean — one summary line per step + a final ready line.
     for (const step of report.steps) {
-      lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+      lines.push(`  ✓ ${stepLabel(step)}`);
     }
     lines.push('');
     lines.push('init: ready');
@@ -304,7 +592,7 @@ export const formatInitReport = (report: InitReport): string => {
     // At least one step needs attention or could not run.
     for (const step of report.steps) {
       if (step.code === 0) {
-        lines.push(`  ✓ ${STEP_LABEL[step.step]}`);
+        lines.push(`  ✓ ${stepLabel(step)}`);
       } else if (step.code === 2) {
         lines.push(`  ✗ ${STEP_LABEL[step.step]} — ${step.title} could not run`);
         for (const detail of step.lines) {
@@ -319,7 +607,7 @@ export const formatInitReport = (report: InitReport): string => {
     }
     lines.push('');
     if (failed.length > 0) {
-      lines.push(`init: ${failed.length}/4 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
+      lines.push(`init: ${failed.length}/7 step(s) could not run — ${failed.map((s) => s.title).join(', ')}`);
     } else {
       lines.push(
         `init: ${needsAttention.length} step(s) need(s) attention — ${needsAttention.map((s) => s.title).join(', ')}`,
@@ -348,28 +636,130 @@ export const formatInitReportVerbose = (report: InitReport): string => {
   return lines.join('\n') + '\n';
 };
 
+// ---------------------------------------------------------------------------
+// The unattended-capture prompt
+// ---------------------------------------------------------------------------
+
+const parseYesNo = (answer: string): boolean | null => {
+  const normalized = answer.trim().toLowerCase();
+  // A bare Enter takes the default, and the default is yes — the prompt says
+  // so with [Y/n].
+  if (normalized === '' || normalized === 'y' || normalized === 'yes') return true;
+  if (normalized === 'n' || normalized === 'no') return false;
+  return null;
+};
+
+/**
+ * Ask on the controlling terminal. Resolves null when the input stream closes
+ * without an answer (EOF, Ctrl-D) — that is "nobody answered", not "no".
+ */
+const askUnattended = async (): Promise<boolean | null> => {
+  for (;;) {
+    const answer = await new Promise<string | null>((resolveAnswer) => {
+      const readlineInterface = createInterface({ input: process.stdin, output: process.stdout });
+      let settled = false;
+      const settle = (value: string | null): void => {
+        if (settled) return;
+        settled = true;
+        readlineInterface.close();
+        resolveAnswer(value);
+      };
+      readlineInterface.question('Enable unattended capture? [Y/n] ', (line) => settle(line));
+      readlineInterface.on('close', () => settle(null));
+    });
+    if (answer === null) return null;
+    const parsed = parseYesNo(answer);
+    if (parsed !== null) return parsed;
+    process.stdout.write('Please answer y or n — a bare Enter accepts the default (yes).\n');
+  }
+};
+
+/**
+ * How this invocation decides about unattended capture, before any step runs:
+ *
+ * 1. An explicit flag answers without a prompt — that is what scripts get.
+ * 2. An interactive terminal gets the question. Default yes, bare Enter takes
+ *    it; the prompt names the one thing a yes cannot take back quietly: the
+ *    file is committed, so it applies to the whole team.
+ * 3. Anything else — no TTY, or `--json`, which is a machine reading the
+ *    output — gets no prompt and does not enable. The output states that.
+ */
+const resolveUnattendedChoice = async (options: {
+  json?: boolean;
+  unattended?: boolean;
+}): Promise<UnattendedChoice> => {
+  if (options.unattended === true) return 'enable';
+  if (options.unattended === false) return 'decline';
+  // A policy file that already exists is never changed, whatever the answer —
+  // so the question is not asked. Asking it would invite a yes that does
+  // nothing, which reads as consent being taken rather than given.
+  const existing = capturePolicyPath(process.cwd());
+  if (existing !== null && existsSync(existing)) return 'no-answer';
+  if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
+    process.stdout.write(
+      'Unattended capture authorises an agent host to prepare, verify and stage a record without asking.\n' +
+        'It does not make ordinary git commits start capture: the host must provide the session transcript.\n' +
+        `The answer is written to ${POLICY_FILE_NAME} and committed — enabling it applies to everyone who clones this repository.\n`,
+    );
+    let answer: boolean | null;
+    try {
+      answer = await askUnattended();
+    } catch {
+      answer = null;
+    }
+    return answer === null ? 'no-answer' : answer ? 'enable' : 'decline';
+  }
+  return 'no-tty';
+};
+
 export const register = (program: Command): void => {
   program
     .command('init')
-    .description('one-command onboarding: hooks install, index --rebuild, claude hook install, doctor --fix')
+    .description(
+      'one-command onboarding: hooks install, trusted author, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix',
+    )
     .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
     .option('--verbose', 'show step-by-step detail output instead of the result summary')
     .option('--json', 'emit the report as JSON')
+    .option(
+      '--unattended',
+      'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)',
+    )
+    .option(
+      '--no-unattended',
+      'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)',
+    )
     .addHelpText(
       'after',
-      '\nRuns four setup steps in sequence — hooks install, index --rebuild, claude hook install, ' +
-        'then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
+      '\nRuns seven setup steps in sequence — hooks install, trusted author, index --rebuild, agent ' +
+        'integration, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +
         're-running with nothing else changed changes nothing else.' +
+        '\n\nUnattended capture: with no policy file yet, init asks whether to authorise it — the default is ' +
+        'yes, and a bare Enter accepts. The answer is written to ' + POLICY_FILE_NAME + ', which is ' +
+        'committed with the repository: enabling it applies to everyone who clones it. The policy does not ' +
+        'install a capture initiator: an agent host must call `commitlore_prepare_capture` with its session ' +
+        'transcript before commit, because ordinary git commits cannot start capture. A policy file that ' +
+        'already exists is reported and left unchanged, whatever the flags say. Without an interactive ' +
+        'terminal (scripts, CI) init does not enable it and says so; pass --unattended to opt in ' +
+        'explicitly.' +
+        '\n\nMCP registration writes the repository-scoped ' + MCP_REGISTRATION_FILE + ' only; it does not configure hosts that keep their ' +
+        'own MCP settings elsewhere. The file uses `commitlore mcp`, not a machine-local path, and is committed with the repository so it applies to everyone who clones it.' +
         '\n\n`doctor`, `hooks install`, `index --rebuild`, and `commitlore inject install-claude-hook` ' +
-        'still exist on their own for anyone who wants one piece rather than all four.' +
-        '\n\nExit codes: 0 all four steps ran clean, 1 the final doctor check found something init could not ' +
-        'fix itself (an actionable warning or failure — read the detail above), 2 hooks install, index rebuild, or claude ' +
-        'hook install could not run at all (SPEC §10).',
+        'still exist on their own for anyone who wants one piece rather than all seven.' +
+        '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
+        'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
+        'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
+        'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
+        'AGENTS.md; every other line stays untouched. A repository MCP registration that cannot be written leaves the ' +
+        'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.',
     )
-    .action((options: { force?: boolean; json?: boolean; verbose?: boolean }) => {
-      const report = runInit(options.force === undefined ? {} : { force: options.force });
+    .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean }) => {
+      const choice = await resolveUnattendedChoice(options);
+      const initOptions: InitOptions = options.force === undefined ? {} : { force: options.force };
+      initOptions.unattended = choice;
+      const report = runInit(initOptions);
       let output: string;
       if (options.json === true) {
         output = `${JSON.stringify(report, null, 2)}\n`;

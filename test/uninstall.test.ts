@@ -14,7 +14,7 @@
  * with that table, and the two fail for different reasons.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -69,6 +69,27 @@ const cursorConfig = (wrapper: string): string =>
     null,
     2,
   )}\n`;
+
+/** Hermes keeps YAML comments and unrelated settings intact on removal. */
+const hermesConfig = (wrapper: string, skillsDir: string): string =>
+  [
+    'approvals:',
+    '  deny:',
+    '    - "*git push*--force*"',
+    'mcp_servers:',
+    '  commitlore:',
+    `    command: ${JSON.stringify(wrapper)}`,
+    '    args:',
+    '      - mcp',
+    '    enabled: true',
+    '  other:',
+    '    command: other-mcp',
+    'skills:',
+    '  external_dirs:',
+    `    - ${JSON.stringify(skillsDir)}`,
+    '    - "/operator/skills"',
+    '',
+  ].join('\n');
 
 describe('T-1123 uninstall removes what the installer wrote', () => {
   it('removes the wrapper, the checkout and our entry', async () => {
@@ -139,6 +160,110 @@ describe('T-1123 uninstall removes what the installer wrote', () => {
     expect(readFileSync(path, 'utf8'), 'a config we could not parse was rewritten').toBe(broken);
     expect(result.report.join('\n')).toMatch(/could not|parse/i);
     expect(result.exitCode).toBe(0);
+  });
+
+  it('removes its Hermes YAML entries without rewriting operator policy or other servers', async () => {
+    const h = makeHome();
+    const path = h.path('.hermes', 'config.yaml');
+    const skillsDir = join(h.checkout, 'hermes', 'skills');
+    const before = hermesConfig(h.wrapper, skillsDir);
+    write(path, before);
+
+    const result = await runUninstall({ home: h.home });
+    const after = readFileSync(path, 'utf8');
+
+    expect(result.removed.join('\n')).toContain('.hermes');
+    expect(after).toContain('    - "*git push*--force*"');
+    expect(after).toContain('  other:\n    command: other-mcp');
+    expect(after).toContain('    - "/operator/skills"');
+    expect(after).not.toContain(h.wrapper);
+    expect(after).not.toContain(skillsDir);
+  });
+});
+
+describe('Codex MCP removal uses the owning CLI when it is available', () => {
+  it('checks the registered server shape, then removes it through codex mcp remove', async () => {
+    const h = makeHome();
+    const config = h.path('.codex', 'config.toml');
+    const calls = h.path('codex-calls.txt');
+    const codex = h.path('bin', 'codex');
+    write(config, `[mcp_servers.commitlore]\ncommand = "${h.wrapper}"\nargs = ["mcp"]\n`);
+    write(
+      codex,
+      `#!/bin/sh
+printf '%s\\n' "$*" >>"${calls}"
+case "$1:$2" in
+  mcp:list) printf '[{"name":"commitlore","transport":{"type":"stdio","command":"${h.wrapper}","args":["mcp"]}}]\\n' ;;
+  mcp:remove) rm -f "${config}" ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(codex, 0o755);
+
+    const result = await runUninstall({ home: h.home, codexCommand: codex });
+
+    expect(existsSync(config)).toBe(false);
+    expect(readFileSync(calls, 'utf8')).toContain('mcp list --json');
+    expect(readFileSync(calls, 'utf8')).toContain('mcp remove commitlore');
+    expect(result.report.join('\n')).toContain('through codex mcp remove');
+  });
+});
+
+describe('Codex plugin removal uses the owning CLI only with an ownership marker', () => {
+  it('removes the Codex plugin through Codex only when its ownership marker is present', async () => {
+    const h = makeHome();
+    const marker = h.path('.local', 'share', 'commitlore', 'codex-plugin.json');
+    write(
+      marker,
+      `${JSON.stringify(
+        {
+          version: 1,
+          selector: 'commitlore@commitlore',
+          source: 'MongLong0214/commitlore',
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const calls: string[][] = [];
+
+    const result = await runUninstall({
+      home: h.home,
+      runCodex: (args) => {
+        calls.push([...args]);
+        return args.join(' ') === 'plugin list'
+          ? {
+              status: 0,
+              stdout: 'PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/plugin\n',
+              stderr: '',
+            }
+          : { status: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(calls).toEqual([
+      ['plugin', 'list'],
+      ['plugin', 'remove', 'commitlore@commitlore'],
+    ]);
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(h.checkout)).toBe(false);
+    expect(result.report.join('\n')).toContain('removed: Codex plugin commitlore@commitlore');
+  });
+
+  it('keeps its checkout marker when Codex cannot confirm plugin removal', async () => {
+    const h = makeHome();
+    const marker = h.path('.local', 'share', 'commitlore', 'codex-plugin.json');
+    write(marker, '{"version":1,"selector":"commitlore@commitlore","source":"MongLong0214/commitlore"}\n');
+
+    const result = await runUninstall({
+      home: h.home,
+      runCodex: () => ({ status: 2, stdout: '', stderr: '' }),
+    });
+
+    expect(existsSync(marker)).toBe(true);
+    expect(existsSync(h.checkout)).toBe(true);
+    expect(result.report.join('\n')).toContain('Codex could not list installed plugins');
   });
 });
 

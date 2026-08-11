@@ -349,7 +349,9 @@ if (-not $onPath) {
 #
 # PowerShell parses and writes JSON natively, so unlike install.sh there is no
 # jq to be missing -- the "cannot merge without jq" branch has no counterpart
-# here. An unparseable config is still left untouched and reported.
+# here. An unparseable config is still left untouched and reported. Hermes is
+# YAML and has stricter byte-preservation requirements, so both installers
+# dispatch to the same `commitlore hermes install` helper for that one profile.
 
 Write-Log ''
 Write-Log 'Detecting coding agents...'
@@ -463,33 +465,69 @@ if (Test-AgentPresent 'claude' @()) {
     $notFound.Add('Claude Code') | Out-Null
 }
 
-# Codex CLI -- TOML, one [mcp_servers.<name>] table per server.
+# Codex CLI owns its MCP config whenever it is available. The file branch is
+# only for an existing Codex home on a machine without the CLI: hand-writing
+# TOML while the CLI is present invites drift when Codex changes its format.
 # https://developers.openai.com/codex/mcp
 if (Test-AgentPresent 'codex' @((Join-Path $home_ '.codex'))) {
     $codexConfig = Join-Path $home_ '.codex\config.toml'
-    $existingToml = ''
-    if (Test-Path -LiteralPath $codexConfig) {
-        try { $existingToml = (Get-Content -LiteralPath $codexConfig -Raw) } catch { $existingToml = '' }
-    }
-    if ($existingToml -match '(?m)^\[mcp_servers\.commitlore\]') {
-        Add-Skipped 'codex' "$codexConfig already has a [mcp_servers.commitlore] block -- left unchanged"
-    } else {
-        try {
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $codexConfig) | Out-Null
-            # A backslash is TOML's escape character inside a basic string, so a
-            # Windows path has to be doubled or the parser reads \d as an escape.
-            $tomlPath = $dest -replace '\\', '\\'
-            $block = "`r`n[mcp_servers.commitlore]`r`ncommand = ""$tomlPath""`r`nargs = [""mcp""]`r`n"
-            if (Test-Path -LiteralPath $codexConfig) {
-                [System.IO.File]::AppendAllText($codexConfig, $block)
-                Add-Wired "codex: appended a [mcp_servers.commitlore] block to the existing $codexConfig"
+    $codexCli = Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $codexCli) {
+        $codexServers = ''
+        try { $codexServers = (& codex mcp list --json 2>$null | Out-String) } catch { $codexServers = '' }
+        if ($codexServers -match '"name"\s*:\s*"commitlore"') {
+            Add-Skipped 'codex' 'commitlore is already registered (checked with codex mcp list) -- left unchanged'
+        } else {
+            $registered = $false
+            try {
+                & codex mcp add commitlore -- $dest mcp > $null 2>&1
+                $registered = ($LASTEXITCODE -eq 0)
+            } catch { $registered = $false }
+            if ($registered) {
+                Add-Wired 'codex: registered commitlore with codex mcp add'
             } else {
-                [System.IO.File]::WriteAllText($codexConfig, $block.TrimStart("`r", "`n"))
-                Add-Wired "codex: created $codexConfig"
+                Add-Skipped 'codex' 'codex mcp add could not register commitlore -- config file was left untouched'
             }
-        } catch {
-            Add-Skipped 'codex' "could not write $codexConfig"
         }
+    } else {
+        $existingToml = ''
+        if (Test-Path -LiteralPath $codexConfig) {
+            try { $existingToml = (Get-Content -LiteralPath $codexConfig -Raw) } catch { $existingToml = '' }
+        }
+        if ($existingToml -match '(?m)^\[mcp_servers\.commitlore\]') {
+            Add-Skipped 'codex' "$codexConfig already has a [mcp_servers.commitlore] block (config-file fallback; codex CLI is unavailable) -- left unchanged"
+        } else {
+            try {
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $codexConfig) | Out-Null
+                # A backslash is TOML's escape character inside a basic string, so a
+                # Windows path has to be doubled or the parser reads \d as an escape.
+                $tomlPath = $dest -replace '\\', '\\'
+                $block = "`r`n[mcp_servers.commitlore]`r`ncommand = ""$tomlPath""`r`nargs = [""mcp""]`r`n"
+                if (Test-Path -LiteralPath $codexConfig) {
+                    [System.IO.File]::AppendAllText($codexConfig, $block)
+                    Add-Wired "codex: appended a [mcp_servers.commitlore] block to the existing $codexConfig (config-file fallback; codex CLI is unavailable)"
+                } else {
+                    [System.IO.File]::WriteAllText($codexConfig, $block.TrimStart("`r", "`n"))
+                    Add-Wired "codex: created $codexConfig (config-file fallback; codex CLI is unavailable)"
+                }
+            } catch {
+                Add-Skipped 'codex' "could not write $codexConfig"
+            }
+        }
+    }
+
+# Codex's plugin API owns the plugin cache and marketplace. The packaged plugin
+# supplies its own MCP server and capture skill, while the marker lets uninstall
+# remove only the plugin this installer placed.
+    $ok = $false
+    try {
+        & $dest plugin install-codex > $null 2>&1
+        $ok = ($LASTEXITCODE -eq 0)
+    } catch { $ok = $false }
+    if ($ok) {
+        Add-Wired 'codex: installed the commitlore plugin (marketplace: commitlore)'
+    } else {
+        Add-Skipped 'codex' "could not install the commitlore plugin -- run manually: $dest plugin install-codex"
     }
 } else {
     $notFound.Add('Codex') | Out-Null
@@ -514,6 +552,27 @@ if (Test-AgentPresent 'windsurf' @((Join-Path $home_ '.codeium\windsurf'))) {
     Wire-McpServersJson 'windsurf' (Join-Path $home_ '.codeium\windsurf\mcp_config.json')
 } else {
     $notFound.Add('Windsurf') | Out-Null
+}
+
+# Hermes -- YAML active profile at ~/.hermes/config.yaml. The helper makes a
+# backup before a surgical edit, registers the MCP server, and adds the
+# installed bundle through skills.external_dirs (the supported read-only path).
+if (Test-AgentPresent 'hermes' @((Join-Path $home_ '.hermes'))) {
+    $hermesConfig = Join-Path $home_ '.hermes\config.yaml'
+    $hermesOk = $false
+    try {
+        & $dest hermes install --config $hermesConfig --command $dest --data-root $dataRoot --verify
+        $hermesOk = ($LASTEXITCODE -eq 0)
+    } catch {
+        $hermesOk = $false
+    }
+    if ($hermesOk) {
+        Add-Wired "hermes: configured MCP and the installed CommitLore skill bundle in $hermesConfig"
+    } else {
+        Add-Skipped 'hermes' 'host setup could not finish; its existing config was left intact where it could not be edited safely'
+    }
+} else {
+    $notFound.Add('Hermes') | Out-Null
 }
 
 # opencode -- different shape from the rest: the key is `mcp`, not `mcpServers`,

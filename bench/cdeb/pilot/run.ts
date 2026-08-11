@@ -36,7 +36,7 @@ import {
   sameHistoryMismatches,
   type MaterializedIdentity,
 } from "../freeze/repository-bundle.ts";
-import { CLI_ENTRY, DIST_DIR, digestDistTree } from "../../hooks-settings.ts";
+import { CLAUDE_HOOK_MATCHER, CLI_ENTRY, DIST_DIR, digestDistTree } from "../../hooks-settings.ts";
 import { PILOT_TASKS, type PilotTask } from "./tasks.ts";
 import { gitOrThrow } from "../../git.ts";
 
@@ -103,7 +103,7 @@ const armSettings = (dir: string, condition: Condition, exposureLog: string): st
       ? {
           PreToolUse: [
             {
-              matcher: "Edit|Write|MultiEdit|NotebookEdit",
+              matcher: CLAUDE_HOOK_MATCHER,
               hooks: [
                 {
                   type: "command",

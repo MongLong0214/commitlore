@@ -22,6 +22,8 @@ import type { Command } from 'commander';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
+import { POLICY_FILE_NAME } from '../core/capture-policy.js';
+import { runCaptureShadow, type CaptureShadowResult } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
 import { parseDraft, type DraftRejection } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
@@ -32,11 +34,14 @@ import type { GuardAdvisory } from '../core/pending.js';
 // ---------------------------------------------------------------------------
 
 interface CaptureOptions {
-  transcript: string;
+  transcript?: string;
   diff?: string;
   draft?: string;
   out?: string;
   json?: boolean;
+  unattended?: boolean;
+  shadow?: boolean;
+  since?: string;
 }
 
 /** Why a drafted record did not survive. Empty when everything was accepted. */
@@ -66,6 +71,47 @@ interface CaptureResult {
   rejected?: CaptureRejectionReport[];
 }
 
+/** Render historical measurement output without ever echoing a blocked secret. */
+export const formatCaptureShadow = (result: CaptureShadowResult): string => {
+  const lines = [
+    'commitlore capture --shadow',
+    `approximation: ${result.summary.approximation}`,
+    '',
+  ];
+
+  for (const commit of result.commits) {
+    lines.push(`${commit.sha.slice(0, 12)} ${commit.subject === '' ? '(no subject)' : commit.subject}`);
+    if (!commit.would_record) {
+      lines.push('  would record: no', `  reason: ${commit.silence_reason ?? 'no record survived'}`, '');
+      continue;
+    }
+
+    lines.push('  would record: yes');
+    if (commit.secret_guard === 'blocked') {
+      const findings = (commit.secret_findings ?? [])
+        .map((finding) => `${finding.ruleId} at line ${finding.line}`)
+        .join(', ');
+      lines.push(`  secret-guard: BLOCKED${findings === '' ? '' : ` (${findings})`}`, '  record: withheld', '');
+      continue;
+    }
+
+    lines.push('  secret-guard: clear', '  record:');
+    for (const line of (commit.record ?? '').trimEnd().split('\n')) lines.push(`    ${line}`);
+    lines.push('');
+  }
+
+  const percent = (result.summary.silence_rate * 100).toFixed(1);
+  lines.push(
+    'summary:',
+    `  silence rate: ${result.summary.silence}/${result.summary.commits_examined} (${percent}%)`,
+    `  commits examined: ${result.summary.commits_examined}`,
+    `  would produce a record: ${result.summary.would_record}`,
+    `  secret-guard would block: ${result.summary.blocked}`,
+    `  ${result.summary.read_only}`,
+  );
+  return `${lines.join('\n')}\n`;
+};
+
 // ---------------------------------------------------------------------------
 // Core logic — separated from registration for testability
 // ---------------------------------------------------------------------------
@@ -82,6 +128,11 @@ export const runCapture = (opts: {
   diffPath?: string;
   draftPath?: string;
   cwd: string;
+  /**
+   * Declare the whole run unattended (#511). Refused by prepare unless the
+   * repository opted in — the CLI never decides consent on its own.
+   */
+  unattended?: boolean;
 }): CaptureResult => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
 
@@ -97,7 +148,11 @@ export const runCapture = (opts: {
   const diff = diffPath ? readFileSync(diffPath, 'utf8') : execGitOrThrow(['diff', '--cached'], { cwd });
 
   // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
-  const prepareResult = prepareCaptureContext({ cwd, transcript });
+  const prepareResult = prepareCaptureContext({
+    cwd,
+    transcript,
+    ...(opts.unattended === true ? { unattended: true } : {}),
+  });
   if (prepareResult.policy_error !== null) {
     // The defaults ran. Say which policy actually applied rather than letting a
     // user assume their file did (T-1110, PRD-F13 requirement 10).
@@ -193,8 +248,43 @@ export const register = (program: Command): void => {
     .option('--diff <path>', 'path to the diff file (defaults to the staged diff)')
     .option('--draft <path>', 'path to the draft JSON file (omit for prompt-only mode)')
     .option('--out <path>', 'write the pending nonce to a file')
+    .option('--shadow', 'measure historical capture candidates without writing anything')
+    .option('--since <rev>', 'exclusive historical lower bound for --shadow')
     .option('--json', 'emit structured JSON output')
+    .option(
+      '--unattended',
+      'declare this capture unattended: prepared, verified and staged without asking. ' +
+        `Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`,
+    )
     .action((options: CaptureOptions) => {
+      if (options.shadow === true) {
+        if (options.since === undefined) {
+          process.stderr.write("error: required option '--since <rev>' not specified with --shadow\n");
+          process.exitCode = 2;
+          return;
+        }
+        if (options.out !== undefined) {
+          process.stderr.write('commitlore capture: --out cannot be used with --shadow because shadow writes nothing\n');
+          process.exitCode = 2;
+          return;
+        }
+        if (options.transcript !== undefined || options.diff !== undefined || options.draft !== undefined) {
+          process.stderr.write('commitlore capture: --shadow reads historical commits; do not pass --transcript, --diff, or --draft\n');
+          process.exitCode = 2;
+          return;
+        }
+        try {
+          const result = runCaptureShadow({ cwd: process.cwd(), since: options.since });
+          process.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatCaptureShadow(result));
+          process.exitCode = 0;
+        } catch (error) {
+          process.stderr.write(
+            `commitlore capture --shadow: ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+          process.exitCode = 2;
+        }
+        return;
+      }
       if (options.transcript === undefined) {
         process.stderr.write("error: required option '--transcript <path>' not specified\n");
         process.exitCode = 2;
@@ -207,9 +297,11 @@ export const register = (program: Command): void => {
           diffPath?: string;
           draftPath?: string;
           cwd: string;
+          unattended?: boolean;
         } = { transcriptPath: options.transcript, cwd };
         if (options.diff !== undefined) runOpts.diffPath = options.diff;
         if (options.draft !== undefined) runOpts.draftPath = options.draft;
+        if (options.unattended === true) runOpts.unattended = true;
 
         const result = runCapture(runOpts);
 

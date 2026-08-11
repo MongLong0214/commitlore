@@ -44,9 +44,9 @@ describe('T-1016: deterministic demo recording', () => {
   it('SVG contains canonical fixture identifiers', () => {
     const svg = fs.readFileSync(ASSET_PATH, 'utf8');
     // From T-1010: the active record id
-    expect(svg).toContain('r-demo02');
+    expect(svg).toContain('r-price02');
     // The target path from the fixture
-    expect(svg).toContain('src/services/cache.ts');
+    expect(svg).toContain('src/pricing.ts');
   });
 
   it('SVG contains no private identifiers', () => {

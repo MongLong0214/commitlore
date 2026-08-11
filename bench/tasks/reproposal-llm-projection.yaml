@@ -97,9 +97,9 @@ detect:
         label: regex:model-identifier
   # The Limit — no network call in the injection path — is machine-checkable, but
   # only as a *call*. A bare `https?://` was tried first and fired on both arms of
-  # every live run: the agent's own tooling writes `.serena/project.yml` into the
-  # workspace, and its comments carry documentation URLs. A URL in a comment is
-  # not a network call, so only call-shaped signatures count.
+  # every live run: the agent's own tooling writes per-project config files into
+  # the workspace, and their comments carry documentation URLs. A URL in a
+  # comment is not a network call, so only call-shaped signatures count.
   violation_if:
     any_of:
       - kind: regex

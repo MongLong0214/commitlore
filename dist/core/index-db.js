@@ -50,7 +50,7 @@
  * applied on top of it, and it is used only where trigram LIKE is exactly
  * substring matching (printable ASCII, >= 3 characters, no LIKE wildcards).
  */
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
@@ -980,13 +980,24 @@ const incrementalProblem = (handle, head, last) => {
 export const updateIndex = (handle, opts = {}) => {
     requireWritable(handle);
     const started = Date.now();
+    // A consumer query may catch the index up but may not rebuild it: reading the
+    // whole history is the cost #522 is about, and it is unbounded from the
+    // caller's side. `index` and `init` own that work and pass nothing here.
+    const allowRebuild = opts.allowRebuild ?? true;
+    const rebuildOrRefuse = (reason) => {
+        if (!allowRebuild)
+            throw new Error(reason);
+        return rebuildIndex(handle, { reason });
+    };
     const discarded = handle.discardedReason;
     if (discarded !== null) {
         handle.discardedReason = null;
-        return rebuildIndex(handle, { reason: discarded });
+        return rebuildOrRefuse(discarded);
     }
     const problem = healthProblem(handle.db);
     if (problem !== null) {
+        if (!allowRebuild)
+            throw new Error(problem);
         resetIndexFile(handle);
         return rebuildIndex(handle, { reason: problem });
     }
@@ -1006,7 +1017,7 @@ export const updateIndex = (handle, opts = {}) => {
     const last = readMeta(handle.db, 'last_indexed_sha');
     const blocker = incrementalProblem(handle, head, last);
     if (blocker !== null)
-        return rebuildIndex(handle, { reason: blocker });
+        return rebuildOrRefuse(blocker);
     const stats = { ...emptyStats(handle, started), headSha: head };
     if (last !== null && last !== head) {
         const shas = revList(handle.cwd, `${last}..HEAD`);
@@ -1018,9 +1029,7 @@ export const updateIndex = (handle, opts = {}) => {
             stats.pathsIndexed = counts.paths;
         }
         catch (error) {
-            return rebuildIndex(handle, {
-                reason: `incremental insert conflicted with existing rows (${errorMessage(error)})`,
-            });
+            return rebuildOrRefuse(`incremental insert conflicted with existing rows (${errorMessage(error)})`);
         }
         writeMeta(handle.db, 'last_indexed_sha', head);
     }
@@ -1034,6 +1043,67 @@ export const ensureIndex = (opts = {}) => {
     const handle = openIndex(opts);
     try {
         return { handle, stats: updateIndex(handle) };
+    }
+    catch (error) {
+        closeIndex(handle);
+        throw error;
+    }
+};
+/**
+ * Opens an index for a consumer query, catching it up but never rebuilding it.
+ *
+ * The distinction is the whole point of #522. An incremental update reads
+ * `last_indexed_sha..HEAD`, so its cost is the commits made since the last
+ * query — on a repository being worked in, a handful. A full rebuild reads the
+ * entire history: 186 seconds on a 21,000-commit repository, which a
+ * before-change hook cannot wait for and which a caller's timeout will kill,
+ * leaving the next edit to start cold again.
+ *
+ * So this refuses exactly the unbounded case and keeps the bounded one. Not
+ * catching up at all would be the same defect wearing different clothes: an
+ * index one commit behind would be unusable, and every query after every commit
+ * would fall back to reading the whole history — worse, in steady state, than
+ * what this set out to fix. The incremental range is always a subset of that
+ * history, so taking it is never the slower choice.
+ *
+ * Refusing is an error rather than a stale read. The caller falls back to git,
+ * which remains the authority, and no answer ever comes from a cache that
+ * missed a commit or a notes update.
+ */
+export const openCurrentIndex = (opts = {}) => {
+    // Opening creates the file, and a query that leaves an empty index behind has
+    // changed the repository to answer a read. Refuse before that happens: with
+    // no baseline there is nothing to catch up from, and only `index` or `init`
+    // may build one.
+    const cwd = opts.cwd ?? process.cwd();
+    if (!existsSync(indexDbPath(cwd)))
+        throw new Error('the index has no baseline commit');
+    const handle = openIndex(opts);
+    try {
+        if (handle.discardedReason !== null)
+            throw new Error(handle.discardedReason);
+        const problem = healthProblem(handle.db);
+        if (problem !== null)
+            throw new Error(problem);
+        const head = revParse(handle.cwd, 'HEAD');
+        if (head !== null) {
+            const blocker = incrementalProblem(handle, head, readMeta(handle.db, 'last_indexed_sha'));
+            if (blocker !== null)
+                throw new Error(blocker);
+        }
+        // Bounded: the ranges read here are `last..HEAD` and the notes tree, both
+        // of which a full rebuild would read as part of a much larger whole.
+        updateIndex(handle, { allowRebuild: false });
+        const indexedHead = readMeta(handle.db, 'last_indexed_sha');
+        if (indexedHead !== head) {
+            throw new Error(`index is at ${indexedHead?.slice(0, 12) ?? '(no baseline)'} but HEAD is ` +
+                `${head?.slice(0, 12) ?? '(unborn)'}`);
+        }
+        const notesRef = revParseRef(handle.cwd, NOTES_REF);
+        if (readMeta(handle.db, 'notes_ref_sha') !== notesRef) {
+            throw new Error('index does not match refs/notes/commitlore');
+        }
+        return handle;
     }
     catch (error) {
         closeIndex(handle);
@@ -1171,6 +1241,11 @@ const matchesQuery = (trailer, query) => {
     }
     return true;
 };
+/** Applies the scan path's predicate to already-materialized trailer rows. */
+export const filterTrailers = (trailers, query = {}) => {
+    const matched = trailers.filter((trailer) => matchesQuery(trailer, query)).sort(compareTrailers);
+    return query.limit === undefined ? matched : matched.slice(0, query.limit);
+};
 const toIndexedTrailers = (records) => records.flatMap((record) => {
     const provenance = record.trailers.find((t) => t.key === 'Provenance')?.value ?? null;
     return record.trailers.map((trailer, seq) => ({
@@ -1199,10 +1274,7 @@ export const scanTrailers = (query = {}, opts = {}) => {
     const head = revParse(cwd, 'HEAD');
     const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
     const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
-    const matched = toIndexedTrailers(records)
-        .filter((trailer) => matchesQuery(trailer, query))
-        .sort(compareTrailers);
-    return query.limit === undefined ? matched : matched.slice(0, query.limit);
+    return filterTrailers(toIndexedTrailers(records), query);
 };
 /** Every row, ordered, for the identity assertions the tests make. */
 export const dumpIndex = (handle) => queryTrailers(handle);

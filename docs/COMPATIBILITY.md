@@ -14,6 +14,7 @@ there is no platform-specific artifact to choose between.
 
 | Path | Command | Who it is for |
 |---|---|---|
+| Codex plugin | `commitlore plugin install-codex` | Codex users |
 | Plugin | `/plugin marketplace add MongLong0214/commitlore`, then `/plugin install commitlore@commitlore` | Claude Code users on macOS, Linux and Windows |
 | Shell script | `install.sh` | everyone else on macOS and Linux |
 | PowerShell script | `install.ps1` | Windows — see the host table below |
@@ -63,6 +64,21 @@ carries a `#!/bin/bash` shebang, so the plugin's pre-edit hook needs a shell tha
 neither install script installs and neither one checks for. On a host without
 one the MCP server still works and the hook does not.
 
+## Codex plugin
+
+`commitlore plugin install-codex` is the one-command, idempotent route. It calls
+`codex plugin marketplace add` only when the `commitlore` marketplace is absent,
+then calls `codex plugin add commitlore@commitlore` only when the plugin is not
+installed. Codex owns its configuration and cache; CommitLore never writes
+either directly. A fresh Codex session is required to discover the installed
+skill and MCP server.
+
+| Capability | Provided by | Value |
+|---|---|---|
+| MCP server | `.mcp.json` | `node ./dist/commitlore.mjs mcp` with plugin-root `cwd` |
+| capture skill | `skills/commitlore-codex/SKILL.md` | transcript-backed capture; claims lacking support are dropped, never cited by invention |
+| plugin identity | `.codex-plugin/plugin.json` | `commitlore` at the `package.json` version |
+
 ## Plugin capabilities
 
 Each row is a claim about a committed manifest, and the assertion reads the file
@@ -70,9 +86,9 @@ named in the middle column rather than one it assumed.
 
 | Capability | Provided by | Value |
 |---|---|---|
-| MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
+| MCP server | `.mcp.json` | `node ./dist/commitlore.mjs mcp` |
 | pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` |
-| skills | `skills/` | `commitlore-commits`, `commitlore-query`, `commitlore-setup` |
+| skills | `skills/` | `commitlore-commits`, `commitlore-codex`, `commitlore-query`, `commitlore-setup` |
 | plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |
 | marketplace | `.claude-plugin/marketplace.json` | `commitlore`, `source: "./"` |
 

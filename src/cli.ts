@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 
 import { register as registerBackfill } from './commands/backfill.js';
+import { register as registerAuto } from './commands/auto.js';
 import { register as registerCapture } from './commands/capture.js';
 import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
@@ -22,12 +23,14 @@ import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerGuard } from './commands/guard.js';
 import { register as registerHarvestVerify } from './commands/harvest-verify.js';
+import { register as registerHermes } from './commands/hermes.js';
 import { register as registerHooks } from './commands/hooks.js';
 import { register as registerIndex } from './commands/index-cmd.js';
 import { register as registerInit } from './commands/init.js';
 import { register as registerInject } from './commands/inject.js';
 import { register as registerMcp } from './commands/mcp.js';
 import { register as registerPending } from './commands/pending.js';
+import { register as registerPlugin } from './commands/plugin.js';
 import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
@@ -151,8 +154,10 @@ registerQuery(program);
 registerStale(program);
 registerDoctor(program);
 registerInit(program);
+registerAuto(program);
 registerHarvest(program);
 registerHarvestVerify(program);
+registerHermes(program);
 registerSquashPreserve(program);
 registerPrepareCommitMsg(program);
 registerPostCommit(program);
@@ -163,6 +168,7 @@ registerCapture(program);
 registerDemo(program);
 registerMcp(program);
 registerPending(program);
+registerPlugin(program);
 
 /**
  * Exit codes are a protocol property, not a per-command habit (SPEC §10): 0

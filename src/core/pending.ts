@@ -49,6 +49,12 @@ export interface PendingRecord {
   overlap_check: 'canonical_exact_only' | null;
   incomplete: boolean;
   guard_advisory?: GuardAdvisory | null;
+  /**
+   * Present — and only ever `true` — when the capture declared itself
+   * unattended and the repository's policy consented (#511). Absent otherwise,
+   * so a capture that made no declaration leaves byte-identical bytes on disk.
+   */
+  unattended?: boolean;
 }
 
 export class PendingFormatError extends Error {
@@ -151,25 +157,29 @@ export interface CreatePendingOptions {
   staged_tree_oid: string;
   policy_identity_hash: string;
   guard_advisory?: GuardAdvisory | null;
+  /** Set only when prepare accepted an unattended declaration (#511). */
+  unattended?: boolean;
 }
 
 /**
- * Creates a pending transaction in `prepared` phase.
- * Returns the nonce (32 hex chars).
+ * The in-memory form of a newly prepared transaction.
+ *
+ * `createPending` persists this exact shape. Read-only callers such as capture
+ * shadow use the same transaction input without first creating a file they
+ * would have to clean up afterwards.
  */
-export const createPending = (opts: CreatePendingOptions): string => {
-  const nonce = randomBytes(16).toString('hex');
-  const baseHead = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: opts.cwd }).trim();
-  if (!baseHead || !/^[0-9a-f]{40}$/.test(baseHead)) {
+export const makePreparedPending = (
+  opts: CreatePendingOptions & { nonce: string; base_head: string; created_at?: string },
+): PendingRecord => {
+  validateNonce(opts.nonce);
+  if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
     throw new Error('Cannot resolve HEAD — is this a git repository with at least one commit?');
   }
 
-  const now = new Date().toISOString();
-
-  const record: PendingRecord = {
+  return {
     version: 1,
-    nonce,
-    created_at: now,
+    nonce: opts.nonce,
+    created_at: opts.created_at ?? new Date().toISOString(),
     // CEO amendment 1: expires_at is null while phase is prepared or verified
     expires_at: null,
     phase: 'prepared',
@@ -180,7 +190,7 @@ export const createPending = (opts: CreatePendingOptions): string => {
     applied_record_hash: null,
     consumed_at: null,
     consumed_by: null,
-    base_head: baseHead,
+    base_head: opts.base_head,
     staged_diff_hash: opts.staged_diff_hash,
     staged_tree_oid: opts.staged_tree_oid,
     policy_identity_hash: opts.policy_identity_hash,
@@ -191,7 +201,20 @@ export const createPending = (opts: CreatePendingOptions): string => {
     overlap_check: null,
     incomplete: false,
     guard_advisory: opts.guard_advisory ?? null,
+    // Written only when true: the stored bytes of an ordinary capture must be
+    // exactly what they were before the setting existed (#511).
+    ...(opts.unattended === true ? { unattended: true } : {}),
   };
+};
+
+/**
+ * Creates a pending transaction in `prepared` phase.
+ * Returns the nonce (32 hex chars).
+ */
+export const createPending = (opts: CreatePendingOptions): string => {
+  const nonce = randomBytes(16).toString('hex');
+  const baseHead = execGitOrThrow(['rev-parse', 'HEAD'], { cwd: opts.cwd }).trim();
+  const record = makePreparedPending({ ...opts, nonce, base_head: baseHead });
 
   const filePath = pendingFilePath(nonce, opts.cwd);
   atomicWriteJson(filePath, record);

@@ -1,7 +1,7 @@
 /**
  * T-1123 (#272): `src/core/agent-configs.ts` is the single place that knows
- * where each agent's MCP config lives and what shape the installers wrote into
- * it. `commitlore uninstall` reads it to decide what it is allowed to remove.
+ * where each agent's MCP config lives and the Codex plugin state the installers
+ * write. `commitlore uninstall` reads it to decide what it is allowed to remove.
  *
  * The assertions are **bidirectional** on purpose. Two sources of the same truth
  * diverge silently: the table can grow an agent no installer wires, and an
@@ -21,7 +21,12 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_CONFIGS, isCommitloreEntry } from '../src/core/agent-configs.js';
+import {
+  AGENT_CONFIGS,
+  isCodexPluginConfig,
+  isCommitloreEntry,
+  isMcpAgentConfig,
+} from '../src/core/agent-configs.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 const sh = (): string => readFileSync(join(REPO_ROOT, 'install.sh'), 'utf8');
@@ -29,38 +34,62 @@ const ps1 = (): string => readFileSync(join(REPO_ROOT, 'install.ps1'), 'utf8');
 
 describe('T-1123 the config table names every agent both installers wire', () => {
   it('covers every agent the installers wire, and nothing else', () => {
-    // Five, not the four the ticket's measured inventory lists. Both installers
-    // wire Windsurf, and the bidirectional assertion below is what found it.
-    expect(AGENT_CONFIGS.map((c) => c.agent).sort()).toEqual([
+    // Six, not the four the ticket's measured inventory lists. Both installers
+    // wire Windsurf and Hermes, and the bidirectional assertion below is what
+    // finds this kind of silent installer/uninstall disagreement.
+    expect(AGENT_CONFIGS.filter(isMcpAgentConfig).map((c) => c.agent).sort()).toEqual([
       'codex',
       'cursor',
       'gemini-cli',
+      'hermes',
       'opencode',
       'windsurf',
     ]);
   });
 
-  it.each(AGENT_CONFIGS)('$agent: install.sh writes the path this table names', (config) => {
+  it('records that Codex registration is CLI-owned with a config-file fallback', () => {
+    const codex = AGENT_CONFIGS.find((config) => isMcpAgentConfig(config) && config.agent === 'codex');
+    expect(codex?.registration).toBe('cli-or-config-fallback');
+    for (const config of AGENT_CONFIGS.filter(isMcpAgentConfig).filter((config) => config.agent !== 'codex')) {
+      expect(config.registration).toBe('config-file');
+    }
+  });
+
+  it.each(AGENT_CONFIGS.filter(isMcpAgentConfig))('$agent: install.sh writes the path this table names', (config) => {
     // The shell installer spells paths with `$HOME/` and forward slashes.
     const posix = `$HOME/${config.homeRelativePath.join('/')}`;
     expect(sh(), `install.sh does not write ${posix}`).toContain(posix);
   });
 
-  it.each(AGENT_CONFIGS)('$agent: install.ps1 writes the same path', (config) => {
+  it.each(AGENT_CONFIGS.filter(isMcpAgentConfig))('$agent: install.ps1 writes the same path', (config) => {
     // PowerShell spells it as a Join-Path argument with backslashes.
     const win = config.homeRelativePath.join('\\');
     expect(ps1(), `install.ps1 does not write ${win}`).toContain(win);
   });
 
   it('knows about every config path the shell installer writes', () => {
-    const written = [...sh().matchAll(/\$HOME\/((?:\.|config\/)[\w./-]*\.(?:toml|json))/g)].map(
+    const written = [...sh().matchAll(/\$HOME\/((?:\.|config\/)[\w./-]*\.(?:toml|json|yaml))/g)].map(
       (m) => m[1],
     );
     expect(written.length, 'no config paths found in install.sh — the pattern went stale').toBeGreaterThan(0);
-    const known = new Set(AGENT_CONFIGS.map((c) => c.homeRelativePath.join('/')));
+    const known = new Set(AGENT_CONFIGS.filter(isMcpAgentConfig).map((c) => c.homeRelativePath.join('/')));
     for (const path of new Set(written)) {
       expect(known.has(path), `install.sh writes ${path}, which this table does not know`).toBe(true);
     }
+  });
+
+  it('records the Codex plugin alongside the MCP files, not in a second table', () => {
+    const plugin = AGENT_CONFIGS.find(isCodexPluginConfig);
+    expect(plugin).toEqual({
+      kind: 'codex-plugin',
+      agent: 'codex',
+      marketplace: 'commitlore',
+      plugin: 'commitlore',
+      marketplaceSource: 'MongLong0214/commitlore',
+      dataRelativePath: ['commitlore', 'codex-plugin.json'],
+    });
+    expect(sh()).toContain('plugin install-codex');
+    expect(ps1()).toContain('plugin install-codex');
   });
 });
 
@@ -77,12 +106,13 @@ describe('T-1123 an entry is recognised by its shape, not by its name', () => {
     const written: Record<string, unknown> = {
       'toml-mcp_servers': { command: WRAPPER, args: ['mcp'] },
       'json-mcpServers': { command: WRAPPER, args: ['mcp'] },
+      'yaml-mcp_servers': { command: WRAPPER, args: ['mcp'], enabled: true },
       // opencode's shape is its own: the command is an array, and there are two
       // more keys. A recogniser written only for the shape above silently leaves
       // this one behind.
       'json-mcp': { type: 'local', command: [WRAPPER, 'mcp'], enabled: true },
     };
-    for (const config of AGENT_CONFIGS) {
+    for (const config of AGENT_CONFIGS.filter(isMcpAgentConfig)) {
       const entry = written[config.format];
       expect(entry, `no sample for ${config.format}`).toBeDefined();
       expect(
@@ -117,5 +147,14 @@ describe('T-1123 an entry is recognised by its shape, not by its name', () => {
     expect(
       isCommitloreEntry('json-mcpServers', { command: WRAPPER, args: ['mcp'] }, '/opt/other/commitlore'),
     ).toBe(false);
+  });
+
+  it('dispatches Hermes through the shared host command in both installers', () => {
+    // The YAML updater has to preserve comments and unrelated operator policy,
+    // so it lives in the CLI rather than growing two subtly different parsers.
+    // This is still bidirectional: deleting either dispatch leaves the table
+    // describing a config its corresponding installer never writes.
+    expect(sh()).toContain('hermes install --config "$config_path" --command "$dest" --data-root "$data_root" --verify');
+    expect(ps1()).toContain('hermes install --config $hermesConfig --command $dest --data-root $dataRoot --verify');
   });
 });

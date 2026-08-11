@@ -12,12 +12,18 @@
  *   cannot be parsed is left exactly as it was and reported.
  * - **Never do another tool's job.** Per-repository state belongs to
  *   `hooks uninstall` and `inject uninstall-claude-hook`; the Claude Code plugin
- *   cache belongs to Claude Code. Both are named, neither is touched.
+ *   cache belongs to Claude Code. Both are named, neither is touched. Codex
+ *   plugin state is removed only through Codex's own CLI and only when our
+ *   ownership marker says this installer added it.
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { AGENT_CONFIGS, SERVER_KEY, isCommitloreEntry } from '../core/agent-configs.js';
+import { AGENT_CONFIGS, SERVER_KEY, isCodexPluginConfig, isCommitloreEntry, isMcpAgentConfig, } from '../core/agent-configs.js';
+import { removeHermesConfig } from '../core/hermes-config.js';
+import { installedPath } from '../core/paths.js';
+import { codexPluginIsInstalled, codexPluginMarkerPath, codexPluginSelector, readCodexPluginMarker, removeCodexPluginMarker, runCodexCommand, } from '../core/codex-plugin.js';
 /** Written into the wrapper by both installers; its absence means it is not ours. */
 const WRAPPER_MARKER = '# commitlore:wrapper:v1';
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -66,14 +72,47 @@ const withoutTomlBlock = (contents, wrapper) => {
         from -= 1;
     return [...lines.slice(0, from), ...lines.slice(end)].join('\n');
 };
+/**
+ * Codex owns its config format, so use its CLI to remove an entry it recognises.
+ * The explicit shape check preserves uninstall's central restraint: a user can
+ * independently name another server `commitlore`, and `mcp remove` alone has
+ * no way to distinguish that server from the one this installer registered.
+ */
+const listCodexMcp = (command) => {
+    const listed = spawnSync(command, ['mcp', 'list', '--json'], { encoding: 'utf8' });
+    if (listed.error?.code === 'ENOENT') {
+        return { state: 'absent', servers: [] };
+    }
+    if (listed.error !== undefined || listed.status !== 0)
+        return { state: 'unavailable', servers: [] };
+    try {
+        const parsed = JSON.parse(listed.stdout);
+        if (!Array.isArray(parsed))
+            return { state: 'invalid', servers: [] };
+        return { state: 'listed', servers: parsed.filter(isRecord) };
+    }
+    catch {
+        return { state: 'invalid', servers: [] };
+    }
+};
+const isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY &&
+    server.transport?.type === 'stdio' &&
+    server.transport.command === wrapper &&
+    Array.isArray(server.transport.args) &&
+    server.transport.args.length === 1 &&
+    server.transport.args[0] === 'mcp';
 export const runUninstall = async (options = {}) => {
     const home = options.home ?? homedir();
-    const dataHome = options.dataHome ?? join(home, '.local', 'share');
+    const dataHome = options.dataHome ??
+        (process.platform === 'win32'
+            ? process.env['LOCALAPPDATA'] ?? join(home, 'AppData', 'Local')
+            : process.env['XDG_DATA_HOME'] ?? join(home, '.local', 'share'));
     const dryRun = options.dryRun === true;
     const say = dryRun ? 'would remove' : 'removed';
     const report = [];
     const removed = [];
     const kept = [];
+    const runCodex = options.runCodex ?? runCodexCommand;
     const wrapper = join(home, '.local', 'bin', 'commitlore');
     if (existsSync(wrapper)) {
         const contents = (() => {
@@ -95,14 +134,104 @@ export const runUninstall = async (options = {}) => {
             report.push(`kept: ${wrapper} — it carries no commitlore marker, so it was not written by this installer`);
         }
     }
+    // Codex owns both its config and cache, so its CLI is the only thing allowed
+    // to remove the plugin. A marker is written only after our installer succeeds;
+    // without it, a matching plugin may be the user's own installation.
+    let retainDataRoot = false;
+    for (const config of AGENT_CONFIGS.filter(isCodexPluginConfig)) {
+        const markerPath = codexPluginMarkerPath(config, dataHome);
+        if (!existsSync(markerPath))
+            continue;
+        if (readCodexPluginMarker(config, dataHome) === null) {
+            retainDataRoot = true;
+            kept.push(markerPath);
+            report.push(`kept: ${markerPath} — it is not a CommitLore Codex-plugin marker`);
+            continue;
+        }
+        const selector = codexPluginSelector(config);
+        if (dryRun) {
+            removed.push(`${selector} (Codex plugin)`);
+            report.push(`${say}: Codex plugin ${selector}`);
+            continue;
+        }
+        const listed = runCodex(['plugin', 'list']);
+        if (listed.status !== 0 || listed.error !== undefined) {
+            retainDataRoot = true;
+            kept.push(markerPath);
+            report.push(`kept: Codex plugin ${selector} — Codex could not list installed plugins`);
+            continue;
+        }
+        if (codexPluginIsInstalled(listed.stdout, config)) {
+            const result = runCodex(['plugin', 'remove', selector]);
+            if (result.status !== 0 || result.error !== undefined) {
+                retainDataRoot = true;
+                kept.push(markerPath);
+                report.push(`kept: Codex plugin ${selector} — Codex could not remove it`);
+                continue;
+            }
+            report.push(`removed: Codex plugin ${selector}`);
+        }
+        else {
+            report.push(`Codex plugin already absent: ${selector}`);
+        }
+        removeCodexPluginMarker(config, dataHome);
+        removed.push(`${selector} (Codex plugin)`);
+    }
     const dataRoot = join(dataHome, 'commitlore');
     if (existsSync(dataRoot)) {
-        if (!dryRun)
-            rmSync(dataRoot, { recursive: true, force: true });
-        removed.push(dataRoot);
-        report.push(`${say}: ${dataRoot}`);
+        if (retainDataRoot) {
+            kept.push(dataRoot);
+            report.push(`kept: ${dataRoot} — it carries a Codex-plugin marker that still needs removal`);
+        }
+        else {
+            if (!dryRun)
+                rmSync(dataRoot, { recursive: true, force: true });
+            removed.push(dataRoot);
+            report.push(`${say}: ${dataRoot}`);
+        }
+    }
+    const codexConfig = AGENT_CONFIGS.filter(isMcpAgentConfig).find((config) => config.agent === 'codex');
+    // `home` is an in-process test seam, not an alternate Codex home. A real
+    // invocation has no `home` option and therefore lets Codex select and edit
+    // its own config. Tests can opt into the same path with `codexCommand`.
+    const codexCommand = options.codexCommand ?? (options.home === undefined ? 'codex' : undefined);
+    const codexList = codexCommand === undefined ? null : listCodexMcp(codexCommand);
+    if (codexConfig !== undefined && codexList !== null) {
+        const path = join(home, ...codexConfig.homeRelativePath);
+        if (codexList.state === 'unavailable' || codexList.state === 'invalid') {
+            kept.push(path);
+            report.push(`kept: ${path} — codex mcp list could not verify its entry, so the config was left untouched`);
+        }
+        else if (codexList.state === 'listed') {
+            const named = codexList.servers.find((server) => server.name === SERVER_KEY);
+            if (named !== undefined && !isInstalledCodexServer(named, wrapper)) {
+                kept.push(path);
+                report.push(`kept: ${path} — its ${SERVER_KEY} server is not this install, so codex mcp remove was not called`);
+            }
+            else if (named !== undefined) {
+                if (dryRun) {
+                    removed.push(`${path} (${SERVER_KEY} entry)`);
+                    report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+                }
+                else {
+                    const removedByCli = spawnSync(codexCommand, ['mcp', 'remove', SERVER_KEY], { encoding: 'utf8' });
+                    if (removedByCli.error === undefined && removedByCli.status === 0) {
+                        removed.push(`${path} (${SERVER_KEY} entry)`);
+                        report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
+                    }
+                    else {
+                        kept.push(path);
+                        report.push(`kept: ${path} — codex mcp remove could not remove its entry, so the config was left untouched`);
+                    }
+                }
+            }
+        }
     }
     for (const config of AGENT_CONFIGS) {
+        if (!isMcpAgentConfig(config))
+            continue;
+        if (config.agent === 'codex' && codexList !== null && codexList.state !== 'absent')
+            continue;
         const path = join(home, ...config.homeRelativePath);
         if (!existsSync(path))
             continue;
@@ -123,6 +252,20 @@ export const runUninstall = async (options = {}) => {
                 writeFileSync(path, next);
             removed.push(`${path} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry in ${path}`);
+            continue;
+        }
+        if (config.format === 'yaml-mcp_servers') {
+            const next = removeHermesConfig(contents, {
+                wrapperPath: [wrapper, join(dataRoot, 'bin', 'commitlore.cmd')],
+                dataRoot,
+                installedSkillsDir: installedPath('hermes', 'skills'),
+            });
+            if (next.removed.length === 0)
+                continue;
+            if (!dryRun)
+                writeFileSync(path, next.contents);
+            removed.push(`${path} (${next.removed.join(' and ')} ${SERVER_KEY} entries)`);
+            report.push(`${say}: the ${next.removed.join(' and ')} ${SERVER_KEY} entries in ${path}`);
             continue;
         }
         let parsed;
@@ -151,6 +294,7 @@ export const runUninstall = async (options = {}) => {
     report.push('  per-repository hooks and index — run `commitlore hooks uninstall` in each repository');
     report.push('  the Claude Code agent hook — run `commitlore inject uninstall-claude-hook`');
     report.push('  the Claude Code plugin — remove it with `/plugin uninstall commitlore@commitlore`');
+    report.push('  a Codex plugin not installed by this command — remove it with `codex plugin remove commitlore@commitlore`');
     return {
         exitCode: 0,
         report,
@@ -161,7 +305,7 @@ export const runUninstall = async (options = {}) => {
 export const registerUninstall = (program) => {
     program
         .command('uninstall')
-        .description('Remove what install.sh or install.ps1 wrote: the wrapper, the checkout and the MCP entries')
+        .description('Remove what install.sh or install.ps1 wrote: the wrapper, checkout, agent entries and Codex plugin')
         .option('--dry-run', 'report what would be removed and change nothing')
         .option('--json', 'emit the result as JSON')
         .action(async (options) => {

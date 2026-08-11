@@ -281,6 +281,11 @@ const TOOLS = [
                     type: 'string',
                     description: 'the session transcript to compute source hashes from',
                 },
+                unattended: {
+                    type: 'boolean',
+                    description: 'declare this capture unattended: nobody was asked before staging. Refused unless the ' +
+                        'repository opted in (.commitlore-policy.json: "unattended": true, mode "auto")',
+                },
             },
             required: ['transcript'],
             additionalProperties: false,
@@ -359,6 +364,14 @@ const stringArg = (args, name) => {
         throw new Error(`${name} must be a string`);
     return value;
 };
+const booleanArg = (args, name) => {
+    const value = args[name];
+    if (value === undefined || value === null)
+        return undefined;
+    if (typeof value !== 'boolean')
+        throw new Error(`${name} must be a boolean`);
+    return value;
+};
 const requiredString = (args, name) => {
     const value = stringArg(args, name);
     if (value === undefined || value.trim() === '') {
@@ -433,7 +446,12 @@ export const createServer = (opts = {}) => {
         },
         [PREPARE_CAPTURE_TOOL]: (args) => {
             const transcript = requiredString(args, 'transcript');
-            const result = prepareCaptureContext({ cwd: root, transcript });
+            const unattended = booleanArg(args, 'unattended');
+            const result = prepareCaptureContext({
+                cwd: root,
+                transcript,
+                ...(unattended === true ? { unattended: true } : {}),
+            });
             return asText({
                 nonce: result.nonce,
                 base_head: result.base_head,
@@ -518,10 +536,10 @@ export const createServer = (opts = {}) => {
     };
     server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
     server.setRequestHandler(CallToolRequestSchema, (request) => {
-        const handler = handlers[request.params.name];
-        if (handler === undefined)
-            throw new Error(`unknown tool: ${request.params.name}`);
         try {
+            const handler = handlers[request.params.name];
+            if (handler === undefined)
+                throw new Error(`unknown tool: ${request.params.name}`);
             return handler(request.params.arguments ?? {});
         }
         catch (error) {
@@ -597,9 +615,20 @@ export const startStdioServer = async (opts = {}) => {
     // #424: a session lost every commitlore tool mid-conversation and nothing on
     // disk could say whether the server had been running. This leaves that much
     // behind. It cannot fail the start — see `mcp/lifecycle.ts`.
-    recordServerStart(opts.cwd ?? process.cwd());
-    const server = createServer(opts);
-    await server.connect(new StdioServerTransport());
-    return server;
+    // Pass stdout explicitly to both collaborators: the transport writes the
+    // protocol there, and lifecycle owns its EPIPE listener. The SDK itself only
+    // listens for `drain`, so using another stream here would leave the real
+    // output error unhandled.
+    const transport = new StdioServerTransport(process.stdin, process.stdout);
+    const lifecycle = recordServerStart(opts.cwd ?? process.cwd(), new Date(), process.stdout);
+    try {
+        const server = createServer(opts);
+        await server.connect(transport);
+        return server;
+    }
+    catch (error) {
+        lifecycle.crash(error);
+        throw error;
+    }
 };
 //# sourceMappingURL=server.js.map

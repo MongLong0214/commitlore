@@ -67,7 +67,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -77,6 +77,17 @@ import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
+
+/*
+ * Measured 2026-08-08 with five depth-one file:// clones of this repository,
+ * timing `runDoctor` from call through return (clone setup excluded):
+ * 222, 225, 224, 223, and 227ms. The 227ms maximum was measured on an Apple
+ * Silicon macOS developer workstation (Node 24.18.0, local APFS). 3,000ms is
+ * that baseline plus 2,773ms of headroom (13.2× total), chosen to survive a
+ * contended shared Linux CI runner while still catching an order-of-magnitude
+ * regression.
+ */
+const FULL_DOCTOR_BUDGET_MS = 3_000;
 
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
@@ -135,6 +146,21 @@ const populatedRepo = (label: string): string => {
   return repo;
 };
 
+/** Matches RELEASE-GATE's depth-one fresh-clone doctor row without a network remote. */
+const referenceClone = (label: string): string =>
+  createTestRepo({
+    path: join(temp(label), 'reference'),
+    source: pathToFileURL(PACKAGE_ROOT).href,
+    depth: 1,
+  });
+
+const slowestChecks = (report: ReturnType<typeof runDoctor>): string =>
+  report.checks
+    .slice()
+    .sort((left, right) => (right.durationMs ?? 0) - (left.durationMs ?? 0))
+    .map((check) => `${check.id}: ${check.durationMs ?? 'unmeasured'}ms`)
+    .join('\n');
+
 /** Recursive path → size+mtime inventory, for detecting any write. */
 const inventory = (root: string): Map<string, string> => {
   const seen = new Map<string, string>();
@@ -176,6 +202,18 @@ const diff = (before: Map<string, string>, after: Map<string, string>): string[]
 const localConfig = (repo: string): string => git(repo, ['config', '--list', '--local']);
 
 describe('#461 doctor invariants', () => {
+  it('finishes a full fresh-clone doctor run within the measured budget', () => {
+    const repo = referenceClone('budget');
+    const started = process.hrtime.bigint();
+    const report = runDoctor({ cwd: repo });
+    const elapsedMs = Number((process.hrtime.bigint() - started) / 1_000_000n);
+
+    expect(
+      elapsedMs,
+      `doctor took ${elapsedMs}ms (budget ${FULL_DOCTOR_BUDGET_MS}ms). Slowest checks:\n${slowestChecks(report)}`,
+    ).toBeLessThanOrEqual(FULL_DOCTOR_BUDGET_MS);
+  });
+
   it('leaves the repository byte-identical without --fix, including under failure', () => {
     const repo = populatedRepo('readonly');
     const report = runDoctor({ cwd: repo });
@@ -228,9 +266,10 @@ describe('#461 doctor invariants', () => {
     }
   });
 
-  it('writes only remote fetch refspecs under --fix', () => {
-    // #63: --fix has already shipped one defect through this surface. A second
-    // write surface growing here is what this pins.
+  it('writes only remote fetch refspecs and notes-absence evidence under --fix', () => {
+    // #63: --fix has already shipped one defect through this surface. The
+    // URL-bound absence evidence is the one additional local fact queries may
+    // rely on; a third write surface must still fail this fence.
     const repo = populatedRepo('fix');
     const configBefore = localConfig(repo);
     const before = inventory(repo);
@@ -241,8 +280,8 @@ describe('#461 doctor invariants', () => {
       .split('\n')
       .filter((line) => line.trim() !== '' && !configBefore.includes(line));
     for (const line of added) {
-      expect(line, `--fix wrote a config key outside remote.<name>.fetch: ${line}`).toMatch(
-        /^remote\.[^.]+\.fetch=/,
+      expect(line, `--fix wrote an undocumented config key: ${line}`).toMatch(
+        /^(remote\.[^.]+\.fetch|commitlore\.notesabsence\.r[0-9a-f]+)=/,
       );
     }
 

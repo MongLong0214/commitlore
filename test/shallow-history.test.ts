@@ -9,6 +9,7 @@ import { runDoctor } from '../src/commands/doctor.js';
 import { hookResult } from '../src/commands/inject.js';
 import { guard } from '../src/core/guard.js';
 import { buildInjection } from '../src/core/inject.js';
+import { notesAbsenceEvidenceKey } from '../src/core/notes.js';
 import { runQuery } from '../src/core/query.js';
 import { createTestRepo } from './git-fixtures.js';
 
@@ -42,6 +43,17 @@ const shallowClone = (): string => {
   );
   createTestRepo({ path: clone, source: `file://${origin}`, depth: 1 });
   git(clone, ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore']);
+  // A refspec says what this clone would fetch, never what the remote has, so
+  // it alone leaves notes availability unknown and every answer incomplete
+  // (#512). `doctor --fix` records the probe; the fixture records the same
+  // evidence directly, because this suite is about the shallow caveat and an
+  // unrelated incompleteness would mask it.
+  git(clone, [
+    'config',
+    '--local',
+    notesAbsenceEvidenceKey('origin'),
+    git(clone, ['config', '--get', 'remote.origin.url']).trim(),
+  ]);
   return clone;
 };
 

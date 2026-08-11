@@ -155,6 +155,13 @@ export const listRecordShas = (opts = {}) => {
     })
         .filter((object) => object.length > 0);
 };
+/**
+ * A `doctor --fix` observation is scoped to one remote name and value-bound to
+ * its configured URL. Remote names may contain punctuation that is not valid
+ * in a git-config variable, so encode their UTF-8 bytes instead of interpolating
+ * the name into the key.
+ */
+export const notesAbsenceEvidenceKey = (remote) => `commitlore.notesabsence.r${Buffer.from(remote, 'utf8').toString('hex')}`;
 export const listRemotes = (opts) => {
     const result = execGit(['remote'], gitOptions(opts));
     if (result.code !== 0)
@@ -167,6 +174,18 @@ export const fetchRefspecs = (remote, opts) => {
     if (result.code !== 0)
         return [];
     return result.stdout.split('\n').filter((line) => line.length > 0);
+};
+/**
+ * Whether `doctor --fix` last established, for this exact configured remote,
+ * that it advertised no notes mirror. This is deliberately a local-config
+ * lookup: consumer routes must not put a network round trip before an edit.
+ */
+export const hasNotesAbsenceEvidence = (remote, opts = {}) => {
+    const url = execGit(['config', '--get', `remote.${remote}.url`], gitOptions(opts));
+    if (url.code !== 0 || url.stdout.trim() === '')
+        return false;
+    const observed = execGit(['config', '--local', '--get', notesAbsenceEvidenceKey(remote)], gitOptions(opts));
+    return observed.code === 0 && observed.stdout.trim() === url.stdout.trim();
 };
 /**
  * Whether a configured refspec lands the mirror where we read it.
@@ -191,27 +210,28 @@ export const forcesNotes = (refspec) => refspec.startsWith('+') && coversNotes(r
 /**
  * Whether this repository can answer for the notes mirror, and if not, why.
  *
- * Reads git config only — no network, no fetch. A repository with no remote at
- * all reports `absent`: there is nowhere for unseen records to be, so an empty
- * answer is a true empty.
- *
- * A configured refspec that has never been fetched through is indistinguishable
- * here from one that was fetched and found nothing, and the difference matters:
- * `doctor --fix` writes the refspec and fetches nothing, so the state it leaves
- * looks exactly like an upstream with no records. Reporting `unfetched` for both
- * was tried and rejected — it fires on every repository whose refspec was added
- * after cloning, and `incomplete` changes `guard`'s exit code. The honest fix
- * lives in `doctor`, which now says a fetch is still owed instead of letting
- * `ok` read as repaired.
+ * Reads local refs and config only — no network, no fetch. Config describes
+ * what this clone intends to fetch; it does not prove what a remote advertised.
+ * `doctor --fix` records a URL-bound absence observation after its remote probe.
+ * Without that observation (including no configured remote), absence is not
+ * evidence that there is nothing upstream, so the answer stays incomplete.
  */
 export const notesAvailability = (opts = {}) => {
     const ref = execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], gitOptions(opts));
     if (ref.code === 0)
         return 'present';
+    // No remote is not "unverified"; it is verified. There is nowhere for an
+    // unseen record to be, so an empty answer here is a true empty. Reporting
+    // `unfetched` would warn on every query about an upstream that does not
+    // exist, and nothing could ever clear it — there is no remote to probe, so
+    // `doctor --fix` cannot record evidence about one. That is the incoherence
+    // #512 is about, arriving from the other side.
     const remotes = listRemotes(opts);
     if (remotes.length === 0)
         return 'absent';
     const uncovered = remotes.filter((remote) => !fetchRefspecs(remote, opts).some(coversNotes));
-    return uncovered.length > 0 ? 'unfetched' : 'absent';
+    if (uncovered.length > 0)
+        return 'unfetched';
+    return remotes.every((remote) => hasNotesAbsenceEvidence(remote, opts)) ? 'absent' : 'unfetched';
 };
 //# sourceMappingURL=notes.js.map

@@ -1,6 +1,6 @@
 {
   "name": "commitlore",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Git-native, lifecycle-aware decision memory for coding agents",
   "license": "MIT",
   "private": true,
@@ -22,7 +22,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "bundle": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/commitlore.mjs",
     "bench:m5": "node --experimental-strip-types bench/m5-analysis.ts",
-    "bench:cdeb:verify": "node bench/cdeb/verify.mjs"
+    "bench:cdeb:verify": "node bench/cdeb/verify.mjs",
+    "bench:cdeb:analyze": "node --experimental-strip-types bench/cdeb/analyze.ts",
+    "bench:cdeb:registry": "node --experimental-strip-types bench/cdeb/freeze/candidate-registry.ts"
   },
   "keywords": [
     "git",

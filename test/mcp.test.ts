@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { execGitOrThrow } from '../src/core/git.js';
+import { NOTES_REFSPEC, notesAbsenceEvidenceKey } from '../src/core/notes.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -136,7 +137,11 @@ const temporaries: string[] = [];
 const makeRepo = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'commitlore-mcp-'));
   temporaries.push(dir);
-  return createTestRepo({ path: dir });
+  createTestRepo({ path: dir });
+  execGitOrThrow(['remote', 'add', 'origin', '.'], { cwd: dir });
+  execGitOrThrow(['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC], { cwd: dir });
+  execGitOrThrow(['config', '--local', notesAbsenceEvidenceKey('origin'), '.'], { cwd: dir });
+  return dir;
 };
 
 const commitAt = (
@@ -698,12 +703,13 @@ describe('commitlore_query', () => {
     expect(toolText(response)).toContain('kind must be one of');
   });
 
-  it('reports a missing tool as a protocol error', async () => {
+  it('reports a missing tool as a tool error like every other dispatch failure', async () => {
     const response = await stub.request('tools/call', {
       name: 'commitlore_nonexistent',
       arguments: {},
     });
-    expect(response.error?.message).toContain('unknown tool');
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toContain('unknown tool');
   });
 });
 

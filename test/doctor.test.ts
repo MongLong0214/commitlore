@@ -37,6 +37,7 @@ const QUERY_SKILL = fileURLToPath(new URL('../skills/commitlore-query/SKILL.md',
 import { NOTES_REF, NOTES_REFSPEC, writeRecord } from '../src/core/notes.js';
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { runQuery } from '../src/core/query.js';
+import { POLICY_FILE_NAME } from '../src/core/capture-policy.js';
 // The real stub T-202 installs — doctor must recognize that exact file, so the
 // fixture is the installer's own output rather than a lookalike.
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
@@ -260,6 +261,11 @@ describe('doctor: notes fetch refspec', () => {
 describe('commitlore-query skill', () => {
   it('documents that multi-path queries answer literal paths and report skipped rename following', () => {
     const repo = initRepo('query-skill-multiple-paths');
+    // `init` builds the index; without one the query reports that it answered
+    // by full scan (#522), which is a true diagnostic about a different thing.
+    const handle = openIndex({ cwd: repo });
+    rebuildIndex(handle, { reason: 'test fixture' });
+    closeIndex(handle);
     const result = runQuery({ cwd: repo, paths: ['a.ts', 'b.ts'] });
     const skill = readFileSync(QUERY_SKILL, 'utf8');
 
@@ -540,7 +546,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    expect(report.checks).toHaveLength(13);
+    expect(report.checks).toHaveLength(14);
   });
 });
 
@@ -948,6 +954,7 @@ describe('doctor: report', () => {
       'inject-runtime',
       'inject-version',
       'mcp-lifecycle',
+      'unattended-initiator',
       'pending-backlog',
       'git-trailers',
       'history-depth',
@@ -970,7 +977,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(13);
+    expect(parsed.checks).toHaveLength(14);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
@@ -986,6 +993,24 @@ describe('doctor: report', () => {
     expect(text).toContain('notes fetch refspec');
     expect(text).toContain(`fix: git config --add remote.origin.fetch '${NOTES_REFSPEC}'`);
     expect(text).toContain('index health');
+  });
+});
+
+describe('#527 doctor: unattended capture initiator', () => {
+  it('warns when policy consent is mistaken for a commit trigger', () => {
+    const { repo } = repoWithRemote('doctor-unattended-initiator');
+    writeFileSync(join(repo, POLICY_FILE_NAME), '{ "unattended": true }\n');
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('ordinary git commit cannot start it');
+    expect(check?.fix).toContain('commitlore_prepare_capture');
+    expect(check?.evidence).toMatchObject({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator: 'agent-host-required',
+    });
   });
 });
 
@@ -1012,6 +1037,34 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     git(repo, ['merge', '--squash', 'feature']);
     git(repo, ['commit', '--quiet', '-m', 'Squash in the feature']);
     return git(repo, ['rev-parse', 'HEAD']).trim();
+  };
+
+  /** Adds refs directly so the cap fixture measures branches, not branch-creation process startup. */
+  const fillBranches = (repo: string, total: number): void => {
+    const existing = git(repo, ['for-each-ref', '--format=%(refname)', 'refs/heads'])
+      .split('\n')
+      .filter((line) => line !== '').length;
+    const head = git(repo, ['rev-parse', 'HEAD']).trim();
+    const creates = Array.from(
+      { length: total - existing },
+      (_, index) => `create refs/heads/zz-cap-${String(index + 1).padStart(3, '0')} ${head}`,
+    );
+    if (creates.length > 0) {
+      const result = execGit(['update-ref', '--stdin'], {
+        cwd: repo,
+        stdin: `${creates.join('\n')}\n`,
+      });
+      if (result.code !== 0) throw new Error(`git update-ref failed: ${result.stderr}`);
+    }
+  };
+
+  const preservedSquash = (repo: string, recordId: string): void => {
+    git(repo, ['commit', '--quiet', '--allow-empty', '-m', 'seed']);
+    const { base, featureSha } = growFeatureBranch(repo, recordId);
+    const mergeSha = squashWithoutPreserving(repo);
+    const outcome = runSquashPreserve({ range: `${base}..${featureSha}`, target: mergeSha, cwd: repo });
+    expect(outcome.code).toBe(0);
+    rebuildIndex(openIndex({ cwd: repo }));
   };
 
   it('skips when no local branch looks like a squash source', () => {
@@ -1057,5 +1110,82 @@ describe('doctor: squash conservation (bug-issue-60 finding 1)', () => {
     const entry = after.checks.find((check) => check.id === 'squash-conservation');
     expect(entry?.status).toBe('ok');
     expect(entry?.detail).toContain('reachable from HEAD');
+  });
+
+  it('discloses the 200-branch limit instead of reporting an unqualified subset', () => {
+    const repo = initRepo('squash-conservation-capped');
+    preservedSquash(repo, 'r-capped01');
+    fillBranches(repo, 201);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.evidence).toMatchObject({ branches_seen: '201', branches_checked: '200' });
+    expect(entry?.detail).toContain('first 200 of 201 local branches');
+  });
+
+  it('keeps a 200-branch scan byte-for-byte on the existing report shape', () => {
+    const repo = initRepo('squash-conservation-at-cap');
+    preservedSquash(repo, 'r-atcap01');
+    fillBranches(repo, 200);
+
+    const entry = runDoctor({ cwd: repo }).checks.find((check) => check.id === 'squash-conservation');
+
+    expect(entry?.status).toBe('ok');
+    expect(entry?.detail).toBe(
+      '1 squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD',
+    );
+    expect(entry?.evidence).toEqual({
+      candidates: '1',
+      checked: '1',
+      uncheckable: '0',
+      lost_count: '0',
+    });
+  });
+});
+
+describe('#527 unattended capture initiator', () => {
+  const enableUnattended = (repo: string): void => {
+    writeFileSync(
+      join(repo, '.commitlore-policy.json'),
+      `${JSON.stringify({ mode: 'auto', unattended: true }, null, 2)}\n`,
+    );
+  };
+
+  it('warns while nothing in the repository can start a capture', () => {
+    const repo = initRepo('unattended-no-initiator');
+    enableUnattended(repo);
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('an ordinary git commit cannot start it');
+  });
+
+  // The warning has to be clearable, or it fires forever on exactly the
+  // repositories that are configured correctly and teaches operators to
+  // ignore the surface that carries the real ones.
+  it('clears once the repository registers the capture server, and says it checked only registration', () => {
+    const repo = initRepo('unattended-registered');
+    enableUnattended(repo);
+    writeFileSync(
+      join(repo, '.mcp.json'),
+      `${JSON.stringify({ mcpServers: { commitlore: { command: 'node', args: ['x', 'mcp'] } } }, null, 2)}\n`,
+    );
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.evidence?.['verified']).toBe('registration-only');
+  });
+
+  it('does not accept a malformed registration as an initiator', () => {
+    const repo = initRepo('unattended-malformed');
+    enableUnattended(repo);
+    writeFileSync(join(repo, '.mcp.json'), '{ not json');
+
+    const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
   });
 });

@@ -78,8 +78,13 @@ describe('T-1021: Known limitations discloses guard precision and recall', () =>
     describe(file, () => {
       const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
 
-      // Extract the Known limitations section (between its heading and the next ## heading)
-      const knownLimStart = content.search(/^## (Known limitations|알려진 제한 사항|既知の制限事項|已知限制)/m);
+      // The section moved above the fold and was renamed to a question a reader
+      // asks before installing rather than a label they meet at the bottom. What
+      // it must disclose is unchanged; only where the test looks for it moved.
+      // Extract the section (between its heading and the next ## heading)
+      const knownLimStart = content.search(
+        /^## (When this will not help you|이것이 도움이 되지 않는 경우|これが役に立たない場合|这在什么情况下帮不上忙)/m,
+      );
       const afterStart = content.slice(knownLimStart + 1);
       const nextSection = afterStart.search(/^## /m);
       const knownLimSection = nextSection === -1
@@ -113,8 +118,8 @@ describe('T-1021: Known limitations discloses guard precision and recall', () =>
 describe('T-1021 mutation oracles', () => {
   const enContent = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
 
-  // Extract the Known limitations section for English
-  const knownLimStart = enContent.search(/^## Known limitations/m);
+  // Extract that section for English
+  const knownLimStart = enContent.search(/^## When this will not help you/m);
   const afterStart = enContent.slice(knownLimStart + 1);
   const nextSection = afterStart.search(/^## /m);
   const knownLimSection = nextSection === -1 ? afterStart : afterStart.slice(0, nextSection);

@@ -26,10 +26,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { readHookStatus } from '../src/commands/hooks.js';
+import { runDoctor } from '../src/commands/doctor.js';
 import { closeIndex, indexInfo, openIndex } from '../src/core/index-db.js';
 import { CHAINED_HOOK_NAME, HOOK_NAME } from '../src/hooks/commit-msg.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
 import { formatInitReport, runInit, type InitOptions, type InitReport } from '../src/commands/init.js';
+import { POLICY_FILE_NAME, resolvePolicy } from '../src/core/capture-policy.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -144,13 +146,21 @@ const trailerCount = (repo: string): number => {
 };
 
 describe('commitlore init — the happy path', () => {
-  it('installs the hook and the index, and reports 0/0/0/0 codes on a repo with a working remote', () => {
+  it('installs every onboarding component and reports clean codes on a repo with a working remote', () => {
     const repo = repoWithRemote('happy');
 
     const report = runInitAsCli({ cwd: repo });
 
-    expect(report.steps.map((s) => s.step)).toEqual(['hooks', 'trust', 'index', 'claude-hook', 'doctor']);
-    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0]);
+    expect(report.steps.map((s) => s.step)).toEqual([
+      'hooks',
+      'trust',
+      'index',
+      'claude-hook',
+      'mcp-registration',
+      'policy',
+      'doctor',
+    ]);
+    expect(report.steps.map((s) => s.code)).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(report.exitCode).toBe(0);
 
     expect(readHookStatus(repo).state).toBe('installed');
@@ -163,15 +173,20 @@ describe('commitlore init — the happy path', () => {
 
     const first = runInitAsCli({ cwd: repo });
     const hookBytesAfterFirst = readFileSync(hookPathOf(repo), 'utf8');
+    const mcpBytesAfterFirst = readFileSync(join(repo, '.mcp.json'), 'utf8');
     const second = runInitAsCli({ cwd: repo });
 
     expect(first.exitCode).toBe(0);
     expect(second.exitCode).toBe(0);
     expect(readFileSync(hookPathOf(repo), 'utf8')).toBe(hookBytesAfterFirst);
+    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toBe(mcpBytesAfterFirst);
 
     const hooksStep = second.steps.find((s) => s.step === 'hooks');
     expect(hooksStep?.lines.join('\n')).toContain('already installed');
     expect(hooksStep?.lines.join('\n')).toContain('unchanged');
+    const mcpStep = second.steps.find((s) => s.step === 'mcp-registration');
+    expect(mcpStep?.lines.join('\n')).toContain('already registers commitlore');
+    expect(mcpStep?.lines.join('\n')).toContain('left unchanged');
   });
 
   it('formats a human-readable report with a clean summary line when nothing needs attention', () => {
@@ -182,8 +197,176 @@ describe('commitlore init — the happy path', () => {
     expect(text).toContain('✓ Hooks');
     expect(text).toContain('✓ Index');
     expect(text).toContain('✓ Agent integration');
+    expect(text).toContain('✓ MCP registration');
     expect(text).toContain('✓ Final check');
     expect(text).toContain('init: ready');
+  });
+});
+
+describe('commitlore init — repository MCP registration', () => {
+  const initiatorStatus = (repo: string): string | undefined =>
+    runDoctor({ cwd: repo }).checks.find((check) => check.id === 'unattended-initiator')?.status;
+
+  const enableUnattended = (repo: string): void => {
+    writeFileSync(
+      join(repo, POLICY_FILE_NAME),
+      `${JSON.stringify({ mode: 'auto', unattended: true }, null, 2)}\n`,
+    );
+  };
+
+  it('creates a portable registration and clears doctor’s unattended-initiator warning', () => {
+    const repo = repoWithRemote('mcp-created');
+    enableUnattended(repo);
+
+    expect(existsSync(join(repo, '.mcp.json'))).toBe(false);
+    expect(initiatorStatus(repo)).toBe('warn');
+
+    const report = runInitAsCli({ cwd: repo });
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+    const config = JSON.parse(readFileSync(join(repo, '.mcp.json'), 'utf8')) as {
+      mcpServers?: Record<string, { command?: unknown; args?: unknown }>;
+    };
+
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('registered the capture server for repository-scoped hosts');
+    expect(registration?.lines.join('\n')).toContain('applies to everyone who clones');
+    expect(registration?.lines.join('\n')).toContain('hosts that keep MCP configuration outside the repository are unchanged');
+    expect(config.mcpServers?.commitlore).toEqual({ command: 'commitlore', args: ['mcp'] });
+    expect(initiatorStatus(repo)).toBe('ok');
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('merges into an existing .mcp.json without changing other servers or fields', () => {
+    const repo = repoWithRemote('mcp-merge');
+    const otherServer = [
+      '    "other-server": {',
+      '      "command": "other-mcp",',
+      '      "args": ["serve", "--safe"],',
+      '      "env": { "PRESERVE": "every-byte" }',
+      '    }',
+    ].join('\n');
+    const unrelated = '  "host-owned": { "keep": [1, 2, 3] }';
+    const original = ['{', '  "mcpServers": {', otherServer, '  },', unrelated, '}', ''].join('\n');
+    writeFileSync(join(repo, '.mcp.json'), original);
+
+    const report = runInitAsCli({ cwd: repo });
+    const after = readFileSync(join(repo, '.mcp.json'), 'utf8');
+    const parsed = JSON.parse(after) as {
+      mcpServers: Record<string, unknown>;
+      'host-owned': unknown;
+    };
+
+    expect(report.steps.find((step) => step.step === 'mcp-registration')?.code).toBe(0);
+    expect(after).toContain(otherServer);
+    expect(after).toContain(unrelated);
+    expect(parsed.mcpServers['other-server']).toEqual({
+      command: 'other-mcp',
+      args: ['serve', '--safe'],
+      env: { PRESERVE: 'every-byte' },
+    });
+    expect(parsed['host-owned']).toEqual({ keep: [1, 2, 3] });
+    expect(parsed.mcpServers.commitlore).toEqual({ command: 'commitlore', args: ['mcp'] });
+  });
+
+  it('leaves an existing commitlore entry byte-for-byte unchanged', () => {
+    const repo = repoWithRemote('mcp-existing');
+    const original =
+      '{"mcpServers":{"commitlore":{"command":"deliberate-wrapper","args":["custom-mcp"],"env":{"MODE":"operator-choice"}}},"host-owned":true}\n';
+    writeFileSync(join(repo, '.mcp.json'), original);
+
+    const report = runInitAsCli({ cwd: repo });
+
+    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toBe(original);
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('already registers commitlore');
+    expect(registration?.lines.join('\n')).toContain('left unchanged');
+  });
+
+  it('reports a registration failure but does not make the install fail', () => {
+    const repo = repoWithRemote('mcp-registration-failure');
+    mkdirSync(join(repo, '.mcp.json'));
+
+    const report = runInitAsCli({ cwd: repo });
+    const registration = report.steps.find((step) => step.step === 'mcp-registration');
+
+    expect(registration?.code).toBe(0);
+    expect(registration?.lines.join('\n')).toContain('could not register the capture server');
+    expect(registration?.lines.join('\n')).toContain('repository still installs');
+    expect(report.steps.find((step) => step.step === 'hooks')?.code).toBe(0);
+    expect(report.steps.find((step) => step.step === 'index')?.code).toBe(0);
+    expect(report.exitCode).toBe(0);
+    expect(formatInitReport(report)).toContain('MCP registration — not registered for repository-scoped hosts');
+  });
+});
+
+describe('commitlore init — repository-owned agent guidance', () => {
+  it('creates AGENTS.md with the shared capture procedure when the repository has none', () => {
+    const repo = initRepo('agents-created');
+
+    const report = runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(join(repo, 'AGENTS.md'), 'utf8');
+
+    expect(guidance).toContain('<!-- commitlore:begin -->');
+    expect(guidance).toContain('commitlore_prepare_capture');
+    expect(guidance).toContain('commitlore_verify_capture');
+    expect(guidance).toContain('commitlore_stage_capture');
+    expect(guidance).toContain('Drop the trailer; never invent a citation.');
+    expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'created AGENTS.md',
+    );
+  });
+
+  it('keeps an existing AGENTS.md intact and appends one marked CommitLore section', () => {
+    const repo = initRepo('agents-existing');
+    const path = join(repo, 'AGENTS.md');
+    const existing = '# Project instructions\n\nKeep every one of these lines.\n';
+    writeFileSync(path, existing);
+
+    runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(path, 'utf8');
+
+    expect(guidance.startsWith(existing)).toBe(true);
+    expect(guidance).toContain('Keep every one of these lines.');
+    expect(guidance).toContain('<!-- commitlore:begin -->');
+    expect(guidance).toContain('<!-- commitlore:end -->');
+  });
+
+  it('replaces only an older marked section when refreshing repository guidance', () => {
+    const repo = initRepo('agents-updated');
+    const path = join(repo, 'AGENTS.md');
+    writeFileSync(
+      path,
+      '# Project instructions\n<!-- commitlore:begin -->\nold capture guidance\n<!-- commitlore:end -->\nKeep this line too.\n',
+    );
+
+    const report = runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(path, 'utf8');
+
+    expect(guidance).toContain('# Project instructions');
+    expect(guidance).toContain('Keep this line too.');
+    expect(guidance).not.toContain('old capture guidance');
+    expect(guidance).toContain('commitlore_prepare_capture');
+    expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'updated the marked',
+    );
+  });
+
+  it('is byte-idempotent: it replaces neither user instructions nor adds a second section', () => {
+    const repo = initRepo('agents-idempotent');
+    const path = join(repo, 'AGENTS.md');
+    writeFileSync(path, '# Local instructions\n');
+
+    runInitAsCli({ cwd: repo });
+    const afterFirst = readFileSync(path, 'utf8');
+    const second = runInitAsCli({ cwd: repo });
+    const afterSecond = readFileSync(path, 'utf8');
+
+    expect(afterSecond).toBe(afterFirst);
+    expect((afterSecond.match(/<!-- commitlore:begin -->/g) ?? [])).toHaveLength(1);
+    expect(second.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'unchanged',
+    );
   });
 });
 
@@ -279,10 +462,91 @@ describe('commitlore init — a step that cannot fully succeed is reported, not 
     const report = runInitAsCli({ cwd: repo });
 
     // Nothing here is a thrown exception: every step reports its own outcome.
-    expect(report.steps).toHaveLength(5);
+    expect(report.steps).toHaveLength(7);
     for (const step of report.steps) {
       expect(step.lines.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('commitlore init — the capture policy step', () => {
+  const policyPathOf = (repo: string): string => join(repo, POLICY_FILE_NAME);
+
+  it('authorises unattended capture where no policy file exists and registers its initiator', () => {
+    const repo = repoWithRemote('policy-enable');
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('unattended capture policy enabled');
+    expect(policyStep?.lines.join('\n')).toContain('ordinary git commits cannot start it');
+    expect(policyStep?.lines.join('\n')).toContain('applies to everyone who clones');
+
+    // The file it wrote is one the resolver accepts, mode beside the setting.
+    const resolution = resolvePolicy(repo);
+    expect(resolution.error).toBeNull();
+    expect(resolution.policy.unattended).toBe(true);
+    expect(resolution.policy.mode).toBe('auto');
+
+    const text = formatInitReport(report);
+    expect(text).toContain('unattended policy enabled — agent host must initiate capture');
+    expect(text).toContain('MCP registration — registered for repository-scoped hosts');
+    expect(text).toContain('init: ready');
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('records a decline without writing a file', () => {
+    const repo = repoWithRemote('policy-decline');
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'decline' });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('declined at the prompt');
+    expect(existsSync(policyPathOf(repo))).toBe(false);
+  });
+
+  it('enables nothing where nobody answered, and states that', () => {
+    const repo = repoWithRemote('policy-no-answer');
+
+    const report = runInitAsCli({ cwd: repo });
+
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('no interactive terminal');
+    expect(policyStep?.lines.join('\n')).toContain('commitlore auto on');
+    expect(existsSync(policyPathOf(repo))).toBe(false);
+  });
+
+  it('leaves an existing policy file unchanged, whatever the flags say', () => {
+    const repo = repoWithRemote('policy-existing');
+    const policyPath = policyPathOf(repo);
+    const original = `{ "mode": "suggest" }\n`;
+    writeFileSync(policyPath, original);
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    expect(readFileSync(policyPath, 'utf8')).toBe(original);
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(0);
+    expect(policyStep?.lines.join('\n')).toContain('left unchanged');
+    expect(formatInitReport(report)).toContain('unchanged — unattended capture off');
+  });
+
+  it('names a rejected policy file and leaves it untouched', () => {
+    const repo = repoWithRemote('policy-rejected');
+    const policyPath = policyPathOf(repo);
+    const original = `{ "unattended": "yes" }\n`;
+    writeFileSync(policyPath, original);
+
+    const report = runInitAsCli({ cwd: repo, unattended: 'enable' });
+
+    expect(readFileSync(policyPath, 'utf8')).toBe(original);
+    const policyStep = report.steps.find((s) => s.step === 'policy');
+    expect(policyStep?.code).toBe(1);
+    expect(policyStep?.lines.join('\n')).toContain('rejected');
+    expect(report.exitCode).toBe(1);
   });
 });
 

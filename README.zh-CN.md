@@ -14,8 +14,193 @@
 
 # CommitLore
 
-## 代理继承了代码。
-## 也把判断传下去。
+**你的编程代理不断重新提议团队早已否决的方案。**
+
+CommitLore 把这些决策保存在 Git 中，并在它编辑文件之前，把仍然有效的决策交给它。
+
+CommitLore 没有托管服务；它把 record 保存在 Git 中。其 MCP 服务器或 hook 返回
+上下文后，host 会按自己的政策处理这些上下文；CommitLore 无法控制那条数据流。
+
+<p align="center">
+  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
+</p>
+
+<details>
+<summary><strong>目录</strong></summary>
+
+- [安装](#安装)
+- [代理收到的内容](#看它实际运行)
+- [哪些是自动的，哪些不是](#哪些是自动的哪些不是)
+- [这在什么情况下帮不上忙](#这在什么情况下帮不上忙)
+- [一个例子中的问题](#代码留了下来决定没有)
+- [完整地说，它是什么](#完整地说它是什么)
+- [查看路径查询](#查看路径查询)
+- [这个仓库本身就是演示](#这个仓库本身就是演示)
+- [路径范围与检索](#检索能找到记录路径范围会排除已经推翻的决策)
+- [工作方式](#工作方式)
+- [来自另一仓库的现场报告](#在真实仓库中的样子)
+- [有何不同](#有何不同)
+- [在哪里见效](#在哪里见效)
+- [record 如何创建](#record-如何创建)
+- [完整 record](#完整-record)
+- [仓库能够证明什么](#仓库能够证明什么)
+- [证据](#evidence更窄的产品主张)
+- [卸载](#卸载) · [文档](#文档) · [贡献](#贡献)
+
+</details>
+
+## 安装
+
+安装一次。装好 host integration，并初始化要使用的仓库。
+
+**Claude Code** — 一个插件即可注册 MCP 服务器、编辑前上下文钩子与技能:
+
+```
+/plugin marketplace add MongLong0214/commitlore
+/plugin install commitlore@commitlore
+```
+
+插件所含仅此而已：MCP 服务器、编辑前钩子与技能。它不会把 `commitlore` 放到 `PATH` 上，因此下面的 `commitlore …` 命令来自 `install.sh` / `install.ps1`，还需要那一步安装。
+
+**Codex** — 原生插件只需一条命令即可安装:
+
+```bash
+commitlore plugin install-codex
+```
+
+它通过 Codex 自己的 CLI 注册 marketplace 与 plugin，绝不直接修改其配置或缓存。下面的标准安装脚本在检测到 Codex 时也会执行同一条命令。安装后请开启新的 Codex session —— plugin 的 skill 与 MCP server 在 session 启动时加载，而不是在安装时。下面的 CLI 提供 repository 命令。
+
+两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
+
+**其他编程代理** — 安装 CLI:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
+```
+
+**Hermes** — 安装 CLI 后，配置它的 host integration：
+
+```bash
+commitlore hermes install
+```
+
+支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**把上一个代理挣得的判断，交给下一个代理。**
+
+### 然后，在每个仓库中
+
+然后在每个需要验证 hook、本地 index 与仓库自有 agent procedure 的仓库运行
+`commitlore init`。安装程序会检测受支持的编程代理，并在可以安全处理的地方注册
+本地 MCP server。
+
+```bash
+cd your-repository
+commitlore init
+commitlore context .
+```
+
+在那之后：
+
+- 照常提交。绝大多数提交没有 record。
+- 如果已有 record，commit-msg hook 会验证它；不会创建 record。
+- delivery 与 capture 是不同 layer。下一节会准确说明每个 host 具备的两层。
+
+继续通过编程代理工作。若某项更改包含 diff 无法保存的决策上下文，请让代理在提交中加入 CommitLore record。
+
+<details>
+<summary>想检查或固定安装版本？</summary>
+
+这一行命令是为了方便。若需要经过审阅或固定版本的安装，请先下载并检查 `install.sh`，或 clone 仓库。脚本只安装一个固定标签的源码检出，以及一个运行 `node <checkout>/dist/commitlore.mjs` 的薄 wrapper —— 它不下载任何编译产物，也没有构建步骤，因此放到机器上的就是你能阅读的源码。
+
+```bash
+# 固定版本并检查 installer 后再执行。
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh
+sh install.sh v0.8.0
+
+# 或者完全不用脚本：它创建的检出，你自己也能创建。
+git clone --depth 1 --branch v0.8.0 https://github.com/MongLong0214/commitlore
+node commitlore/dist/commitlore.mjs --version
+```
+
+</details>
+
+## 看它实际运行
+
+在编辑 `src/pricing.ts` 前，代理会收到这份 payload——record 本身，而不是对它的描述：
+
+```
+commitlore: active records for src/pricing.ts
+
+Limit
+  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
+
+Ruled-out
+  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
+                                    and rounding semantics differ between the two flows
+```
+
+`[claim]` 有实际含义：这条 record 并非由仓库的可信作者写入，所以代理会被告知把它
+当作信息权衡，而不是当作命令服从。可信作者写入的 record 会渲染为 `[directive]`。
+delivery 给代理的是上下文，并不阻止编辑。
+
+## 哪些是自动的，哪些不是
+
+**Delivery** 表示 record 会在代理编辑 path 前到达。**Capture** 表示一项决定可以进入
+经过验证的 commit-time flow。二者是不同的 layer：
+
+| Host | Delivery | Capture |
+|---|---|---|
+| Claude Code | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
+| Codex | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
+| Hermes | **有——`commitlore hermes install`。** | **有——`commitlore hermes install`。** |
+| 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** `commitlore init` 写入编辑前 delivery instruction；host 可能遵循，也可能不遵循。 | **是 procedure，不自动。** host 可能遵循，也可能不遵循。 |
+
+“有”只表示该 layer 已安装，不表示每次 commit 都会得到 record。绝大多数 commit
+本就不应携带 record。只有前三行会自动运行 integration。在其他 `AGENTS.md` host 上，
+两步都是 instruction，而不是 hook。host 仍须启动 capture，candidate 也必须先通过
+验证，commit hook 才会附加它。commit-msg hook 会验证已有的 record；它从不凭空创建 record。
+
+## 这在什么情况下帮不上忙
+
+请在安装前阅读，而不是之后。
+
+- **测量的是较弱的那一档。** 在 1,160 次研究中，所有记录都渲染为 `[claim]`，
+  它告诉代理把记录当作信息来权衡，而不是当作命令。`[directive]` 档位是在那之后
+  才可达的，所以上面的数字是**测得的下限**，而不是宣称的上限。
+- **一个模型、一套 harness、十个构造的 fixture。** oracle 读取的是最终实现状态，
+  因此它显示收到记录的代理更少重提被排除的方案，但并不显示其中任何一个读过什么。
+- 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
+- M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
+- Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。
+
+完整方法、排除项与每个 arm 的 truncation split 见 [bench/VERDICT-M5.md](bench/VERDICT-M5.md)
+及[它没有显示什么](docs/evidence.md)。delivery 方法和 retrieval 证据见
+[bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md)。
+
+## 代码留了下来，决定没有。
+
+*不再重复评审同一个坏主意。*
+
+**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
+
+```ts
+calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
+```
+
+团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
+第二次写下“我们已经否决过这个了”。
+
+**有 CommitLore。** 编辑之前，代理收到的是上方展示的 active record，而不是从评审意见
+重新拼凑出的指令。
+
+模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。
+
+在 1,160 次已登记的运行中，重新提议已否决方案的比例从 **18.8%** 降至 **2.8%**。
+这个数字没有说明的内容，见上方的
+[这在什么情况下帮不上忙](#这在什么情况下帮不上忙)。
+
+## 完整地说，它是什么
 
 **面向编程代理的 Git 原生 decision layer。**
 
@@ -29,36 +214,13 @@ CommitLore 把这份工程判断保存在 Git 中，并在下一次编辑前只�
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
-没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有并随仓库流转、可供审查的决策上下文。
+没有托管记忆服务，也没有特定供应商的聊天历史。只有由仓库拥有、可供审查的
+决策上下文。commit trailer 会随 commit 流转；notes-backed record 则需要在 clone
+之后配置 notes fetch。普通 clone 不会获取 `refs/notes/*`，因为 Git 默认不 fetch 它。
 
-安装一次。你的编程代理可以记录值得延续的决策，而 CommitLore 会验证它们并将其保存在 Git 中。
+## 查看路径查询
 
-**Claude Code** — 一个插件即可注册 MCP 服务器、编辑前上下文钩子与技能:
 
-```
-/plugin marketplace add MongLong0214/commitlore
-/plugin install commitlore@commitlore
-```
-
-插件所含仅此而已：MCP 服务器、编辑前钩子与技能。它不会把 `commitlore` 放到 `PATH` 上，因此下面的 `commitlore …` 命令来自 `install.sh` / `install.ps1`，还需要那一步安装。
-
-两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
-
-**其他编程代理** — 安装 CLI:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh | sh
-```
-
-支持哪些 host，以及各条安装路径需要什么：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
-
-**把上一个代理挣得的判断，交给下一个代理。**
-
-## 看它实际运行
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 **一个全新的代理，没有聊天历史。它仍被交到手上：为什么那个显而易见的修复被排除了。** 在改动前查询 path：
 
@@ -79,6 +241,19 @@ warnings
 ```
 
 如何原样复现这条 `PreToolUse` hook path，以及其余全部命令：[docs/cli.md](docs/cli.md)。
+
+## 这个仓库本身就是演示
+
+一个声称能阻止代理重新决定已尘埃落定的问题的工具，应当能够展示它在自身上捕获了什么。这个工具公开维护该清单，其中也包括本项目已经发布、后来被证明有误的内容。
+
+- **没有任何一种安装方式能产生 README 的主张所依赖的信任等级。** record 到达代理时会被评为 `directive` 或 `claim`。结果是，没有已安装的 surface 配置了可信 author，于是所有人的等级都 fail-closed 为 `claim`，而注入的图例却展示了没人能达到的 tier。此前两项 benchmark 测量的都是 `claim` 等级的送达（[#415](https://github.com/MongLong0214/commitlore/issues/415)）。
+- **已登记的 benchmark 分析本会同时读取四项不同的实验。** 由于它的停止规则是行数，这种污染会让研究*通过*它自己的完整性关卡（[#441](https://github.com/MongLong0214/commitlore/issues/441)）。
+- **没有任何东西运行 result-schema gate。** 因此 schema 比 runner 落后五个字段，两天都没人发现（[#392](https://github.com/MongLong0214/commitlore/issues/392)）。
+- **一个已发布的 pre-push hook 会挂起每一次 `git push`。** 40 秒内调用 hook 1,240 次，因为函数被测试了十一次，而 hook path 一次也没有测试（[#422](https://github.com/MongLong0214/commitlore/issues/422)）。
+
+每一项都是 commit trailer 中的一行 `Ruled-out:`、`Warn:` 或 `Limit:`，由本项目请你安装的 hook 验证，并且可以用你在其他地方运行的同一条 `commitlore context` 读取。
+
+**完整列表及每一项的代价：[docs/SELF-AUDIT.md](docs/SELF-AUDIT.md)。**
 
 ## 检索能找到记录。路径范围会排除已经推翻的决策。
 
@@ -110,75 +285,6 @@ warnings
 | CommitLore 路径范围 | 2 | 2/2 | 335 |
 
 这项测量是在固定的两条记录输出预算下进行的暴露与召回率测量，不测量令牌成本、计费成本、准确率或代理行为。它只涉及一个语料库、一个查询和一个固定的 embedding 模型。召回率打平的地方，以及此外还测量了什么、没测量什么：[docs/evidence.md](docs/evidence.md)。
-
-## 在仓库中试用
-
-然后在每个需要验证 hook 与本地 index 的仓库运行 `commitlore init`。安装程序会检测受支持的编程代理，并在可以安全处理的地方注册本地 MCP server。
-
-```bash
-cd your-repository
-commitlore init
-commitlore context .
-```
-
-在那之后：
-
-- 照常提交。绝大多数提交没有 record。
-- 如果已有 record，commit-msg hook 会验证它；不会创建 record。
-- 代理通过 MCP 查询决策上下文，或从 `PreToolUse` hook 接收它。
-- 更改 path 前，它们会看到 active limit、ruled-out alternative、warning 和 verification gap。
-
-继续通过编程代理工作。若某项更改包含 diff 无法保存的决策上下文，请让代理在提交中加入 CommitLore record。
-
-<details>
-<summary>想检查或固定安装版本？</summary>
-
-这一行命令是为了方便。若需要经过审阅或固定版本的安装，请先下载并检查 `install.sh`，或 clone 仓库。脚本只安装一个固定标签的源码检出，以及一个运行 `node <checkout>/dist/commitlore.mjs` 的薄 wrapper —— 它不下载任何编译产物，也没有构建步骤，因此放到机器上的就是你能阅读的源码。
-
-```bash
-# 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.7.1/install.sh
-sh install.sh v0.7.1
-
-# 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v0.7.1 https://github.com/MongLong0214/commitlore
-node commitlore/dist/commitlore.mjs --version
-```
-
-</details>
-
-## 代码留了下来，决定没有。
-
-*不再重复评审同一个坏主意。*
-
-
-**没有 CommitLore。** 新会话看到两个输入相似的函数，复用了其中一个。
-
-```ts
-calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
-```
-
-团队于是多了一个标志、一个包装器，以及一个守护该函数本不该承担的用例的兼容分支。评审者
-第二次写下"我们已经否决过这个了"。
-
-**有 CommitLore。** 编辑之前，代理收到：
-
-```
-commitlore: active records for src/pricing.ts
-
-Limit
-  [claim]      r-price01  87e36511  calculatePrice owns final checkout pricing only
-
-Ruled-out
-  [claim]      r-price01  87e36511  Reuse checkout pricing for admin quotes | eligibility
-                                    and rounding semantics differ between the two flows
-```
-
-`[claim]` 在真正起作用：这条 record 并非由仓库的可信作者写入，因此代理被告知把它当作
-信息而不是命令。由可信作者留下的 record 会渲染为 `[directive]`。
-
-模块边界在代理提出改动**之前**就摆在它面前，而不是事后出现在评审意见里。它是否照做，是
-本项目尚未回答的代理行为问题 —— 见下面的测量，以及[未被测量的部分](docs/evidence.md)。
 
 ## 工作方式
 
@@ -399,12 +505,6 @@ commitlore uninstall
 - [docs/protocol.md](docs/protocol.md) — record 格式，以及只用 Git 读取的方法
 - [docs/evidence.md](docs/evidence.md) — 哪些已被测量，哪些没有
 - [spec/SPEC.md](spec/SPEC.md) — 规范协议
-
-## 已知限制
-
-- 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
-- M4 没有检验 guard 效果：row 没有 `guard_exposure`，因而无法验证 treatment exposure（[#122](https://github.com/MongLong0214/commitlore/issues/122)）。
-- Guard（ruled-out alternative matching）是实验性参考信息：precision 44.8%（95% Wilson CI 32.7%–57.5%），recall 22.0%，基于 417-decision corpus（[ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)）。空的 guard 结果不保证提案避开了所有 ruled-out alternative——在 recall 22% 下，遗漏才是常态。
 
 ## 贡献
 

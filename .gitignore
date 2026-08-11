@@ -16,13 +16,18 @@ bench/results/*.local.jsonl
 .debug-journal.md
 
 # Agent skill installs — tooling, not product.
+#
+# Anchored: unanchored, `skills/` matches a directory of that name at any depth,
+# which swallowed `hermes/skills/` — a bundle this repository ships. The
+# installer would then have been released with nothing to install, which is the
+# same silent-incomplete-install failure twice over.
+# Anchoring was not enough on its own. The bundles this repository *ships* also
+# live under the root `skills/`, and they are tracked only because they predate
+# this rule — so the next product bundle added there would have been ignored on
+# arrival and released missing. The rule now says what it means: skills this
+# repository authors are product, everything else under here is an install.
 .agents/
 .claude/
-skills/
+/skills/*
+!/skills/commitlore-*/
 skills-lock.json
-
-# Serena MCP writes a per-project config into whatever directory it was
-# pointed at. It carries that directory's name, so a copy committed from a
-# worktree ships somebody else's label -- which is how `project_name:
-# "t1124"` reached v0.5.0.
-.serena/

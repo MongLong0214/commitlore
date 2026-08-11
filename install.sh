@@ -35,8 +35,9 @@
 #
 # A second phase runs after the wrapper is in place (see "detect and wire
 # coding agents" below): it looks for which coding agents are on this machine
-# and registers commitlore's MCP server with each one it finds. That phase
-# never fails the script.
+# and registers CommitLore with each one it finds. Codex receives its native
+# plugin (including the MCP server and skill); other hosts receive an MCP entry.
+# That phase never fails the script.
 set -eu
 
 REPO="MongLong0214/commitlore"
@@ -272,6 +273,10 @@ esac
 # opencode is the one exception to *that*: its config key is `mcp`, not
 # `mcpServers`, and its `command` is an argv array rather than
 # command+args -- see its own comment below.
+# Hermes is the other exception: its active profile is YAML at
+# `$HOME/.hermes/config.yaml`, and its externally owned skills are declared
+# beside that MCP block. `commitlore hermes install` owns the surgical YAML
+# edit so the two platform installers cannot drift on what uninstall removes.
 
 log ""
 log "Detecting coding agents..."
@@ -354,16 +359,50 @@ wire_claude_code() {
   fi
 }
 
-# Codex CLI -- TOML, one [mcp_servers.<name>] table per server.
+# Codex CLI owns its MCP config whenever it is available.  The file branch is
+# only for an existing Codex home on a machine without the CLI: hand-writing
+# TOML while the CLI is present invites drift when Codex changes its format.
 # https://developers.openai.com/codex/mcp
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
-wire_codex() {
+wire_codex_mcp() {
+  if command -v codex >/dev/null 2>&1; then
+    # A registration named `commitlore` is not evidence of a working one. A
+    # machine here carried an entry pointing at a wrapper in a temp directory
+    # left by an install from months earlier, and a name-only check called it
+    # correct -- so every session got a server that was not what the name said.
+    # Ownership is decided by the wrapper an entry points at, never by the key
+    # it sits under, which is the rule `agent-configs.ts` already states for
+    # removal.
+    codex_existing="$(codex mcp get commitlore 2>/dev/null || true)"
+    case "$codex_existing" in
+      "")
+        ;;
+      *"command: $dest"*)
+        record_skipped "codex" "commitlore already points at this install -- left unchanged"
+        return
+        ;;
+      *"$data_root"*)
+        codex mcp remove commitlore >/dev/null 2>&1 || true
+        ;;
+      *)
+        record_skipped "codex" "an mcp server named commitlore points somewhere this install did not write -- left untouched"
+        return
+        ;;
+    esac
+    if codex mcp add commitlore -- "$dest" mcp >/dev/null 2>&1; then
+      record_wired "codex: registered commitlore with codex mcp add"
+    else
+      record_skipped "codex" "codex mcp add could not register commitlore -- config file was left untouched"
+    fi
+    return
+  fi
+
   config_path="$HOME/.codex/config.toml"
   config_dir="$(dirname -- "$config_path")" || { record_skipped "codex" "could not resolve the directory for $config_path"; return; }
   mkdir -p "$config_dir" 2>/dev/null || { record_skipped "codex" "could not create $config_dir"; return; }
 
   if [ -f "$config_path" ] && grep -q '^\[mcp_servers\.commitlore\]' "$config_path" 2>/dev/null; then
-    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block -- left unchanged"
+    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block (config-file fallback; codex CLI is unavailable) -- left unchanged"
     return
   fi
 
@@ -371,17 +410,33 @@ wire_codex() {
   # with an explicit trailing `\n` rather than sharing one block between them.
   if [ -f "$config_path" ]; then
     if printf '\n[mcp_servers.commitlore]\ncommand = "%s"\nargs = ["mcp"]\n' "$dest" >>"$config_path"; then
-      record_wired "codex: appended a [mcp_servers.commitlore] block to the existing $config_path"
+      record_wired "codex: appended a [mcp_servers.commitlore] block to the existing $config_path (config-file fallback; codex CLI is unavailable)"
     else
       record_skipped "codex" "could not append to $config_path"
     fi
   else
     if printf '[mcp_servers.commitlore]\ncommand = "%s"\nargs = ["mcp"]\n' "$dest" >"$config_path"; then
-      record_wired "codex: created $config_path"
+      record_wired "codex: created $config_path (config-file fallback; codex CLI is unavailable)"
     else
       record_skipped "codex" "could not write $config_path"
     fi
   fi
+}
+
+# Codex's plugin API owns the plugin cache and marketplace. The packaged plugin
+# supplies its own MCP server and capture skill, while the marker lets uninstall
+# remove only the plugin this installer placed.
+wire_codex_plugin() {
+  if "$dest" plugin install-codex >/dev/null 2>&1; then
+    record_wired "codex: installed the commitlore plugin (marketplace: commitlore)"
+  else
+    record_skipped "codex" "could not install the commitlore plugin -- run manually: $dest plugin install-codex"
+  fi
+}
+
+wire_codex() {
+  wire_codex_mcp
+  wire_codex_plugin
 }
 
 # Gemini CLI -- same mcpServers shape as Claude Desktop.
@@ -398,6 +453,19 @@ wire_cursor() { wire_mcp_servers_json "cursor" "$HOME/.cursor/mcp.json"; }
 # https://docs.windsurf.com/windsurf/cascade/mcp
 has_windsurf() { command -v windsurf >/dev/null 2>&1 || [ -d "$HOME/.codeium/windsurf" ] || [ -d "/Applications/Windsurf.app" ]; }
 wire_windsurf() { wire_mcp_servers_json "windsurf" "$HOME/.codeium/windsurf/mcp_config.json"; }
+
+# Hermes -- its active profile reads `mcp_servers` and `skills.external_dirs`
+# from YAML. The helper backs up an existing config before a byte-preserving
+# edit, then verifies a fresh Hermes process when the executable is on PATH.
+has_hermes() { command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ]; }
+wire_hermes() {
+  config_path="$HOME/.hermes/config.yaml"
+  if "$dest" hermes install --config "$config_path" --command "$dest" --data-root "$data_root" --verify; then
+    record_wired "hermes: configured MCP and the installed CommitLore skill bundle in $config_path"
+  else
+    record_skipped "hermes" "host setup could not finish; its existing config was left intact where it could not be edited safely"
+  fi
+}
 
 # opencode -- different shape from the rest: the key is `mcp`, not
 # `mcpServers`, and `command` is an argv array alongside a `type`/`enabled`
@@ -457,6 +525,7 @@ for spec in \
   "Gemini CLI:has_gemini:wire_gemini" \
   "Cursor:has_cursor:wire_cursor" \
   "Windsurf:has_windsurf:wire_windsurf" \
+  "Hermes:has_hermes:wire_hermes" \
   "opencode:has_opencode:wire_opencode"; do
   agent_name="${spec%%:*}"
   agent_rest="${spec#*:}"

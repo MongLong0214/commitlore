@@ -21,10 +21,12 @@ v1.3은 **CDEB-P가 실제로 돌려서 알아낸 것**만 반영한다(`bench/c
 
 | # | 파일럿이 측정한 것 | v1.3이 바꾸는 것 |
 |---|---|---|
-| 1 | `T_on/T_off` = **1.45** — ON arm이 45% 더 비싸다 | §16.4는 **15% 고정을 유지**하고 보정값은 서술적으로만 쓴다. §16.6은 headline을 세 게이트로 분리한다 |
-| 2 | 4개 task 중 **1개가 4런 전부 timeout** | §4.6에 ON+OFF runtime-boundedness qualification을 의무화한다 |
-| 3 | 4개 task 중 **2개가 ON arm에 record를 0개 전달** | §4.9를 신설해 **frozen shipping inject 경로로** 배송 가능성을 봉인 전 검증한다 |
+| 1 | ⚠ `T_on/T_off` = **1.45** — ON arm이 45% 더 비싸다 | §16.4는 **15% 고정을 유지**하고 보정값은 서술적으로만 쓴다. §16.6은 headline을 세 게이트로 분리한다 |
+| 2 | ⚠ 4개 task 중 **1개가 4런 전부 timeout** | §4.6에 ON+OFF runtime-boundedness qualification을 의무화한다 |
+| 3 | ⚠ 4개 task 중 **2개가 ON arm에 record를 0개 전달** | §4.9를 신설해 **frozen shipping inject 경로로** 배송 가능성을 봉인 전 검증한다 |
 | 4 | 파일럿 계측이 opportunity와 delivery를 합쳐 셌다 | §9.5가 분리를 요구하고 §19.3이 exposure 불변식을 재계산 대상으로 만든다 |
+
+**⚠ 이 앵커들은 shipping 표면과 다른 hook 표면에서 측정됐다 (shipping 표면에 대해 UNVERIFIED).** 파일럿의 ON arm은 `Edit|Write|MultiEdit|NotebookEdit` matcher를 설치했지만 제품이 shipping하는 matcher는 `Read|Edit|Write`다(`CLAUDE_HOOK_MATCHER`, `src/hooks/claude-settings.ts`). shipping은 모든 `Read`에도 발화하므로, 파일럿은 study가 측정할 표면보다 가벼운 표면에서 측정한 것이다 — ON arm의 토큰, wall time, delivery 기회는 이 숫자들과 다를 수 있다. 숫자는 재유도하지도 삭제하지도 않고, 어느 숫자가 어느 표면에서 나왔는지 보이도록 1–3행에 ⚠를 남긴다. 재측정 여부는 이 변경이 내리지 않는 별도의 결정이다. 4행은 계측 구조에 대한 발견이므로 표면에 의존하지 않는다.
 
 **v1.3 초안이 스스로 만든 결함과 그 수정** — 외부 production-readiness review가 잡았다.
 
@@ -47,7 +49,7 @@ v1.1의 실험 설계, matrix, gate, locked decisions는 그대로다. v1.2는 v
 1. **`TokenVolumeReduction` 정의 추가** — §16.4가 게이트 조건으로 사용하지만 §15에 정의가 없었다. §15.2에 정의한다.
 2. **bootstrap replicate 내 TVPDSS 계산 규정** — 재표집된 task 집합 위에서 ratio-of-sums로 계산함을 §16.2에 명시한다.
 3. **ON arm의 활성 surface를 delivery로 한정** — ADR-0030이 병합되어 capture 기본 모드가 `auto`(무인 스테이징)가 됐다. Agent가 run 중 commit하면 무인 캡처가 새 record를 만들어 repository state를 비결정적으로 바꾼다. §2.3과 §9.2가 이제 capture surface를 양 arm 모두 설치하지 않는다고 명시하고, full install과의 차이를 공개 사항으로 규정한다.
-4. **shipping trust 상태의 명시** — 현재 어떤 설치 표면도 `--trusted-author`를 전달하지 않으므로 shipping 설정에서 모든 record는 `[claim]`으로 전달된다(#415). CDEB는 그 상태를 그대로 측정하며, §9.2와 §17이 이를 결과 문구에 포함하도록 한다.
+4. **shipping trust 상태의 명시** — 당시 어떤 설치 표면도 `--trusted-author`를 전달하지 않아 shipping 설정에서 모든 record가 `[claim]`으로 전달되던 상태(#415)를 CDEB가 그대로 측정함을 명시하고, §9.2와 §17이 이를 결과 문구에 포함하도록 한다. 이 상태는 2026-08-07 v0.7.0(`a030e93`)에서 끝났다 — `init`이 `commitlore.trustedAuthor`를 시드한다. 현재 상태는 §9.2 참조.
 5. **randomization manifest의 task ID 누출 차단** — public pre-run freeze에 randomization을 raw task ID로 공개하면 sealed corpus가 부분 누출된다. §18.2가 opaque block index를 쓰고 mapping은 post-run에 공개한다.
 6. **corpus cutoff의 단위 명확화** — cutoff는 per-repository snapshot ref이고, 프로토콜 자체의 freeze는 본 PRD를 승인하는 commit이다(§3.1).
 7. **provider-side cache 공유 한계 명시** — cache_read는 org-scoped provider cache 때문에 run 순서에 의존할 수 있다. §14.2와 §18.2가 within-block 랜덤 순서로 이를 분산하고, §23 appendix가 arm별 cache category를 보고하도록 한다.
@@ -394,6 +396,13 @@ timeout된 task         900s = 1.00 × budget
 첫 두 줄이 문턱값을 정한다: 파일럿의 좋은 task와 나쁜 task는 **0.48과 1.00 사이
 어디서든 분리된다.** 0.6은 그 구간 안이며, 양 끝 어디에도 붙어 있지 않다.
 
+**이 분리의 ON 쪽 숫자는 shipping 표면에 대해 UNVERIFIED다 (⚠).** 0.48을 만든
+완료 런들과 위 903/902/902/902초 timeout의 ON 행은 `Read`에서 발화하지 않는
+파일럿 matcher `Edit|Write|MultiEdit|NotebookEdit`로 측정됐다 — shipping
+`Read|Edit|Write`가 아니다. study가 측정할 ON arm은 모든 `Read`에도 발화하므로
+이 split은 shipping 표면에서 재현되지 않을 수 있다. 0.6은 screen으로 동결된
+채 남고, split의 재측정 여부는 이 변경이 내리지 않는 별도의 결정이다 (§0의 ⚠).
+
 **세 번째 줄이 이 게이트가 주장할 수 있는 것을 제한한다.** 같은 task·같은 arm의
 두 반복이 ×4.9까지 벌어졌다. 두 번의 probe는 그 꼬리를 잡지 못한다. 따라서 이
 qualification은 **중앙값 근처를 거르는 screen이며, study에서 timeout이 나오지
@@ -521,7 +530,7 @@ transparent proxy
 ```text
 same product commit · same dist digest · same hook proxy
 same injection budget · same trust configuration · same index policy
-same repository snapshot
+same repository snapshot · same hook matcher
 ```
 
 `expected_edit_paths`는 **good control patch가 수정하는 파일 집합**이다 — 저자의
@@ -777,7 +786,11 @@ ON은 다음 product defaults를 그대로 사용한다.
 
 CDEB를 유리하게 만들기 위해 trusted authors를 추가하거나 budget을 변경하지 않는다.
 
-**Shipping trust 상태의 명시 (v1.2):** 현재 shipping 설치는 `--trusted-author`를 전달하지 않으므로, ON arm이 전달하는 모든 record는 `[claim]`으로 렌더링되고 payload legend는 "not an instruction"이라고 말한다(#415). CDEB는 이 상태를 그대로 측정한다 — 이것이 사용자가 실제로 받는 제품이기 때문이다. 결과 문구는 "records delivered as `[claim]`-graded information under the shipping trust configuration"임을 명시하며, `[directive]` 전달의 효과에 대한 주장으로 확장하지 않는다. Shipping trust configuration이 향후 바뀌면 새로운 study가 필요하다(§2.2의 product build digest 규칙에 의해 자동으로 강제된다).
+**Shipping trust 상태의 명시 (v1.2, 2026-08-11 수정):** 이 문단은 그것이 참이었을 때 쓰였다. 당시 어떤 설치 표면도 `--trusted-author`를 전달하지 않아 grading이 `[claim]`으로 fail closed했고, payload legend는 "not an instruction"이라고 말했다(#415). 그 상태는 2026-08-07 20:43에 끝났다 — v0.7.0(`a030e93`)부터 `init`은 설치한 운영자의 identity로 `commitlore.trustedAuthor`를 시드한다(`src/core/trusted-authors.ts`). 신뢰 저자가 작성한 record는 `[directive]`로 grading되고, 그 외 저자의 record만 `[claim]`으로 남는다. "shipping 설치는 `[claim]`만 전달한다"는 더 이상 제품의 성질이 아니다.
+
+**그런데도 study가 all-`[claim]` 전달을 측정하는 이유:** study repository는 frozen bundle에서 materialize되며(§6.1), bundle은 git config를 실어 나를 수 없다. 따라서 materialize된 study repository에는 trusted author가 실제로 존재하지 않고, ON arm이 전달하는 모든 record — 운영자 저작 포함 — 는 `[claim]`으로 렌더링된다. **이것은 fixture의 성질이지 제품의 성질이 아니다**: 저 repository들에 shipping 설치가 있다면 운영자 저작 record는 `[directive]`로 grading된다. 파일럿 runner도 이 점에서 shipping install을 재현한다 — `bench/cdeb/pilot/run.ts`는 shipping install이 운영자를 trusted로 기록한다는 주석과 함께 `commitlore.trustedAuthor`를 시드한다.
+
+측정은 자신이 측정하는 것을 정확히 말하는 조건으로 여전히 방어 가능하다. CDEB는 all-`[claim]` 전달을 측정하며, 결과 문구는 그것을 말한다 — "records delivered as `[claim]`-graded information: study repositories carry no trusted-author configuration because bundles cannot carry git config" (§17.1, §23). 문구는 `[directive]` 전달의 효과로 확장하지 않는다: study repository 밖의 shipping 설치는 운영자 저작 record를 `[directive]`로 전달하므로, `[directive]` 전달의 측정은 별도의 study가 필요하다. Shipping trust configuration이 향후 바뀌면 새로운 study가 필요하다는 규칙은 그대로다(§2.2의 product build digest 규칙에 의해 자동으로 강제된다).
 
 ### 9.3 Transparent hook proxy
 
@@ -1194,6 +1207,8 @@ Behavioral outcome은 유효하지만 terminal provider usage가 복구 불가�
 - token-efficiency claim은 NOT MEASURABLE
 - token을 0으로 두거나 추정하지 않음
 - 해당 run을 token denominator에서 제거하지 않음
+- canonical row의 `usage`는 `availability: "unavailable"`와 gap reason만 기록하며,
+  raw category나 `total_token_volume` field를 함께 기록하지 않음
 
 Graceful timeout path는 terminal usage를 얻도록 구현하고 fault-injection test를 통과해야 한다.
 
@@ -1405,6 +1420,18 @@ CDEB는 이 frozen corpus에서 큰 상업적으로 의미 있는 효과를 인�
 
 Gate 실패는 더 작은 효과가 전혀 없음을 증명하지 않는다.
 
+**Gate가 검출할 수 있는 효과의 바닥 (CDEB-P preregistration 시뮬레이션).** §16.3의 registered analysis — 30 tasks, 3 repeats, paired task bootstrap, ≥10pp 문턱값과 CI lower bound > 0 규칙 — 를 시뮬레이션한 결과다(`bench/cdeb/PREREGISTRATION-CDEB-P.md`).
+
+| true lift | P(gate 통과) · OFF=0.40 | P(gate 통과) · OFF=0.55 |
+|---:|---:|---:|
+| **10pp** (문턱값 자체) | **0.30** | **0.31** |
+| 15pp | 0.55 | 0.58 |
+| **20pp** | **0.78** | **0.84** |
+| 25pp | 0.93 | 0.96 |
+| 30pp | 0.98 | 0.99 |
+
+참 효과가 문턱값(10pp)에 정확히 걸쳐 있어도 gate는 열에 일곱 번 실패하고, 80% 통과에는 약 20pp가 필요하다. 이 study가 인증하는 효과는 대략 20pp 이상이다. Performance gate FAIL을 "효과 없음"으로 읽는 것은 이 검출 바닥을 무시한 오독이다 — FAIL은 검출 가능한 효과의 바닥 아래 효과를 배제하지 않는다.
+
 CI는 5 fixed repositories / 30 tasks 내의 task-resampling stability를 표현하며 모든 software repository의 population CI로 해석하지 않는다.
 
 ### 16.8 Prohibited analysis
@@ -1435,7 +1462,7 @@ NOT MEASURABLE이면 이 문장은 생성되지 않으며, `CoreBehaviorHeadline
 30 tasks · 5 repositories · 90 runs per condition
 one pinned model and agent harness
 corpus independence tier
-records delivered as [claim]-graded information under the shipping trust configuration
+records delivered [claim]-graded — fixture property, not product: bundles carry no trusted-author git config (§9.2); a shipping install grades owner-authored records [directive]
 delivery surface only; capture surface disabled in both arms
 ```
 
@@ -1489,7 +1516,7 @@ evaluator image digests
 result schemas and verifier digest
 analysis source and bootstrap seed
 claim thresholds
-calibrated overhead and the token threshold derived from it (v1.3, §16.4)
+calibrated overhead (descriptive; sets no threshold) and the fixed 15% token threshold (v1.3, §16.4)
 per-task wall-clock probe results (v1.3, §4.6)
 per-task path-carries-record verification (v1.3, §4.9)
 privacy/authorization manifest
@@ -1643,6 +1670,7 @@ runs/<logical-run-id>/
   },
 
   "usage": {
+    "availability": "measured",
     "input_tokens": 12000,
     "output_tokens": 4100,
     "cache_creation_input_tokens": 5000,
@@ -1864,7 +1892,7 @@ CommitLore Decision Efficiency Benchmark v1
 30 frozen decision-sensitive tasks · 5 named repositories · 180 fresh runs
 Same pinned model · same agent harness · byte-identical repository states
 90 runs per condition · corpus independence tier A/B
-Records delivered as [claim]-graded information · delivery surface only
+Records delivered [claim]-graded — fixture property, not product (§9.2) · delivery surface only
 
 DECISION-SAFE FIRST-PASS SUCCESS
 OFF  __ / 90  (__%)
@@ -2458,8 +2486,8 @@ Implementation 중 다음을 다시 열지 않는다.
 
 **v1.3이 닫은 것 — 파일럿이 측정해서만 나온 것:**
 
-- 아무도 측정하지 않고 고른 15% 토큰 문턱값 → §16.4 overhead calibration에서 유도
-- 가장 도달 불가능한 게이트가 나머지를 거부하던 3중 conjunction → §16.6 2중으로 축소
+- 아무도 측정하지 않고 고른 15% 토큰 문턱값 → §16.4에서 15% 고정을 유지하고, 측정 overhead는 문턱값을 결정하지 않는 서술적 FeasibilityNote로만 기록
+- 가장 도달 불가능한 게이트가 나머지를 거부하던 3중 conjunction → §16.6에서 headline을 세 게이트로 분리해 token이 행동 headline을 지우지 못하게 하고, v1.2의 3중 conjunction은 `CombinedHeadline`에 그대로 보존
 - 확인할 방법 없이 바라기만 하던 "한 세션 안에 완료 가능" → §4.6 wall-clock probe
 - record가 존재하기만 하면 통과하던 task 자격 → §4.9 경로가 실제로 그것을 나르는지 기계 검증
 - opportunity와 delivery를 합쳐 세던 계측 → §9.5 분리 요구 + §25.3 테스트

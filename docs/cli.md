@@ -70,7 +70,8 @@ is in [protocol.md](protocol.md).
 
 | Command | What it does |
 |---|---|
-| `commitlore init` | one-command onboarding: `hooks install`, `index --rebuild`, claude hook install, `doctor --fix` |
+| `commitlore init` | one-command onboarding: `hooks install`, trusted author, `index --rebuild`, `AGENTS.md` capture guidance and agent integration, repository MCP registration, capture policy, `doctor --fix` |
+| `commitlore auto` | read and write the unattended-capture setting (`.commitlore-policy.json`): `status`, `on`, `off` |
 | `commitlore doctor` | checks that this repository can carry and share records |
 | `commitlore hooks` | `install`, `uninstall`, `status` for the Git hooks |
 | `commitlore index` | builds or refreshes the derived record index (`.git/commitlore/index.db`) |
@@ -87,6 +88,28 @@ is in [protocol.md](protocol.md).
 
 `prepare-commit-msg`, `post-commit` and `pre-push` are internal hook commands.
 Git invokes them; you do not.
+
+### `doctor --json` envelope
+
+`commitlore doctor --json` emits the versioned `commitlore_doctor.v2` envelope.
+Consumers should pin `schema`, then read only the fields they need: the contract
+is additive within that schema. New fields may appear, but existing fields keep
+their names, types, and meanings; removing or repurposing one requires a new
+schema id.
+
+The envelope contains the producing CLI `version`; aggregate `status`
+(`ok`, `degraded`, or `failed`); offline-detected `installSource` (`plugin`,
+`npm`, `npx`, `source`, or `unknown`); a human `headline`; ordered `fixPlan`;
+and the registry-ordered `checks` rows. `summary` has `total`, one count for
+each check status (`ok`, `warn`, `fail`, `skipped`), and `durationMs`, the sum
+of the check durations. Those counts always add up to `total`, which equals
+`checks.length`.
+
+`status` and `exitCode` answer different questions. Any non-optional failed
+check makes the status `failed` and exits 1. Otherwise any non-optional warning
+or skipped check makes it `degraded`, which exits 0; only an all-`ok`
+non-optional run is `ok`. `selection` is reserved for filtered reports. It is
+absent (never `null`) from the current unfiltered report.
 
 ## Sharing records with a team
 

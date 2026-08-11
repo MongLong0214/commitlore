@@ -49,7 +49,19 @@ export declare const lifecyclePath: (cwd?: string) => string | null;
  * is a server that was killed — which is exactly the shape #424 describes and
  * exactly what nobody could establish afterwards.
  */
-export declare const recordServerStart: (cwd?: string, at?: Date) => void;
+/** One process's lifecycle reporter, retained so a caught startup failure can be recorded too. */
+export interface LifecycleRecorder {
+    crash: (error: unknown) => void;
+}
+/**
+ * Records a server start and classifies the eventual exit.
+ *
+ * `output` is deliberately supplied by the caller alongside the stdio
+ * transport. The SDK writes protocol frames there but does not watch it for
+ * errors, so the listener here is what turns an output-pipe EPIPE into the
+ * ordinary client hangup it represents.
+ */
+export declare const recordServerStart: (cwd?: string, at?: Date, output?: typeof process.stdout) => LifecycleRecorder;
 export interface LifecycleEntry {
     readonly kind: 'started' | 'exited';
     readonly at: string;
@@ -58,6 +70,8 @@ export interface LifecycleEntry {
 }
 /** Parses the log. Unreadable or absent reads as empty — it is a breadcrumb trail. */
 export declare const readLifecycle: (cwd?: string) => LifecycleEntry[];
+/** A completed server process whose final record says why it crashed. */
+export declare const crashedRuns: (cwd?: string) => LifecycleEntry[];
 /**
  * Servers that started and never recorded an exit.
  *

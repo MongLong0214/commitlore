@@ -10,6 +10,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "inject-runtime",
   "inject-version",
   "mcp-lifecycle",
+  "unattended-initiator",
   "pending-backlog",
   "git-trailers",
   "history-depth",
@@ -19,7 +20,12 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
 `;
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target is missing 1`] = `
-"ok      cli runtime — <root><path> runs (<version>)
+"Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
+2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node> (commitlore hooks install)
+3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
+ok      cli runtime — <root><path> runs (<version>)
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
@@ -30,6 +36,7 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
+ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
@@ -38,7 +45,12 @@ skipped squash conservation — no local branch looks like the source of a squas
 `;
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target resolves 1`] = `
-"ok      cli runtime — <root><path> runs (<version>)
+"Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
+2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
+3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
+ok      cli runtime — <root><path> runs (<version>)
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
@@ -49,9 +61,135 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
+ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
 ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
 skipped squash conservation — no local branch looks like the source of a squash — nothing to check"
+`;
+
+exports[`#470 doctor text report header > keeps the per-check tail byte-identical to the pre-ticket rows 1`] = `
+{
+  "broken": "ok      cli runtime — <root><path> runs (<version>)
+warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
+        fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
+warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/missing.mjs; commitlore.node: <node>
+        fix: commitlore hooks install
+ok      hook runtime — the hook runs and validates without node on PATH
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+        fix: commitlore inject install-claude-hook
+skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
+ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      pending captures — no captures are waiting
+ok      git interpret-trailers — git version <git>
+ok      history depth — full history is available
+ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check",
+  "working": "ok      cli runtime — <root><path> runs (<version>)
+warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
+        fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
+warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
+        fix: commitlore hooks install
+ok      hook runtime — the hook runs and validates without node on PATH
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+        fix: commitlore inject install-claude-hook
+skipped PreToolUse hook version — no installed hook to compare against <version>
+ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
+ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      pending captures — no captures are waiting
+ok      git interpret-trailers — git version <git>
+ok      history depth — full history is available
+ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check",
+}
+`;
+
+exports[`#470 doctor text report header > pins verbose diagnostics while the default adds no per-check lines 1`] = `
+"Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+9 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
+2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
+3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
+ok      cli runtime — <root><path> runs (<version>)
+        evidence.entry: ~<path>
+        evidence.stdout_first_line: <version>
+        evidence.stdout_truncated: false
+        evidence.version: <version>
+        durationMs: <ms>
+warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
+        fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
+        evidence.missing: origin
+        evidence.remotes: origin
+        durationMs: <ms>
+ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
+        evidence.local_sha: none
+        evidence.remote: origin
+        evidence.remote_sha: not_queried
+        durationMs: <ms>
+warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
+        fix: commitlore hooks install
+        evidence.bin: ~<path>
+        evidence.hook_path: <repo>/.git/hooks/commit-msg
+        evidence.node: <node>
+        durationMs: <ms>
+ok      hook runtime — the hook runs and validates without node on PATH
+        evidence.exit_code: 0
+        evidence.hook_path: <repo>/.git/hooks/commit-msg
+        durationMs: <ms>
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+        fix: commitlore inject install-claude-hook
+        evidence.executable: not_run
+        evidence.exit_code: not_run
+        evidence.settings_path: <repo>/.claude/settings.json
+        evidence.settings_state: absent
+        evidence.stderr_first_line: (empty)
+        evidence.stderr_truncated: false
+        durationMs: <ms>
+skipped PreToolUse hook version — no installed hook to compare against <version>
+        evidence.executable: not_run
+        evidence.mine: <version>
+        evidence.theirs: not_run
+        skipReason: hook_not_installed
+        durationMs: <ms>
+ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
+        evidence.last_at: none
+        evidence.last_pid: none
+        evidence.unfinished_count: 0
+        durationMs: <ms>
+ok      unattended capture initiator — unattended capture is off; no host initiator is required
+        evidence.initiator: not-applicable
+        evidence.ordinary_git_commit: cannot-initiate
+        evidence.policy: off
+        durationMs: <ms>
+ok      pending captures — no captures are waiting
+        evidence.oldest: none
+        evidence.staged_expired: 0
+        evidence.stranded: 0
+        evidence.waiting: 0
+        durationMs: <ms>
+ok      git interpret-trailers — git version <git>
+        evidence.git_version: git version <git>
+        evidence.parsed: Limit: probe, Blast: local
+        durationMs: <ms>
+ok      history depth — full history is available
+        evidence.shallow: false
+        durationMs: <ms>
+ok      index health — 3 trailers over 1 commits, current with HEAD — no FTS5 (value search falls back to LIKE)
+        evidence.commits: 1
+        evidence.fts: false
+        evidence.head_sha: <sha>
+        evidence.last_indexed_sha: <sha>
+        evidence.trailers: 3
+        durationMs: <ms>
+skipped squash conservation — no local branch looks like the source of a squash — nothing to check
+        evidence.candidates: 0
+        evidence.checked: 0
+        evidence.lost_count: 0
+        evidence.uncheckable: 0
+        skipReason: nothing_applicable
+        durationMs: <ms>"
 `;

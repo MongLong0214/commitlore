@@ -20,14 +20,17 @@
  * three steps that can each fail independently and are not allowed to hide
  * that from one another: doctor's own fail/warn distinction is preserved
  * verbatim, and a hook or index step that could not run is a step this
- * command marks failed, not a step it skips past.
+ * command marks failed, not a step it skips past. Repository MCP registration
+ * is deliberately advisory: failure is visible in its own line but does not
+ * make the installation fail, because doctor already reports its absence when
+ * unattended capture makes an initiator necessary.
  *
  * Idempotent by construction, not by a special case: every step it calls is
  * already idempotent on its own (doctor's checks re-report `ok` once fixed,
  * `hooks install` reports "already installed ... (unchanged)", and an index
  * rebuild is a deterministic function of repository state) — running `init`
  * twice with nothing else changing degrades gracefully because with nothing
- * else changing, none of the three sub-invocations do.
+ * else changing, none of its sub-invocations do.
  */
 import type { Command } from 'commander';
 import { type DoctorReport } from './doctor.js';
@@ -39,12 +42,31 @@ import { type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js'
 import { type PostCommitHookResult } from '../hooks/post-commit.js';
 import { type PrePushHookResult } from '../hooks/pre-push.js';
 import { type TrustSeedResult } from '../core/trusted-authors.js';
+import { type McpRegistrationResult } from '../core/mcp-registration.js';
+import { type AgentsGuidanceResult } from '../core/agents-guidance.js';
 export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
     force?: boolean;
+    /**
+     * What to do about unattended capture when the repository has **no** policy
+     * file yet. An existing policy file is never changed regardless (#511's
+     * consent is the team's, not this command's to revise).
+     *
+     * Absent when the caller leaves the decision to `init` — which then behaves
+     * like `no-tty`: a caller that did not state a choice must not be answered
+     * for (see `runPolicyStep`).
+     */
+    unattended?: UnattendedChoice;
 }
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'trust';
+/**
+ * The answers the policy step understands. `enable` and `decline` are what a
+ * person said — at the prompt, or through `--unattended` / `--no-unattended`.
+ * `no-tty` and `no-answer` are what a run records when nobody could say
+ * anything, kept distinct so the output can state which one happened.
+ */
+export type UnattendedChoice = 'enable' | 'decline' | 'no-tty' | 'no-answer';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy';
 export interface InitStep {
     step: StepName;
     title: string;
@@ -52,12 +74,25 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | TrustSeedResult | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
     message: string;
     stats?: IndexStats;
+}
+interface PolicyStepDetail {
+    state: 'enabled' | 'declined' | 'no-answer' | 'no-tty' | 'existing' | 'existing-rejected' | 'write-failed' | 'no-repository';
+    /** Where the policy lives or would live; null outside a repository. */
+    path: string | null;
+    /** The unattended setting in effect, when a valid policy is in effect. */
+    unattended: boolean | null;
+    /** The named reason when the step could not leave a clean state behind. */
+    error: string | null;
+}
+interface AgentIntegrationStepDetail {
+    readonly guidance: AgentsGuidanceResult;
+    readonly claude: ClaudeHookResult;
 }
 export interface InitReport {
     steps: InitStep[];
@@ -72,15 +107,17 @@ export interface InitReport {
      * an index that still has none of the records kept in notes.
      */
     notesBefore: ReturnType<typeof notesAvailability>;
-    /** Worst of the three step codes — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
+    /** Worst step code — 2 outranks 1 outranks 0, same order SPEC §10 gives the codes themselves. */
     exitCode: 0 | 1 | 2;
 }
 /**
  * Order of execution:
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
- * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
- * 4. Doctor (final check) — verifies everything is working
+ * 3. Agent integration — refreshes AGENTS.md and wires the Claude PreToolUse hook
+ * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
+ * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
+ * 6. Doctor (final check) — verifies everything is working
  *
  * Doctor runs last on purpose. `doctor` diagnoses the hook and the index among
  * its checks, and it does not install either: run it first and its own

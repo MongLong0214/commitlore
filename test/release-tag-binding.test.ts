@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ const TAG_BINDING = join(REPO_ROOT, 'scripts', 'check-tag-binding.mjs');
 const RELEASE_TARGET = join(REPO_ROOT, 'scripts', 'check-release-target.mjs');
 const EXACT_HEAD_CI = join(REPO_ROOT, 'scripts', 'check-exact-head-ci.mjs');
 const RELEASE_WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'release.yml');
+const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
 
 const TAG = 'v9.9.9';
 const REF = `refs/tags/${TAG}`;
@@ -224,7 +225,11 @@ describe('#499 the published tag is the commit the gates qualified', () => {
     expect(result.stderr).toContain(`now resolves to ${second}`);
   });
 
-  it('keeps the canonical commit at the event sha when the tag moves before the resolver runs', () => {
+  // Paired with the workflow-shape case asserting the resolver is handed
+  // `$GITHUB_SHA`: this one shows the script answers for the commit it is
+  // given, not for whatever the tag names now. Neither half claims the other's
+  // property, and only together do they close the window.
+  it('answers for the commit it is handed, not the one the tag now names', () => {
     // The window this closes: a move landing between the push and the first
     // job. Resolving the tag name here would hand every downstream gate the
     // attacker's commit and they would all agree, greenly, on the wrong one.
@@ -493,6 +498,25 @@ describe('#499 every release boundary consumes one canonical sha', () => {
     }
 
     expect(parsed.jobs['publish']?.permissions?.['contents']).toBe('write');
+  });
+
+  // Scoping the release-write grant removed the worst consequence of a changed
+  // action; it did not stop one from running. A digest names one immutable
+  // tree, so an action cannot become something else under the same reference.
+  it('references every action by digest rather than a movable tag', () => {
+    const unpinned: string[] = [];
+    for (const file of readdirSync(WORKFLOW_DIR).filter((name) => name.endsWith('.yml'))) {
+      const raw = readFileSync(join(WORKFLOW_DIR, file), 'utf8');
+      for (const line of raw.split('\n')) {
+        const match = /uses:\s*(\S+)/.exec(line);
+        if (match === null) continue;
+        const ref = match[1] ?? '';
+        if (ref.startsWith('./')) continue;
+        if (!/@[0-9a-f]{40}$/.test(ref)) unpinned.push(`${file}: ${ref}`);
+      }
+    }
+
+    expect(unpinned).toEqual([]);
   });
 
   it('grants no privilege for an action the workflow does not contain', () => {

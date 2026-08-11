@@ -12,10 +12,12 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { zstdCompressSync } from 'node:zlib';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -89,6 +91,7 @@ const validRow = (overrides: Record<string, unknown> = {}): Record<string, unkno
     exposure_log_sha256: HEX64,
   },
   usage: {
+    availability: 'measured',
     input_tokens: 1000,
     output_tokens: 200,
     cache_creation_input_tokens: 300,
@@ -159,6 +162,9 @@ const validFreeze = (overrides: Record<string, unknown> = {}): Record<string, un
     min_finite_replicates: 9900,
   },
   expected_logical_runs: 180,
+  analysis_inputs: {
+    row_files: Array.from({ length: 180 }, (_unused, index) => `rows/block-${String(index).padStart(3, '0')}.json`),
+  },
   ...overrides,
 });
 
@@ -197,6 +203,17 @@ const verify = (root: string): { code: number; output: string } => {
     const failure = error as { status?: number; stderr?: string; stdout?: string };
     return { code: failure.status ?? 1, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` };
   }
+};
+
+const writeRunWithProviderArtifact = (root: string, rawStreamSha256: string): void => {
+  const runDir = join(root, 'cdeb-test-01', 'runs', 'repo-a__task-a__on__r1');
+  mkdirSync(runDir, { recursive: true });
+  const raw = readFileSync('test/fixtures/claude-stream/partial-messages.jsonl');
+  writeFileSync(join(runDir, 'provider.ndjson.zst'), zstdCompressSync(raw));
+  writeFileSync(join(runDir, 'provider.ndjson.sha256'), `${createHash('sha256').update(raw).digest('hex')}  provider.ndjson\n`);
+  const row = validRow();
+  (row.usage as Record<string, unknown>).raw_stream_sha256 = rawStreamSha256;
+  writeFileSync(join(runDir, 'row.json'), `${JSON.stringify(row, null, 2)}\n`);
 };
 
 describe('#443 the CDEB recursive verifier', () => {
@@ -247,6 +264,39 @@ describe('#443 the CDEB recursive verifier', () => {
     const result = verify(study('tokensum', [row]));
     expect(result.code).toBe(1);
     expect(result.output).toMatch(/total_token_volume 1999 != raw category sum 2000/);
+  });
+
+  it('fails a per-run row whose raw usage digest does not match its compressed NDJSON artifact', () => {
+    const root = study('artifact-digest', []);
+    writeRunWithProviderArtifact(root, HEX64);
+    const result = verify(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toMatch(/raw_stream_sha256 does not match provider NDJSON/);
+  });
+
+  it('fails an archive that was fsynced but never received final-tree.json', () => {
+    const root = study('half-final-tree', []);
+    const runDir = join(root, 'cdeb-test-01', 'runs', 'repo-a__task-a__on__r1');
+    mkdirSync(runDir, { recursive: true });
+    // This is the crash window CDEB-07 recovers before resume.  It must not
+    // verify as a final tree merely because its archive bytes are complete.
+    writeFileSync(join(runDir, 'final-tree.tar.zst'), Buffer.from('not-a-committed-tree'));
+    const result = verify(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toMatch(/final tree archive and metadata must appear together/);
+  });
+
+  it('accepts an unavailable usage row without inventing a numeric total', () => {
+    const row = validRow({
+      usage: {
+        availability: 'unavailable',
+        reasons: ['terminal_usage_absent'],
+        unparsed_lines: 0,
+        raw_stream_sha256: HEX64,
+      },
+    });
+    const result = verify(study('usage-unavailable', [row]));
+    expect(result.code, result.output).toBe(0);
   });
 
   it('fails when decision_safe_success does not match its recomputation', () => {
@@ -313,6 +363,12 @@ describe('#443 the CDEB recursive verifier', () => {
     const result = verify(study('drift', [validRow({ dist_digest: 'c'.repeat(64) })]));
     expect(result.code).toBe(1);
     expect(result.output).toMatch(/dist_digest does not match the freeze/);
+  });
+
+  it('fails a row whose observed answer model differs from the frozen observation', () => {
+    const result = verify(study('model-drift', [validRow({ observed_model_ids: ['claude-other-9'] })]));
+    expect(result.code).toBe(1);
+    expect(result.output).toMatch(/observed_model_ids/);
   });
 
   it('fails a row claiming delivery with nothing having run to deliver it', () => {

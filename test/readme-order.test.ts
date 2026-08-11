@@ -1,16 +1,24 @@
 /**
- * T-1015 (#207): README section order — `See it work` sits after the install
- * command and before the evidence section, across all four language files.
+ * T-1015 (#207, #547): README first-screen order. A new reader gets the
+ * recognizable problem, installation, the actual payload, the delivery/capture
+ * boundary, limitations, then evidence — in that order in all four languages.
  *
- * Binding anchors from the CEO amendment:
- *   product  → hero heading (decision-authority framing)
- *   local-first → "No hosted memory service."
+ * Binding anchors from the CEO amendment. #450 restructured the opening, so
+ * two anchors point at the sentences that carry those properties rather than
+ * at the wording they had before. #547 deliberately extends the required
+ * order to make the automatic boundary and limitations visible before the
+ * evidence section. The anchors still stand for:
+ *   product  → the opening problem sentence (was: the hero heading)
+ *   local-first → the accurate no-hosted-service data-flow sentence
  *   install promise → "Install once."
  *   install command → the `curl` block
+ *   automatic → the heading that distinguishes delivery from capture
+ *   limitations → the heading that says when this will not help
  *   evidence → "Retrieval can find records. Path scope keeps reversed decisions out."
  *
  * The required order is:
- *   product < local-first < install-promise < install-command < see-it-work < evidence
+ *   product < local-first < install-promise < install-command < payload
+ *   < automatic-boundary < limitations < evidence
  */
 
 import { describe, it, expect } from 'vitest';
@@ -26,6 +34,8 @@ interface ReadmeAnchors {
   installPromise: number;
   installCommand: number;
   seeItWork: number;
+  automaticBoundary: number;
+  limitations: number;
   evidence: number;
 }
 
@@ -38,22 +48,26 @@ function findAnchors(file: string): ReadmeAnchors {
   // whether a proposal is bad, it decides whether a decision still applies.
   // "Stop re-reviewing the same bad idea" was tried here and moved into the
   // demo: as a hero it implied a judgement `guard` cannot make at 22% recall.
+  // #450 replaced the two-line poster heading that used to carry this with a
+  // plain problem sentence in the same position. What the amendment pinned —
+  // the reader learns what the product is about before anything else — is
+  // unchanged; the sentence carrying it is no longer a heading.
   const product = lines.findIndex(
     (l) =>
-      l.startsWith('## ') &&
-      (l.includes('inherit the judgment') ||
-        l.includes('판단까지 물려주세요') ||
-        l.includes('判断も継がせましょう') ||
-        l.includes('也把判断传下去')),
+      l.includes('keeps re-proposing things your team already rejected') ||
+      l.includes('이미 기각한 방안을 계속 다시 제안합니다') ||
+      l.includes('すでに却下した案を何度も提案します') ||
+      l.includes('不断重新提议团队早已否决的方案'),
   );
 
-  // Local-first: "No hosted memory service." or equivalent
+  // Local-first: the opening states the scope accurately. CommitLore has no
+  // hosted service, but a host can handle returned context under its own policy.
   const localFirst = lines.findIndex(
     (l) =>
-      l.includes('No hosted memory service') ||
-      l.includes('호스팅 메모리 서비스도') ||
-      l.includes('ホスト型メモリサービスも') ||
-      l.includes('没有托管记忆服务'),
+      l.includes('CommitLore has no hosted service') ||
+      l.includes('CommitLore에는 호스팅 서비스가 없') ||
+      l.includes('CommitLore にホスティングサービスは') ||
+      l.includes('CommitLore 没有托管服务'),
   );
 
   // Install promise: "Install once." or equivalent
@@ -79,16 +93,49 @@ function findAnchors(file: string): ReadmeAnchors {
       l === '## 看它实际运行',
   );
 
-  // Evidence: "Retrieval can find records..." heading or equivalent
-  const evidence = lines.findIndex(
+  // The table heading, rather than an incidental mention of delivery or
+  // capture. A previous anchor regression matched the contents link instead
+  // of a heading; keep every heading lookup exact for the same reason.
+  const automaticBoundary = lines.findIndex(
     (l) =>
-      l.includes('Retrieval can find records') ||
-      l.includes('검색은 레코드를 찾을 수 있습니다') ||
-      l.includes('検索はレコードを見つけられる') ||
-      l.includes('检索能找到记录'),
+      l === '## What happens automatically — and what does not' ||
+      l === '## 자동으로 되는 것과 아닌 것' ||
+      l === '## 自動になること、ならないこと' ||
+      l === '## 哪些是自动的，哪些不是',
   );
 
-  return { file, product, localFirst, installPromise, installCommand, seeItWork, evidence };
+  const limitations = lines.findIndex(
+    (l) =>
+      l === '## When this will not help you' ||
+      l === '## 이것이 도움이 되지 않는 경우' ||
+      l === '## これが役に立たない場合' ||
+      l === '## 这在什么情况下帮不上忙',
+  );
+
+  // Evidence: the "Retrieval can find records..." heading. It must be the
+  // heading and not any line mentioning it — #450 added a contents list whose
+  // entries name the same sections, and a bare substring search finds the link
+  // first, which would compare the wrong position.
+  const evidence = lines.findIndex(
+    (l) =>
+      l.startsWith('## ') &&
+      (l.includes('Retrieval can find records') ||
+      l.includes('검색은 레코드를 찾을 수 있습니다') ||
+      l.includes('検索はレコードを見つけられる') ||
+      l.includes('检索能找到记录')),
+  );
+
+  return {
+    file,
+    product,
+    localFirst,
+    installPromise,
+    installCommand,
+    seeItWork,
+    automaticBoundary,
+    limitations,
+    evidence,
+  };
 }
 
 const FILES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh-CN.md'] as const;
@@ -104,6 +151,8 @@ describe('T-1015: README section order', () => {
         expect(anchors.installPromise).toBeGreaterThanOrEqual(0);
         expect(anchors.installCommand).toBeGreaterThanOrEqual(0);
         expect(anchors.seeItWork).toBeGreaterThanOrEqual(0);
+        expect(anchors.automaticBoundary).toBeGreaterThanOrEqual(0);
+        expect(anchors.limitations).toBeGreaterThanOrEqual(0);
         expect(anchors.evidence).toBeGreaterThanOrEqual(0);
       });
 
@@ -113,9 +162,11 @@ describe('T-1015: README section order', () => {
         expect(anchors.installPromise).toBeLessThan(anchors.installCommand);
       });
 
-      it('See it work sits after install command and before evidence', () => {
+      it('the first screen delivers payload, automation boundary, limits, then evidence', () => {
         expect(anchors.installCommand).toBeLessThan(anchors.seeItWork);
-        expect(anchors.seeItWork).toBeLessThan(anchors.evidence);
+        expect(anchors.seeItWork).toBeLessThan(anchors.automaticBoundary);
+        expect(anchors.automaticBoundary).toBeLessThan(anchors.limitations);
+        expect(anchors.limitations).toBeLessThan(anchors.evidence);
       });
     });
   }
@@ -127,7 +178,9 @@ describe('T-1015: README section order', () => {
       expect(anchors.localFirst).toBeLessThan(anchors.installPromise);
       expect(anchors.installPromise).toBeLessThan(anchors.installCommand);
       expect(anchors.installCommand).toBeLessThan(anchors.seeItWork);
-      expect(anchors.seeItWork).toBeLessThan(anchors.evidence);
+      expect(anchors.seeItWork).toBeLessThan(anchors.automaticBoundary);
+      expect(anchors.automaticBoundary).toBeLessThan(anchors.limitations);
+      expect(anchors.limitations).toBeLessThan(anchors.evidence);
     }
   });
 
@@ -147,6 +200,46 @@ describe('T-1015: README section order', () => {
           content.includes('モデルに見えるレコード') ||
           content.includes('模型可见记录'),
       ).toBe(true);
+    }
+  });
+
+  it('the first screen names delivery and capture for every host class', () => {
+    for (const file of FILES) {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      expect(content).toContain('| Host | Delivery | Capture |');
+      expect(content).toContain('| Claude Code |');
+      expect(content).toContain('| Codex |');
+      expect(content).toContain('| Hermes |');
+      expect(content).toContain('commitlore hermes install');
+      expect(content).toContain('AGENTS.md');
+    }
+  });
+
+  it('distinguishes clone-carried trailers from notes-backed records in every file', () => {
+    for (const file of FILES) {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      expect(content).toContain('refs/notes/*');
+    }
+  });
+
+  it('does not claim that returned context remains inside the repository', () => {
+    const oldClaims = [
+      'single byte leaving your repository',
+      '저장소 밖으로 단 1바이트도',
+      'リポジトリの外へ 1 バイトも',
+      '不会有一个字节离开你的仓库',
+    ];
+    const hostPolicy = [
+      /under its own\s+policy/,
+      /자신의 정책에 따라/,
+      /自身のポリシーで/,
+      /按自己的政策/,
+    ];
+
+    for (const [index, file] of FILES.entries()) {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      expect(content).not.toContain(oldClaims[index]!);
+      expect(content).toMatch(hostPolicy[index]!);
     }
   });
 });

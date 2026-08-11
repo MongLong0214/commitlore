@@ -28,6 +28,27 @@
  * The 0.6 fraction is not a guess. Completed pilot runs topped out at 0.48 of
  * budget and the failing task sat at 1.00, so good and bad separate anywhere
  * between; 0.6 touches neither end.
+ *
+ * Those pilot runs were measured under a hook matcher the product does not
+ * ship (`Edit|Write|MultiEdit|NotebookEdit`, which never fires on `Read`,
+ * instead of the shipping `Read|Edit|Write`), so the 0.48/1.00 split is
+ * UNVERIFIED against the surface the study measures — the ON arm it screened
+ * was lighter than the shipping one. 0.6 stays frozen as the screen; whether
+ * the split needs re-measuring is a separate decision this fix does not make
+ * (PRD §4.6).
+ *
+ * **Runtime seam (CDEB-03).** §4.6 requires the probe to run on the same
+ * pinned runtime as the study, and until CDEB-03 this file spawned the host's
+ * `claude` instead. `runProbe` now takes the runtime explicitly: the host
+ * runtime stays exported so CDEB-P's sealed numbers remain reproducible, and
+ * the pinned-container runtime lives in `bench/cdeb/runtime/agent-container.ts`.
+ * Say it plainly: every wall-time number frozen into the PRD was measured on
+ * the host CLI, so probes executed on the pinned runtime are screening a
+ * different runtime and MUST be re-validated — the 0.48/1.00 split and the
+ * 0.6 screen derived from it cannot be assumed to transfer. That
+ * re-validation has not happened yet: it needs the pinned image built and a
+ * container runtime this machine will lend the study, and neither existed
+ * when this seam was written.
  */
 
 import { createHash } from "node:crypto";
@@ -36,7 +57,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CLI_ENTRY } from "../../hooks-settings.ts";
+import { CLAUDE_HOOK_MATCHER, CLI_ENTRY } from "../../hooks-settings.ts";
 
 /** Fraction of the per-task budget a probe must finish within (PRD §4.6). */
 export const RUNTIME_FRACTION = 0.6;
@@ -83,7 +104,7 @@ const armSettings = (dir: string, condition: ProbeCondition): string => {
       ? {
           PreToolUse: [
             {
-              matcher: "Edit|Write|MultiEdit|NotebookEdit",
+              matcher: CLAUDE_HOOK_MATCHER,
               hooks: [{ type: "command", command: `node ${JSON.stringify(CLI_ENTRY)} inject --hook-input` }],
             },
           ],
@@ -97,6 +118,67 @@ const emptyMcp = (dir: string): string => {
   const path = join(dir, "mcp.json");
   writeFileSync(path, `${JSON.stringify({ mcpServers: {} })}\n`);
   return path;
+};
+
+/** One probe invocation, as the runtime receives it. */
+export interface ProbeRunParams {
+  readonly workdir: string;
+  readonly settingsPath: string;
+  readonly mcpPath: string;
+  readonly prompt: string;
+  readonly model: string;
+  readonly timeoutMs: number;
+}
+
+export interface ProbeRunResult {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly status: number | null;
+  readonly timedOut: boolean;
+}
+
+/**
+ * The surface a probe runs on. CDEB-03 made this explicit: §4.6 probes the
+ * study's pinned runtime, and a probe that does not say which runtime it ran
+ * on is the exact ambiguity that let this file spawn the host's `claude`
+ * while the PRD promised a pinned one.
+ */
+export interface ProbeRuntime {
+  readonly name: string;
+  readonly run: (params: ProbeRunParams) => ProbeRunResult;
+}
+
+/**
+ * The host's installed `claude`, exactly as CDEB-P measured it. Kept so the
+ * pilot's sealed qualification numbers remain reproducible; it is NOT the
+ * study runtime, and the wall times it produced are not transferable to the
+ * pinned runtime (see the module header).
+ */
+export const hostClaudeRuntime: ProbeRuntime = {
+  name: "host-claude",
+  run: (params) => {
+    const result = spawnSync(
+      "claude",
+      [
+        "-p", params.prompt,
+        "--output-format", "json",
+        "--permission-mode", "acceptEdits",
+        "--strict-mcp-config",
+        "--mcp-config", params.mcpPath,
+        "--setting-sources", "",
+        "--no-session-persistence",
+        "--settings", params.settingsPath,
+        "--model", params.model,
+      ],
+      { cwd: params.workdir, encoding: "utf8", timeout: params.timeoutMs, maxBuffer: 64 * 1024 * 1024 },
+    );
+    return {
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+      status: result.status,
+      timedOut: (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT",
+    };
+  },
 };
 
 /**
@@ -113,37 +195,23 @@ export const runProbe = (
   condition: ProbeCondition,
   timeoutMs: number,
   model: string,
+  runtime: ProbeRuntime,
 ): { probe: RuntimeProbe; artifact: string } => {
   const scratch = mkdtempSync(join(tmpdir(), "cdeb-probe-"));
   const settings = armSettings(scratch, condition);
   const mcp = emptyMcp(scratch);
 
   const start = Date.now();
-  const result = spawnSync(
-    "claude",
-    [
-      "-p", prompt,
-      "--output-format", "json",
-      "--permission-mode", "acceptEdits",
-      "--strict-mcp-config",
-      "--mcp-config", mcp,
-      "--setting-sources", "",
-      "--no-session-persistence",
-      "--settings", settings,
-      "--model", model,
-    ],
-    { cwd: workdir, encoding: "utf8", timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 },
-  );
+  const result = runtime.run({ workdir, settingsPath: settings, mcpPath: mcp, prompt, model, timeoutMs });
   const wall_ms = Date.now() - start;
 
-  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
-  const stop_reason: RuntimeProbe["stop_reason"] = timedOut
+  const stop_reason: RuntimeProbe["stop_reason"] = result.timedOut
     ? "timeout"
     : result.status === 0
       ? "completed"
       : "agent_error";
 
-  const artifact = `${result.stdout ?? ""}\n---stderr---\n${result.stderr ?? ""}`;
+  const artifact = `${result.stdout}\n---stderr---\n${result.stderr}`;
   return {
     probe: { condition, model, stop_reason, wall_ms, artifact_sha256: sha256(artifact) },
     artifact,

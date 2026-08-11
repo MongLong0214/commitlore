@@ -1,6 +1,7 @@
 ---
 name: commitlore-commits
-description: Use when about to make a git commit and there is decision context worth recording — a constraint that shaped the change, an alternative that was tried and dropped, a warning for whoever touches this next. Drives the CommitLore capture pipeline, which drafts a record from the session transcript and the staged diff, machine-checks every quote against them, and binds what survives to the commit it was prepared for. Applies to an ordinary commit request, not only to one that names CommitLore: most commits carry nothing worth recording and this skill is silent on them, so the cost of considering it is a judgement the agent makes and drops. Trigger phrases include "commit this", "commit these changes", "finish up and commit", "commit this with commitlore", "write a commitlore record for this change", "capture the decision context for this commit", "what should I record about why I ruled out X", "커밋해줘", "수정 완료하고 커밋해", "commitlore 기록 남겨서 커밋해줘", "이 변경 결정 맥락 커밋에 남겨줘".
+description: >-
+  Use when about to make a git commit and there is decision context worth recording — a constraint that shaped the change, an alternative that was tried and dropped, a warning for whoever touches this next. Drives the CommitLore capture pipeline, which drafts a record from the session transcript and the staged diff, machine-checks every quote against them, and binds what survives to the commit it was prepared for. Applies to an ordinary commit request, not only to one that names CommitLore: most commits carry nothing worth recording and this skill is silent on them, so the cost of considering it is a judgement the agent makes and drops. Trigger phrases include "commit this", "commit these changes", "finish up and commit", "commit this with commitlore", "write a commitlore record for this change", "capture the decision context for this commit", "what should I record about why I ruled out X", "커밋해줘", "수정 완료하고 커밋해", "commitlore 기록 남겨서 커밋해줘", "이 변경 결정 맥락 커밋에 남겨줘".
 ---
 
 # CommitLore commits
@@ -27,9 +28,12 @@ leaving. Answering `{"records": []}` is correct, and common.
 
 ## Capture
 
-Needs the `prepare-commit-msg` hook that `commitlore init` installs (see
-`commitlore-setup`); without it nothing staged reaches a commit message. Stage
-the change first — capture hashes `git diff --cached`.
+This skill is the host-side initiator when the host selects it for a commit
+request. The `prepare-commit-msg` hook that `commitlore init` installs only
+attaches an already staged transaction; an ordinary `git commit` never starts
+capture because it has no session transcript. Without the hook, nothing staged
+reaches a commit message. Stage the change first — capture hashes `git diff
+--cached`.
 
 **1. Prepare.** Write the relevant part of the session to a transcript, in the
 words actually exchanged rather than a summary: it is the source every quote is
@@ -62,6 +66,15 @@ asking. Those records are stamped `Provenance: drafted`, which caps them at
 `[claim]` — they are delivered as information, never as an instruction, because
 nobody read them. Say nothing about it; a record landing quietly is the pipeline
 working.
+
+Where the policy goes further — `"unattended": true` beside `"mode": "auto"`
+in `.commitlore-policy.json` — this step does not exist at all (#511). The
+repository consented once, for every commit: declare the capture unattended
+(CLI `--unattended`, or the MCP prepare tool's `unattended` argument), stage
+what came back `accepted`, and show nothing to anyone. Declare it only where
+the file opts in — `prepare` refuses the declaration anywhere else — and know
+that a host which stages without declaring still stages a record nobody read:
+the `drafted` stamp and its `claim` cap follow either way (ADR-0028).
 
 In `suggest`, show what came back and stage only what the user keeps:
 
@@ -101,8 +114,10 @@ unchanged. Break one and the commit proceeds carrying no record.
 
 The CLI runs steps 1, 3 and 5 in one process. There is no point inside it where
 a user can answer, so it stages without asking — reach for it only when the user
-has already agreed to record this one, and otherwise keep the MCP tools, where
-step 4 fits between verify and stage:
+has already agreed to record this one, or when the repository opted into
+unattended capture, in which case pass `--unattended`: prepare refuses the
+declaration where the policy does not consent. Otherwise keep the MCP tools,
+where step 4 fits between verify and stage:
 
 ```
 commitlore capture --transcript session.txt --draft draft.json
@@ -146,7 +161,7 @@ reprints this, so the table is mostly for reading records and for the fallback.
 | `Supersedes:` | `Record-Id` | yes | Retires an earlier record |
 | `Expires:` | `YYYY-MM-DD` \| free-text condition | no | When this record stops being active |
 | `Evidence:` | `path` \| `path#anchor` \| URL | yes | Link from a claim to its proof |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` | no | How this record came to exist |
 | `CommitLore-Version:` | semver | no | Protocol version this record targets |
 | `X-<Name>:` | free text | yes | Organization extension, never interpreted by the core |
 

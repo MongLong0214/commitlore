@@ -17,6 +17,7 @@ import { Command } from 'commander';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { register as registerIndex } from '../src/commands/index-cmd.js';
+import { runDoctor } from '../src/commands/doctor.js';
 import {
   notesAvailability,
   coversNotes,
@@ -72,8 +73,10 @@ describe('notesAvailability', () => {
     expect(notesAvailability({ cwd: originWithRecords() })).toBe('present');
   });
 
-  it('reports absent for a repository with no mirror and no remote', () => {
-    // Nowhere for unseen records to be, so an empty answer is a true empty.
+  it('treats a repository with no remote as a true empty', () => {
+    // Fail-closed answers the question "could there be records I cannot see".
+    // With no remote there is nowhere for one to be, and no probe that could
+    // ever settle it, so warning would be permanent and about nothing.
     expect(notesAvailability({ cwd: makeRepo() })).toBe('absent');
   });
 
@@ -81,12 +84,34 @@ describe('notesAvailability', () => {
     expect(notesAvailability({ cwd: clone(originWithRecords()) })).toBe('unfetched');
   });
 
-  it('reports absent once the refspec covers the mirror, even before fetching', () => {
-    // The distinction is "could this repository have missed records", not
-    // "does it have them": a configured clone that fetched nothing found nothing.
+  it('keeps a configured but unverified mirror incomplete', () => {
     const dir = clone(makeRepo());
     git(dir, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
+    expect(notesAvailability({ cwd: dir })).toBe('unfetched');
+  });
+
+  it('reports absent after doctor verifies that every remote has no notes mirror', () => {
+    const dir = clone(makeRepo());
+
+    const report = runDoctor({ cwd: dir, fix: true });
+    const check = report.checks.find((entry) => entry.id === 'notes-refspec');
+
+    expect(check).toMatchObject({ status: 'ok', detail: expect.stringContaining('there is nothing to fetch') });
     expect(notesAvailability({ cwd: dir })).toBe('absent');
+  });
+
+  it('keeps warning after doctor fixes the refspec when records do exist upstream', () => {
+    const dir = clone(originWithRecords());
+
+    const report = runDoctor({ cwd: dir, fix: true });
+    const check = report.checks.find((entry) => entry.id === 'notes-refspec');
+
+    expect(check).toMatchObject({ status: 'warn', detail: expect.stringContaining('advertises') });
+    expect(notesAvailability({ cwd: dir })).toBe('unfetched');
+    expect(runQuery({ cwd: dir, noIndex: true }).diagnostics.join(' ')).toContain('may be missing records that exist upstream');
+
+    git(dir, ['fetch', '-q', 'origin']);
+    expect(notesAvailability({ cwd: dir })).toBe('present');
   });
 
   it('reports present after the refspec is added and the notes are fetched', () => {
@@ -116,7 +141,9 @@ describe('coversNotes', () => {
 describe('an unfetched mirror does not read as an empty repository', () => {
   it('is the same records and the same empty count, and a different state', () => {
     const unfetched = runQuery({ cwd: clone(originWithRecords()), noIndex: true });
-    const trulyEmpty = runQuery({ cwd: makeRepo(), noIndex: true });
+    const empty = clone(makeRepo());
+    runDoctor({ cwd: empty, fix: true });
+    const trulyEmpty = runQuery({ cwd: empty, noIndex: true });
 
     expect(unfetched.records).toEqual([]);
     expect(trulyEmpty.records).toEqual([]);
@@ -133,8 +160,17 @@ describe('an unfetched mirror does not read as an empty repository', () => {
   });
 
   it('stays quiet when there is nothing to warn about', () => {
-    expect(runQuery({ cwd: makeRepo(), noIndex: true }).diagnostics).toEqual([]);
+    const empty = clone(makeRepo());
+    runDoctor({ cwd: empty, fix: true });
+    expect(runQuery({ cwd: empty, noIndex: true }).diagnostics).toEqual([]);
     expect(runQuery({ cwd: originWithRecords(), noIndex: true }).diagnostics).toEqual([]);
+  });
+
+  it('does not warn when no remote is configured, because there is no upstream', () => {
+    const result = runQuery({ cwd: makeRepo(), noIndex: true });
+
+    expect(result.notes).toBe('absent');
+    expect(result.diagnostics.join(' ')).not.toContain('may be missing records that exist upstream');
   });
 
   it('finds the records once they are fetched, and stops warning', () => {
@@ -249,9 +285,22 @@ describe('a build over an unfetched mirror says so', () => {
     expect(run.code).toBe(0);
   });
 
-  it('stays quiet when the mirror is present or there is nothing to fetch', () => {
+  it('stays quiet when the mirror is present or doctor verified there is nothing to fetch', () => {
+    const empty = clone(makeRepo());
+    runDoctor({ cwd: empty, fix: true });
+
     expect(runIndexCommand(originWithBothSources(), ['index', '--rebuild']).stderr).toBe('');
-    expect(runIndexCommand(makeRepo(), ['index', '--rebuild']).stderr).toBe('');
+    expect(runIndexCommand(empty, ['index', '--rebuild']).stderr).toBe('');
+  });
+
+  it('keeps index diagnostics when a configured remote cannot be verified', () => {
+    const origin = makeRepo();
+    const dir = clone(origin);
+    git(dir, ['config', '--add', 'remote.origin.fetch', NOTES_REFSPEC]);
+    rmSync(origin, { recursive: true, force: true });
+
+    const run = runIndexCommand(dir, ['index', '--rebuild']);
+    expect(run.stderr).toContain('may be missing records that exist upstream');
   });
 
   it('stops saying it once the mirror is fetched, and indexes the record', () => {
