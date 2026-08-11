@@ -45,6 +45,7 @@ import { installPostCommitHook } from '../hooks/post-commit.js';
 import { installPrePushHook } from '../hooks/pre-push.js';
 import { seedTrustedAuthor } from '../core/trusted-authors.js';
 import { MCP_REGISTRATION_FILE, registerCommitloreMcpServer, } from '../core/mcp-registration.js';
+import { installAgentsGuidance } from '../core/agents-guidance.js';
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 /** `exactOptionalPropertyTypes` treats `{ cwd: undefined }` as distinct from omitting `cwd` entirely. */
 const cwdOption = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
@@ -152,27 +153,44 @@ const runTrustStep = (opts) => {
         detail: result,
     };
 };
-const runClaudeHookStep = (opts) => {
+/**
+ * The shared AGENTS.md block is the host-neutral capture initiator.  Keep it
+ * beside the existing Claude-specific hook in one integration step: init's
+ * compact report is a frozen surface, while both are agent wiring that should
+ * report their own outcome instead of hiding a failed guidance write.
+ */
+const runAgentIntegrationStep = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     const settingsPath = claudeSettingsPath(cwd);
+    const guidance = installAgentsGuidance(cwd);
     const result = installClaudeHook({ settingsPath });
-    const lines = result.stdout.trimEnd().split('\n').filter((line) => line.length > 0);
+    const guidanceLine = {
+        created: `created AGENTS.md with the CommitLore capture instructions`,
+        added: `added the marked CommitLore capture instructions to AGENTS.md`,
+        updated: `updated the marked CommitLore capture instructions in AGENTS.md`,
+        unchanged: `AGENTS.md already carries the current marked CommitLore capture instructions (unchanged)`,
+        invalid: `AGENTS.md has an unsafe CommitLore marker layout and was left unchanged: ${guidance.error ?? 'unknown marker error'}`,
+        'write-failed': `could not install the CommitLore capture instructions in AGENTS.md: ${guidance.error ?? 'unknown write error'}`,
+    };
+    const lines = [guidanceLine[guidance.state], ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0)];
     if (result.stderr) {
         lines.push(...result.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
     }
     // If the hook is already installed (unchanged), treat as success with code 0.
     // If there's an error but it's just about missing settings, that's not a failure — Claude Code may not be on this machine.
-    const code = result.code === 0
-        ? 0
-        : result.status?.state === 'unreadable' && result.status.problem?.includes('cannot read')
+    const code = guidance.state === 'invalid' || guidance.state === 'write-failed'
+        ? 2
+        : result.code === 0
             ? 0
-            : 2;
+            : result.status?.state === 'unreadable' && result.status.problem?.includes('cannot read')
+                ? 0
+                : 2;
     return {
         step: 'claude-hook',
-        title: 'claude hook install',
+        title: 'agent integration',
         code,
         lines: lines.length > 0 ? lines : [result.stderr.trim() || 'failed with no diagnostic'],
-        detail: result,
+        detail: { guidance, claude: result },
     };
 };
 /**
@@ -325,7 +343,7 @@ const runPolicyStep = (opts) => {
  * Order of execution:
  * 1. Hooks install — sets up the commit-msg hook
  * 2. Index rebuild — builds the index of trailers
- * 3. Claude hook install — wires the PreToolUse hook into .claude/settings.json
+ * 3. Agent integration — refreshes AGENTS.md and wires the Claude PreToolUse hook
  * 4. Repository MCP registration — advertises the capture tools to a host that loads `.mcp.json`
  * 5. Capture policy — asks about unattended capture, once, where no policy exists yet
  * 6. Doctor (final check) — verifies everything is working
@@ -342,7 +360,7 @@ const runPolicyStep = (opts) => {
  */
 export const runInit = (opts = {}) => {
     const notesBefore = notesAvailability(cwdOption(opts));
-    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runClaudeHookStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
+    const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
     const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
     return { steps, notesBefore, exitCode: exitCode };
 };
@@ -361,7 +379,7 @@ export const STEP_HEADING = {
     trust: 'trusted author',
     hooks: '[1/4] hooks install',
     index: '[2/4] index --rebuild',
-    'claude-hook': '[3/4] claude hook install',
+    'claude-hook': '[3/4] agent integration',
     'mcp-registration': 'repository MCP registration',
     // Unnumbered on purpose, the same way `trust` was added: the numbered four
     // are pinned by T-1013's tests, and renumbering them would move a frozen
@@ -568,14 +586,14 @@ const resolveUnattendedChoice = async (options) => {
 export const register = (program) => {
     program
         .command('init')
-        .description('one-command onboarding: hooks install, trusted author, index --rebuild, claude hook install, repository MCP registration, capture policy, doctor --fix')
+        .description('one-command onboarding: hooks install, trusted author, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix')
         .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
         .option('--verbose', 'show step-by-step detail output instead of the result summary')
         .option('--json', 'emit the report as JSON')
         .option('--unattended', 'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--no-unattended', 'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)')
-        .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, trusted author, index --rebuild, claude hook ' +
-        'install, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
+        .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, trusted author, index --rebuild, agent ' +
+        'integration, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
         '(see #63, #67). Safe to run more than once: every step it calls is independently idempotent, so ' +
         're-running with nothing else changed changes nothing else.' +
@@ -593,8 +611,10 @@ export const register = (program) => {
         'still exist on their own for anyone who wants one piece rather than all seven.' +
         '\n\nExit codes: 0 every step ran clean, 1 the final doctor check found something init could not ' +
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
-        'read the detail above), 2 hooks install, index rebuild, claude hook install, or the policy write ' +
-        'could not run at all (SPEC §10). A repository MCP registration that cannot be written leaves the install degraded rather than broken; doctor reports it when unattended capture needs an initiator.')
+        'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
+        'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
+        'AGENTS.md; every other line stays untouched. A repository MCP registration that cannot be written leaves the ' +
+        'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.')
         .action(async (options) => {
         const choice = await resolveUnattendedChoice(options);
         const initOptions = options.force === undefined ? {} : { force: options.force };

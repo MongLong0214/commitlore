@@ -1,7 +1,9 @@
 /**
- * Where each coding agent keeps its MCP config, and what `install.sh` and
- * `install.ps1` wrote into it. `commitlore uninstall` reads this to decide what
- * it may remove; nothing else in `src/` knows these paths.
+ * Where each coding agent keeps its MCP config. `install.sh` and `install.ps1`
+ * use Codex's own MCP CLI when it exists; that CLI owns the write but persists
+ * the same Codex config that the installers edit only as their CLI-absent
+ * fallback. `commitlore uninstall` reads this table to decide what it may
+ * remove; nothing else in `src/` knows these paths.
  *
  * One table, because two copies of this knowledge drift apart without failing:
  * an installer grows an agent the uninstall never learns about and the entry is
@@ -16,12 +18,15 @@
  * removal that finds nothing looks exactly like a removal with nothing to do.
  */
 export type ConfigFormat = 'toml-mcp_servers' | 'json-mcpServers' | 'json-mcp';
+/** Which interface owns registration for this config. */
+export type RegistrationPath = 'cli-or-config-fallback' | 'config-file';
 export interface AgentConfig {
     /** The name the installers report this agent by. */
     readonly agent: string;
     /** Path segments below the user's home directory. */
     readonly homeRelativePath: readonly string[];
     readonly format: ConfigFormat;
+    readonly registration: RegistrationPath;
 }
 export declare const AGENT_CONFIGS: readonly AgentConfig[];
 /** The key both installers write the server under, in every format. */

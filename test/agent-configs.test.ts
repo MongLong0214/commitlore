@@ -40,6 +40,14 @@ describe('T-1123 the config table names every agent both installers wire', () =>
     ]);
   });
 
+  it('records that Codex registration is CLI-owned with a config-file fallback', () => {
+    const codex = AGENT_CONFIGS.find((config) => config.agent === 'codex');
+    expect(codex?.registration).toBe('cli-or-config-fallback');
+    for (const config of AGENT_CONFIGS.filter((config) => config.agent !== 'codex')) {
+      expect(config.registration).toBe('config-file');
+    }
+  });
+
   it.each(AGENT_CONFIGS)('$agent: install.sh writes the path this table names', (config) => {
     // The shell installer spells paths with `$HOME/` and forward slashes.
     const posix = `$HOME/${config.homeRelativePath.join('/')}`;

@@ -14,7 +14,7 @@
  * with that table, and the two fail for different reasons.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -139,6 +139,35 @@ describe('T-1123 uninstall removes what the installer wrote', () => {
     expect(readFileSync(path, 'utf8'), 'a config we could not parse was rewritten').toBe(broken);
     expect(result.report.join('\n')).toMatch(/could not|parse/i);
     expect(result.exitCode).toBe(0);
+  });
+});
+
+describe('Codex MCP removal uses the owning CLI when it is available', () => {
+  it('checks the registered server shape, then removes it through codex mcp remove', async () => {
+    const h = makeHome();
+    const config = h.path('.codex', 'config.toml');
+    const calls = h.path('codex-calls.txt');
+    const codex = h.path('bin', 'codex');
+    write(config, `[mcp_servers.commitlore]\ncommand = "${h.wrapper}"\nargs = ["mcp"]\n`);
+    write(
+      codex,
+      `#!/bin/sh
+printf '%s\\n' "$*" >>"${calls}"
+case "$1:$2" in
+  mcp:list) printf '[{"name":"commitlore","transport":{"type":"stdio","command":"${h.wrapper}","args":["mcp"]}}]\\n' ;;
+  mcp:remove) rm -f "${config}" ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(codex, 0o755);
+
+    const result = await runUninstall({ home: h.home, codexCommand: codex });
+
+    expect(existsSync(config)).toBe(false);
+    expect(readFileSync(calls, 'utf8')).toContain('mcp list --json');
+    expect(readFileSync(calls, 'utf8')).toContain('mcp remove commitlore');
+    expect(result.report.join('\n')).toContain('through codex mcp remove');
   });
 });
 

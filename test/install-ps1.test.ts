@@ -186,4 +186,11 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(text).toContain('if ($cloneCode -ne 0)');
     expect(text).not.toMatch(/git clone[^\n]*2>&1/);
   });
+
+  it('uses Codex MCP commands when the CLI exists and names the config fallback', () => {
+    const text = body();
+    expect(text).toContain('& codex mcp list --json');
+    expect(text).toContain('& codex mcp add commitlore -- $dest mcp');
+    expect(text).toContain('config-file fallback; codex CLI is unavailable');
+  });
 });

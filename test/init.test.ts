@@ -300,6 +300,76 @@ describe('commitlore init — repository MCP registration', () => {
   });
 });
 
+describe('commitlore init — repository-owned agent guidance', () => {
+  it('creates AGENTS.md with the shared capture procedure when the repository has none', () => {
+    const repo = initRepo('agents-created');
+
+    const report = runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(join(repo, 'AGENTS.md'), 'utf8');
+
+    expect(guidance).toContain('<!-- commitlore:begin -->');
+    expect(guidance).toContain('commitlore_prepare_capture');
+    expect(guidance).toContain('commitlore_verify_capture');
+    expect(guidance).toContain('commitlore_stage_capture');
+    expect(guidance).toContain('Drop the trailer; never invent a citation.');
+    expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'created AGENTS.md',
+    );
+  });
+
+  it('keeps an existing AGENTS.md intact and appends one marked CommitLore section', () => {
+    const repo = initRepo('agents-existing');
+    const path = join(repo, 'AGENTS.md');
+    const existing = '# Project instructions\n\nKeep every one of these lines.\n';
+    writeFileSync(path, existing);
+
+    runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(path, 'utf8');
+
+    expect(guidance.startsWith(existing)).toBe(true);
+    expect(guidance).toContain('Keep every one of these lines.');
+    expect(guidance).toContain('<!-- commitlore:begin -->');
+    expect(guidance).toContain('<!-- commitlore:end -->');
+  });
+
+  it('replaces only an older marked section when refreshing repository guidance', () => {
+    const repo = initRepo('agents-updated');
+    const path = join(repo, 'AGENTS.md');
+    writeFileSync(
+      path,
+      '# Project instructions\n<!-- commitlore:begin -->\nold capture guidance\n<!-- commitlore:end -->\nKeep this line too.\n',
+    );
+
+    const report = runInitAsCli({ cwd: repo });
+    const guidance = readFileSync(path, 'utf8');
+
+    expect(guidance).toContain('# Project instructions');
+    expect(guidance).toContain('Keep this line too.');
+    expect(guidance).not.toContain('old capture guidance');
+    expect(guidance).toContain('commitlore_prepare_capture');
+    expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'updated the marked',
+    );
+  });
+
+  it('is byte-idempotent: it replaces neither user instructions nor adds a second section', () => {
+    const repo = initRepo('agents-idempotent');
+    const path = join(repo, 'AGENTS.md');
+    writeFileSync(path, '# Local instructions\n');
+
+    runInitAsCli({ cwd: repo });
+    const afterFirst = readFileSync(path, 'utf8');
+    const second = runInitAsCli({ cwd: repo });
+    const afterSecond = readFileSync(path, 'utf8');
+
+    expect(afterSecond).toBe(afterFirst);
+    expect((afterSecond.match(/<!-- commitlore:begin -->/g) ?? [])).toHaveLength(1);
+    expect(second.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'unchanged',
+    );
+  });
+});
+
 describe('commitlore init — a step that cannot fully succeed is reported, not hidden', () => {
   it('a fresh repo with no remote keeps its warnings and skips visible, but exits cleanly', () => {
     const repo = initRepo('no-remote');

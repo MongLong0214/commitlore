@@ -354,16 +354,34 @@ wire_claude_code() {
   fi
 }
 
-# Codex CLI -- TOML, one [mcp_servers.<name>] table per server.
+# Codex CLI owns its MCP config whenever it is available.  The file branch is
+# only for an existing Codex home on a machine without the CLI: hand-writing
+# TOML while the CLI is present invites drift when Codex changes its format.
 # https://developers.openai.com/codex/mcp
 has_codex() { command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; }
 wire_codex() {
+  if command -v codex >/dev/null 2>&1; then
+    codex_servers="$(codex mcp list --json 2>/dev/null || true)"
+    case "$codex_servers" in
+      *'"name": "commitlore"'*)
+        record_skipped "codex" "commitlore is already registered (checked with codex mcp list) -- left unchanged"
+        return
+        ;;
+    esac
+    if codex mcp add commitlore -- "$dest" mcp >/dev/null 2>&1; then
+      record_wired "codex: registered commitlore with codex mcp add"
+    else
+      record_skipped "codex" "codex mcp add could not register commitlore -- config file was left untouched"
+    fi
+    return
+  fi
+
   config_path="$HOME/.codex/config.toml"
   config_dir="$(dirname -- "$config_path")" || { record_skipped "codex" "could not resolve the directory for $config_path"; return; }
   mkdir -p "$config_dir" 2>/dev/null || { record_skipped "codex" "could not create $config_dir"; return; }
 
   if [ -f "$config_path" ] && grep -q '^\[mcp_servers\.commitlore\]' "$config_path" 2>/dev/null; then
-    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block -- left unchanged"
+    record_skipped "codex" "$config_path already has a [mcp_servers.commitlore] block (config-file fallback; codex CLI is unavailable) -- left unchanged"
     return
   fi
 
@@ -371,13 +389,13 @@ wire_codex() {
   # with an explicit trailing `\n` rather than sharing one block between them.
   if [ -f "$config_path" ]; then
     if printf '\n[mcp_servers.commitlore]\ncommand = "%s"\nargs = ["mcp"]\n' "$dest" >>"$config_path"; then
-      record_wired "codex: appended a [mcp_servers.commitlore] block to the existing $config_path"
+      record_wired "codex: appended a [mcp_servers.commitlore] block to the existing $config_path (config-file fallback; codex CLI is unavailable)"
     else
       record_skipped "codex" "could not append to $config_path"
     fi
   else
     if printf '[mcp_servers.commitlore]\ncommand = "%s"\nargs = ["mcp"]\n' "$dest" >"$config_path"; then
-      record_wired "codex: created $config_path"
+      record_wired "codex: created $config_path (config-file fallback; codex CLI is unavailable)"
     else
       record_skipped "codex" "could not write $config_path"
     fi
