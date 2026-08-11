@@ -143,6 +143,13 @@ const logicalIdPathSafe = (logicalRunId: string): void => {
   }
 };
 
+/** The public freeze may name only opaque, flat analysis rows. */
+const analysisRowPathSafe = (path: string): void => {
+  if (!/^rows\/[a-z0-9][a-z0-9._-]*\.json$/u.test(path)) {
+    throw new ImmutableArtifactError(`invalid freeze-named analysis row path ${JSON.stringify(path)}`);
+  }
+};
+
 const attemptIdPathSafe = (attemptId: string): void => {
   if (!/^[a-z0-9-]+__[a-z0-9-]+__(on|off)__r[1-3]__a[1-9][0-9]*$/u.test(attemptId)) {
     throw new ImmutableArtifactError(`invalid attempt id ${JSON.stringify(attemptId)}`);
@@ -245,6 +252,29 @@ export class DurableStudyStorage {
 
   public writeJsonNew(relativePath: string, value: unknown): void {
     this.writeNew(relativePath, jsonBytes(value));
+  }
+
+  /**
+   * Finish a row publication interrupted between its two immutable views.
+   * Both views carry the same bytes: the per-run `row.json` binds the row to its
+   * evidence, while the freeze-named `rows/*.json` file is the analyzer's
+   * only permitted input.  Either existing copy is evidence; divergent copies
+   * are an integrity failure, never a choice for recovery to make.
+   */
+  private writeOrMatch(relativePath: string, bytes: Buffer): void {
+    const primary = this.absolute(relativePath);
+    const backup = this.absolute(relativePath, this.backupDir);
+    if (existsSync(primary)) {
+      if (!readFileSync(primary).equals(bytes)) {
+        throw new ImmutableArtifactError(`existing artifact differs from immutable row publication ${relativePath}`);
+      }
+      this.mirrorExisting(relativePath);
+      return;
+    }
+    if (existsSync(backup) && !readFileSync(backup).equals(bytes)) {
+      throw new ImmutableArtifactError(`backup artifact differs from immutable row publication ${relativePath}`);
+    }
+    this.writeNew(relativePath, bytes);
   }
 
   public readJson<T>(relativePath: string): T | null {
@@ -438,19 +468,43 @@ export class DurableStudyStorage {
     this.writeJsonNew(this.runRelative(logicalRunId, "evaluator.json"), value);
   }
 
-  /** The row is the final commit record.  It can never be replaced. */
-  public writeRow(logicalRunId: string, row: Record<string, unknown>): void {
+  /**
+   * The row is the final commit record.  The per-run and analysis views are
+   * byte-identical immutable publications of one observation, not two rows.
+   */
+  public writeRow(logicalRunId: string, analysisRowPath: string, row: Record<string, unknown>): void {
     const named = row["logical_run_id"];
     if (named !== logicalRunId) {
       throw new ImmutableArtifactError(`row logical_run_id does not match its directory for ${logicalRunId}`);
     }
-    const mirrorRow = this.absolute(join("rows", `${logicalRunId}.json`));
-    if (existsSync(mirrorRow)) {
-      // `rows/` is a legacy alternative verifier input, not a second output
-      // path. Writing both would look exactly like a duplicate observation.
-      throw new ImmutableArtifactError(`rows/${logicalRunId}.json already exists; refusing a duplicate logical row`);
+    analysisRowPathSafe(analysisRowPath);
+    const bytes = jsonBytes(row);
+    // The analyzer-facing name lands first. A kill before the run-local copy
+    // is recovered by `reconcileNamedRows` before resume decides what is done.
+    this.writeOrMatch(analysisRowPath, bytes);
+    this.writeOrMatch(this.runRelative(logicalRunId, "row.json"), bytes);
+  }
+
+  /** Repairs a killed row publication without re-running its observation. */
+  public reconcileNamedRows(namedRows: ReadonlyMap<string, string>): void {
+    const paths = new Set<string>();
+    for (const [logicalRunId, analysisRowPath] of namedRows) {
+      logicalIdPathSafe(logicalRunId);
+      analysisRowPathSafe(analysisRowPath);
+      if (paths.has(analysisRowPath)) {
+        throw new ImmutableArtifactError(`freeze names ${analysisRowPath} for more than one logical row`);
+      }
+      paths.add(analysisRowPath);
+      const runPath = this.runRelative(logicalRunId, "row.json");
+      const primaryRun = this.absolute(runPath);
+      const primaryAnalysis = this.absolute(analysisRowPath);
+      const hasRun = existsSync(primaryRun);
+      const hasAnalysis = existsSync(primaryAnalysis);
+      if (!hasRun && !hasAnalysis) continue;
+      const bytes = hasRun ? readFileSync(primaryRun) : readFileSync(primaryAnalysis);
+      this.writeOrMatch(runPath, bytes);
+      this.writeOrMatch(analysisRowPath, bytes);
     }
-    this.writeJsonNew(this.runRelative(logicalRunId, "row.json"), row);
   }
 
   public readFinalTree(logicalRunId: string): FinalTreeArtifact | null {
@@ -530,12 +584,6 @@ export class DurableStudyStorage {
         if (rows.has(id)) throw new ImmutableArtifactError(`duplicate logical row ${id}`);
         rows.set(id, row);
       }
-    }
-    const legacyRows = this.absolute("rows");
-    if (existsSync(legacyRows) && readdirSync(legacyRows).length > 0) {
-      // The verifier treats `rows/` and `runs/*/row.json` as alternative input
-      // layouts; accepting both would create an unresolvable duplicate.
-      throw new ImmutableArtifactError("rows/ is populated alongside run directories; refusing duplicate row surfaces");
     }
     return rows;
   }

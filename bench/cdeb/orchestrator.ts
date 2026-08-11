@@ -16,7 +16,8 @@
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   executeAgentRun,
@@ -27,7 +28,11 @@ import {
 import type { CapabilityGatePassed } from "./runtime/isolation.ts";
 import { readExposureEvents, exposureLogSha256 } from "./runtime/exposure.ts";
 import { readPersistedRawNdjson, readProviderLedger, type ProviderLedger } from "./runtime/provider-ledger.ts";
-import { assertCaptureSurfaceAbsent, writeCdebArmConfig } from "./runtime/arm-settings.ts";
+import {
+  assertCaptureSurfaceAbsent,
+  assertFrozenShippingProxy,
+  writeCdebArmConfig,
+} from "./runtime/arm-settings.ts";
 import { materializeBundle, type RepositoryBundleIdentity } from "./freeze/repository-bundle.ts";
 import { freezeFinalTree, frozenTreeProvenance } from "./evaluator/freeze-tree.ts";
 import { runEvaluatorOci } from "./evaluator/runner-oci.ts";
@@ -56,6 +61,10 @@ export type LifecycleState =
 
 export const MAX_PRE_AGENT_ATTEMPTS = 3;
 export const MAX_EVALUATOR_ATTEMPTS = 3;
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SHIPPING_PROXY_PATH = join(HERE, "runtime", "shipping-proxy.ts");
+const EXPOSURE_PARSER_PATH = join(HERE, "runtime", "exposure.ts");
 
 const conditionSuffix = (condition: CdebCondition): "on" | "off" =>
   condition === "commitlore-on" ? "on" : "off";
@@ -262,6 +271,8 @@ export interface LogicalRunPlan {
   readonly condition: CdebCondition;
   readonly repeat: 1 | 2 | 3;
   readonly order: number;
+  /** Opaque analyzer input path committed by public-freeze.json. */
+  readonly analysis_row_file: string;
   /** Required to re-parse retained CDEB-05 bytes during evaluator-only resume. */
   readonly requested_model: string;
   readonly prompt: string;
@@ -339,6 +350,11 @@ export const materializedWorkspacePreparer = (
 export interface RunStudyOptions {
   readonly storage: DurableStudyStorage;
   readonly progress?: ProgressReporter;
+  /** Test-only path override for a copied, byte-mutated proxy fixture. */
+  readonly shipping_proxy_paths?: {
+    readonly proxy_path: string;
+    readonly parser_path: string;
+  };
 }
 
 export interface StudyRunResult {
@@ -376,6 +392,59 @@ const requiredRunId = (plan: LogicalRunPlan): void => {
   if (plan.logical_run_id !== expected) {
     throw new Error(`logical run id ${plan.logical_run_id} does not name its repository/task/condition/repeat cell`);
   }
+};
+
+interface FreezeWiring {
+  readonly hook_proxy_sha256: string;
+  readonly analysis_row_files: readonly string[];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Reads the two freeze commitments this coordinator must enforce itself.
+ * Keeping this narrow avoids turning the runner into a second freeze schema
+ * parser while making it impossible to omit either seam at execution time.
+ */
+const frozenWiring = (freeze: unknown): FreezeWiring => {
+  if (!isRecord(freeze)) throw new Error("CDEB public freeze is not an object with execution wiring");
+  const proxy = freeze["hook_proxy_sha256"];
+  if (typeof proxy !== "string" || !/^[0-9a-f]{64}$/u.test(proxy)) {
+    throw new Error("CDEB public freeze has no valid hook_proxy_sha256");
+  }
+  const analysis = freeze["analysis_inputs"];
+  if (!isRecord(analysis) || !Array.isArray(analysis["row_files"])) {
+    throw new Error("CDEB public freeze has no analysis_inputs.row_files");
+  }
+  const rowFiles = analysis["row_files"];
+  if (rowFiles.some((path) => typeof path !== "string" || !/^rows\/[a-z0-9][a-z0-9._-]*\.json$/u.test(path))) {
+    throw new Error("CDEB public freeze names an unsafe analysis row path");
+  }
+  if (new Set(rowFiles).size !== rowFiles.length) {
+    throw new Error("CDEB public freeze names an analysis row path more than once");
+  }
+  return { hook_proxy_sha256: proxy, analysis_row_files: rowFiles as readonly string[] };
+};
+
+/** The sealed schedule maps every logical observation to one frozen row path. */
+const analysisRowsForPlan = (plan: CdebStudyPlan, wiring: FreezeWiring): ReadonlyMap<string, string> => {
+  const named = new Map<string, string>();
+  for (const logicalRun of plan.logical_runs) {
+    if (named.has(logicalRun.logical_run_id)) {
+      throw new Error(`CDEB logical run schedule has duplicate id ${logicalRun.logical_run_id}`);
+    }
+    if (!wiring.analysis_row_files.includes(logicalRun.analysis_row_file)) {
+      throw new Error(
+        `CDEB ${logicalRun.logical_run_id} writes ${logicalRun.analysis_row_file}, which public-freeze.json does not name`,
+      );
+    }
+    named.set(logicalRun.logical_run_id, logicalRun.analysis_row_file);
+  }
+  if (new Set(named.values()).size !== named.size || named.size !== wiring.analysis_row_files.length) {
+    throw new Error("CDEB sealed schedule and public freeze do not name the same one-to-one analysis row set");
+  }
+  return named;
 };
 
 /** Binds the sealed task mapping to the committed opaque block order. */
@@ -505,7 +574,7 @@ const finalizeMeasuredRow = (
     evaluator,
     evaluator_attempts: evaluatorAttempts,
   });
-  storage.writeRow(plan.logical_run_id, row);
+  storage.writeRow(plan.logical_run_id, plan.analysis_row_file, row);
 };
 
 const evaluateFrozenTree = async (
@@ -770,6 +839,15 @@ export const runStudy = async (
   dependencies: OrchestratorDependencies,
   options: RunStudyOptions,
 ): Promise<StudyRunResult> => {
+  const wiring = frozenWiring(plan.public_freeze);
+  const analysisRows = analysisRowsForPlan(plan, wiring);
+  const shippingPaths = options.shipping_proxy_paths ?? {
+    proxy_path: SHIPPING_PROXY_PATH,
+    parser_path: EXPOSURE_PARSER_PATH,
+  };
+  // The bytes the arm would execute are checked before an attempt checkpoint
+  // exists. A modified observer is a changed experiment, never a row.
+  assertFrozenShippingProxy(wiring.hook_proxy_sha256, shippingPaths.proxy_path, shippingPaths.parser_path);
   if (plan.logical_runs.length === 0) throw new Error("CDEB study has no logical runs");
   if (plan.randomization.block_count * 2 !== plan.logical_runs.length) {
     throw new Error("CDEB randomization block count does not match its logical run schedule");
@@ -785,6 +863,7 @@ export const runStudy = async (
   options.storage.repairBackupMirrors();
   options.storage.ensureCommittedJson("public-freeze.json", plan.public_freeze);
   options.storage.ensureCommittedJson("randomization.json", plan.randomization);
+  options.storage.reconcileNamedRows(analysisRows);
   const completedBefore = options.storage.completedRows(expectedIds);
   let completed = completedBefore.size;
   for (const logicalRun of plan.logical_runs) {

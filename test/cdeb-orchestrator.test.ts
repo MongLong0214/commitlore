@@ -9,7 +9,7 @@
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -30,6 +30,7 @@ import {
   type PreparedWorkspace,
 } from "../bench/cdeb/orchestrator.ts";
 import { readProviderLedger } from "../bench/cdeb/runtime/provider-ledger.ts";
+import { shippingProxySha256 } from "../bench/cdeb/runtime/arm-settings.ts";
 import { DurableStudyStorage, SimulatedProcessKill } from "../bench/cdeb/storage.ts";
 import { FIXTURE_ROOT, SEALED_DIR, TASK_ID, TEST_IMAGE_DIGEST } from "./cdeb-evaluator-helpers.ts";
 
@@ -51,6 +52,8 @@ const HEX = "a".repeat(64);
 const OID = "b".repeat(40);
 const RECORDED_STREAM = (): Buffer => readFileSync("test/fixtures/claude-stream/partial-messages.jsonl");
 const RECORDED_MODEL = "claude-haiku-4-5-20251001";
+const PROXY = resolve("bench/cdeb/runtime/shipping-proxy.ts");
+const PARSER = resolve("bench/cdeb/runtime/exposure.ts");
 
 interface Counters {
   readonly agent: Map<string, number>;
@@ -146,6 +149,7 @@ const makePlan = (condition: CdebCondition, order: number): LogicalRunPlan => {
     condition,
     repeat: 1,
     order,
+    analysis_row_file: `rows/${logical_run_id}.json`,
     requested_model: RECORDED_MODEL,
     prompt: "Fix calc without running external services.",
     expected_record_ids: [],
@@ -210,16 +214,25 @@ const makePlan = (condition: CdebCondition, order: number): LogicalRunPlan => {
   };
 };
 
-const studyPlan = (): CdebStudyPlan => ({
-  public_freeze: { benchmark: "cdeb-v1", study_id: "cdeb-orchestrator-test", freeze: "fixture" },
-  randomization: {
-    schema_version: 1,
-    algorithm: "sha256-key-sort-v1",
-    block_count: 1,
-    blocks: [{ block_index: "block-000", conditions: ["commitlore-on", "commitlore-off"] }],
-  },
-  logical_runs: [makePlan("commitlore-on", 1), makePlan("commitlore-off", 2)],
-});
+const studyPlan = (): CdebStudyPlan => {
+  const logical_runs = [makePlan("commitlore-on", 1), makePlan("commitlore-off", 2)];
+  return {
+    public_freeze: {
+      benchmark: "cdeb-v1",
+      study_id: "cdeb-orchestrator-test",
+      freeze: "fixture",
+      hook_proxy_sha256: shippingProxySha256(PROXY, PARSER),
+      analysis_inputs: { row_files: logical_runs.map((run) => run.analysis_row_file) },
+    },
+    randomization: {
+      schema_version: 1,
+      algorithm: "sha256-key-sort-v1",
+      block_count: 1,
+      blocks: [{ block_index: "block-000", conditions: ["commitlore-on", "commitlore-off"] }],
+    },
+    logical_runs,
+  };
+};
 
 const dependencies = (counts: Counters, options: { failEvaluatorFirst?: boolean; preTurnFailures?: number } = {}): OrchestratorDependencies => ({
   prepare_workspace: async () => workspaceFor(),
