@@ -9,7 +9,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,49 @@ import { afterAll, describe, expect, it } from 'vitest';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GATE = join(REPO_ROOT, 'scripts', 'check-release-version.mjs');
 const VERSION = '0.7.1';
+
+// The fixtures below build miniature repositories and prove the gate reasons
+// correctly about them. They cannot notice that *this* repository disagrees
+// with itself, and on 0.8.0 it did: `package.json` was bumped and both
+// `package-lock.json` versions were left at the previous release, so the gate
+// would have refused the tag at publish time. That is the second time a stale
+// lock has reached a release candidate.
+//
+// A gate whose tests only ever see fixtures is a gate nobody is running.
+describe('this repository agrees with itself', () => {
+  it('every manifest the gate reads carries the same version as package.json', () => {
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      version?: unknown;
+    };
+    const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'package-lock.json'), 'utf8')) as {
+      version?: unknown;
+      packages?: Record<string, { version?: unknown }>;
+    };
+    const claudePlugin = JSON.parse(
+      readFileSync(join(REPO_ROOT, '.claude-plugin', 'plugin.json'), 'utf8'),
+    ) as { version?: unknown };
+    const codexPlugin = JSON.parse(
+      readFileSync(join(REPO_ROOT, '.codex-plugin', 'plugin.json'), 'utf8'),
+    ) as { version?: unknown };
+
+    expect(lock.version).toBe(pkg.version);
+    expect(lock.packages?.['']?.version).toBe(pkg.version);
+    expect(claudePlugin.version).toBe(pkg.version);
+    expect(codexPlugin.version).toBe(pkg.version);
+  });
+
+  it('the gate itself accepts this repository at its own version', () => {
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      version?: string;
+    };
+    const run = spawnSync(process.execPath, [GATE, `v${String(pkg.version)}`], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    expect(`${run.stdout}${run.stderr}`).not.toMatch(/version mismatch/);
+    expect(run.status).toBe(0);
+  });
+});
 
 const scratch: string[] = [];
 afterAll(() => {

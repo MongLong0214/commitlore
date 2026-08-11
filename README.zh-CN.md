@@ -167,7 +167,8 @@ delivery 给代理的是上下文，并不阻止编辑。
 
 - **测量的是较弱的那一档。** 在 1,160 次研究中，所有记录都渲染为 `[claim]`，
   它告诉代理把记录当作信息来权衡，而不是当作命令。`[directive]` 档位是在那之后
-  才可达的，所以上面的数字是**测得的下限**，而不是宣称的上限。
+  才可达的，这里并未测量它 —— 研究自己的判定写道，这个数字"不会转移到更强的那一
+  档"。directive 是更好、更差还是相同，**两个方向都没有测量**。
 - **一个模型、一套 harness、十个构造的 fixture。** oracle 读取的是最终实现状态，
   因此它显示收到记录的代理更少重提被排除的方案，但并不显示其中任何一个读过什么。
 - 尚未实现 cryptographic author verification、repository-wide record coverage、symbol anchor 和 interactive record builder：[#28](https://github.com/MongLong0214/commitlore/issues/28)、[#32](https://github.com/MongLong0214/commitlore/issues/32)、[#33](https://github.com/MongLong0214/commitlore/issues/33)、[#34](https://github.com/MongLong0214/commitlore/issues/34)。
