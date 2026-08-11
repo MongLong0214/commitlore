@@ -2,11 +2,100 @@
 
 ## Unreleased
 
-- The agent tooling whose local config shipped in 0.5.0 as `.serena/` is no
-  longer used, and the configuration that kept it out of future runs is
-  retired with it: the ignore entry, the manifest-test guard, and the
-  task-level comments that named it. The bench evidence still names the
-  directory, because that is what the recorded runs saw (#514).
+## 0.8.0
+
+Everything 0.7.1 promised about unattended capture is in a release for the
+first time. 0.7.1 was published on 2026-08-09; the work it was credited with
+merged on 2026-08-11, so the published artefact never carried `commitlore auto`
+or `capture --unattended` at all (#525, #511). It does now.
+
+### One command sets a repository up
+
+`commitlore init` grew the step that had been missing: it registers this
+repository's MCP server, so the tools that *start* a capture reach a host that
+loads `.mcp.json`.
+
+Without it the install was half a product and did not say so. The git hooks can
+apply and finalise a record that something else already staged; they cannot
+begin one, because a hook has a diff and a capture needs a transcript. Four
+repositories ran with `unattended: true` and produced no records between them
+until this was wired by hand.
+
+`init` also writes the `AGENTS.md` capture procedure into the repository, so
+the instruction travels with the work rather than with the machine. An
+`AGENTS.md` that already exists keeps every line it had.
+
+### Records get their own identity
+
+A capture with no `Record-Id` in its draft used to land on the commit anonymous,
+and nothing reported it. Supersession then had nothing to name, collision
+detection had no key, and the injected payload rendered `-` where the id
+belongs — so an agent could not cite the constraint it was about to follow.
+
+The pipeline now mints one from the record's own content: stable if a capture
+is retried, never replacing an id the draft supplied, and never minted for a
+draft that was rejected.
+
+### Hosts, and what each of them actually does
+
+| Host | Delivery | Capture |
+|---|---|---|
+| Claude Code | plugin | plugin |
+| Codex | plugin — `commitlore plugin install-codex` | plugin |
+| Hermes | `commitlore hermes install` | same command |
+| Other `AGENTS.md` hosts | yes | a written procedure the host may or may not follow |
+
+The last row is the honest one and the README now says it in those words. A
+host without a plugin gets guidance, not a mechanism.
+
+Codex and Hermes both gained a real installation this release. Hermes needed
+its own: its skills load from a configured directory, and an earlier attempt
+that wrote a bundle into the source checkout was never found by a live session.
+
+### Queries stop blocking on a cold index
+
+A path-scoped query on a repository with no index used to rebuild the whole
+index first — 186 seconds on a 21,446-commit repository, on the path that runs
+before every edit. A caller with a shorter timeout killed it, and the next edit
+started cold again, so the index could stay cold forever.
+
+A consumer query now catches an index up but never rebuilds it, and the
+fallback materialises the corpus once instead of once per path alias.
+
+### Fewer warnings that could not be acted on
+
+`context` warned about an unfetched notes mirror in repositories where no notes
+ref existed anywhere, pointing at a fix that could not change anything, while
+`doctor --fix` called the same checks `ok`. `doctor --fix` now asks each remote
+what it advertises and records the answer; the query reads that. A repository
+that has genuinely never been checked still warns — that case is why the
+warning exists.
+
+### Upgrading
+
+Nothing to migrate. Re-run `commitlore init` in each repository to pick up the
+MCP registration and the `AGENTS.md` section; it is idempotent and leaves an
+existing policy file, `.mcp.json` entry or `AGENTS.md` alone.
+
+If you use Codex or Hermes, run its installer once — `commitlore plugin
+install-codex` or `commitlore hermes install` — and start a new session
+afterwards, since both load their skill at session start.
+
+### Still true, and worth repeating
+
+Capture needs an agent host. An ordinary `git commit` typed by a person
+initiates nothing and by design never will: there is no transcript, and a
+record invented from a diff would be a claim about a decision nobody made.
+`doctor` reports whether this repository has an initiator rather than assuming
+the policy file implies one.
+
+### Also in this release
+
+The agent tooling whose local config shipped in 0.5.0 as `.serena/` is no
+longer used, and the configuration that kept it out of future runs is retired
+with it: the ignore entry, the manifest-test guard, and the task-level comments
+that named it. The bench evidence still names the directory, because that is
+what the recorded runs saw (#514).
 
 ## 0.7.1
 
