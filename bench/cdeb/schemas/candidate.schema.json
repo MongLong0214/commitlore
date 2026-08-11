@@ -15,25 +15,28 @@
     "benchmark": { "const": "cdeb-v1" },
     "candidate_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
     "repository_id": { "type": "string", "minLength": 1 },
-    "record_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^r-[a-z0-9]{6,}$" } },
+    "record_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
     "decision_source_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
     "record_commit_or_note_ref": { "type": "string", "minLength": 1 },
     "record_created_at": { "type": "string", "format": "date-time" },
-    "natural_record": { "const": true },
-    "benchmark_authored": { "const": false },
+    "natural_record": { "$ref": "#/$defs/eligibilityValue" },
+    "benchmark_authored": { "$ref": "#/$defs/eligibilityValue" },
     "eligibility": {
       "type": "object",
       "additionalProperties": false,
       "required": ["explicit_rejection_reason", "wrong_path_functionally_viable", "deterministic_oracle_possible", "current_code_does_not_reveal_reason", "bounded_implementation"],
       "properties": {
-        "explicit_rejection_reason": { "type": "boolean" },
-        "wrong_path_functionally_viable": { "type": "boolean" },
-        "deterministic_oracle_possible": { "type": "boolean" },
-        "current_code_does_not_reveal_reason": { "type": "boolean" },
-        "bounded_implementation": { "type": "boolean" }
+        "explicit_rejection_reason": { "$ref": "#/$defs/eligibilityValue" },
+        "wrong_path_functionally_viable": { "$ref": "#/$defs/eligibilityValue" },
+        "deterministic_oracle_possible": { "$ref": "#/$defs/eligibilityValue" },
+        "current_code_does_not_reveal_reason": { "$ref": "#/$defs/eligibilityValue" },
+        "bounded_implementation": { "$ref": "#/$defs/eligibilityValue" }
       }
     },
     "review_status": { "enum": ["accepted", "rejected"] },
     "rejection_reason": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "eligibilityValue": { "enum": [true, false, "undecided"] }
   }
 }
