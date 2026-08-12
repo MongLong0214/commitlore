@@ -2,6 +2,112 @@
 
 ## Unreleased
 
+## 0.8.1
+
+Three independent reviews ran against this candidate. They found twenty-one
+blockers between them, and most of what follows is the answer to those — several
+of them defects in the fixes made earlier in the same release.
+
+### The capture procedure reaches every host
+
+Four of the seven hosts `install.sh` wires — Gemini, Cursor, Windsurf, opencode
+— receive an `mcpServers` entry and no skills. The MCP server's `instructions`
+described only the read half of the protocol, so those hosts held the capture
+tools with nothing saying what they were for. The server now describes both
+halves, and it ships to every host by definition.
+
+Verified with the plugin disabled and no `AGENTS.md` present: a real session
+drove prepare, verify and stage and landed a `Provenance: drafted` record.
+
+### `init` no longer writes AGENTS.md
+
+Because it no longer has to. `--agents-md` writes it for a host that reads that
+convention and not MCP instructions. It used to create the file in repositories
+that use no such convention, and add a hundred lines to one that does.
+
+### What is served, and what is claimed
+
+- `commitlore_stale` served its records ungraded while `commitlore_query`
+  withheld the same payloads. An expired `Warn:` — or an `Expires:` value —
+  carrying prompt-injection text reached a model through a tool on the same
+  server. Both fields are now withheld when a pattern matches, and the record
+  is still listed.
+- A trailer key in `STRUCTURAL_TRAILER_KEYS` was exempt from injection scanning
+  on its name alone. Validation runs at commit time; grading runs on history.
+- `init` reported `ready` over a repository whose capture server could not be
+  registered. It now exits 1 and prints the `.mcp.json` to write.
+- `doctor` called any launchable command a working capture server.
+  `{"command": "false"}` read as healthy. An entry that is not the one `init`
+  writes is preserved, and reported as unverified rather than as ready.
+- Records were said to survive squash-merge. They do not, unless
+  `commitlore squash-preserve` or its Action runs.
+- "Evidence-verified" is now "Quote-checked": verification establishes that a
+  cited quote occurs in the source, not that it supports the claim.
+
+### Installing
+
+- The advertised one-liner fetched a pinned URL and passed no version, so it
+  installed whatever the newest tag was. It now installs the version its URL
+  names.
+- Ownership of an existing wrapper was inferred from a version string, then
+  from a directory name, then from a file's existence. It is now the runtime
+  answering with the version the wrapper claims.
+- A registration naming a path that no longer exists is reported instead of
+  counted as healthy — four hosts on the author's machine pointed at a temp
+  directory deleted long ago.
+- A config that merely contains the word `commitlore` is no longer taken for a
+  registration.
+- A requested version is bound to the runtime that answers, on both installers.
+- The Node floor is `>=22.12.0`, which is what `node:sqlite` and the
+  dependencies actually require, and both installers enforce it.
+- Windows has an install command in the README for the first time.
+
+### What CI now establishes
+
+- `install-macos` and `install-alpine` (amd64 and arm64) run the installer on
+  those hosts and then run `init`, `doctor` and `context` — the compatibility
+  matrix claimed executions that no job performed.
+- The dogfooding gate fetches the notes mirror and reads its report: `shape` and
+  `reference` must each be `ok`. It used to pass with the reference half
+  unperformed.
+- `test/capture-pipeline-e2e.test.ts` drives the built server through prepare,
+  verify, stage, commit and read-back.
+- The engine-floor parser has tests. It read `>=22.5` as Node 5, which failed
+  every required job before typecheck, build, tests or dogfooding ran.
+- With the notes mirror finally fetched, the reference check ran for the first
+  time and found one violation in this repository's own history: a `Follows:`
+  written six minutes before the record it points at. It cannot be corrected
+  without rewriting the commit that carries it, so it is named in
+  `scripts/dogfood-baseline.json` with the reason, and the assertion subtracts
+  only what that file names. The carried count prints on every run.
+- The release gate matched required checks by name. Any GitHub App installed on
+  the repository could open a check run called `check (22)`, conclude it
+  `success`, and be read as CI having passed. The producing app must now be
+  `github-actions`, and a run with no app attributed is refused.
+- `npm audit` reported ten vulnerabilities on every green run, with no way to
+  tell "assessed" from "never looked at". The production surface — which is
+  what users receive, since `dist/` is committed and the installer never runs
+  npm — is now a blocking check at zero, and the development surface is
+  reported without failing the build. A separate step proves the premise by
+  running the shipped tree with no `node_modules` present.
+
+### Reporting a problem
+
+`SECURITY.md` exists and GitHub's private vulnerability reporting is enabled,
+so a vulnerability no longer has to be disclosed publicly to be disclosed at
+all. It names what is in scope for a tool that serves recorded text to agents —
+injection through served records, a trust grade that overstates, capture
+writing without evidence — and what is not. Dependabot covers npm and the
+workflow actions.
+
+### Failing an installation, not a message
+
+An installation missing `spec/` failed every commit with a raw `ENOENT` and a
+usage line, so the screen showed a path the user never chose and usage for a
+command they never typed. The message had not been examined. It now says what
+is missing, that the message was not examined, and the command that restores
+it — and exits 3 for an operational failure rather than 2 for usage.
+
 ## 0.8.0
 
 Everything 0.7.1 promised about unattended capture is in a release for the

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh -s v0.8.0
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -40,6 +40,12 @@ set -eu
 REPO="MongLong0214/commitlore"
 SOURCE_URL="${COMMITLORE_INSTALL_SOURCE:-https://github.com/$REPO.git}"
 NODE_MAJOR_MIN=22
+# Two requirements meet here. `node:sqlite`, which the index needs, does not
+# exist before 22.5; `commander`, a direct dependency, needs 22.12. The floor is
+# the higher of the two, and `engines.node` says the same. Checking the major
+# alone let everything below it install cleanly and then fail, which reads as
+# "no records" rather than "your Node is too old".
+NODE_MINOR_MIN=12
 
 log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {
@@ -356,6 +362,11 @@ case "$node_version" in
   *) die "\"$node_bin --version\" did not report a version (got: \"$node_version\"), so the Node.js major version cannot be checked. Nothing was installed." 1 ;;
 esac
 node_major="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f1)"
+node_minor="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f2)"
+case "$node_minor" in ''|*[!0-9]*) node_minor=0 ;; esac
+if [ "$node_major" -eq "$NODE_MAJOR_MIN" ] && [ "$node_minor" -lt "$NODE_MINOR_MIN" ]; then
+  die "Node.js $node_version is too old: this release needs Node $NODE_MAJOR_MIN.$NODE_MINOR_MIN or newer (node:sqlite for the index, and a direct dependency). Upgrade Node.js, then run this again. Nothing was installed." 1
+fi
 if [ "$node_major" -lt "$NODE_MAJOR_MIN" ]; then
   die "Node.js $NODE_MAJOR_MIN or newer is required; this machine has $node_version. Upgrade Node.js, then run this again. Nothing was installed." 1
 fi
@@ -448,7 +459,23 @@ if [ -e "$dest" ]; then
     existing_version="$("$dest" --version 2>/dev/null || true)"
     case "$existing_version" in
       [0-9]*.[0-9]*.[0-9]*)
-        if [ -d "$data_root/v$existing_version" ] || [ -d "$data_root/$existing_version" ]; then
+        # The *contents*, not the directory name. Requiring only a directory
+        # called `v1.2.3` meant anyone could make one and have an unrelated
+        # executable at the wrapper path replaced -- the check asked whether a
+        # name existed, which is the thing an attacker controls. `dist/commitlore.mjs`
+        # is written by this install and by nothing else.
+        # The runtime has to answer, not merely exist. A file at that path is
+        # still something anyone can create -- the previous rule accepted one
+        # containing a comment -- so the evidence is that it runs and reports
+        # the version the wrapper claims. Forging that means installing a
+        # working CommitLore of that version, which is not an attack.
+        owned_checkout=""
+        for candidate in "$data_root/v$existing_version" "$data_root/$existing_version"; do
+          [ -f "$candidate/dist/commitlore.mjs" ] || continue
+          reported="$("$node_bin" "$candidate/dist/commitlore.mjs" --version 2>/dev/null || true)"
+          if [ "$reported" = "$existing_version" ]; then owned_checkout="$candidate"; break; fi
+        done
+        if [ -n "$owned_checkout" ]; then
           log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
         else
           die "$dest already exists, reports version \"$existing_version\", and has no commitlore checkout under $data_root to match it -- refusing to overwrite a file this installer cannot show it wrote. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
@@ -665,6 +692,53 @@ record_skipped() { printf '%s: %s\n' "$1" "$2" >>"$skipped_log"; }
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor, and
 # Windsurf all document this exact shape.
+# Whether a JSON agent config actually registers a commitlore server, rather
+# than merely containing the word somewhere.
+registers_commitlore() {
+  path="$1"
+  [ -f "$path" ] || return 1
+  if command -v jq >/dev/null 2>&1; then
+    jq -e '[.. | objects | to_entries[] | select(.key == "commitlore")] | length > 0' "$path" >/dev/null 2>&1
+    return $?
+  fi
+  # Without jq the key form is still narrower than the bare word.
+  grep -q '"commitlore"[[:space:]]*:' "$path" 2>/dev/null
+}
+
+# Reports an existing commitlore registration, and says when it cannot work.
+#
+# Shared by every host that keeps its servers in JSON, because it was not:
+# the generic path learned to name a dead target and `opencode`, which has its
+# own writer for a different config shape, kept reporting one as fine. Two
+# copies of a rule is how the first one drifts.
+#
+# Always returns 0 -- the caller is skipping either way. The difference is what
+# the operator is told.
+report_existing_registration() {
+  agent_name="$1"
+  path="$2"
+  existing_cmd=""
+  if command -v jq >/dev/null 2>&1; then
+    existing_cmd="$(jq -r '
+      [ .. | objects | to_entries[] | select(.key == "commitlore") | .value
+        | (.command? // empty) ]
+      | map(if type == "array" then .[0] else . end)
+      | map(select(type == "string"))
+      | first // empty
+    ' "$path" 2>/dev/null || true)"
+  fi
+  case "$existing_cmd" in
+    /*)
+      if [ ! -e "$existing_cmd" ]; then
+        record_skipped "$agent_name" "$path names commitlore at \"$existing_cmd\", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+        return 0
+      fi
+      ;;
+  esac
+  record_skipped "$agent_name" "$path already mentions commitlore -- left unchanged"
+  return 0
+}
+
 wire_mcp_servers_json() {
   agent="$1"
   config_path="$2"
@@ -690,7 +764,11 @@ EOF
     return
   fi
 
-  if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
+  # Whether this file *registers* commitlore, not whether it mentions the word.
+  # A grep for the string skipped any config that happened to contain it
+  # anywhere -- a note, a comment, an unrelated value -- and reported the host
+  # already wired while nothing was registered.
+  if registers_commitlore "$config_path"; then
     # Preserving an entry somebody configured is right; preserving one that
     # cannot start is not. Four hosts on this author's machine held
     # `/tmp/fresh256.../bin/commitlore` -- a temp directory from a test install,
@@ -698,25 +776,7 @@ EOF
     # commitlore, left unchanged" while those hosts had no working server at
     # all. The file is still never rewritten here; what changes is that a dead
     # target is named instead of counted as fine.
-    existing_cmd=""
-    if command -v jq >/dev/null 2>&1; then
-      existing_cmd="$(jq -r '
-        [ .. | objects | to_entries[] | select(.key == "commitlore") | .value
-          | (.command? // empty) ]
-        | map(if type == "array" then .[0] else . end)
-        | map(select(type == "string"))
-        | first // empty
-      ' "$config_path" 2>/dev/null || true)"
-    fi
-    case "$existing_cmd" in
-      /*)
-        if [ ! -e "$existing_cmd" ]; then
-          record_skipped "$agent" "$config_path names commitlore at \"$existing_cmd\", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
-          return
-        fi
-        ;;
-    esac
-    record_skipped "$agent" "$config_path already mentions commitlore -- left unchanged"
+    if report_existing_registration "$agent" "$config_path"; then return; fi
     return
   fi
 
@@ -896,8 +956,12 @@ EOF
     return
   fi
 
-  if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
-    record_skipped "opencode" "$config_path already mentions commitlore -- left unchanged"
+  # Whether this file *registers* commitlore, not whether it mentions the word.
+  # A grep for the string skipped any config that happened to contain it
+  # anywhere -- a note, a comment, an unrelated value -- and reported the host
+  # already wired while nothing was registered.
+  if registers_commitlore "$config_path"; then
+    report_existing_registration "opencode" "$config_path"
     return
   fi
 

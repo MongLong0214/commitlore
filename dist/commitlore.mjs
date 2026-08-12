@@ -11444,7 +11444,22 @@ var findPackageRoot = (startDir) => {
 };
 var PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
 var installedPath = (...segments) => join(PACKAGE_ROOT, ...segments);
-var readInstalledFile = (...segments) => readFileSync(installedPath(...segments), "utf8");
+var MISSING_INSTALLED_FILE = "commitloreMissingInstalledFile";
+var isMissingInstalledFile = (error2) => error2 instanceof Error && error2[MISSING_INSTALLED_FILE] === true;
+var readInstalledFile = (...segments) => {
+  const path2 = installedPath(...segments);
+  try {
+    return readFileSync(path2, "utf8");
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    const missing = new Error(
+      `this installation is missing ${path2} \u2014 the commit message was not examined. Reinstall CommitLore to restore it: curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/main/install.sh | sh`
+    );
+    Object.defineProperty(missing, MISSING_INSTALLED_FILE, { value: true });
+    missing.cause = error2;
+    throw missing;
+  }
+};
 var cachedVersion = null;
 var packageVersion = () => {
   if (cachedVersion !== null) return cachedVersion;
@@ -12445,7 +12460,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   }
   return records;
 };
-var readNoteRecords = (cwd, reachable, excluded) => {
+var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF2}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line2) => line2 !== "").map((line2) => line2.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
   if (annotated.length === 0) return [];
@@ -12457,7 +12472,14 @@ var readNoteRecords = (cwd, reachable, excluded) => {
   const commits = typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "");
   if (commits.length === 0) return [];
   const records = [];
-  for (const batch of chunked(commits, LOG_BATCH)) {
+  let read = 0;
+  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
+  for (const batch of chunked(commits, batchSize)) {
+    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== void 0) cost.unreadNotes = commits.length - read;
+      return records;
+    }
+    read += batch.length;
     const result = gitLogByShas(cwd, batch, "%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00", [
       `--notes=${NOTES_REF2}`
     ]);
@@ -13025,7 +13047,7 @@ var scanTrailers = (query = {}, opts = {}) => {
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
   const records = [
     ...readCommitRecords(cwd, shas, void 0, opts.budget, opts.cost),
-    ...readNoteRecords(cwd, new Set(shas))
+    ...readNoteRecords(cwd, new Set(shas), void 0, opts.budget, opts.cost)
   ];
   return filterTrailers(toIndexedTrailers(records), query);
 };
@@ -14840,7 +14862,7 @@ var normalizePaths = (opts) => {
 var scanSource = (cwd, diagnostics, budgetMs) => {
   let rows;
   let corpusPasses = 0;
-  const cost = { unreadCommits: 0 };
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
   return {
     fetch: (query) => {
       if (rows === void 0) {
@@ -14854,7 +14876,7 @@ var scanSource = (cwd, diagnostics, budgetMs) => {
     },
     fromIndex: false,
     corpusPasses: () => corpusPasses,
-    unreadCommits: () => cost.unreadCommits,
+    unreadCommits: () => cost.unreadCommits + cost.unreadNotes,
     close: () => {
     },
     diagnostics
@@ -15210,7 +15232,7 @@ var runQuery = (opts = {}) => {
     const unread = source.unreadCommits();
     if (unread > 0) {
       diagnostics.push(
-        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
+        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
       );
     }
     const shallow = hasShallowHistory(cwd);
@@ -16124,6 +16146,22 @@ var verifyCaptureRecords = (opts) => {
   const accepted = [];
   const rejected = [];
   const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+  const settle = (result) => {
+    if (persist(result)) return result;
+    if (opts.readOnly !== true) {
+      try {
+        deletePending(nonce, { cwd });
+      } catch {
+      }
+    }
+    return {
+      accepted: [],
+      rejected: [],
+      validation_result: "empty",
+      incomplete: true,
+      overlap_check: "canonical_exact_only"
+    };
+  };
   try {
     const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
@@ -16131,7 +16169,7 @@ var verifyCaptureRecords = (opts) => {
         accepted: [],
         rejected: [],
         validation_result: "empty",
-        incomplete: false,
+        incomplete: true,
         overlap_check: "canonical_exact_only"
       };
     }
@@ -16152,8 +16190,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     if (pending.source_hashes.diff !== diffHash) {
       for (const record2 of draft) {
@@ -16170,8 +16207,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
@@ -16182,8 +16218,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const history = opts.history === void 0 ? loadCaptureVerificationHistory(cwd) : opts.history;
     if (history === null) {
@@ -16194,8 +16229,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const reservedRecordIds = new Set(history.recordIds);
     const { activeCanonicalTuples } = history;
@@ -16252,17 +16286,7 @@ var verifyCaptureRecords = (opts) => {
       incomplete: false,
       overlap_check: "canonical_exact_only"
     };
-    if (!persist(result)) {
-      const unbound = {
-        accepted: [],
-        rejected: [],
-        validation_result: "empty",
-        incomplete: true,
-        overlap_check: "canonical_exact_only"
-      };
-      return unbound;
-    }
-    return result;
+    return settle(result);
   } catch {
     const result = {
       accepted: [],
@@ -18699,6 +18723,23 @@ var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
+var registeredMcpCommand = (cwd) => {
+  const path2 = mcpRegistrationPath(cwd);
+  if (path2 === null) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync10(path2, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!isJsonObject(parsed)) return null;
+  const servers = parsed["mcpServers"];
+  if (!isJsonObject(servers)) return null;
+  const entry = servers[MCP_SERVER_KEY];
+  if (!isLaunchableEntry(entry)) return null;
+  return String(entry["command"]);
+};
+var registrationIsOurs = (cwd) => registeredMcpCommand(cwd) === MCP_SERVER_COMMAND;
 var holdsLaunchableRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && isLaunchableEntry(servers[MCP_SERVER_KEY]);
 var holdsMalformedRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && !isLaunchableEntry(servers[MCP_SERVER_KEY]);
 var repositoryRoot = (cwd) => {
@@ -18999,6 +19040,28 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     );
   }
   if (registersCommitloreMcpServer(cwd)) {
+    const command = registeredMcpCommand(cwd);
+    const ours = registrationIsOurs(cwd);
+    if (!ours) {
+      return check(
+        id,
+        category,
+        title,
+        "warn",
+        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, which is not the command this tool writes \u2014 it is left alone, and whether it starts a capture server is unverified`,
+        `check that ${JSON.stringify(command)} is a CommitLore MCP server, or remove the entry and run commitlore init`,
+        false,
+        void 0,
+        {
+          evidence: {
+            policy: "unattended",
+            ordinary_git_commit: "cannot-initiate",
+            initiator: "registered-command-unverified",
+            command: command ?? ""
+          }
+        }
+      );
+    }
     return check(
       id,
       category,
@@ -21551,15 +21614,19 @@ var runAgentIntegrationStep = (opts) => {
   };
 };
 var runMcpRegistrationStep = (opts) => {
-  const result = registerCommitloreMcpServer(opts.cwd ?? process.cwd());
+  const cwd = opts.cwd ?? process.cwd();
+  const result = registerCommitloreMcpServer(cwd);
   if (!result.ok) {
     return {
       step: "mcp-registration",
       title: "MCP registration",
-      code: 0,
+      code: 1,
       lines: [
         `could not register the capture server: ${result.error}`,
-        "the repository still installs; doctor reports a missing initiator when unattended capture needs one"
+        "nothing in this repository can start a capture until it is registered \u2014 delivery and the hooks still work",
+        `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
+        '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
+        "then run commitlore doctor to confirm it"
       ],
       detail: result
     };
@@ -32279,6 +32346,26 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source !== "notes").reverse(),
   ...records.filter((record2) => record2.source === "notes")
 ];
+var withheldIfInjection = (record2) => {
+  const matched = [
+    ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
+  ];
+  if (matched.length === 0) return record2;
+  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
+  return {
+    ...record2,
+    resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
+      key: trailer.key,
+      value: withheld
+    })),
+    // `expiresAt` carries the `Expires:` value verbatim, condition form and
+    // all, and is serialised beside the trailers. Redacting only
+    // `resolvedTrailers` left this field as an open second channel: a payload
+    // in `Expires:` reached a model through the same tool. Every place the
+    // value appears has to be the same place.
+    ...record2.expiresAt === void 0 ? {} : { expiresAt: withheld }
+  };
+};
 var buildReport2 = (scan2, at) => {
   const ordered = oldestFirst2(scan2.records);
   const states = foldLifecycle(ordered, { at });
@@ -32289,7 +32376,7 @@ var buildReport2 = (scan2, at) => {
       )
     );
     if (record2 === void 0) throw new Error(`no source for stale record ${state.recordId}`);
-    return { ...state, source: record2.source };
+    return withheldIfInjection({ ...state, source: record2.source });
   });
   return {
     at: at.toISOString(),
@@ -33066,20 +33153,21 @@ var codexPluginInstallCommand = () => "commitlore plugin install-codex";
 var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join14(dataHome, ...plugin.dataRelativePath);
 var successful = (result) => result.status === 0 && result.error === void 0;
 var readMarketplaceState = (json, plugin) => {
+  const namedInText = () => json.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `)) ? { kind: "unverifiable-present" } : { kind: "unverifiable-absent" };
   let parsed;
   try {
     parsed = JSON.parse(json);
   } catch {
-    return { kind: "unverifiable" };
+    return namedInText();
   }
   const entries = parsed.marketplaces;
-  if (!Array.isArray(entries)) return { kind: "unverifiable" };
+  if (!Array.isArray(entries)) return namedInText();
   const mine = entries.find(
     (entry) => typeof entry === "object" && entry !== null && entry.name === plugin.marketplace
   );
   if (mine === void 0) return { kind: "absent" };
   const source = mine.marketplaceSource?.source;
-  if (typeof source !== "string" || source === "") return { kind: "unverifiable" };
+  if (typeof source !== "string" || source === "") return { kind: "unverifiable-present" };
   return sameMarketplaceSource(source, plugin.marketplaceSource) ? { kind: "ours" } : { kind: "foreign", source };
 };
 var canonicalMarketplaceSource = (value) => {
@@ -33146,12 +33234,22 @@ var installCodexPlugin = (options = {}) => {
       ]
     };
   }
-  if (marketplace.kind === "unverifiable") {
+  if (marketplace.kind === "unverifiable-present") {
+    return {
+      exitCode: 2,
+      report: [
+        `a Codex marketplace named ${plugin.marketplace} is already configured, and this Codex does not report where it points`,
+        "nothing was installed: this cannot tell it apart from one somebody else configured under the same name",
+        `to use this one, remove that marketplace (codex plugin marketplace remove ${plugin.marketplace}) and rerun, or upgrade Codex to a version that reports a marketplace source`
+      ]
+    };
+  }
+  if (marketplace.kind === "unverifiable-absent") {
     report.push(
-      `could not confirm which repository the ${plugin.marketplace} marketplace points at; this Codex does not report a marketplace source`
+      `this Codex does not report marketplace sources; none named ${plugin.marketplace} was visible, so one was added from this install`
     );
   }
-  if (marketplace.kind === "absent") {
+  if (marketplace.kind === "absent" || marketplace.kind === "unverifiable-absent") {
     const added = run(["plugin", "marketplace", "add", plugin.marketplaceSource]);
     if (!successful(added)) {
       return {
@@ -33415,6 +33513,15 @@ var usageError2 = (message) => ({
   stdout: "",
   stderr: `commitlore: ${message}
 ${USAGE2}
+`,
+  violations: [],
+  secrets: [],
+  checks: []
+});
+var installationError = (message) => ({
+  code: 3,
+  stdout: "",
+  stderr: `commitlore: ${message}
 `,
   violations: [],
   secrets: [],
@@ -33808,6 +33915,7 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
+    if (isMissingInstalledFile(error2)) return installationError(messageOf8(error2));
     return usageError2(messageOf8(error2));
   }
   const references = checkReferences(input, sources, cwd);

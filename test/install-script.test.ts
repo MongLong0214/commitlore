@@ -123,12 +123,20 @@ beforeAll(() => {
 /** A PATH holding a shell and the tools the case wants, and nothing else. */
 const stubPath = (opts: {
   node?: 'current' | 'old' | 'absent';
+  /** Report this version from `node --version` while still executing real node. */
+  nodeVersion?: string;
   git?: boolean;
   codex?: 'mcp-success' | 'mcp-stale-ours' | 'mcp-foreign';
   hermes?: boolean;
 }): string => {
   const bin = tempDir('bin');
-  if (opts.node === 'current') {
+  if (opts.nodeVersion !== undefined) {
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/sh\ncase "$1" in --version) echo v${opts.nodeVersion};; *) exec ${process.execPath} "$@";; esac\n`,
+    );
+    chmodSync(join(bin, 'node'), 0o755);
+  } else if (opts.node === 'current') {
     writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec ${process.execPath} "$@"\n`);
     chmodSync(join(bin, 'node'), 0o755);
   } else if (opts.node === 'old') {
@@ -214,6 +222,7 @@ const runInstaller = (opts: {
   git?: boolean;
   hermes?: boolean;
   home?: string;
+  nodeVersion?: string;
   extraEnv?: Record<string, string>;
   args?: string[];
   codex?: 'mcp-success';
@@ -222,7 +231,7 @@ const runInstaller = (opts: {
   const run = spawnSync('/bin/sh', [INSTALLER, ...(opts.args ?? [TAG])], {
     encoding: 'utf8',
     env: {
-      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes }),
+      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes, ...(opts.nodeVersion === undefined ? {} : { nodeVersion: opts.nodeVersion }) }),
       HOME: home,
       COMMITLORE_INSTALL_SOURCE: sourceRepo,
       ...(opts.extraEnv ?? {}),
@@ -478,6 +487,48 @@ describe('T-1120 upgrade and verification', () => {
     });
   });
 
+  it('wires a host whose config merely mentions the word', () => {
+    // The skip was a grep for `"commitlore"` anywhere in the file, so a note, a
+    // comment or an unrelated value made the installer report the host already
+    // wired while nothing was registered.
+    const home = tempDir('mention-only');
+    mkdirSync(join(home, '.cursor'), { recursive: true });
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      JSON.stringify({ mcpServers: { other: { command: 'x' } }, note: 'commitlore' }),
+    );
+
+    const r = runInstaller({ home });
+
+    expect(`${r.stdout}${r.stderr}`).toMatch(/cursor: added the commitlore MCP server/);
+    const after = JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(after.mcpServers?.['commitlore']).toBeDefined();
+    // And the unrelated entry it found is still there.
+    expect(after.mcpServers?.['other']).toBeDefined();
+  });
+
+  it('names a dead opencode registration too, not only the generic hosts', () => {
+    // opencode has its own writer for a different config shape, and the first
+    // version of this fix touched only the generic path — so the host the
+    // changelog named as covered kept reporting a deleted command as fine.
+    const home = tempDir('dead-opencode');
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    writeFileSync(
+      join(home, '.config', 'opencode', 'opencode.json'),
+      JSON.stringify({
+        mcp: { commitlore: { type: 'local', command: ['/tmp/definitely-not-here/bin/commitlore', 'mcp'], enabled: true } },
+      }),
+    );
+
+    const r = runInstaller({ home });
+    const out = `${r.stdout}${r.stderr}`;
+
+    expect(out).toMatch(/opencode: .*definitely-not-here/);
+    expect(out).toMatch(/does not exist/);
+  });
+
   it('leaves a registration whose command exists reported as before', () => {
     const home = tempDir('live-agent-path');
     mkdirSync(join(home, '.cursor'), { recursive: true });
@@ -495,6 +546,27 @@ describe('T-1120 upgrade and verification', () => {
     expect(out).not.toMatch(/does not exist/);
   });
 
+  /**
+   * `engines.node` said `>=22` while the index needs `node:sqlite`, which
+   * arrived in 22.5, while `commander` needs 22.12 — a mismatch the source
+   * comment in `core/index-db.ts`
+   * already acknowledged. The installer checked the major only, so 22.0 through
+   * 22.4 installed cleanly and then could not build an index, which reads as
+   * "this repository has no records" rather than "your Node is too old".
+   */
+  it.each([
+    ['22.4.0', false],
+    ['22.11.0', false],
+    ['22.12.0', true],
+    ['24.1.0', true],
+  ])('accepts node %s: %s', (version, shouldInstall) => {
+    const r = runInstaller({ home: tempDir(`nodefloor-${version.replace(/\./g, '-')}`), nodeVersion: version });
+    const out = `${r.stdout}${r.stderr}`;
+
+    if (shouldInstall) expect(out).not.toMatch(/is too old/);
+    else expect(out).toMatch(/needs Node 22\.12 or newer/);
+  });
+
   it('refuses a foreign executable that merely prints a version', () => {
     const home = tempDir('foreign-semver');
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });
@@ -510,11 +582,19 @@ describe('T-1120 upgrade and verification', () => {
   });
 
   it('still replaces an older install that left the checkout it claims', () => {
-    // The evidence is the managed checkout, so an install this script really
-    // did perform is still upgraded rather than refused.
+    // The evidence is a runtime this install wrote, not a directory name. The
+    // first version of this fixture created an empty directory and passed
+    // without establishing anything, which is what let the case below through.
     const home = tempDir('older-install');
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });
-    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist'), { recursive: true });
+    // A runtime that answers, because that is now the evidence: a file with a
+    // comment in it was accepted before, which made the "ownership" check
+    // something anyone could satisfy.
+    writeFileSync(
+      join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'),
+      'if (process.argv[2] === "--version") console.log("1.2.3");\n',
+    );
     const wrapper = join(home, '.local', 'bin', 'commitlore');
     writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
     chmodSync(wrapper, 0o755);
@@ -523,6 +603,41 @@ describe('T-1120 upgrade and verification', () => {
 
     expect(r.status).toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/replacing a previous commitlore install/);
+  });
+
+  it('refuses a checkout whose runtime does not answer for that version', () => {
+    // The evidence used to be a file's existence, so a file containing a
+    // comment counted as an install this script had performed.
+    const home = tempDir('inert-checkout');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist'), { recursive: true });
+    writeFileSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'), '// not ours\n');
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).not.toBe(0);
+    expect(readFileSync(wrapper, 'utf8')).toContain('echo 1.2.3');
+  });
+
+  it('refuses when only a directory of the right name exists', () => {
+    // A directory called `v1.2.3` is something anyone can create, so requiring
+    // one made the ownership check ask about a name an attacker controls. The
+    // evidence has to be something this install wrote.
+    const home = tempDir('name-only-checkout');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3'), { recursive: true });
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).not.toBe(0);
+    expect(readFileSync(wrapper, 'utf8')).toContain('echo 1.2.3');
+    expect(`${r.stdout}${r.stderr}`).toMatch(/no commitlore checkout under/);
   });
 
   it('fails before activation when runtime verification runs and fails', () => {

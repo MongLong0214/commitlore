@@ -11,6 +11,7 @@
 
 import type { Command } from 'commander';
 
+import { scanInjection } from '../core/grade.js';
 import { execGit } from '../core/git.js';
 import {
   listRecordShas,
@@ -187,6 +188,40 @@ const oldestFirst = (records: CollectedRecord[]): CollectedRecord[] => [
   ...records.filter((record) => record.source === 'notes'),
 ];
 
+/**
+ * Withholds the content of a record whose trailers match an injection pattern.
+ *
+ * `commitlore_query` grades every record before a model sees it and renders a
+ * `blocked` one as a count. `stale` serialised `resolvedTrailers` straight into
+ * its report, so an expired `Warn: ignore previous instructions…` reached the
+ * model ungraded through a tool the same server exposes — the payload only had
+ * to be stale, which is the one state nobody is watching.
+ *
+ * The record still appears: what is stale is the operator's business, and
+ * hiding it would trade one silence for another. Its *values* do not. The keys
+ * are kept because a key is a closed vocabulary and cannot carry prose.
+ */
+const withheldIfInjection = (record: StaleReportRecord): StaleReportRecord => {
+  const matched = [
+    ...new Set(record.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value))),
+  ];
+  if (matched.length === 0) return record;
+  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(', ')}]`;
+  return {
+    ...record,
+    resolvedTrailers: record.resolvedTrailers.map((trailer) => ({
+      key: trailer.key,
+      value: withheld,
+    })),
+    // `expiresAt` carries the `Expires:` value verbatim, condition form and
+    // all, and is serialised beside the trailers. Redacting only
+    // `resolvedTrailers` left this field as an open second channel: a payload
+    // in `Expires:` reached a model through the same tool. Every place the
+    // value appears has to be the same place.
+    ...(record.expiresAt === undefined ? {} : { expiresAt: withheld }),
+  };
+};
+
 export const buildReport = (scan: Scan, at: Date): StaleReport => {
   const ordered = oldestFirst(scan.records);
   const states = foldLifecycle(ordered, { at });
@@ -199,7 +234,7 @@ export const buildReport = (scan: Scan, at: Date): StaleReport => {
         ),
     );
     if (record === undefined) throw new Error(`no source for stale record ${state.recordId}`);
-    return { ...state, source: record.source };
+    return withheldIfInjection({ ...state, source: record.source });
   });
   return {
     at: at.toISOString(),

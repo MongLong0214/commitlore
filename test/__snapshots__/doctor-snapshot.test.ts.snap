@@ -120,7 +120,7 @@ exports[`#470 doctor text report header > pins verbose diagnostics while the def
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
 ok      cli runtime — <root><path> runs (<version>)
-        evidence.entry: ~<path>
+        evidence.entry: <root><path>
         evidence.stdout_first_line: <version>
         evidence.stdout_truncated: false
         evidence.version: <version>
@@ -137,7 +137,7 @@ ok      notes push — no local mirror yet — nothing to push (git push origin 
         durationMs: <ms>
 warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
         fix: commitlore hooks install
-        evidence.bin: ~<path>
+        evidence.bin: <root><path>
         evidence.hook_path: <repo>/.git/hooks/commit-msg
         evidence.node: <node>
         durationMs: <ms>

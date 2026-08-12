@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="ライセンス: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -22,6 +22,12 @@ CommitLore はその決定を Git に残し、ファイルを編集する前に�
 CommitLore にホスティングサービスはなく、record は Git に保管します。MCP サーバー
 または hook がコンテキストを返した後は、host が自身のポリシーでそのコンテキストを
 扱います。CommitLore はそのデータフローを制御しません。
+
+**半分は自動で、もう半分はそうではありません。** *delivery* — エージェントがパスを
+編集する前に、まだ有効な決定を渡すこと — はインストールすれば自動で行われます。
+*capture* — 新しい決定を書き残すこと — は、変更に diff では示せない理由があると
+エージェントが判断したときに行われます。通常の `git commit` はこれを開始できません。
+hook には diff があり、capture にはセッションが必要だからです。
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -72,18 +78,18 @@ commitlore plugin install-codex
 
 Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や cache を直接編集しません。下の標準 installer も Codex を検出すれば同じコマンドを実行します。インストール後は新しい Codex session を開始してください — plugin の skill と MCP server はインストール時ではなく session 開始時に読み込まれます。下の CLI が repository command を提供します。
 
-どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
+どちらの経路も前提条件は Node.js 22.12+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
 
 **その他のコーディングエージェント** — CLI をインストールします:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — PowerShell で同じインストールを行います:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
 ```
 
 **Hermes** — CLI をインストールした後、host integration を設定します:
@@ -123,11 +129,11 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh
-sh install.sh v0.8.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh
+sh install.sh v0.8.1
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v0.8.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.8.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -168,7 +174,8 @@ signature も必要です。その signature も権限や record の真実を証
 | Claude Code | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Codex | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Hermes | **はい — `commitlore hermes install`.** | **はい — `commitlore hermes install`.** |
-| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init` が編集前 delivery instruction を書きます。host が従う場合も従わない場合もあります。 | **procedure であり自動ではありません。** host が従う場合も従わない場合もあります。 |
+| Gemini CLI, Cursor, Windsurf, opencode | **はい — `install.sh` が MCP server を配線します。** | **procedure であり自動ではありません。** server が接続ごとに prepare → verify → stage の手順を伝えます。host が従う場合も従わない場合もあります。 |
+| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init --agents-md` が repository に書きます。 | **procedure であり自動ではありません。** 同じファイル、同じ但し書きです。 |
 
 「はい」は layer がインストールされるという意味であり、すべての commit に record が
 付くという意味ではありません。自動 integration は最初の三行だけです。その他の

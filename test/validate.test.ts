@@ -7,12 +7,16 @@
  * `hooks.test.ts`, because a hook and a CI job both branch on it.
  */
 
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
+
+/** This checkout's root, for tests that need a real installation tree. */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 import { CHECK_CLASS_NEEDS, runValidate } from '../src/commands/validate.js';
 import { notesAbsenceEvidenceKey, writeRecord } from '../src/core/notes.js';
@@ -1032,5 +1036,59 @@ describe('validate — Ruled-out: separator ambiguity (issue #372)', () => {
     });
     expect(result.code).toBe(0);
     expect(result.stderr).toBe('');
+  });
+});
+
+/**
+ * #533: an installation missing `spec/` failed every commit with a raw ENOENT
+ * and a usage line, so the two things on screen were a path the user did not
+ * choose and usage for a command they did not type. The available reading was
+ * "my trailers are wrong" — and the message had never been examined.
+ *
+ * Asserted against a real installation tree rather than a mock, because the
+ * thing being tested is what a user sees when `spec/` is genuinely absent.
+ */
+describe('validate — a broken installation does not read as a bad message', () => {
+  const brokenInstall = (): string => {
+    const root = mkdtempSync(join(tmpdir(), 'commitlore-noschema-'));
+    cpSync(join(REPO_ROOT, 'dist'), join(root, 'dist'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'package.json'), join(root, 'package.json'));
+    // No spec/ — that is the whole point.
+    const message = join(root, 'msg.txt');
+    writeFileSync(
+      message,
+      'test: a subject\n\nBody.\n\nBlast: local\nUndo: easy\nCertainty: firm\n' +
+        'Record-Id: r-aaa111\nProvenance: authored\nCommitLore-Version: 2.0.0\n',
+    );
+    temporaryDirectories.push(root);
+    return root;
+  };
+
+  const runBroken = (): { status: number; stderr: string } => {
+    const root = brokenInstall();
+    const result = spawnSync(
+      process.execPath,
+      [join(root, 'dist', 'commitlore.mjs'), 'validate', '--message-file', join(root, 'msg.txt')],
+      { cwd: root, encoding: 'utf8' },
+    );
+    return { status: result.status ?? -1, stderr: result.stderr };
+  };
+
+  it('exits 3 for an operational failure, not 2 for usage', () => {
+    expect(runBroken().status).toBe(3);
+  });
+
+  it('prints no usage line, because nothing the caller typed is wrong', () => {
+    expect(runBroken().stderr).not.toContain('usage: commitlore validate');
+  });
+
+  it('says the message was not examined, and names what is missing', () => {
+    const { stderr } = runBroken();
+    expect(stderr).toContain('the commit message was not examined');
+    expect(stderr).toContain('record.schema.json');
+  });
+
+  it('gives the repair, since the user cannot fix this by retyping', () => {
+    expect(runBroken().stderr).toContain('install.sh');
   });
 });

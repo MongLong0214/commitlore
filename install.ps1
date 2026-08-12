@@ -1,8 +1,8 @@
 <#
     Installs commitlore from source on Windows, for any agent that is not Claude Code.
 
-      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1 | iex
-      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1 | iex
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
 
     Claude Code users do not need this script. The repository is itself a plugin
     marketplace (ADR-0011), so two /plugin commands register the MCP server, the
@@ -54,6 +54,9 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = 'MongLong0214/commitlore'
 $NodeMajorMin = 22
+# Two requirements meet here: `node:sqlite` (22.5) and the `commander`
+# dependency (22.12). The floor is the higher, and `engines.node` says the same.
+$NodeMinorMin = 12
 $WrapperMarker = ':: commitlore:wrapper:v1'
 
 $SourceUrl = $env:COMMITLORE_INSTALL_SOURCE
@@ -460,6 +463,12 @@ if ($nodeVersion -notmatch '^v[0-9]+') {
     Stop-Install """$nodeBin --version"" did not report a version (got: ""$nodeVersion""), so the Node.js major version cannot be checked. Nothing was installed." 1
 }
 $nodeMajor = [int]($nodeVersion.TrimStart('v').Split('.')[0])
+$nodeMinorRaw = ($nodeVersion.TrimStart('v').Split('.') + @('0'))[1]
+$nodeMinor = 0
+[void][int]::TryParse($nodeMinorRaw, [ref]$nodeMinor)
+if ($nodeMajor -eq $NodeMajorMin -and $nodeMinor -lt $NodeMinorMin) {
+    Stop-Install "Node.js $nodeVersion is too old: this release needs Node $NodeMajorMin.$NodeMinorMin or newer (node:sqlite for the index, and a direct dependency). Upgrade Node.js, then run this again. Nothing was installed." 1
+}
 if ($nodeMajor -lt $NodeMajorMin) {
     Stop-Install "Node.js $NodeMajorMin or newer is required; this machine has $nodeVersion. Upgrade Node.js, then run this again. Nothing was installed." 1
 }
@@ -560,8 +569,21 @@ if (Test-Path -LiteralPath $dest) {
         $existingVersion = $existingVersion.Trim()
         $existingCheckout = ''
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
+            # The *contents*, not the directory name: a directory called
+            # `v1.2.3` is something anyone can create, and requiring only that
+            # let an unrelated executable at the shim path be replaced.
+            # The runtime has to answer, not merely exist: a file at that path
+            # is still something anyone can create. Forging this means
+            # installing a working CommitLore of that version.
             foreach ($candidate in @((Join-Path $dataRoot ("v" + $existingVersion)), (Join-Path $dataRoot $existingVersion))) {
-                if (Test-Path -LiteralPath $candidate -PathType Container) { $existingCheckout = $candidate; break }
+                $bundle = Join-Path $candidate 'dist\commitlore.mjs'
+                if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) { continue }
+                $reported = ''
+                $eapProbe = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                try { $reported = (& $nodeBin $bundle --version 2>$null | Select-Object -First 1) } catch { $reported = '' }
+                $ErrorActionPreference = $eapProbe
+                if ($null -ne $reported -and $reported.Trim() -eq $existingVersion) { $existingCheckout = $candidate; break }
             }
         }
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+' -and $existingCheckout -ne '') {
@@ -802,6 +824,52 @@ function Test-AgentPresent {
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor and Windsurf
 # all document this exact shape.
+# Whether a JSON agent config actually registers a commitlore server, rather
+# than merely containing the word somewhere. A regex for the string skipped any
+# config that happened to contain it -- a note, an unrelated value -- and
+# reported the host already wired while nothing was registered.
+function Test-RegistersCommitlore {
+    param([string]$Body)
+    try {
+        $parsed = $Body | ConvertFrom-Json
+    } catch {
+        # Unparseable: fall back to the key form, still narrower than the word.
+        return ($Body -match '"commitlore"\s*:')
+    }
+    foreach ($container in @($parsed.mcpServers, $parsed.mcp, $parsed.servers)) {
+        if ($null -ne $container -and $null -ne $container.commitlore) { return $true }
+    }
+    return $false
+}
+
+# Reports an existing commitlore registration, and says when it cannot work.
+#
+# Shared by every host that keeps its servers in JSON, because it was not: the
+# generic path learned to name a dead target and `opencode`, which has its own
+# writer for a different config shape, kept reporting one as fine.
+function Add-ExistingRegistrationNote {
+    param([string]$AgentName, [string]$ConfigPath, [string]$Body)
+    $existingCmd = ''
+    try {
+        $probe = $Body | ConvertFrom-Json
+        foreach ($container in @($probe.mcpServers, $probe.mcp, $probe.servers)) {
+            if ($null -eq $container) { continue }
+            $entry = $container.commitlore
+            if ($null -eq $entry) { continue }
+            $cmd = $entry.command
+            if ($cmd -is [array]) { $cmd = $cmd | Select-Object -First 1 }
+            if ($cmd -is [string] -and $cmd -ne '') { $existingCmd = $cmd; break }
+        }
+    } catch {
+        $existingCmd = ''
+    }
+    if ($existingCmd -ne '' -and -not (Test-Path -LiteralPath $existingCmd)) {
+        Add-Skipped $AgentName "$ConfigPath names commitlore at ""$existingCmd"", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+        return
+    }
+    Add-Skipped $AgentName "$ConfigPath already mentions commitlore -- left unchanged"
+}
+
 function Wire-McpServersJson {
     param([string] $Agent, [string] $ConfigPath)
 
@@ -835,32 +903,8 @@ function Wire-McpServersJson {
         Add-Skipped $Agent "could not read $ConfigPath"
         return
     }
-    if ($body -match '"commitlore"') {
-        # Preserving an entry somebody configured is right; preserving one that
-        # cannot start is not. A registration left by a temp-directory install
-        # kept reporting "already mentions commitlore" long after the directory
-        # was gone, so the host had no working server and every reinstall said
-        # it was fine. The file is still never rewritten here -- a dead target
-        # is named rather than counted as healthy.
-        $existingCmd = ''
-        try {
-            $probe = $body | ConvertFrom-Json
-            foreach ($container in @($probe.mcpServers, $probe.mcp, $probe.servers)) {
-                if ($null -eq $container) { continue }
-                $entry = $container.commitlore
-                if ($null -eq $entry) { continue }
-                $cmd = $entry.command
-                if ($cmd -is [array]) { $cmd = $cmd | Select-Object -First 1 }
-                if ($cmd -is [string] -and $cmd -ne '') { $existingCmd = $cmd; break }
-            }
-        } catch {
-            $existingCmd = ''
-        }
-        if ($existingCmd -ne '' -and -not (Test-Path -LiteralPath $existingCmd)) {
-            Add-Skipped $Agent "$ConfigPath names commitlore at ""$existingCmd"", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
-            return
-        }
-        Add-Skipped $Agent "$ConfigPath already mentions commitlore -- left unchanged"
+    if (Test-RegistersCommitlore $body) {
+        Add-ExistingRegistrationNote $Agent $ConfigPath $body
         return
     }
     try {
@@ -1070,8 +1114,8 @@ if (Test-AgentPresent 'opencode' @((Join-Path $home_ '.config\opencode'))) {
             Add-Wired "opencode: created $openConfig"
         } else {
             $body = (Get-Content -LiteralPath $openConfig -Raw)
-            if ($body -match '"commitlore"') {
-                Add-Skipped 'opencode' "$openConfig already mentions commitlore -- left unchanged"
+            if (Test-RegistersCommitlore $body) {
+                Add-ExistingRegistrationNote 'opencode' $openConfig $body
             } else {
                 $parsed = $body | ConvertFrom-Json
                 if ($null -eq $parsed.PSObject.Properties['mcp']) {

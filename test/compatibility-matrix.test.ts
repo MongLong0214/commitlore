@@ -272,7 +272,7 @@ describe('T-1122 the documented prerequisites are the ones the installers check 
 
   it('names exactly the prerequisites, with none dropped', () => {
     expect(keysOf(rows()).map((k) => k.replace(/\s*\(.*\)$/, ''))).toEqual([
-      'Node.js ≥ 22',
+      'Node.js ≥ 22.12',
       'Git',
       'A POSIX shell',
     ]);
@@ -427,6 +427,36 @@ describe('T-1122 no README contradicts the host table', () => {
           `${file} says "${line.trim().slice(0, 90)}" while the host table calls ${platform} supported`,
         ).toBe(false);
       }
+    }
+  });
+});
+
+/**
+ * The matrix says "supported" means an install path reached the host and the
+ * result was executed there. It named jobs that did not exist: macOS rested on
+ * the conformance suite while the row itself admitted the install ran on Linux
+ * only, and the musl row claimed two architectures the workflow never used.
+ *
+ * Prose cannot be checked, but a job name can. This asserts that every job the
+ * matrix cites as its evidence is a job CI actually defines — the cheapest
+ * check that would have caught both.
+ */
+describe('the evidence the matrix cites exists', () => {
+  it('names only jobs that CI defines', () => {
+    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+    const defined = new Set(
+      workflow
+        .split('\n')
+        .map((line) => /^ {2}([a-z][a-z0-9-]*):\s*$/.exec(line)?.[1])
+        .filter((name): name is string => name !== undefined),
+    );
+
+    const matrix = readFileSync(DOC_PATH, 'utf8');
+    const cited = [...new Set([...matrix.matchAll(/`(install-[a-z0-9-]+|git-matrix|check)` job/g)].map((m) => m[1]!))];
+
+    expect(cited.length, 'the matrix cites no job at all').toBeGreaterThan(0);
+    for (const job of cited) {
+      expect(defined, `the matrix cites a job CI does not define: ${job}`).toContain(job);
     }
   });
 });

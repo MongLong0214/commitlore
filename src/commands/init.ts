@@ -340,22 +340,32 @@ const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
 
 /**
  * Make this repository advertise the capture tools a repository-scoped MCP
- * host can load. The registration is intentionally advisory: a malformed or
- * unwritable file leaves the repository degraded, not broken, and doctor owns
- * the warning when unattended capture makes an initiator necessary. The other
- * install steps still run and this one never raises init's exit status on its
- * own.
+ * host can load.
+ *
+ * A failure here used to be reported at code 0, so `init` printed a checkmark
+ * and finished with `init: ready` over a repository where nothing can start a
+ * capture. Capture is the product; a setup command that cannot wire it is not
+ * ready, whatever else succeeded.
+ *
+ * It is still not fatal — the other steps run, the hooks work, delivery works —
+ * so this raises init to 1, the code that already means "ran, and something
+ * needs you", never 2. And it says what to do, because the repair is one file
+ * and the operator is the only one who can decide what belongs in it.
  */
 const runMcpRegistrationStep = (opts: InitOptions): InitStep => {
-  const result = registerCommitloreMcpServer(opts.cwd ?? process.cwd());
+  const cwd = opts.cwd ?? process.cwd();
+  const result = registerCommitloreMcpServer(cwd);
   if (!result.ok) {
     return {
       step: 'mcp-registration',
       title: 'MCP registration',
-      code: 0,
+      code: 1,
       lines: [
         `could not register the capture server: ${result.error}`,
-        'the repository still installs; doctor reports a missing initiator when unattended capture needs one',
+        'nothing in this repository can start a capture until it is registered — delivery and the hooks still work',
+        `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
+        '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
+        'then run commitlore doctor to confirm it',
       ],
       detail: result,
     };

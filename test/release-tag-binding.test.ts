@@ -185,7 +185,7 @@ describe('#499 the published tag is the commit the gates qualified', () => {
 
   it('refuses a same-name tag on another main commit even when CI passed on the original', () => {
     // Every upstream gate is genuinely satisfied for the original commit here:
-    // both commits are main descendants, and the six required check runs exist
+    // both commits are main descendants, and every required check run exists
     // at `first` and concluded success. The CI gate passes on exactly the
     // evidence a release would present. None of that is about the commit the
     // tag now names, which is the split this ticket exists to close — so the
@@ -205,12 +205,14 @@ describe('#499 the published tag is the commit the gates qualified', () => {
           status: 'completed',
           conclusion: 'success',
           head_sha: first,
+          // The gate requires the producing app, not just the name (#571).
+          app: { slug: 'github-actions' },
         })),
       }),
     );
     const ci = run(EXACT_HEAD_CI, ['owner', 'repo', first, '--from-file', green], clone);
     expect(ci.status).toBe(0);
-    expect(ci.stdout).toContain('all 6 required checks succeeded');
+    expect(ci.stdout).toContain(`all ${REQUIRED_CHECKS.length} required checks succeeded`);
 
     moveTag(clone, second, false);
 

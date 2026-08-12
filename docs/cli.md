@@ -72,7 +72,7 @@ is in [protocol.md](protocol.md).
 
 | Command | What it does |
 |---|---|
-| `commitlore init` | one-command onboarding: `hooks install`, directive author string, `index --rebuild`, `AGENTS.md` capture guidance and agent integration, repository MCP registration, capture policy, `doctor --fix` |
+| `commitlore init` | one-command onboarding: `hooks install`, directive author string, `index --rebuild`, agent integration, repository MCP registration, capture policy, `doctor --fix`. `--agents-md` also writes the capture procedure into `AGENTS.md`; the MCP server states it either way |
 | `commitlore auto` | read and write the unattended-capture setting (`.commitlore-policy.json`): `status`, `on`, `off` |
 | `commitlore doctor` | checks that this repository can carry and share records |
 | `commitlore hooks` | `install`, `uninstall`, `status` for the Git hooks |

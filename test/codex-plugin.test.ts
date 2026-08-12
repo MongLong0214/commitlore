@@ -155,6 +155,25 @@ describe('Codex plugin installation', () => {
     expect(installed.report.join('\n')).not.toContain('points at');
   });
 
+  it('refuses when a marketplace of our name is present but unidentifiable', () => {
+    // Same risk as `foreign`: the next call would be `plugin add
+    // commitlore@commitlore`, installing whatever that marketplace serves.
+    const calls: string[][] = [];
+    const home = dataHome();
+    const installed = installCodexPlugin({
+      dataHome: home,
+      run: (args) => {
+        calls.push([...args]);
+        return result('MARKETPLACE ROOT\ncommitlore /tmp/somebody-elses\n');
+      },
+    });
+
+    expect(installed.exitCode).toBe(2);
+    expect(calls).toEqual([['plugin', 'marketplace', 'list', '--json']]);
+    expect(installed.report.join('\n')).toContain('does not report where it points');
+    expect(existsSync(codexPluginMarkerPath(undefined, home))).toBe(false);
+  });
+
   it('says so when Codex cannot report where a marketplace points', () => {
     // An older Codex prints a table with no source column. That is neither
     // "ours" nor "theirs", and reporting it as either would be a claim this
@@ -163,12 +182,12 @@ describe('Codex plugin installation', () => {
       dataHome: dataHome(),
       run: (args) =>
         args.join(' ') === 'plugin marketplace list --json'
-          ? result('MARKETPLACE ROOT\ncommitlore /tmp/commitlore\n')
+          ? result('MARKETPLACE ROOT\nopenai-bundled /tmp/bundled\n')
           : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.8.0 /tmp/c\n'),
     });
 
     expect(installed.exitCode).toBe(0);
-    expect(installed.report.join('\n')).toContain('could not confirm which repository');
+    expect(installed.report.join('\n')).toContain('none named commitlore was visible');
   });
 
   it('claims no ownership over a plugin it found already installed', () => {

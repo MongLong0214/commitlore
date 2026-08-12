@@ -442,9 +442,15 @@ export interface ScanBudget {
   now?: () => number;
 }
 
-/** Filled in by a budgeted scan: 0 means every commit was read. */
+/** Filled in by a budgeted scan: 0 means everything was read. */
 export interface ScanCost {
   unreadCommits: number;
+  /**
+   * Commits whose notes went unread. Separate from `unreadCommits` because the
+   * two passes stop independently: the budget can run out during the commit
+   * scan, leaving every note unread, or survive it and expire in the notes.
+   */
+  unreadNotes: number;
 }
 
 const recordExclusion = (counts: ExclusionCounts | undefined, key: string): void => {
@@ -772,6 +778,8 @@ const readNoteRecords = (
   cwd: string,
   reachable: ReadonlySet<string>,
   excluded?: ExclusionCounts,
+  budget?: ScanBudget,
+  cost?: ScanCost,
 ): RawRecord[] => {
   const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
 
@@ -800,7 +808,18 @@ const readNoteRecords = (
   if (commits.length === 0) return [];
 
   const records: RawRecord[] = [];
-  for (const batch of chunked(commits, LOG_BATCH)) {
+  let read = 0;
+  // The same ceiling the commit scan honours. Budgeting only that half left the
+  // notes pass unbounded, and `scanTrailers` always runs it afterwards — so a
+  // repository with many notes could stall an edit well past the budget while
+  // the number reported as "unread" stayed 0.
+  const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
+  for (const batch of chunked(commits, batchSize)) {
+    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== undefined) cost.unreadNotes = commits.length - read;
+      return records;
+    }
+    read += batch.length;
     const result = gitLogByShas(cwd, batch, '%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00', [
       `--notes=${NOTES_REF}`,
     ]);
@@ -1697,7 +1716,7 @@ export const scanTrailers = (
 
   const records = [
     ...readCommitRecords(cwd, shas, undefined, opts.budget, opts.cost),
-    ...readNoteRecords(cwd, new Set(shas)),
+    ...readNoteRecords(cwd, new Set(shas), undefined, opts.budget, opts.cost),
   ];
   return filterTrailers(toIndexedTrailers(records), query);
 };

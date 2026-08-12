@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22.12 or newer" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -21,6 +21,14 @@ force, before it edits the file.
 CommitLore has no hosted service; it keeps its records in Git. Once its MCP
 server or hook returns context, the host handles that context under its own
 policy; CommitLore does not control that data flow.
+
+**Two halves, and only one of them is automatic.** *Delivery* — handing the
+agent the decisions that still apply, before it edits a path — happens on its
+own once installed. *Capture* — writing a new decision down — is something the
+agent does when a change carries a reason the diff cannot show; an ordinary
+`git commit` cannot start it, because a hook has the diff and a capture needs
+the session. [What happens automatically](#what-happens-automatically-and-what-does-not)
+says exactly which hosts do which.
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -76,18 +84,18 @@ command when it finds Codex. Start a new Codex session afterwards: the plugin's
 skill and MCP server are loaded at session start, not on install. The CLI below
 provides the repository commands.
 
-Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
+Prerequisites for either path: Node.js 22.12+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — the same install, in PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
 ```
 
 **Hermes** — after installing the CLI, configure its host integration:
@@ -129,11 +137,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh
-sh install.sh v0.8.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh
+sh install.sh v0.8.1
 
 # Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v0.8.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.8.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -177,12 +185,15 @@ separate layers:
 | Claude Code | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Codex | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Hermes | **Yes — `commitlore hermes install`.** | **Yes — `commitlore hermes install`.** |
-| Other `AGENTS.md`-convention hosts | **Procedure, not automatic.** `commitlore init` writes the pre-edit delivery instruction; the host may or may not follow it. | **Procedure, not automatic.** The host may or may not follow it. |
+| Gemini CLI, Cursor, Windsurf, opencode | **Yes — the MCP server is wired by `install.sh`.** | **Procedure, not automatic.** The server states the prepare → verify → stage procedure in its `instructions` on every connection. The host may or may not act on it. |
+| Any other `AGENTS.md`-convention host | **Procedure, not automatic.** `commitlore init --agents-md` writes it into the repository. | **Procedure, not automatic.** Same file, same caveat. |
 
 “Yes” means the layer is installed, not that every commit gains a record.
-Most commits should carry none. Only the first three rows run integrations
-automatically. On other `AGENTS.md` hosts, both steps are instructions, not
-hooks. A host still has to start capture, and the candidate must pass
+Most commits should carry none. The first three rows install a skill that
+drives capture; the fourth receives the same procedure over MCP, which is what
+a host that loads no skills has to work from — verified with the plugin
+disabled, and it captured. Whether a given host surfaces those instructions to
+its model is the host's choice, and nothing here detects it. A host still has to start capture, and the candidate must pass
 verification before the commit hook attaches it. The commit-msg hook validates
 a record when present; it never invents one.
 

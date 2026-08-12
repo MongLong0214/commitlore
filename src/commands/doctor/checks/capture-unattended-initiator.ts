@@ -7,7 +7,12 @@
  */
 
 import { POLICY_FILE_NAME, resolvePolicy } from '../../../core/capture-policy.js';
-import { MCP_REGISTRATION_FILE, registersCommitloreMcpServer } from '../../../core/mcp-registration.js';
+import {
+  MCP_REGISTRATION_FILE,
+  registeredMcpCommand,
+  registersCommitloreMcpServer,
+  registrationIsOurs,
+} from '../../../core/mcp-registration.js';
 import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
@@ -82,6 +87,33 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
   }
 
   if (registersCommitloreMcpServer(cwd)) {
+    // Registered and *ours* is the only combination this can vouch for.
+    // Anything else is an entry an operator chose, which is theirs to keep and
+    // not this report's to call verified: `{"command": "false"}` was reading as
+    // a working capture server.
+    const command = registeredMcpCommand(cwd);
+    const ours = registrationIsOurs(cwd);
+    if (!ours) {
+      return check(
+        id,
+        category,
+        title,
+        'warn',
+        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, which is not the command ` +
+          'this tool writes — it is left alone, and whether it starts a capture server is unverified',
+        `check that ${JSON.stringify(command)} is a CommitLore MCP server, or remove the entry and run commitlore init`,
+        false,
+        undefined,
+        {
+          evidence: {
+            policy: 'unattended',
+            ordinary_git_commit: 'cannot-initiate',
+            initiator: 'registered-command-unverified',
+            command: command ?? '',
+          },
+        },
+      );
+    }
     return check(
       id,
       category,

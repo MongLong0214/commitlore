@@ -21,6 +21,8 @@ import { join, resolve } from 'node:path';
 const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
 const NODE_MODULES = join(REPO_ROOT, 'node_modules');
 
+import { rangeMinimum, admits } from './engine-floor.mjs';
+
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 const pkg = readJson(join(REPO_ROOT, 'package.json'));
@@ -30,27 +32,13 @@ if (!declared) {
   process.exit(2);
 }
 
-/** The lowest major this package claims to support, e.g. ">=20" -> 20, "20.x || 22.x" -> 20. */
-const floor = (() => {
-  const majors = [...declared.matchAll(/(\d+)/g)].map((m) => Number(m[1]));
-  return majors.length > 0 ? Math.min(...majors) : null;
-})();
+const floor = rangeMinimum(declared);
 if (floor === null) {
-  console.error(`ERROR: cannot read a major version out of engines.node = ${declared}`);
+  console.error(`ERROR: cannot read a version out of engines.node = ${declared}`);
   process.exit(2);
 }
+const floorText = floor.join('.');
 
-/** True when `range` admits the given major. Handles ">=N", "N.x", and "||" unions. */
-const admitsMajor = (range, major) => {
-  for (const clause of range.split('||').map((s) => s.trim())) {
-    if (/^\*$/.test(clause)) return true;
-    const gte = clause.match(/^>=\s*(\d+)/);
-    if (gte && major >= Number(gte[1])) return true;
-    const exact = clause.match(/^\^?~?(\d+)(?:\.[\dx*]+)*$/);
-    if (exact && Number(exact[1]) === major) return true;
-  }
-  return false;
-};
 
 const directDeps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies });
 
@@ -60,13 +48,13 @@ for (const name of directDeps) {
   if (!existsSync(manifest)) continue;
   const range = readJson(manifest).engines?.node;
   if (!range) continue;
-  if (!admitsMajor(range, floor)) {
+  if (!admits(range, floor)) {
     offenders.push({ name, range });
   }
 }
 
 if (offenders.length > 0) {
-  console.error(`ERROR: ${offenders.length} dependency(ies) do not support Node ${floor}, which package.json promises (${declared}):`);
+  console.error(`ERROR: ${offenders.length} dependency(ies) do not support Node ${floorText}, which package.json promises (${declared}):`);
   for (const { name, range } of offenders) {
     console.error(`  → ${name} requires node ${range}`);
   }
@@ -75,4 +63,4 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log(`all ${directDeps.length} direct dependencies support Node ${floor} (${declared})`);
+console.log(`all ${directDeps.length} direct dependencies support Node ${floorText} (${declared})`);

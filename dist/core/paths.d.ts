@@ -19,13 +19,6 @@ export declare const findPackageRoot: (startDir: string) => string;
 export declare const PACKAGE_ROOT: string;
 /** A file shipped with the installation, addressed from its root. */
 export declare const installedPath: (...segments: readonly string[]) => string;
-/**
- * Reads a file this installation ships.
- *
- * Every shipped installation has a real `spec/` and `package.json` on disk: a
- * clone, the bundle inside one, or the pinned checkout an installer makes. The
- * SEA-asset branch this used to carry existed for the compiled build ADR-0026
- * removed.
- */
+export declare const isMissingInstalledFile: (error: unknown) => boolean;
 export declare const readInstalledFile: (...segments: readonly string[]) => string;
 export declare const packageVersion: () => string;

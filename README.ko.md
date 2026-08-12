@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="라이선스: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 이상" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 이상" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -22,6 +22,12 @@ CommitLore는 그런 결정을 Git에 보관하고, 파일을 편집하기 전�
 CommitLore에는 호스팅 서비스가 없고 record를 Git에 보관합니다. MCP 서버나 hook이
 맥락을 반환한 뒤에는 host가 자신의 정책에 따라 그 맥락을 처리하며, CommitLore는 그
 데이터 흐름을 제어하지 않습니다.
+
+**두 절반이 있고, 자동인 것은 하나입니다.** *delivery* — 에이전트가 경로를 편집하기
+전에 아직 유효한 결정을 건네주는 것 — 는 설치하면 알아서 됩니다. *capture* — 새
+결정을 기록하는 것 — 는 변경에 diff가 보여줄 수 없는 이유가 있을 때 에이전트가
+합니다. 평범한 `git commit`은 이것을 시작할 수 없습니다. hook에는 diff가 있고
+capture에는 세션이 필요하기 때문입니다.
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -72,18 +78,18 @@ commitlore plugin install-codex
 
 Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache를 직접 고치지 않는다. 아래의 표준 설치 스크립트도 Codex를 감지하면 같은 명령을 실행한다. 설치 뒤에는 새 Codex session을 시작한다 — plugin의 skill과 MCP server는 설치 시점이 아니라 session 시작 시점에 로드된다. 아래 CLI가 repository command를 제공한다.
 
-두 경로 모두의 전제 조건: Node.js 22+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
+두 경로 모두의 전제 조건: Node.js 22.12+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — PowerShell에서 같은 설치를 한다:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
 ```
 
 **Hermes** — CLI를 설치한 뒤 host integration을 설정한다:
@@ -123,11 +129,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh
-sh install.sh v0.8.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh
+sh install.sh v0.8.1
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v0.8.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.8.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -166,7 +172,8 @@ Ruled-out
 | Claude Code | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Codex | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Hermes | **예 — `commitlore hermes install`.** | **예 — `commitlore hermes install`.** |
-| 그 밖의 `AGENTS.md` convention host | **procedure이며 자동이 아니다.** `commitlore init`이 편집 전 delivery instruction을 쓴다. host가 따를 수도, 따르지 않을 수도 있다. | **procedure이며 자동이 아니다.** host가 따를 수도, 따르지 않을 수도 있다. |
+| Gemini CLI, Cursor, Windsurf, opencode | **된다 — `install.sh`가 MCP server를 배선한다.** | **procedure이며 자동이 아니다.** server가 연결마다 prepare → verify → stage 절차를 알린다. host가 따를 수도, 따르지 않을 수도 있다. |
+| 그 밖의 `AGENTS.md` convention host | **procedure이며 자동이 아니다.** `commitlore init --agents-md`가 저장소에 적는다. | **procedure이며 자동이 아니다.** 같은 파일, 같은 단서. |
 
 “예”는 layer가 설치되었다는 뜻이지 모든 commit에 record가 생긴다는 뜻이 아니다.
 대부분의 commit에는 record가 없어야 한다. 자동 integration은 첫 세 행에만 있다. 다른

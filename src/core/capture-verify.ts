@@ -22,7 +22,12 @@ import { createHash } from 'node:crypto';
 import { verifyDraft, type RejectedRecord, type VerifiedRecord } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
-import { readPending, storeVerification, type PendingRecord } from './pending.js';
+import {
+  deletePending,
+  readPending,
+  storeVerification,
+  type PendingRecord,
+} from './pending.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
 import type { DraftRecord } from './harvest.js';
@@ -214,6 +219,47 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
   const persist = (result: VerifyCaptureResult): boolean =>
     opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
 
+  /**
+   * The only way out of this function that writes.
+   *
+   * Every exit used to be `persist(result); return result;` written by hand,
+   * and the first repair changed one of them. The other four — transcript
+   * mismatch, diff mismatch, unfetched notes, unavailable history — kept
+   * discarding the refusal, so replaying a nonce through any of them returned
+   * a rejection to the caller while the earlier stored result stayed staged.
+   * Routing every exit through one function is what makes that impossible to
+   * reintroduce by copying two lines.
+   */
+  const settle = (result: VerifyCaptureResult): VerifyCaptureResult => {
+    if (persist(result)) return result;
+
+    // Changing only what is returned was not enough. `stage` reads the *stored*
+    // transaction, so a replay whose result could not be stored left the
+    // earlier record staged-able: the caller was told empty, and the commit
+    // would have carried the first record. The stored transaction has to stop
+    // being usable, not just stop being reported.
+    //
+    // Discarded rather than downgraded. Two verifications of one nonce have now
+    // disagreed, and there is no reading of that where either result should
+    // reach a commit. `prepare` is one call away.
+    if (opts.readOnly !== true) {
+      try {
+        deletePending(nonce, { cwd });
+      } catch {
+        // The refusal below is the guarantee; failing to clean up must not
+        // turn into a thrown error from a function that never throws.
+      }
+    }
+
+    return {
+      accepted: [],
+      rejected: [],
+      validation_result: 'empty',
+      incomplete: true,
+      overlap_check: 'canonical_exact_only',
+    };
+  };
+
   try {
     // 1. Re-read prepared transaction and verify source hashes
     const pending = opts.pending ?? readPending(nonce, { cwd });
@@ -223,7 +269,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         accepted: [],
         rejected: [],
         validation_result: 'empty',
-        incomplete: false,
+        incomplete: true,
         overlap_check: 'canonical_exact_only',
       };
     }
@@ -248,8 +294,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: false,
         overlap_check: 'canonical_exact_only',
       };
-      persist(result);
-      return result;
+      return settle(result);
     }
 
     if (pending.source_hashes.diff !== diffHash) {
@@ -267,8 +312,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: false,
         overlap_check: 'canonical_exact_only',
       };
-      persist(result);
-      return result;
+      return settle(result);
     }
 
     // 2. Check notes availability — unfetched means incomplete
@@ -281,8 +325,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: true,
         overlap_check: 'canonical_exact_only',
       };
-      persist(result);
-      return result;
+      return settle(result);
     }
 
     // 3. Load active records for duplicate checking
@@ -296,8 +339,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
         incomplete: true,
         overlap_check: 'canonical_exact_only',
       };
-      persist(result);
-      return result;
+      return settle(result);
     }
     // Do not mutate a caller-provided historical snapshot: shadow reuses one
     // across many verification calls. This local reservation set also keeps
@@ -386,20 +428,7 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
       overlap_check: 'canonical_exact_only',
     };
 
-    if (!persist(result)) {
-      // The transaction moved on — already verified, staged, or gone. Returning
-      // `result` here would hand back records that nothing will stage, which is
-      // the one shape this function must never produce.
-      const unbound: VerifyCaptureResult = {
-        accepted: [],
-        rejected: [],
-        validation_result: 'empty',
-        incomplete: true,
-        overlap_check: 'canonical_exact_only',
-      };
-      return unbound;
-    }
-    return result;
+    return settle(result);
   } catch {
     // Never throws — return empty on any unhandled error.
     //
@@ -414,11 +443,14 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
       incomplete: true,
       overlap_check: 'canonical_exact_only',
     };
-    // Best-effort store
+    // The one exit that does not go through `settle`, and the only one where
+    // that is right: this result is already `empty` with `incomplete: true`,
+    // which is exactly what `settle` would substitute if the store refused. A
+    // failed store cannot change the answer, so it cannot be worth throwing for.
     try {
       persist(result);
     } catch {
-      // Ignore — we must never throw
+      // Never throw from the handler that exists so nothing throws.
     }
     return result;
   }

@@ -217,9 +217,15 @@ export interface ScanBudget {
      */
     now?: () => number;
 }
-/** Filled in by a budgeted scan: 0 means every commit was read. */
+/** Filled in by a budgeted scan: 0 means everything was read. */
 export interface ScanCost {
     unreadCommits: number;
+    /**
+     * Commits whose notes went unread. Separate from `unreadCommits` because the
+     * two passes stop independently: the budget can run out during the commit
+     * scan, leaving every note unread, or survive it and expire in the notes.
+     */
+    unreadNotes: number;
 }
 /**
  * Opens the index, creating it if absent. A file that SQLite refuses to open

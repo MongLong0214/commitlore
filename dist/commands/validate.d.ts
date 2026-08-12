@@ -42,7 +42,8 @@ export interface ValidateInput {
 }
 /** Exit code, plus the streams the caller writes. Returned rather than printed so tests can drive the command in-process. */
 export interface ValidateResult {
-    code: 0 | 1 | 2;
+    /** 0 clean, 1 violations, 2 usage, 3 broken installation (#533). */
+    code: 0 | 1 | 2 | 3;
     stdout: string;
     stderr: string;
     violations: LocatedViolation[];

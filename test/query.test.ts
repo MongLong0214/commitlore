@@ -1216,6 +1216,34 @@ describe('#522 cold path queries', () => {
       expect(cost.unreadCommits).toBeGreaterThanOrEqual(1024 - BUDGETED_BATCH);
     }, 120_000);
 
+    it('bounds the notes pass too, not only the commit pass', () => {
+      // The budget was read only inside `readCommitRecords`, and `scanTrailers`
+      // always runs the notes pass afterwards — unbudgeted, in batches of 1024,
+      // parsing every note. A repository whose records live in notes could
+      // therefore stall an edit well past the ceiling while `unreadCommits`
+      // reported 0, because nothing counted what the notes pass had skipped.
+      const dir = syntheticRepo(256);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+      // The synthetic fixture commits with per-invocation identity flags, so
+      // the repository itself has none — and writing a note needs one.
+      execGitOrThrow(['config', 'user.name', 'CommitLore Test'], { cwd: dir });
+      execGitOrThrow(['config', 'user.email', 'test@example.invalid'], { cwd: dir });
+      for (const sha of execGitOrThrow(['rev-list', '-n', '40', 'HEAD'], { cwd: dir })
+        .trim()
+        .split('\n')) {
+        writeRecord(sha, [{ key: 'Limit', value: `a note on ${sha.slice(0, 7)}` }], { cwd: dir });
+      }
+
+      // A clock that is past the deadline from its very first read: the commit
+      // pass stops immediately, so anything counted here is the notes pass
+      // honouring the same budget rather than inheriting the commit one.
+      const cost = { unreadCommits: 0, unreadNotes: 0 };
+      scanTrailers({}, { cwd: dir, budget: { deadline: 10, now: () => 20 }, cost });
+
+      expect(cost.unreadCommits).toBeGreaterThan(0);
+      expect(cost.unreadNotes).toBeGreaterThan(0);
+    }, 120_000);
+
     it('does not truncate an answer the index could give', () => {
       // A budget is a ceiling on the fallback, not on the index. A repository
       // that is indexed must be unaffected by one, however small.

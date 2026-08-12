@@ -1194,13 +1194,13 @@ describe('#527 unattended capture initiator', () => {
     enableUnattended(repo);
     writeFileSync(
       join(repo, '.mcp.json'),
-      `${JSON.stringify({ mcpServers: { commitlore: { command: 'node', args: ['x', 'mcp'] } } }, null, 2)}\n`,
+      `${JSON.stringify({ mcpServers: { commitlore: { command: 'commitlore', args: ['mcp'] } } }, null, 2)}\n`,
     );
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
 
     expect(check?.status).toBe('ok');
-    expect(check?.evidence?.['verified']).toBe('registration-only');
+    expect(check?.evidence?.['initiator']).toBe('mcp-server-registered');
   });
 
   it('does not accept a malformed registration as an initiator', () => {
@@ -1238,10 +1238,26 @@ describe('#527 unattended capture initiator', () => {
     });
   }
 
-  it('still accepts an entry pointing somewhere other than our own command', () => {
+  it('reports a command that is not ours as preserved, not as verified', () => {
+    // Preserving an operator's entry is right; calling it a working capture
+    // server is not. `{"command": "false"}` read as `ok` — a registration that
+    // launches nothing, reported as readiness.
+    const repo = initRepo('unattended-entry-false');
+    enableUnattended(repo);
+    writeFileSync(join(repo, '.mcp.json'), '{ "mcpServers": { "commitlore": { "command": "false" } } }');
+
+    const row = runDoctor({ cwd: repo }).checks.find((c) => c.id === 'unattended-initiator');
+
+    expect(row?.status).toBe('warn');
+    expect(row?.detail).toContain('unverified');
+    expect(row?.evidence?.['initiator']).toBe('registered-command-unverified');
+  });
+
+  it('preserves an entry pointing somewhere other than our own command', () => {
     // Not every launchable entry is the one `init` writes. A wrapper or an
-    // absolute path is a deliberate choice, and the reader's callers respond to
-    // "not registered" by writing our entry over it.
+    // absolute path is a deliberate choice: it is left alone. What changed is
+    // that the report no longer calls it verified — this tool cannot say what
+    // somebody else's command starts.
     const repo = initRepo('unattended-entry-wrapper');
     enableUnattended(repo);
     writeFileSync(
@@ -1251,6 +1267,9 @@ describe('#527 unattended capture initiator', () => {
 
     const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
 
-    expect(check?.status).toBe('ok');
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('unverified');
+    // Preserved: nothing rewrote the operator's file.
+    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toContain('/opt/bin/commitlore-wrapper');
   });
 });

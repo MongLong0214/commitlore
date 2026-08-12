@@ -292,20 +292,38 @@ describe('commitlore init — repository MCP registration', () => {
     expect(registration?.lines.join('\n')).toContain('left unchanged');
   });
 
-  it('reports a registration failure but does not make the install fail', () => {
+  /**
+   * This expectation deliberately flipped. A failed registration used to be
+   * code 0, so `init` printed a checkmark and finished with `init: ready` over
+   * a repository where nothing can start a capture. Capture is the product; a
+   * setup command that could not wire it is not ready, whatever else worked.
+   *
+   * It is still not fatal — hooks, index and delivery all installed — so this
+   * is 1, the code that already means "ran, and something needs you", never 2.
+   */
+  it('does not call the install ready when the capture server could not be registered', () => {
     const repo = repoWithRemote('mcp-registration-failure');
     mkdirSync(join(repo, '.mcp.json'));
 
     const report = runInitAsCli({ cwd: repo });
     const registration = report.steps.find((step) => step.step === 'mcp-registration');
+    const lines = registration?.lines.join('\n') ?? '';
 
-    expect(registration?.code).toBe(0);
-    expect(registration?.lines.join('\n')).toContain('could not register the capture server');
-    expect(registration?.lines.join('\n')).toContain('repository still installs');
+    expect(registration?.code).toBe(1);
+    expect(lines).toContain('could not register the capture server');
+    expect(lines).toContain('nothing in this repository can start a capture');
+    // And what to do about it, because the repair is one file the operator owns.
+    expect(lines).toContain('"mcpServers"');
+    expect(lines).toContain('commitlore doctor');
+
+    // The rest of the install still ran.
     expect(report.steps.find((step) => step.step === 'hooks')?.code).toBe(0);
     expect(report.steps.find((step) => step.step === 'index')?.code).toBe(0);
-    expect(report.exitCode).toBe(0);
-    expect(formatInitReport(report)).toContain('MCP registration — not registered for repository-scoped hosts');
+
+    expect(report.exitCode).toBe(1);
+    const rendered = formatInitReport(report);
+    expect(rendered).not.toContain('init: ready');
+    expect(rendered).toContain('MCP registration');
   });
 });
 

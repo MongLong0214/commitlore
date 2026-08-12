@@ -87,7 +87,7 @@ const normalizePaths = (opts) => {
 const scanSource = (cwd, diagnostics, budgetMs) => {
     let rows;
     let corpusPasses = 0;
-    const cost = { unreadCommits: 0 };
+    const cost = { unreadCommits: 0, unreadNotes: 0 };
     return {
         fetch: (query) => {
             if (rows === undefined) {
@@ -104,7 +104,7 @@ const scanSource = (cwd, diagnostics, budgetMs) => {
         },
         fromIndex: false,
         corpusPasses: () => corpusPasses,
-        unreadCommits: () => cost.unreadCommits,
+        unreadCommits: () => cost.unreadCommits + cost.unreadNotes,
         close: () => { },
         diagnostics,
     };
@@ -656,7 +656,7 @@ export const runQuery = (opts = {}) => {
         const unread = source.unreadCommits();
         if (unread > 0) {
             diagnostics.push(`this repository has no index, and the scan stopped after its time budget with ` +
-                `${String(unread)} commit(s) unread — records in them are missing from this answer. ` +
+                `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
                 'fix: commitlore init (or commitlore index) to build the index once');
         }
         const shallow = hasShallowHistory(cwd);
