@@ -942,7 +942,12 @@ export const runValidate = (input: ValidateInput = {}): ValidateResult => {
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
-      stdout: `${JSON.stringify({ checks, violations, secrets })}\n`,
+      // `examined` is how many messages were actually read. Without it a
+      // report of an empty range is indistinguishable from a clean one — both
+      // are `ok`/`ok` with no violations — so a gate reading this JSON can
+      // report success having checked nothing (the shape #542 was about, one
+      // level along).
+      stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}\n`,
       stderr: warningText,
       violations,
       secrets,

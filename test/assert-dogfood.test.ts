@@ -45,6 +45,7 @@ afterAll(() => {
 });
 
 interface Report {
+  examined?: number;
   checks: { class: string; status: string; reason?: string }[];
   violations: unknown[];
   secrets?: unknown[];
@@ -65,6 +66,7 @@ const assertOn = (report: Report): { status: number; stdout: string; stderr: str
 };
 
 const bothOk = (): Report => ({
+  examined: 42,
   checks: [
     { class: 'shape', status: 'ok' },
     { class: 'reference', status: 'ok' },
@@ -88,6 +90,7 @@ describe('the dogfooding gate accepts a clean report', () => {
  */
 describe('the gate tolerates a failed check that the baseline fully explains', () => {
   const carriedOnly = (): Report => ({
+    examined: 823,
     checks: [
       { class: 'shape', status: 'ok' },
       { class: 'reference', status: 'failed' },
@@ -110,6 +113,7 @@ describe('the gate tolerates a failed check that the baseline fully explains', (
 describe('the gate refuses anything the baseline does not name', () => {
   it('refuses a violation absent from the baseline', () => {
     const result = assertOn({
+      examined: 823,
       checks: [
         { class: 'shape', status: 'ok' },
         { class: 'reference', status: 'failed' },
@@ -122,6 +126,7 @@ describe('the gate refuses anything the baseline does not name', () => {
 
   it('refuses an unrecorded violation even alongside a carried one', () => {
     const result = assertOn({
+      examined: 823,
       checks: [
         { class: 'shape', status: 'ok' },
         { class: 'reference', status: 'failed' },
@@ -135,6 +140,7 @@ describe('the gate refuses anything the baseline does not name', () => {
   // ran — which is the failure the baseline was introduced alongside.
   it('never tolerates a sub-check that did not run, baseline or not', () => {
     const result = assertOn({
+      examined: 823,
       checks: [
         { class: 'shape', status: 'ok' },
         { class: 'reference', status: 'not-checked', reason: 'notes mirror not fetched' },
@@ -147,6 +153,7 @@ describe('the gate refuses anything the baseline does not name', () => {
 
   it('refuses a failed check when nothing was carried to explain it', () => {
     const result = assertOn({
+      examined: 823,
       checks: [
         { class: 'shape', status: 'failed' },
         { class: 'reference', status: 'ok' },
@@ -158,7 +165,7 @@ describe('the gate refuses anything the baseline does not name', () => {
   });
 
   it('refuses a report missing a check class entirely', () => {
-    const result = assertOn({ checks: [{ class: 'shape', status: 'ok' }], violations: [] });
+    const result = assertOn({ examined: 823, checks: [{ class: 'shape', status: 'ok' }], violations: [] });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('no reference check');
   });
@@ -167,5 +174,33 @@ describe('the gate refuses anything the baseline does not name', () => {
     const result = assertOn({ ...bothOk(), secrets: ['AKIA...'] });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('secret');
+  });
+});
+
+/**
+ * An empty range validates to `ok`/`ok` with no violations — byte-identical to
+ * a clean one. `scripts/adoption-range.mjs` derives its boundary from the
+ * oldest commit carrying `CommitLore-Version:`, so any history rewrite that
+ * moves that boundary to HEAD yields `<HEAD>..HEAD`, and the gate that proves
+ * this repository keeps its own protocol would report clean having read
+ * nothing. Same shape as #542: a check that did not run, reported as passing.
+ */
+describe('the gate refuses a report that examined nothing', () => {
+  it('refuses an empty range even though every check says ok', () => {
+    const result = assertOn({ ...bothOk(), examined: 0 });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('the range was empty');
+  });
+
+  it('refuses a report that does not say how much it examined', () => {
+    const { examined, ...withoutCount } = bothOk();
+    void examined;
+    const result = assertOn(withoutCount);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('does not say how many');
+  });
+
+  it('says how much it examined when the range is real', () => {
+    expect(assertOn(bothOk()).stdout).toContain('examined: 42 message(s)');
   });
 });

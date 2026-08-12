@@ -54,6 +54,24 @@ if (violations.length > 0) {
   console.log('violations: none');
 }
 
+// A report of an empty range is `ok`/`ok` with no violations — identical to a
+// clean one. `scripts/adoption-range.mjs` derives its boundary from the oldest
+// commit carrying `CommitLore-Version:`, so a history rewrite, a squash, or a
+// filter that moves that boundary to HEAD yields `<HEAD>..HEAD`, and the gate
+// proving this repository keeps its own protocol reports clean having read
+// nothing. #542 was the same shape: a check that did not run, reported as one
+// that passed.
+const examined = typeof report.examined === 'number' ? report.examined : null;
+if (examined === null) {
+  console.error('ERROR: the report does not say how many messages it examined');
+  bad += 1;
+} else if (examined === 0) {
+  console.error('ERROR: the range was empty — nothing was validated, which is not the same as clean');
+  bad += 1;
+} else {
+  console.log(`examined: ${examined} message(s)`);
+}
+
 const secrets = Array.isArray(report.secrets) ? report.secrets : [];
 if (secrets.length > 0) {
   console.error(`ERROR: ${secrets.length} secret(s) reported in the range`);
