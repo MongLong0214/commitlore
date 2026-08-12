@@ -106,6 +106,14 @@ const normalise = (text: string, repo: string): string =>
       line
         .replaceAll(realpathSync(repo), '<repo>')
         .replaceAll(repo, '<repo>')
+        // Both spellings of this checkout's root. The report writes paths
+        // home-relative, so a checkout under $HOME appears as `~/…` and one
+        // outside it as an absolute path -- and a snapshot recorded in one
+        // place then failed everywhere else (#555). Collapsing the tilde form
+        // to the same token makes the pinned text a fact about the report
+        // rather than about where somebody keeps their repositories.
+        .replaceAll(asWritten(realpathSync(PACKAGE_ROOT)), '<root>')
+        .replaceAll(asWritten(PACKAGE_ROOT), '<root>')
         .replaceAll(realpathSync(PACKAGE_ROOT), '<root>')
         .replaceAll(PACKAGE_ROOT, '<root>')
         .replaceAll(realpathSync(tmpdir()), '<tmp>')
