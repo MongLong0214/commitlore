@@ -44,6 +44,10 @@ const GIT_CONFIG = [
   'core.hooksPath=/dev/null',
 ];
 
+/** Mirrors `BUDGETED_LOG_BATCH` in core/index-db.ts; kept here so the
+ *  assertion below reads as a count of commits rather than a magic number. */
+const BUDGETED_BATCH = 64;
+
 const temporaries: string[] = [];
 
 const SYNTHETIC_REPO = fileURLToPath(
@@ -1182,6 +1186,34 @@ describe('#522 cold path queries', () => {
       const whole = { unreadCommits: 0 };
       scanTrailers({}, { cwd: dir, budget: { deadline: 10, now: () => 0 }, cost: whole });
       expect(whole.unreadCommits).toBe(0);
+    }, 120_000);
+
+    it('stops before a batch\'s expensive passes, not only before the batch', () => {
+      // The deadline was read once per batch, before the cheap `git log` that
+      // reads trailers. The rest of a batch -- a process per record to recover
+      // squashed blocks, and a `--name-only` diff over every commit in it --
+      // ran unguarded, so a three-second budget cost six seconds of wall clock.
+      //
+      // The clock counts reads. With one check per batch, the third read
+      // arrives on the third batch; with a second check inside each batch, it
+      // arrives during the second. Asserting the *number of reads* before the
+      // scan stops is what distinguishes the two, and it does not depend on how
+      // fast anything runs.
+      const dir = syntheticRepo(1024);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      let reads = 0;
+      const cost = { unreadCommits: 0 };
+      scanTrailers(
+        {},
+        { cwd: dir, budget: { deadline: 10, now: () => (++reads <= 2 ? 0 : 20) }, cost },
+      );
+
+      // Two reads survived, so the scan stopped on its third check. Reached
+      // inside the first batch when the inner guard exists; only at the top of
+      // the third batch without it.
+      expect(reads).toBe(3);
+      expect(cost.unreadCommits).toBeGreaterThanOrEqual(1024 - BUDGETED_BATCH);
     }, 120_000);
 
     it('does not truncate an answer the index could give', () => {

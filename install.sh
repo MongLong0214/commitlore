@@ -428,11 +428,19 @@ else
 fi
 dest="$dest_dir/commitlore"
 
+# Defined here rather than beside the checkout below: the ownership check
+# consults it, and a value read after its first use is a value that is empty
+# when it matters.
+data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
+
 WRAPPER_MARKER="# commitlore:wrapper:v1"
 
 # Refuse to clobber a file this script did not put there. A previous wrapper
-# carries the marker; a previous binary install prints a bare semver. Anything
-# else is somebody else's file and is left exactly where it is.
+# carries the marker. An older install predating the marker is recognised by a
+# bare semver *and* the managed checkout that install would have left behind --
+# printing a version was the whole test, so any unrelated executable that
+# answered `--version` with something like `1.2.3` was silently destroyed.
+# Anything else is somebody else's file and is left exactly where it is.
 if [ -e "$dest" ]; then
   if grep -qF "$WRAPPER_MARKER" "$dest" 2>/dev/null; then
     log "upgrading the existing commitlore wrapper at $dest"
@@ -440,7 +448,11 @@ if [ -e "$dest" ]; then
     existing_version="$("$dest" --version 2>/dev/null || true)"
     case "$existing_version" in
       [0-9]*.[0-9]*.[0-9]*)
-        log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
+        if [ -d "$data_root/v$existing_version" ] || [ -d "$data_root/$existing_version" ]; then
+          log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
+        else
+          die "$dest already exists, reports version \"$existing_version\", and has no commitlore checkout under $data_root to match it -- refusing to overwrite a file this installer cannot show it wrote. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
+        fi
         ;;
       *)
         die "$dest already exists and is not a commitlore wrapper (got: \"$existing_version\") -- refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
@@ -456,7 +468,6 @@ fi
 # into an incoming directory, then fully checked before it receives its stable
 # name or the wrapper can point at it.
 
-data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
 checkout="$data_root/$version"
 candidate=""
 

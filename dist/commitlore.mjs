@@ -12429,6 +12429,10 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
         paths: []
       });
     }
+    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== void 0) cost.unreadCommits = shas.length - read + batch.length;
+      return records;
+    }
     const exploded = explodeRecordBlocks(cwd, batchRecords, excluded).filter(
       (record2) => record2.trailers.length > 0
     );
