@@ -468,6 +468,19 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
         // A block whose only trailers were reserved strips to empty here; that is
         // "recorded nothing" (SPEC §4), not a record, so it is dropped rather
         // than indexed as one (bug-issue-150).
+        // Checked again before the expensive part of the batch, not only before the
+        // batch. The first pass above is one `git log` over 64 commits and is
+        // cheap; `explodeRecordBlocks` spawns a process per record and `readPaths`
+        // diffs every commit in the batch, and together they took 2.7s on an
+        // 823-commit repository -- so a deadline enforced only between batches
+        // overshot a three-second budget to six. Bailing here drops this batch
+        // whole rather than resolving half of it, which is what keeps the records
+        // that are kept internally consistent.
+        if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+            if (cost !== undefined)
+                cost.unreadCommits = shas.length - read + batch.length;
+            return records;
+        }
         const exploded = explodeRecordBlocks(cwd, batchRecords, excluded).filter((record) => record.trailers.length > 0);
         const paths = readPaths(cwd, batchRecords.map((record) => record.sha));
         for (const record of exploded)

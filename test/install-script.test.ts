@@ -438,6 +438,44 @@ describe('T-1120 upgrade and verification', () => {
     expect(`${r.stdout}${r.stderr}`).toMatch(/refus|already exists|not .*commitlore/i);
   });
 
+  /**
+   * The case above uses a file that answers `--version` with prose, which the
+   * old check already refused. The dangerous shape is the one that answers like
+   * a version: printing a bare semver was the entire test of ownership, so any
+   * unrelated executable at this path that happened to print `1.2.3` was
+   * silently replaced. The old check passes the case above with that defect
+   * fully present.
+   */
+  it('refuses a foreign executable that merely prints a version', () => {
+    const home = tempDir('foreign-semver');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).not.toBe(0);
+    expect(readFileSync(wrapper, 'utf8')).toContain('echo 1.2.3');
+    expect(`${r.stdout}${r.stderr}`).toMatch(/no commitlore checkout under/);
+  });
+
+  it('still replaces an older install that left the checkout it claims', () => {
+    // The evidence is the managed checkout, so an install this script really
+    // did perform is still upgraded rather than refused.
+    const home = tempDir('older-install');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3'), { recursive: true });
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/replacing a previous commitlore install/);
+  });
+
   it('fails before activation when runtime verification runs and fails', () => {
     // #541 flips the old expectation: a bundle that runs and exits 3 has
     // conclusively failed verification, so reporting a successful install would

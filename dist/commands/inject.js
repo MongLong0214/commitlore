@@ -264,6 +264,16 @@ export const hookResponse = (raw, base) => hookResult(raw, base).stdout;
  * answered in full, and short enough that a large one costs a pause rather than
  * a stall. Exceeding it is never silent: the payload says how many commits went
  * unread and names `commitlore init`, which removes the cost for good.
+ *
+ * It bounds the scan, not the process. The deadline is read between batches and
+ * again before each batch's expensive passes, so the work in flight when it
+ * expires is one `git log` over at most 64 commits -- measured at 3.4s wall for
+ * this budget on an 823-commit repository, against 6.0s when only the outer
+ * check existed and 34.7s with no budget at all. Node startup, the path
+ * resolution git calls and rendering sit outside it and cost about 0.4s
+ * together; a repository whose *single* cheap pass is slower than that will
+ * exceed the budget by that much, which is a ceiling on the scan rather than a
+ * promise about the clock.
  */
 const HOOK_SCAN_BUDGET_MS = 3_000;
 const runHookMode = (options) => {
