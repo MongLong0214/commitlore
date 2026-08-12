@@ -16787,12 +16787,16 @@ var configuredTrustedAuthors = (cwd) => {
   if (result.code !== 0) return [];
   return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
 };
-var configuredSignedDirectivesRequired = (cwd, git2 = execGit) => {
-  const result = git2(["config", "--local", "--bool", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], {
+var configuredDirectiveTrustSetting = (cwd, git2 = execGit) => {
+  const raw = git2(["config", "--local", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], { cwd });
+  if (raw.code !== 0 || raw.stdout.trim() === "") return "author-string";
+  const parsed = git2(["config", "--local", "--bool", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], {
     cwd
   });
-  return result.code === 0 && result.stdout.trim() === "true";
+  if (parsed.code !== 0) return "malformed";
+  return parsed.stdout.trim() === "true" ? "signature-required" : "author-string";
 };
+var configuredSignedDirectivesRequired = (cwd, git2 = execGit) => configuredDirectiveTrustSetting(cwd, git2) !== "author-string";
 var seedTrustedAuthor = (cwd) => {
   const existing = configuredTrustedAuthors(cwd);
   if (existing.length > 0) {
@@ -19113,7 +19117,21 @@ var checkInjectVersion = (ctx, dependencies) => {
 
 // src/commands/doctor/checks/delivery-directive-trust-mode.ts
 var checkDirectiveTrustMode = (ctx) => {
-  const enabled = configuredSignedDirectivesRequired(ctx.opts.cwd ?? process.cwd(), ctx.git);
+  const setting = configuredDirectiveTrustSetting(ctx.opts.cwd ?? process.cwd(), ctx.git);
+  if (setting === "malformed") {
+    return check(
+      "directive-trust-mode",
+      "delivery",
+      "directive trust mode",
+      "warn",
+      "commitlore.requireSignedDirective is set to something Git cannot read as a boolean; directives are being held to signature mode until it is corrected.",
+      "git config --local --bool commitlore.requireSignedDirective true (or false)",
+      false,
+      false,
+      { evidence: { mode: "malformed-setting-failing-closed" } }
+    );
+  }
+  const enabled = setting === "signature-required";
   return check(
     "directive-trust-mode",
     "delivery",
@@ -33040,10 +33058,12 @@ var installCodexPlugin = (options = {}) => {
       };
     }
     report.push(`installed Codex plugin: ${codexPluginSelector(plugin)}`);
+    writeCodexPluginMarker(plugin, dataHome);
   } else {
-    report.push(`Codex plugin already installed: ${codexPluginSelector(plugin)}`);
+    report.push(
+      `Codex plugin already installed: ${codexPluginSelector(plugin)} \u2014 left as it is, and not recorded as ours`
+    );
   }
-  writeCodexPluginMarker(plugin, dataHome);
   report.push("start a new Codex session to load the CommitLore skill and MCP tools");
   return { exitCode: 0, report };
 };

@@ -196,11 +196,19 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
       };
     }
     report.push(`installed Codex plugin: ${codexPluginSelector(plugin)}`);
+    // The marker is a claim of ownership, and `uninstall` removes what it
+    // marks. Writing it here — after this invocation actually performed the
+    // install — is what keeps "removes nothing it did not write" true. Writing
+    // it below, past both branches, meant finding someone else's plugin
+    // already installed and quietly adopting it, so a later uninstall deleted
+    // state this tool never created.
+    writeCodexPluginMarker(plugin, dataHome);
   } else {
-    report.push(`Codex plugin already installed: ${codexPluginSelector(plugin)}`);
+    report.push(
+      `Codex plugin already installed: ${codexPluginSelector(plugin)} — left as it is, and not recorded as ours`,
+    );
   }
 
-  writeCodexPluginMarker(plugin, dataHome);
   report.push('start a new Codex session to load the CommitLore skill and MCP tools');
   return { exitCode: 0, report };
 };
