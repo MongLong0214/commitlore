@@ -373,10 +373,14 @@ jobs:
           printf 'COMMITLORE_CI_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
           printf 'COMMITLORE_CI_WRONG_VERSION=%s\n' "$wrong_version" >> "$GITHUB_ENV"
           git tag -f "$version"
-          # This clean checkout is deliberately put at the requested tag's path
-          # below. It is a different tag even though this local CI source can
-          # share bytes; tag binding must still reject the mislabelled path.
-          git tag -f "$wrong_version"
+          # The wrong tag must name a different *commit*, not just a different
+          # name for this one. Tagging both at HEAD made the mislabelled clone
+          # contain the requested tag at its own HEAD, so binding passed and the
+          # step proved nothing. Reusing HEAD's tree keeps the checkout
+          # internally valid -- the manifest and smoke test still pass -- so the
+          # only thing left to reject it is the version binding under test.
+          wrong_commit="$(git commit-tree 'HEAD^{tree}' -p HEAD -m 'ci: a clean tree that is not the requested release')"
+          git tag -f "$wrong_version" "$wrong_commit"
 
       # -File, under 5.1, with the version as a positional argument: the same
       # entry point a user gets from `& ([scriptblock]::Create((irm ...))) <tag>`,
