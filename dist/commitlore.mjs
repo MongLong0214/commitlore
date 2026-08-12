@@ -18708,6 +18708,23 @@ var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
+var registeredMcpCommand = (cwd) => {
+  const path2 = mcpRegistrationPath(cwd);
+  if (path2 === null) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync10(path2, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!isJsonObject(parsed)) return null;
+  const servers = parsed["mcpServers"];
+  if (!isJsonObject(servers)) return null;
+  const entry = servers[MCP_SERVER_KEY];
+  if (!isLaunchableEntry(entry)) return null;
+  return String(entry["command"]);
+};
+var registrationIsOurs = (cwd) => registeredMcpCommand(cwd) === MCP_SERVER_COMMAND;
 var holdsLaunchableRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && isLaunchableEntry(servers[MCP_SERVER_KEY]);
 var holdsMalformedRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && !isLaunchableEntry(servers[MCP_SERVER_KEY]);
 var repositoryRoot = (cwd) => {
@@ -19008,6 +19025,28 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     );
   }
   if (registersCommitloreMcpServer(cwd)) {
+    const command = registeredMcpCommand(cwd);
+    const ours = registrationIsOurs(cwd);
+    if (!ours) {
+      return check(
+        id,
+        category,
+        title,
+        "warn",
+        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, which is not the command this tool writes \u2014 it is left alone, and whether it starts a capture server is unverified`,
+        `check that ${JSON.stringify(command)} is a CommitLore MCP server, or remove the entry and run commitlore init`,
+        false,
+        void 0,
+        {
+          evidence: {
+            policy: "unattended",
+            ordinary_git_commit: "cannot-initiate",
+            initiator: "registered-command-unverified",
+            command: command ?? ""
+          }
+        }
+      );
+    }
     return check(
       id,
       category,

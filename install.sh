@@ -464,8 +464,18 @@ if [ -e "$dest" ]; then
         # executable at the wrapper path replaced -- the check asked whether a
         # name existed, which is the thing an attacker controls. `dist/commitlore.mjs`
         # is written by this install and by nothing else.
-        if [ -f "$data_root/v$existing_version/dist/commitlore.mjs" ] \
-          || [ -f "$data_root/$existing_version/dist/commitlore.mjs" ]; then
+        # The runtime has to answer, not merely exist. A file at that path is
+        # still something anyone can create -- the previous rule accepted one
+        # containing a comment -- so the evidence is that it runs and reports
+        # the version the wrapper claims. Forging that means installing a
+        # working CommitLore of that version, which is not an attack.
+        owned_checkout=""
+        for candidate in "$data_root/v$existing_version" "$data_root/$existing_version"; do
+          [ -f "$candidate/dist/commitlore.mjs" ] || continue
+          reported="$("$node_bin" "$candidate/dist/commitlore.mjs" --version 2>/dev/null || true)"
+          if [ "$reported" = "$existing_version" ]; then owned_checkout="$candidate"; break; fi
+        done
+        if [ -n "$owned_checkout" ]; then
           log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
         else
           die "$dest already exists, reports version \"$existing_version\", and has no commitlore checkout under $data_root to match it -- refusing to overwrite a file this installer cannot show it wrote. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4

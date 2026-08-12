@@ -588,7 +588,13 @@ describe('T-1120 upgrade and verification', () => {
     const home = tempDir('older-install');
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });
     mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist'), { recursive: true });
-    writeFileSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'), '// an earlier install\n');
+    // A runtime that answers, because that is now the evidence: a file with a
+    // comment in it was accepted before, which made the "ownership" check
+    // something anyone could satisfy.
+    writeFileSync(
+      join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'),
+      'if (process.argv[2] === "--version") console.log("1.2.3");\n',
+    );
     const wrapper = join(home, '.local', 'bin', 'commitlore');
     writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
     chmodSync(wrapper, 0o755);
@@ -597,6 +603,23 @@ describe('T-1120 upgrade and verification', () => {
 
     expect(r.status).toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/replacing a previous commitlore install/);
+  });
+
+  it('refuses a checkout whose runtime does not answer for that version', () => {
+    // The evidence used to be a file's existence, so a file containing a
+    // comment counted as an install this script had performed.
+    const home = tempDir('inert-checkout');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist'), { recursive: true });
+    writeFileSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'), '// not ours\n');
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).not.toBe(0);
+    expect(readFileSync(wrapper, 'utf8')).toContain('echo 1.2.3');
   });
 
   it('refuses when only a directory of the right name exists', () => {

@@ -572,9 +572,18 @@ if (Test-Path -LiteralPath $dest) {
             # The *contents*, not the directory name: a directory called
             # `v1.2.3` is something anyone can create, and requiring only that
             # let an unrelated executable at the shim path be replaced.
+            # The runtime has to answer, not merely exist: a file at that path
+            # is still something anyone can create. Forging this means
+            # installing a working CommitLore of that version.
             foreach ($candidate in @((Join-Path $dataRoot ("v" + $existingVersion)), (Join-Path $dataRoot $existingVersion))) {
                 $bundle = Join-Path $candidate 'dist\commitlore.mjs'
-                if (Test-Path -LiteralPath $bundle -PathType Leaf) { $existingCheckout = $candidate; break }
+                if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) { continue }
+                $reported = ''
+                $eapProbe = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                try { $reported = (& $nodeBin $bundle --version 2>$null | Select-Object -First 1) } catch { $reported = '' }
+                $ErrorActionPreference = $eapProbe
+                if ($null -ne $reported -and $reported.Trim() -eq $existingVersion) { $existingCheckout = $candidate; break }
             }
         }
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+' -and $existingCheckout -ne '') {

@@ -41,6 +41,43 @@ const messageOf = (error) => (error instanceof Error ? error.message : String(er
  * can start, which nobody chooses on purpose.
  */
 const isLaunchableEntry = (value) => isJsonObject(value) && typeof value['command'] === 'string' && value['command'].trim() !== '';
+/**
+ * The command a registration under our key names, or null when there is none a
+ * host could launch.
+ *
+ * Exposed because "there is a command here" and "that command is this tool" are
+ * different facts, and doctor was reporting the first as though it were the
+ * second: `{"command": "false"}` read as a working capture server.
+ */
+export const registeredMcpCommand = (cwd) => {
+    const path = mcpRegistrationPath(cwd);
+    if (path === null)
+        return null;
+    let parsed;
+    try {
+        parsed = JSON.parse(readFileSync(path, 'utf8'));
+    }
+    catch {
+        return null;
+    }
+    if (!isJsonObject(parsed))
+        return null;
+    const servers = parsed['mcpServers'];
+    if (!isJsonObject(servers))
+        return null;
+    const entry = servers[MCP_SERVER_KEY];
+    if (!isLaunchableEntry(entry))
+        return null;
+    return String(entry['command']);
+};
+/**
+ * Whether the registered command is the one `init` writes.
+ *
+ * Not a probe — nothing is executed here. It answers the narrower question the
+ * report needs: is this the entry this tool wrote, or something an operator
+ * chose that this tool cannot vouch for?
+ */
+export const registrationIsOurs = (cwd) => registeredMcpCommand(cwd) === MCP_SERVER_COMMAND;
 /** Whether `servers` carries a registration under our key that a host could launch. */
 const holdsLaunchableRegistration = (servers) => isJsonObject(servers) &&
     Object.hasOwn(servers, MCP_SERVER_KEY) &&

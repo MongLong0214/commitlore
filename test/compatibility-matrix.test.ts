@@ -272,7 +272,7 @@ describe('T-1122 the documented prerequisites are the ones the installers check 
 
   it('names exactly the prerequisites, with none dropped', () => {
     expect(keysOf(rows()).map((k) => k.replace(/\s*\(.*\)$/, ''))).toEqual([
-      'Node.js ≥ 22',
+      'Node.js ≥ 22.12',
       'Git',
       'A POSIX shell',
     ]);
