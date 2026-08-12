@@ -189,6 +189,50 @@ jobs:
             node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$clone_dir/$f"
           done
 
+  # `npm audit` reported ten vulnerabilities on every run, green every time, and
+  # nobody could tell "assessed and accepted" from "never looked at" (#545). The
+  # two questions were sharing one number. They are separated here.
+  #
+  # What users receive is `dist/`, which is committed (ADR-0011) and which the
+  # installer clones without ever running npm — an installed CommitLore has no
+  # `node_modules` at all. So the vulnerabilities that can reach a user are the
+  # ones in the production tree, and that count must be zero. The rest live in
+  # the build and test tooling, which runs here and on maintainer machines. They
+  # are worth updating, which is what Dependabot is for; they are not worth
+  # failing a build that no user's installation depends on.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # `--audit-level=low` so that "zero" means zero and not "nothing above the
+      # threshold I chose". This is the blocking half.
+      - name: Nothing reachable by an installed CommitLore is vulnerable
+        run: npm audit --omit=dev --audit-level=low
+
+      # The build tooling, reported rather than enforced. `|| true` is
+      # deliberate and is the whole point of the split: this number is
+      # information, and the line above is the gate.
+      - name: Development-only surface, for the record
+        run: npm audit || true
+
+      # The claim above — that an installation has no node_modules — is what
+      # makes the split legitimate. If `dist/` ever stops being self-contained,
+      # the production audit stops covering what users run, and this fails
+      # before that can go unnoticed.
+      - name: The shipped runtime resolves with no dependencies installed
+        run: |
+          set -euo pipefail
+          ship="$(mktemp -d)"
+          cp -R dist spec package.json "$ship/"
+          test ! -e "$ship/node_modules"
+          ( cd "$ship" && node dist/commitlore.mjs --version )
+
   # git's own behavior is the substrate this protocol delegates to, so a git
   # version that parses trailers differently is a correctness problem, not a
   # compatibility footnote. SPEC section 2.1 was derived empirically from one
