@@ -601,6 +601,53 @@ describe('verifyCaptureRecords', () => {
     expect(pending!.records).toHaveLength(1);
   });
 
+  /**
+   * `storeVerification` refuses any phase but `prepared`, and that refusal was
+   * discarded. A second call on the same nonce therefore computed a different
+   * draft, failed to store it, and returned it as accepted — while staging went
+   * on using the draft the first call stored. The caller was shown one record
+   * and the repository would have committed another, with nothing reporting a
+   * difference.
+   */
+  it('does not report a second verification as accepted when it cannot be stored', () => {
+    const transcript =
+      'We decided: Do not use shared mutable state for config because it causes race conditions. ' +
+      'We also decided: Keep the retry ceiling at three attempts because more masks real failures.';
+    const diff = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n';
+    const nonce = prepare(cwd, transcript, diff);
+    const first = 'Do not use shared mutable state for config because it causes race conditions';
+    const second = 'Keep the retry ceiling at three attempts because more masks real failures';
+
+    const one = verifyCaptureRecords({
+      nonce,
+      draft: [validDraft(first)],
+      transcript,
+      diff,
+      cwd,
+    });
+    expect(one.validation_result).toBe('pass');
+
+    const two = verifyCaptureRecords({
+      nonce,
+      draft: [validDraft(second)],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    // The second call's records were never bound to the transaction, so it must
+    // not hand them back as though they had been.
+    expect(two.accepted).toEqual([]);
+    expect(two.validation_result).toBe('empty');
+    expect(two.incomplete).toBe(true);
+
+    // And what is stored is still the first call's record, unchanged.
+    const pending = readPending(nonce, { cwd });
+    expect(pending!.phase).toBe('verified');
+    expect(pending!.records).toHaveLength(1);
+    expect(JSON.stringify(pending!.records)).toContain('shared mutable state');
+  });
+
   // === Verification failure never blocks a commit ===
   it('verification failure returns empty, does not throw or signal error', () => {
     const transcript = 'Just a chat.';

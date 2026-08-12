@@ -269,6 +269,34 @@ describe('#506 the built MCP server records exactly how it ended', () => {
     const path = lifecyclePath(dir);
     expect(path).not.toBeNull();
     expect(path).toContain(join('.git', 'commitlore'));
+    // `toContain` alone passes for a path that merely has those segments
+    // somewhere inside it, which is how the linked-worktree case below went
+    // unnoticed. The log has to be under this repository's git directory, not
+    // merely mention it.
+    expect(path!.startsWith(join(dir, '.git'))).toBe(true);
+  });
+
+  /**
+   * A linked worktree is the case `lifecyclePath` promises to handle and the
+   * one it got wrong. `rev-parse --git-path` answers relative to `cwd` in an
+   * ordinary clone and absolutely here, and joining an absolute answer onto
+   * `cwd` put the log at `<worktree>/Users/.../.git/worktrees/<name>/…` —
+   * a directory created inside the working tree on every server start, where a
+   * diff can see it and another working directory's diagnostics cannot.
+   */
+  it('writes to the real git directory from a linked worktree', () => {
+    const dir = repo('life-worktree');
+    const linked = `${dir}-linked`;
+    expect(execGit(['worktree', 'add', '--detach', linked], { cwd: dir }).code).toBe(0);
+
+    const path = lifecyclePath(linked);
+    const gitDir = execGit(['rev-parse', '--path-format=absolute', '--git-path', 'commitlore'], {
+      cwd: linked,
+    });
+
+    expect(path).not.toBeNull();
+    expect(path!.startsWith(linked)).toBe(false);
+    expect(path).toBe(join(gitDir.stdout.trim(), 'mcp-lifecycle.log'));
   });
 
   it('is silent outside a repository rather than throwing', () => {
