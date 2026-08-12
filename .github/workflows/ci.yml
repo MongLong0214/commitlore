@@ -129,37 +129,8 @@ jobs:
       - name: The CLI validates this repository's own history
         run: |
           set -euo pipefail
-          # `|| true`: validate exits 1 when it finds violations, and under
-          # `set -e` that killed the step before the assertion below could say
-          # *which* check failed -- including the reference check this gate
-          # exists for. The exit code is not discarded, it is re-derived from
-          # the report, which is the thing that can name what went wrong.
           node dist/cli.js validate --range "$(node scripts/adoption-range.mjs)" --json > validate.json || true
-          node -e '
-            const r = JSON.parse(require("fs").readFileSync("validate.json", "utf8"));
-            const checks = Array.isArray(r.checks) ? r.checks : [r.check].filter(Boolean);
-            const byClass = Object.fromEntries(checks.map((c) => [c.class, c]));
-            let bad = 0;
-            const violations = Array.isArray(r.violations) ? r.violations : [];
-            if (violations.length > 0) {
-              console.error(`ERROR: ${violations.length} violation(s) in this repository's own history:`);
-              for (const v of violations.slice(0, 20)) {
-                console.error(`  ${v.sha ?? "?"}: ${v.rule ?? "?"} — ${JSON.stringify(v).slice(0, 200)}`);
-              }
-              bad++;
-            }
-            for (const cls of ["shape", "reference"]) {
-              const c = byClass[cls];
-              if (c === undefined) { console.error(`ERROR: validate reported no ${cls} check`); bad++; continue; }
-              if (c.status !== "ok") {
-                console.error(`ERROR: ${cls} is ${c.status}${c.reason ? ` (${c.reason})` : ""}`);
-                bad++;
-              } else {
-                console.log(`${cls}: ok`);
-              }
-            }
-            process.exit(bad === 0 ? 0 : 1);
-          '
+          node scripts/assert-dogfood.mjs validate.json
 
       - name: doctor runs clean enough to report
         run: node dist/cli.js doctor
