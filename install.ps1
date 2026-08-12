@@ -534,8 +534,11 @@ if ([string]::IsNullOrEmpty($destDir)) {
 $dest = Join-Path $destDir 'commitlore.cmd'
 
 # Refuse to clobber a file this script did not put there. A previous shim
-# carries the marker; a previous install prints a bare semver. Anything else is
-# somebody else's file and is left exactly where it is.
+# carries the marker. An older install predating the marker is recognised by a
+# bare semver *and* the managed checkout that install would have left behind --
+# printing a version was the whole test, so any unrelated executable answering
+# `--version` with something like `1.2.3` was silently destroyed. Anything else
+# is somebody else's file and is left exactly where it is.
 if (Test-Path -LiteralPath $dest) {
     $existing = ''
     try {
@@ -555,8 +558,16 @@ if (Test-Path -LiteralPath $dest) {
         }
         if ($null -eq $existingVersion) { $existingVersion = '' }
         $existingVersion = $existingVersion.Trim()
+        $existingCheckout = ''
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
+            foreach ($candidate in @((Join-Path $dataRoot ("v" + $existingVersion)), (Join-Path $dataRoot $existingVersion))) {
+                if (Test-Path -LiteralPath $candidate -PathType Container) { $existingCheckout = $candidate; break }
+            }
+        }
+        if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+' -and $existingCheckout -ne '') {
             Write-Log "replacing a previous commitlore install at $dest ($existingVersion -> $Version)"
+        } elseif ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
+            Stop-Install "$dest already exists, reports version ""$existingVersion"", and has no commitlore checkout under $dataRoot to match it -- refusing to overwrite a file this installer cannot show it wrote. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
         } else {
             Stop-Install "$dest already exists and is not a commitlore shim (got: ""$existingVersion"") -- refusing to overwrite it. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4
         }
