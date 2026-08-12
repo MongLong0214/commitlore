@@ -879,6 +879,9 @@ describe('validate — --json', () => {
       json: true,
     });
     expect(JSON.parse(result.stdout)).toEqual({
+      // The count of messages read. Without it an empty range is
+      // indistinguishable from a clean one, so the gate requires it (r-4f8d13).
+      examined: 1,
       checks: [
         { class: 'shape', status: 'failed' },
         { class: 'reference', status: 'not-checked', reason: 'no repository' },
@@ -901,6 +904,9 @@ describe('validate — --json', () => {
     const result = runValidate({ readStdin: () => 'Subject\n\nBlast: local\n', json: true });
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
+      // The count of messages read. Without it an empty range is
+      // indistinguishable from a clean one, so the gate requires it (r-4f8d13).
+      examined: 1,
       checks: [
         { class: 'shape', status: 'ok' },
         { class: 'reference', status: 'not-checked', reason: 'no repository' },
