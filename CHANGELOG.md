@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+## 0.8.1
+
+Three defects found by installing 0.8.0 onto a clean machine and watching what
+it did, rather than by reading the code.
+
+### The capture procedure now reaches every host
+
+Four of the seven hosts `install.sh` wires — Gemini, Cursor, Windsurf, opencode
+— receive an `mcpServers` entry and no skills. The MCP server's `instructions`
+described only the read half of the protocol: read the context resource before
+editing, and how to read the trust tiers. Nothing said when to record anything,
+so those hosts held the capture tools with nothing telling them what the tools
+were for.
+
+The server now describes both halves. It ships to every host by definition.
+Verified with the plugin disabled and no `AGENTS.md` present: a real session
+drove prepare, verify and stage and landed a `Provenance: drafted` record.
+
+### `init` no longer writes AGENTS.md
+
+Because it no longer has to. Writing the file is `--agents-md`, off by default.
+It used to create one in repositories that use no such convention, and add a
+hundred lines to one that does.
+
+### A registration pointing at a deleted directory is no longer reported as fine
+
+The generic agent-config step skips any file that mentions commitlore, which
+correctly preserves a registration somebody configured on purpose — and equally
+preserved ones that could not start. Four hosts on the author's machine pointed
+at a temp directory from a test install deleted long before, and every reinstall
+reported "already mentions commitlore — left unchanged" while those hosts had no
+working server.
+
+The file is still never rewritten. A command naming an absolute path that does
+not exist is now reported with the path and how to fix it.
+
+
 ## 0.8.0
 
 Everything 0.7.1 promised about unattended capture is in a release for the
