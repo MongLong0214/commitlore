@@ -254,8 +254,10 @@ jobs:
       - name: Tag the checkout so install.sh has a pinned version to clone
         run: |
           set -euo pipefail
-          git -c user.name=ci -c user.email=ci@example.invalid tag -f v9.9.9
-          git tag --list v9.9.9
+          version="v$(node -p 'require("./package.json").version')"
+          printf 'COMMITLORE_CI_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          git -c user.name=ci -c user.email=ci@example.invalid tag -f "$version"
+          git tag --list "$version"
 
       - name: Fresh install, then upgrade over it
         run: |
@@ -264,18 +266,19 @@ jobs:
           mkdir -p "$HOME"
           export COMMITLORE_INSTALL_SOURCE="$GITHUB_WORKSPACE"
 
-          sh install.sh v9.9.9
+          sh install.sh "$COMMITLORE_CI_VERSION"
           wrapper="$HOME/.local/bin/commitlore"
           test -x "$wrapper"
           grep -qF '# commitlore:wrapper:v1' "$wrapper"
-          test -f "$HOME/.local/share/commitlore/v9.9.9/dist/commitlore.mjs"
-          "$wrapper" --version
+          test -f "$HOME/.local/share/commitlore/$COMMITLORE_CI_VERSION/dist/commitlore.mjs"
+          installed_version="$("$wrapper" --version)"
+          test "$installed_version" = "${COMMITLORE_CI_VERSION#v}"
 
           # The wrapper is replaced by rename, and a second run is an upgrade
           # rather than a refusal. An in-place overwrite of a file that may be
           # executing is the defect that forced a same-day patch release.
-          sh install.sh v9.9.9
-          "$wrapper" --version
+          sh install.sh "$COMMITLORE_CI_VERSION"
+          test "$("$wrapper" --version)" = "${COMMITLORE_CI_VERSION#v}"
 
           # No shell profile is written. Printing the PATH line is the whole of
           # what this script does about PATH.
@@ -301,9 +304,9 @@ jobs:
       - name: Bare debian names the missing prerequisite and installs nothing
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/w" -w /w debian:stable-slim sh -c '
+          docker run --rm -e COMMITLORE_CI_VERSION="$COMMITLORE_CI_VERSION" -v "$PWD:/w" -w /w debian:stable-slim sh -c '
             set -eu
-            out=$(COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9 2>&1 || true)
+            out=$(COMMITLORE_INSTALL_SOURCE=/w sh install.sh "$COMMITLORE_CI_VERSION" 2>&1 || true)
             printf "%s\n" "$out"
             printf "%s" "$out" | grep -qi "node" || { echo "expected the message to name Node"; exit 1; }
             test ! -e "$HOME/.local/bin/commitlore" || { echo "something was installed"; exit 1; }
@@ -312,7 +315,7 @@ jobs:
       - name: The same image succeeds once Node and Git are present
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/w" -w /w node:22-bookworm-slim sh -c '
+          docker run --rm -e COMMITLORE_CI_VERSION="$COMMITLORE_CI_VERSION" -v "$PWD:/w" -w /w node:22-bookworm-slim sh -c '
             set -eu
             apt-get update -qq && apt-get install -y -qq git >/dev/null
             # The checkout is owned by the runner uid, not this container user.
@@ -321,10 +324,10 @@ jobs:
             # Raw clone first, unfiltered: if the installer cannot fetch, this
             # shows git saying why instead of leaving it to be inferred.
             echo "--- raw clone probe ---"
-            git clone --depth 1 --branch v9.9.9 /w /tmp/probe || echo "(probe failed, see above)"
+            git clone --depth 1 --branch "$COMMITLORE_CI_VERSION" /w /tmp/probe || echo "(probe failed, see above)"
             echo "--- installer ---"
-            COMMITLORE_INSTALL_SOURCE=/w sh install.sh v9.9.9
-            "$HOME/.local/bin/commitlore" --version
+            COMMITLORE_INSTALL_SOURCE=/w sh install.sh "$COMMITLORE_CI_VERSION"
+            test "$("$HOME/.local/bin/commitlore" --version)" = "${COMMITLORE_CI_VERSION#v}"
           '
 
   # T-1121 (#282): install.ps1 is install.sh's twin, and a shape test cannot show
@@ -364,17 +367,26 @@ jobs:
           set -euo pipefail
           git config user.email t@example.com
           git config user.name "CommitLore CI"
-          git tag v9.9.9
+          version="v$(node -p 'require("./package.json").version')"
+          wrong_version='v0.0.1'
+          if [ "$wrong_version" = "$version" ]; then wrong_version='v0.0.2'; fi
+          printf 'COMMITLORE_CI_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          printf 'COMMITLORE_CI_WRONG_VERSION=%s\n' "$wrong_version" >> "$GITHUB_ENV"
+          git tag -f "$version"
+          # This clean checkout is deliberately put at the requested tag's path
+          # below. It is a different tag even though this local CI source can
+          # share bytes; tag binding must still reject the mislabelled path.
+          git tag -f "$wrong_version"
 
       # -File, under 5.1, with the version as a positional argument: the same
-      # entry point a user gets from `& ([scriptblock]::Create((irm ...))) v9.9.9`,
+      # entry point a user gets from `& ([scriptblock]::Create((irm ...))) <tag>`,
       # and the one that proves param() binds.
       - name: Install under Windows PowerShell 5.1
         shell: cmd
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
         run: |
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION%
           if errorlevel 1 exit /b 1
 
       - name: The 5.1 host reports its own version, for the record
@@ -405,13 +417,45 @@ jobs:
         shell: pwsh
         env:
           COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
-          COMMITLORE_VERSION: v9.9.9
         run: |
           $ErrorActionPreference = 'Stop'
+          $env:COMMITLORE_VERSION = $env:COMMITLORE_CI_VERSION
           $out = (Get-Content -LiteralPath .\install.ps1 -Raw | Invoke-Expression 2>&1 | Out-String)
           Write-Host $out
           if ($out -notmatch 'reusing the existing checkout') { throw 'the checkout was not reused' }
           if ($out -notmatch 'upgrading the existing commitlore shim') { throw 'the shim was not recognized as its own' }
+
+      # A clean checkout can be internally valid and still be the wrong release.
+      # This is Windows evidence for the same version-binding condition the shell
+      # installer exercises locally: a directory named for the requested tag does
+      # not authorize activation until its own tag agrees.
+      - name: A clean wrong tag at the requested checkout path is refused
+        shell: cmd
+        env:
+          COMMITLORE_INSTALL_SOURCE: ${{ github.workspace }}
+        run: |
+          set "root=%TEMP%\commitlore-version-binding"
+          rmdir /s /q "%root%" 2>nul
+          mkdir "%root%\commitlore"
+          set "LOCALAPPDATA=%root%"
+          set "COMMITLORE_INSTALL_DIR=%root%\bin"
+          git clone --quiet --depth 1 --branch %COMMITLORE_CI_WRONG_VERSION% "%GITHUB_WORKSPACE%" "%root%\commitlore\%COMMITLORE_CI_VERSION%" > "%root%-clone.log" 2>&1
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION% > "%root%-wrong-tag.log" 2>&1
+          set "code=%ERRORLEVEL%"
+          type "%root%-wrong-tag.log"
+          if not "%code%"=="3" (
+            echo ::error::expected exit 3 for a clean wrong-tag checkout, got %code%
+            exit /b 1
+          )
+          findstr /C:"requested tag %COMMITLORE_CI_VERSION%" "%root%-wrong-tag.log" >nul || (
+            echo ::error::the requested-tag mismatch was not named
+            exit /b 1
+          )
+          if exist "%root%\bin\commitlore.cmd" (
+            echo ::error::a shim was activated for the wrong tag
+            exit /b 1
+          )
 
       # This has to run on Windows rather than be inferred from the shape test:
       # cmd.exe is the active wrapper, and the transaction is only established
@@ -425,13 +469,13 @@ jobs:
           rmdir /s /q "%root%" 2>nul
           set "LOCALAPPDATA=%root%"
           set "COMMITLORE_INSTALL_DIR=%root%\bin"
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-initial.log" 2>&1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION% > "%root%-initial.log" 2>&1
           if errorlevel 1 exit /b 1
           set "shim=%root%\bin\commitlore.cmd"
-          set "bundle=%root%\commitlore\v9.9.9\dist\commitlore.mjs"
+          set "bundle=%root%\commitlore\%COMMITLORE_CI_VERSION%\dist\commitlore.mjs"
           copy /y "%shim%" "%root%-shim-before.cmd" >nul
           del "%bundle%"
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-deleted.log" 2>&1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION% > "%root%-deleted.log" 2>&1
           set "code=%ERRORLEVEL%"
           type "%root%-deleted.log"
           if not "%code%"=="3" (
@@ -446,8 +490,18 @@ jobs:
             echo ::error::the shim changed after a deleted bundle was refused
             exit /b 1
           )
+          findstr /C:"Remove-Item -LiteralPath" "%root%-deleted.log" >nul || (
+            echo ::error::the damaged-checkout repair command was not named
+            exit /b 1
+          )
+          powershell.exe -NoProfile -Command "$repair = (Get-Content -LiteralPath '%root%-deleted.log' | Where-Object { $_.TrimStart().StartsWith('Remove-Item -LiteralPath ') } | Select-Object -First 1).Trim(); if ([string]::IsNullOrEmpty($repair)) { throw 'repair command missing' }; Write-Host $repair; Invoke-Expression $repair"
+          if errorlevel 1 exit /b 1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION% > "%root%-repaired.log" 2>&1
+          if errorlevel 1 exit /b 1
+          "%shim%" --version > "%root%-repaired-version.log" 2>&1
+          if errorlevel 1 exit /b 1
           mkdir "%bundle%"
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 v9.9.9 > "%root%-directory.log" 2>&1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 %COMMITLORE_CI_VERSION% > "%root%-directory.log" 2>&1
           set "code=%ERRORLEVEL%"
           type "%root%-directory.log"
           if not "%code%"=="3" (

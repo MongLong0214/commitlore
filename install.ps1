@@ -213,6 +213,86 @@ function New-VerificationResult {
     }
 }
 
+# A directory named after a release is not itself evidence that it contains
+# that release. An interrupted or hand-copied upgrade can leave a clean older
+# checkout at the newer path, so bind HEAD to the requested tag before reuse or
+# activation.
+function Test-RequestedTag {
+    param(
+        [string] $Root,
+        [string] $Tag
+    )
+    $tagRef = "refs/tags/$Tag"
+
+    try {
+        $previousTagPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & git -C $Root show-ref --verify --quiet $tagRef > $null 2>$null
+        $tagCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousTagPreference
+    } catch {
+        $ErrorActionPreference = $previousTagPreference
+        return (New-VerificationResult 'unavailable' $Root "Git could not read requested tag $Tag ($($_.Exception.Message))")
+    }
+    if ($tagCode -eq 1) {
+        return (New-VerificationResult 'failed' $Root "the checkout does not contain requested tag $Tag")
+    }
+    if ($tagCode -ne 0) {
+        return (New-VerificationResult 'unavailable' $Root "Git could not read requested tag $Tag (exit $tagCode)")
+    }
+
+    try {
+        $previousTagPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $requestedHead = ((& git -C $Root rev-parse --verify "$tagRef^{commit}" 2>$null | Out-String).Trim())
+        $requestedCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousTagPreference
+    } catch {
+        $ErrorActionPreference = $previousTagPreference
+        return (New-VerificationResult 'unavailable' $Root "Git could not resolve requested tag $Tag ($($_.Exception.Message))")
+    }
+    if ($requestedCode -ne 0) {
+        return (New-VerificationResult 'unavailable' $Root "Git could not resolve requested tag $Tag to a commit (exit $requestedCode)")
+    }
+
+    try {
+        $previousTagPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $checkoutHead = ((& git -C $Root rev-parse --verify HEAD 2>$null | Out-String).Trim())
+        $headCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousTagPreference
+    } catch {
+        $ErrorActionPreference = $previousTagPreference
+        return (New-VerificationResult 'unavailable' $Root "Git could not resolve checkout HEAD ($($_.Exception.Message))")
+    }
+    if ($headCode -ne 0) {
+        return (New-VerificationResult 'unavailable' $Root "Git could not resolve checkout HEAD (exit $headCode)")
+    }
+    if ($checkoutHead -cne $requestedHead) {
+        return (New-VerificationResult 'failed' $Root "checkout HEAD $checkoutHead does not match requested tag $Tag ($requestedHead)")
+    }
+    return (New-VerificationResult 'passed' $Root '')
+}
+
+# The installer may have arrived through Invoke-Expression, so it cannot safely
+# reconstruct the command that invoked it. It can name the one deliberate repair
+# that returns this transaction to a state a rerun can install into. The quoted
+# command is valid in both Windows PowerShell 5.1 and PowerShell 7+.
+function Stop-UnusableCheckout {
+    param(
+        [object] $Result,
+        [string] $Checkout,
+        [string] $Destination
+    )
+    [Console]::Error.WriteLine(('commitlore-install: error: runtime verification ran and found an unusable path: "{0}" ({1}). The existing shim at {2} was left unchanged.' -f $Result.Path, $Result.Detail, $Destination))
+    if (Test-Path -LiteralPath $Checkout) {
+        $quotedCheckout = $Checkout.Replace("'", "''")
+        [Console]::Error.WriteLine('commitlore-install: error: To repair this checkout deliberately, remove only it, then rerun the same install command:')
+        [Console]::Error.WriteLine("  Remove-Item -LiteralPath '$quotedCheckout' -Recurse -Force")
+    }
+    exit 3
+}
+
 # Smoke-test the checkout directly, while it is still only an incoming tree.
 # doctor --json can legitimately exit 1 for a repository that needs setup; its
 # JSON report proves the command ran. Exit 2 is the documented could-not-run
@@ -220,7 +300,8 @@ function New-VerificationResult {
 function Invoke-IncomingSmoke {
     param(
         [string] $Root,
-        [string] $NodePath
+        [string] $NodePath,
+        [string] $ExpectedVersion
     )
 
     $entry = Join-Path $Root 'dist\commitlore.mjs'
@@ -246,6 +327,9 @@ function Invoke-IncomingSmoke {
         }
         if ([string]::IsNullOrEmpty($version)) {
             return (New-VerificationResult 'failed' $entry '--version exited 0 without reporting a version')
+        }
+        if ($version -cne $ExpectedVersion) {
+            return (New-VerificationResult 'failed' $entry "--version reported ""$version"", want requested version ""$ExpectedVersion""")
         }
 
         $validMessage = Join-Path $smokeDir 'valid-message'
@@ -319,7 +403,8 @@ function Invoke-IncomingSmoke {
 function Invoke-LegacySmoke {
     param(
         [string] $Root,
-        [string] $NodePath
+        [string] $NodePath,
+        [string] $ExpectedVersion
     )
     $entry = Join-Path $Root 'dist\commitlore.mjs'
     try {
@@ -339,6 +424,9 @@ function Invoke-LegacySmoke {
     }
     if ([string]::IsNullOrEmpty($version)) {
         return (New-VerificationResult 'failed' $entry '--version exited 0 without reporting a version')
+    }
+    if ($version -cne $ExpectedVersion) {
+        return (New-VerificationResult 'failed' $entry "--version reported ""$version"", want requested version ""$ExpectedVersion""")
     }
     return (New-VerificationResult 'passed' $entry '' $version)
 }
@@ -494,11 +582,16 @@ if (Test-Path -LiteralPath $checkout) {
         $manifest = Test-RuntimeManifest $checkout
     }
     if ($manifest.State -eq 'passed') {
-        $candidate = $checkout
-        if ($manifest.Mode -eq 'legacy') {
-            Write-Log "reusing the existing checkout at $checkout (legacy runtime check and --version smoke test; this release predates $RuntimeManifestPath)"
+        $tagBinding = Test-RequestedTag $checkout $Version
+        if ($tagBinding.State -eq 'passed') {
+            $candidate = $checkout
+            if ($manifest.Mode -eq 'legacy') {
+                Write-Log "reusing the existing checkout at $checkout (legacy runtime check and --version smoke test; this release predates $RuntimeManifestPath)"
+            } else {
+                Write-Log "reusing the existing checkout at $checkout (runtime manifest and requested tag verified)"
+            }
         } else {
-            Write-Log "reusing the existing checkout at $checkout (runtime manifest verified)"
+            $manifest = $tagBinding
         }
     }
 } else {
@@ -547,9 +640,14 @@ if (Test-Path -LiteralPath $checkout) {
     }
     $manifest = Test-RuntimeManifest $checkoutTmp
     if ($manifest.State -eq 'passed') {
-        $candidate = $checkoutTmp
-        if ($manifest.Mode -eq 'legacy') {
-            Write-Log "$Version predates $RuntimeManifestPath; using the installer's legacy runtime check and --version smoke test"
+        $tagBinding = Test-RequestedTag $checkoutTmp $Version
+        if ($tagBinding.State -eq 'passed') {
+            $candidate = $checkoutTmp
+            if ($manifest.Mode -eq 'legacy') {
+                Write-Log "$Version predates $RuntimeManifestPath; using the installer's legacy runtime check and --version smoke test"
+            }
+        } else {
+            $manifest = $tagBinding
         }
     }
 }
@@ -561,13 +659,13 @@ if ([string]::IsNullOrEmpty($candidate)) {
     if ($manifest.State -eq 'unavailable') {
         Stop-Install "runtime verification could not run for ""$($manifest.Path)"": $($manifest.Detail). The existing shim at $dest was left unchanged." 5
     }
-    Stop-Install "runtime verification ran and found an unusable path: ""$($manifest.Path)"" ($($manifest.Detail)). The existing shim at $dest was left unchanged." 3
+    Stop-UnusableCheckout $manifest $checkout $dest
 }
 
 if ($manifest.Mode -eq 'legacy') {
-    $smoke = Invoke-LegacySmoke $candidate $nodeBin
+    $smoke = Invoke-LegacySmoke $candidate $nodeBin ($Version.TrimStart('v'))
 } else {
-    $smoke = Invoke-IncomingSmoke $candidate $nodeBin
+    $smoke = Invoke-IncomingSmoke $candidate $nodeBin ($Version.TrimStart('v'))
 }
 if ($smoke.State -ne 'passed') {
     if (-not [string]::IsNullOrEmpty($checkoutTmp) -and (Test-Path -LiteralPath $checkoutTmp)) {
@@ -576,7 +674,7 @@ if ($smoke.State -ne 'passed') {
     if ($smoke.State -eq 'unavailable') {
         Stop-Install "runtime verification could not run for ""$($smoke.Path)"": $($smoke.Detail). The existing shim at $dest was left unchanged." 5
     }
-    Stop-Install "runtime verification ran and found an unusable path: ""$($smoke.Path)"" ($($smoke.Detail)). The existing shim at $dest was left unchanged." 3
+    Stop-UnusableCheckout $smoke $checkout $dest
 }
 
 if ($candidate -eq $checkoutTmp) {

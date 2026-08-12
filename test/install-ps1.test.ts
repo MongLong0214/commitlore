@@ -188,13 +188,16 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(writes).toEqual([]);
   });
 
-  it('reads the checkout-owned runtime manifest and smoke-tests before activation', () => {
+  it('binds the requested tag and its reported version before activation', () => {
     const text = body();
     expect(text).toContain("$RuntimeManifestPath = 'installer/runtime-manifest.txt'");
     expect(text).toContain("$RuntimeManifestFormat = 'commitlore-runtime-manifest-v1'");
     expect(text).toContain('Test-TrackedRuntimeFile $Root $RuntimeManifestPath');
     expect(text).toContain('Get-Content -LiteralPath $manifestPath');
     expect(text).toContain('Test-LegacyRuntime $Root');
+    expect(text).toContain('function Test-RequestedTag');
+    expect(text).toContain('Test-RequestedTag $checkout $Version');
+    expect(text).toContain('Test-RequestedTag $checkoutTmp $Version');
     expect(text).toContain('Invoke-LegacySmoke $candidate $nodeBin');
     expect(readFileSync(SH, 'utf8')).toContain('RUNTIME_MANIFEST="installer/runtime-manifest.txt"');
     for (const asset of [
@@ -211,6 +214,8 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
       expect(readFileSync(RUNTIME_MANIFEST, 'utf8')).toContain(asset);
     }
     expect(text).toContain('Invoke-IncomingSmoke $candidate $nodeBin');
+    expect(text).toContain('if ($version -cne $ExpectedVersion)');
+    expect(text).toContain('want requested version');
     expect(text).toContain('validate --message-file $validMessage');
     expect(text).toContain('validate --message-file $invalidMessage');
     expect(text).toContain('doctor --json');
@@ -219,11 +224,22 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(text).not.toContain('Start-Sleep -Seconds 1');
   });
 
-  it('is re-runnable only after an existing checkout passes the runtime manifest', () => {
+  it('is re-runnable only after an existing checkout binds to its requested tag', () => {
     const text = body();
-    expect(text).toContain('reusing the existing checkout at $checkout (runtime manifest verified)');
+    expect(text).toContain('reusing the existing checkout at $checkout (runtime manifest and requested tag verified)');
     expect(text).toContain('upgrading the existing commitlore shim at');
     expect(text).toContain('already mentions commitlore -- left unchanged');
+  });
+
+  it('names an explicit manual repair for an unusable existing checkout', () => {
+    // The installer must not delete an unverified path by itself. This command
+    // is intentionally printed for the operator to run, after which the same
+    // installer invocation can materialize a fresh requested checkout.
+    const text = body();
+    expect(text).toContain('function Stop-UnusableCheckout');
+    expect(text).toContain("Remove-Item -LiteralPath '$quotedCheckout' -Recurse -Force");
+    expect(text).toContain('Stop-UnusableCheckout $manifest $checkout $dest');
+    expect(text).toContain('Stop-UnusableCheckout $smoke $checkout $dest');
   });
 
   it('writes the shim beside the target and moves it into place', () => {
