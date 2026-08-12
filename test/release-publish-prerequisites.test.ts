@@ -118,6 +118,7 @@ interface CheckRun {
   head_sha: string;
   status: string;
   conclusion: string | null;
+  app: { slug: string } | null;
 }
 
 const successfulPayload = (): { check_runs: CheckRun[] } => ({
@@ -126,6 +127,7 @@ const successfulPayload = (): { check_runs: CheckRun[] } => ({
     head_sha: RELEASE_SHA,
     status: 'completed',
     conclusion: 'success',
+    app: { slug: 'github-actions' },
   })),
 });
 
@@ -193,6 +195,44 @@ describe('the required CI checks passed at the exact tagged SHA', () => {
     const payload = successfulPayload();
     for (const check of payload.check_runs) check.head_sha = OTHER_SHA;
     rejectedPayload(payload, 'head SHA');
+  });
+
+  // A check run's name says nothing about who created it. Any GitHub App
+  // installed on the repository can post one under a required check's name and
+  // conclude it `success`; matching on the name alone took that for CI (#571).
+  it('refuses a required check reported by an app other than Actions', () => {
+    const payload = successfulPayload();
+    payload.check_runs[0]!.app = { slug: 'some-other-app' };
+    rejectedPayload(payload, 'reported by app "some-other-app"');
+  });
+
+  it('refuses a required check with no app attributed at all', () => {
+    const payload = successfulPayload();
+    payload.check_runs[0]!.app = null;
+    rejectedPayload(payload, 'reported by app "none"');
+  });
+
+  // The impersonation must not be able to stand in for the real run: with the
+  // genuine check absent, a look-alike leaves the required check unsatisfied.
+  it('does not let a look-alike check substitute for the genuine one', () => {
+    const payload = successfulPayload();
+    payload.check_runs[0]!.app = { slug: 'some-other-app' };
+    const result = runPayload(payload);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('required check is absent');
+  });
+
+  // ...and must not be able to hide behind it either: a genuine success plus a
+  // forged duplicate is still a refusal, so an attacker cannot add noise to a
+  // passing set and have it pass anyway.
+  it('refuses a forged duplicate alongside a genuine success', () => {
+    const payload = successfulPayload();
+    payload.check_runs.push({
+      ...payload.check_runs[0]!,
+      app: { slug: 'some-other-app' },
+      conclusion: 'success',
+    });
+    rejectedPayload(payload, 'reported by app "some-other-app"');
   });
 });
 

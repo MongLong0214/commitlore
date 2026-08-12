@@ -140,11 +140,27 @@ const networkPayload = async (owner, repo, sha) => {
   return checkRuns;
 };
 
+// The only producer whose check runs mean "this repository's CI ran". A check
+// run's name is not evidence of who wrote it: any GitHub App installed on the
+// repository may create one, choose `check (22)` as its name, and conclude it
+// `success`. Matching on the name alone accepted that as CI (#571). The slug is
+// GitHub's own identifier for the Actions app and is not settable by a caller.
+const REQUIRED_APP_SLUG = 'github-actions';
+
 const checkRequiredRuns = (checkRuns, sha) => {
   const problems = [];
 
   for (const required of REQUIRED_CHECKS) {
-    const matching = checkRuns.filter((run) => run !== null && typeof run === 'object' && run.name === required);
+    const named = checkRuns.filter((run) => run !== null && typeof run === 'object' && run.name === required);
+    // Split rather than filter: a run bearing a required check's name from some
+    // other app is a finding, not something to pass over quietly. Dropping it
+    // silently would report "required check is absent" and lose the reason.
+    const matching = named.filter((run) => run.app?.slug === REQUIRED_APP_SLUG);
+    for (const foreign of named.filter((run) => !matching.includes(run))) {
+      problems.push(
+        `${required}: reported by app "${String(foreign.app?.slug ?? 'none')}", expected "${REQUIRED_APP_SLUG}"`,
+      );
+    }
     if (matching.length === 0) {
       problems.push(`${required}: required check is absent`);
       continue;
