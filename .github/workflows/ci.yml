@@ -311,7 +311,11 @@ jobs:
             -v "$PWD:/w" -w /w alpine:3.21 sh -c '
               set -eu
               apk add --no-cache nodejs git >/dev/null
-              git config --global --add safe.directory /w
+              # `--system`, not `--global`: the checkout is owned by the runner
+              # uid and this container runs as root with a different HOME, so a
+              # global entry is written where git will not read it back.
+              git config --system --add safe.directory /w
+              git config --system --add safe.directory '*'
               node --version
               COMMITLORE_INSTALL_SOURCE=/w sh install.sh "$COMMITLORE_CI_VERSION"
               wrapper="$HOME/.local/bin/commitlore"

@@ -54,10 +54,9 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = 'MongLong0214/commitlore'
 $NodeMajorMin = 22
-# The index is `node:sqlite`, which does not exist before 22.5. Checking the
-# major alone let 22.0 through 22.4 install cleanly and then fail to build an
-# index, which reads as "no records" rather than "your Node is too old".
-$NodeMinorMin = 5
+# Two requirements meet here: `node:sqlite` (22.5) and the `commander`
+# dependency (22.12). The floor is the higher, and `engines.node` says the same.
+$NodeMinorMin = 12
 $WrapperMarker = ':: commitlore:wrapper:v1'
 
 $SourceUrl = $env:COMMITLORE_INSTALL_SOURCE
@@ -468,7 +467,7 @@ $nodeMinorRaw = ($nodeVersion.TrimStart('v').Split('.') + @('0'))[1]
 $nodeMinor = 0
 [void][int]::TryParse($nodeMinorRaw, [ref]$nodeMinor)
 if ($nodeMajor -eq $NodeMajorMin -and $nodeMinor -lt $NodeMinorMin) {
-    Stop-Install "Node.js $nodeVersion is too old: the index needs node:sqlite, which arrived in $NodeMajorMin.$NodeMinorMin. Upgrade Node.js, then run this again. Nothing was installed." 1
+    Stop-Install "Node.js $nodeVersion is too old: this release needs Node $NodeMajorMin.$NodeMinorMin or newer (node:sqlite for the index, and a direct dependency). Upgrade Node.js, then run this again. Nothing was installed." 1
 }
 if ($nodeMajor -lt $NodeMajorMin) {
     Stop-Install "Node.js $NodeMajorMin or newer is required; this machine has $nodeVersion. Upgrade Node.js, then run this again. Nothing was installed." 1
