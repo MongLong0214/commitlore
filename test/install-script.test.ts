@@ -446,6 +446,55 @@ describe('T-1120 upgrade and verification', () => {
    * silently replaced. The old check passes the case above with that defect
    * fully present.
    */
+  /**
+   * The generic agent-config step skips any file that mentions commitlore,
+   * which preserves a registration somebody configured on purpose. It also
+   * preserved ones that could not start: four hosts on this author's machine
+   * pointed at `/tmp/fresh256…/bin/commitlore`, a temp directory from a test
+   * install deleted long before, and every reinstall reported "already
+   * mentions commitlore -- left unchanged" while those hosts had no server.
+   *
+   * The file is still never rewritten. What changed is that a target which
+   * does not exist is named instead of counted as fine.
+   */
+  it('names a registration whose command no longer exists instead of calling it fine', () => {
+    const home = tempDir('dead-agent-path');
+    mkdirSync(join(home, '.cursor'), { recursive: true });
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      JSON.stringify({
+        mcpServers: { commitlore: { command: '/tmp/definitely-not-here/bin/commitlore', args: ['mcp'] } },
+      }),
+    );
+
+    const r = runInstaller({ home });
+    const out = `${r.stdout}${r.stderr}`;
+
+    expect(out).toMatch(/definitely-not-here/);
+    expect(out).toMatch(/does not exist/);
+    // Still left unchanged: reporting is the fix, not rewriting somebody's file.
+    expect(JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8'))).toEqual({
+      mcpServers: { commitlore: { command: '/tmp/definitely-not-here/bin/commitlore', args: ['mcp'] } },
+    });
+  });
+
+  it('leaves a registration whose command exists reported as before', () => {
+    const home = tempDir('live-agent-path');
+    mkdirSync(join(home, '.cursor'), { recursive: true });
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      JSON.stringify({ mcpServers: { commitlore: { command: '/bin/sh', args: ['mcp'] } } }),
+    );
+
+    const out = (() => {
+      const r = runInstaller({ home });
+      return `${r.stdout}${r.stderr}`;
+    })();
+
+    expect(out).toMatch(/already mentions commitlore -- left unchanged/);
+    expect(out).not.toMatch(/does not exist/);
+  });
+
   it('refuses a foreign executable that merely prints a version', () => {
     const home = tempDir('foreign-semver');
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });

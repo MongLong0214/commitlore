@@ -691,6 +691,31 @@ EOF
   fi
 
   if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
+    # Preserving an entry somebody configured is right; preserving one that
+    # cannot start is not. Four hosts on this author's machine held
+    # `/tmp/fresh256.../bin/commitlore` -- a temp directory from a test install,
+    # deleted long before -- and every reinstall reported "already mentions
+    # commitlore, left unchanged" while those hosts had no working server at
+    # all. The file is still never rewritten here; what changes is that a dead
+    # target is named instead of counted as fine.
+    existing_cmd=""
+    if command -v jq >/dev/null 2>&1; then
+      existing_cmd="$(jq -r '
+        [ .. | objects | to_entries[] | select(.key == "commitlore") | .value
+          | (.command? // empty) ]
+        | map(if type == "array" then .[0] else . end)
+        | map(select(type == "string"))
+        | first // empty
+      ' "$config_path" 2>/dev/null || true)"
+    fi
+    case "$existing_cmd" in
+      /*)
+        if [ ! -e "$existing_cmd" ]; then
+          record_skipped "$agent" "$config_path names commitlore at \"$existing_cmd\", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+          return
+        fi
+        ;;
+    esac
     record_skipped "$agent" "$config_path already mentions commitlore -- left unchanged"
     return
   fi

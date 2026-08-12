@@ -162,8 +162,31 @@ const runTrustStep = (opts) => {
 const runAgentIntegrationStep = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     const settingsPath = claudeSettingsPath(cwd);
-    const guidance = installAgentsGuidance(cwd);
     const result = installClaudeHook({ settingsPath });
+    // `AGENTS.md` is a convention, not a requirement, and this step writes into a
+    // file the repository owns -- 105 lines into an existing one, or a new file
+    // where the repository had none. Capture works without it: an end-to-end run
+    // with no AGENTS.md drove prepare, verify and stage and landed a `drafted`
+    // record, because the Claude plugin carries the same procedure as a skill.
+    // What the file buys is hosts that load no skills. Somebody who does not use
+    // AGENTS.md should be able to say so rather than delete it after every init.
+    if (opts.agentsGuidance === false) {
+        const lines = [
+            'AGENTS.md left alone (--no-agents-md); hosts that load no skills will not see the capture procedure',
+            ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0),
+        ];
+        if (result.stderr) {
+            lines.push(...result.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
+        }
+        return {
+            step: 'claude-hook',
+            title: 'agent integration',
+            code: result.code === 0 ? 0 : 2,
+            lines,
+            detail: { guidance: null, claude: result },
+        };
+    }
+    const guidance = installAgentsGuidance(cwd);
     const guidanceLine = {
         created: `created AGENTS.md with the CommitLore capture instructions`,
         added: `added the marked CommitLore capture instructions to AGENTS.md`,
@@ -592,6 +615,7 @@ export const register = (program) => {
         .option('--json', 'emit the report as JSON')
         .option('--unattended', 'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)')
         .option('--no-unattended', 'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)')
+        .option('--no-agents-md', 'leave AGENTS.md untouched — the capture procedure also ships as a plugin skill')
         .addHelpText('after', '\nRuns seven setup steps in sequence — hooks install, directive author string, index --rebuild, agent ' +
         'integration, repository MCP registration, capture policy, then doctor --fix as a final check — and reports each one\'s own outcome rather than a single ' +
         'pass/fail. A step this command could not complete is named, never absorbed into a success message ' +
@@ -613,12 +637,15 @@ export const register = (program) => {
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
         'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
-        'AGENTS.md; every other line stays untouched. A repository MCP registration that cannot be written leaves the ' +
+        'AGENTS.md; every other line stays untouched, and `--no-agents-md` skips that write entirely -- the same procedure ships as a plugin skill, so a host that loads skills captures without the file. A repository MCP registration that cannot be written leaves the ' +
         'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.')
         .action(async (options) => {
         const choice = await resolveUnattendedChoice(options);
         const initOptions = options.force === undefined ? {} : { force: options.force };
         initOptions.unattended = choice;
+        // commander maps `--no-agents-md` to `agentsMd: false`; absent means true.
+        if (options.agentsMd === false)
+            initOptions.agentsGuidance = false;
         const report = runInit(initOptions);
         let output;
         if (options.json === true) {

@@ -229,6 +229,11 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(text).toContain('reusing the existing checkout at $checkout (runtime manifest and requested tag verified)');
     expect(text).toContain('upgrading the existing commitlore shim at');
     expect(text).toContain('already mentions commitlore -- left unchanged');
+    // Parity with install.sh: a mention whose command is gone is named, not
+    // counted as healthy. Asserted here because PowerShell cannot run in this
+    // environment and only the windows-latest job exercises the behaviour.
+    expect(text).toContain('which does not exist -- left unchanged');
+    expect(text).toContain('Test-Path -LiteralPath $existingCmd');
   });
 
   it('names an explicit manual repair for an unusable existing checkout', () => {
