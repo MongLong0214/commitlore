@@ -118,8 +118,35 @@ jobs:
       # The range is derived rather than pinned -- a hardcoded cutoff goes stale
       # and a stale cutoff reads as passing, which is the same rule the library
       # path follows.
+      # The notes mirror is a second authoritative source, and `git fetch` does
+      # not carry it. Without it `validate` answers `reference: not-checked` and
+      # still exits 0, so the gate that proves this repository keeps its own
+      # protocol was passing with half the check skipped (#542). Fetch it, then
+      # read the JSON rather than the exit code.
+      - name: Fetch the notes mirror so references can be checked
+        run: git fetch --no-tags origin '+refs/notes/commitlore:refs/notes/commitlore' || true
+
       - name: The CLI validates this repository's own history
-        run: node dist/cli.js validate --range "$(node scripts/adoption-range.mjs)"
+        run: |
+          set -euo pipefail
+          node dist/cli.js validate --range "$(node scripts/adoption-range.mjs)" --json > validate.json
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("validate.json", "utf8"));
+            const checks = Array.isArray(r.checks) ? r.checks : [r.check].filter(Boolean);
+            const byClass = Object.fromEntries(checks.map((c) => [c.class, c]));
+            let bad = 0;
+            for (const cls of ["shape", "reference"]) {
+              const c = byClass[cls];
+              if (c === undefined) { console.error(`ERROR: validate reported no ${cls} check`); bad++; continue; }
+              if (c.status !== "ok") {
+                console.error(`ERROR: ${cls} is ${c.status}${c.reason ? ` (${c.reason})` : ""}`);
+                bad++;
+              } else {
+                console.log(`${cls}: ok`);
+              }
+            }
+            process.exit(bad === 0 ? 0 : 1);
+          '
 
       - name: doctor runs clean enough to report
         run: node dist/cli.js doctor
