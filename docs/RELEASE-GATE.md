@@ -93,7 +93,7 @@ cannot drift from what CI runs. They compare expanded names rather than job
 names on purpose: an earlier version matched by prefix, and a prefix match
 accepts `check (banana)` and survives the deletion of three required legs.
 
-    check (22.12.0)   check (24)   audit
+    check (22.13.0)   check (24)   audit
     git-matrix (ubuntu-latest)   git-matrix (macos-latest)
     install-script   install-ps1   install-macos
     install-alpine (linux/amd64)   install-alpine (linux/arm64)

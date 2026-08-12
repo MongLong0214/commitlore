@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="라이선스: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 이상" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 이상" src="https://img.shields.io/badge/Node.js-%3E%3D22.13-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -78,7 +78,7 @@ commitlore plugin install-codex
 
 Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache를 직접 고치지 않는다. 아래의 표준 설치 스크립트도 Codex를 감지하면 같은 명령을 실행한다. 설치 뒤에는 새 Codex session을 시작한다 — plugin의 skill과 MCP server는 설치 시점이 아니라 session 시작 시점에 로드된다. 아래 CLI가 repository command를 제공한다.
 
-두 경로 모두의 전제 조건: Node.js 22.12+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
+두 경로 모두의 전제 조건: Node.js 22.13+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 

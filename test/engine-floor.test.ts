@@ -13,8 +13,24 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 // @ts-expect-error — a plain .mjs helper, deliberately not part of the build.
-import { admits, compare, parseVersion, rangeMinimum } from '../scripts/engine-floor.mjs';
+import {
+  admits,
+  compare,
+  gatedBuiltinOffenders,
+  parseVersion,
+  rangeMinimum,
+  scanNodeBuiltins,
+  UNFLAGGED_SINCE,
+} from '../scripts/engine-floor.mjs';
+
+import { readSourceFiles } from './fixtures.js';
+
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 describe('reading the lowest version a range admits', () => {
   it.each([
@@ -103,5 +119,55 @@ describe('ordering', () => {
     expect(compare([22, 5, 0], [22, 12, 0])).toBeLessThan(0);
     expect(compare([22, 12, 0], [22, 12, 0])).toBe(0);
     expect(compare([24, 0, 0], [22, 99, 99])).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The gap that let 22.12.0 ship: check-engines read declared dependency
+ * ranges and could not see a bare `node:` builtin. The product's index
+ * imports `node:sqlite`, which is unflagged only from 22.13.0.
+ *
+ * The 22.12.0 case below is the bug. If it starts passing, the table no
+ * longer knows what sqlite needs, and the next too-low floor will ship
+ * the same way.
+ */
+describe('imported node: builtins against the declared floor', () => {
+  it('treats node:sqlite as unflagged from 22.13.0', () => {
+    expect(UNFLAGGED_SINCE['node:sqlite']).toEqual([22, 13, 0]);
+  });
+
+  it('finds node:sqlite in the product source, including createRequire', () => {
+    const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
+    expect(imported).toContain('node:sqlite');
+    expect(
+      scanNodeBuiltins([
+        "const nodeSqlite = createRequire(process.execPath)('node:sqlite');\n",
+      ]),
+    ).toEqual(['node:sqlite']);
+  });
+
+  it('refuses a 22.12.0 floor when src/ imports node:sqlite', () => {
+    const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
+    expect(gatedBuiltinOffenders([22, 12, 0], imported)).toEqual([
+      { specifier: 'node:sqlite', needed: [22, 13, 0] },
+    ]);
+  });
+
+  it('accepts a 22.13.0 floor for the same import', () => {
+    const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
+    expect(gatedBuiltinOffenders([22, 13, 0], imported)).toEqual([]);
+  });
+
+  it('the declared engines.node floor covers every gated builtin src/ imports', () => {
+    const declared = (
+      JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+        engines?: { node?: string };
+      }
+    ).engines?.node;
+    expect(declared, 'package.json must declare engines.node').toBeDefined();
+    const floor = rangeMinimum(declared!);
+    expect(floor, `cannot read a version out of engines.node = ${declared}`).not.toBeNull();
+    const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
+    expect(gatedBuiltinOffenders(floor!, imported)).toEqual([]);
   });
 });

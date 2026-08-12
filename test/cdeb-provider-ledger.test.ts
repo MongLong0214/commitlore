@@ -13,6 +13,8 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
+import { hasZstd, zstdUnavailableMessage } from "./cdeb-zstd.ts";
+
 import {
   aggregateTokenVolume,
   persistRawNdjson,
@@ -138,7 +140,11 @@ describe("CDEB-05 strict provider usage ledger", () => {
     expect("total_token_volume" in aggregate).toBe(false);
   });
 
-  it("round-trips recorded raw NDJSON byte-exactly through the persisted zstd artifact", () => {
+  it.skipIf(!hasZstd)(
+    hasZstd
+      ? "round-trips recorded raw NDJSON byte-exactly through the persisted zstd artifact"
+      : `round-trips recorded raw NDJSON byte-exactly through the persisted zstd artifact — ${zstdUnavailableMessage}`,
+    () => {
     const raw = recordedBytes();
     const directory = temp("raw-roundtrip");
     const artifact = persistRawNdjson(directory, raw);

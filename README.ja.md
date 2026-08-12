@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="ライセンス: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22.13-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -78,7 +78,7 @@ commitlore plugin install-codex
 
 Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や cache を直接編集しません。下の標準 installer も Codex を検出すれば同じコマンドを実行します。インストール後は新しい Codex session を開始してください — plugin の skill と MCP server はインストール時ではなく session 開始時に読み込まれます。下の CLI が repository command を提供します。
 
-どちらの経路も前提条件は Node.js 22.12+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
+どちらの経路も前提条件は Node.js 22.13+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
 
 **その他のコーディングエージェント** — CLI をインストールします:
 

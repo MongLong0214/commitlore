@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+The Node floor is `>=22.13.0`. `node:sqlite` exists behind
+`--experimental-sqlite` from 22.5 and is unflagged only from 22.13; on 22.12.x
+`init` dies at the Index step and every command that needs the index loses it.
+`zlib.zstdCompressSync` is 22.15.0 and is used only in `bench/cdeb`, so it does
+not raise the package floor — those tests skip when zstd is missing.
+`scripts/check-engines.mjs` now fails when `src/` imports a `node:` builtin
+whose unflagged version is newer than the declared floor; that is the gap that
+let 22.12.0 ship. See ADR-0033.
+
 ## 0.8.1
 
 Three independent reviews ran against this candidate. They found twenty-one

@@ -10,7 +10,7 @@
     "spec"
   ],
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",

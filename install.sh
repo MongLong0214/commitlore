@@ -40,12 +40,13 @@ set -eu
 REPO="MongLong0214/commitlore"
 SOURCE_URL="${COMMITLORE_INSTALL_SOURCE:-https://github.com/$REPO.git}"
 NODE_MAJOR_MIN=22
-# Two requirements meet here. `node:sqlite`, which the index needs, does not
-# exist before 22.5; `commander`, a direct dependency, needs 22.12. The floor is
-# the higher of the two, and `engines.node` says the same. Checking the major
-# alone let everything below it install cleanly and then fail, which reads as
-# "no records" rather than "your Node is too old".
-NODE_MINOR_MIN=12
+# Two requirements meet here. `node:sqlite`, which the index needs, exists
+# behind a flag from 22.5 and is unflagged only from 22.13; `commander`, a
+# direct dependency, needs 22.12. The floor is the higher of the two, and
+# `engines.node` says the same. Checking the major alone let everything below
+# it install cleanly and then fail, which reads as "no records" rather than
+# "your Node is too old".
+NODE_MINOR_MIN=13
 
 log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {

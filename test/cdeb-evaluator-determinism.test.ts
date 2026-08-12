@@ -35,7 +35,9 @@
 import { cpSync, readFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, expect, it } from 'vitest';
+
+import { describeZstd as describe } from './cdeb-zstd.ts';
 
 import { canonicalResultBytes, normalizedResultSha256 } from '../bench/cdeb/evaluator/engine.ts';
 import { freezeFinalTree } from '../bench/cdeb/evaluator/freeze-tree.ts';

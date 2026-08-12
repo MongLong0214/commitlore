@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22.12 or newer" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/Node.js-%3E%3D22.13-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -84,7 +84,7 @@ command when it finds Codex. Start a new Codex session afterwards: the plugin's
 skill and MCP server are loaded at session start, not on install. The CLI below
 provides the repository commands.
 
-Prerequisites for either path: Node.js 22.12+ and Git. The script checks both before it writes anything.
+Prerequisites for either path: Node.js 22.13+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
 

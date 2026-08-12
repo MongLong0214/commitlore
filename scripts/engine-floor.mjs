@@ -80,3 +80,48 @@ export const admits = (range, version) => {
   }
   return false;
 };
+
+/**
+ * Built-ins that exist earlier than they are usable without a flag.
+ *
+ * `check-engines.mjs` used to read only declared `engines.node` ranges. A
+ * bare `node:` import has no range, so the product's own storage layer
+ * (`node:sqlite`, unflagged at 22.13.0) sat below a 22.12.0 floor and
+ * nobody's check could see it. This table is that check.
+ *
+ * A specifier not in this table is treated as unflagged at 22.0. Add an
+ * entry when src/ starts importing a builtin that is still flagged at the
+ * current floor. Do not put bench-only APIs here — `zlib.zstdCompressSync`
+ * is 22.15.0 and lives only in bench/cdeb.
+ */
+export const UNFLAGGED_SINCE = Object.freeze({
+  'node:sqlite': Object.freeze([22, 13, 0]),
+});
+
+const NODE_SPECIFIER =
+  /(?:from|import\(|(?:require|createRequire\([^;]*?\))\()\s*['"](node:[^'"]+)['"]/g;
+
+/** Every `node:` specifier a list of source texts mentions. */
+export const scanNodeBuiltins = (sources) => {
+  const found = new Set();
+  for (const source of sources) {
+    for (const match of source.matchAll(NODE_SPECIFIER)) found.add(match[1]);
+  }
+  return [...found].sort();
+};
+
+/**
+ * Specifiers whose unflagged version is newer than `floor`. Empty when the
+ * floor covers every gated builtin in `specifiers`.
+ */
+export const gatedBuiltinOffenders = (floor, specifiers) => {
+  const offenders = [];
+  for (const specifier of specifiers) {
+    const needed = UNFLAGGED_SINCE[specifier];
+    if (needed === undefined) continue;
+    if (compare(floor, needed) < 0) {
+      offenders.push({ specifier, needed: [...needed] });
+    }
+  }
+  return offenders;
+};

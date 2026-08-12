@@ -1,6 +1,13 @@
 # ADR-0010: raise the supported Node floor to 22
 
-- Status: Accepted (2026-07-26)
+> ⚠️ **The runtime floor was superseded by [ADR-0033](ADR-0033-node-floor-22-13.md).**
+> The supported floor is **Node ≥ 22.13.0**, not “≥ 22”. `node:sqlite` exists
+> behind a flag from 22.5 and is unflagged only from 22.13; a 22.12.0 floor let
+> `init` fail at the Index step. The major-22 decision, the refusal to set the
+> floor at 24, and `scripts/check-engines.mjs` as the enforcement point remain
+> valid. ADR-0033 adds the builtin check this document did not have.
+
+- Status: Accepted (2026-07-26) · Runtime floor superseded by ADR-0033 (2026-08-13)
 - Owner: CTO
 - Supersedes: ADR-0002's runtime clause (“Node ≥ 20”). The language (TypeScript strict), distribution channel (npm/npx), and single-package decisions remain valid.
 

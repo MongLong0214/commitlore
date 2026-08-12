@@ -18,7 +18,9 @@ import { cpSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, expect, it } from "vitest";
+
+import { describeZstd as describe } from "./cdeb-zstd.ts";
 
 // `ajv`'s default export ships draft-07 only; the schema declares 2020-12.
 import { Ajv2020 } from "ajv/dist/2020.js";

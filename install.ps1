@@ -54,9 +54,10 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = 'MongLong0214/commitlore'
 $NodeMajorMin = 22
-# Two requirements meet here: `node:sqlite` (22.5) and the `commander`
-# dependency (22.12). The floor is the higher, and `engines.node` says the same.
-$NodeMinorMin = 12
+# Two requirements meet here: `node:sqlite` unflagged (22.13) and the
+# `commander` dependency (22.12). The floor is the higher, and `engines.node`
+# says the same.
+$NodeMinorMin = 13
 $WrapperMarker = ':: commitlore:wrapper:v1'
 
 $SourceUrl = $env:COMMITLORE_INSTALL_SOURCE

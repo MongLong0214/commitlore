@@ -11,7 +11,9 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, expect, it } from "vitest";
+
+import { describeZstd as describe } from "./cdeb-zstd.ts";
 
 import { normalizedResultSha256 } from "../bench/cdeb/evaluator/engine.ts";
 import { evaluateLocal } from "../bench/cdeb/evaluator/runner-local.ts";

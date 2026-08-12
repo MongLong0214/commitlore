@@ -26,7 +26,7 @@
 import { mkdirSync, readlinkSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, posix } from "node:path";
-import { constants as zstdConstants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { zstdCompressSync, zstdConstants, zstdDecompressSync } from "../runtime/zstd.ts";
 
 import type { IngestLimits, IngestRefusal } from "./types.ts";
 import { DEFAULT_INGEST_LIMITS } from "./types.ts";

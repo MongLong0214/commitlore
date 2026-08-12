@@ -547,24 +547,25 @@ describe('T-1120 upgrade and verification', () => {
   });
 
   /**
-   * `engines.node` said `>=22` while the index needs `node:sqlite`, which
-   * arrived in 22.5, while `commander` needs 22.12 — a mismatch the source
+   * `engines.node` said `>=22` while the index needs `node:sqlite` unflagged,
+   * which is 22.13, while `commander` needs 22.12 — a mismatch the source
    * comment in `core/index-db.ts`
    * already acknowledged. The installer checked the major only, so 22.0 through
-   * 22.4 installed cleanly and then could not build an index, which reads as
+   * 22.12 installed cleanly and then could not build an index, which reads as
    * "this repository has no records" rather than "your Node is too old".
    */
   it.each([
     ['22.4.0', false],
     ['22.11.0', false],
-    ['22.12.0', true],
+    ['22.12.0', false],
+    ['22.13.0', true],
     ['24.1.0', true],
   ])('accepts node %s: %s', (version, shouldInstall) => {
     const r = runInstaller({ home: tempDir(`nodefloor-${version.replace(/\./g, '-')}`), nodeVersion: version });
     const out = `${r.stdout}${r.stderr}`;
 
     if (shouldInstall) expect(out).not.toMatch(/is too old/);
-    else expect(out).toMatch(/needs Node 22\.12 or newer/);
+    else expect(out).toMatch(/needs Node 22\.13 or newer/);
   });
 
   it('refuses a foreign executable that merely prints a version', () => {

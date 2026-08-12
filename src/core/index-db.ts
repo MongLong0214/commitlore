@@ -71,9 +71,10 @@ import {
  * `createRequire` rather than a static `import`, and still resolved lazily
  * below rather than at module scope, for the same reason ADR-0003 gave for
  * `better-sqlite3`: importing this file must never throw before a caller can
- * choose `--no-index`. `node:sqlite` is experimental and version-gated (it
- * does not exist before Node 22.5, which satisfies but predates the `>=22`
- * floor in `package.json`), so that guarantee still matters. The construct
+ * choose `--no-index`. `node:sqlite` is experimental and version-gated: it
+ * exists behind `--experimental-sqlite` from Node 22.5 and is unflagged only
+ * from 22.13, which is why the package floor is `>=22.13.0` and not 22.5.
+ * A Node that only has the flagged module still throws here. The construct
  * signature is declared locally to name exactly the surface this file uses;
  * `@types/node` exports `DatabaseSync` itself directly, unlike
  * `@types/better-sqlite3`'s buried `DatabaseConstructor`.
@@ -92,7 +93,7 @@ type DatabaseConstructor = new (path: string, options?: { readOnly?: boolean }) 
  * That is not hypothetical. It is what a distribution without node_modules
  * does, which is exactly the shape this project now ships (ADR-0011) — and it
  * is also what a Node build without SQLite support, or a Node 22 minor older
- * than 22.5, would do to `node:sqlite` today.
+ * than 22.13, would do to `node:sqlite` today.
  */
 let cachedCtor: DatabaseConstructor | null = null;
 
@@ -989,8 +990,8 @@ const createSchema = (db: IndexDatabase): void => {
  * depth 1+ opens a named `SAVEPOINT` and releases or rolls back to it on exit,
  * leaving the outer transaction open either way. Depth is tracked per
  * database in JS rather than read back from SQLite (`db.isTransaction` would
- * also work, but only since Node 22.16 — this needs nothing past the 22.5
- * floor `node:sqlite` itself sets).
+ * also work, but only since Node 22.16 — this needs nothing past the 22.13
+ * floor `node:sqlite` itself sets once it is unflagged).
  */
 const transactionDepth = new WeakMap<IndexDatabase, number>();
 
