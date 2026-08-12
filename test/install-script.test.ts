@@ -45,7 +45,10 @@ afterAll(() => {
 let sourceRepo: string;
 /** A source whose bundle exits non-zero — a real broken release, not a test hook. */
 let brokenRepo: string;
+/** A correctly named tag whose bundle reports a different release version. */
+let versionMismatchRepo: string;
 const TAG = 'v9.9.9';
+const OLDER_TAG = 'v9.8.8';
 
 const git = (cwd: string, args: string[]): void => {
   execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e.invalid', ...args], {
@@ -63,14 +66,14 @@ const writeRuntimeManifest = (target: string, assets: string[]): void => {
 /** The non-bundle files the installed CLI reads at runtime. */
 const copyRuntimeAssets = (
   target: string,
-  options: { manifest?: string[] | false; includeHermes?: boolean } = {},
+  options: { manifest?: string[] | false; includeHermes?: boolean; version?: string } = {},
 ): void => {
   cpSync(join(REPO_ROOT, 'AGENTS.md'), join(target, 'AGENTS.md'));
   cpSync(join(REPO_ROOT, 'spec'), join(target, 'spec'), { recursive: true });
   if (options.includeHermes !== false) {
     cpSync(join(REPO_ROOT, 'hermes'), join(target, 'hermes'), { recursive: true });
   }
-  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'commitlore', version: '9.9.9' }));
+  writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'commitlore', version: options.version ?? '9.9.9' }));
   if (options.manifest === false) return;
   if (options.manifest !== undefined) {
     writeRuntimeManifest(target, options.manifest);
@@ -88,10 +91,14 @@ beforeAll(() => {
   // read from this fixture package.json, so the installer's ordinary wrapper
   // verification remains deterministic without a network or another worktree.
   cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(sourceRepo, 'dist', 'commitlore.mjs'));
-  copyRuntimeAssets(sourceRepo);
+  copyRuntimeAssets(sourceRepo, { version: '9.8.8' });
   execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: sourceRepo });
   git(sourceRepo, ['add', '-A']);
-  git(sourceRepo, ['commit', '--quiet', '-m', 'source']);
+  git(sourceRepo, ['commit', '--quiet', '-m', 'older source']);
+  git(sourceRepo, ['tag', OLDER_TAG]);
+  writeFileSync(join(sourceRepo, 'package.json'), JSON.stringify({ name: 'commitlore', version: '9.9.9' }));
+  git(sourceRepo, ['add', 'package.json']);
+  git(sourceRepo, ['commit', '--quiet', '-m', 'requested source']);
   git(sourceRepo, ['tag', TAG]);
 
   brokenRepo = join(tempDir('broken'), 'commitlore');
@@ -102,6 +109,15 @@ beforeAll(() => {
   git(brokenRepo, ['add', '-A']);
   git(brokenRepo, ['commit', '--quiet', '-m', 'broken bundle']);
   git(brokenRepo, ['tag', TAG]);
+
+  versionMismatchRepo = join(tempDir('version-mismatch'), 'commitlore');
+  mkdirSync(join(versionMismatchRepo, 'dist'), { recursive: true });
+  cpSync(join(REPO_ROOT, 'dist', 'commitlore.mjs'), join(versionMismatchRepo, 'dist', 'commitlore.mjs'));
+  copyRuntimeAssets(versionMismatchRepo, { version: '9.8.8' });
+  execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: versionMismatchRepo });
+  git(versionMismatchRepo, ['add', '-A']);
+  git(versionMismatchRepo, ['commit', '--quiet', '-m', 'wrong runtime version']);
+  git(versionMismatchRepo, ['tag', TAG]);
 });
 
 /** A PATH holding a shell and the tools the case wants, and nothing else. */
@@ -432,6 +448,34 @@ describe('T-1120 upgrade and verification', () => {
     expect(existsSync(r.wrapper)).toBe(false);
   });
 
+  it('refuses a requested tag whose binary reports another version before activating a wrapper', () => {
+    // Tag identity alone is insufficient: a tag can point at bytes that still
+    // declare an older release. The exact --version value is what the wrapper
+    // will expose to every later invocation.
+    const r = runInstaller({ extraEnv: { COMMITLORE_INSTALL_SOURCE: versionMismatchRepo } });
+    expect(r.status).toBe(3);
+    expect(`${r.stdout}${r.stderr}`).toContain('--version reported "9.8.8", want requested version "9.9.9"');
+    expect(existsSync(r.wrapper)).toBe(false);
+  });
+
+  it('refuses a clean older checkout placed at the requested release path', () => {
+    // This is the upgrade failure that a directory name cannot prove away: the
+    // checkout is internally clean, but its HEAD is the older tag. It must stay
+    // untouched for the operator to inspect or remove deliberately.
+    const home = tempDir('wrong-clean-checkout');
+    const checkout = join(home, '.local', 'share', 'commitlore', TAG);
+    mkdirSync(dirname(checkout), { recursive: true });
+    execFileSync('git', ['clone', '--quiet', '--depth', '1', '--branch', OLDER_TAG, sourceRepo, checkout]);
+    const before = execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+    const r = runInstaller({ home });
+    expect(r.status).toBe(3);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/requested tag v9\.9\.9/);
+    expect(existsSync(r.wrapper)).toBe(false);
+    expect(execFileSync('git', ['-C', checkout, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()).toBe(before);
+    expect(execFileSync('node', ['dist/commitlore.mjs', '--version'], { cwd: checkout, encoding: 'utf8' }).trim()).toBe('9.8.8');
+  });
+
   it('accepts an older tag whose own manifest names fewer runtime assets', () => {
     // This source predates the Hermes bundle. Its manifest deliberately lists
     // only the files that tag reads, and the checkout itself carries that
@@ -443,6 +487,7 @@ describe('T-1120 upgrade and verification', () => {
     copyRuntimeAssets(olderRepo, {
       includeHermes: false,
       manifest: ['AGENTS.md', 'dist/commitlore.mjs', 'package.json', 'spec/SPEC.md', 'spec/schema/record.schema.json'],
+      version: '9.8.0',
     });
     execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: olderRepo });
     git(olderRepo, ['add', '-A']);
@@ -467,7 +512,7 @@ describe('T-1120 upgrade and verification', () => {
       join(legacyRepo, 'dist', 'commitlore.mjs'),
       "if (process.argv[2] === '--version') process.stdout.write('9.7.0\\n'); else process.exit(1);\n",
     );
-    copyRuntimeAssets(legacyRepo, { manifest: false });
+    copyRuntimeAssets(legacyRepo, { manifest: false, version: '9.7.0' });
     execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: legacyRepo });
     git(legacyRepo, ['add', '-A']);
     git(legacyRepo, ['commit', '--quiet', '-m', 'release before runtime manifest']);
@@ -555,6 +600,34 @@ describe('T-1120 upgrade and verification', () => {
       }
     });
   }
+
+  it('gives a damaged checkout a repair command that returns it to an installable state', () => {
+    const home = tempDir('damaged-repair');
+    const first = runInstaller({ home });
+    expect(first.status).toBe(0);
+    const bundle = join(first.dataDir, TAG, 'dist', 'commitlore.mjs');
+    rmSync(bundle);
+
+    const refused = runInstaller({ home });
+    expect(refused.status).toBe(3);
+    const repair = `${refused.stdout}${refused.stderr}`.match(/^  (rm -rf .+)$/m)?.[1];
+    expect(repair).toBeDefined();
+
+    // Execute the exact command the refusal printed, then rerun the original
+    // installation. The installer never removes an unverified checkout itself.
+    const repairedPath = spawnSync('/bin/sh', ['-c', repair!], { encoding: 'utf8' });
+    expect(repairedPath.status).toBe(0);
+    expect(existsSync(join(first.dataDir, TAG))).toBe(false);
+
+    const repaired = runInstaller({ home });
+    expect(repaired.status).toBe(0);
+    const version = spawnSync('/bin/sh', [repaired.wrapper, '--version'], {
+      encoding: 'utf8',
+      env: { PATH: stubPath({ node: 'current' }), HOME: home },
+    });
+    expect(version.status).toBe(0);
+    expect(version.stdout.trim()).toBe('9.9.9');
+  });
 });
 
 describe('#298 tag auto-resolution needs no sort extension', () => {
@@ -611,7 +684,11 @@ describe('#298 tag auto-resolution needs no sort extension', () => {
     execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: repo });
     git(repo, ['add', '-A']);
     git(repo, ['commit', '--quiet', '-m', 'src']);
-    for (const tag of ['v1.0.0', 'v2.5.0', 'v9.9.9', 'v10.0.0']) git(repo, ['tag', tag]);
+    for (const tag of ['v1.0.0', 'v2.5.0', 'v9.9.9']) git(repo, ['tag', tag]);
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'commitlore', version: '10.0.0' }));
+    git(repo, ['add', 'package.json']);
+    git(repo, ['commit', '--quiet', '-m', 'newest source']);
+    git(repo, ['tag', 'v10.0.0']);
 
     const home = tempDir('majors-home');
     const run = spawnSync('/bin/sh', [INSTALLER], {

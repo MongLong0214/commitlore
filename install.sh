@@ -187,6 +187,48 @@ verification_unavailable() {
   return 1
 }
 
+# A directory named after a release is not itself evidence that it contains
+# that release. In particular, an interrupted or hand-copied upgrade can leave
+# a clean checkout of an older tag at the newer tag's path. Bind HEAD to the
+# requested tag before reusing or activating any checkout.
+verify_requested_tag() {
+  runtime_root="$1"
+  requested_tag="$2"
+  requested_ref="refs/tags/$requested_tag"
+
+  if git -C "$runtime_root" show-ref --verify --quiet "$requested_ref"; then
+    :
+  else
+    requested_tag_status=$?
+    if [ "$requested_tag_status" -eq 1 ]; then
+      verification_failed "$runtime_root" "the checkout does not contain requested tag $requested_tag"
+    else
+      verification_unavailable "$runtime_root" "Git could not read requested tag $requested_tag (exit $requested_tag_status)"
+    fi
+    return 1
+  fi
+
+  if requested_head="$(git -C "$runtime_root" rev-parse --verify "$requested_ref^{commit}" 2>/dev/null)"; then
+    :
+  else
+    requested_tag_status=$?
+    verification_unavailable "$runtime_root" "Git could not resolve requested tag $requested_tag to a commit (exit $requested_tag_status)"
+    return 1
+  fi
+  if checkout_head="$(git -C "$runtime_root" rev-parse --verify HEAD 2>/dev/null)"; then
+    :
+  else
+    requested_tag_status=$?
+    verification_unavailable "$runtime_root" "Git could not resolve checkout HEAD (exit $requested_tag_status)"
+    return 1
+  fi
+  if [ "$checkout_head" != "$requested_head" ]; then
+    verification_failed "$runtime_root" "checkout HEAD $checkout_head does not match requested tag $requested_tag ($requested_head)"
+    return 1
+  fi
+  return 0
+}
+
 # Smoke-test the checkout directly, while it is still only an incoming tree.
 # `doctor --json` can legitimately exit 1 for a repository that needs setup;
 # its JSON report proves the command ran. Exit 2 is the documented "could not
@@ -202,6 +244,10 @@ verify_incoming_smoke() {
     verified_version="$(cat "$smoke_dir/version.out")"
     if [ -z "$verified_version" ]; then
       verification_failed "$runtime_entry" "--version exited 0 without reporting a version"
+      return 1
+    fi
+    if [ "$verified_version" != "$requested_version" ]; then
+      verification_failed "$runtime_entry" "--version reported \"$verified_version\", want requested version \"$requested_version\""
       return 1
     fi
   else
@@ -281,6 +327,10 @@ verify_legacy_smoke() {
       verification_failed "$runtime_entry" "--version exited 0 without reporting a version"
       return 1
     fi
+    if [ "$verified_version" != "$requested_version" ]; then
+      verification_failed "$runtime_entry" "--version reported \"$verified_version\", want requested version \"$requested_version\""
+      return 1
+    fi
     return 0
   fi
   smoke_status=$?
@@ -349,6 +399,7 @@ else
 fi
 
 log "installing $version"
+requested_version="${version#v}"
 
 # Scratch space for verification and the wiring phase's write-temp-then-rename
 # config merges. Incoming and wrapper temporaries share its exit cleanup.
@@ -409,6 +460,25 @@ data_root="${XDG_DATA_HOME:-$HOME/.local/share}/commitlore"
 checkout="$data_root/$version"
 candidate=""
 
+# The installer may have arrived through a pipe, so it cannot safely recreate
+# the command that invoked it. It can name the one deliberate filesystem repair
+# that returns this transaction to a state a rerun can install into. Quoting is
+# emitted for a POSIX shell, including a data directory whose path has spaces.
+quote_for_sh() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+die_unusable_checkout() {
+  printf 'commitlore-install: error: runtime verification ran and found an unusable path: "%s" (%s). The existing wrapper at %s was left unchanged.\n' \
+    "$verification_path" "$verification_detail" "$dest" >&2
+  if [ -e "$checkout" ]; then
+    printf 'commitlore-install: error: To repair this checkout deliberately, remove only it, then rerun the same install command:\n' >&2
+    printf '  rm -rf %s\n' "$(quote_for_sh "$checkout")" >&2
+  fi
+  exit 3
+}
+
 if [ -e "$checkout" ]; then
   if [ ! -d "$checkout" ]; then
     verification_state="failed"
@@ -416,12 +486,14 @@ if [ -e "$checkout" ]; then
     verification_detail="the existing checkout path is not a directory"
   elif ! verify_runtime_manifest "$checkout"; then
     :
+  elif ! verify_requested_tag "$checkout" "$version"; then
+    :
   else
     candidate="$checkout"
     if [ "$runtime_manifest_mode" = "legacy" ]; then
       log "reusing the existing checkout at $checkout (legacy runtime check and --version smoke test; this release predates $RUNTIME_MANIFEST)"
     else
-      log "reusing the existing checkout at $checkout (runtime manifest verified)"
+      log "reusing the existing checkout at $checkout (runtime manifest and requested tag verified)"
     fi
   fi
 else
@@ -446,7 +518,7 @@ else
     die "could not fetch $version from $SOURCE_URL. git said: ${clone_reason:-nothing}. Nothing was installed." 2
   fi
   rm -f "$clone_log"
-  if verify_runtime_manifest "$checkout_tmp"; then
+  if verify_runtime_manifest "$checkout_tmp" && verify_requested_tag "$checkout_tmp" "$version"; then
     candidate="$checkout_tmp"
     if [ "$runtime_manifest_mode" = "legacy" ]; then
       log "$version predates $RUNTIME_MANIFEST; using the installer's legacy runtime check and --version smoke test"
@@ -458,7 +530,7 @@ if [ -z "$candidate" ]; then
   if [ "$verification_state" = "unavailable" ]; then
     die "runtime verification could not run for \"$verification_path\": $verification_detail. The existing wrapper at $dest was left unchanged." 5
   fi
-  die "runtime verification ran and found an unusable path: \"$verification_path\" ($verification_detail). The existing wrapper at $dest was left unchanged." 3
+  die_unusable_checkout
 fi
 
 verification_smoke_ok="true"
@@ -471,7 +543,7 @@ if [ "$verification_smoke_ok" != "true" ]; then
   if [ "$verification_state" = "unavailable" ]; then
     die "runtime verification could not run for \"$verification_path\": $verification_detail. The existing wrapper at $dest was left unchanged." 5
   else
-    die "runtime verification ran and found an unusable path: \"$verification_path\" ($verification_detail). The existing wrapper at $dest was left unchanged." 3
+    die_unusable_checkout
   fi
 fi
 

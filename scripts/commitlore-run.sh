@@ -16,25 +16,29 @@
 set -u
 
 resolve() {
-  # On PATH by whatever means the user chose. The installer's wrapper lands here:
-  # it is a shell script that execs node, so it runs without this script having to
-  # find node itself, and it is tried before the `command -v node` gate for that
-  # reason. ADR-0026 removed the compiled build that used to be probed first.
+  # A plugin is a versioned release artifact. When this script is executing as
+  # a plugin hook, its root is therefore the runtime authority: accepting a
+  # different `commitlore` from PATH would let a newly installed plugin silently
+  # run an older CLI. If this bundle cannot run, fail open rather than substituting
+  # an unrelated installation and presenting its context as the plugin's.
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    command -v node >/dev/null 2>&1 || return 1   # without it `exec node` exits 127
+
+    # The bundle carries its own dependencies, so it runs from a clone that never
+    # had node_modules. The unbundled build remains a development fallback.
+    if [ -f "$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs" ]; then
+      echo "node|$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs"; return 0
+    fi
+    if [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then
+      echo "node|$CLAUDE_PLUGIN_ROOT/dist/cli.js"; return 0
+    fi
+    return 1
+  fi
+
+  # Outside a plugin invocation there is no plugin-owned bundle to bind, so a
+  # caller may deliberately use the normal CLI install from PATH.
   if command -v commitlore >/dev/null 2>&1; then
     echo "commitlore"; return 0
-  fi
-
-  command -v node >/dev/null 2>&1 || return 1   # without it `exec node` exits 127
-
-  # The bundle carries its own dependencies, so it runs from a clone that never
-  # had node_modules. It is tried first among the node-based options for that
-  # reason alone.
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs" ]; then
-    echo "node|$CLAUDE_PLUGIN_ROOT/dist/commitlore.mjs"; return 0
-  fi
-  # Unbundled build, which needs node_modules beside it.
-  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then
-    echo "node|$CLAUDE_PLUGIN_ROOT/dist/cli.js"; return 0
   fi
   return 1
 }
