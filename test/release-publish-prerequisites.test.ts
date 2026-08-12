@@ -247,27 +247,51 @@ describe('the required CI checks passed at the exact tagged SHA', () => {
  * So the list stays fixed and this notices when CI grows past it.
  */
 describe('the release gate requires every job CI runs on a push', () => {
-  const ciJobs = (): string[] => {
+  /**
+   * The check-run names GitHub will actually produce, expanded from the matrix.
+   *
+   * The first version of this compared a required entry against the job name
+   * with `startsWith(`${job} (`)`, which asks only whether the job has *some*
+   * entry. `check (banana)` satisfied the job `check`, and deleting
+   * `check (24)` left `check (22.12.0)` satisfying it alone — so three of ten
+   * legs could drop out of the release gate with both cases green. A name was
+   * standing in for the thing it names, which is the defect these very tests
+   * were written to catch one layer down.
+   */
+  const expectedCheckNames = (): string[] => {
     const workflow = load(readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')) as {
-      jobs: Record<string, unknown>;
+      jobs: Record<string, { strategy?: { matrix?: Record<string, unknown> } }>;
     };
-    return Object.keys(workflow.jobs);
+    return Object.entries(workflow.jobs).flatMap(([job, definition]) => {
+      const matrix = definition.strategy?.matrix;
+      if (matrix === undefined) return [job];
+      const axes = Object.entries(matrix).filter(([, values]) => Array.isArray(values));
+      if (axes.length === 0) return [job];
+      // Every matrix here has a single axis. A second one would change how
+      // GitHub composes the name — `job (a, b)` — so refuse rather than guess.
+      if (axes.length > 1) {
+        throw new Error(`${job} has a multi-axis matrix; this expansion only handles one axis`);
+      }
+      const [, values] = axes[0] as [string, unknown[]];
+      return values.map((value) => `${job} (${String(value)})`);
+    });
   };
 
-  it('names each ci.yml job, directly or as a matrix expansion', () => {
-    const missing = ciJobs().filter(
-      (job) => !REQUIRED_CHECKS.some((check) => check === job || check.startsWith(`${job} (`)),
-    );
+  it('requires exactly the check runs ci.yml produces, matrix legs included', () => {
+    expect([...REQUIRED_CHECKS].sort()).toEqual(expectedCheckNames().sort());
+  });
+
+  // The set comparison above subsumes both directions, but each is asserted on
+  // its own so a failure says which way it drifted rather than printing two
+  // sorted arrays and leaving the reader to diff them.
+  it('names every check ci.yml produces', () => {
+    const missing = expectedCheckNames().filter((name) => !REQUIRED_CHECKS.includes(name));
     expect(missing).toEqual([]);
   });
 
-  // The converse: an entry naming a job that no longer exists would block every
-  // release, since a check that cannot run can never be present.
-  it('names no check that ci.yml does not produce', () => {
-    const jobs = ciJobs();
-    const orphaned = REQUIRED_CHECKS.filter(
-      (check) => !jobs.some((job) => check === job || check.startsWith(`${job} (`)),
-    );
+  it('names no check ci.yml does not produce', () => {
+    const expected = expectedCheckNames();
+    const orphaned = REQUIRED_CHECKS.filter((check) => !expected.includes(check));
     expect(orphaned).toEqual([]);
   });
 });
