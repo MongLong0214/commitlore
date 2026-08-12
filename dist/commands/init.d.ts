@@ -49,6 +49,17 @@ export interface InitOptions {
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
     force?: boolean;
     /**
+     * Whether to also write CommitLore's capture procedure into `AGENTS.md`.
+     *
+     * Absent means no. The procedure ships in the MCP server's `instructions`,
+     * which every host this installer wires receives on initialize, so the file
+     * is redundant for delivering it — and writing it meant creating a file in
+     * repositories that use no such convention, or adding a hundred lines to one
+     * that does. `true` writes it anyway, for a host that reads AGENTS.md but
+     * does not honour MCP instructions.
+     */
+    agentsGuidance?: boolean;
+    /**
      * What to do about unattended capture when the repository has **no** policy
      * file yet. An existing policy file is never changed regardless (#511's
      * consent is the team's, not this command's to revise).
@@ -91,7 +102,8 @@ interface PolicyStepDetail {
     error: string | null;
 }
 interface AgentIntegrationStepDetail {
-    readonly guidance: AgentsGuidanceResult;
+    /** `null` unless `--agents-md` asked this step to write the file. */
+    readonly guidance: AgentsGuidanceResult | null;
     readonly claude: ClaudeHookResult;
 }
 export interface InitReport {

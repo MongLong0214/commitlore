@@ -836,6 +836,30 @@ function Wire-McpServersJson {
         return
     }
     if ($body -match '"commitlore"') {
+        # Preserving an entry somebody configured is right; preserving one that
+        # cannot start is not. A registration left by a temp-directory install
+        # kept reporting "already mentions commitlore" long after the directory
+        # was gone, so the host had no working server and every reinstall said
+        # it was fine. The file is still never rewritten here -- a dead target
+        # is named rather than counted as healthy.
+        $existingCmd = ''
+        try {
+            $probe = $body | ConvertFrom-Json
+            foreach ($container in @($probe.mcpServers, $probe.mcp, $probe.servers)) {
+                if ($null -eq $container) { continue }
+                $entry = $container.commitlore
+                if ($null -eq $entry) { continue }
+                $cmd = $entry.command
+                if ($cmd -is [array]) { $cmd = $cmd | Select-Object -First 1 }
+                if ($cmd -is [string] -and $cmd -ne '') { $existingCmd = $cmd; break }
+            }
+        } catch {
+            $existingCmd = ''
+        }
+        if ($existingCmd -ne '' -and -not (Test-Path -LiteralPath $existingCmd)) {
+            Add-Skipped $Agent "$ConfigPath names commitlore at ""$existingCmd"", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+            return
+        }
         Add-Skipped $Agent "$ConfigPath already mentions commitlore -- left unchanged"
         return
     }

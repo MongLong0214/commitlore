@@ -64,6 +64,17 @@ export interface InitOptions {
   /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
   force?: boolean;
   /**
+   * Whether to also write CommitLore's capture procedure into `AGENTS.md`.
+   *
+   * Absent means no. The procedure ships in the MCP server's `instructions`,
+   * which every host this installer wires receives on initialize, so the file
+   * is redundant for delivering it — and writing it meant creating a file in
+   * repositories that use no such convention, or adding a hundred lines to one
+   * that does. `true` writes it anyway, for a host that reads AGENTS.md but
+   * does not honour MCP instructions.
+   */
+  agentsGuidance?: boolean;
+  /**
    * What to do about unattended capture when the repository has **no** policy
    * file yet. An existing policy file is never changed regardless (#511's
    * consent is the team's, not this command's to revise).
@@ -120,7 +131,8 @@ interface PolicyStepDetail {
 }
 
 interface AgentIntegrationStepDetail {
-  readonly guidance: AgentsGuidanceResult;
+  /** `null` unless `--agents-md` asked this step to write the file. */
+  readonly guidance: AgentsGuidanceResult | null;
   readonly claude: ClaudeHookResult;
 }
 
@@ -265,8 +277,33 @@ const runTrustStep = (opts: InitOptions): InitStep => {
 const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
-  const guidance = installAgentsGuidance(cwd);
   const result = installClaudeHook({ settingsPath });
+
+  // `AGENTS.md` is a convention, not a requirement, and this step writes into a
+  // file the repository owns -- 105 lines into an existing one, or a new file
+  // where the repository had none. Capture works without it: an end-to-end run
+  // with no AGENTS.md drove prepare, verify and stage and landed a `drafted`
+  // record, because the Claude plugin carries the same procedure as a skill.
+  // What the file buys is hosts that load no skills. Somebody who does not use
+  // AGENTS.md should be able to say so rather than delete it after every init.
+  if (opts.agentsGuidance !== true) {
+    const lines = [
+      'AGENTS.md left alone — the capture procedure ships in the MCP server every host receives (--agents-md writes it into the repository as well)',
+      ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0),
+    ];
+    if (result.stderr) {
+      lines.push(...result.stderr.trimEnd().split('\n').filter((line) => line.length > 0));
+    }
+    return {
+      step: 'claude-hook',
+      title: 'agent integration',
+      code: result.code === 0 ? 0 : 2,
+      lines,
+      detail: { guidance: null, claude: result },
+    };
+  }
+
+  const guidance = installAgentsGuidance(cwd);
 
   const guidanceLine: Record<AgentsGuidanceResult['state'], string> = {
     created: `created AGENTS.md with the CommitLore capture instructions`,
@@ -729,6 +766,10 @@ export const register = (program: Command): void => {
       '--no-unattended',
       'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)',
     )
+    .option(
+      '--agents-md',
+      'also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)',
+    )
     .addHelpText(
       'after',
       '\nRuns seven setup steps in sequence — hooks install, directive author string, index --rebuild, agent ' +
@@ -752,13 +793,14 @@ export const register = (program: Command): void => {
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
         'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
-        'AGENTS.md; every other line stays untouched. A repository MCP registration that cannot be written leaves the ' +
+        'AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server\'s instructions, which every wired host receives on initialize, so the file is not how the procedure travels. A repository MCP registration that cannot be written leaves the ' +
         'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.',
     )
-    .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean }) => {
+    .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean; agentsMd?: boolean }) => {
       const choice = await resolveUnattendedChoice(options);
       const initOptions: InitOptions = options.force === undefined ? {} : { force: options.force };
       initOptions.unattended = choice;
+      if (options.agentsMd === true) initOptions.agentsGuidance = true;
       const report = runInit(initOptions);
       let output: string;
       if (options.json === true) {
