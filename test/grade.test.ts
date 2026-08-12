@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { BLAST_VALUES, CERTAINTY_VALUES, UNDO_VALUES } from '../src/core/types.js';
+
 import {
   INJECTION_PATTERNS,
   gradeAll,
@@ -920,8 +922,13 @@ describe('gradeAll', () => {
  * of history, where `--no-verify`, missing hooks, or a rewritten branch all
  * produce trailers that never passed it. `Blast:` reaches the agent through the
  * injection projection, so the assumption was a channel, not a shortcut.
+ *
+ * The exemption is gone rather than conditional, and the last case here is why
+ * that costs nothing: no legal value of any exempt key matches any pattern.
+ * Should a future pattern be broad enough to catch one, this fails rather than
+ * quietly blocking every record that carries it.
  */
-describe('a structural key is only structural when its value validates', () => {
+describe('no key is exempt from the scanner because of its name', () => {
   const smuggler: AuthoredRecord = {
     sha: 'c1',
     author: TRUSTED[0]!,
@@ -955,5 +962,24 @@ describe('a structural key is only structural when its value validates', () => {
     };
 
     expect(gradeRecord(wellFormed, { at: AT, trustedAuthors: TRUSTED }).trust).toBe('directive');
+  });
+
+  it('finds no collision between a legal structural value and any pattern', () => {
+    const legal = [
+      ...BLAST_VALUES,
+      ...UNDO_VALUES,
+      ...CERTAINTY_VALUES,
+      'authored',
+      'drafted',
+      'reconstructed',
+      'delegated',
+      'r-abc123',
+      '0.8.0',
+      'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+    ];
+
+    const collisions = legal.filter((value) => scanInjection(value).length > 0);
+
+    expect(collisions).toEqual([]);
   });
 });
