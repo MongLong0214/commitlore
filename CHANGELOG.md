@@ -4,40 +4,76 @@
 
 ## 0.8.1
 
-Three defects found by installing 0.8.0 onto a clean machine and watching what
-it did, rather than by reading the code.
+Three independent reviews ran against this candidate. They found twenty-one
+blockers between them, and most of what follows is the answer to those — several
+of them defects in the fixes made earlier in the same release.
 
-### The capture procedure now reaches every host
+### The capture procedure reaches every host
 
 Four of the seven hosts `install.sh` wires — Gemini, Cursor, Windsurf, opencode
 — receive an `mcpServers` entry and no skills. The MCP server's `instructions`
-described only the read half of the protocol: read the context resource before
-editing, and how to read the trust tiers. Nothing said when to record anything,
-so those hosts held the capture tools with nothing telling them what the tools
-were for.
+described only the read half of the protocol, so those hosts held the capture
+tools with nothing saying what they were for. The server now describes both
+halves, and it ships to every host by definition.
 
-The server now describes both halves. It ships to every host by definition.
 Verified with the plugin disabled and no `AGENTS.md` present: a real session
 drove prepare, verify and stage and landed a `Provenance: drafted` record.
 
 ### `init` no longer writes AGENTS.md
 
-Because it no longer has to. Writing the file is `--agents-md`, off by default.
-It used to create one in repositories that use no such convention, and add a
-hundred lines to one that does.
+Because it no longer has to. `--agents-md` writes it for a host that reads that
+convention and not MCP instructions. It used to create the file in repositories
+that use no such convention, and add a hundred lines to one that does.
 
-### A registration pointing at a deleted directory is no longer reported as fine
+### What is served, and what is claimed
 
-The generic agent-config step skips any file that mentions commitlore, which
-correctly preserves a registration somebody configured on purpose — and equally
-preserved ones that could not start. Four hosts on the author's machine pointed
-at a temp directory from a test install deleted long before, and every reinstall
-reported "already mentions commitlore — left unchanged" while those hosts had no
-working server.
+- `commitlore_stale` served its records ungraded while `commitlore_query`
+  withheld the same payloads. An expired `Warn:` — or an `Expires:` value —
+  carrying prompt-injection text reached a model through a tool on the same
+  server. Both fields are now withheld when a pattern matches, and the record
+  is still listed.
+- A trailer key in `STRUCTURAL_TRAILER_KEYS` was exempt from injection scanning
+  on its name alone. Validation runs at commit time; grading runs on history.
+- `init` reported `ready` over a repository whose capture server could not be
+  registered. It now exits 1 and prints the `.mcp.json` to write.
+- `doctor` called any launchable command a working capture server.
+  `{"command": "false"}` read as healthy. An entry that is not the one `init`
+  writes is preserved, and reported as unverified rather than as ready.
+- Records were said to survive squash-merge. They do not, unless
+  `commitlore squash-preserve` or its Action runs.
+- "Evidence-verified" is now "Quote-checked": verification establishes that a
+  cited quote occurs in the source, not that it supports the claim.
 
-The file is still never rewritten. A command naming an absolute path that does
-not exist is now reported with the path and how to fix it.
+### Installing
 
+- The advertised one-liner fetched a pinned URL and passed no version, so it
+  installed whatever the newest tag was. It now installs the version its URL
+  names.
+- Ownership of an existing wrapper was inferred from a version string, then
+  from a directory name, then from a file's existence. It is now the runtime
+  answering with the version the wrapper claims.
+- A registration naming a path that no longer exists is reported instead of
+  counted as healthy — four hosts on the author's machine pointed at a temp
+  directory deleted long ago.
+- A config that merely contains the word `commitlore` is no longer taken for a
+  registration.
+- A requested version is bound to the runtime that answers, on both installers.
+- The Node floor is `>=22.12.0`, which is what `node:sqlite` and the
+  dependencies actually require, and both installers enforce it.
+- Windows has an install command in the README for the first time.
+
+### What CI now establishes
+
+- `install-macos` and `install-alpine` (amd64 and arm64) run the installer on
+  those hosts and then run `init`, `doctor` and `context` — the compatibility
+  matrix claimed executions that no job performed.
+- The dogfooding gate fetches the notes mirror and reads its report: `shape` and
+  `reference` must each be `ok`. It used to pass with the reference half
+  unperformed.
+- `test/capture-pipeline-e2e.test.ts` drives the built server through prepare,
+  verify, stage, commit and read-back.
+- The engine-floor parser has tests. It read `>=22.5` as Node 5, which failed
+  every required job before typecheck, build, tests or dogfooding ran.
 
 ## 0.8.0
 
