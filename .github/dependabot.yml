@@ -1,0 +1,42 @@
+# Two ecosystems, because a supply-chain problem can arrive through either.
+#
+# npm is grouped and monthly on purpose. CommitLore ships one runtime dependency
+# and the rest are dev-only; a weekly per-package PR stream would be noise that
+# gets closed unread, which is worse than a monthly batch that gets read.
+# Security updates ignore the schedule and the grouping — Dependabot opens those
+# as they land regardless of what is set here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+    commit-message:
+      # Dependabot commits on GitHub's side, so the local commit-msg hook never
+      # sees them. What does see them is the dogfooding gate, which validates
+      # this repository's own history on every run. A commit carrying no record
+      # is not a violation there — checked against a Dependabot-shaped message:
+      # 0 violations, shape ok — so these land without a trailer and that is
+      # correct. A dependency bump is not a decision anyone needs served back.
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+  # The workflows hold the release gates. A pinned action going stale is how a
+  # gate quietly stops meaning what it says.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: chore
+      include: scope
