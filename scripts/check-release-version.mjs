@@ -17,6 +17,7 @@
  *     `v0.1.0`; a plain argument for local testing), with exactly one
  *     leading `v` stripped
  *   - `package.json`'s `.version` field
+ *   - `.codex-plugin/plugin.json`'s `.version` field — the same, for Codex
  *   - `.claude-plugin/plugin.json`'s `.version` field — the manifest Claude
  *     Code resolves when installing the canonical plugin distribution
  *   - `package-lock.json`'s `.version` and `.packages[""].version` fields.
@@ -92,10 +93,20 @@ if (!existsSync(BUNDLE)) {
 
 const pkg = readManifest('package.json', ['.version']);
 const plugin = readManifest('.claude-plugin/plugin.json', ['.version']);
+// The Codex manifest is the third one a release has to move, and it was not
+// checked. Nothing else would have caught it: `--version` reads the bundle, and
+// the plugin installs from a tag whose manifest a stale field does not block.
+// A Codex user would have installed this release and been told it was the
+// previous one.
+const codexPlugin = readManifest('.codex-plugin/plugin.json', ['.version']);
 const packageLock = readManifest('package-lock.json', ['.version', '.packages[""].version']);
 
 const pkgVersion = requiredVersion(pkg.version, 'package.json .version');
 const pluginVersion = requiredVersion(plugin.version, '.claude-plugin/plugin.json .version');
+const codexPluginVersion = requiredVersion(
+  codexPlugin.version,
+  '.codex-plugin/plugin.json .version',
+);
 const packageLockVersion = requiredVersion(packageLock.version, 'package-lock.json .version');
 const packageLockRootVersion = requiredVersion(
   packageLock.packages?.['']?.version,
@@ -108,6 +119,7 @@ const mismatches = [];
 const versionSources = [
   ['package.json .version', pkgVersion],
   ['.claude-plugin/plugin.json .version', pluginVersion],
+  ['.codex-plugin/plugin.json .version', codexPluginVersion],
   ['package-lock.json .version', packageLockVersion],
   ['package-lock.json .packages[""].version', packageLockRootVersion],
   ['dist/commitlore.mjs --version', cliVersion],
@@ -127,7 +139,8 @@ if (mismatches.length > 0) {
 
 console.log(
   `version consistent: tag ${tagArg} == package.json .version ${pkgVersion} == ` +
-    `.claude-plugin/plugin.json .version ${pluginVersion} == package-lock.json .version ` +
+    `.claude-plugin/plugin.json .version ${pluginVersion} == ` +
+    `.codex-plugin/plugin.json .version ${codexPluginVersion} == package-lock.json .version ` +
     `${packageLockVersion} == package-lock.json .packages[""].version ${packageLockRootVersion} == ` +
     `dist/commitlore.mjs --version ${cliVersion}`,
 );

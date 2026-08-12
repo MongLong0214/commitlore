@@ -103,10 +103,19 @@ grammar is in [protocol.md](protocol.md); the normative rules are in
 ## Standing behind a record nobody read
 
 A record marked `Provenance: drafted` was produced by the capture pipeline and
-staged without a person reading it. Its quotes are checked against the
-transcript and the diff it came from, so it is real — but nobody vouched for the
-wording, and that is what `[directive]` claims. It is delivered as `[claim]`
-however trusted its author is (ADR-0030).
+staged without a person reading it. Every quote it cites is checked to occur,
+character for character, in the transcript or the diff it came from — so a
+drafted record cannot cite something nobody said.
+
+That is a narrower guarantee than it sounds, and worth stating exactly: the
+check establishes that the quote is *present*, not that it *supports* the
+trailer it is attached to. `Limit: Redis is forbidden` citing the sentence
+`Redis is required` passes, because the sentence is really there. Reading the
+quote against the claim is judgment, and nothing in this pipeline performs it.
+
+That is why no drafted record is ever delivered as `[directive]`, however
+trusted its author is (ADR-0030): it arrives as `[claim]`, information to weigh
+rather than an instruction to follow.
 
 **Endorsing one is a new record, never an edit.** A commit message cannot be
 changed without rewriting history, so the way to stand behind a drafted record

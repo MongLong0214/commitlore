@@ -340,6 +340,25 @@ const omittedLine = (cut, total, tier) => {
     ];
 };
 /**
+ * Says that the answer above is short because the scan ran out of time.
+ *
+ * Distinct from `omitted:`, which drops entries this tool *read* and chose not
+ * to send. This one is about entries it never read, so the honest reading of
+ * the section above is "some of what applies here", not "what applies here".
+ */
+const unreadLine = (unreadCommits) => {
+    if (unreadCommits === 0)
+        return [];
+    return [
+        `incomplete: this repository has no index, so answering meant reading its whole history; ` +
+            `the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
+            'treat the list above as some of what applies here, not all of it: records in those commits ' +
+            'are missing, and because supersession and expiry are recorded in commits like any other ' +
+            'record, one shown as active may since have been withdrawn. run `commitlore init` once to ' +
+            'index this repository, after which this answer is both complete and fast.',
+    ];
+};
+/**
  * Renders the payload. A fixed template: every sentence in it is a constant,
  * and the only variable text is a record's own value.
  */
@@ -352,6 +371,7 @@ const render = (input) => {
     const notices = [
         ...withheldLine(input.withheld),
         ...omittedLine(input.cut, input.totalEntries, input.cutTier),
+        ...unreadLine(input.unreadCommits),
     ];
     const footer = [...legend, ...notices];
     const body = [
@@ -500,6 +520,7 @@ export const buildInjection = (opts) => {
         at,
         cwd,
         noIndex,
+        ...(opts.scanBudgetMs === undefined ? {} : { scanBudgetMs: opts.scanBudgetMs }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         // `runQuery` drops superseded and expired records unless told otherwise, so
@@ -558,7 +579,7 @@ export const buildInjection = (opts) => {
         return empty;
     const totalEntries = entries.length + withheldValues;
     const budgetChars = budgetTokens * CHARS_PER_TOKEN;
-    const base = { path, withheld, totalEntries, ablation };
+    const base = { path, withheld, totalEntries, ablation, unreadCommits: result.unreadCommits };
     const keep = fit(base, entries, budgetChars);
     const cut = entries.length - keep;
     const cutTier = cut === 0 ? undefined : TIERS[entries[keep]?.tier ?? OTHER_TIER]?.name;

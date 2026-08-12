@@ -28,6 +28,41 @@ export declare const runCodexCommand: CodexCommandRunner;
 export declare const codexPluginSelector: (plugin?: CodexPluginConfig) => string;
 export declare const codexPluginInstallCommand: () => string;
 export declare const codexPluginMarkerPath: (plugin?: CodexPluginConfig, dataHome?: string) => string;
+/** What a marketplace of our name, if any, currently points at. */
+export type MarketplaceState = 
+/** No marketplace of that name is configured. */
+{
+    kind: 'absent';
+}
+/** Configured, and its source is the repository we publish from. */
+ | {
+    kind: 'ours';
+}
+/** Configured under our name, but pointing somewhere else. */
+ | {
+    kind: 'foreign';
+    source: string;
+}
+/** Configured, and this Codex cannot say where it points. */
+ | {
+    kind: 'unverifiable';
+};
+/**
+ * Reads `plugin marketplace list --json` and says what our name currently
+ * holds.
+ *
+ * The name was the whole test before. A marketplace called `commitlore` was
+ * accepted however it had been configured, and the installer went straight on
+ * to `plugin add commitlore@commitlore` — so a marketplace of that name
+ * pointing at somebody else's repository meant installing their code and
+ * reporting CommitLore installed. Codex publishes `marketplaceSource` for
+ * exactly this question.
+ *
+ * Text output has no source column, so a Codex too old for `--json` leaves the
+ * question open. That is `unverifiable`, and it is reported rather than
+ * rounded to either answer.
+ */
+export declare const readMarketplaceState: (json: string, plugin: CodexPluginConfig) => MarketplaceState;
 export declare const codexPluginIsInstalled: (output: string, plugin?: CodexPluginConfig) => boolean;
 export declare const readCodexPluginMarker: (plugin?: CodexPluginConfig, dataHome?: string) => CodexPluginMarker | null;
 export declare const removeCodexPluginMarker: (plugin?: CodexPluginConfig, dataHome?: string) => void;

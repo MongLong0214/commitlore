@@ -189,6 +189,39 @@ export declare const indexDbPath: (cwd?: string) => string;
  */
 type ExclusionCounts = Map<string, number>;
 /**
+ * A wall-clock ceiling on a no-index scan, and what it cost.
+ *
+ * The scan reads the whole history because the lifecycle fold is
+ * repository-wide, and on the pre-edit hook path that is a per-edit cost the
+ * agent waits through: 35s on an 823-commit repository, repeated on every edit,
+ * because the scan deliberately builds no index (ADR-0003 gives that work to
+ * `index` and `init`).
+ *
+ * `deadline` stops the batch loop; `unreadCommits` says how many commits that
+ * left unread. The count is the point. A scan that quietly returned less would
+ * be indistinguishable from a repository with fewer records, which is the one
+ * answer this codebase refuses to produce — so nothing consults the budget
+ * without also reporting what it cost.
+ */
+export interface ScanBudget {
+    /** `Date.now()` value after which no further batch is read. */
+    deadline: number;
+    /**
+     * The clock the deadline is read against. Defaults to `Date.now`.
+     *
+     * Injectable because the case worth testing — a budget that expires *partway*
+     * through, rather than one already spent when the scan starts — is otherwise
+     * a race against the machine. Asserting it with a real millisecond budget
+     * passed on a slow laptop and failed on a fast CI runner, where the scan
+     * finished inside the budget and nothing was truncated.
+     */
+    now?: () => number;
+}
+/** Filled in by a budgeted scan: 0 means every commit was read. */
+export interface ScanCost {
+    unreadCommits: number;
+}
+/**
  * Opens the index, creating it if absent. A file that SQLite refuses to open
  * at all is deleted and recreated rather than reported: the bytes are a cache.
  */
@@ -265,6 +298,8 @@ export declare const filterTrailers: (trailers: readonly IndexedTrailer[], query
  */
 export declare const scanTrailers: (query?: TrailerQuery, opts?: {
     cwd?: string;
+    budget?: ScanBudget;
+    cost?: ScanCost;
 }) => IndexedTrailer[];
 /** Every row, ordered, for the identity assertions the tests make. */
 export declare const dumpIndex: (handle: IndexHandle) => IndexedTrailer[];

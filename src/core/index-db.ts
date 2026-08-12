@@ -157,6 +157,15 @@ export const NOTES_REF = 'refs/notes/commitlore';
 /** Commits per `git log` invocation. Bounds peak output size, not correctness. */
 const LOG_BATCH = 1024;
 
+/**
+ * Batch size once a scan is running against a deadline.
+ *
+ * Small enough that the deadline is checked often enough to be a deadline —
+ * `LOG_BATCH` exceeds the commit count of most repositories, so a budgeted scan
+ * using it never reached a second iteration and never stopped.
+ */
+const BUDGETED_LOG_BATCH = 64;
+
 /** `git log` output can be large; 256 MiB leaves room for a wide merge commit. */
 const LOG_MAX_BUFFER = 256 * 1024 * 1024;
 
@@ -403,6 +412,41 @@ const parseTrailerField = (field: string): Trailer[] => {
  */
 type ExclusionCounts = Map<string, number>;
 
+/**
+ * A wall-clock ceiling on a no-index scan, and what it cost.
+ *
+ * The scan reads the whole history because the lifecycle fold is
+ * repository-wide, and on the pre-edit hook path that is a per-edit cost the
+ * agent waits through: 35s on an 823-commit repository, repeated on every edit,
+ * because the scan deliberately builds no index (ADR-0003 gives that work to
+ * `index` and `init`).
+ *
+ * `deadline` stops the batch loop; `unreadCommits` says how many commits that
+ * left unread. The count is the point. A scan that quietly returned less would
+ * be indistinguishable from a repository with fewer records, which is the one
+ * answer this codebase refuses to produce — so nothing consults the budget
+ * without also reporting what it cost.
+ */
+export interface ScanBudget {
+  /** `Date.now()` value after which no further batch is read. */
+  deadline: number;
+  /**
+   * The clock the deadline is read against. Defaults to `Date.now`.
+   *
+   * Injectable because the case worth testing — a budget that expires *partway*
+   * through, rather than one already spent when the scan starts — is otherwise
+   * a race against the machine. Asserting it with a real millisecond budget
+   * passed on a slow laptop and failed on a fast CI runner, where the scan
+   * finished inside the budget and nothing was truncated.
+   */
+  now?: () => number;
+}
+
+/** Filled in by a budgeted scan: 0 means every commit was read. */
+export interface ScanCost {
+  unreadCommits: number;
+}
+
 const recordExclusion = (counts: ExclusionCounts | undefined, key: string): void => {
   if (counts === undefined) return;
   const canonical = canonicalConventionalTrailerKey(key);
@@ -599,10 +643,26 @@ const readCommitRecords = (
   cwd: string,
   shas: readonly string[],
   excluded?: ExclusionCounts,
+  budget?: ScanBudget,
+  cost?: ScanCost,
 ): RawRecord[] => {
   const records: RawRecord[] = [];
+  let read = 0;
 
-  for (const batch of chunked(shas, LOG_BATCH)) {
+  // A batch is the unit all three passes below share, so a deadline can only be
+  // honoured between batches — and `LOG_BATCH` is larger than most repositories
+  // have commits, which made a single batch the whole scan and the check below
+  // unreachable. Under a budget the work is cut into slices small enough for
+  // the deadline to mean something, at the cost of more `git log` invocations
+  // on a run that has already decided it would rather stop early than wait.
+  const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
+
+  for (const batch of chunked(shas, batchSize)) {
+    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== undefined) cost.unreadCommits = shas.length - read;
+      return records;
+    }
+    read += batch.length;
     const result = gitLogByShas(
       cwd,
       batch,
@@ -1615,14 +1675,17 @@ const toIndexedTrailers = (records: readonly RawRecord[]): IndexedTrailer[] =>
  */
 export const scanTrailers = (
   query: TrailerQuery = {},
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string; budget?: ScanBudget; cost?: ScanCost } = {},
 ): IndexedTrailer[] => {
   const cwd = opts.cwd ?? process.cwd();
   if (historyAvailability(cwd) === 'unavailable') return [];
   const head = revParse(cwd, 'HEAD');
   const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
 
-  const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
+  const records = [
+    ...readCommitRecords(cwd, shas, undefined, opts.budget, opts.cost),
+    ...readNoteRecords(cwd, new Set(shas)),
+  ];
   return filterTrailers(toIndexedTrailers(records), query);
 };
 

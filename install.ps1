@@ -888,11 +888,39 @@ if (Test-AgentPresent 'codex' @((Join-Path $home_ '.codex'))) {
     $codexConfig = Join-Path $home_ '.codex\config.toml'
     $codexCli = Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -ne $codexCli) {
-        $codexServers = ''
-        try { $codexServers = (& codex mcp list --json 2>$null | Out-String) } catch { $codexServers = '' }
-        if ($codexServers -match '"name"\s*:\s*"commitlore"') {
-            Add-Skipped 'codex' 'commitlore is already registered (checked with codex mcp list) -- left unchanged'
+        # A registration named `commitlore` is not evidence of a working one.
+        # This branch used to check only that the name appeared in `codex mcp
+        # list`, so an entry pointing at a wrapper some earlier install left in
+        # a temp directory was reported healthy and never repaired -- the defect
+        # install.sh already fixed by asking what the entry points at. Ownership
+        # is decided by the target, never by the key it sits under.
+        #
+        # `$ErrorActionPreference` is relaxed around the native call: under
+        # 'Stop' anything codex writes to stderr becomes a terminating error, and
+        # "no such server" is an ordinary answer here, not a failure.
+        $codexExisting = ''
+        $eapCodex = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $codexExisting = (& codex mcp get commitlore 2>$null | Out-String) } catch { $codexExisting = '' }
+        $ErrorActionPreference = $eapCodex
+
+        $codexPointsHere = $codexExisting -match [regex]::Escape("command: $dest")
+        $codexIsOurs = $codexExisting -match [regex]::Escape($dataRoot)
+
+        if ($codexExisting.Trim() -ne '' -and $codexPointsHere) {
+            Add-Skipped 'codex' 'commitlore already points at this install -- left unchanged'
+        } elseif ($codexExisting.Trim() -ne '' -and -not $codexIsOurs) {
+            Add-Skipped 'codex' 'an mcp server named commitlore points somewhere this install did not write -- left untouched'
         } else {
+            # Either nothing is registered, or what is registered is a stale
+            # entry this tool wrote. The stale one is removed first so the add
+            # below is not refused for a name that is already taken.
+            if ($codexExisting.Trim() -ne '') {
+                $eapRemove = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                try { & codex mcp remove commitlore > $null 2>&1 } catch { }
+                $ErrorActionPreference = $eapRemove
+            }
             $registered = $false
             try {
                 & codex mcp add commitlore -- $dest mcp > $null 2>&1

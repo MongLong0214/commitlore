@@ -1212,4 +1212,45 @@ describe('#527 unattended capture initiator', () => {
 
     expect(check?.status).toBe('warn');
   });
+
+  /**
+   * The case above is a file no parser accepts, which was the only malformedness
+   * this check ever saw. A well-formed file whose entry is unlaunchable read as
+   * a registration, because the test was the key's presence rather than its
+   * value — so a repository that serves nothing was reported ready to serve.
+   */
+  for (const [label, entry] of [
+    ['null', 'null'],
+    ['an empty object', '{}'],
+    ['a blank command', '{ "command": "" }'],
+    ['a command that is not a string', '{ "command": 7 }'],
+  ] as const) {
+    it(`does not accept ${label} under the commitlore key as an initiator`, () => {
+      const repo = initRepo(`unattended-entry-${label.replace(/\W+/g, '-')}`);
+      enableUnattended(repo);
+      writeFileSync(join(repo, '.mcp.json'), `{ "mcpServers": { "commitlore": ${entry} } }`);
+
+      const check = runDoctor({ cwd: repo }).checks.find(
+        (row) => row.id === 'unattended-initiator',
+      );
+
+      expect(check?.status).toBe('warn');
+    });
+  }
+
+  it('still accepts an entry pointing somewhere other than our own command', () => {
+    // Not every launchable entry is the one `init` writes. A wrapper or an
+    // absolute path is a deliberate choice, and the reader's callers respond to
+    // "not registered" by writing our entry over it.
+    const repo = initRepo('unattended-entry-wrapper');
+    enableUnattended(repo);
+    writeFileSync(
+      join(repo, '.mcp.json'),
+      '{ "mcpServers": { "commitlore": { "command": "/opt/bin/commitlore-wrapper", "args": ["mcp"] } } }',
+    );
+
+    const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+  });
 });

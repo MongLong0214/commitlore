@@ -154,6 +154,16 @@ export interface InjectOptions {
   requireSignedDirective?: boolean;
   /** Answer from git alone, without the SQLite index. Same answers, slower. */
   noIndex?: boolean;
+  /**
+   * Wall-clock ceiling on the no-index scan, in milliseconds.
+   *
+   * The hook sets this; `commitlore context`, which a person ran and is waiting
+   * for, does not. Without an index the scan reads the whole history and builds
+   * nothing, so an uninitialised repository charged that cost to every edit
+   * forever. A truncated scan is reported in the rendered notices — the point is
+   * to bound the wait, never to quietly answer with less.
+   */
+  scanBudgetMs?: number;
   /** Guarantees to remove. Bench instrumentation; every flag defaults to false. */
   ablation?: AblationFlags;
 }
@@ -582,6 +592,25 @@ const omittedLine = (cut: number, total: number, tier: Tier | undefined): string
   ];
 };
 
+/**
+ * Says that the answer above is short because the scan ran out of time.
+ *
+ * Distinct from `omitted:`, which drops entries this tool *read* and chose not
+ * to send. This one is about entries it never read, so the honest reading of
+ * the section above is "some of what applies here", not "what applies here".
+ */
+const unreadLine = (unreadCommits: number): string[] => {
+  if (unreadCommits === 0) return [];
+  return [
+    `incomplete: this repository has no index, so answering meant reading its whole history; ` +
+      `the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
+      'treat the list above as some of what applies here, not all of it: records in those commits ' +
+      'are missing, and because supersession and expiry are recorded in commits like any other ' +
+      'record, one shown as active may since have been withdrawn. run `commitlore init` once to ' +
+      'index this repository, after which this answer is both complete and fast.',
+  ];
+};
+
 interface RenderInput {
   path: string;
   kept: readonly Entry[];
@@ -590,6 +619,8 @@ interface RenderInput {
   cut: number;
   cutTier: Tier | undefined;
   totalEntries: number;
+  /** Commits the scan budget left unread; 0 when the history was read whole. */
+  unreadCommits: number;
   ablation: Ablation;
 }
 
@@ -608,6 +639,7 @@ const render = (input: RenderInput): string => {
   const notices = [
     ...withheldLine(input.withheld),
     ...omittedLine(input.cut, input.totalEntries, input.cutTier),
+    ...unreadLine(input.unreadCommits),
   ];
 
   const footer = [...legend, ...notices];
@@ -781,6 +813,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     at,
     cwd,
     noIndex,
+    ...(opts.scanBudgetMs === undefined ? {} : { scanBudgetMs: opts.scanBudgetMs }),
     ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
     // `runQuery` drops superseded and expired records unless told otherwise, so
@@ -851,7 +884,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
 
   const totalEntries = entries.length + withheldValues;
   const budgetChars = budgetTokens * CHARS_PER_TOKEN;
-  const base = { path, withheld, totalEntries, ablation };
+  const base = { path, withheld, totalEntries, ablation, unreadCommits: result.unreadCommits };
 
   const keep = fit(base, entries, budgetChars);
   const cut = entries.length - keep;

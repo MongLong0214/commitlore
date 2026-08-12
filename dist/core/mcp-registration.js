@@ -23,6 +23,32 @@ export const MCP_SERVER_COMMAND = 'commitlore';
 export const MCP_SERVER_ARGS = ['mcp'];
 const isJsonObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
+/**
+ * Whether the entry under our key is a registration at all.
+ *
+ * The key's presence used to be the whole test, so `"commitlore": null` and
+ * `"commitlore": {}` counted. Nothing launches from either, and both made
+ * `init` report the repository already wired and leave it that way, while
+ * doctor called the result healthy — a repository that serves no records while
+ * every diagnostic says it does.
+ *
+ * The test is the field a host actually launches: a non-empty `command`
+ * string. It deliberately does not require that command to be ours. Pointing
+ * the entry at a wrapper, an absolute path, or a launcher is a legitimate
+ * choice, and this reader's callers respond to a "not registered" answer by
+ * writing our own entry — so demanding an exact command would overwrite a
+ * working setup somebody chose on purpose. What it rejects is a value no host
+ * can start, which nobody chooses on purpose.
+ */
+const isLaunchableEntry = (value) => isJsonObject(value) && typeof value['command'] === 'string' && value['command'].trim() !== '';
+/** Whether `servers` carries a registration under our key that a host could launch. */
+const holdsLaunchableRegistration = (servers) => isJsonObject(servers) &&
+    Object.hasOwn(servers, MCP_SERVER_KEY) &&
+    isLaunchableEntry(servers[MCP_SERVER_KEY]);
+/** Whether our key is present but holds something no host can launch. */
+const holdsMalformedRegistration = (servers) => isJsonObject(servers) &&
+    Object.hasOwn(servers, MCP_SERVER_KEY) &&
+    !isLaunchableEntry(servers[MCP_SERVER_KEY]);
 /** The repository root, or null when `cwd` is outside one. */
 const repositoryRoot = (cwd) => {
     const result = execGit(['rev-parse', '--show-toplevel'], { cwd });
@@ -56,7 +82,7 @@ export const registersCommitloreMcpServer = (cwd) => {
     if (!isJsonObject(parsed))
         return false;
     const servers = parsed['mcpServers'];
-    return isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY);
+    return holdsLaunchableRegistration(servers);
 };
 // ---------------------------------------------------------------------------
 // Text-preserving JSON insertion
@@ -286,8 +312,18 @@ export const registerCommitloreMcpServer = (cwd) => {
     const mcpMembers = rootMembers.filter((member) => member.key === 'mcpServers');
     const mcpMember = mcpMembers[mcpMembers.length - 1];
     const servers = parsed['mcpServers'];
-    if (isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY)) {
+    if (holdsLaunchableRegistration(servers)) {
         return { ok: true, path, state: 'already-registered', changed: false };
+    }
+    // Present but unlaunchable. Reported rather than repaired: the value is
+    // somebody's edit, and this function's other branches only ever add a missing
+    // entry. Silently replacing it would be the first time it destroyed one.
+    if (holdsMalformedRegistration(servers)) {
+        return {
+            ok: false,
+            path,
+            error: `${MCP_REGISTRATION_FILE} has a "${MCP_SERVER_KEY}" entry with no command to launch — left unchanged; remove it and run init again, or give it "command": "${MCP_SERVER_COMMAND}"`,
+        };
     }
     if (servers !== undefined && !isJsonObject(servers)) {
         return {

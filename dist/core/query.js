@@ -84,9 +84,10 @@ const normalizePaths = (opts) => {
     }
     return kept;
 };
-const scanSource = (cwd, diagnostics) => {
+const scanSource = (cwd, diagnostics, budgetMs) => {
     let rows;
     let corpusPasses = 0;
+    const cost = { unreadCommits: 0 };
     return {
         fetch: (query) => {
             if (rows === undefined) {
@@ -94,13 +95,16 @@ const scanSource = (cwd, diagnostics) => {
                 // must inspect the whole history. Materialize it once, then apply each
                 // lifecycle/display alias predicate in memory; re-reading git for each
                 // fetch made a single path query parse that corpus repeatedly.
-                rows = scanTrailers({}, { cwd });
+                rows = scanTrailers({}, budgetMs === undefined
+                    ? { cwd }
+                    : { cwd, budget: { deadline: Date.now() + budgetMs }, cost });
                 corpusPasses += 1;
             }
             return filterTrailers(rows, query);
         },
         fromIndex: false,
         corpusPasses: () => corpusPasses,
+        unreadCommits: () => cost.unreadCommits,
         close: () => { },
         diagnostics,
     };
@@ -114,23 +118,22 @@ const scanSource = (cwd, diagnostics) => {
  * own that work. The fallback is reported, because "slower" and "wrong" must
  * not look alike from the outside.
  */
-const openSource = (cwd, noIndex) => {
+const openSource = (cwd, noIndex, budgetMs) => {
     if (noIndex)
-        return scanSource(cwd, []);
+        return scanSource(cwd, [], budgetMs);
     try {
         const handle = openCurrentIndex({ cwd });
         return {
             fetch: (query) => queryTrailers(handle, query),
             fromIndex: true,
             corpusPasses: () => 0,
+            unreadCommits: () => 0,
             close: () => closeIndex(handle),
             diagnostics: [],
         };
     }
     catch (error) {
-        return scanSource(cwd, [
-            `the index is unavailable (${errorMessage(error)}); answering with a full scan`,
-        ]);
+        return scanSource(cwd, [`the index is unavailable (${errorMessage(error)}); answering with a full scan`], budgetMs);
     }
 };
 // ---------------------------------------------------------------------------
@@ -620,7 +623,7 @@ export const runQuery = (opts = {}) => {
         throw new Error('runQuery: opts.at is not a valid Date');
     const paths = normalizePaths(opts);
     const scope = resolveScope(cwd, paths);
-    const source = openSource(cwd, opts.noIndex === true);
+    const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
     const diagnostics = [...source.diagnostics, ...scope.diagnostics];
     try {
         if (opts.explainEmptyResult === true)
@@ -650,6 +653,12 @@ export const runQuery = (opts = {}) => {
             diagnostics.push('git could not read this repository, so this is not an answer about its contents — ' +
                 'treat it as unknown, not as empty');
         }
+        const unread = source.unreadCommits();
+        if (unread > 0) {
+            diagnostics.push(`this repository has no index, and the scan stopped after its time budget with ` +
+                `${String(unread)} commit(s) unread — records in them are missing from this answer. ` +
+                'fix: commitlore init (or commitlore index) to build the index once');
+        }
         const shallow = hasShallowHistory(cwd);
         if (shallow)
             diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
@@ -671,6 +680,7 @@ export const runQuery = (opts = {}) => {
             history,
             shallow,
             notes,
+            unreadCommits: unread,
             diagnostics,
         };
     }

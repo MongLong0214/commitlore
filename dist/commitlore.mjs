@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve20.call(this, root, ref);
+      let _sch = resolve21.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve20(root, ref) {
+    function resolve21(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve20(baseURI, relativeURI, options) {
+    function resolve21(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3906,7 +3906,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve20,
+      resolve: resolve21,
       resolveComponent,
       equal,
       serialize,
@@ -12217,6 +12217,7 @@ var loadDatabaseCtor = () => {
 var SCHEMA_VERSION = 4;
 var NOTES_REF2 = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
+var BUDGETED_LOG_BATCH = 64;
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
 var GIT_NO_SUCH_REF2 = 1;
 var RECORD_SEP = "";
@@ -12388,9 +12389,16 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
     ];
   });
 };
-var readCommitRecords = (cwd, shas, excluded) => {
+var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   const records = [];
-  for (const batch of chunked(shas, LOG_BATCH)) {
+  let read = 0;
+  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
+  for (const batch of chunked(shas, batchSize)) {
+    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== void 0) cost.unreadCommits = shas.length - read;
+      return records;
+    }
+    read += batch.length;
     const result = gitLogByShas(
       cwd,
       batch,
@@ -13011,7 +13019,10 @@ var scanTrailers = (query = {}, opts = {}) => {
   if (historyAvailability(cwd) === "unavailable") return [];
   const head = revParse(cwd, "HEAD");
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
-  const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
+  const records = [
+    ...readCommitRecords(cwd, shas, void 0, opts.budget, opts.cost),
+    ...readNoteRecords(cwd, new Set(shas))
+  ];
   return filterTrailers(toIndexedTrailers(records), query);
 };
 var indexInfo = (handle) => ({
@@ -14822,39 +14833,47 @@ var normalizePaths = (opts) => {
   }
   return kept;
 };
-var scanSource = (cwd, diagnostics) => {
+var scanSource = (cwd, diagnostics, budgetMs) => {
   let rows;
   let corpusPasses = 0;
+  const cost = { unreadCommits: 0 };
   return {
     fetch: (query) => {
       if (rows === void 0) {
-        rows = scanTrailers({}, { cwd });
+        rows = scanTrailers(
+          {},
+          budgetMs === void 0 ? { cwd } : { cwd, budget: { deadline: Date.now() + budgetMs }, cost }
+        );
         corpusPasses += 1;
       }
       return filterTrailers(rows, query);
     },
     fromIndex: false,
     corpusPasses: () => corpusPasses,
+    unreadCommits: () => cost.unreadCommits,
     close: () => {
     },
     diagnostics
   };
 };
-var openSource = (cwd, noIndex) => {
-  if (noIndex) return scanSource(cwd, []);
+var openSource = (cwd, noIndex, budgetMs) => {
+  if (noIndex) return scanSource(cwd, [], budgetMs);
   try {
     const handle = openCurrentIndex({ cwd });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
       corpusPasses: () => 0,
+      unreadCommits: () => 0,
       close: () => closeIndex(handle),
       diagnostics: []
     };
   } catch (error2) {
-    return scanSource(cwd, [
-      `the index is unavailable (${errorMessage3(error2)}); answering with a full scan`
-    ]);
+    return scanSource(
+      cwd,
+      [`the index is unavailable (${errorMessage3(error2)}); answering with a full scan`],
+      budgetMs
+    );
   }
 };
 var RECORD_SEP2 = "";
@@ -15159,7 +15178,7 @@ var runQuery = (opts = {}) => {
   if (Number.isNaN(cutoff)) throw new Error("runQuery: opts.at is not a valid Date");
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
   const diagnostics = [...source.diagnostics, ...scope.diagnostics];
   try {
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
@@ -15184,6 +15203,12 @@ var runQuery = (opts = {}) => {
         "git could not read this repository, so this is not an answer about its contents \u2014 treat it as unknown, not as empty"
       );
     }
+    const unread = source.unreadCommits();
+    if (unread > 0) {
+      diagnostics.push(
+        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
+      );
+    }
     const shallow = hasShallowHistory(cwd);
     if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
     const notes = notesAvailability({ cwd });
@@ -15204,6 +15229,7 @@ var runQuery = (opts = {}) => {
       history,
       shallow,
       notes,
+      unreadCommits: unread,
       diagnostics
     };
   } finally {
@@ -16093,9 +16119,7 @@ var verifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
   const rejected = [];
-  const persist = (result) => {
-    if (opts.readOnly !== true) storeVerificationResult(nonce, cwd, result);
-  };
+  const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
   try {
     const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
@@ -16224,14 +16248,23 @@ var verifyCaptureRecords = (opts) => {
       incomplete: false,
       overlap_check: "canonical_exact_only"
     };
-    persist(result);
+    if (!persist(result)) {
+      const unbound = {
+        accepted: [],
+        rejected: [],
+        validation_result: "empty",
+        incomplete: true,
+        overlap_check: "canonical_exact_only"
+      };
+      return unbound;
+    }
     return result;
   } catch {
     const result = {
       accepted: [],
       rejected: [],
       validation_result: "empty",
-      incomplete: false,
+      incomplete: true,
       overlap_check: "canonical_exact_only"
     };
     try {
@@ -16244,7 +16277,7 @@ var verifyCaptureRecords = (opts) => {
 var verifyCaptureRecordsReadOnly = (opts) => verifyCaptureRecords({ ...opts, readOnly: true });
 var storeVerificationResult = (nonce, cwd, result) => {
   const evidenceHash = sha2562(JSON.stringify(result.accepted.map((a) => a.record)));
-  storeVerification(nonce, {
+  return storeVerification(nonce, {
     cwd,
     accepted: result.accepted.map((a) => a.record),
     rejected: result.rejected,
@@ -17221,7 +17254,7 @@ var register3 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync4, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname7, join as join11, resolve as resolve15 } from "node:path";
+import { dirname as dirname7, join as join11, resolve as resolve16 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -18661,6 +18694,9 @@ var MCP_SERVER_COMMAND = "commitlore";
 var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
+var holdsLaunchableRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && isLaunchableEntry(servers[MCP_SERVER_KEY]);
+var holdsMalformedRegistration = (servers) => isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY) && !isLaunchableEntry(servers[MCP_SERVER_KEY]);
 var repositoryRoot = (cwd) => {
   const result = execGit(["rev-parse", "--show-toplevel"], { cwd });
   if (result.code !== 0) return null;
@@ -18682,7 +18718,7 @@ var registersCommitloreMcpServer = (cwd) => {
   }
   if (!isJsonObject(parsed)) return false;
   const servers = parsed["mcpServers"];
-  return isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY);
+  return holdsLaunchableRegistration(servers);
 };
 var skipJsonWhitespace = (source, index) => {
   let next = index;
@@ -18870,8 +18906,15 @@ var registerCommitloreMcpServer = (cwd) => {
   const mcpMembers = rootMembers.filter((member) => member.key === "mcpServers");
   const mcpMember = mcpMembers[mcpMembers.length - 1];
   const servers = parsed["mcpServers"];
-  if (isJsonObject(servers) && Object.hasOwn(servers, MCP_SERVER_KEY)) {
+  if (holdsLaunchableRegistration(servers)) {
     return { ok: true, path: path2, state: "already-registered", changed: false };
+  }
+  if (holdsMalformedRegistration(servers)) {
+    return {
+      ok: false,
+      path: path2,
+      error: `${MCP_REGISTRATION_FILE} has a "${MCP_SERVER_KEY}" entry with no command to launch \u2014 left unchanged; remove it and run init again, or give it "command": "${MCP_SERVER_COMMAND}"`
+    };
   }
   if (servers !== void 0 && !isJsonObject(servers)) {
     return {
@@ -19146,14 +19189,14 @@ var checkDirectiveTrustMode = (ctx) => {
 
 // src/mcp/lifecycle.ts
 import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync11, statSync as statSync4, writeFileSync as writeFileSync7, writeSync } from "node:fs";
-import { dirname as dirname5, join as join7 } from "node:path";
+import { dirname as dirname5, join as join7, resolve as resolve9 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
 var lifecyclePath = (cwd = process.cwd()) => {
   const result = execGit(["rev-parse", "--git-path", join7("commitlore", LIFECYCLE_FILE)], { cwd });
   if (result.code !== 0) return null;
   const path2 = result.stdout.trim();
-  return path2 === "" ? null : join7(cwd, path2);
+  return path2 === "" ? null : resolve9(cwd, path2);
 };
 var trim = (path2) => {
   try {
@@ -20376,7 +20419,7 @@ ${formatCheckReport(report, options)}`;
 
 // src/commands/doctor/report.ts
 import { existsSync as existsSync12, readFileSync as readFileSync12 } from "node:fs";
-import { join as join8, resolve as resolve9, sep as sep2 } from "node:path";
+import { join as join8, resolve as resolve10, sep as sep2 } from "node:path";
 
 // src/commands/doctor/runner.ts
 var containedRun = (definition, ctx, dependencies) => {
@@ -20483,7 +20526,7 @@ var deriveInstallSource = ({
   pluginRoot = process.env["CLAUDE_PLUGIN_ROOT"]
 } = {}) => {
   if (pluginRoot !== void 0 && pluginRoot !== "") return "plugin";
-  const segments = resolve9(entryPath).split(sep2);
+  const segments = resolve10(entryPath).split(sep2);
   if (segments.includes("_npx")) return "npx";
   if (segments.includes("node_modules")) return "npm";
   try {
@@ -20563,12 +20606,12 @@ import {
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
-import { join as join9, resolve as resolve13 } from "node:path";
+import { join as join9, resolve as resolve14 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
 import { chmodSync, existsSync as existsSync13, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
-import { resolve as resolve10 } from "node:path";
+import { resolve as resolve11 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
 var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -20588,8 +20631,8 @@ var installPostCommitHook = (cwd = process.cwd()) => {
   try {
     const result = execGit(["rev-parse", "--git-path", `hooks/${POST_COMMIT_HOOK_NAME}`], { cwd });
     if (result.code !== 0) return hookFailure(result.stderr.trim() || "not a git repository");
-    hookPath = resolve10(cwd, result.stdout.trim());
-    mkdirSync5(resolve10(hookPath, ".."), { recursive: true });
+    hookPath = resolve11(cwd, result.stdout.trim());
+    mkdirSync5(resolve11(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
@@ -20616,7 +20659,7 @@ var installPostCommitHook = (cwd = process.cwd()) => {
 var resolvePendingDir2 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
-  return resolve10(cwd, result.stdout.trim());
+  return resolve11(cwd, result.stdout.trim());
 };
 var readPendingFile = (filePath) => {
   try {
@@ -20680,7 +20723,7 @@ var runPostCommitFinaliser = (cwd) => {
   if (msgResult.code !== 0) return;
   const commitMessage = msgResult.stdout;
   for (const file of files) {
-    const filePath = resolve10(pendingDirPath, file);
+    const filePath = resolve11(pendingDirPath, file);
     const pending = readPendingFile(filePath);
     if (!pending) continue;
     if (pending.phase !== "applied") continue;
@@ -20718,7 +20761,7 @@ var register6 = (program3) => {
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
 import { chmodSync as chmodSync2, existsSync as existsSync14, mkdirSync as mkdirSync6, readFileSync as readFileSync14, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
-import { resolve as resolve11 } from "node:path";
+import { resolve as resolve12 } from "node:path";
 
 // src/core/sync.ts
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
@@ -20822,8 +20865,8 @@ var installPrePushHook = (cwd = process.cwd()) => {
   try {
     const result = execGit(["rev-parse", "--git-path", `hooks/${PRE_PUSH_HOOK_NAME}`], { cwd });
     if (result.code !== 0) return hookFailure2(result.stderr.trim() || "not a git repository");
-    hookPath = resolve11(cwd, result.stdout.trim());
-    mkdirSync6(resolve11(hookPath, ".."), { recursive: true });
+    hookPath = resolve12(cwd, result.stdout.trim());
+    mkdirSync6(resolve12(hookPath, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
@@ -20866,7 +20909,7 @@ var register7 = (program3) => {
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes7 } from "node:crypto";
 import { chmodSync as chmodSync3, existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync15, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
-import { resolve as resolve12 } from "node:path";
+import { resolve as resolve13 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
 var PREPARE_COMMIT_MSG_CHAINED_HOOK_NAME = `${PREPARE_COMMIT_MSG_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -20876,7 +20919,7 @@ var isRecordBlock = (trailers) => trailers.some((trailer) => RECORD_KEYS.has(tra
 var squashMessagePath = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "SQUASH_MSG"], { cwd });
   if (result.code !== 0) return null;
-  return resolve12(cwd, result.stdout.trim());
+  return resolve13(cwd, result.stdout.trim());
 };
 var squashCommitIds = (message) => {
   const ids = [];
@@ -20911,7 +20954,7 @@ var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
 var prepareHookPath = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", `hooks/${PREPARE_COMMIT_MSG_HOOK_NAME}`], { cwd });
   if (result.code !== 0) throw new Error(result.stderr.trim() || "not a git repository");
-  return resolve12(cwd, result.stdout.trim());
+  return resolve13(cwd, result.stdout.trim());
 };
 var hookSuccess3 = (line2) => ({ code: 0, stdout: `${line2}
 `, stderr: "" });
@@ -20927,7 +20970,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
   let path2;
   try {
     path2 = prepareHookPath(cwd);
-    mkdirSync7(resolve12(path2, ".."), { recursive: true });
+    mkdirSync7(resolve13(path2, ".."), { recursive: true });
   } catch (error2) {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
@@ -20952,7 +20995,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
 var resolvePendingDir3 = (cwd) => {
   const result = execGit(["rev-parse", "--git-path", "commitlore/pending"], { cwd });
   if (result.code !== 0) return null;
-  return resolve12(cwd, result.stdout.trim());
+  return resolve13(cwd, result.stdout.trim());
 };
 var readPendingFile2 = (filePath) => {
   try {
@@ -21014,7 +21057,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
     return;
   }
   for (const file of files) {
-    const filePath = resolve12(pendingDirPath, file);
+    const filePath = resolve13(pendingDirPath, file);
     const pending = readPendingFile2(filePath);
     if (!pending) continue;
     if (pending.phase !== "staged" && pending.phase !== "applied") continue;
@@ -21072,7 +21115,7 @@ var resolveHooksDir = (cwd) => {
   if (result.code !== 0) {
     throw new Error(`not a git repository (${firstLine3(result.stderr)})`);
   }
-  return resolve13(cwd, result.stdout.trim());
+  return resolve14(cwd, result.stdout.trim());
 };
 var isExecutable = (path2) => {
   try {
@@ -21121,10 +21164,10 @@ var resolveEntryForRecord = (entry, cwd) => {
       return null;
     }
   };
-  if (entry.includes("/")) return existingFile(resolve13(cwd, entry));
+  if (entry.includes("/")) return existingFile(resolve14(cwd, entry));
   for (const dir of (process.env["PATH"] ?? "").split(":")) {
     if (dir === "") continue;
-    const found = existingFile(resolve13(dir, entry));
+    const found = existingFile(resolve14(dir, entry));
     if (found !== null) return found;
   }
   return null;
@@ -21294,7 +21337,7 @@ var register9 = (program3) => {
 
 // src/core/agents-guidance.ts
 import { existsSync as existsSync17, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
-import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve14 } from "node:path";
+import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve15 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
@@ -21302,7 +21345,7 @@ var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(e
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
   const here = dirname6(source);
-  return basename2(here) === "dist" ? resolve14(here, "..", "AGENTS.md") : resolve14(here, "..", "..", "AGENTS.md");
+  return basename2(here) === "dist" ? resolve15(here, "..", "AGENTS.md") : resolve15(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
   const contents = readFileSync17(shippedAgentsPath(), "utf8");
@@ -21834,8 +21877,8 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGTERM", onSignal);
   try {
     tmpDir = mkdtempSync(join11(opts.tmpRoot ?? tmpdir(), "commitlore-demo-"));
-    const userCwd = resolve15(opts.cwd ?? process.cwd());
-    const tmpResolved = resolve15(tmpDir);
+    const userCwd = resolve16(opts.cwd ?? process.cwd());
+    const tmpResolved = resolve16(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
@@ -22308,10 +22351,10 @@ var register14 = (program3) => {
 import { spawnSync as spawnSync4 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync19, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve17 } from "node:path";
+import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve18 } from "node:path";
 
 // src/core/hermes-config.ts
-import { relative as relative2, resolve as resolve16, sep as sep3 } from "node:path";
+import { relative as relative2, resolve as resolve17, sep as sep3 } from "node:path";
 var HERMES_SERVER_KEY = "commitlore";
 var splitLines = (contents) => {
   const lines = [];
@@ -22400,8 +22443,8 @@ var skillsBlock = (skillsDir, newline) => ["  external_dirs:", `    - ${yamlStri
 var topLevelMcpBlock = (wrapperPath, newline) => [`mcp_servers:`, mcpBlock(wrapperPath, newline)].join(newline);
 var topLevelSkillsBlock = (skillsDir, newline) => [`skills:`, skillsBlock(skillsDir, newline)].join(newline);
 var isManagedHermesSkillsDir = (value, dataRoot, installedSkillsDir) => {
-  if (installedSkillsDir !== void 0 && resolve16(value) === resolve16(installedSkillsDir)) return true;
-  const rel = relative2(resolve16(dataRoot), resolve16(value));
+  if (installedSkillsDir !== void 0 && resolve17(value) === resolve17(installedSkillsDir)) return true;
+  const rel = relative2(resolve17(dataRoot), resolve17(value));
   const parts = rel.split(sep3);
   return parts.length === 3 && parts[0] !== "" && parts[0] !== ".." && !parts[0]?.startsWith("..") && parts[1] === "hermes" && parts[2] === "skills";
 };
@@ -22606,7 +22649,7 @@ var runHermesInstall = (options = {}) => {
   const before = existsSync19(configPath) ? readFileSync21(configPath, "utf8") : "";
   const edit = addHermesConfig(before, {
     wrapperPath,
-    skillsDir: resolve17(skillsDir),
+    skillsDir: resolve18(skillsDir),
     dataRoot
   });
   if (edit.blocked.length > 0) {
@@ -22755,7 +22798,7 @@ var register16 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync22, realpathSync as realpathSync3 } from "node:fs";
-import { basename as basename4, dirname as dirname9, isAbsolute as isAbsolute2, join as join13, relative as relative3, resolve as resolve18, sep as sep4 } from "node:path";
+import { basename as basename4, dirname as dirname9, isAbsolute as isAbsolute2, join as join13, relative as relative3, resolve as resolve19, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash7 } from "node:crypto";
@@ -22905,6 +22948,12 @@ var omittedLine = (cut, total, tier) => {
     `omitted: ${cut} of ${total} entries did not fit the injection budget; the cut reached ${tier}.`
   ];
 };
+var unreadLine = (unreadCommits) => {
+  if (unreadCommits === 0) return [];
+  return [
+    `incomplete: this repository has no index, so answering meant reading its whole history; the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to index this repository, after which this answer is both complete and fast.`
+  ];
+};
 var render = (input) => {
   const sections = TIERS.flatMap((tier, index) => {
     const lines = input.kept.filter((entry) => entry.tier === index).map((entry) => entry.line);
@@ -22913,7 +22962,8 @@ var render = (input) => {
   const legend = [DIRECTIVE_LEGEND, CLAIM_LEGEND, BLOCKED_LEGEND];
   const notices = [
     ...withheldLine(input.withheld),
-    ...omittedLine(input.cut, input.totalEntries, input.cutTier)
+    ...omittedLine(input.cut, input.totalEntries, input.cutTier),
+    ...unreadLine(input.unreadCommits)
   ];
   const footer = [...legend, ...notices];
   const body = [
@@ -23010,6 +23060,7 @@ var buildInjection = (opts) => {
     at,
     cwd,
     noIndex,
+    ...opts.scanBudgetMs === void 0 ? {} : { scanBudgetMs: opts.scanBudgetMs },
     ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors },
     ...opts.requireSignedDirective === true ? { requireSignedDirective: true } : {},
     // `runQuery` drops superseded and expired records unless told otherwise, so
@@ -23058,7 +23109,7 @@ var buildInjection = (opts) => {
   if (entries.length === 0 && withheld.length === 0) return empty;
   const totalEntries = entries.length + withheldValues;
   const budgetChars = budgetTokens * CHARS_PER_TOKEN2;
-  const base = { path: path2, withheld, totalEntries, ablation };
+  const base = { path: path2, withheld, totalEntries, ablation, unreadCommits: result.unreadCommits };
   const keep = fit(base, entries, budgetChars);
   const cut = entries.length - keep;
   const cutTier = cut === 0 ? void 0 : TIERS[entries[keep]?.tier ?? OTHER_TIER]?.name;
@@ -23135,7 +23186,7 @@ var repositoryRoot2 = (cwd) => {
   return result.code === 0 ? result.stdout.trim() : void 0;
 };
 var canonical = (target) => {
-  const absolute = resolve18(target);
+  const absolute = resolve19(target);
   const tail = [];
   let current = absolute;
   for (; ; ) {
@@ -23166,7 +23217,7 @@ var payloadPath = (payload, cwd) => {
   }
   const root = repositoryRoot2(cwd);
   if (root === void 0) throw new Error("repository root could not be resolved");
-  const target = canonical(isAbsolute2(raw) ? raw : resolve18(cwd, raw));
+  const target = canonical(isAbsolute2(raw) ? raw : resolve19(cwd, raw));
   const scoped = relative3(canonical(root), target);
   if (scoped === "") throw new Error("file_path resolves to the repository root");
   if (scoped === ".." || scoped.startsWith(`..${sep4}`) || isAbsolute2(scoped)) {
@@ -23234,10 +23285,15 @@ var hookResult = (raw, base) => {
     };
   }
 };
+var HOOK_SCAN_BUDGET_MS = 3e3;
 var runHookMode = (options) => {
   try {
     const { path: _fromFlag, ...base } = injectOptions(".", options, process.cwd());
-    const result = hookResult(readStdin(), { ...base, cwd: process.cwd() });
+    const result = hookResult(readStdin(), {
+      ...base,
+      cwd: process.cwd(),
+      scanBudgetMs: HOOK_SCAN_BUDGET_MS
+    });
     if (result.stdout !== "") process.stdout.write(result.stdout);
     if (result.stderr !== "") process.stderr.write(result.stderr);
   } catch (error2) {
@@ -23299,7 +23355,7 @@ var register17 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute3, relative as relative4, resolve as resolve19, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute3, relative as relative4, resolve as resolve20, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -30619,7 +30675,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve20) => setTimeout(resolve20, pollInterval));
+        await new Promise((resolve21) => setTimeout(resolve21, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -30636,7 +30692,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve20, reject2) => {
+    return new Promise((resolve21, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -30714,7 +30770,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve20(parseResult.data);
+            resolve21(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -30975,12 +31031,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve20, reject2) => {
+    return new Promise((resolve21, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve20, interval);
+      const timeoutId = setTimeout(resolve21, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -31850,12 +31906,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve20) => {
+    return new Promise((resolve21) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve20();
+        resolve21();
       } else {
-        this._stdout.once("drain", resolve20);
+        this._stdout.once("drain", resolve21);
       }
     });
   }
@@ -32437,7 +32493,7 @@ var resolveRepoPath = (root, raw) => {
   if (isAbsolute3(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
-  const resolved = resolve19(root, raw);
+  const resolved = resolve20(root, raw);
   if (resolved !== root && !resolved.startsWith(`${root}${sep5}`)) {
     throw new Error(`path escapes the repository root: ${raw}`);
   }
@@ -32658,7 +32714,7 @@ var kindArg = (args) => {
 };
 var pathArg = (root, args) => resolveRepoPath(root, stringArg(args, "path") ?? "");
 var createServer = (opts = {}) => {
-  const root = resolve19(opts.cwd ?? process.cwd());
+  const root = resolve20(opts.cwd ?? process.cwd());
   const server = new Server(
     { name: SERVER_NAME, version: packageVersion2() },
     {
@@ -32974,7 +33030,32 @@ var codexPluginSelector = (plugin = config2()) => `${plugin.plugin}@${plugin.mar
 var codexPluginInstallCommand = () => "commitlore plugin install-codex";
 var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join14(dataHome, ...plugin.dataRelativePath);
 var successful = (result) => result.status === 0 && result.error === void 0;
-var marketplaceIsConfigured = (output, plugin) => output.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `));
+var readMarketplaceState = (json, plugin) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return { kind: "unverifiable" };
+  }
+  const entries = parsed.marketplaces;
+  if (!Array.isArray(entries)) return { kind: "unverifiable" };
+  const mine = entries.find(
+    (entry) => typeof entry === "object" && entry !== null && entry.name === plugin.marketplace
+  );
+  if (mine === void 0) return { kind: "absent" };
+  const source = mine.marketplaceSource?.source;
+  if (typeof source !== "string" || source === "") return { kind: "unverifiable" };
+  return sameMarketplaceSource(source, plugin.marketplaceSource) ? { kind: "ours" } : { kind: "foreign", source };
+};
+var canonicalMarketplaceSource = (value) => {
+  let rest = value.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
+  rest = rest.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  rest = rest.replace(/^git@([^:]+):/i, "$1/");
+  rest = rest.replace(/^[^@/]+@/, "");
+  if (!/[.:]/.test(rest.split("/")[0] ?? "")) rest = `github.com/${rest}`;
+  return rest.toLowerCase();
+};
+var sameMarketplaceSource = (a, b) => canonicalMarketplaceSource(a) === canonicalMarketplaceSource(b);
 var codexPluginIsInstalled = (output, plugin = config2()) => output.split("\n").some((line2) => line2.trim().startsWith(codexPluginSelector(plugin)) && line2.includes("installed,"));
 var markerFor = (plugin) => ({
   version: MARKER_VERSION,
@@ -33008,7 +33089,7 @@ var installCodexPlugin = (options = {}) => {
   const dataHome = options.dataHome ?? defaultDataHome();
   const run = options.run ?? runCodexCommand;
   const report = [];
-  const marketplaces = run(["plugin", "marketplace", "list"]);
+  const marketplaces = run(["plugin", "marketplace", "list", "--json"]);
   if (!successful(marketplaces)) {
     return {
       exitCode: 2,
@@ -33019,7 +33100,23 @@ var installCodexPlugin = (options = {}) => {
       ]
     };
   }
-  if (!marketplaceIsConfigured(marketplaces.stdout, plugin)) {
+  const marketplace = readMarketplaceState(marketplaces.stdout, plugin);
+  if (marketplace.kind === "foreign") {
+    return {
+      exitCode: 2,
+      report: [
+        `a Codex marketplace named ${plugin.marketplace} is already configured, and it points at ${marketplace.source} rather than ${plugin.marketplaceSource}`,
+        "nothing was installed: installing from it would have run somebody else\u2019s plugin under this name",
+        `to use this one, remove that marketplace (codex plugin marketplace remove ${plugin.marketplace}) and rerun`
+      ]
+    };
+  }
+  if (marketplace.kind === "unverifiable") {
+    report.push(
+      `could not confirm which repository the ${plugin.marketplace} marketplace points at; this Codex does not report a marketplace source`
+    );
+  }
+  if (marketplace.kind === "absent") {
     const added = run(["plugin", "marketplace", "add", plugin.marketplaceSource]);
     if (!successful(added)) {
       return {

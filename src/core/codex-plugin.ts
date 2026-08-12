@@ -84,8 +84,88 @@ export const codexPluginMarkerPath = (
 
 const successful = (result: CodexCommandResult): boolean => result.status === 0 && result.error === undefined;
 
-const marketplaceIsConfigured = (output: string, plugin: CodexPluginConfig): boolean =>
-  output.split('\n').some((line) => line.trim().startsWith(`${plugin.marketplace} `));
+/** What a marketplace of our name, if any, currently points at. */
+export type MarketplaceState =
+  /** No marketplace of that name is configured. */
+  | { kind: 'absent' }
+  /** Configured, and its source is the repository we publish from. */
+  | { kind: 'ours' }
+  /** Configured under our name, but pointing somewhere else. */
+  | { kind: 'foreign'; source: string }
+  /** Configured, and this Codex cannot say where it points. */
+  | { kind: 'unverifiable' };
+
+/**
+ * Reads `plugin marketplace list --json` and says what our name currently
+ * holds.
+ *
+ * The name was the whole test before. A marketplace called `commitlore` was
+ * accepted however it had been configured, and the installer went straight on
+ * to `plugin add commitlore@commitlore` — so a marketplace of that name
+ * pointing at somebody else's repository meant installing their code and
+ * reporting CommitLore installed. Codex publishes `marketplaceSource` for
+ * exactly this question.
+ *
+ * Text output has no source column, so a Codex too old for `--json` leaves the
+ * question open. That is `unverifiable`, and it is reported rather than
+ * rounded to either answer.
+ */
+export const readMarketplaceState = (
+  json: string,
+  plugin: CodexPluginConfig,
+): MarketplaceState => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return { kind: 'unverifiable' };
+  }
+  const entries = (parsed as { marketplaces?: unknown }).marketplaces;
+  if (!Array.isArray(entries)) return { kind: 'unverifiable' };
+
+  const mine = entries.find(
+    (entry): entry is { marketplaceSource?: { source?: unknown } } =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      (entry as { name?: unknown }).name === plugin.marketplace,
+  );
+  if (mine === undefined) return { kind: 'absent' };
+
+  const source = mine.marketplaceSource?.source;
+  if (typeof source !== 'string' || source === '') return { kind: 'unverifiable' };
+  return sameMarketplaceSource(source, plugin.marketplaceSource)
+    ? { kind: 'ours' }
+    : { kind: 'foreign', source };
+};
+
+/**
+ * Whether two marketplace sources name the same origin.
+ *
+ * They are rarely spelled the same. This tool adds the marketplace as
+ * `MongLong0214/commitlore`; Codex stores what that resolves to and reports
+ * `https://github.com/MongLong0214/commitlore.git`. A literal comparison would
+ * call the marketplace this tool installed itself foreign and refuse to use it
+ * — a worse failure than the one the check exists to prevent, and one that
+ * would hit every correctly installed machine.
+ *
+ * So both sides are reduced to host and path: scheme, credentials, `.git`,
+ * trailing slashes and case are dropped, and a bare `owner/repo` is read as
+ * GitHub, which is what Codex does with it. The host is kept rather than
+ * compared on `owner/repo` alone, so the same path on a different host stays a
+ * different origin.
+ */
+const canonicalMarketplaceSource = (value: string): string => {
+  let rest = value.trim().replace(/\.git$/i, '').replace(/\/+$/, '');
+  rest = rest.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  rest = rest.replace(/^git@([^:]+):/i, '$1/');
+  rest = rest.replace(/^[^@/]+@/, '');
+  // A bare `owner/repo` has no host; Codex resolves it against GitHub.
+  if (!/[.:]/.test(rest.split('/')[0] ?? '')) rest = `github.com/${rest}`;
+  return rest.toLowerCase();
+};
+
+const sameMarketplaceSource = (a: string, b: string): boolean =>
+  canonicalMarketplaceSource(a) === canonicalMarketplaceSource(b);
 
 export const codexPluginIsInstalled = (
   output: string,
@@ -144,7 +224,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
   const run = options.run ?? runCodexCommand;
   const report: string[] = [];
 
-  const marketplaces = run(['plugin', 'marketplace', 'list']);
+  const marketplaces = run(['plugin', 'marketplace', 'list', '--json']);
   if (!successful(marketplaces)) {
     return {
       exitCode: 2,
@@ -156,7 +236,32 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
     };
   }
 
-  if (!marketplaceIsConfigured(marketplaces.stdout, plugin)) {
+  const marketplace = readMarketplaceState(marketplaces.stdout, plugin);
+
+  // Refused rather than replaced. Overwriting a marketplace somebody else
+  // configured is a destructive answer to an ambiguous situation, and the
+  // ambiguity is the point: this tool cannot tell an attack from a colleague's
+  // fork. What it can do is decline to install from it and say why.
+  if (marketplace.kind === 'foreign') {
+    return {
+      exitCode: 2,
+      report: [
+        `a Codex marketplace named ${plugin.marketplace} is already configured, and it points at ` +
+          `${marketplace.source} rather than ${plugin.marketplaceSource}`,
+        'nothing was installed: installing from it would have run somebody else’s plugin under this name',
+        `to use this one, remove that marketplace (codex plugin marketplace remove ${plugin.marketplace}) and rerun`,
+      ],
+    };
+  }
+
+  if (marketplace.kind === 'unverifiable') {
+    report.push(
+      `could not confirm which repository the ${plugin.marketplace} marketplace points at; ` +
+        'this Codex does not report a marketplace source',
+    );
+  }
+
+  if (marketplace.kind === 'absent') {
     const added = run(['plugin', 'marketplace', 'add', plugin.marketplaceSource]);
     if (!successful(added)) {
       return {

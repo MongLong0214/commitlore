@@ -71,10 +71,12 @@ afterAll(() => {
 interface FixtureVersions {
   package?: string;
   plugin?: string;
+  codexPlugin?: string;
   packageLock?: string;
   packageLockRoot?: string;
   cli?: string;
   pluginManifest?: boolean;
+  codexPluginManifest?: boolean;
 }
 
 const fixture = (versions: FixtureVersions = {}): string => {
@@ -109,6 +111,13 @@ const fixture = (versions: FixtureVersions = {}): string => {
       `${JSON.stringify({ name: 'commitlore', version: versions.plugin ?? VERSION }, null, 2)}\n`,
     );
   }
+  if (versions.codexPluginManifest !== false) {
+    mkdirSync(join(root, '.codex-plugin'));
+    writeFileSync(
+      join(root, '.codex-plugin', 'plugin.json'),
+      `${JSON.stringify({ name: 'commitlore', version: versions.codexPlugin ?? VERSION }, null, 2)}\n`,
+    );
+  }
   writeFileSync(
     join(root, 'dist', 'commitlore.mjs'),
     `#!/usr/bin/env node\nif (process.argv[2] === '--version') console.log(${JSON.stringify(versions.cli ?? VERSION)});\n`,
@@ -132,6 +141,11 @@ describe('#492 check-release-version', () => {
 
   it.each([
     ['the plugin manifest', { plugin: '0.7.0' }, '.claude-plugin/plugin.json .version'],
+    // Added with the check itself: this manifest ships the Codex plugin, moves
+    // every release, and was the one field the gate did not read -- so a stale
+    // one would have published green and told a Codex user they had installed
+    // the previous release.
+    ['the codex plugin manifest', { codexPlugin: '0.7.0' }, '.codex-plugin/plugin.json .version'],
     ['the package-lock root version', { packageLock: '0.7.0' }, 'package-lock.json .version'],
     [
       'the package-lock root package version',

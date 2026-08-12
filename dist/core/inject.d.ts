@@ -130,6 +130,16 @@ export interface InjectOptions {
     requireSignedDirective?: boolean;
     /** Answer from git alone, without the SQLite index. Same answers, slower. */
     noIndex?: boolean;
+    /**
+     * Wall-clock ceiling on the no-index scan, in milliseconds.
+     *
+     * The hook sets this; `commitlore context`, which a person ran and is waiting
+     * for, does not. Without an index the scan reads the whole history and builds
+     * nothing, so an uninitialised repository charged that cost to every edit
+     * forever. A truncated scan is reported in the rendered notices — the point is
+     * to bound the wait, never to quietly answer with less.
+     */
+    scanBudgetMs?: number;
     /** Guarantees to remove. Bench instrumentation; every flag defaults to false. */
     ablation?: AblationFlags;
 }

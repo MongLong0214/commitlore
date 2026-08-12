@@ -292,8 +292,52 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
 
   it('uses Codex MCP commands when the CLI exists and names the config fallback', () => {
     const text = body();
-    expect(text).toContain('& codex mcp list --json');
+    expect(text).toContain('& codex mcp get commitlore');
     expect(text).toContain('& codex mcp add commitlore -- $dest mcp');
     expect(text).toContain('config-file fallback; codex CLI is unavailable');
+  });
+
+  /**
+   * The check above was satisfied by `codex mcp list --json` and a name match,
+   * which is what install.sh was fixed for months earlier: a registration named
+   * `commitlore` pointing at a wrapper some earlier install left behind was
+   * reported healthy and never repaired. The Windows twin kept the defect
+   * because the only Windows coverage was that the strings `list` and `add`
+   * appeared somewhere in the file.
+   *
+   * These assert the decision, not the vocabulary — the four outcomes
+   * install.sh distinguishes must each exist here, and be reached by asking
+   * what the entry points at.
+   */
+  it('decides codex ownership by target, the same four ways install.sh does', () => {
+    const text = body();
+
+    // Points at this install: left alone.
+    expect(text).toContain("command: $dest");
+    expect(text).toContain('commitlore already points at this install -- left unchanged');
+    // Points somewhere we never wrote: left alone, and said so.
+    expect(text).toContain(
+      'an mcp server named commitlore points somewhere this install did not write -- left untouched',
+    );
+    // Ours but stale: removed, then re-added.
+    expect(text).toContain('& codex mcp remove commitlore');
+    // The name alone must no longer be the test.
+    expect(text).not.toContain('checked with codex mcp list');
+  });
+
+  it('says the same four things install.sh says about a codex registration', () => {
+    // Parity asserted against the other script rather than restated, so the two
+    // cannot drift apart the way they already did once.
+    const ps1 = body();
+    const sh = readFileSync(join(REPO_ROOT, 'install.sh'), 'utf8');
+
+    for (const sentence of [
+      'commitlore already points at this install -- left unchanged',
+      'an mcp server named commitlore points somewhere this install did not write -- left untouched',
+      'codex mcp add could not register commitlore -- config file was left untouched',
+    ]) {
+      expect(sh, `install.sh no longer says: ${sentence}`).toContain(sentence);
+      expect(ps1, `install.ps1 does not say: ${sentence}`).toContain(sentence);
+    }
   });
 });
