@@ -1,0 +1,12 @@
+{
+  "why": "Violations in this repository's own commit messages, found the first time the dogfooding gate fetched the notes mirror and actually ran its reference check (#542). Commit messages cannot be corrected without rewriting history, so each is named here with what it is. Anything not listed fails the gate.",
+  "accepted": [
+    {
+      "sha": "03b4bfeed987d16e050504eaef0a1f07cb9db486",
+      "rule": "dangling-ref",
+      "key": "Follows",
+      "value": "r-8c31f7",
+      "why": "A forward reference. `r-8c31f7` does exist and is reachable from HEAD — it was written six minutes later, in 53d60c2, by somebody who noticed the omission. The reference still points forward, which is what the check reports. Writing the record was the repair available at the time; the reference itself cannot be corrected without rewriting the commit that carries it."
+    }
+  ]
+}

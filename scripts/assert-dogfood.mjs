@@ -32,14 +32,25 @@ try {
 
 let bad = 0;
 
-const violations = Array.isArray(report.violations) ? report.violations : [];
+// Violations in this repository's own commit messages that predate the gate
+// finding them. They are named in scripts/dogfood-baseline.json with what each
+// one is; anything not named there still fails. Recording them is the point —
+// a gate that skipped them silently is what #542 was about.
+const baseline = JSON.parse(readFileSync(new URL('./dogfood-baseline.json', import.meta.url), 'utf8'));
+const accepted = new Set(baseline.accepted.map((a) => `${a.sha}:${a.rule}:${a.value}`));
+const all = Array.isArray(report.violations) ? report.violations : [];
+const violations = all.filter((v) => !accepted.has(`${v.sha}:${v.rule}:${v.value}`));
+const carried = all.length - violations.length;
+if (carried > 0) {
+  console.log(`violations: ${carried} carried from scripts/dogfood-baseline.json`);
+}
 if (violations.length > 0) {
-  console.error(`ERROR: ${violations.length} violation(s) in this repository's own history:`);
+  console.error(`ERROR: ${violations.length} violation(s) outside the recorded baseline:`);
   for (const v of violations.slice(0, 20)) {
     console.error(`  ${v.sha ?? '?'}: ${v.rule ?? '?'} — ${JSON.stringify(v).slice(0, 200)}`);
   }
   bad += 1;
-} else {
+} else if (carried === 0) {
   console.log('violations: none');
 }
 
