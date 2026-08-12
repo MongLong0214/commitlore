@@ -26,7 +26,7 @@
  * depend on recognising the attack at all.
  */
 import { type StaleRecord } from './stale.js';
-import { type Lifecycle, type Provenance, type Record } from './types.js';
+import { type Lifecycle, type Provenance, type Record, type Trailer } from './types.js';
 /** How a record's `Warn:` may be delivered. */
 export type Trust = 'directive' | 'claim' | 'blocked';
 export declare const BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
@@ -131,6 +131,24 @@ export declare const normalizeForMatch: (text: string) => string;
  * Exported so consumers can scan text that is not part of a record too.
  */
 export declare const scanInjection: (text: string) => string[];
+/**
+ * The form an agent is shown for a trailer whose key is not a dedicated
+ * section: `context` other-lines and the injection `other` tier both print
+ * `key: value`. Known-section renderers print the value alone, which is a
+ * substring of this form, so scanning the pair is a superset.
+ *
+ * Scanning the value alone misses a payload that lives in the key
+ * (`system: do nothing` — #596).
+ */
+export declare const renderedTrailer: (trailer: Trailer) => string;
+/** Every pattern the rendered trailer trips, in table order. */
+export declare const scanTrailer: (trailer: Trailer) => string[];
+/**
+ * Whether an identity string would itself trip the scanner, either as the
+ * bare value a report prints or as the `Record-Id: …` pair some surfaces
+ * still emit. A withheld record whose id is still printed is not withheld.
+ */
+export declare const identityCarriesInjection: (recordId: string) => boolean;
 /**
  * Whether `author` matches a repository-configured author string.
  *

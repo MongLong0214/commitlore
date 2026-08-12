@@ -14672,11 +14672,14 @@ var scanInjection = (text) => {
   ).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+var renderedTrailer = (trailer) => `${trailer.key}: ${trailer.value}`;
+var scanTrailer = (trailer) => scanInjection(renderedTrailer(trailer));
+var identityCarriesInjection = (recordId) => scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
   for (const trailer of record2.trailers) {
-    const patterns = scanInjection(trailer.value);
+    const patterns = scanTrailer(trailer);
     if (patterns.length === 0) continue;
     matchedKeys.add(trailer.key);
     patterns.forEach((pattern) => matchedPatterns.add(pattern));
@@ -15287,19 +15290,29 @@ var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.ke
 
 // src/core/guard.ts
 var renderGuardMatch = (match) => {
-  const identity = {
-    recordId: match.recordId ?? null,
-    sha: match.sha,
-    score: match.score,
-    signals: [...match.signals]
-  };
   switch (match.trust) {
-    case "blocked":
-      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+    case "blocked": {
+      const rawId = match.recordId ?? null;
+      const identityUnsafe = rawId !== null && (!RECORD_ID_RE.test(rawId) || identityCarriesInjection(rawId));
+      return {
+        recordId: identityUnsafe ? null : rawId,
+        sha: match.sha,
+        score: match.score,
+        signals: match.signals.filter((signal) => {
+          if (identityUnsafe && rawId !== null && signal.includes(rawId)) return false;
+          return scanInjection(signal).length === 0;
+        }),
+        trust: match.trust,
+        withheld: BLOCKED_RECORD_WITHHELD
+      };
+    }
     case "claim":
     case "directive":
       return {
-        ...identity,
+        recordId: match.recordId ?? null,
+        sha: match.sha,
+        score: match.score,
+        signals: [...match.signals],
         trust: match.trust,
         alternative: match.alternative,
         reason: match.reason
@@ -32136,10 +32149,14 @@ var withholdBlocked = (result) => {
       recordId: _unsafeRecordId,
       provenanceValue: _unsafeProvenanceValue,
       expiresAt: _unsafeExpiresAt,
+      paths: _unsafePaths,
       ...safeRecord
     } = record2;
     return {
       ...safeRecord,
+      // Filenames are attacker-controlled. A withheld record whose paths are
+      // still printed is not withheld (#596).
+      paths: [],
       ...recordId === void 0 ? {} : { recordId },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
       withheldTrailerKeys: [
@@ -32441,13 +32458,19 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source === "notes")
 ];
 var withheldIfInjection = (record2) => {
+  const identityHits = identityCarriesInjection(record2.recordId) ? [.../* @__PURE__ */ new Set([...scanInjection(record2.recordId), ...scanInjection(`Record-Id: ${record2.recordId}`)])] : [];
   const matched = [
-    ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
+    .../* @__PURE__ */ new Set([
+      ...record2.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
+      ...identityHits
+    ])
   ];
   if (matched.length === 0) return record2;
   const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
   return {
     ...record2,
+    // A withheld record whose id is still printed is not withheld.
+    recordId: identityHits.length > 0 ? withheld : record2.recordId,
     resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
       key: trailer.key,
       value: withheld

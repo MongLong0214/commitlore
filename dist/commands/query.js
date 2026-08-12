@@ -49,9 +49,12 @@ export const withholdBlocked = (result) => {
         const trailers = record.trailers.filter((trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0);
         const recordId = trailers.find((trailer) => trailer.key === RECORD_ID_KEY)?.value;
         const provenanceValue = trailers.find((trailer) => trailer.key === 'Provenance')?.value;
-        const { recordId: _unsafeRecordId, provenanceValue: _unsafeProvenanceValue, expiresAt: _unsafeExpiresAt, ...safeRecord } = record;
+        const { recordId: _unsafeRecordId, provenanceValue: _unsafeProvenanceValue, expiresAt: _unsafeExpiresAt, paths: _unsafePaths, ...safeRecord } = record;
         return {
             ...safeRecord,
+            // Filenames are attacker-controlled. A withheld record whose paths are
+            // still printed is not withheld (#596).
+            paths: [],
             ...(recordId === undefined ? {} : { recordId }),
             ...(provenanceValue === undefined ? {} : { provenanceValue }),
             withheldTrailerKeys: [
