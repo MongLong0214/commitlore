@@ -72,12 +72,22 @@ for (const cls of ['shape', 'reference']) {
     bad += 1;
     continue;
   }
-  if (check.status !== 'ok') {
-    console.error(`ERROR: ${cls} is ${check.status}${check.reason ? ` (${check.reason})` : ''}`);
-    bad += 1;
+  if (check.status === 'ok') {
+    console.log(`${cls}: ok`);
     continue;
   }
-  console.log(`${cls}: ok`);
+  // `validate` sets the class to `failed` from the same violations subtracted
+  // above, so filtering the list without accounting for the status leaves the
+  // gate red for a case already recorded. Tolerated only when the subtraction
+  // is the entire explanation: nothing unrecorded remains, and something was
+  // in fact carried. `not-checked` is never tolerated — a sub-check that did
+  // not run is exactly what #542 was about, and no baseline entry excuses it.
+  if (check.status === 'failed' && violations.length === 0 && carried > 0) {
+    console.log(`${cls}: failed only on ${carried} baselined violation(s), none unrecorded`);
+    continue;
+  }
+  console.error(`ERROR: ${cls} is ${check.status}${check.reason ? ` (${check.reason})` : ''}`);
+  bad += 1;
 }
 
 process.exit(bad === 0 ? 0 : 1);
