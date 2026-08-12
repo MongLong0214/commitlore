@@ -124,6 +124,14 @@ export const SCHEMA_VERSION = 4;
 export const NOTES_REF = 'refs/notes/commitlore';
 /** Commits per `git log` invocation. Bounds peak output size, not correctness. */
 const LOG_BATCH = 1024;
+/**
+ * Batch size once a scan is running against a deadline.
+ *
+ * Small enough that the deadline is checked often enough to be a deadline —
+ * `LOG_BATCH` exceeds the commit count of most repositories, so a budgeted scan
+ * using it never reached a second iteration and never stopped.
+ */
+const BUDGETED_LOG_BATCH = 64;
 /** `git log` output can be large; 256 MiB leaves room for a wide merge commit. */
 const LOG_MAX_BUFFER = 256 * 1024 * 1024;
 const GIT_NO_SUCH_REF = 1;
@@ -408,9 +416,23 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
  * recorded anything. A third pass (`explodeRecordBlocks`) recovers additional
  * record blocks for that same sliver of commits (SPEC §2.4).
  */
-const readCommitRecords = (cwd, shas, excluded) => {
+const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     const records = [];
-    for (const batch of chunked(shas, LOG_BATCH)) {
+    let read = 0;
+    // A batch is the unit all three passes below share, so a deadline can only be
+    // honoured between batches — and `LOG_BATCH` is larger than most repositories
+    // have commits, which made a single batch the whole scan and the check below
+    // unreachable. Under a budget the work is cut into slices small enough for
+    // the deadline to mean something, at the cost of more `git log` invocations
+    // on a run that has already decided it would rather stop early than wait.
+    const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
+    for (const batch of chunked(shas, batchSize)) {
+        if (budget !== undefined && Date.now() > budget.deadline) {
+            if (cost !== undefined)
+                cost.unreadCommits = shas.length - read;
+            return records;
+        }
+        read += batch.length;
         const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`, []);
         if (result.code !== 0) {
             throw Object.assign(new Error(`git log failed: ${result.stderr.trim()}`), {
@@ -1283,7 +1305,10 @@ export const scanTrailers = (query = {}, opts = {}) => {
         return [];
     const head = revParse(cwd, 'HEAD');
     const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
-    const records = [...readCommitRecords(cwd, shas), ...readNoteRecords(cwd, new Set(shas))];
+    const records = [
+        ...readCommitRecords(cwd, shas, undefined, opts.budget, opts.cost),
+        ...readNoteRecords(cwd, new Set(shas)),
+    ];
     return filterTrailers(toIndexedTrailers(records), query);
 };
 /** Every row, ordered, for the identity assertions the tests make. */

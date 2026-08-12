@@ -146,10 +146,9 @@ export const verifyCaptureRecords = (opts) => {
     const { nonce, draft, transcript, diff, cwd } = opts;
     const accepted = [];
     const rejected = [];
-    const persist = (result) => {
-        if (opts.readOnly !== true)
-            storeVerificationResult(nonce, cwd, result);
-    };
+    // True when the result is bound to the transaction — vacuously so for a
+    // read-only check, which has nothing to bind.
+    const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
     try {
         // 1. Re-read prepared transaction and verify source hashes
         const pending = opts.pending ?? readPending(nonce, { cwd });
@@ -307,16 +306,33 @@ export const verifyCaptureRecords = (opts) => {
             incomplete: false,
             overlap_check: 'canonical_exact_only',
         };
-        persist(result);
+        if (!persist(result)) {
+            // The transaction moved on — already verified, staged, or gone. Returning
+            // `result` here would hand back records that nothing will stage, which is
+            // the one shape this function must never produce.
+            const unbound = {
+                accepted: [],
+                rejected: [],
+                validation_result: 'empty',
+                incomplete: true,
+                overlap_check: 'canonical_exact_only',
+            };
+            return unbound;
+        }
         return result;
     }
     catch {
-        // Never throws — return empty on any unhandled error
+        // Never throws — return empty on any unhandled error.
+        //
+        // `incomplete` is true because that is what it means: nothing here
+        // established that the draft was checked, so an empty answer is "unknown",
+        // not "nothing survived". Reporting `incomplete: false` told a caller the
+        // opposite of what had happened.
         const result = {
             accepted: [],
             rejected: [],
             validation_result: 'empty',
-            incomplete: false,
+            incomplete: true,
             overlap_check: 'canonical_exact_only',
         };
         // Best-effort store
@@ -338,9 +354,20 @@ export const verifyCaptureRecordsReadOnly = (opts) => verifyCaptureRecords({ ...
 // ---------------------------------------------------------------------------
 // Internal: store verification result in pending transaction
 // ---------------------------------------------------------------------------
+/**
+ * Binds a verification result to its transaction, and says whether it managed
+ * to.
+ *
+ * `storeVerification` refuses any phase but `prepared`, and that refusal used
+ * to be discarded here. A second verification of the same nonce then computed a
+ * new draft, failed to store it, and returned it to the caller as accepted —
+ * while staging went on to use the draft stored by the first call. The caller
+ * was shown B and the repository committed A, with nothing anywhere reporting a
+ * difference.
+ */
 const storeVerificationResult = (nonce, cwd, result) => {
     const evidenceHash = sha256(JSON.stringify(result.accepted.map((a) => a.record)));
-    storeVerification(nonce, {
+    return storeVerification(nonce, {
         cwd,
         accepted: result.accepted.map((a) => a.record),
         rejected: result.rejected,

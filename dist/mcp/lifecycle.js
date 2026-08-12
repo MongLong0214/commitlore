@@ -34,7 +34,7 @@
  *   server that starts on every session.
  */
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { packageVersion } from '../core/paths.js';
 /** Kept small: this is a breadcrumb trail, not telemetry. */
@@ -45,13 +45,20 @@ export const LIFECYCLE_FILE = 'mcp-lifecycle.log';
  *
  * `rev-parse --git-path` rather than `.git/` by hand, so a linked worktree
  * writes where its own git directory is.
+ *
+ * Git answers relative to `cwd` in an ordinary clone and absolutely in a linked
+ * worktree, and `join` is not that distinction: joining an absolute answer onto
+ * `cwd` produced `<worktree>/Users/.../.git/worktrees/<name>/commitlore/...`, a
+ * directory created inside the working tree on every MCP start, in the one case
+ * the comment above promises to handle. `resolve` takes the absolute answer as
+ * given and still anchors a relative one at `cwd`.
  */
 export const lifecyclePath = (cwd = process.cwd()) => {
     const result = execGit(['rev-parse', '--git-path', join('commitlore', LIFECYCLE_FILE)], { cwd });
     if (result.code !== 0)
         return null;
     const path = result.stdout.trim();
-    return path === '' ? null : join(cwd, path);
+    return path === '' ? null : resolve(cwd, path);
 };
 const trim = (path) => {
     try {

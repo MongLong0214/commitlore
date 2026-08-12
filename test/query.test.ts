@@ -1105,6 +1105,79 @@ describe('#522 cold path queries', () => {
     expect(after.corpusPasses).toBe(0);
     expect(after.records.some((record) => record.recordId === 'r-later01')).toBe(true);
   }, 120_000);
+
+  /**
+   * The cold scan above is correct and unbounded, which is right for a command
+   * a person ran. The pre-edit hook is not that: it fires before every edit, and
+   * an unindexed repository charged it the whole history every time — 34.7s per
+   * edit on an 823-commit repository, forever, because the scan deliberately
+   * builds no index.
+   *
+   * A budget bounds that wait. What it must never do is answer with less and
+   * look complete, so the count of what went unread is a typed field and the
+   * caller is expected to report it.
+   */
+  describe('a scan budget bounds the wait and says what it cost', () => {
+    it('leaves an unbudgeted query exactly as it was', () => {
+      const dir = syntheticRepo(1024);
+      warmIndex(dir);
+      const indexed = runQuery({ cwd: dir, path: 'src', limit: 1 });
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      const cold = runQuery({ cwd: dir, path: 'src', limit: 1 });
+
+      expect(cold.records).toEqual(indexed.records);
+      expect(cold.unreadCommits).toBe(0);
+      expect(cold.diagnostics.join(' ')).not.toContain('unread');
+    }, 120_000);
+
+    it('stops a cold scan at the budget and reports the commits it skipped', () => {
+      const dir = syntheticRepo(1024);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      // Already spent: the first deadline check must stop the scan before any
+      // batch is read.
+      const cold = runQuery({ cwd: dir, path: 'src', scanBudgetMs: -1 });
+
+      expect(cold.fromIndex).toBe(false);
+      expect(cold.unreadCommits).toBeGreaterThan(0);
+      expect(cold.diagnostics.join(' ')).toContain('commitlore init');
+    }, 120_000);
+
+    it('honours a budget that expires partway through, not only one already spent', () => {
+      // The first version of this fix checked the deadline between batches and
+      // left the batch size at 1024 — more commits than most repositories have,
+      // so the whole scan was one batch and the check never ran a second time.
+      // A budget that is already spent hides that completely: the very first
+      // check stops it either way. This is the case that does not.
+      //
+      // The assertion is two-sided on purpose. `unread > 0` fails if the budget
+      // is ignored and the scan runs to completion; `unread < total` fails if
+      // the scan can only stop before reading anything, which would make the
+      // budget useless for its actual job.
+      const total = 1024;
+      const dir = syntheticRepo(total);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      const cold = runQuery({ cwd: dir, path: 'src', scanBudgetMs: 400 });
+
+      expect(cold.fromIndex).toBe(false);
+      expect(cold.unreadCommits).toBeGreaterThan(0);
+      expect(cold.unreadCommits).toBeLessThan(total);
+    }, 120_000);
+
+    it('does not truncate an answer the index could give', () => {
+      // A budget is a ceiling on the fallback, not on the index. A repository
+      // that is indexed must be unaffected by one, however small.
+      const dir = syntheticRepo(1024);
+      warmIndex(dir);
+
+      const budgeted = runQuery({ cwd: dir, path: 'src', limit: 1, scanBudgetMs: -1 });
+
+      expect(budgeted.fromIndex).toBe(true);
+      expect(budgeted.unreadCommits).toBe(0);
+    }, 120_000);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -39,6 +39,13 @@ export declare const LIFECYCLE_FILE = "mcp-lifecycle.log";
  *
  * `rev-parse --git-path` rather than `.git/` by hand, so a linked worktree
  * writes where its own git directory is.
+ *
+ * Git answers relative to `cwd` in an ordinary clone and absolutely in a linked
+ * worktree, and `join` is not that distinction: joining an absolute answer onto
+ * `cwd` produced `<worktree>/Users/.../.git/worktrees/<name>/commitlore/...`, a
+ * directory created inside the working tree on every MCP start, in the one case
+ * the comment above promises to handle. `resolve` takes the absolute answer as
+ * given and still anchors a relative one at `cwd`.
  */
 export declare const lifecyclePath: (cwd?: string) => string | null;
 /**

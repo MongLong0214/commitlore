@@ -330,11 +330,32 @@ export const hookResponse = (
  * quieter failure is a hook that says nothing; the cost of the louder one is a
  * session that cannot open a file.
  */
+/**
+ * How long the hook may spend scanning a repository that has no index.
+ *
+ * Only the hook sets a budget; `commitlore context` stays unbounded, because a
+ * person ran it and is waiting for the whole answer. Here nobody chose to wait:
+ * the hook fires before every edit, and without an index each firing reads the
+ * entire history and builds nothing (ADR-0003 gives that work to `index` and
+ * `init`). On an 823-commit repository that was 53 seconds, on every edit,
+ * indefinitely.
+ *
+ * Three seconds is long enough that a repository of ordinary size is still
+ * answered in full, and short enough that a large one costs a pause rather than
+ * a stall. Exceeding it is never silent: the payload says how many commits went
+ * unread and names `commitlore init`, which removes the cost for good.
+ */
+const HOOK_SCAN_BUDGET_MS = 3_000;
+
 const runHookMode = (options: InjectCommandOptions): void => {
   try {
     // `path` is discarded: in hook mode it comes from the payload, not the flag.
     const { path: _fromFlag, ...base } = injectOptions('.', options, process.cwd());
-    const result = hookResult(readStdin(), { ...base, cwd: process.cwd() });
+    const result = hookResult(readStdin(), {
+      ...base,
+      cwd: process.cwd(),
+      scanBudgetMs: HOOK_SCAN_BUDGET_MS,
+    });
     if (result.stdout !== '') process.stdout.write(result.stdout);
     if (result.stderr !== '') process.stderr.write(result.stderr);
   } catch (error) {

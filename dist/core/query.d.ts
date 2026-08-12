@@ -78,6 +78,17 @@ export interface QueryOptions {
     allHistory?: boolean;
     /** Answer from git alone, with no SQLite index. Same answers, slower. */
     noIndex?: boolean;
+    /**
+     * Wall-clock ceiling, in milliseconds, on the no-index scan.
+     *
+     * Absent means unbounded, which is right for a command a person ran and
+     * waited for. Latency-critical callers — the pre-edit hook above all — set it
+     * so a repository that has never been indexed costs a bounded pause once
+     * rather than an unbounded one on every edit. A budget that trips is always
+     * reported in `diagnostics`; a truncated answer that looked complete would be
+     * worse than a slow one.
+     */
+    scanBudgetMs?: number;
     /** The instant to evaluate against. Defaults to now. */
     at?: Date;
     /** Maximum records returned, applied after ordering. */
@@ -165,6 +176,17 @@ export interface QueryResult {
      * empty, and a consumer can branch on it without parsing prose.
      */
     notes: NotesAvailability;
+    /**
+     * Commits a scan budget left unread, and therefore records this answer may be
+     * missing.
+     *
+     * A typed field for the same reason `notes` is one: the symptom is a
+     * *smaller* answer, not an error, and "fewer records" is byte-identical to
+     * "this repository recorded less". Only a caller that set `scanBudgetMs` can
+     * see anything but 0 here, and one that did must say so rather than present a
+     * truncated answer as the whole of what a path is subject to.
+     */
+    unreadCommits: number;
     /** Anything the caller should be told about how the answer was produced. */
     diagnostics: string[];
 }

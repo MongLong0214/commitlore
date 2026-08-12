@@ -57,6 +57,7 @@ import {
   openCurrentIndex,
   queryTrailers,
   scanTrailers,
+  type ScanCost,
   type IndexedTrailer,
   type RecordSource,
   type TrailerQuery,
@@ -137,6 +138,17 @@ export interface QueryOptions {
   allHistory?: boolean;
   /** Answer from git alone, with no SQLite index. Same answers, slower. */
   noIndex?: boolean;
+  /**
+   * Wall-clock ceiling, in milliseconds, on the no-index scan.
+   *
+   * Absent means unbounded, which is right for a command a person ran and
+   * waited for. Latency-critical callers — the pre-edit hook above all — set it
+   * so a repository that has never been indexed costs a bounded pause once
+   * rather than an unbounded one on every edit. A budget that trips is always
+   * reported in `diagnostics`; a truncated answer that looked complete would be
+   * worse than a slow one.
+   */
+  scanBudgetMs?: number;
   /** The instant to evaluate against. Defaults to now. */
   at?: Date;
   /** Maximum records returned, applied after ordering. */
@@ -226,6 +238,17 @@ export interface QueryResult {
    * empty, and a consumer can branch on it without parsing prose.
    */
   notes: NotesAvailability;
+  /**
+   * Commits a scan budget left unread, and therefore records this answer may be
+   * missing.
+   *
+   * A typed field for the same reason `notes` is one: the symptom is a
+   * *smaller* answer, not an error, and "fewer records" is byte-identical to
+   * "this repository recorded less". Only a caller that set `scanBudgetMs` can
+   * see anything but 0 here, and one that did must say so rather than present a
+   * truncated answer as the whole of what a path is subject to.
+   */
+  unreadCommits: number;
   /** Anything the caller should be told about how the answer was produced. */
   diagnostics: string[];
 }
@@ -257,13 +280,16 @@ interface RowSource {
   fromIndex: boolean;
   /** Complete scans attempted while answering this one query. */
   corpusPasses: () => number;
+  /** Commits a scan budget left unread. 0 when nothing was truncated. */
+  unreadCommits: () => number;
   close: () => void;
   diagnostics: string[];
 }
 
-const scanSource = (cwd: string, diagnostics: string[]): RowSource => {
+const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowSource => {
   let rows: IndexedTrailer[] | undefined;
   let corpusPasses = 0;
+  const cost: ScanCost = { unreadCommits: 0 };
 
   return {
     fetch: (query) => {
@@ -272,13 +298,19 @@ const scanSource = (cwd: string, diagnostics: string[]): RowSource => {
         // must inspect the whole history. Materialize it once, then apply each
         // lifecycle/display alias predicate in memory; re-reading git for each
         // fetch made a single path query parse that corpus repeatedly.
-        rows = scanTrailers({}, { cwd });
+        rows = scanTrailers(
+          {},
+          budgetMs === undefined
+            ? { cwd }
+            : { cwd, budget: { deadline: Date.now() + budgetMs }, cost },
+        );
         corpusPasses += 1;
       }
       return filterTrailers(rows, query);
     },
     fromIndex: false,
     corpusPasses: () => corpusPasses,
+    unreadCommits: () => cost.unreadCommits,
     close: () => {},
     diagnostics,
   };
@@ -293,21 +325,24 @@ const scanSource = (cwd: string, diagnostics: string[]): RowSource => {
  * own that work. The fallback is reported, because "slower" and "wrong" must
  * not look alike from the outside.
  */
-const openSource = (cwd: string, noIndex: boolean): RowSource => {
-  if (noIndex) return scanSource(cwd, []);
+const openSource = (cwd: string, noIndex: boolean, budgetMs?: number): RowSource => {
+  if (noIndex) return scanSource(cwd, [], budgetMs);
   try {
     const handle = openCurrentIndex({ cwd });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
       corpusPasses: () => 0,
+      unreadCommits: () => 0,
       close: () => closeIndex(handle),
       diagnostics: [],
     };
   } catch (error) {
-    return scanSource(cwd, [
-      `the index is unavailable (${errorMessage(error)}); answering with a full scan`,
-    ]);
+    return scanSource(
+      cwd,
+      [`the index is unavailable (${errorMessage(error)}); answering with a full scan`],
+      budgetMs,
+    );
   }
 };
 
@@ -856,7 +891,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
 
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
   const diagnostics = [...source.diagnostics, ...scope.diagnostics];
 
   try {
@@ -893,6 +928,15 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       );
     }
 
+    const unread = source.unreadCommits();
+    if (unread > 0) {
+      diagnostics.push(
+        `this repository has no index, and the scan stopped after its time budget with ` +
+          `${String(unread)} commit(s) unread — records in them are missing from this answer. ` +
+          'fix: commitlore init (or commitlore index) to build the index once',
+      );
+    }
+
     const shallow = hasShallowHistory(cwd);
     if (shallow) diagnostics.push(`${SHALLOW_HISTORY_CAVEAT} (fix: git fetch --unshallow)`);
 
@@ -918,6 +962,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       history,
       shallow,
       notes,
+      unreadCommits: unread,
       diagnostics,
     };
   } finally {
