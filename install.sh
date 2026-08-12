@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.sh | sh -s v0.4.1
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh -s v0.8.0
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -376,7 +376,7 @@ if [ -n "$version" ]; then
   case "$version" in
     v[0-9]*) ;;
     [0-9]*) version="v$version" ;;
-    *) die "\"$version\" is not a version tag. Pass a tag such as v0.4.1, or pass nothing to install the newest one." 1 ;;
+    *) die "\"$version\" is not a version tag. Pass a tag such as v1.2.3, or pass nothing to install the newest one." 1 ;;
   esac
 else
   # Newest release tag, compared numerically without `sort -V`. That flag is a
@@ -395,7 +395,7 @@ else
     | sort \
     | tail -n 1 \
     | awk '{ print $4 }' || true)"
-  [ -n "$version" ] || die "no version tag could be resolved from $SOURCE_URL. Pass one explicitly, for example: sh install.sh v0.4.1" 2
+  [ -n "$version" ] || die "no version tag could be resolved from $SOURCE_URL. Pass one explicitly, for example: sh install.sh v1.2.3" 2
 fi
 
 log "installing $version"

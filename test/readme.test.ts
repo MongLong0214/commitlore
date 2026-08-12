@@ -154,3 +154,54 @@ describe('T-1021 mutation oracles', () => {
     expect(mutated).toMatch(/57\.5%/);
   });
 });
+
+/**
+ * Windows was documented as supported and never documented as installable.
+ * `install.ps1` was named twenty-three times across the READMEs and docs, and
+ * not once shown as a command anyone could run — a reader on Windows had to
+ * reconstruct the URL from the shell one-liner. The platform has a required CI
+ * job proving the installer works; the evidence outran the instructions.
+ *
+ * The installers' own header examples had gone stale in the other direction:
+ * they carried copy-pasteable URLs pinned to v0.4.1, four releases behind, so
+ * following the file's own documentation installed an old release. Nothing
+ * checked them, because the pin test only ever read the READMEs.
+ */
+describe('every supported install path is documented and pinned to this release', () => {
+  const INSTALLERS = ['install.sh', 'install.ps1'] as const;
+
+  for (const file of README_FILES) {
+    it(`${file} gives Windows a command, not just a mention`, () => {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      const oneLiner = content
+        .split('\n')
+        .find((line) => line.includes('install.ps1') && line.includes('irm'));
+
+      expect(oneLiner, 'no runnable PowerShell install line').toBeDefined();
+      expect(oneLiner).not.toContain('/dev/');
+      expect(oneLiner).toContain(`/v${PACKAGE_VERSION}/`);
+    });
+  }
+
+  for (const file of INSTALLERS) {
+    it(`${file} documents itself at this release, not an older one`, () => {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      const urls = content.match(/raw\.githubusercontent\.com\/[^\s"']*/g) ?? [];
+
+      expect(urls.length, 'the header lost its example URLs').toBeGreaterThan(0);
+      for (const url of urls) {
+        expect(url, `${url} is not pinned to this release`).toContain(`/v${PACKAGE_VERSION}/`);
+      }
+    });
+
+    it(`${file} illustrates a tag with a placeholder that cannot go stale`, () => {
+      // "Pass a tag such as v0.4.1" reads as advice to install v0.4.1, and it
+      // silently rots every release. A number that was never a release cannot.
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      const examples = content.match(/such as (v\d+\.\d+\.\d+)/g) ?? [];
+
+      expect(examples.length, 'the illustrative tag example is gone').toBeGreaterThan(0);
+      for (const example of examples) expect(example).toContain('v1.2.3');
+    });
+  }
+});
