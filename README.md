@@ -76,7 +76,7 @@ command when it finds Codex. Start a new Codex session afterwards: the plugin's
 skill and MCP server are loaded at session start, not on install. The CLI below
 provides the repository commands.
 
-Prerequisites for either path: Node.js 22+ and Git. The script checks both before it writes anything.
+Prerequisites for either path: Node.js 22.12+ and Git. The script checks both before it writes anything.
 
 **Any other coding agent** — install the CLI:
 

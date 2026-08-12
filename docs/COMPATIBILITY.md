@@ -52,7 +52,7 @@ message naming what is missing. The MCP server runs the bundle directly.
 
 | Prerequisite | Required by | Checked by `install.sh` | Checked by `install.ps1` |
 |---|---|---|---|
-| Node.js ≥ 22 | plugin path, `install.sh`, `install.ps1` | yes | yes |
+| Node.js ≥ 22.12 | plugin path, `install.sh`, `install.ps1` | yes | yes |
 | Git | plugin path, `install.sh`, `install.ps1` | yes | yes |
 | A POSIX shell (`bash`) | plugin path only | — | — |
 

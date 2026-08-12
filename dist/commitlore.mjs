@@ -16131,12 +16131,21 @@ var verifyCaptureRecords = (opts) => {
   const accepted = [];
   const rejected = [];
   const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
-  const settle = (result) => persist(result) ? result : {
-    accepted: [],
-    rejected: [],
-    validation_result: "empty",
-    incomplete: true,
-    overlap_check: "canonical_exact_only"
+  const settle = (result) => {
+    if (persist(result)) return result;
+    if (opts.readOnly !== true) {
+      try {
+        deletePending(nonce, { cwd });
+      } catch {
+      }
+    }
+    return {
+      accepted: [],
+      rejected: [],
+      validation_result: "empty",
+      incomplete: true,
+      overlap_check: "canonical_exact_only"
+    };
   };
   try {
     const pending = opts.pending ?? readPending(nonce, { cwd });
@@ -16145,7 +16154,7 @@ var verifyCaptureRecords = (opts) => {
         accepted: [],
         rejected: [],
         validation_result: "empty",
-        incomplete: false,
+        incomplete: true,
         overlap_check: "canonical_exact_only"
       };
     }
@@ -32288,12 +32297,19 @@ var withheldIfInjection = (record2) => {
     ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
   ];
   if (matched.length === 0) return record2;
+  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
   return {
     ...record2,
     resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
       key: trailer.key,
-      value: `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`
-    }))
+      value: withheld
+    })),
+    // `expiresAt` carries the `Expires:` value verbatim, condition form and
+    // all, and is serialised beside the trailers. Redacting only
+    // `resolvedTrailers` left this field as an open second channel: a payload
+    // in `Expires:` reached a model through the same tool. Every place the
+    // value appears has to be the same place.
+    ...record2.expiresAt === void 0 ? {} : { expiresAt: withheld }
   };
 };
 var buildReport2 = (scan2, at) => {

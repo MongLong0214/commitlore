@@ -300,7 +300,15 @@ jobs:
           printf 'export const run = (x) => x;\n' > src/app.js
           git add -A
           git commit -q --no-verify -m 'feat: initial'
-          "$wrapper" init --unattended --no-agents-md || true
+          # `|| true` used to hide that this line passed an option that no
+          # longer exists: init never ran, and doctor and context below measured
+          # a repository it had never touched while the job stayed green. The
+          # exit code alone cannot tell "a step needs attention" (1, which a
+          # fixture with no remote always produces) from "could not run", so the
+          # evidence is init's own summary line.
+          "$wrapper" init --unattended > init.log 2>&1 || true
+          cat init.log
+          grep -qE '^init: (ready|[0-9]+ step)' init.log
           "$wrapper" doctor >/dev/null
           "$wrapper" context src/app.js >/dev/null
 
@@ -357,7 +365,9 @@ jobs:
               printf "export const run = (x) => x;\n" > src/app.js
               git add -A
               git commit -q --no-verify -m "feat: initial"
-              "$wrapper" init --unattended --no-agents-md || true
+              "$wrapper" init --unattended > /tmp/init.log 2>&1 || true
+              cat /tmp/init.log
+              grep -qE "^init: (ready|[0-9]+ step)" /tmp/init.log
               "$wrapper" doctor >/dev/null
               "$wrapper" context src/app.js >/dev/null
             '

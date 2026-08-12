@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
-import { readPending, storeVerification } from './pending.js';
+import { deletePending, readPending, storeVerification, } from './pending.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
 // ---------------------------------------------------------------------------
@@ -160,15 +160,35 @@ export const verifyCaptureRecords = (opts) => {
      * Routing every exit through one function is what makes that impossible to
      * reintroduce by copying two lines.
      */
-    const settle = (result) => persist(result)
-        ? result
-        : {
+    const settle = (result) => {
+        if (persist(result))
+            return result;
+        // Changing only what is returned was not enough. `stage` reads the *stored*
+        // transaction, so a replay whose result could not be stored left the
+        // earlier record staged-able: the caller was told empty, and the commit
+        // would have carried the first record. The stored transaction has to stop
+        // being usable, not just stop being reported.
+        //
+        // Discarded rather than downgraded. Two verifications of one nonce have now
+        // disagreed, and there is no reading of that where either result should
+        // reach a commit. `prepare` is one call away.
+        if (opts.readOnly !== true) {
+            try {
+                deletePending(nonce, { cwd });
+            }
+            catch {
+                // The refusal below is the guarantee; failing to clean up must not
+                // turn into a thrown error from a function that never throws.
+            }
+        }
+        return {
             accepted: [],
             rejected: [],
             validation_result: 'empty',
             incomplete: true,
             overlap_check: 'canonical_exact_only',
         };
+    };
     try {
         // 1. Re-read prepared transaction and verify source hashes
         const pending = opts.pending ?? readPending(nonce, { cwd });
@@ -178,7 +198,7 @@ export const verifyCaptureRecords = (opts) => {
                 accepted: [],
                 rejected: [],
                 validation_result: 'empty',
-                incomplete: false,
+                incomplete: true,
                 overlap_check: 'canonical_exact_only',
             };
         }

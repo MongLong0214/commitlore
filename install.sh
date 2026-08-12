@@ -682,6 +682,19 @@ record_skipped() { printf '%s: %s\n' "$1" "$2" >>"$skipped_log"; }
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor, and
 # Windsurf all document this exact shape.
+# Whether a JSON agent config actually registers a commitlore server, rather
+# than merely containing the word somewhere.
+registers_commitlore() {
+  path="$1"
+  [ -f "$path" ] || return 1
+  if command -v jq >/dev/null 2>&1; then
+    jq -e '[.. | objects | to_entries[] | select(.key == "commitlore")] | length > 0' "$path" >/dev/null 2>&1
+    return $?
+  fi
+  # Without jq the key form is still narrower than the bare word.
+  grep -q '"commitlore"[[:space:]]*:' "$path" 2>/dev/null
+}
+
 # Reports an existing commitlore registration, and says when it cannot work.
 #
 # Shared by every host that keeps its servers in JSON, because it was not:
@@ -741,7 +754,11 @@ EOF
     return
   fi
 
-  if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
+  # Whether this file *registers* commitlore, not whether it mentions the word.
+  # A grep for the string skipped any config that happened to contain it
+  # anywhere -- a note, a comment, an unrelated value -- and reported the host
+  # already wired while nothing was registered.
+  if registers_commitlore "$config_path"; then
     # Preserving an entry somebody configured is right; preserving one that
     # cannot start is not. Four hosts on this author's machine held
     # `/tmp/fresh256.../bin/commitlore` -- a temp directory from a test install,
@@ -929,7 +946,11 @@ EOF
     return
   fi
 
-  if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
+  # Whether this file *registers* commitlore, not whether it mentions the word.
+  # A grep for the string skipped any config that happened to contain it
+  # anywhere -- a note, a comment, an unrelated value -- and reported the host
+  # already wired while nothing was registered.
+  if registers_commitlore "$config_path"; then
     report_existing_registration "opencode" "$config_path"
     return
   fi

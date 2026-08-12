@@ -70,7 +70,7 @@ commitlore plugin install-codex
 
 它通过 Codex 自己的 CLI 注册 marketplace 与 plugin，绝不直接修改其配置或缓存。下面的标准安装脚本在检测到 Codex 时也会执行同一条命令。安装后请开启新的 Codex session —— plugin 的 skill 与 MCP server 在 session 启动时加载，而不是在安装时。下面的 CLI 提供 repository 命令。
 
-两条路径的前置条件都是 Node.js 22+ 与 Git。脚本在写入任何内容之前会检查这两项。
+两条路径的前置条件都是 Node.js 22.12+ 与 Git。脚本在写入任何内容之前会检查这两项。
 
 **其他编程代理** — 安装 CLI:
 

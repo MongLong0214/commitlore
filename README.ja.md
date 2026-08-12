@@ -72,7 +72,7 @@ commitlore plugin install-codex
 
 Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や cache を直接編集しません。下の標準 installer も Codex を検出すれば同じコマンドを実行します。インストール後は新しい Codex session を開始してください — plugin の skill と MCP server はインストール時ではなく session 開始時に読み込まれます。下の CLI が repository command を提供します。
 
-どちらの経路も前提条件は Node.js 22+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
+どちらの経路も前提条件は Node.js 22.12+ と Git です。スクリプトは何かを書き込む前に両方を確認します。
 
 **その他のコーディングエージェント** — CLI をインストールします:
 

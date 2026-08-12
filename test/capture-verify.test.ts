@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { stageCaptureRecord } from '../src/core/capture-stage.js';
 
 import { verifyCaptureRecords, type VerifyCaptureResult } from '../src/core/capture-verify.js';
 import { createPending, readPending } from '../src/core/pending.js';
@@ -645,10 +646,11 @@ describe('verifyCaptureRecords', () => {
     expect(replay.accepted).toEqual([]);
     expect(replay.incomplete).toBe(true);
 
-    // The transaction is untouched, so nothing new became stageable.
-    const pending = readPending(nonce, { cwd });
-    expect(pending!.phase).toBe('verified');
-    expect(pending!.records).toHaveLength(1);
+    // And nothing is left that `stage` could use. Leaving the transaction
+    // `verified` with the first record was the defect: `stage` reads what is
+    // stored, so the caller saw empty while the commit would have carried A.
+    expect(readPending(nonce, { cwd })).toBeNull();
+    expect(stageCaptureRecord({ nonce, cwd })).toBeNull();
   });
 
   it('does not report a second verification as accepted when it cannot be stored', () => {
@@ -683,11 +685,11 @@ describe('verifyCaptureRecords', () => {
     expect(two.validation_result).toBe('empty');
     expect(two.incomplete).toBe(true);
 
-    // And what is stored is still the first call's record, unchanged.
-    const pending = readPending(nonce, { cwd });
-    expect(pending!.phase).toBe('verified');
-    expect(pending!.records).toHaveLength(1);
-    expect(JSON.stringify(pending!.records)).toContain('shared mutable state');
+    // And the transaction is gone, so `stage` has nothing to reach for. Two
+    // verifications of one nonce disagreed; there is no reading of that where
+    // either result should reach a commit.
+    expect(readPending(nonce, { cwd })).toBeNull();
+    expect(stageCaptureRecord({ nonce, cwd })).toBeNull();
   });
 
   // === Verification failure never blocks a commit ===

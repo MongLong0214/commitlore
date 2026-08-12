@@ -4,7 +4,7 @@ Which hosts are supported and what each install path requires is stated once, in
 [COMPATIBILITY.md](COMPATIBILITY.md). This page is what each path actually
 writes, and how to undo it.
 
-Prerequisites for every path: Node.js 22 or newer, and Git. `install.sh` and
+Prerequisites for every path: Node.js 22.12 or newer, and Git. `install.sh` and
 `install.ps1` check both before they write anything; the plugin path checks
 nothing.
 

@@ -815,6 +815,24 @@ function Test-AgentPresent {
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor and Windsurf
 # all document this exact shape.
+# Whether a JSON agent config actually registers a commitlore server, rather
+# than merely containing the word somewhere. A regex for the string skipped any
+# config that happened to contain it -- a note, an unrelated value -- and
+# reported the host already wired while nothing was registered.
+function Test-RegistersCommitlore {
+    param([string]$Body)
+    try {
+        $parsed = $Body | ConvertFrom-Json
+    } catch {
+        # Unparseable: fall back to the key form, still narrower than the word.
+        return ($Body -match '"commitlore"\s*:')
+    }
+    foreach ($container in @($parsed.mcpServers, $parsed.mcp, $parsed.servers)) {
+        if ($null -ne $container -and $null -ne $container.commitlore) { return $true }
+    }
+    return $false
+}
+
 # Reports an existing commitlore registration, and says when it cannot work.
 #
 # Shared by every host that keeps its servers in JSON, because it was not: the
@@ -876,7 +894,7 @@ function Wire-McpServersJson {
         Add-Skipped $Agent "could not read $ConfigPath"
         return
     }
-    if ($body -match '"commitlore"') {
+    if (Test-RegistersCommitlore $body) {
         Add-ExistingRegistrationNote $Agent $ConfigPath $body
         return
     }
@@ -1087,7 +1105,7 @@ if (Test-AgentPresent 'opencode' @((Join-Path $home_ '.config\opencode'))) {
             Add-Wired "opencode: created $openConfig"
         } else {
             $body = (Get-Content -LiteralPath $openConfig -Raw)
-            if ($body -match '"commitlore"') {
+            if (Test-RegistersCommitlore $body) {
                 Add-ExistingRegistrationNote 'opencode' $openConfig $body
             } else {
                 $parsed = $body | ConvertFrom-Json

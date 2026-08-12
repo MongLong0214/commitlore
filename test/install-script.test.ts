@@ -487,6 +487,28 @@ describe('T-1120 upgrade and verification', () => {
     });
   });
 
+  it('wires a host whose config merely mentions the word', () => {
+    // The skip was a grep for `"commitlore"` anywhere in the file, so a note, a
+    // comment or an unrelated value made the installer report the host already
+    // wired while nothing was registered.
+    const home = tempDir('mention-only');
+    mkdirSync(join(home, '.cursor'), { recursive: true });
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      JSON.stringify({ mcpServers: { other: { command: 'x' } }, note: 'commitlore' }),
+    );
+
+    const r = runInstaller({ home });
+
+    expect(`${r.stdout}${r.stderr}`).toMatch(/cursor: added the commitlore MCP server/);
+    const after = JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(after.mcpServers?.['commitlore']).toBeDefined();
+    // And the unrelated entry it found is still there.
+    expect(after.mcpServers?.['other']).toBeDefined();
+  });
+
   it('names a dead opencode registration too, not only the generic hosts', () => {
     // opencode has its own writer for a different config shape, and the first
     // version of this fix touched only the generic path — so the host the

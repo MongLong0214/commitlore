@@ -206,12 +206,19 @@ const withheldIfInjection = (record: StaleReportRecord): StaleReportRecord => {
     ...new Set(record.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value))),
   ];
   if (matched.length === 0) return record;
+  const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(', ')}]`;
   return {
     ...record,
     resolvedTrailers: record.resolvedTrailers.map((trailer) => ({
       key: trailer.key,
-      value: `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(', ')}]`,
+      value: withheld,
     })),
+    // `expiresAt` carries the `Expires:` value verbatim, condition form and
+    // all, and is serialised beside the trailers. Redacting only
+    // `resolvedTrailers` left this field as an open second channel: a payload
+    // in `Expires:` reached a model through the same tool. Every place the
+    // value appears has to be the same place.
+    ...(record.expiresAt === undefined ? {} : { expiresAt: withheld }),
   };
 };
 
