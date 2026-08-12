@@ -92,8 +92,10 @@ export type MarketplaceState =
   | { kind: 'ours' }
   /** Configured under our name, but pointing somewhere else. */
   | { kind: 'foreign'; source: string }
-  /** Configured, and this Codex cannot say where it points. */
-  | { kind: 'unverifiable' };
+  /** A marketplace of our name is present, and this Codex cannot say where it points. */
+  | { kind: 'unverifiable-present' }
+  /** This Codex reports nothing machine-readable, and none of our name is visible. */
+  | { kind: 'unverifiable-absent' };
 
 /**
  * Reads `plugin marketplace list --json` and says what our name currently
@@ -114,14 +116,23 @@ export const readMarketplaceState = (
   json: string,
   plugin: CodexPluginConfig,
 ): MarketplaceState => {
+  // Whether *something* of our name is there, for a Codex whose output this
+  // cannot parse. Presence is the half that decides safety: a marketplace we
+  // add ourselves is ours by construction, while one that already exists and
+  // cannot be identified is the case worth refusing.
+  const namedInText = (): MarketplaceState =>
+    json.split('\n').some((line) => line.trim().startsWith(`${plugin.marketplace} `))
+      ? { kind: 'unverifiable-present' }
+      : { kind: 'unverifiable-absent' };
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    return { kind: 'unverifiable' };
+    return namedInText();
   }
   const entries = (parsed as { marketplaces?: unknown }).marketplaces;
-  if (!Array.isArray(entries)) return { kind: 'unverifiable' };
+  if (!Array.isArray(entries)) return namedInText();
 
   const mine = entries.find(
     (entry): entry is { marketplaceSource?: { source?: unknown } } =>
@@ -132,7 +143,7 @@ export const readMarketplaceState = (
   if (mine === undefined) return { kind: 'absent' };
 
   const source = mine.marketplaceSource?.source;
-  if (typeof source !== 'string' || source === '') return { kind: 'unverifiable' };
+  if (typeof source !== 'string' || source === '') return { kind: 'unverifiable-present' };
   return sameMarketplaceSource(source, plugin.marketplaceSource)
     ? { kind: 'ours' }
     : { kind: 'foreign', source };
@@ -254,14 +265,35 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
     };
   }
 
-  if (marketplace.kind === 'unverifiable') {
+  // Present and unidentifiable is the same risk as foreign: the next call is
+  // `plugin add <name>@<name>`, which installs whatever that marketplace
+  // serves. Warning and continuing meant a marketplace somebody else had
+  // configured under this name could supply the plugin while the install
+  // reported CommitLore.
+  if (marketplace.kind === 'unverifiable-present') {
+    return {
+      exitCode: 2,
+      report: [
+        `a Codex marketplace named ${plugin.marketplace} is already configured, and this Codex does not ` +
+          'report where it points',
+        'nothing was installed: this cannot tell it apart from one somebody else configured under the same name',
+        `to use this one, remove that marketplace (codex plugin marketplace remove ${plugin.marketplace}) and rerun, ` +
+          'or upgrade Codex to a version that reports a marketplace source',
+      ],
+    };
+  }
+
+  // Nothing of our name is visible, so the branch below adds ours and the
+  // question of whose it is does not arise. Said out loud because the check
+  // that would normally confirm it did not run.
+  if (marketplace.kind === 'unverifiable-absent') {
     report.push(
-      `could not confirm which repository the ${plugin.marketplace} marketplace points at; ` +
-        'this Codex does not report a marketplace source',
+      `this Codex does not report marketplace sources; none named ${plugin.marketplace} was visible, ` +
+        'so one was added from this install',
     );
   }
 
-  if (marketplace.kind === 'absent') {
+  if (marketplace.kind === 'absent' || marketplace.kind === 'unverifiable-absent') {
     const added = run(['plugin', 'marketplace', 'add', plugin.marketplaceSource]);
     if (!successful(added)) {
       return {

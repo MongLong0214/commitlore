@@ -33066,20 +33066,21 @@ var codexPluginInstallCommand = () => "commitlore plugin install-codex";
 var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join14(dataHome, ...plugin.dataRelativePath);
 var successful = (result) => result.status === 0 && result.error === void 0;
 var readMarketplaceState = (json, plugin) => {
+  const namedInText = () => json.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `)) ? { kind: "unverifiable-present" } : { kind: "unverifiable-absent" };
   let parsed;
   try {
     parsed = JSON.parse(json);
   } catch {
-    return { kind: "unverifiable" };
+    return namedInText();
   }
   const entries = parsed.marketplaces;
-  if (!Array.isArray(entries)) return { kind: "unverifiable" };
+  if (!Array.isArray(entries)) return namedInText();
   const mine = entries.find(
     (entry) => typeof entry === "object" && entry !== null && entry.name === plugin.marketplace
   );
   if (mine === void 0) return { kind: "absent" };
   const source = mine.marketplaceSource?.source;
-  if (typeof source !== "string" || source === "") return { kind: "unverifiable" };
+  if (typeof source !== "string" || source === "") return { kind: "unverifiable-present" };
   return sameMarketplaceSource(source, plugin.marketplaceSource) ? { kind: "ours" } : { kind: "foreign", source };
 };
 var canonicalMarketplaceSource = (value) => {
@@ -33146,12 +33147,22 @@ var installCodexPlugin = (options = {}) => {
       ]
     };
   }
-  if (marketplace.kind === "unverifiable") {
+  if (marketplace.kind === "unverifiable-present") {
+    return {
+      exitCode: 2,
+      report: [
+        `a Codex marketplace named ${plugin.marketplace} is already configured, and this Codex does not report where it points`,
+        "nothing was installed: this cannot tell it apart from one somebody else configured under the same name",
+        `to use this one, remove that marketplace (codex plugin marketplace remove ${plugin.marketplace}) and rerun, or upgrade Codex to a version that reports a marketplace source`
+      ]
+    };
+  }
+  if (marketplace.kind === "unverifiable-absent") {
     report.push(
-      `could not confirm which repository the ${plugin.marketplace} marketplace points at; this Codex does not report a marketplace source`
+      `this Codex does not report marketplace sources; none named ${plugin.marketplace} was visible, so one was added from this install`
     );
   }
-  if (marketplace.kind === "absent") {
+  if (marketplace.kind === "absent" || marketplace.kind === "unverifiable-absent") {
     const added = run(["plugin", "marketplace", "add", plugin.marketplaceSource]);
     if (!successful(added)) {
       return {

@@ -43,9 +43,13 @@ export type MarketplaceState =
     kind: 'foreign';
     source: string;
 }
-/** Configured, and this Codex cannot say where it points. */
+/** A marketplace of our name is present, and this Codex cannot say where it points. */
  | {
-    kind: 'unverifiable';
+    kind: 'unverifiable-present';
+}
+/** This Codex reports nothing machine-readable, and none of our name is visible. */
+ | {
+    kind: 'unverifiable-absent';
 };
 /**
  * Reads `plugin marketplace list --json` and says what our name currently
