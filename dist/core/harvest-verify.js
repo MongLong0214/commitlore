@@ -31,8 +31,9 @@ import { validateRecord } from './schema.js';
  * queue worker" quote equally well, and only the second is a record.
  *
  * The table is deliberately short. Every phrase added here is a phrase that can
- * launder a mention into a rejection, and the cost of a missing marker (a true
- * `Ruled-out:` discarded) is one the protocol has already agreed to pay.
+ * launder a mention into a rejection. Missing *refusal* language is still a
+ * cost the protocol pays; missing a *measured outcome* is not — that was #585,
+ * and those forms live in the outcome layer below rather than in this list.
  *
  * Matched case-insensitively against the whitespace-collapsed neighbourhood of
  * the quote, with curly apostrophes folded to straight ones so that `won’t` and
@@ -92,6 +93,39 @@ export const REJECTION_MARKERS = [
     '쓰지 않기로',
     '못 쓴다',
     '안 쓴다',
+];
+/**
+ * Past-tense outcome phrasing. The marker table above is refusal language
+ * ("does not work", "not viable", "ruled out"). A measured rejection often
+ * never uses those words: it reports what happened when the alternative was
+ * tried. The capture that opened #585 quoted "pushed the 429 rate higher than
+ * it was without retries at all" and was discarded twice, because nothing in
+ * the table fires on a comparative against a baseline.
+ *
+ * These are not single tokens. `caused` or `higher than` alone would match a
+ * proposal ("the rate is already higher than 10, we should try X"). Each
+ * pattern requires a concluded outcome — something was tried, rolled back, or
+ * measured worse than the thing it replaced.
+ */
+const PAST_OUTCOME_PHRASES = [
+    'did not work',
+    "didn't work",
+    'did not help',
+    "didn't help",
+    'rolled back',
+    'regressed',
+    'made things worse',
+    'made it worse',
+    'made them worse',
+];
+const PAST_OUTCOME_PATTERNS = [
+    /\btried\b.{0,200}\b(higher|slower|worse) than\b/,
+    /\btried\b.{0,200}\bmade\b.{0,80}\bworse\b/,
+    /\bmade \w+( \w+){0,4} worse\b/,
+    /\bwhen we (used|tried)\b.{0,200}\b(higher|slower|worse) than\b/,
+    /\b(higher|slower|worse) than (it was|they were|before|without)\b/,
+    /\bcaused .{0,80}\bto (spike|climb|regress|worsen)\b/,
+    /\bcaused more \b/,
 ];
 /**
  * How far from the quote a rejection marker may sit: the quoted lines, plus one
@@ -190,11 +224,13 @@ const neighbourhood = (source, start, length) => {
 };
 /** Marker matching folds case and curly apostrophes; the quote check never does. */
 const forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
+const hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) ||
+    PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 const hasRejectionContext = (source, quote) => {
     const normalized = normalize(quote);
     return occurrences(source, normalized).some((at) => {
         const window = forMarkers(neighbourhood(source, at, normalized.length));
-        return REJECTION_MARKERS.some((marker) => window.includes(marker));
+        return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
     });
 };
 const brief = (text) => {
@@ -274,7 +310,8 @@ const unfoundEvidence = (record, sources) => {
 /**
  * `Ruled-out:` claims an alternative was considered and dropped. The quote
  * proves the alternative was *mentioned*; only the surrounding text can show it
- * was turned down, so this asks for a rejection marker in the neighbourhood.
+ * was turned down, so this asks for a refusal marker or a past-tense measured
+ * outcome in the neighbourhood.
  *
  * Checked per key rather than per trailer: `evidence.key` names a key, not an
  * occurrence, so a record with two `Ruled-out:` trailers cannot say which

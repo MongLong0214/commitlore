@@ -12015,6 +12015,26 @@ var REJECTION_MARKERS = [
   "\uBABB \uC4F4\uB2E4",
   "\uC548 \uC4F4\uB2E4"
 ];
+var PAST_OUTCOME_PHRASES = [
+  "did not work",
+  "didn't work",
+  "did not help",
+  "didn't help",
+  "rolled back",
+  "regressed",
+  "made things worse",
+  "made it worse",
+  "made them worse"
+];
+var PAST_OUTCOME_PATTERNS = [
+  /\btried\b.{0,200}\b(higher|slower|worse) than\b/,
+  /\btried\b.{0,200}\bmade\b.{0,80}\bworse\b/,
+  /\bmade \w+( \w+){0,4} worse\b/,
+  /\bwhen we (used|tried)\b.{0,200}\b(higher|slower|worse) than\b/,
+  /\b(higher|slower|worse) than (it was|they were|before|without)\b/,
+  /\bcaused .{0,80}\bto (spike|climb|regress|worsen)\b/,
+  /\bcaused more \b/
+];
 var NEIGHBOUR_LINES = 1;
 var DETAIL_LIMIT = 80;
 var SPACE = /\s/;
@@ -12081,11 +12101,12 @@ var neighbourhood = (source, start, length) => {
   return source.raw.slice(from, to);
 };
 var forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
+var hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) || PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 var hasRejectionContext = (source, quote) => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
     const window = forMarkers(neighbourhood(source, at, normalized.length));
-    return REJECTION_MARKERS.some((marker) => window.includes(marker));
+    return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
   });
 };
 var brief = (text) => {

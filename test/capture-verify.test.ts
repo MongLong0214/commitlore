@@ -434,6 +434,79 @@ describe('verifyCaptureRecords', () => {
     expect(result.rejected[0]!.reason).toBe('ruled-out-no-rejection');
   });
 
+  // === #585: past-tense measured rejection, the path that actually failed ===
+  it('accepts a Ruled-out whose quote reports a past-tense measured outcome', () => {
+    const outcome =
+      're-synchronised the in-flight clients and pushed the 429 rate higher than it was without retries at all';
+    const transcript = [
+      'assistant: Exponential backoff had been tried.',
+      `assistant: It ${outcome}.`,
+    ].join('\n');
+    const diff = '';
+    const nonce = prepare(cwd, transcript, diff);
+
+    const draft: DraftRecord = {
+      trailers: [
+        {
+          key: 'Ruled-out',
+          value: 'exponential backoff | re-synced in-flight clients and raised the 429 rate',
+        },
+        { key: 'Record-Id', value: 'r-backoff585' },
+      ],
+      evidence: [
+        {
+          key: 'Ruled-out',
+          source: 'transcript',
+          quote: `It ${outcome}.`,
+          locator: 'L2-L2',
+        },
+      ],
+    };
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [draft],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.accepted).toHaveLength(1);
+  });
+
+  it('still refuses a proposal to try the alternative', () => {
+    const transcript = 'assistant: We should try exponential backoff.';
+    const diff = '';
+    const nonce = prepare(cwd, transcript, diff);
+
+    const draft: DraftRecord = {
+      trailers: [
+        { key: 'Ruled-out', value: 'exponential backoff | worth a look' },
+        { key: 'Record-Id', value: 'r-propose585' },
+      ],
+      evidence: [
+        {
+          key: 'Ruled-out',
+          source: 'transcript',
+          quote: 'We should try exponential backoff.',
+          locator: 'L1-L1',
+        },
+      ],
+    };
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [draft],
+      transcript,
+      diff,
+      cwd,
+    });
+
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]!.reason).toBe('ruled-out-no-rejection');
+  });
+
   // === Duplicate Record-Id against active records ===
   it('duplicate id against active records is rejected', () => {
     const transcript = 'We decided to never use eval in production code due to security risks.';
