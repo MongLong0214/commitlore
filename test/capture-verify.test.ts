@@ -9,12 +9,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { stageCaptureRecord } from '../src/core/capture-stage.js';
 
 import { verifyCaptureRecords, type VerifyCaptureResult } from '../src/core/capture-verify.js';
 import { createPending, readPending } from '../src/core/pending.js';
+import { notesAbsenceEvidenceKey } from '../src/core/notes.js';
 import type { DraftRecord } from '../src/core/harvest.js';
 
 // ---------------------------------------------------------------------------
@@ -630,6 +631,52 @@ describe('verifyCaptureRecords', () => {
 
     expect(result.incomplete).toBe(true);
     expect(result.validation_result).toBe('empty');
+  });
+
+  it('reports verification as incomplete when the duplicate history is shallow', () => {
+    const origin = cwd;
+    writeFileSync(join(origin, 'second.txt'), 'second\n');
+    execSync('git add .', { cwd: origin, stdio: 'ignore' });
+    execSync('git commit -m "second"', { cwd: origin, stdio: 'ignore' });
+
+    const parent = mkdtempSync(join(tmpdir(), 'cl-verify-shallow-parent-'));
+    const shallow = join(parent, 'repo');
+    execFileSync('git', ['clone', '--quiet', '--depth', '1', `file://${origin}`, shallow], {
+      cwd: parent,
+      stdio: 'ignore',
+    });
+    try {
+      execFileSync(
+        'git',
+        ['config', '--add', 'remote.origin.fetch', '+refs/notes/commitlore:refs/notes/commitlore'],
+        { cwd: shallow, stdio: 'ignore' },
+      );
+      const remoteUrl = execFileSync('git', ['config', '--get', 'remote.origin.url'], {
+        cwd: shallow,
+        encoding: 'utf8',
+      }).trim();
+      execFileSync('git', ['config', '--local', notesAbsenceEvidenceKey('origin'), remoteUrl], {
+        cwd: shallow,
+        stdio: 'ignore',
+      });
+
+      const transcript = 'We decided to keep the history scan bounded.';
+      const diff = '';
+      const nonce = prepare(shallow, transcript, diff);
+      const result = verifyCaptureRecords({
+        nonce,
+        draft: [validDraft('We decided to keep the history scan bounded')],
+        transcript,
+        diff,
+        cwd: shallow,
+      });
+
+      expect(result.accepted).toHaveLength(1);
+      expect(result.incomplete).toBe(true);
+      expect(stageCaptureRecord({ nonce, cwd: shallow })).toBeNull();
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 
   // === Source substitution is rejected ===

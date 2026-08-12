@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTestRepo } from './git-fixtures.js';
@@ -11,6 +11,7 @@ import {
   stagePending,
   markApplied,
   consumePending,
+  isUnreadablePendingFile,
   PendingFormatError,
 } from '../src/core/pending.js';
 
@@ -262,6 +263,46 @@ describe('pending transaction store', () => {
     // Version 2 file
     writeFileSync(filePath, JSON.stringify({ version: 2, nonce }));
     expect(() => readPending(nonce, { cwd: repo })).toThrow(PendingFormatError);
+  });
+
+  it('distinguishes an unreadable pending file from an absent one', ({ skip }) => {
+    const absent = readPending('0'.repeat(32), { cwd: repo });
+    expect(absent).toBeNull();
+
+    const nonce = createPending({
+      cwd: repo,
+      source_hashes: { transcript: 'a'.repeat(64), diff: 'b'.repeat(64) },
+      staged_diff_hash: 'c'.repeat(64),
+      staged_tree_oid: 'd'.repeat(40),
+      policy_identity_hash: 'e'.repeat(64),
+    });
+    const pendingDir = execFileSync('git', ['rev-parse', '--git-path', 'commitlore/pending'], {
+      cwd: repo,
+      encoding: 'utf8',
+    }).trim();
+    const filePath = join(repo, pendingDir, `${nonce}.json`);
+
+    chmodSync(filePath, 0o000);
+    try {
+      try {
+        readFileSync(filePath, 'utf8');
+        skip();
+        return;
+      } catch {
+        // The permission check itself is independent of readPending, so root
+        // can skip this case without making the regression test vacuous.
+      }
+
+      let thrown: unknown;
+      try {
+        readPending(nonce, { cwd: repo });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(isUnreadablePendingFile(thrown)).toBe(true);
+    } finally {
+      chmodSync(filePath, 0o600);
+    }
   });
 
   it('rejects invalid nonce format (trust boundary)', () => {

@@ -115,6 +115,7 @@ export interface PendingNonceList {
     /** A stable filesystem error code when the pending directory could not be read. */
     error: string | null;
 }
+export declare const isUnreadablePendingFile: (error: unknown) => boolean;
 export declare const listPendingNonces: (cwd: string) => PendingNonceList;
 export interface ReadPendingOptions {
     cwd: string;
@@ -123,6 +124,7 @@ export interface ReadPendingOptions {
  * Reads a pending transaction by nonce.
  * Returns null if the file is absent.
  * Throws PendingFormatError for corrupt or unknown-version content.
+ * Throws a marked plain Error when the file exists but cannot be read.
  */
 export declare const readPending: (nonce: string, opts: ReadPendingOptions) => PendingRecord | null;
 export interface StoreVerificationOptions {

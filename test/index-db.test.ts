@@ -409,7 +409,13 @@ describe('index-db: --no-index fallback returns identical rows', () => {
     const handle = openIndex({ cwd: dir });
     try {
       updateIndex(handle);
-      expect(handle.fts).toBe(true);
+      // Whichever mode this runtime gives us, the answers must match the
+      // fallback. Asserting `fts === true` here asserted a property of the
+      // Node the suite happened to run on: `node:sqlite` is built without
+      // FTS5 until 22.16.0, and the declared floor is 22.13.0 (#593). The
+      // sibling case below pins the LIKE path deliberately; this one is about
+      // agreement, so it takes the runtime as it finds it.
+      expect(typeof handle.fts).toBe('boolean');
       expectFallbackAgrees(handle, dir, [...QUERY_MATRIX, ...withShaQueries(dir)]);
     } finally {
       closeIndex(handle);

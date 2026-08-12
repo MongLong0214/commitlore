@@ -24,6 +24,7 @@ import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
 import {
   deletePending,
+  isUnreadablePendingFile,
   readPending,
   storeVerification,
   type PendingRecord,
@@ -73,6 +74,8 @@ export interface CaptureVerificationHistory {
   recordIds: Set<string>;
   /** Canonical tuples of active records, which are the only duplicate content. */
   activeCanonicalTuples: Set<string>;
+  /** Whether the history scan could not cover the whole repository. */
+  incomplete: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +190,11 @@ export const loadCaptureVerificationHistory = (cwd: string): CaptureVerification
         .join('|');
       activeCanonicalTuples.add(tuple);
     }
-    return { recordIds, activeCanonicalTuples };
+    return {
+      recordIds,
+      activeCanonicalTuples,
+      incomplete: queryResult.shallow || queryResult.unreadCommits > 0,
+    };
   } catch {
     return null;
   }
@@ -424,12 +431,14 @@ export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureR
       accepted,
       rejected,
       validation_result: validationResult,
-      incomplete: false,
+      incomplete: history.incomplete,
       overlap_check: 'canonical_exact_only',
     };
 
     return settle(result);
-  } catch {
+  } catch (error) {
+    if (isUnreadablePendingFile(error)) throw error;
+
     // Never throws — return empty on any unhandled error.
     //
     // `incomplete` is true because that is what it means: nothing here
