@@ -40,6 +40,10 @@ set -eu
 REPO="MongLong0214/commitlore"
 SOURCE_URL="${COMMITLORE_INSTALL_SOURCE:-https://github.com/$REPO.git}"
 NODE_MAJOR_MIN=22
+# The index is `node:sqlite`, which does not exist before 22.5. Checking the
+# major alone let 22.0 through 22.4 install cleanly and then fail to build an
+# index, which reads as "no records" rather than "your Node is too old".
+NODE_MINOR_MIN=5
 
 log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {
@@ -356,6 +360,11 @@ case "$node_version" in
   *) die "\"$node_bin --version\" did not report a version (got: \"$node_version\"), so the Node.js major version cannot be checked. Nothing was installed." 1 ;;
 esac
 node_major="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f1)"
+node_minor="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f2)"
+case "$node_minor" in ''|*[!0-9]*) node_minor=0 ;; esac
+if [ "$node_major" -eq "$NODE_MAJOR_MIN" ] && [ "$node_minor" -lt "$NODE_MINOR_MIN" ]; then
+  die "Node.js $node_version is too old: the index needs node:sqlite, which arrived in $NODE_MAJOR_MIN.$NODE_MINOR_MIN. Upgrade Node.js, then run this again. Nothing was installed." 1
+fi
 if [ "$node_major" -lt "$NODE_MAJOR_MIN" ]; then
   die "Node.js $NODE_MAJOR_MIN or newer is required; this machine has $node_version. Upgrade Node.js, then run this again. Nothing was installed." 1
 fi

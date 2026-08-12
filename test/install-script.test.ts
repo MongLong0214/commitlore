@@ -123,12 +123,20 @@ beforeAll(() => {
 /** A PATH holding a shell and the tools the case wants, and nothing else. */
 const stubPath = (opts: {
   node?: 'current' | 'old' | 'absent';
+  /** Report this version from `node --version` while still executing real node. */
+  nodeVersion?: string;
   git?: boolean;
   codex?: 'mcp-success' | 'mcp-stale-ours' | 'mcp-foreign';
   hermes?: boolean;
 }): string => {
   const bin = tempDir('bin');
-  if (opts.node === 'current') {
+  if (opts.nodeVersion !== undefined) {
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/sh\ncase "$1" in --version) echo v${opts.nodeVersion};; *) exec ${process.execPath} "$@";; esac\n`,
+    );
+    chmodSync(join(bin, 'node'), 0o755);
+  } else if (opts.node === 'current') {
     writeFileSync(join(bin, 'node'), `#!/bin/sh\nexec ${process.execPath} "$@"\n`);
     chmodSync(join(bin, 'node'), 0o755);
   } else if (opts.node === 'old') {
@@ -214,6 +222,7 @@ const runInstaller = (opts: {
   git?: boolean;
   hermes?: boolean;
   home?: string;
+  nodeVersion?: string;
   extraEnv?: Record<string, string>;
   args?: string[];
   codex?: 'mcp-success';
@@ -222,7 +231,7 @@ const runInstaller = (opts: {
   const run = spawnSync('/bin/sh', [INSTALLER, ...(opts.args ?? [TAG])], {
     encoding: 'utf8',
     env: {
-      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes }),
+      PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes, ...(opts.nodeVersion === undefined ? {} : { nodeVersion: opts.nodeVersion }) }),
       HOME: home,
       COMMITLORE_INSTALL_SOURCE: sourceRepo,
       ...(opts.extraEnv ?? {}),
@@ -493,6 +502,25 @@ describe('T-1120 upgrade and verification', () => {
 
     expect(out).toMatch(/already mentions commitlore -- left unchanged/);
     expect(out).not.toMatch(/does not exist/);
+  });
+
+  /**
+   * `engines.node` said `>=22` while the index needs `node:sqlite`, which
+   * arrived in 22.5 — a mismatch the source comment in `core/index-db.ts`
+   * already acknowledged. The installer checked the major only, so 22.0 through
+   * 22.4 installed cleanly and then could not build an index, which reads as
+   * "this repository has no records" rather than "your Node is too old".
+   */
+  it.each([
+    ['22.4.0', false],
+    ['22.5.0', true],
+    ['24.1.0', true],
+  ])('accepts node %s: %s', (version, shouldInstall) => {
+    const r = runInstaller({ home: tempDir(`nodefloor-${version.replace(/\./g, '-')}`), nodeVersion: version });
+    const out = `${r.stdout}${r.stderr}`;
+
+    if (shouldInstall) expect(out).not.toMatch(/is too old/);
+    else expect(out).toMatch(/node:sqlite, which arrived in 22\.5/);
   });
 
   it('refuses a foreign executable that merely prints a version', () => {
