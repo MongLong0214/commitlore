@@ -43,6 +43,20 @@ const defaultDataHome = (): string =>
     ? process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local')
     : process.env['XDG_DATA_HOME'] ?? join(homedir(), '.local', 'share');
 
+/**
+ * What Codex said, as a line worth printing.
+ *
+ * Every failure below already had this and threw it away, so an operator whose
+ * DNS was down read "could not add the marketplace" followed by "retry with"
+ * the identical command. Retrying unchanged could not have helped, and the one
+ * sentence that would have told them so had been captured and discarded.
+ */
+const codexSaid = (result: CodexCommandResult): string[] => {
+  const said = (result.stderr.trim() || result.stdout.trim()).split('\n')[0]?.trim() ?? '';
+  if (said === '') return [];
+  return [`codex said: ${said}`];
+};
+
 export const runCodexCommand: CodexCommandRunner = (args) => {
   const result = spawnSync('codex', args, { encoding: 'utf8', timeout: 30_000 });
   return {
@@ -136,6 +150,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
       exitCode: 2,
       report: [
         'could not list Codex plugin marketplaces; no plugin installation was recorded',
+        ...codexSaid(marketplaces),
         `retry with: ${codexPluginInstallCommand()}`,
       ],
     };
@@ -148,6 +163,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
         exitCode: 2,
         report: [
           `could not add the ${plugin.marketplace} Codex marketplace; no plugin installation was recorded`,
+          ...codexSaid(added),
           `retry with: ${codexPluginInstallCommand()}`,
         ],
       };
@@ -161,6 +177,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
       exitCode: 2,
       report: [
         'could not list Codex plugins; no plugin installation was recorded',
+        ...codexSaid(listed),
         `retry with: ${codexPluginInstallCommand()}`,
       ],
     };
@@ -173,6 +190,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
         exitCode: 2,
         report: [
           `could not install ${codexPluginSelector(plugin)}; no plugin installation was recorded`,
+          ...codexSaid(added),
           `retry with: ${codexPluginInstallCommand()}`,
         ],
       };

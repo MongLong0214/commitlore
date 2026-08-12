@@ -75,6 +75,34 @@ describe('Codex plugin installation', () => {
     expect(installed.report).toContain('Codex plugin already installed: commitlore@commitlore');
   });
 
+  // A review ran this with GitHub unreachable. Codex printed "Could not resolve
+  // host: github.com" and the operator was shown "could not add the marketplace"
+  // followed by "retry with" the identical command — advice that could not work,
+  // with the one sentence explaining why already captured and thrown away.
+  it('reports what Codex said when it fails, not only that it failed', () => {
+    const home = dataHome();
+    const failed = installCodexPlugin({
+      dataHome: home,
+      run: (args) =>
+        args.join(' ') === 'plugin marketplace list'
+          ? result('MARKETPLACE ROOT\n')
+          : { status: 2, stdout: '', stderr: 'Could not resolve host: github.com\n' },
+    });
+
+    expect(failed.exitCode).toBe(2);
+    expect(failed.report.join('\n')).toContain('Could not resolve host: github.com');
+  });
+
+  it('says nothing extra when Codex itself said nothing', () => {
+    const home = dataHome();
+    const failed = installCodexPlugin({
+      dataHome: home,
+      run: (args) => (args.join(' ') === 'plugin marketplace list' ? result('MARKETPLACE ROOT\n') : result('', 2)),
+    });
+
+    expect(failed.report.join('\n')).not.toContain('codex said:');
+  });
+
   it('does not leave an ownership marker when Codex cannot add the marketplace', () => {
     const home = dataHome();
     const installed = installCodexPlugin({
