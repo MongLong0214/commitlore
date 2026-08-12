@@ -10,7 +10,7 @@
       "name": "commitlore",
       "source": "./",
       "displayName": "CommitLore",
-      "description": "Constraints, alternatives already ruled out, and warnings left by whoever was here last — injected before the agent edits the path they cover. Records are ordinary git trailers, so they survive rebase, squash and rename.",
+      "description": "Constraints, alternatives already ruled out, and warnings left by whoever was here last — injected before the agent edits the path they cover. Records are ordinary git trailers: they survive rebase and rename, and squash keeps them only when `commitlore squash-preserve` or its GitHub Action runs.",
       "author": {
         "name": "MongLong0214",
         "url": "https://github.com/MongLong0214"

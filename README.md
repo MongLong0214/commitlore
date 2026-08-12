@@ -274,7 +274,7 @@ CommitLore preserves that engineering judgment in Git, and surfaces only the
 decisions still in force before the next edit. A decision that was later
 superseded or expired does not reach the agent as if it still stood.
 
-**Repository-owned · Lifecycle-aware · Evidence-verified · Agent-independent**
+**Repository-owned · Lifecycle-aware · Quote-checked · Agent-independent**
 
 Claude Code · Codex · Cursor · Gemini CLI · OpenCode · Windsurf
 
@@ -495,7 +495,7 @@ Read a path's history with `commitlore context <path>`. Smaller examples, and ho
 
 ## What the repository proves
 
-- Decision history survives rebase, squash, remote transfer, and path renames in the tested Git workflows.
+- Decision history survives rebase, remote transfer, and path renames in the tested Git workflows. Squash-merge discards the trailer block, as any ordinary trailer would be: `commitlore squash-preserve` or its GitHub Action carries the records across, and the tested workflows cover that route.
 - Every route uses the same trust grading, so untrusted text is information rather than an instruction.
 - Injection-like text in free-form trailers is withheld from model-readable routes.
 - A readable repository with no records is distinct from incomplete history or an unfetched notes mirror.

@@ -423,7 +423,7 @@ CommitLore-Version: 2.0.0
 
 ## 仓库能够证明什么
 
-- 在经过测试的 Git workflow 中，决策历史会跨越 rebase、squash、remote transfer 与 path rename 保留下来。
+- 在经过测试的 Git workflow 中，决策历史会跨越 rebase、remote transfer 与 path rename 保留下来。squash merge 会像丢弃任何普通 trailer 一样丢弃 trailer block；由 `commitlore squash-preserve` 或其 GitHub Action 承接这些记录 —— 测试覆盖了该路径。
 - 所有 route 使用相同的 trust grading，因此不受信任的 text 会作为 information 而不是 instruction 传递。
 - free-form trailer 中类似 injection 的 text 会从 model-readable route 中被保留。
 - 可读取的 repository 没有 record，与不完整的 history 或未 fetch 的 notes mirror 是不同状态。

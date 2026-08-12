@@ -442,7 +442,7 @@ path の履歴は `commitlore context <path>` で読みます。より小さな�
 
 ## リポジトリが証明すること
 
-- テスト済みの Git workflow では、意思決定の履歴は rebase、squash、remote transfer、path rename を経ても残る。
+- テスト済みの Git workflow では、意思決定の履歴は rebase、remote transfer、path rename を経ても残る。squash merge は通常の trailer と同じく trailer block を捨てるため、`commitlore squash-preserve` かその GitHub Action が記録を引き継ぐ — テストはその経路を含む。
 - すべての route は同じ trust grading を使い、信頼されない text は instruction ではなく information として渡す。
 - free-form trailer 内の injection に似た text は model-readable route から保留される。
 - 読める repository に record がない状態は、不完全な history や fetch されていない notes mirror と区別される。

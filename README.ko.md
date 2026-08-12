@@ -436,7 +436,7 @@ CommitLore-Version: 2.0.0
 
 ## 저장소가 증명하는 것
 
-- 테스트한 Git workflow에서 결정 이력은 rebase, squash, remote transfer, 경로 rename을 거쳐도 유지된다.
+- 테스트한 Git workflow에서 결정 이력은 rebase, remote transfer, 경로 rename을 거쳐도 유지된다. squash merge는 여느 trailer와 마찬가지로 trailer block을 버리며, `commitlore squash-preserve` 또는 그 GitHub Action이 기록을 옮긴다 — 테스트가 그 경로를 덮는다.
 - 모든 route는 같은 trust grading을 써서 신뢰하지 않는 텍스트를 지시가 아닌 정보로 전달한다.
 - 자유 형식 trailer의 injection 같은 텍스트는 model-readable route에서 보류된다.
 - 읽을 수 있는 저장소의 기록 없음은 불완전한 history나 fetch하지 않은 notes mirror와 구별된다.

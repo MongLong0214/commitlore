@@ -31,3 +31,8 @@ bench/results/*.local.jsonl
 /skills/*
 !/skills/commitlore-*/
 skills-lock.json
+
+# Staging copies `commitlore init` makes while installing dist into a
+# repository. Transient, and named with a random suffix -- one survived a test
+# run long enough for `git add -A` to commit 258 files of it.
+.commitlore-init-dist-*/
