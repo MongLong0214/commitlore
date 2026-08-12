@@ -289,7 +289,7 @@ interface RowSource {
 const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowSource => {
   let rows: IndexedTrailer[] | undefined;
   let corpusPasses = 0;
-  const cost: ScanCost = { unreadCommits: 0 };
+  const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
 
   return {
     fetch: (query) => {
@@ -310,7 +310,7 @@ const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowS
     },
     fromIndex: false,
     corpusPasses: () => corpusPasses,
-    unreadCommits: () => cost.unreadCommits,
+    unreadCommits: () => cost.unreadCommits + cost.unreadNotes,
     close: () => {},
     diagnostics,
   };
@@ -932,7 +932,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
     if (unread > 0) {
       diagnostics.push(
         `this repository has no index, and the scan stopped after its time budget with ` +
-          `${String(unread)} commit(s) unread — records in them are missing from this answer. ` +
+          `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
           'fix: commitlore init (or commitlore index) to build the index once',
       );
     }

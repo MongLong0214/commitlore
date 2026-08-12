@@ -525,7 +525,7 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
  * `commands/stale.ts` filters its notes the same way; without this the two
  * answered differently on the same repository.
  */
-const readNoteRecords = (cwd, reachable, excluded) => {
+const readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
     const listed = execGitOrThrow(['notes', `--ref=${NOTES_REF}`, 'list'], { cwd });
     const annotated = listed
         .split('\n')
@@ -552,7 +552,19 @@ const readNoteRecords = (cwd, reachable, excluded) => {
     if (commits.length === 0)
         return [];
     const records = [];
-    for (const batch of chunked(commits, LOG_BATCH)) {
+    let read = 0;
+    // The same ceiling the commit scan honours. Budgeting only that half left the
+    // notes pass unbounded, and `scanTrailers` always runs it afterwards — so a
+    // repository with many notes could stall an edit well past the budget while
+    // the number reported as "unread" stayed 0.
+    const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
+    for (const batch of chunked(commits, batchSize)) {
+        if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
+            if (cost !== undefined)
+                cost.unreadNotes = commits.length - read;
+            return records;
+        }
+        read += batch.length;
         const result = gitLogByShas(cwd, batch, '%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00', [
             `--notes=${NOTES_REF}`,
         ]);
@@ -1320,7 +1332,7 @@ export const scanTrailers = (query = {}, opts = {}) => {
     const shas = head === null ? [] : (revList(cwd, 'HEAD') ?? []);
     const records = [
         ...readCommitRecords(cwd, shas, undefined, opts.budget, opts.cost),
-        ...readNoteRecords(cwd, new Set(shas)),
+        ...readNoteRecords(cwd, new Set(shas), undefined, opts.budget, opts.cost),
     ];
     return filterTrailers(toIndexedTrailers(records), query);
 };

@@ -674,6 +674,40 @@ record_skipped() { printf '%s: %s\n' "$1" "$2" >>"$skipped_log"; }
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor, and
 # Windsurf all document this exact shape.
+# Reports an existing commitlore registration, and says when it cannot work.
+#
+# Shared by every host that keeps its servers in JSON, because it was not:
+# the generic path learned to name a dead target and `opencode`, which has its
+# own writer for a different config shape, kept reporting one as fine. Two
+# copies of a rule is how the first one drifts.
+#
+# Always returns 0 -- the caller is skipping either way. The difference is what
+# the operator is told.
+report_existing_registration() {
+  agent_name="$1"
+  path="$2"
+  existing_cmd=""
+  if command -v jq >/dev/null 2>&1; then
+    existing_cmd="$(jq -r '
+      [ .. | objects | to_entries[] | select(.key == "commitlore") | .value
+        | (.command? // empty) ]
+      | map(if type == "array" then .[0] else . end)
+      | map(select(type == "string"))
+      | first // empty
+    ' "$path" 2>/dev/null || true)"
+  fi
+  case "$existing_cmd" in
+    /*)
+      if [ ! -e "$existing_cmd" ]; then
+        record_skipped "$agent_name" "$path names commitlore at \"$existing_cmd\", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+        return 0
+      fi
+      ;;
+  esac
+  record_skipped "$agent_name" "$path already mentions commitlore -- left unchanged"
+  return 0
+}
+
 wire_mcp_servers_json() {
   agent="$1"
   config_path="$2"
@@ -707,25 +741,7 @@ EOF
     # commitlore, left unchanged" while those hosts had no working server at
     # all. The file is still never rewritten here; what changes is that a dead
     # target is named instead of counted as fine.
-    existing_cmd=""
-    if command -v jq >/dev/null 2>&1; then
-      existing_cmd="$(jq -r '
-        [ .. | objects | to_entries[] | select(.key == "commitlore") | .value
-          | (.command? // empty) ]
-        | map(if type == "array" then .[0] else . end)
-        | map(select(type == "string"))
-        | first // empty
-      ' "$config_path" 2>/dev/null || true)"
-    fi
-    case "$existing_cmd" in
-      /*)
-        if [ ! -e "$existing_cmd" ]; then
-          record_skipped "$agent" "$config_path names commitlore at \"$existing_cmd\", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
-          return
-        fi
-        ;;
-    esac
-    record_skipped "$agent" "$config_path already mentions commitlore -- left unchanged"
+    if report_existing_registration "$agent" "$config_path"; then return; fi
     return
   fi
 
@@ -906,7 +922,7 @@ EOF
   fi
 
   if grep -q '"commitlore"' "$config_path" 2>/dev/null; then
-    record_skipped "opencode" "$config_path already mentions commitlore -- left unchanged"
+    report_existing_registration "opencode" "$config_path"
     return
   fi
 

@@ -812,6 +812,34 @@ function Test-AgentPresent {
 
 # `mcpServers: { name: { command, args } }` -- Gemini CLI, Cursor and Windsurf
 # all document this exact shape.
+# Reports an existing commitlore registration, and says when it cannot work.
+#
+# Shared by every host that keeps its servers in JSON, because it was not: the
+# generic path learned to name a dead target and `opencode`, which has its own
+# writer for a different config shape, kept reporting one as fine.
+function Add-ExistingRegistrationNote {
+    param([string]$AgentName, [string]$ConfigPath, [string]$Body)
+    $existingCmd = ''
+    try {
+        $probe = $Body | ConvertFrom-Json
+        foreach ($container in @($probe.mcpServers, $probe.mcp, $probe.servers)) {
+            if ($null -eq $container) { continue }
+            $entry = $container.commitlore
+            if ($null -eq $entry) { continue }
+            $cmd = $entry.command
+            if ($cmd -is [array]) { $cmd = $cmd | Select-Object -First 1 }
+            if ($cmd -is [string] -and $cmd -ne '') { $existingCmd = $cmd; break }
+        }
+    } catch {
+        $existingCmd = ''
+    }
+    if ($existingCmd -ne '' -and -not (Test-Path -LiteralPath $existingCmd)) {
+        Add-Skipped $AgentName "$ConfigPath names commitlore at ""$existingCmd"", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
+        return
+    }
+    Add-Skipped $AgentName "$ConfigPath already mentions commitlore -- left unchanged"
+}
+
 function Wire-McpServersJson {
     param([string] $Agent, [string] $ConfigPath)
 
@@ -846,31 +874,7 @@ function Wire-McpServersJson {
         return
     }
     if ($body -match '"commitlore"') {
-        # Preserving an entry somebody configured is right; preserving one that
-        # cannot start is not. A registration left by a temp-directory install
-        # kept reporting "already mentions commitlore" long after the directory
-        # was gone, so the host had no working server and every reinstall said
-        # it was fine. The file is still never rewritten here -- a dead target
-        # is named rather than counted as healthy.
-        $existingCmd = ''
-        try {
-            $probe = $body | ConvertFrom-Json
-            foreach ($container in @($probe.mcpServers, $probe.mcp, $probe.servers)) {
-                if ($null -eq $container) { continue }
-                $entry = $container.commitlore
-                if ($null -eq $entry) { continue }
-                $cmd = $entry.command
-                if ($cmd -is [array]) { $cmd = $cmd | Select-Object -First 1 }
-                if ($cmd -is [string] -and $cmd -ne '') { $existingCmd = $cmd; break }
-            }
-        } catch {
-            $existingCmd = ''
-        }
-        if ($existingCmd -ne '' -and -not (Test-Path -LiteralPath $existingCmd)) {
-            Add-Skipped $Agent "$ConfigPath names commitlore at ""$existingCmd"", which does not exist -- left unchanged, so this host has no working server; remove that entry and rerun to wire it to $dest"
-            return
-        }
-        Add-Skipped $Agent "$ConfigPath already mentions commitlore -- left unchanged"
+        Add-ExistingRegistrationNote $Agent $ConfigPath $body
         return
     }
     try {
@@ -1081,7 +1085,7 @@ if (Test-AgentPresent 'opencode' @((Join-Path $home_ '.config\opencode'))) {
         } else {
             $body = (Get-Content -LiteralPath $openConfig -Raw)
             if ($body -match '"commitlore"') {
-                Add-Skipped 'opencode' "$openConfig already mentions commitlore -- left unchanged"
+                Add-ExistingRegistrationNote 'opencode' $openConfig $body
             } else {
                 $parsed = $body | ConvertFrom-Json
                 if ($null -eq $parsed.PSObject.Properties['mcp']) {

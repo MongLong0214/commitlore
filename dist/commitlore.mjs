@@ -12445,7 +12445,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   }
   return records;
 };
-var readNoteRecords = (cwd, reachable, excluded) => {
+var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
   const listed = execGitOrThrow(["notes", `--ref=${NOTES_REF2}`, "list"], { cwd });
   const annotated = listed.split("\n").filter((line2) => line2 !== "").map((line2) => line2.split(" ")[1] ?? "").filter((sha) => sha !== "" && reachable.has(sha));
   if (annotated.length === 0) return [];
@@ -12457,7 +12457,14 @@ var readNoteRecords = (cwd, reachable, excluded) => {
   const commits = typed.split("\n").filter((line2) => line2.endsWith(" commit") || line2.includes(" commit ")).map((line2) => line2.split(" ")[0] ?? "").filter((sha) => sha !== "");
   if (commits.length === 0) return [];
   const records = [];
-  for (const batch of chunked(commits, LOG_BATCH)) {
+  let read = 0;
+  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
+  for (const batch of chunked(commits, batchSize)) {
+    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
+      if (cost !== void 0) cost.unreadNotes = commits.length - read;
+      return records;
+    }
+    read += batch.length;
     const result = gitLogByShas(cwd, batch, "%x01%H%x00%ct%x00%cI%x00%G?%x00%N%x00", [
       `--notes=${NOTES_REF2}`
     ]);
@@ -13025,7 +13032,7 @@ var scanTrailers = (query = {}, opts = {}) => {
   const shas = head === null ? [] : revList(cwd, "HEAD") ?? [];
   const records = [
     ...readCommitRecords(cwd, shas, void 0, opts.budget, opts.cost),
-    ...readNoteRecords(cwd, new Set(shas))
+    ...readNoteRecords(cwd, new Set(shas), void 0, opts.budget, opts.cost)
   ];
   return filterTrailers(toIndexedTrailers(records), query);
 };
@@ -14840,7 +14847,7 @@ var normalizePaths = (opts) => {
 var scanSource = (cwd, diagnostics, budgetMs) => {
   let rows;
   let corpusPasses = 0;
-  const cost = { unreadCommits: 0 };
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
   return {
     fetch: (query) => {
       if (rows === void 0) {
@@ -14854,7 +14861,7 @@ var scanSource = (cwd, diagnostics, budgetMs) => {
     },
     fromIndex: false,
     corpusPasses: () => corpusPasses,
-    unreadCommits: () => cost.unreadCommits,
+    unreadCommits: () => cost.unreadCommits + cost.unreadNotes,
     close: () => {
     },
     diagnostics
@@ -15210,7 +15217,7 @@ var runQuery = (opts = {}) => {
     const unread = source.unreadCommits();
     if (unread > 0) {
       diagnostics.push(
-        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
+        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
       );
     }
     const shallow = hasShallowHistory(cwd);

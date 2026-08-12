@@ -487,6 +487,26 @@ describe('T-1120 upgrade and verification', () => {
     });
   });
 
+  it('names a dead opencode registration too, not only the generic hosts', () => {
+    // opencode has its own writer for a different config shape, and the first
+    // version of this fix touched only the generic path — so the host the
+    // changelog named as covered kept reporting a deleted command as fine.
+    const home = tempDir('dead-opencode');
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    writeFileSync(
+      join(home, '.config', 'opencode', 'opencode.json'),
+      JSON.stringify({
+        mcp: { commitlore: { type: 'local', command: ['/tmp/definitely-not-here/bin/commitlore', 'mcp'], enabled: true } },
+      }),
+    );
+
+    const r = runInstaller({ home });
+    const out = `${r.stdout}${r.stderr}`;
+
+    expect(out).toMatch(/opencode: .*definitely-not-here/);
+    expect(out).toMatch(/does not exist/);
+  });
+
   it('leaves a registration whose command exists reported as before', () => {
     const home = tempDir('live-agent-path');
     mkdirSync(join(home, '.cursor'), { recursive: true });
