@@ -38,6 +38,7 @@ export declare const gitResultFromSpawn: (result: SpawnSyncReturns<string>) => G
  * grades records precisely because anyone who can push can write one).
  */
 export declare const execGit: (args: string[], opts?: ExecGitOptions) => GitResult;
+export declare const isGitFailure: (error: unknown) => boolean;
 /**
  * Runs `git` and returns stdout, throwing on any failure. The thrown `Error`
  * carries `code` and `stderr` as own properties so a caller can branch on them

@@ -259,6 +259,7 @@ describe('commitlore capture', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed).toHaveProperty('nonce');
     expect(parsed).toHaveProperty('staged');
+    expect(parsed.outcome).toBe('staged');
   });
 
   // ---------------------------------------------------------------------------

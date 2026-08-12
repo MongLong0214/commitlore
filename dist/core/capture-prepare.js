@@ -6,6 +6,7 @@
  * through `createPending`.
  */
 import { createHash, randomBytes } from 'node:crypto';
+import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
@@ -82,13 +83,13 @@ const prepareValues = (opts) => {
     const { cwd, transcript, snapshot } = opts;
     const baseHead = snapshot?.base_head ?? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
     if (!isObjectId(baseHead)) {
-        throw new Error('Cannot resolve HEAD — is this a git repository with at least one commit?');
+        throw markCaptureError(new Error('Cannot resolve HEAD — is this a git repository with at least one commit?'), 'operational');
     }
     const diff = snapshot?.staged_diff ?? execGitOrThrow(['diff', '--cached'], { cwd });
     const stagedDiffHash = createHash('sha256').update(diff).digest('hex');
     const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(['write-tree'], { cwd }).trim();
     if (!isObjectId(stagedTreeOid)) {
-        throw new Error('Cannot resolve staged tree — is this a git repository with at least one commit?');
+        throw markCaptureError(new Error('Cannot resolve staged tree — is this a git repository with at least one commit?'), 'operational');
     }
     const sourceHashes = {
         transcript: createHash('sha256').update(transcript).digest('hex'),
@@ -96,7 +97,7 @@ const prepareValues = (opts) => {
     };
     const policy = resolvePolicy(cwd);
     if (policy.policy.mode === 'off') {
-        throw new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`);
+        throw markCaptureError(new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`), 'rejected');
     }
     // ADR-0030, #511. Declaring a capture unattended is claiming the repository
     // consented to capture without asking; prepare is the one moment that can
@@ -106,7 +107,7 @@ const prepareValues = (opts) => {
     // repository's opt-in changes nothing about what shadow writes: nothing.
     if (opts.unattended === true &&
         !(policy.policy.mode === 'auto' && policy.policy.unattended)) {
-        throw new Error(`unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`);
+        throw markCaptureError(new Error(`unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`), 'rejected');
     }
     const diffPaths = extractPathsFromDiff(diff);
     const advisory = opts.skipGuard === true

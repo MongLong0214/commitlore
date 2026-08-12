@@ -73,6 +73,16 @@ export const execGit = (args: string[], opts: ExecGitOptions = {}): GitResult =>
 };
 
 /**
+ * Marks a thrown `Error` as "git could not answer", so a caller can tell a
+ * host failure from a usage error without matching on message text. A flag
+ * rather than an Error subclass, same shape as `commitloreMissingInstalledFile`.
+ */
+const GIT_FAILURE = 'commitloreGitFailure';
+
+export const isGitFailure = (error: unknown): boolean =>
+  error instanceof Error && (error as unknown as Record<string, unknown>)[GIT_FAILURE] === true;
+
+/**
  * Runs `git` and returns stdout, throwing on any failure. The thrown `Error`
  * carries `code` and `stderr` as own properties so a caller can branch on them
  * programmatically without a custom Error class.
@@ -80,10 +90,12 @@ export const execGit = (args: string[], opts: ExecGitOptions = {}): GitResult =>
 export const execGitOrThrow = (args: string[], opts: ExecGitOptions = {}): string => {
   const result = execGit(args, opts);
   if (result.code !== 0) {
-    throw Object.assign(
+    const error = Object.assign(
       new Error(`git ${args.join(' ')} failed (exit ${result.code}): ${result.stderr.trim()}`),
       { code: result.code, stderr: result.stderr },
     );
+    Object.defineProperty(error, GIT_FAILURE, { value: true });
+    throw error;
   }
   return result.stdout;
 };

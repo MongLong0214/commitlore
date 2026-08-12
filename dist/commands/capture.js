@@ -10,7 +10,9 @@
  * - The user never types trailer syntax.
  * - Most commits produce nothing.
  * - At most one record per commit by default.
- * - A verification failure produces no record and does not fail the command.
+ * - A verification failure produces no record and exits 0 as `rejected`.
+ * - A host failure exits 3; an unanticipated exception exits 4. Neither is
+ *   silence (#543). The hook wrapper, not this command, is what fails open.
  *
  * Structured for subcommand extension (T-1019 will add `capture gc`).
  */
@@ -19,6 +21,7 @@ import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
 import { POLICY_FILE_NAME } from '../core/capture-policy.js';
+import { classifyCaptureError, exitCodeForCaptureOutcome, markCaptureError, messageOf, } from '../core/capture-outcome.js';
 import { runCaptureShadow } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
 import { configuredTrustedAuthors } from '../core/trusted-authors.js';
@@ -57,17 +60,46 @@ export const formatCaptureShadow = (result) => {
 // ---------------------------------------------------------------------------
 // Core logic — separated from registration for testability
 // ---------------------------------------------------------------------------
+const errnoCode = (error) => {
+    if (typeof error !== 'object' || error === null || !('code' in error))
+        return undefined;
+    return typeof error.code === 'string' ? error.code : undefined;
+};
+/** A file the caller named. Missing is usage; any other read failure is the host. */
+const readCallerFile = (path) => {
+    try {
+        return readFileSync(path, 'utf8');
+    }
+    catch (error) {
+        const wrapped = new Error(`cannot read ${JSON.stringify(path)}: ${messageOf(error)}`);
+        throw markCaptureError(wrapped, errnoCode(error) === 'ENOENT' ? 'usage' : 'operational');
+    }
+};
+const failureResult = (error) => ({
+    outcome: classifyCaptureError(error),
+    nonce: null,
+    staged: false,
+    error: messageOf(error),
+});
 /**
  * Run the full capture pipeline: prepare → verify → stage.
  *
- * Returns a structured result. Never throws on pipeline failures (verification
- * failure, nothing to stage) — those are communicated via the result. Only
- * throws for true usage errors (unreadable files).
+ * Returns a typed outcome on every path. Never throws: a verification refusal
+ * is `rejected`, a git or filesystem failure is `operational`, and an
+ * exception the code did not anticipate is `internal`. Silence is a
+ * conclusion, not a place exceptions fall into (#543).
  */
 export const runCapture = (opts) => {
+    try {
+        return runCapturePipeline(opts);
+    }
+    catch (error) {
+        return failureResult(error);
+    }
+};
+const runCapturePipeline = (opts) => {
     const { transcriptPath, diffPath, draftPath, cwd } = opts;
-    // Read input files — these throw on unreadable paths (usage error)
-    const transcript = readFileSync(transcriptPath, 'utf8');
+    const transcript = readCallerFile(transcriptPath);
     // Prepare hashes `git diff --cached` itself, so verification has to be given
     // the same bytes. This used to default to the empty string, whose hash never
     // matches -- every record was refused with `source-mismatch` and the command
@@ -75,7 +107,7 @@ export const runCapture = (opts) => {
     // unless the caller happened to pass a --diff file byte-identical to the
     // staged diff. A caller-supplied --diff that differs is still a real mismatch
     // and is still refused.
-    const diff = diffPath ? readFileSync(diffPath, 'utf8') : execGitOrThrow(['diff', '--cached'], { cwd });
+    const diff = diffPath ? readCallerFile(diffPath) : execGitOrThrow(['diff', '--cached'], { cwd });
     // 1. Prepare: compute bindings, generate prompt, persist prepared transaction
     const prepareResult = prepareCaptureContext({
         cwd,
@@ -90,10 +122,16 @@ export const runCapture = (opts) => {
     }
     // 2. If no draft provided, print the prompt contract and exit (prompt-only mode)
     if (!draftPath) {
-        return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
+        return {
+            outcome: 'empty',
+            nonce: null,
+            staged: false,
+            prompt: prepareResult.prompt,
+            guard_advisory: prepareResult.guard_advisory,
+        };
     }
     // 3. Parse and verify the draft
-    const rawDraft = readFileSync(draftPath, 'utf8');
+    const rawDraft = readCallerFile(draftPath);
     let draftRecords;
     // Rejections from the draft parser. Keeping them is the whole of #309: they
     // were computed here and dropped, so the caller saw "no record staged" with no
@@ -145,12 +183,71 @@ export const runCapture = (opts) => {
             reason: rejection.reason,
         })),
     ];
+    if (stagedNonce !== null) {
+        return {
+            outcome: 'staged',
+            nonce: stagedNonce,
+            staged: true,
+            guard_advisory: prepareResult.guard_advisory,
+            rejected,
+        };
+    }
     return {
-        nonce: stagedNonce ?? prepareResult.nonce,
-        staged: stagedNonce !== null,
+        outcome: rejected.length > 0 ? 'rejected' : 'empty',
+        nonce: prepareResult.nonce,
+        staged: false,
         guard_advisory: prepareResult.guard_advisory,
         rejected,
     };
+};
+const writeGuardMatches = (advisory) => {
+    for (const match of advisory.matches) {
+        if (match.trust === 'blocked') {
+            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}\n`);
+        }
+        else {
+            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}\n`);
+        }
+    }
+};
+/**
+ * Emit the envelope on every path, including failure. `--json` callers used
+ * to get empty stdout and exit 0 when the pipeline broke (#543).
+ */
+const emitCaptureOutcome = (result, opts) => {
+    if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
+    else if (result.prompt) {
+        process.stdout.write(result.prompt);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+            process.stdout.write('\n--- guard advisory ---\n');
+            process.stdout.write(`${result.guard_advisory.disclosure}\n`);
+            writeGuardMatches(result.guard_advisory);
+        }
+        else if (result.guard_advisory) {
+            process.stdout.write('\n--- guard advisory ---\n');
+            process.stdout.write(`${result.guard_advisory.disclosure}\n`);
+        }
+    }
+    else if (result.staged) {
+        process.stdout.write(`staged: ${result.nonce}\n`);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+            process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):\n`);
+            writeGuardMatches(result.guard_advisory);
+        }
+    }
+    else if (result.outcome === 'empty' || result.outcome === 'rejected') {
+        process.stdout.write('no record staged\n');
+    }
+    for (const rejection of result.rejected ?? []) {
+        process.stderr.write(`commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}\n`);
+    }
+    if (result.error !== undefined) {
+        const prefix = opts.humanPrefix ?? 'commitlore capture';
+        process.stderr.write(`${prefix}: ${result.error}\n`);
+    }
+    process.exitCode = exitCodeForCaptureOutcome(result.outcome);
 };
 // ---------------------------------------------------------------------------
 // CLI registration
@@ -172,6 +269,8 @@ export const register = (program) => {
         .option('--json', 'emit structured JSON output')
         .option('--unattended', 'declare this capture unattended: prepared, verified and staged without asking. ' +
         `Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`)
+        .addHelpText('after', '\nExit codes: 0 staged, empty, or rejected (rejected names the reason), ' +
+        '2 usage, 3 operational (git, filesystem, host), 4 internal (unanticipated exception).')
         .action((options) => {
         if (options.shadow === true) {
             if (options.since === undefined) {
@@ -201,84 +300,37 @@ export const register = (program) => {
             return;
         }
         if (options.transcript === undefined) {
-            process.stderr.write("error: required option '--transcript <path>' not specified\n");
-            process.exitCode = 2;
+            emitCaptureOutcome({
+                outcome: 'usage',
+                nonce: null,
+                staged: false,
+                error: "required option '--transcript <path>' not specified",
+            }, { json: options.json === true, humanPrefix: 'error' });
             return;
         }
-        try {
-            const cwd = process.cwd();
-            const runOpts = { transcriptPath: options.transcript, cwd };
-            if (options.diff !== undefined)
-                runOpts.diffPath = options.diff;
-            if (options.draft !== undefined)
-                runOpts.draftPath = options.draft;
-            runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
-            if (options.unattended === true)
-                runOpts.unattended = true;
-            const result = runCapture(runOpts);
-            if (options.json) {
-                process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-            }
-            else if (result.prompt) {
-                // Prompt-only mode
-                process.stdout.write(result.prompt);
-                // Render advisory in human output if present
-                if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-                    process.stdout.write('\n--- guard advisory ---\n');
-                    process.stdout.write(`${result.guard_advisory.disclosure}\n`);
-                    for (const match of result.guard_advisory.matches) {
-                        if (match.trust === 'blocked') {
-                            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}\n`);
-                        }
-                        else {
-                            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}\n`);
-                        }
-                    }
-                }
-                else if (result.guard_advisory) {
-                    process.stdout.write('\n--- guard advisory ---\n');
-                    process.stdout.write(`${result.guard_advisory.disclosure}\n`);
-                }
-            }
-            else if (result.staged) {
-                process.stdout.write(`staged: ${result.nonce}\n`);
-                if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-                    process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):\n`);
-                    for (const match of result.guard_advisory.matches) {
-                        if (match.trust === 'blocked') {
-                            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}\n`);
-                        }
-                        else {
-                            process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}\n`);
-                        }
-                    }
-                }
-            }
-            else {
-                process.stdout.write('no record staged\n');
-            }
-            // The reasons, in the same shape `harvest --draft` uses, so the two
-            // commands answer the same question the same way (#309).
-            for (const rejection of result.rejected ?? []) {
-                process.stderr.write(`commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}\n`);
-            }
-            // Write nonce to --out file if requested
-            if (options.out && result.nonce) {
+        const cwd = process.cwd();
+        const runOpts = { transcriptPath: options.transcript, cwd };
+        if (options.diff !== undefined)
+            runOpts.diffPath = options.diff;
+        if (options.draft !== undefined)
+            runOpts.draftPath = options.draft;
+        runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
+        if (options.unattended === true)
+            runOpts.unattended = true;
+        let result = runCapture(runOpts);
+        if (options.out && result.nonce) {
+            try {
                 writeFileSync(options.out, result.nonce + '\n');
             }
-            process.exitCode = 0;
-        }
-        catch (error) {
-            // Usage errors: unreadable file paths → exit 2
-            if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-                process.stderr.write(`commitlore capture: ${error.message}\n`);
-                process.exitCode = 2;
-                return;
+            catch (error) {
+                result = {
+                    ...result,
+                    outcome: 'operational',
+                    error: `cannot write ${JSON.stringify(options.out)}: ${messageOf(error)}`,
+                };
             }
-            // Pipeline errors (verification failure, staging failure) → exit 0
-            process.stderr.write(`commitlore capture: ${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 0;
         }
+        emitCaptureOutcome(result, { json: options.json === true });
     });
     // T-1019: gc subcommand — garbage-collect expired pending transactions
     capture

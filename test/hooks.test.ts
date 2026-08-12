@@ -36,7 +36,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { installHook, readHookStatus, uninstallHook } from '../src/commands/hooks.js';
 import { runInit } from '../src/commands/init.js';
 import { packageVersion } from '../src/core/paths.js';
-import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_NAME, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { captureHookFailOpen } from '../src/hooks/capture-fail-open.js';
+import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_NAME, captureHookStub, commitMsgStub } from '../src/hooks/commit-msg.js';
 import { POST_COMMIT_HOOK_NAME } from '../src/hooks/post-commit.js';
 import {
   PREPARE_COMMIT_MSG_HOOK_NAME,
@@ -1143,6 +1144,43 @@ describe('hooks that are not the validation gate fail open', () => {
       expect(result.status, `${name}: ${String(result.stderr)}`).toBe(0);
       expect(String(result.stderr)).toContain('commitlore: cannot find the CLI');
     }
+  });
+
+  /**
+   * #543. The CLI now exits 3/4 when capture breaks. That honesty must not
+   * travel through the hook into git: aborting a commit because the recorder
+   * failed is worse than the silence being fixed. This is a separate decision
+   * from the CLI's, and the test is meant to break loudly if someone "fixes"
+   * the wrapper by propagating the new codes.
+   */
+  it('the TypeScript capture wrappers never assign an exit code', () => {
+    const previous = process.exitCode;
+    process.exitCode = 0;
+    captureHookFailOpen('capture application error', new Error('pipeline broke'));
+    expect(process.exitCode).toBe(0);
+    process.exitCode = previous;
+
+    const src = (name: string): string =>
+      readFileSync(join(PACKAGE_ROOT, 'src', 'hooks', name), 'utf8');
+    const failOpen = src('capture-fail-open.ts');
+    const failOpenBody = failOpen.slice(failOpen.indexOf('export const captureHookFailOpen'));
+    expect(failOpenBody).not.toMatch(/process\.exitCode/);
+    expect(failOpenBody).not.toMatch(/process\.exit\(/);
+
+    for (const name of ['prepare-commit-msg.ts', 'post-commit.ts']) {
+      const action = src(name).slice(src(name).indexOf('export const register'));
+      expect(action, name).toContain('captureHookFailOpen');
+      expect(action, name).not.toMatch(/process\.exitCode/);
+      expect(action, name).not.toMatch(/process\.exit\(/);
+    }
+  });
+
+  it('the installed capture stub still ends in exit 0, not the gate\'s exit 1', () => {
+    const stub = captureHookStub();
+    const last = stub.trim().split('\n').at(-1);
+    expect(last).toBe('exit 0');
+    expect(stub).toContain('the commit was not blocked');
+    expect(commitMsgStub().trim().split('\n').at(-1)).toBe('exit 1');
   });
 });
 
