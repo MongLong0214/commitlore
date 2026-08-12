@@ -113,9 +113,12 @@ cd your-repository
 commitlore init
 ```
 
-`init` installs the hooks, rebuilds the index, writes or refreshes only
-CommitLore's marked section in `AGENTS.md`, installs the Claude hook, and runs
-`doctor --fix`. The marked section carries the shared pre-edit and capture
+`init` installs the hooks, rebuilds the index, registers the repository MCP
+server, installs the Claude hook, and runs `doctor --fix`. It leaves `AGENTS.md`
+alone: the capture procedure ships in the MCP server's instructions, which every
+wired host receives. `--agents-md` writes or refreshes only CommitLore's marked
+section of that file, for a host that reads the convention and not those
+instructions. The marked section carries the shared pre-edit and capture
 procedure for every agent that follows `AGENTS.md`; an existing file keeps all
 of its other lines. The installer detects supported coding agents and registers
 the local MCP server where it can do so safely. When the Codex CLI is present,

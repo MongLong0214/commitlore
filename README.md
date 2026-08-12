@@ -81,7 +81,7 @@ Prerequisites for either path: Node.js 22+ and Git. The script checks both befor
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — the same install, in PowerShell:
@@ -177,7 +177,7 @@ separate layers:
 | Claude Code | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Codex | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Hermes | **Yes — `commitlore hermes install`.** | **Yes — `commitlore hermes install`.** |
-| Other `AGENTS.md`-convention hosts | **Procedure, not automatic.** `commitlore init` writes the pre-edit delivery instruction; the host may or may not follow it. | **Procedure, not automatic.** The host may or may not follow it. |
+| Other `AGENTS.md`-convention hosts | **Procedure, not automatic.** The MCP server states it on every connection; `commitlore init --agents-md` also writes it into the repository. The host may or may not follow it. | **Procedure, not automatic.** The host may or may not follow it. |
 
 “Yes” means the layer is installed, not that every commit gains a record.
 Most commits should carry none. Only the first three rows run integrations

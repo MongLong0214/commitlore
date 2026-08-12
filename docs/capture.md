@@ -15,10 +15,12 @@ cannot explain:
 > Commit this change. Add a CommitLore record only if the diff cannot recover an
 > important constraint, rejected alternative, warning, or verification gap.
 
-Most commits should still carry no record. `commitlore init` writes the marked
-CommitLore section of `AGENTS.md`, so any agent that follows that convention
-receives the same prepare → verify → stage procedure without replacing the
-repository's own instructions. Claude Code also receives the fuller
+Most commits should still carry no record. The MCP server states the prepare →
+verify → stage procedure in its `instructions` on every connection, so any host
+that surfaces those receives it without a file being written into the
+repository. `commitlore init --agents-md` also writes a marked CommitLore
+section of `AGENTS.md`, for a host that reads that convention and not MCP
+instructions; it replaces nothing else in the file. Claude Code also receives the fuller
 [`skills/commitlore-commits/`](../skills/commitlore-commits/) workflow. The
 hook validates any record the agent adds.
 

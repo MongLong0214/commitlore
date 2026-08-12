@@ -77,7 +77,7 @@ Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — PowerShell에서 같은 설치를 한다:
@@ -166,7 +166,7 @@ Ruled-out
 | Claude Code | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Codex | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Hermes | **예 — `commitlore hermes install`.** | **예 — `commitlore hermes install`.** |
-| 그 밖의 `AGENTS.md` convention host | **procedure이며 자동이 아니다.** `commitlore init`이 편집 전 delivery instruction을 쓴다. host가 따를 수도, 따르지 않을 수도 있다. | **procedure이며 자동이 아니다.** host가 따를 수도, 따르지 않을 수도 있다. |
+| 그 밖의 `AGENTS.md` convention host | **procedure이며 자동이 아니다.** MCP server가 연결마다 절차를 알린다. `commitlore init --agents-md`를 쓰면 저장소에도 적는다. host가 따를 수도, 따르지 않을 수도 있다. | **procedure이며 자동이 아니다.** host가 따를 수도, 따르지 않을 수도 있다. |
 
 “예”는 layer가 설치되었다는 뜻이지 모든 commit에 record가 생긴다는 뜻이 아니다.
 대부분의 commit에는 record가 없어야 한다. 자동 integration은 첫 세 행에만 있다. 다른

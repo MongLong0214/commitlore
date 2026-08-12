@@ -77,7 +77,7 @@ Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や
 **その他のコーディングエージェント** — CLI をインストールします:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — PowerShell で同じインストールを行います:
@@ -168,7 +168,7 @@ signature も必要です。その signature も権限や record の真実を証
 | Claude Code | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Codex | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Hermes | **はい — `commitlore hermes install`.** | **はい — `commitlore hermes install`.** |
-| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init` が編集前 delivery instruction を書きます。host が従う場合も従わない場合もあります。 | **procedure であり自動ではありません。** host が従う場合も従わない場合もあります。 |
+| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** MCP server が接続ごとに手順を伝えます。`commitlore init --agents-md` を使えば repository にも書きます。host が従う場合も従わない場合もあります。 | **procedure であり自動ではありません。** host が従う場合も従わない場合もあります。 |
 
 「はい」は layer がインストールされるという意味であり、すべての commit に record が
 付くという意味ではありません。自動 integration は最初の三行だけです。その他の

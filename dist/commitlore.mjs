@@ -32279,6 +32279,19 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source !== "notes").reverse(),
   ...records.filter((record2) => record2.source === "notes")
 ];
+var withheldIfInjection = (record2) => {
+  const matched = [
+    ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
+  ];
+  if (matched.length === 0) return record2;
+  return {
+    ...record2,
+    resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
+      key: trailer.key,
+      value: `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`
+    }))
+  };
+};
 var buildReport2 = (scan2, at) => {
   const ordered = oldestFirst2(scan2.records);
   const states = foldLifecycle(ordered, { at });
@@ -32289,7 +32302,7 @@ var buildReport2 = (scan2, at) => {
       )
     );
     if (record2 === void 0) throw new Error(`no source for stale record ${state.recordId}`);
-    return { ...state, source: record2.source };
+    return withheldIfInjection({ ...state, source: record2.source });
   });
   return {
     at: at.toISOString(),

@@ -75,7 +75,7 @@ commitlore plugin install-codex
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
 ```
 
 **Windows** — 在 PowerShell 中执行同样的安装：
@@ -164,7 +164,7 @@ delivery 给代理的是上下文，并不阻止编辑。
 | Claude Code | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Codex | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Hermes | **有——`commitlore hermes install`。** | **有——`commitlore hermes install`。** |
-| 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** `commitlore init` 写入编辑前 delivery instruction；host 可能遵循，也可能不遵循。 | **是 procedure，不自动。** host 可能遵循，也可能不遵循。 |
+| 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** MCP server 在每次连接时说明该流程；`commitlore init --agents-md` 也会写入 repository。host 可能遵循，也可能不遵循。 | **是 procedure，不自动。** host 可能遵循，也可能不遵循。 |
 
 “有”只表示该 layer 已安装，不表示每次 commit 都会得到 record。绝大多数 commit
 本就不应携带 record。只有前三行会自动运行 integration。在其他 `AGENTS.md` host 上，
