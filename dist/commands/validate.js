@@ -23,6 +23,7 @@ import { collectRecords } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
+import { isMissingInstalledFile } from '../core/paths.js';
 import { RULED_OUT_KEY } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, isSuccessionDeclared, UNIQUE_ID_WANT, } from '../core/stale.js';
@@ -45,6 +46,22 @@ const usageError = (message) => ({
     code: 2,
     stdout: '',
     stderr: `commitlore: ${message}\n${USAGE}\n`,
+    violations: [],
+    secrets: [],
+    checks: [],
+});
+/**
+ * Exit 3 for an operational failure, distinct from 2 for a usage error.
+ *
+ * This is the first of the codes #543 asks for, taken here because #533 is
+ * where the conflation actually reaches a user. The rest of that taxonomy —
+ * NoRecord, RecordRejected, InternalError, shared across the CLI, the hooks
+ * and the MCP server — is still open.
+ */
+const installationError = (message) => ({
+    code: 3,
+    stdout: '',
+    stderr: `commitlore: ${message}\n`,
     violations: [],
     secrets: [],
     checks: [],
@@ -687,6 +704,13 @@ export const runValidate = (input = {}) => {
         secrets = sources.flatMap((source) => scanForSecrets(source.message));
     }
     catch (error) {
+        // Not every exception here is the caller's fault, and saying so with a
+        // usage line is how a broken installation came to read as a bad commit
+        // message (#533). A missing shipped file is an installation problem: it
+        // gets its own exit code and no usage line, because there is nothing the
+        // caller could retype to fix it.
+        if (isMissingInstalledFile(error))
+            return installationError(messageOf(error));
         return usageError(messageOf(error));
     }
     const references = checkReferences(input, sources, cwd);

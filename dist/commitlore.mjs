@@ -11444,7 +11444,22 @@ var findPackageRoot = (startDir) => {
 };
 var PACKAGE_ROOT = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
 var installedPath = (...segments) => join(PACKAGE_ROOT, ...segments);
-var readInstalledFile = (...segments) => readFileSync(installedPath(...segments), "utf8");
+var MISSING_INSTALLED_FILE = "commitloreMissingInstalledFile";
+var isMissingInstalledFile = (error2) => error2 instanceof Error && error2[MISSING_INSTALLED_FILE] === true;
+var readInstalledFile = (...segments) => {
+  const path2 = installedPath(...segments);
+  try {
+    return readFileSync(path2, "utf8");
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+    const missing = new Error(
+      `this installation is missing ${path2} \u2014 the commit message was not examined. Reinstall CommitLore to restore it: curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/main/install.sh | sh`
+    );
+    Object.defineProperty(missing, MISSING_INSTALLED_FILE, { value: true });
+    missing.cause = error2;
+    throw missing;
+  }
+};
 var cachedVersion = null;
 var packageVersion = () => {
   if (cachedVersion !== null) return cachedVersion;
@@ -33503,6 +33518,15 @@ ${USAGE2}
   secrets: [],
   checks: []
 });
+var installationError = (message) => ({
+  code: 3,
+  stdout: "",
+  stderr: `commitlore: ${message}
+`,
+  violations: [],
+  secrets: [],
+  checks: []
+});
 var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
@@ -33891,6 +33915,7 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
+    if (isMissingInstalledFile(error2)) return installationError(messageOf8(error2));
     return usageError2(messageOf8(error2));
   }
   const references = checkReferences(input, sources, cwd);

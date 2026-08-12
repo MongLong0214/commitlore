@@ -49,8 +49,38 @@ export const installedPath = (...segments: readonly string[]): string =>
  * SEA-asset branch this used to carry existed for the compiled build ADR-0026
  * removed.
  */
-export const readInstalledFile = (...segments: readonly string[]): string =>
-  readFileSync(installedPath(...segments), 'utf8');
+/**
+ * Marks the error above as "a file this installation ships is not there", so a
+ * caller can tell a broken installation from bad input without matching on
+ * message text. A flag rather than an Error subclass, per the repository's
+ * convention that errors are plain.
+ */
+const MISSING_INSTALLED_FILE = 'commitloreMissingInstalledFile';
+
+export const isMissingInstalledFile = (error: unknown): boolean =>
+  error instanceof Error && (error as unknown as Record<string, unknown>)[MISSING_INSTALLED_FILE] === true;
+
+export const readInstalledFile = (...segments: readonly string[]): string => {
+  const path = installedPath(...segments);
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    // A raw ENOENT here reaches the user through the commit-msg hook, where the
+    // two things on screen become a path they did not choose and a usage line
+    // for a command they did not type — so the available reading is "my
+    // trailers are wrong", and the next hour goes into editing a message that
+    // was already correct (#533). The file is missing, not the message.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    const missing = new Error(
+      `this installation is missing ${path} — the commit message was not examined. ` +
+        'Reinstall CommitLore to restore it: ' +
+        'curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/main/install.sh | sh',
+    );
+    Object.defineProperty(missing, MISSING_INSTALLED_FILE, { value: true });
+    missing.cause = error;
+    throw missing;
+  }
+};
 
 /**
  * The declared version, read from the installation's own `package.json`.

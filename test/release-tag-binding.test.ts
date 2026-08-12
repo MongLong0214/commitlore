@@ -205,6 +205,8 @@ describe('#499 the published tag is the commit the gates qualified', () => {
           status: 'completed',
           conclusion: 'success',
           head_sha: first,
+          // The gate requires the producing app, not just the name (#571).
+          app: { slug: 'github-actions' },
         })),
       }),
     );
