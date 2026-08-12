@@ -227,6 +227,107 @@ jobs:
   # proves the compiled binary itself works on a real (non-containerized)
   # Linux and macOS host with no Node on PATH. Adding it here would test the
   # same binary a second time through a thicker layer, not a new claim.
+  # docs/COMPATIBILITY.md defines "supported" as an install path reaching the
+  # host *and the installed result being executed there*. macOS was marked
+  # supported on the strength of the conformance suite, with the row itself
+  # admitting the install path ran on Linux only — a claim the document's own
+  # definition did not support. This job is the missing half.
+  install-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Tag the checkout so install.sh has a pinned version to clone
+        run: |
+          set -euo pipefail
+          version="v$(node -p 'require("./package.json").version')"
+          printf 'COMMITLORE_CI_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          git -c user.name=ci -c user.email=ci@example.invalid tag -f "$version"
+      - name: Install, then run what was installed
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          export COMMITLORE_INSTALL_SOURCE="$GITHUB_WORKSPACE"
+
+          sh install.sh "$COMMITLORE_CI_VERSION"
+
+          wrapper="$HOME/.local/bin/commitlore"
+          test -x "$wrapper"
+          test "$("$wrapper" --version)" = "${COMMITLORE_CI_VERSION#v}"
+
+          # Executed, not merely present: a repository is set up and answered.
+          repo="$RUNNER_TEMP/repo"
+          mkdir -p "$repo/src"
+          cd "$repo"
+          git init -q .
+          git config user.email ci@example.invalid
+          git config user.name ci
+          printf 'export const run = (x) => x;\n' > src/app.js
+          git add -A
+          git commit -q --no-verify -m 'feat: initial'
+          "$wrapper" init --unattended --no-agents-md || true
+          "$wrapper" doctor >/dev/null
+          "$wrapper" context src/app.js >/dev/null
+
+  # The musl row claimed execution on two architectures. Only one of them can
+  # run natively here; the other goes through QEMU, which is what makes the
+  # claim true rather than smaller.
+  install-alpine:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+      - name: Tag the checkout so install.sh has a pinned version to clone
+        run: |
+          set -euo pipefail
+          version="v$(node -p 'require("./package.json").version')"
+          printf 'COMMITLORE_CI_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          git -c user.name=ci -c user.email=ci@example.invalid tag -f "$version"
+      - name: Install under musl, then run what was installed
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -e COMMITLORE_CI_VERSION="$COMMITLORE_CI_VERSION" \
+            -v "$PWD:/w" -w /w alpine:3.21 sh -c '
+              set -eu
+              apk add --no-cache nodejs git >/dev/null
+              git config --global --add safe.directory /w
+              node --version
+              COMMITLORE_INSTALL_SOURCE=/w sh install.sh "$COMMITLORE_CI_VERSION"
+              wrapper="$HOME/.local/bin/commitlore"
+              test "$("$wrapper" --version)" = "${COMMITLORE_CI_VERSION#v}"
+              mkdir -p /tmp/repo/src && cd /tmp/repo
+              git init -q .
+              git config user.email ci@example.invalid
+              git config user.name ci
+              printf "export const run = (x) => x;\n" > src/app.js
+              git add -A
+              git commit -q --no-verify -m "feat: initial"
+              "$wrapper" init --unattended --no-agents-md || true
+              "$wrapper" doctor >/dev/null
+              "$wrapper" context src/app.js >/dev/null
+            '
+
   install-script:
     runs-on: ubuntu-latest
     steps:

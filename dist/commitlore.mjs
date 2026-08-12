@@ -21551,15 +21551,19 @@ var runAgentIntegrationStep = (opts) => {
   };
 };
 var runMcpRegistrationStep = (opts) => {
-  const result = registerCommitloreMcpServer(opts.cwd ?? process.cwd());
+  const cwd = opts.cwd ?? process.cwd();
+  const result = registerCommitloreMcpServer(cwd);
   if (!result.ok) {
     return {
       step: "mcp-registration",
       title: "MCP registration",
-      code: 0,
+      code: 1,
       lines: [
         `could not register the capture server: ${result.error}`,
-        "the repository still installs; doctor reports a missing initiator when unattended capture needs one"
+        "nothing in this repository can start a capture until it is registered \u2014 delivery and the hooks still work",
+        `to register it by hand, put this in ${MCP_REGISTRATION_FILE} at the repository root:`,
+        '  { "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }',
+        "then run commitlore doctor to confirm it"
       ],
       detail: result
     };
