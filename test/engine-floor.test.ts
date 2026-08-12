@@ -52,6 +52,41 @@ describe('whether a range admits the declared floor', () => {
     expect(admits('>=22.12.0', parseVersion('24.0.0'))).toBe(true);
   });
 
+  /**
+   * The caret, tilde and bare-version branch had the defect the `>=` branch was
+   * fixed for: it returned true whenever the majors matched, so `^22.13.0`
+   * admitted 22.12.0. The table below could not have caught it — every entry
+   * was a `>=` form, a `*`, or `^18.0.0 || >=20.0.0`, whose second clause
+   * returns first. Nothing exercised the branch at all.
+   *
+   * These are the windows each operator actually denotes. `^` allows the rest
+   * of the major, `~` the rest of the minor, and a bare version is bounded by
+   * whatever it leaves unstated: `22` is all of 22, `22.13` is all of 22.13,
+   * and `22.13.0` is only itself.
+   */
+  it.each([
+    ['^22.13.0', '22.12.0', false],
+    ['^22.12.0', '22.12.0', true],
+    ['^22.12.0', '22.13.0', true],
+    ['^22.12.0', '23.0.0', false],
+    ['~22.12.5', '22.12.0', false],
+    ['~22.12.0', '22.12.9', true],
+    ['~22.12.0', '22.13.0', false],
+    ['22.13.0', '22.12.0', false],
+    ['22.13.0', '22.13.0', true],
+    ['22.13.0', '22.13.1', false],
+    ['22', '22.12.0', true],
+    ['22.x', '22.12.0', true],
+    ['22', '23.0.0', false],
+    ['22.13', '22.13.9', true],
+    ['22.13', '22.12.0', false],
+  ] satisfies [string, string, boolean][])(
+    'the %s window admits %s: %s',
+    (range, version, expected) => {
+      expect(admits(range, parseVersion(version))).toBe(expected);
+    },
+  );
+
   it.each([
     ['>=18', '22.12.0', true],
     ['^18.0.0 || >=20.0.0', '22.12.0', true],

@@ -86,8 +86,12 @@ The tag workflow therefore blocks `publish` on both jobs below.
 
 The exact-head list is fixed rather than inferred from the API response. It
 lives in `REQUIRED_CHECKS` in `scripts/check-exact-head-ci.mjs` — read it from
-there rather than from here, and note that two tests compare it against
-`ci.yml`'s jobs in both directions so it cannot drift from what CI runs:
+there rather than from here. Three tests in
+`test/release-publish-prerequisites.test.ts` compare it against the check-run
+names expanded from `ci.yml`'s matrix — every leg, both directions — so it
+cannot drift from what CI runs. They compare expanded names rather than job
+names on purpose: an earlier version matched by prefix, and a prefix match
+accepts `check (banana)` and survives the deletion of three required legs.
 
     check (22.12.0)   check (24)   audit
     git-matrix (ubuntu-latest)   git-matrix (macos-latest)

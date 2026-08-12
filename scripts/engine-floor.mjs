@@ -42,17 +42,41 @@ export const rangeMinimum = (range) => {
  * admit 22.5.0, and reading only the major said it did.
  */
 export const admits = (range, version) => {
-  const major = version[0];
   for (const clause of range.split('||').map((s) => s.trim())) {
-    if (/^\*$/.test(clause)) return true;
+    if (/^\*$/.test(clause) || /^x$/i.test(clause)) return true;
+
     const gte = clause.match(/^>=\s*(\d[\d.]*)/);
     if (gte) {
       const bound = parseVersion(gte[1]);
       if (bound !== null && compare(version, bound) >= 0) return true;
       continue;
     }
-    const exact = clause.match(/^\^?~?(\d+)(?:\.[\dx*]+)*$/);
-    if (exact && Number(exact[1]) === major) return true;
+
+    // `^`, `~`, and a bare version each denote a window with a lower bound and
+    // an upper one. Reading only the major treated every window as "any
+    // release of this major", so `^22.13.0` admitted 22.12.0 — the same defect
+    // the `>=` branch above was fixed for, still alive in this branch. Both
+    // ends are compared now.
+    const window = clause.match(/^([\^~]?)(\d+)(?:\.(\d+|[x*]))?(?:\.(\d+|[x*]))?$/);
+    if (window === null) continue;
+    const [, operator, rawMajor, rawMinor, rawPatch] = window;
+    const wild = (part) => part === undefined || part === 'x' || part === 'X' || part === '*';
+    const major = Number(rawMajor);
+    const minor = wild(rawMinor) ? 0 : Number(rawMinor);
+    const patch = wild(rawPatch) ? 0 : Number(rawPatch);
+    const lower = [major, minor, patch];
+    if (compare(version, lower) < 0) continue;
+
+    // Where the window ends: `^` allows the rest of the major, `~` the rest of
+    // the minor, and a bare version is bounded by whatever it left unstated —
+    // `22` is all of 22, `22.13` is all of 22.13, `22.13.0` is only itself.
+    let upper;
+    if (operator === '^') upper = [major + 1, 0, 0];
+    else if (operator === '~') upper = [major, minor + 1, 0];
+    else if (wild(rawMinor)) upper = [major + 1, 0, 0];
+    else if (wild(rawPatch)) upper = [major, minor + 1, 0];
+    else upper = [major, minor, patch + 1];
+    if (compare(version, upper) < 0) return true;
   }
   return false;
 };
