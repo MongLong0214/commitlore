@@ -570,8 +570,12 @@ if (Test-Path -LiteralPath $dest) {
         $existingVersion = $existingVersion.Trim()
         $existingCheckout = ''
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+') {
+            # The *contents*, not the directory name: a directory called
+            # `v1.2.3` is something anyone can create, and requiring only that
+            # let an unrelated executable at the shim path be replaced.
             foreach ($candidate in @((Join-Path $dataRoot ("v" + $existingVersion)), (Join-Path $dataRoot $existingVersion))) {
-                if (Test-Path -LiteralPath $candidate -PathType Container) { $existingCheckout = $candidate; break }
+                $bundle = Join-Path $candidate 'dist\commitlore.mjs'
+                if (Test-Path -LiteralPath $bundle -PathType Leaf) { $existingCheckout = $candidate; break }
             }
         }
         if ($existingVersion -match '^[0-9]+\.[0-9]+\.[0-9]+' -and $existingCheckout -ne '') {

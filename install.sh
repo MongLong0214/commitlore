@@ -457,7 +457,13 @@ if [ -e "$dest" ]; then
     existing_version="$("$dest" --version 2>/dev/null || true)"
     case "$existing_version" in
       [0-9]*.[0-9]*.[0-9]*)
-        if [ -d "$data_root/v$existing_version" ] || [ -d "$data_root/$existing_version" ]; then
+        # The *contents*, not the directory name. Requiring only a directory
+        # called `v1.2.3` meant anyone could make one and have an unrelated
+        # executable at the wrapper path replaced -- the check asked whether a
+        # name existed, which is the thing an attacker controls. `dist/commitlore.mjs`
+        # is written by this install and by nothing else.
+        if [ -f "$data_root/v$existing_version/dist/commitlore.mjs" ] \
+          || [ -f "$data_root/$existing_version/dist/commitlore.mjs" ]; then
           log "replacing a previous commitlore install at $dest ($existing_version -> $version)"
         else
           die "$dest already exists, reports version \"$existing_version\", and has no commitlore checkout under $data_root to match it -- refusing to overwrite a file this installer cannot show it wrote. Remove it first, or set COMMITLORE_INSTALL_DIR to install elsewhere." 4

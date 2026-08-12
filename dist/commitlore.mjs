@@ -16131,6 +16131,13 @@ var verifyCaptureRecords = (opts) => {
   const accepted = [];
   const rejected = [];
   const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+  const settle = (result) => persist(result) ? result : {
+    accepted: [],
+    rejected: [],
+    validation_result: "empty",
+    incomplete: true,
+    overlap_check: "canonical_exact_only"
+  };
   try {
     const pending = opts.pending ?? readPending(nonce, { cwd });
     if (!pending) {
@@ -16159,8 +16166,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     if (pending.source_hashes.diff !== diffHash) {
       for (const record2 of draft) {
@@ -16177,8 +16183,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: false,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const notes = notesAvailability({ cwd });
     if (notes === "unfetched") {
@@ -16189,8 +16194,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const history = opts.history === void 0 ? loadCaptureVerificationHistory(cwd) : opts.history;
     if (history === null) {
@@ -16201,8 +16205,7 @@ var verifyCaptureRecords = (opts) => {
         incomplete: true,
         overlap_check: "canonical_exact_only"
       };
-      persist(result2);
-      return result2;
+      return settle(result2);
     }
     const reservedRecordIds = new Set(history.recordIds);
     const { activeCanonicalTuples } = history;
@@ -16259,17 +16262,7 @@ var verifyCaptureRecords = (opts) => {
       incomplete: false,
       overlap_check: "canonical_exact_only"
     };
-    if (!persist(result)) {
-      const unbound = {
-        accepted: [],
-        rejected: [],
-        validation_result: "empty",
-        incomplete: true,
-        overlap_check: "canonical_exact_only"
-      };
-      return unbound;
-    }
-    return result;
+    return settle(result);
   } catch {
     const result = {
       accepted: [],

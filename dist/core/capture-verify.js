@@ -149,6 +149,26 @@ export const verifyCaptureRecords = (opts) => {
     // True when the result is bound to the transaction — vacuously so for a
     // read-only check, which has nothing to bind.
     const persist = (result) => opts.readOnly === true || storeVerificationResult(nonce, cwd, result);
+    /**
+     * The only way out of this function that writes.
+     *
+     * Every exit used to be `persist(result); return result;` written by hand,
+     * and the first repair changed one of them. The other four — transcript
+     * mismatch, diff mismatch, unfetched notes, unavailable history — kept
+     * discarding the refusal, so replaying a nonce through any of them returned
+     * a rejection to the caller while the earlier stored result stayed staged.
+     * Routing every exit through one function is what makes that impossible to
+     * reintroduce by copying two lines.
+     */
+    const settle = (result) => persist(result)
+        ? result
+        : {
+            accepted: [],
+            rejected: [],
+            validation_result: 'empty',
+            incomplete: true,
+            overlap_check: 'canonical_exact_only',
+        };
     try {
         // 1. Re-read prepared transaction and verify source hashes
         const pending = opts.pending ?? readPending(nonce, { cwd });
@@ -181,8 +201,7 @@ export const verifyCaptureRecords = (opts) => {
                 incomplete: false,
                 overlap_check: 'canonical_exact_only',
             };
-            persist(result);
-            return result;
+            return settle(result);
         }
         if (pending.source_hashes.diff !== diffHash) {
             for (const record of draft) {
@@ -199,8 +218,7 @@ export const verifyCaptureRecords = (opts) => {
                 incomplete: false,
                 overlap_check: 'canonical_exact_only',
             };
-            persist(result);
-            return result;
+            return settle(result);
         }
         // 2. Check notes availability — unfetched means incomplete
         const notes = notesAvailability({ cwd });
@@ -212,8 +230,7 @@ export const verifyCaptureRecords = (opts) => {
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
             };
-            persist(result);
-            return result;
+            return settle(result);
         }
         // 3. Load active records for duplicate checking
         const history = opts.history === undefined ? loadCaptureVerificationHistory(cwd) : opts.history;
@@ -226,8 +243,7 @@ export const verifyCaptureRecords = (opts) => {
                 incomplete: true,
                 overlap_check: 'canonical_exact_only',
             };
-            persist(result);
-            return result;
+            return settle(result);
         }
         // Do not mutate a caller-provided historical snapshot: shadow reuses one
         // across many verification calls. This local reservation set also keeps
@@ -306,20 +322,7 @@ export const verifyCaptureRecords = (opts) => {
             incomplete: false,
             overlap_check: 'canonical_exact_only',
         };
-        if (!persist(result)) {
-            // The transaction moved on — already verified, staged, or gone. Returning
-            // `result` here would hand back records that nothing will stage, which is
-            // the one shape this function must never produce.
-            const unbound = {
-                accepted: [],
-                rejected: [],
-                validation_result: 'empty',
-                incomplete: true,
-                overlap_check: 'canonical_exact_only',
-            };
-            return unbound;
-        }
-        return result;
+        return settle(result);
     }
     catch {
         // Never throws — return empty on any unhandled error.
@@ -335,12 +338,15 @@ export const verifyCaptureRecords = (opts) => {
             incomplete: true,
             overlap_check: 'canonical_exact_only',
         };
-        // Best-effort store
+        // The one exit that does not go through `settle`, and the only one where
+        // that is right: this result is already `empty` with `incomplete: true`,
+        // which is exactly what `settle` would substitute if the store refused. A
+        // failed store cannot change the answer, so it cannot be worth throwing for.
         try {
             persist(result);
         }
         catch {
-            // Ignore — we must never throw
+            // Never throw from the handler that exists so nothing throws.
         }
         return result;
     }

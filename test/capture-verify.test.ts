@@ -609,6 +609,48 @@ describe('verifyCaptureRecords', () => {
    * and the repository would have committed another, with nothing reporting a
    * difference.
    */
+  /**
+   * The repair above changed the accepted path. Four early exits — transcript
+   * mismatch, diff mismatch, unfetched notes, unavailable history — kept
+   * discarding the same boolean, so replaying a nonce through any of them
+   * returned a rejection to the caller while the first call's record stayed
+   * stored and stageable. Every exit now goes through one function; this is the
+   * case that would have caught the gap.
+   */
+  it('does not leave an earlier record stageable when an early exit cannot store', () => {
+    const transcript =
+      'We decided: Do not use shared mutable state for config because it causes race conditions.';
+    const diff = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n';
+    const nonce = prepare(cwd, transcript, diff);
+
+    const first = verifyCaptureRecords({
+      nonce,
+      draft: [validDraft('Do not use shared mutable state for config because it causes race conditions')],
+      transcript,
+      diff,
+      cwd,
+    });
+    expect(first.validation_result).toBe('pass');
+
+    // A replay whose transcript no longer matches what `prepare` recorded: an
+    // early exit, not the accepted path.
+    const replay = verifyCaptureRecords({
+      nonce,
+      draft: [validDraft('Do not use shared mutable state for config because it causes race conditions')],
+      transcript: `${transcript} And something nobody said.`,
+      diff,
+      cwd,
+    });
+
+    expect(replay.accepted).toEqual([]);
+    expect(replay.incomplete).toBe(true);
+
+    // The transaction is untouched, so nothing new became stageable.
+    const pending = readPending(nonce, { cwd });
+    expect(pending!.phase).toBe('verified');
+    expect(pending!.records).toHaveLength(1);
+  });
+
   it('does not report a second verification as accepted when it cannot be stored', () => {
     const transcript =
       'We decided: Do not use shared mutable state for config because it causes race conditions. ' +

@@ -558,11 +558,13 @@ describe('T-1120 upgrade and verification', () => {
   });
 
   it('still replaces an older install that left the checkout it claims', () => {
-    // The evidence is the managed checkout, so an install this script really
-    // did perform is still upgraded rather than refused.
+    // The evidence is a runtime this install wrote, not a directory name. The
+    // first version of this fixture created an empty directory and passed
+    // without establishing anything, which is what let the case below through.
     const home = tempDir('older-install');
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });
-    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist'), { recursive: true });
+    writeFileSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3', 'dist', 'commitlore.mjs'), '// an earlier install\n');
     const wrapper = join(home, '.local', 'bin', 'commitlore');
     writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
     chmodSync(wrapper, 0o755);
@@ -571,6 +573,24 @@ describe('T-1120 upgrade and verification', () => {
 
     expect(r.status).toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/replacing a previous commitlore install/);
+  });
+
+  it('refuses when only a directory of the right name exists', () => {
+    // A directory called `v1.2.3` is something anyone can create, so requiring
+    // one made the ownership check ask about a name an attacker controls. The
+    // evidence has to be something this install wrote.
+    const home = tempDir('name-only-checkout');
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    mkdirSync(join(home, '.local', 'share', 'commitlore', 'v1.2.3'), { recursive: true });
+    const wrapper = join(home, '.local', 'bin', 'commitlore');
+    writeFileSync(wrapper, '#!/bin/sh\necho 1.2.3\n');
+    chmodSync(wrapper, 0o755);
+
+    const r = runInstaller({ home });
+
+    expect(r.status).not.toBe(0);
+    expect(readFileSync(wrapper, 'utf8')).toContain('echo 1.2.3');
+    expect(`${r.stdout}${r.stderr}`).toMatch(/no commitlore checkout under/);
   });
 
   it('fails before activation when runtime verification runs and fails', () => {
