@@ -20069,6 +20069,65 @@ var checkRuntime = (ctx) => {
   );
 };
 
+// src/commands/doctor/checks/runtime-installation-integrity.ts
+var SHIPPED_ASSETS = [
+  ["package.json"],
+  ["spec", "schema", "record.schema.json"],
+  ["spec", "SPEC.md"]
+];
+var relativeOf = (segments) => segments.join("/");
+var checkInstallationIntegrity = (_ctx) => {
+  const title = "installation integrity";
+  const id = "installation-integrity";
+  const category = "runtime";
+  const present2 = [];
+  const missing = [];
+  for (const segments of SHIPPED_ASSETS) {
+    try {
+      readInstalledFile(...segments);
+      present2.push(relativeOf(segments));
+    } catch (error2) {
+      if (!isMissingInstalledFile(error2)) throw error2;
+      const detail = error2 instanceof Error ? error2.message : String(error2);
+      missing.push({ relative: relativeOf(segments), detail });
+    }
+  }
+  const [first] = missing;
+  if (first !== void 0) {
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      first.detail,
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          missing: missing.map((entry) => entry.relative).join(", "),
+          present: present2.join(", ") || "none"
+        }
+      }
+    );
+  }
+  return check(
+    id,
+    category,
+    title,
+    "ok",
+    `${String(present2.length)} shipped files are present and readable`,
+    null,
+    false,
+    void 0,
+    {
+      evidence: {
+        files: present2.join(", ")
+      }
+    }
+  );
+};
+
 // src/commands/doctor/checks/runtime-git-trailers.ts
 var checkGit = (ctx) => {
   const title = "git interpret-trailers";
@@ -20399,6 +20458,7 @@ var hookRuntimeOf = (ctx) => {
 var selectedHookRuntimeOf = (ctx) => ctx.selectedIds?.has("hook-runtime") === false ? void 0 : hookRuntimeOf(ctx);
 var CHECK_REGISTRY = [
   { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
+  { id: "installation-integrity", title: "installation integrity", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkInstallationIntegrity(ctx) },
   { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
   { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
   { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },

@@ -4,9 +4,10 @@
  * local config, and it never installs a hook or pushes to a remote.
  */
 
-import type { SpawnSyncReturns } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -547,10 +548,10 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    // 15 since the signature-mode check joined the registry. The count is
+    // 16 since installation-integrity joined the registry. The count is
     // asserted so a check cannot be dropped without someone noticing; when it
     // moves, it should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(15);
+    expect(report.checks).toHaveLength(16);
   });
 });
 
@@ -885,6 +886,53 @@ describe('doctor: cli runtime', () => {
   });
 });
 
+/**
+ * doctor is the command that answers "does this installation work", yet a
+ * tree missing `spec/` — the same tree `validate` already refuses with exit 3
+ * — reported healthy. The check must fail, and the command must exit
+ * non-zero, or install-gate keeps qualifying a broken install.
+ *
+ * Asserted against a copied installation, not a mock: PACKAGE_ROOT is the
+ * running binary's tree, which is the only way a missing shipped file is
+ * actually missing.
+ */
+describe('doctor: installation integrity', () => {
+  const brokenInstall = (): string => {
+    const root = tempDir('doctor-nospec');
+    cpSync(join(PACKAGE_ROOT, 'dist'), join(root, 'dist'), { recursive: true });
+    cpSync(join(PACKAGE_ROOT, 'package.json'), join(root, 'package.json'));
+    return root;
+  };
+
+  const runBrokenDoctor = () => {
+    const root = brokenInstall();
+    return spawnSync(
+      process.execPath,
+      [join(root, 'dist', 'commitlore.mjs'), 'doctor', '--json'],
+      { cwd: root, encoding: 'utf8' },
+    );
+  };
+
+  it('reports ok on this intact checkout', () => {
+    const check = runDoctor({ cwd: initRepo('doctor-install-ok') }).checks.find(
+      (entry) => entry.id === 'installation-integrity',
+    );
+    expect(check?.status).toBe('ok');
+  });
+
+  it('fails and exits non-zero when a shipped file is missing from the running installation', () => {
+    const result = runBrokenDoctor();
+    expect(result.status, result.stderr).not.toBe(0);
+
+    const report = JSON.parse(result.stdout) as DoctorReport;
+    const check = report.checks.find((entry) => entry.id === 'installation-integrity');
+    expect(check?.status).toBe('fail');
+    expect(check?.detail).toContain('record.schema.json');
+    expect(check?.detail).toContain('install.sh');
+    expect(report.exitCode).not.toBe(0);
+  });
+});
+
 describe('doctor: git capability and index', () => {
   it('verifies interpret-trailers by actually parsing a probe', () => {
     const { repo } = repoWithRemote('doctor-git');
@@ -951,6 +999,7 @@ describe('doctor: report', () => {
 
     expect(report.checks.map((entry) => entry.id)).toEqual([
       'cli-runtime',
+      'installation-integrity',
       'notes-refspec',
       'notes-push',
       'commit-msg-hook',
@@ -1001,7 +1050,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(15);
+    expect(parsed.checks).toHaveLength(16);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');
