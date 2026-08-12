@@ -36,13 +36,29 @@ export declare const TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
 export declare const REQUIRE_SIGNED_DIRECTIVE_KEY = "commitlore.requireSignedDirective";
 /** Every directive author string this repository records. Empty means trust nobody. */
 export declare const configuredTrustedAuthors: (cwd: string) => string[];
+/** What the repository's directive-trust setting says, including "it is broken". */
+export type DirectiveTrustSetting = 'author-string' | 'signature-required' | 'malformed';
 /**
- * Whether this repository requires a Git-verified signature for directives.
+ * Reads the directive-trust setting, keeping "absent" and "unparseable" apart.
  *
- * The absence of the setting is deliberately `false`: author-string mode is
- * the long-standing default, and an upgrade must not downgrade its records.
- * Git's boolean parser owns the accepted spellings; an unreadable or malformed
- * value does not accidentally enable a security claim.
+ * Absence is `author-string`: that mode is the long-standing default and an
+ * upgrade must not downgrade a repository's records. A value that is present
+ * and cannot be parsed is neither — somebody wrote something here on purpose
+ * and it does not mean what they thought.
+ *
+ * That case fails closed. The first version folded it into `false`, so a typo
+ * in the documented security opt-in silently returned the repository to
+ * forgeable author strings while `doctor` reported the setting healthy. A
+ * security control that quietly turns itself off when misconfigured is worse
+ * than one that was never offered.
+ */
+export declare const configuredDirectiveTrustSetting: (cwd: string, git?: typeof execGit) => DirectiveTrustSetting;
+/**
+ * Whether a directive additionally needs Git's verified signature status.
+ *
+ * `malformed` requires it: see above. The setting is the operator's explicit
+ * request for a stronger boundary, and the safe reading of a request nobody can
+ * parse is the strong one.
  */
 export declare const configuredSignedDirectivesRequired: (cwd: string, git?: typeof execGit) => boolean;
 export interface TrustSeedResult {

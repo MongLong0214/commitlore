@@ -26,6 +26,7 @@ import { execGit } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import {
   REQUIRE_SIGNED_DIRECTIVE_KEY,
+  configuredDirectiveTrustSetting,
   TRUSTED_AUTHOR_KEY,
   configuredSignedDirectivesRequired,
   configuredTrustedAuthors,
@@ -239,5 +240,36 @@ describe('#415 through the command line, which is the only path the hook uses', 
 
     expect(cli(['inject', '--path', 'session.ts'], repo)).toMatch(/\[claim\]\s+r-trust01/);
     expect(cli(['context', 'session.ts'], repo)).toMatch(/r-trust01\s+\S+\s+\[claim\]/);
+  });
+});
+
+/**
+ * A review found the opt-in failing open: any non-successful `git config --bool`
+ * became `false`, so a typo in the documented security setting returned the
+ * repository to forgeable author strings while doctor called it healthy. Absence
+ * and unparseable are different facts — the first is a default, the second is
+ * somebody asking for something the code could not read.
+ */
+describe('a directive-trust setting nobody can parse does not turn the boundary off', () => {
+  it('reads an absent setting as the author-string default', () => {
+    const repo = createTestRepo({ path: mkdtempSync(join(realpathSync(tmpdir()), 'cl-trustcfg-')) });
+    expect(configuredDirectiveTrustSetting(repo)).toBe('author-string');
+    expect(configuredSignedDirectivesRequired(repo)).toBe(false);
+  });
+
+  it('reads true and false as written', () => {
+    const repo = createTestRepo({ path: mkdtempSync(join(realpathSync(tmpdir()), 'cl-trustcfg-')) });
+    execGit(['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'true'], { cwd: repo });
+    expect(configuredDirectiveTrustSetting(repo)).toBe('signature-required');
+    execGit(['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'false'], { cwd: repo });
+    expect(configuredDirectiveTrustSetting(repo)).toBe('author-string');
+  });
+
+  it('fails closed on a value Git cannot read as a boolean', () => {
+    const repo = createTestRepo({ path: mkdtempSync(join(realpathSync(tmpdir()), 'cl-trustcfg-')) });
+    execGit(['config', '--local', REQUIRE_SIGNED_DIRECTIVE_KEY, 'yes-please'], { cwd: repo });
+
+    expect(configuredDirectiveTrustSetting(repo)).toBe('malformed');
+    expect(configuredSignedDirectivesRequired(repo)).toBe(true);
   });
 });

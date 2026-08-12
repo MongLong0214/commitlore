@@ -72,7 +72,26 @@ describe('Codex plugin installation', () => {
       ['plugin', 'marketplace', 'list'],
       ['plugin', 'list'],
     ]);
-    expect(installed.report).toContain('Codex plugin already installed: commitlore@commitlore');
+    expect(installed.report.join('\n')).toContain('Codex plugin already installed: commitlore@commitlore');
+  });
+
+  // The marker is a claim of ownership and `uninstall` removes what it marks.
+  // Finding a plugin someone else installed and recording it as ours meant a
+  // later uninstall would delete their state, which is the opposite of the
+  // promise in docs/install.md. This test existed and checked the calls and the
+  // wording; it did not check the one durable side effect that mattered.
+  it('claims no ownership over a plugin it found already installed', () => {
+    const home = dataHome();
+    const installed = installCodexPlugin({
+      dataHome: home,
+      run: (args) =>
+        args.join(' ') === 'plugin marketplace list'
+          ? result('MARKETPLACE ROOT\ncommitlore /tmp/commitlore\n')
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/commitlore\n'),
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(existsSync(codexPluginMarkerPath(undefined, home))).toBe(false);
   });
 
   // A review ran this with GitHub unreachable. Codex printed "Could not resolve

@@ -29,7 +29,6 @@ import { Buffer, isUtf8 } from 'node:buffer';
 import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle } from './stale.js';
-import { STRUCTURAL_TRAILER_KEYS, } from './types.js';
 const PROVENANCE_KEY = 'Provenance';
 /** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
 const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
@@ -465,12 +464,31 @@ export const scanInjection = (text) => {
     return INJECTION_PATTERNS.filter((entry) => haystacks.some((haystack) => fires(haystack, entry))).map((entry) => entry.id);
 };
 const trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+/*
+ * Every trailer is scanned, including the ones whose keys hold enumerated
+ * values.
+ *
+ * Those keys used to be skipped, on the reasoning that a validated `Blast:`
+ * cannot carry prose. Validation runs at commit time and grading runs on
+ * records read back out of history, where `--no-verify`, missing hooks and
+ * rewritten branches all produce trailers that never passed it — so the skip
+ * exempted from scanning whatever an attacker chose to put under an exempt key,
+ * and `Blast:` is rendered into the projection the agent reads.
+ *
+ * Asking the validator per trailer would close that, and it pulls the JSON
+ * schema stack onto the hot path: `core/schema.ts` imports AJV, so grading
+ * would drag a dependency into every hook invocation, and into builds that
+ * resolve `dist/` without `node_modules` beside it. Scanning instead costs a
+ * few regexes against short strings and needs nothing new. It also cannot
+ * drift, which a second hand-written copy of the enums could.
+ *
+ * The exemption bought nothing: no legal value of any of these keys matches any
+ * pattern, which `test/grade.test.ts` pins.
+ */
 const scanRecord = (record) => {
     const matchedPatterns = new Set();
     const matchedKeys = new Set();
     for (const trailer of record.trailers) {
-        if (STRUCTURAL_TRAILER_KEYS.has(trailer.key))
-            continue;
         const patterns = scanInjection(trailer.value);
         if (patterns.length === 0)
             continue;

@@ -48,23 +48,48 @@ export const configuredTrustedAuthors = (cwd: string): string[] => {
     .filter((line) => line !== '');
 };
 
+/** What the repository's directive-trust setting says, including "it is broken". */
+export type DirectiveTrustSetting = 'author-string' | 'signature-required' | 'malformed';
+
 /**
- * Whether this repository requires a Git-verified signature for directives.
+ * Reads the directive-trust setting, keeping "absent" and "unparseable" apart.
  *
- * The absence of the setting is deliberately `false`: author-string mode is
- * the long-standing default, and an upgrade must not downgrade its records.
- * Git's boolean parser owns the accepted spellings; an unreadable or malformed
- * value does not accidentally enable a security claim.
+ * Absence is `author-string`: that mode is the long-standing default and an
+ * upgrade must not downgrade a repository's records. A value that is present
+ * and cannot be parsed is neither — somebody wrote something here on purpose
+ * and it does not mean what they thought.
+ *
+ * That case fails closed. The first version folded it into `false`, so a typo
+ * in the documented security opt-in silently returned the repository to
+ * forgeable author strings while `doctor` reported the setting healthy. A
+ * security control that quietly turns itself off when misconfigured is worse
+ * than one that was never offered.
+ */
+export const configuredDirectiveTrustSetting = (
+  cwd: string,
+  git: typeof execGit = execGit,
+): DirectiveTrustSetting => {
+  const raw = git(['config', '--local', '--get', REQUIRE_SIGNED_DIRECTIVE_KEY], { cwd });
+  if (raw.code !== 0 || raw.stdout.trim() === '') return 'author-string';
+
+  const parsed = git(['config', '--local', '--bool', '--get', REQUIRE_SIGNED_DIRECTIVE_KEY], {
+    cwd,
+  });
+  if (parsed.code !== 0) return 'malformed';
+  return parsed.stdout.trim() === 'true' ? 'signature-required' : 'author-string';
+};
+
+/**
+ * Whether a directive additionally needs Git's verified signature status.
+ *
+ * `malformed` requires it: see above. The setting is the operator's explicit
+ * request for a stronger boundary, and the safe reading of a request nobody can
+ * parse is the strong one.
  */
 export const configuredSignedDirectivesRequired = (
   cwd: string,
   git: typeof execGit = execGit,
-): boolean => {
-  const result = git(['config', '--local', '--bool', '--get', REQUIRE_SIGNED_DIRECTIVE_KEY], {
-    cwd,
-  });
-  return result.code === 0 && result.stdout.trim() === 'true';
-};
+): boolean => configuredDirectiveTrustSetting(cwd, git) !== 'author-string';
 
 export interface TrustSeedResult {
   readonly recorded: boolean;
