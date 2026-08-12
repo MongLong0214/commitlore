@@ -29,13 +29,21 @@ import { resolve } from 'node:path';
 // This is intentionally a fixed allowlist, not a list inferred from whatever
 // happened to report at a SHA. A missing check is the failure this gate exists
 // to catch, so presence cannot define the requirement.
+// `lint` is deliberately absent: its job is conditioned on
+// `github.event_name == 'pull_request'`, so it never runs on the push to main
+// that produces the checks at a release commit. Requiring a check that cannot
+// exist would block every release rather than qualify one.
 export const REQUIRED_CHECKS = Object.freeze([
   'check (22)',
   'check (24)',
+  'audit',
   'git-matrix (ubuntu-latest)',
   'git-matrix (macos-latest)',
   'install-script',
   'install-ps1',
+  'install-macos',
+  'install-alpine (linux/amd64)',
+  'install-alpine (linux/arm64)',
 ]);
 
 class GateError extends Error {

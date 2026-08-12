@@ -236,6 +236,42 @@ describe('the required CI checks passed at the exact tagged SHA', () => {
   });
 });
 
+/**
+ * The gate's list is fixed on purpose — presence cannot define the requirement,
+ * or a check that failed to report would define itself away. The cost is that
+ * it drifts: this release added `audit`, `install-macos` and two
+ * `install-alpine` jobs to CI, and the gate kept qualifying releases on the six
+ * it already knew. Four jobs could have failed at a tagged commit with the
+ * release gate reporting every required check green.
+ *
+ * So the list stays fixed and this notices when CI grows past it.
+ */
+describe('the release gate requires every job CI runs on a push', () => {
+  const ciJobs = (): string[] => {
+    const workflow = load(readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')) as {
+      jobs: Record<string, unknown>;
+    };
+    return Object.keys(workflow.jobs);
+  };
+
+  it('names each ci.yml job, directly or as a matrix expansion', () => {
+    const missing = ciJobs().filter(
+      (job) => !REQUIRED_CHECKS.some((check) => check === job || check.startsWith(`${job} (`)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  // The converse: an entry naming a job that no longer exists would block every
+  // release, since a check that cannot run can never be present.
+  it('names no check that ci.yml does not produce', () => {
+    const jobs = ciJobs();
+    const orphaned = REQUIRED_CHECKS.filter(
+      (check) => !jobs.some((job) => check === job || check.startsWith(`${job} (`)),
+    );
+    expect(orphaned).toEqual([]);
+  });
+});
+
 describe('publication has no path around a failed prerequisite', () => {
   const publish = () => {
     const workflow = load(readFileSync(RELEASE_WORKFLOW, 'utf8')) as {
