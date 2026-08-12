@@ -74,6 +74,39 @@ that use no such convention, and add a hundred lines to one that does.
   verify, stage, commit and read-back.
 - The engine-floor parser has tests. It read `>=22.5` as Node 5, which failed
   every required job before typecheck, build, tests or dogfooding ran.
+- With the notes mirror finally fetched, the reference check ran for the first
+  time and found one violation in this repository's own history: a `Follows:`
+  written six minutes before the record it points at. It cannot be corrected
+  without rewriting the commit that carries it, so it is named in
+  `scripts/dogfood-baseline.json` with the reason, and the assertion subtracts
+  only what that file names. The carried count prints on every run.
+- The release gate matched required checks by name. Any GitHub App installed on
+  the repository could open a check run called `check (22)`, conclude it
+  `success`, and be read as CI having passed. The producing app must now be
+  `github-actions`, and a run with no app attributed is refused.
+- `npm audit` reported ten vulnerabilities on every green run, with no way to
+  tell "assessed" from "never looked at". The production surface — which is
+  what users receive, since `dist/` is committed and the installer never runs
+  npm — is now a blocking check at zero, and the development surface is
+  reported without failing the build. A separate step proves the premise by
+  running the shipped tree with no `node_modules` present.
+
+### Reporting a problem
+
+`SECURITY.md` exists and GitHub's private vulnerability reporting is enabled,
+so a vulnerability no longer has to be disclosed publicly to be disclosed at
+all. It names what is in scope for a tool that serves recorded text to agents —
+injection through served records, a trust grade that overstates, capture
+writing without evidence — and what is not. Dependabot covers npm and the
+workflow actions.
+
+### Failing an installation, not a message
+
+An installation missing `spec/` failed every commit with a raw `ENOENT` and a
+usage line, so the screen showed a path the user never chose and usage for a
+command they never typed. The message had not been examined. It now says what
+is missing, that the message was not examined, and the command that restores
+it — and exits 3 for an operational failure rather than 2 for usage.
 
 ## 0.8.0
 
