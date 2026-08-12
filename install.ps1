@@ -1,8 +1,8 @@
 <#
     Installs commitlore from source on Windows, for any agent that is not Claude Code.
 
-      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.ps1 | iex
-      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.4.1/install.ps1))) v0.4.1
+      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1 | iex
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
 
     Claude Code users do not need this script. The repository is itself a plugin
     marketplace (ADR-0011), so two /plugin commands register the MCP server, the
@@ -493,7 +493,7 @@ if (-not [string]::IsNullOrEmpty($Version)) {
     } elseif ($Version -match '^[0-9]') {
         $Version = "v$Version"
     } else {
-        Stop-Install """$Version"" is not a version tag. Pass a tag such as v0.4.1, or pass nothing to install the newest one." 1
+        Stop-Install """$Version"" is not a version tag. Pass a tag such as v1.2.3, or pass nothing to install the newest one." 1
     }
 } else {
     # Only vMAJOR.MINOR.PATCH is considered. A pre-release tag would otherwise
@@ -513,7 +513,7 @@ if (-not [string]::IsNullOrEmpty($Version)) {
         }
     }
     if ($tags.Count -eq 0) {
-        Stop-Install "no version tag could be resolved from $SourceUrl. Pass one explicitly, for example: & ([scriptblock]::Create((irm <url>/install.ps1))) v0.4.1" 2
+        Stop-Install "no version tag could be resolved from $SourceUrl. Pass one explicitly, for example: & ([scriptblock]::Create((irm <url>/install.ps1))) v1.2.3" 2
     }
     $Version = ($tags | Sort-Object -Property { [version]($_.TrimStart('v')) } | Select-Object -Last 1)
 }

@@ -78,6 +78,12 @@ commitlore plugin install-codex
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
 ```
 
+**Windows** — 在 PowerShell 中执行同样的安装：
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+```
+
 **Hermes** — 安装 CLI 后，配置它的 host integration：
 
 ```bash

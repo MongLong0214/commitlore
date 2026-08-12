@@ -84,6 +84,12 @@ Prerequisites for either path: Node.js 22+ and Git. The script checks both befor
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
 ```
 
+**Windows** — the same install, in PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+```
+
 **Hermes** — after installing the CLI, configure its host integration:
 
 ```bash

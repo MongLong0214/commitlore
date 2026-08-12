@@ -80,6 +80,12 @@ Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や
 curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.sh | sh
 ```
 
+**Windows** — PowerShell で同じインストールを行います:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.0/install.ps1))) v0.8.0
+```
+
 **Hermes** — CLI をインストールした後、host integration を設定します:
 
 ```bash
