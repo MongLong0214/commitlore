@@ -12394,7 +12394,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   let read = 0;
   const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
   for (const batch of chunked(shas, batchSize)) {
-    if (budget !== void 0 && Date.now() > budget.deadline) {
+    if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read;
       return records;
     }

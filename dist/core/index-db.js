@@ -427,7 +427,7 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     // on a run that has already decided it would rather stop early than wait.
     const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
     for (const batch of chunked(shas, batchSize)) {
-        if (budget !== undefined && Date.now() > budget.deadline) {
+        if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
             if (cost !== undefined)
                 cost.unreadCommits = shas.length - read;
             return records;

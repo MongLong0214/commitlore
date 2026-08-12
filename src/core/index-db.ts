@@ -430,6 +430,16 @@ type ExclusionCounts = Map<string, number>;
 export interface ScanBudget {
   /** `Date.now()` value after which no further batch is read. */
   deadline: number;
+  /**
+   * The clock the deadline is read against. Defaults to `Date.now`.
+   *
+   * Injectable because the case worth testing — a budget that expires *partway*
+   * through, rather than one already spent when the scan starts — is otherwise
+   * a race against the machine. Asserting it with a real millisecond budget
+   * passed on a slow laptop and failed on a fast CI runner, where the scan
+   * finished inside the budget and nothing was truncated.
+   */
+  now?: () => number;
 }
 
 /** Filled in by a budgeted scan: 0 means every commit was read. */
@@ -648,7 +658,7 @@ const readCommitRecords = (
   const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
 
   for (const batch of chunked(shas, batchSize)) {
-    if (budget !== undefined && Date.now() > budget.deadline) {
+    if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== undefined) cost.unreadCommits = shas.length - read;
       return records;
     }
