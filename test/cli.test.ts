@@ -5,17 +5,20 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { loadFixtures } from './fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
-const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
-const SCHEMA_MODULE = fileURLToPath(new URL('../dist/core/schema.js', import.meta.url));
+let CLI = '';
+let SCHEMA_MODULE = '';
+let harness = '';
 
 const runCli = (args: string[], stdin = '') =>
   spawnSync(process.execPath, [CLI, ...args], {
@@ -26,7 +29,14 @@ const runCli = (args: string[], stdin = '') =>
   });
 
 beforeAll(() => {
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json'], {
+  harness = mkdtempSync(join(realpathSync(tmpdir()), 'commitlore-cli-dist-'));
+  CLI = join(harness, 'dist', 'cli.js');
+  SCHEMA_MODULE = join(harness, 'dist', 'core', 'schema.js');
+  symlinkSync(join(PACKAGE_ROOT, 'node_modules'), join(harness, 'node_modules'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'spec'), join(harness, 'spec'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'package.json'), join(harness, 'package.json'));
+
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json', '--outDir', join(harness, 'dist')], {
     shell: false,
     encoding: 'utf8',
     cwd: PACKAGE_ROOT,
@@ -35,6 +45,10 @@ beforeAll(() => {
     throw new Error(`tsc build failed (exit ${build.status}):\n${build.stdout}${build.stderr}`);
   }
 }, 120_000);
+
+afterAll(() => {
+  if (harness !== '') rmSync(harness, { recursive: true, force: true });
+});
 
 describe('commitlore CLI', () => {
   it('starts with a node shebang', () => {

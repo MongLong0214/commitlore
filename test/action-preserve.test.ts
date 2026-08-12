@@ -23,6 +23,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +37,7 @@ import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
-const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+let CLI = '';
 const ACTION_DIR = fileURLToPath(new URL('../action/preserve/', import.meta.url));
 const PRESERVE = join(ACTION_DIR, 'preserve.mjs');
 const ACTION_YML = join(ACTION_DIR, 'action.yml');
@@ -246,7 +247,13 @@ const runPreserve = (
 };
 
 beforeAll(() => {
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json'], {
+  const harness = tempDir('dist');
+  CLI = join(harness, 'dist', 'cli.js');
+  symlinkSync(join(REPO_ROOT, 'node_modules'), join(harness, 'node_modules'), 'dir');
+  symlinkSync(join(REPO_ROOT, 'spec'), join(harness, 'spec'), 'dir');
+  symlinkSync(join(REPO_ROOT, 'package.json'), join(harness, 'package.json'));
+
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json', '--outDir', join(harness, 'dist')], {
     shell: false,
     encoding: 'utf8',
     cwd: REPO_ROOT,

@@ -36,7 +36,7 @@ import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
-const CLI_JS = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+let CLI_JS = '';
 
 // `hooks install` (called by the `hooks` step below) records the entry point
 // this process was launched from (`process.argv[1]`) as the hook's target
@@ -44,10 +44,19 @@ const CLI_JS = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 // built commitlore entry; inside this test process it is vitest's own entry,
 // which would make `doctor`'s hook-runtime probe fail for a reason that has
 // nothing to do with `init`. Every `runInit` call below runs with argv[1]
-// pointed at a real, freshly built `dist/cli.js` instead, matching how
-// `test/cli.test.ts` rebuilds it for the same reason.
+// pointed at a real, freshly built `dist/cli.js` in this suite's private
+// harness instead, matching how `test/cli.test.ts` rebuilds it for the same
+// reason.
 beforeAll(() => {
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json'], {
+  // `runInit` remains imported from source, so its hook installer records the
+  // source package root. Keep this unique build below that root: the artifact
+  // is private, while the recorded CLI still has the same installation root
+  // the hook's containment check expects.
+  const harness = mkdtempSync(join(PACKAGE_ROOT, '.commitlore-init-dist-'));
+  scratch.push(harness);
+  CLI_JS = join(harness, 'dist', 'cli.js');
+
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json', '--outDir', join(harness, 'dist')], {
     cwd: PACKAGE_ROOT,
     encoding: 'utf8',
   });

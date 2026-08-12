@@ -17,6 +17,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -29,7 +30,7 @@ import { execGitOrThrow } from '../src/core/git.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
-const SERVER_ENTRY = fileURLToPath(new URL('../dist/mcp/main.js', import.meta.url));
+let SERVER_ENTRY = '';
 
 const PROTOCOL_VERSION = '2025-11-25';
 const RPC_TIMEOUT_MS = 30_000;
@@ -165,7 +166,14 @@ const toolJson = (response: RpcResponse): Record<string, unknown> => {
 // ---------------------------------------------------------------------------
 
 beforeAll(() => {
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json'], {
+  const harness = mkdtempSync(join(tmpdir(), 'commitlore-mcp-capture-dist-'));
+  temporaries.push(harness);
+  SERVER_ENTRY = join(harness, 'dist', 'mcp', 'main.js');
+  symlinkSync(join(PACKAGE_ROOT, 'node_modules'), join(harness, 'node_modules'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'spec'), join(harness, 'spec'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'package.json'), join(harness, 'package.json'));
+
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json', '--outDir', join(harness, 'dist')], {
     shell: false,
     encoding: 'utf8',
     cwd: PACKAGE_ROOT,

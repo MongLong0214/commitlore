@@ -27,6 +27,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
@@ -41,9 +42,10 @@ import { createTestRepo } from './git-fixtures.js';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
-const SERVER_ENTRY = fileURLToPath(new URL('../dist/mcp/main.js', import.meta.url));
-const SERVER_MODULE = fileURLToPath(new URL('../dist/mcp/server.js', import.meta.url));
-const CLI = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+let SERVER_ENTRY = '';
+let SERVER_MODULE = '';
+let CLI = '';
+let buildHarness = '';
 
 /** The files this ticket owns. The source guards below scan exactly these. */
 const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'mcp/lifecycle.ts', 'commands/mcp.ts'];
@@ -79,10 +81,10 @@ const RPC_TIMEOUT_MS = 30_000;
  * that suite's `execFileSync` calls are fully synchronous, so they cannot be
  * pre-empted by vitest's timeout at all -- their failure was a real
  * consistency check tripping on a shared `dist/` raced by another test
- * file's rebuild, not a slow clock. Nothing here reads or rebuilds `dist/`
- * concurrently with anything else, so that specific race does not apply to
- * this file; this is the ordinary case of a fixed budget sized for solo
- * execution running out under real, unavoidable concurrency.
+ * file's rebuild, not a slow clock. This suite's build and runtime output now
+ * live in a private harness, so that specific race does not apply to this
+ * file; this is the ordinary case of a fixed budget sized for solo execution
+ * running out under real, unavoidable concurrency.
  */
 vi.setConfig({ testTimeout: 5_000 * Math.max(availableParallelism() - 1, 1) });
 
@@ -100,7 +102,15 @@ vi.setConfig({ testTimeout: 5_000 * Math.max(availableParallelism() - 1, 1) });
  * output is filtered rather than ignored.
  */
 beforeAll(() => {
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json'], {
+  buildHarness = mkdtempSync(join(tmpdir(), 'commitlore-mcp-dist-'));
+  SERVER_ENTRY = join(buildHarness, 'dist', 'mcp', 'main.js');
+  SERVER_MODULE = join(buildHarness, 'dist', 'mcp', 'server.js');
+  CLI = join(buildHarness, 'dist', 'cli.js');
+  symlinkSync(join(PACKAGE_ROOT, 'node_modules'), join(buildHarness, 'node_modules'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'spec'), join(buildHarness, 'spec'), 'dir');
+  symlinkSync(join(PACKAGE_ROOT, 'package.json'), join(buildHarness, 'package.json'));
+
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.json', '--outDir', join(buildHarness, 'dist')], {
     shell: false,
     encoding: 'utf8',
     cwd: PACKAGE_ROOT,
@@ -467,6 +477,7 @@ afterAll(async () => {
   // Await the shutdown before removing anything the server may still write to.
   await stub?.close();
   for (const dir of temporaries) rmSync(dir, { recursive: true, force: true });
+  if (buildHarness !== '') rmSync(buildHarness, { recursive: true, force: true });
 });
 
 describe('handshake and declarations', () => {
