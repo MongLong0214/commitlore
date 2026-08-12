@@ -30,7 +30,7 @@ describe('Codex plugin installation', () => {
   it('uses Codex APIs once and records ownership only after the plugin is installed', () => {
     const calls: string[][] = [];
     const responses = [
-      result('MARKETPLACE ROOT\n'),
+      result('{"marketplaces":[]}'),
       result(),
       result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore not installed\n'),
       result(),
@@ -47,7 +47,7 @@ describe('Codex plugin installation', () => {
 
     expect(installed.exitCode).toBe(0);
     expect(calls).toEqual([
-      ['plugin', 'marketplace', 'list'],
+      ['plugin', 'marketplace', 'list', '--json'],
       ['plugin', 'marketplace', 'add', 'MongLong0214/commitlore'],
       ['plugin', 'list'],
       ['plugin', 'add', 'commitlore@commitlore'],
@@ -61,15 +61,28 @@ describe('Codex plugin installation', () => {
       dataHome: dataHome(),
       run: (args) => {
         calls.push([...args]);
-        return args.join(' ') === 'plugin marketplace list'
-          ? result('MARKETPLACE ROOT\ncommitlore /tmp/commitlore\n')
+        return args.join(' ') === 'plugin marketplace list --json'
+          ? result(
+              JSON.stringify({
+                marketplaces: [
+                  {
+                    name: 'commitlore',
+                    // What Codex actually reports for `MongLong0214/commitlore`.
+                    marketplaceSource: {
+                      sourceType: 'git',
+                      source: 'https://github.com/MongLong0214/commitlore.git',
+                    },
+                  },
+                ],
+              }),
+            )
           : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.7.1 /tmp/commitlore\n');
       },
     });
 
     expect(installed.exitCode).toBe(0);
     expect(calls).toEqual([
-      ['plugin', 'marketplace', 'list'],
+      ['plugin', 'marketplace', 'list', '--json'],
       ['plugin', 'list'],
     ]);
     expect(installed.report.join('\n')).toContain('Codex plugin already installed: commitlore@commitlore');
@@ -80,6 +93,84 @@ describe('Codex plugin installation', () => {
   // later uninstall would delete their state, which is the opposite of the
   // promise in docs/install.md. This test existed and checked the calls and the
   // wording; it did not check the one durable side effect that mattered.
+  /**
+   * The name was the whole test, so a marketplace called `commitlore` was
+   * accepted however it had been configured — and the next call was
+   * `plugin add commitlore@commitlore`. A marketplace of that name pointing
+   * anywhere else meant installing somebody else's plugin and reporting
+   * CommitLore installed.
+   */
+  it('refuses to install from a marketplace of our name that points elsewhere', () => {
+    const calls: string[][] = [];
+    const home = dataHome();
+
+    const installed = installCodexPlugin({
+      dataHome: home,
+      run: (args) => {
+        calls.push([...args]);
+        return result(
+          JSON.stringify({
+            marketplaces: [
+              {
+                name: 'commitlore',
+                marketplaceSource: { sourceType: 'git', source: 'https://github.com/attacker/commitlore.git' },
+              },
+            ],
+          }),
+        );
+      },
+    });
+
+    expect(installed.exitCode).toBe(2);
+    // Nothing was added and nothing was installed: the listing is the only call.
+    expect(calls).toEqual([['plugin', 'marketplace', 'list', '--json']]);
+    expect(installed.report.join('\n')).toContain('attacker/commitlore');
+    expect(existsSync(codexPluginMarkerPath(undefined, home))).toBe(false);
+  });
+
+  it('accepts the source Codex reports for the shorthand this tool adds', () => {
+    // `MongLong0214/commitlore` goes in; `https://github.com/MongLong0214/commitlore.git`
+    // comes back. Comparing those literally would refuse every correct install.
+    const installed = installCodexPlugin({
+      dataHome: dataHome(),
+      run: (args) =>
+        args.join(' ') === 'plugin marketplace list --json'
+          ? result(
+              JSON.stringify({
+                marketplaces: [
+                  {
+                    name: 'commitlore',
+                    marketplaceSource: {
+                      sourceType: 'git',
+                      source: 'https://github.com/MongLong0214/commitlore.git',
+                    },
+                  },
+                ],
+              }),
+            )
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.8.0 /tmp/c\n'),
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(installed.report.join('\n')).not.toContain('points at');
+  });
+
+  it('says so when Codex cannot report where a marketplace points', () => {
+    // An older Codex prints a table with no source column. That is neither
+    // "ours" nor "theirs", and reporting it as either would be a claim this
+    // tool cannot support.
+    const installed = installCodexPlugin({
+      dataHome: dataHome(),
+      run: (args) =>
+        args.join(' ') === 'plugin marketplace list --json'
+          ? result('MARKETPLACE ROOT\ncommitlore /tmp/commitlore\n')
+          : result('PLUGIN STATUS VERSION PATH\ncommitlore@commitlore installed, enabled 0.8.0 /tmp/c\n'),
+    });
+
+    expect(installed.exitCode).toBe(0);
+    expect(installed.report.join('\n')).toContain('could not confirm which repository');
+  });
+
   it('claims no ownership over a plugin it found already installed', () => {
     const home = dataHome();
     const installed = installCodexPlugin({
