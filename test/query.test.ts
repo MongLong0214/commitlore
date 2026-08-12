@@ -722,6 +722,7 @@ describe('notes merge and dedupe', () => {
     const injection = buildInjection({
       cwd: dir,
       path: 'src/queue/drain.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
       noIndex: true,
     });
     expect(injection.text).not.toContain('only three workers may run concurrently');
@@ -974,6 +975,7 @@ describe('merged-record trust', () => {
     const injection = buildInjection({
       cwd: dir,
       path: 'src/dual.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
       trustedAuthors: [TRUSTED_AUTHOR],
       noIndex: true,
     });
@@ -990,6 +992,7 @@ describe('merged-record trust', () => {
       const injection = buildInjection({
         cwd: dir,
         path: 'src/dual.ts',
+        at: new Date('2100-01-01T00:00:00Z'),
         trustedAuthors: [TRUSTED_AUTHOR],
         noIndex: true,
       });

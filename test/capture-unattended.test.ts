@@ -204,7 +204,12 @@ describe('#511 default off: a repository with no setting captures as it did befo
   it('reads back through the consumer route as a claim', async () => {
     const repo = makeRepo();
     await runWholePipeline(repo);
-    const injection = buildInjection({ cwd: repo, path: 'file.txt', trustedAuthors: [TRUSTED] });
+    const injection = buildInjection({
+      cwd: repo,
+      path: 'file.txt',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    });
     const line = injection.text
       .split('\n')
       .find((candidate) => candidate.includes('use sha256 for integrity checking'));
@@ -260,7 +265,12 @@ describe('#511 opted in: unattended capture in auto mode', () => {
     expect(message).toBe(`test commit\n\n${EXPECTED_BLOCK}`);
 
     // The consumer route: what the next agent receives before editing a path.
-    const injection = buildInjection({ cwd: repo, path: 'file.txt', trustedAuthors: [TRUSTED] });
+    const injection = buildInjection({
+      cwd: repo,
+      path: 'file.txt',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    });
     const line = injection.text
       .split('\n')
       .find((candidate) => candidate.includes('use sha256 for integrity checking'));

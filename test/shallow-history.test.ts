@@ -72,7 +72,12 @@ describe('shallow history caveat', () => {
       incomplete: false,
     });
 
-    const injection = buildInjection({ cwd, path: 'src/policy.ts', noIndex: true });
+    const injection = buildInjection({
+      cwd,
+      path: 'src/policy.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
+      noIndex: true,
+    });
     expect(injection.diagnostics).toContain(`this clone has ${caveat} (fix: git fetch --unshallow)`);
     expect(
       hookResult(
@@ -81,7 +86,7 @@ describe('shallow history caveat', () => {
           tool_name: 'Read',
           tool_input: { file_path: 'src/policy.ts' },
         }),
-        { cwd, noIndex: true },
+        { cwd, at: new Date('2100-01-01T00:00:00Z'), noIndex: true },
       ).stderr,
     ).toContain(caveat);
 

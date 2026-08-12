@@ -60,6 +60,8 @@ export interface BeforeChangeOptions {
   path: string;
   proposal?: string;
   cwd?: string;
+  /** Lifecycle instant resolved by the MCP edge. */
+  at: Date;
   /** Authors whose active records may direct the caller. */
   trustedAuthors?: readonly string[];
 }
@@ -121,21 +123,25 @@ const resolveHead = (cwd: string): string => {
 
 /**
  * Builds a cache key. Two forms:
- * - Context-only (no proposal): `ctx:<sha>:<path-hash>`
- * - With proposal: `full:<sha>:<path-hash>:<proposal-hash>`
+ * - Context-only (no proposal): `ctx:<sha>:<lifecycle-instant>:<path-hash>`
+ * - With proposal: `full:<sha>:<lifecycle-instant>:<path-hash>:<proposal-hash>`
  *
  * The prefix makes the two forms structurally distinguishable, so a
  * context-snapshot key can never serve a proposal-bearing response.
  */
-const buildCacheKey = (head: string, path: string, proposal: string | undefined): string => {
+const buildCacheKey = (head: string, path: string, proposal: string | undefined, at: Date): string => {
+  // The MCP edge supplies a UTC-day bucket for automatic calls. Preserve an
+  // explicit instant exactly, because it can also decide which historical
+  // commits existed when the caller asked the question.
+  const lifecycleInstant = at.toISOString();
   const pathHash = createHash('sha256').update(path).digest('hex').slice(0, 16);
   if (proposal === undefined) {
-    return `ctx:${head}:${pathHash}`;
+    return `ctx:${head}:${lifecycleInstant}:${pathHash}`;
   }
   // Normalise the proposal before hashing: trim and collapse whitespace
   const normalised = proposal.trim().replace(/\s+/g, ' ');
   const proposalHash = createHash('sha256').update(normalised).digest('hex').slice(0, 16);
-  return `full:${head}:${pathHash}:${proposalHash}`;
+  return `full:${head}:${lifecycleInstant}:${pathHash}:${proposalHash}`;
 };
 
 /**
@@ -147,6 +153,10 @@ const buildCacheKey = (head: string, path: string, proposal: string | undefined)
 export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
   const cwd = opts.cwd ?? process.cwd();
   const path = opts.path;
+  const at = opts.at;
+  if (Number.isNaN(at.getTime())) {
+    throw new Error('commitlore_before_change: opts.at is not a valid Date');
+  }
 
   // Derive verification gaps — this determines whether we can trust the context
   const gaps = deriveVerificationGaps(cwd);
@@ -177,6 +187,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
     const queryResult = withholdBlocked(
       runQuery({
         cwd,
+        at,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       }),
@@ -193,6 +204,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
       const guardResult = guard({
         proposal: opts.proposal,
         cwd,
+        at,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       });
@@ -204,7 +216,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
     }
   }
 
-  const cacheKey = buildCacheKey(head, path, opts.proposal);
+  const cacheKey = buildCacheKey(head, path, opts.proposal, at);
 
   return {
     active_decisions: activeDecisions,

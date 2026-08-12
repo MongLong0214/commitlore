@@ -117,7 +117,12 @@ const ablationShim = (ablation: Readonly<Record<string, boolean>>): string =>
     `const ablation = ${JSON.stringify(ablation)};`,
     "let injection;",
     "try {",
-    "  injection = buildInjection({ path: filePath, cwd: process.cwd(), ablation });",
+    // The instant is resolved here rather than inside `buildInjection`, which
+    // takes no clock. The shim mirrors the shipping hook: the final millisecond
+    // of the current UTC day, so an arm sees the same lifecycle the product
+    // would deliver on the day the run happens.
+    "const at = new Date(`${new Date().toISOString().slice(0, 10)}T23:59:59.999Z`);",
+    "  injection = buildInjection({ path: filePath, cwd: process.cwd(), at, ablation });",
     "} catch {",
     "  process.exit(0);", // a path with nothing, or one the injector refuses
     "}",

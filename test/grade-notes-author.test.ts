@@ -101,7 +101,12 @@ describe('#409 a notes-sourced record is graded by the note author, not the comm
 
   it('does not serve a forged note as a directive under the commit author (buildInjection)', () => {
     const dir = forgedNoteRepo('notesforge-inject');
-    const injection = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] });
+    const injection = buildInjection({
+      cwd: dir,
+      path: 'src.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    });
     const line = injection.text.split('\n').find((candidate) => candidate.includes(FORGED));
     expect(line, 'the forged record should reach the injection at all').toBeDefined();
     expect(line).not.toContain('[directive]');

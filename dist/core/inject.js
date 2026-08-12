@@ -9,12 +9,12 @@
  * ## It is deterministic, byte for byte
  *
  * No LLM call, no randomness, and no clock. `Date.now()` and `new Date()` are
- * not called here — the evaluation instant arrives as `opts.at`, and when the
- * caller supplies none it defaults to **HEAD's own commit instant**, never to
- * wall-clock now. That default is not a detail: ADR-0006 makes the projection
- * cacheable, `cacheKey` promises that the same HEAD, path and options produce
- * the same bytes, and an instant read from the clock would make that promise a
- * lie the moment the second hand moved. The repository's clock is HEAD.
+ * not called here — the evaluation instant arrives as `opts.at`, resolved by
+ * the command or hook before it calls this projection. The automatic route
+ * supplies the final millisecond of the current UTC day, while callers that
+ * need a historical answer supply their own instant. That keeps this module a
+ * pure function of its inputs and keeps `cacheKey` honest: same inputs,
+ * including the same lifecycle day, produce the same bytes.
  *
  * Every ordering is stated explicitly. Nothing here iterates a `Map` or a `Set`
  * and hopes; entries are sorted by (kind, commit instant, `Record-Id`, sha,
@@ -155,39 +155,11 @@ const shortSha = (sha) => sha.length > SHORT_SHA_CHARS ? sha.slice(0, SHORT_SHA_
 /** Trailing slashes would make `src/` and `src` different scopes. */
 const normalizePath = (path) => path.trim().replace(/\/+$/, '');
 // ---------------------------------------------------------------------------
-// Repository facts: HEAD, its instant, and commit authors
+// Repository facts: HEAD and commit authors
 // ---------------------------------------------------------------------------
 const headSha = (cwd) => {
     const result = execGit(['rev-parse', 'HEAD'], { cwd });
     return result.code === 0 ? result.stdout.trim() : '';
-};
-/**
- * Epoch, used only when the repository has no HEAD to read an instant from.
- *
- * Reads no clock: a repository with no commits has no records either, so the
- * instant this stands in for never decides anything.
- */
-const EPOCH = new Date(0);
-/**
- * The instant to evaluate against: the caller's, or HEAD's commit instant.
- *
- * Defaulting to HEAD rather than now is what makes `cacheKey` honest — see the
- * module header. It also has a cost worth naming: a record whose `Expires:`
- * date falls between HEAD's commit and today is still injected, because from
- * the repository's point of view that day has not arrived. A caller that wants
- * the wall clock passes `opts.at`, and the CLI exposes it as `--at`.
- */
-const resolveInstant = (cwd, at) => {
-    if (at !== undefined) {
-        if (Number.isNaN(at.getTime()))
-            throw new Error('buildInjection: opts.at is not a valid Date');
-        return at;
-    }
-    const result = execGit(['log', '-1', '--format=%cI'], { cwd });
-    if (result.code !== 0)
-        return EPOCH;
-    const parsed = Date.parse(result.stdout.trim());
-    return Number.isNaN(parsed) ? EPOCH : new Date(parsed);
 };
 /** Object names as git writes them. Anything else never reaches a git argument. */
 const SHA_RE = /^[0-9a-f]{4,40}$/;
@@ -428,9 +400,11 @@ const fit = (input, entries, budgetChars) => {
 // ---------------------------------------------------------------------------
 const CACHE_KEY_CHARS = 32;
 /**
- * `HEAD sha + path + options`, hashed.
+ * `HEAD sha + path + options + evaluation instant`, hashed.
  *
  * Every input that can change a byte of `text` is in here, and nothing else is:
+ * the automatic caller supplies a UTC-day bucket as `at`, so this records that
+ * bucket instead of a per-invocation wall-clock instant.
  * `trustedAuthors` is sorted and de-duplicated because reordering the list
  * cannot change the output, and the template version is included because a
  * change to this file can.
@@ -506,7 +480,10 @@ export const buildInjection = (opts) => {
     const path = ablation.noScope ? '.' : requested;
     const budgetTokens = resolveBudget(opts.budget);
     const noIndex = opts.noIndex === true;
-    const at = resolveInstant(cwd, opts.at);
+    const at = opts.at;
+    if (at === undefined || Number.isNaN(at.getTime())) {
+        throw new Error('buildInjection: opts.at is not a valid Date');
+    }
     const head = headSha(cwd);
     const cacheKey = cacheKeyOf({
         head,

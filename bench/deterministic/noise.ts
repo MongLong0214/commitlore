@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { CHARS_PER_TOKEN, buildInjection } from '../../dist/core/inject.js';
+import { repositoryInstant } from '../repository-instant.ts';
 import { command, git, timing } from './shared.ts';
 import type { NoiseExposureRow, NoiseRoute, RowBase } from './types.ts';
 
@@ -234,7 +235,11 @@ const delivery = (
       text: selected.map((record) => record.message).join('\n\n'),
     };
   }
-  const injection = buildInjection({ cwd: fixture.dir, path: TARGET_PATH });
+  const injection = buildInjection({
+    cwd: fixture.dir,
+    path: TARGET_PATH,
+    at: repositoryInstant(fixture.dir),
+  });
   return { records: injection.records, relevant: injection.records, text: injection.text };
 };
 

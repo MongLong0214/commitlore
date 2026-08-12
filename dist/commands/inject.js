@@ -27,18 +27,21 @@ import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_EVENT, claudeHookStatus, claudeSetting
 // Option parsing
 // ---------------------------------------------------------------------------
 /**
- * Resolves `--at`. Unlike the query commands, an absent `--at` is *not*
- * replaced with now: the engine defaults it to HEAD's commit instant so that
- * the cache key it returns means what it says (see `core/inject.ts`).
+ * Resolves `--at` at the command edge. The automatic route uses the final
+ * millisecond of the current UTC day: a date-form `Expires:` is day-granular,
+ * and this representative keeps two otherwise identical injections on that
+ * day byte-identical (including their cache key) without hiding commits made
+ * later that day. An explicit `--at` remains exact, so callers such as the
+ * benchmark can pin a historical instant.
  */
 const evaluationInstant = (raw) => {
-    if (raw === undefined)
-        return undefined;
-    const parsed = new Date(raw);
+    const parsed = raw === undefined ? new Date() : new Date(raw);
     if (Number.isNaN(parsed.getTime())) {
         throw new Error(`--at is not a valid ISO 8601 instant: ${raw}`);
     }
-    return parsed;
+    if (raw !== undefined)
+        return parsed;
+    return new Date(`${parsed.toISOString().slice(0, 10)}T23:59:59.999Z`);
 };
 const tokenBudget = (raw) => {
     if (raw === undefined)
@@ -194,7 +197,7 @@ const injectOptions = (path, options, cwd) => {
         path,
         cwd,
         noIndex: options.index === false,
-        ...(at === undefined ? {} : { at }),
+        at,
         ...(budget === undefined ? {} : { budget }),
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
         ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
@@ -296,7 +299,7 @@ export const register = (program) => {
         .option('--path <path>', 'the path to project (required outside --hook-input)')
         .option('--budget <tokens>', 'token budget for the payload (default: 800)')
         .option('--json', 'emit the projection object, including its cache key')
-        .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: HEAD commit instant)')
+        .option('--at <instant>', 'evaluate as of an ISO 8601 instant (default: current UTC day)')
         .option('--trusted-author <author>', 'an author string whose records may render as instructions (repeatable; not identity proof)', collect, [])
         .option('--no-index', 'answer from git alone, without the SQLite index')
         .option('--hook-input', `read a ${CLAUDE_HOOK_EVENT} payload on stdin and answer as hook JSON`)

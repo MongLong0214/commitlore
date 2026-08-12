@@ -71,21 +71,25 @@ const resolveHead = (cwd) => {
 };
 /**
  * Builds a cache key. Two forms:
- * - Context-only (no proposal): `ctx:<sha>:<path-hash>`
- * - With proposal: `full:<sha>:<path-hash>:<proposal-hash>`
+ * - Context-only (no proposal): `ctx:<sha>:<lifecycle-instant>:<path-hash>`
+ * - With proposal: `full:<sha>:<lifecycle-instant>:<path-hash>:<proposal-hash>`
  *
  * The prefix makes the two forms structurally distinguishable, so a
  * context-snapshot key can never serve a proposal-bearing response.
  */
-const buildCacheKey = (head, path, proposal) => {
+const buildCacheKey = (head, path, proposal, at) => {
+    // The MCP edge supplies a UTC-day bucket for automatic calls. Preserve an
+    // explicit instant exactly, because it can also decide which historical
+    // commits existed when the caller asked the question.
+    const lifecycleInstant = at.toISOString();
     const pathHash = createHash('sha256').update(path).digest('hex').slice(0, 16);
     if (proposal === undefined) {
-        return `ctx:${head}:${pathHash}`;
+        return `ctx:${head}:${lifecycleInstant}:${pathHash}`;
     }
     // Normalise the proposal before hashing: trim and collapse whitespace
     const normalised = proposal.trim().replace(/\s+/g, ' ');
     const proposalHash = createHash('sha256').update(normalised).digest('hex').slice(0, 16);
-    return `full:${head}:${pathHash}:${proposalHash}`;
+    return `full:${head}:${lifecycleInstant}:${pathHash}:${proposalHash}`;
 };
 /**
  * The unified before-change query. Returns exactly five fields.
@@ -96,6 +100,10 @@ const buildCacheKey = (head, path, proposal) => {
 export const beforeChange = (opts) => {
     const cwd = opts.cwd ?? process.cwd();
     const path = opts.path;
+    const at = opts.at;
+    if (Number.isNaN(at.getTime())) {
+        throw new Error('commitlore_before_change: opts.at is not a valid Date');
+    }
     // Derive verification gaps — this determines whether we can trust the context
     const gaps = deriveVerificationGaps(cwd);
     // If history is unavailable entirely, we still report what we can but the
@@ -122,6 +130,7 @@ export const beforeChange = (opts) => {
         // reading this tool has no way to know the three routes disagreed.
         const queryResult = withholdBlocked(runQuery({
             cwd,
+            at,
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         }));
@@ -135,6 +144,7 @@ export const beforeChange = (opts) => {
             const guardResult = guard({
                 proposal: opts.proposal,
                 cwd,
+                at,
                 ...(path === '' || path === '.' ? {} : { paths: [path] }),
                 ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
             });
@@ -146,7 +156,7 @@ export const beforeChange = (opts) => {
             confidence = 'timed-out';
         }
     }
-    const cacheKey = buildCacheKey(head, path, opts.proposal);
+    const cacheKey = buildCacheKey(head, path, opts.proposal, at);
     return {
         active_decisions: activeDecisions,
         verification_gaps: gaps,
