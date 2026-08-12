@@ -79,6 +79,7 @@ const injected = (): string =>
   buildInjection({
     path: 'session.ts',
     cwd: repo,
+    at: new Date('2100-01-01T00:00:00Z'),
     noIndex: true,
     trustedAuthors: configuredTrustedAuthors(repo),
     requireSignedDirective: configuredSignedDirectivesRequired(repo),

@@ -20,6 +20,7 @@ import {
   DEFAULT_BUDGET_TOKENS,
   buildInjection,
 } from '../../dist/core/inject.js';
+import { repositoryInstant } from '../repository-instant.ts';
 import { buildCensus, type Census } from './census.ts';
 import { command } from './shared.ts';
 import type {
@@ -227,6 +228,7 @@ const injectionDelivery = (
   const projection = buildInjection({
     cwd: repoRoot,
     path,
+    at: repositoryInstant(repoRoot),
     ...(budget === undefined ? {} : { budget }),
   });
   if (budget === UNBOUNDED_BUDGET_TOKENS) {
@@ -239,6 +241,7 @@ const everyRecordDelivery = (repoRoot: string, budget: number, mustNotTruncate: 
   const projection = buildInjection({
     cwd: repoRoot,
     path: '.',
+    at: repositoryInstant(repoRoot),
     budget,
     ablation: { noScope: true, noLifecycle: true },
   });

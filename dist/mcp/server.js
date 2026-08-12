@@ -167,11 +167,18 @@ export const contextUriPath = (uri) => {
 const contextJson = (root, kind, path) => {
     const keys = KEYS_BY_KIND[kind];
     const trustedAuthors = configuredTrustedAuthors(root);
+    const now = new Date();
+    // Date-form Expires is a UTC-day rule. Answering the MCP delivery surfaces
+    // at the day's final millisecond means the hook, query resource and
+    // before-change tool share one lifecycle input and stable answer for that
+    // day without hiding commits made later that day.
+    const at = new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
     const result = withholdBlocked(runQuery({
         // The agent's query surface answers like `context`: an empty result must
         // say whether the path was ever in the history (#307).
         explainEmptyResult: true,
         cwd: root,
+        at,
         trustedAuthors: configuredTrustedAuthors(root),
         ...(configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {}),
         ...(path === '' ? {} : { paths: [path] }),
@@ -446,10 +453,13 @@ export const createServer = (opts = {}) => {
             const path = pathArg(root, args);
             const proposal = stringArg(args, 'proposal');
             const trustedAuthors = configuredTrustedAuthors(root);
+            const now = new Date();
+            const at = new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
             return asText(beforeChange({
                 path: path === '' ? '.' : path,
                 ...(proposal === undefined ? {} : { proposal }),
                 cwd: root,
+                at,
                 ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
             }));
         },

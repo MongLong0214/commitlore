@@ -9,12 +9,12 @@
  * ## It is deterministic, byte for byte
  *
  * No LLM call, no randomness, and no clock. `Date.now()` and `new Date()` are
- * not called here — the evaluation instant arrives as `opts.at`, and when the
- * caller supplies none it defaults to **HEAD's own commit instant**, never to
- * wall-clock now. That default is not a detail: ADR-0006 makes the projection
- * cacheable, `cacheKey` promises that the same HEAD, path and options produce
- * the same bytes, and an instant read from the clock would make that promise a
- * lie the moment the second hand moved. The repository's clock is HEAD.
+ * not called here — the evaluation instant arrives as `opts.at`, resolved by
+ * the command or hook before it calls this projection. The automatic route
+ * supplies the final millisecond of the current UTC day, while callers that
+ * need a historical answer supply their own instant. That keeps this module a
+ * pure function of its inputs and keeps `cacheKey` honest: same inputs,
+ * including the same lifecycle day, produce the same bytes.
  *
  * Every ordering is stated explicitly. Nothing here iterates a `Map` or a `Set`
  * and hopes; entries are sorted by (kind, commit instant, `Record-Id`, sha,
@@ -121,8 +121,8 @@ export interface InjectOptions {
     path: string;
     /** Token budget for the whole payload. Defaults to `DEFAULT_BUDGET_TOKENS`. */
     budget?: number;
-    /** The instant to evaluate against. Defaults to HEAD's commit instant. */
-    at?: Date;
+    /** The instant to evaluate against, resolved by the caller. */
+    at: Date;
     cwd?: string;
     /** Authors whose records may render as instructions. Empty trusts nobody. */
     trustedAuthors?: readonly string[];

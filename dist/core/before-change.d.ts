@@ -47,6 +47,8 @@ export interface BeforeChangeOptions {
     path: string;
     proposal?: string;
     cwd?: string;
+    /** Lifecycle instant resolved by the MCP edge. */
+    at: Date;
     /** Authors whose active records may direct the caller. */
     trustedAuthors?: readonly string[];
 }

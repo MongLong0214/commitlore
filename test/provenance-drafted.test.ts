@@ -100,7 +100,12 @@ describe('ADR-0030 a record nobody read cannot direct an agent', () => {
         'Provenance: drafted\n',
     ]);
 
-    const injection = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] });
+    const injection = buildInjection({
+      cwd: dir,
+      path: 'src.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    });
     const line = injection.text
       .split('\n')
       .find((candidate) => candidate.includes('session entries must stay under 4KB'));
@@ -156,7 +161,12 @@ describe('ADR-0030 promotion is a superseding record, not an edit', () => {
       `feat: cache in process\n\n${body}Record-Id: r-promo01\nProvenance: drafted\n`,
     ]);
 
-    const before = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] }).text;
+    const before = buildInjection({
+      cwd: dir,
+      path: 'src.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    }).text;
     expect(before).toContain('r-promo01');
     expect(before).not.toContain('[directive]  r-promo01');
 
@@ -169,7 +179,12 @@ describe('ADR-0030 promotion is a superseding record, not an edit', () => {
       `feat: stand behind it\n\n${body}Supersedes: r-promo01\nRecord-Id: r-promo02\nProvenance: authored\n`,
     ]);
 
-    const after = buildInjection({ cwd: dir, path: 'src.ts', trustedAuthors: [TRUSTED] }).text;
+    const after = buildInjection({
+      cwd: dir,
+      path: 'src.ts',
+      at: new Date('2100-01-01T00:00:00Z'),
+      trustedAuthors: [TRUSTED],
+    }).text;
     const line = after
       .split('\n')
       .find((candidate) => candidate.includes('session entries must stay under 4KB'));

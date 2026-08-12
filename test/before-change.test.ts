@@ -14,6 +14,7 @@ import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { beforeChange as runBeforeChange, type BeforeChangeOptions } from '../src/core/before-change.js';
 import { createTestRepo } from './git-fixtures.js';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,8 @@ import { createTestRepo } from './git-fixtures.js';
 
 let repoDir: string;
 let tmpBase: string;
+const AT = new Date('2100-01-01T00:00:00Z');
+const beforeChange = (opts: Omit<BeforeChangeOptions, 'at'>) => runBeforeChange({ ...opts, at: AT });
 
 beforeAll(() => {
   tmpBase = mkdtempSync(join(tmpdir(), 'before-change-'));
@@ -67,7 +70,6 @@ afterAll(() => {
 describe('commitlore_before_change', () => {
   // Amendment 1: exactly five response fields
   it('response carries exactly five fields: active_decisions, verification_gaps, possible_revival_matches, guard_confidence, cache_key', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const result = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const keys = Object.keys(result).sort();
     expect(keys).toEqual(
@@ -78,7 +80,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 3: guard_confidence is "not-run" when no proposal supplied
   it('no proposal returns empty matches and guard_confidence "not-run"', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const result = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     expect(result.guard_confidence).toBe('not-run');
     expect(result.possible_revival_matches).toEqual([]);
@@ -86,7 +87,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 3: guard_confidence is "experimental" when a proposal is supplied
   it('proposal returns matches with guard_confidence "experimental"', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const result = beforeChange({
       path: 'src/auth.ts',
       proposal: 'use stateless JWT for session management',
@@ -99,7 +99,6 @@ describe('commitlore_before_change', () => {
   // Amendment 2: guard_confidence qualifies only possible_revival_matches —
   // context fields are identical with and without proposal at one HEAD
   it('context fields are identical with and without a proposal at one HEAD', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const withoutProposal = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const withProposal = beforeChange({
       path: 'src/auth.ts',
@@ -113,7 +112,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 2: path selection — call for path A returns A's records, not B's
   it('call for path A returns A\'s records, never B\'s', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const authResult = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const dbResult = beforeChange({ path: 'src/db.ts', cwd: repoDir });
     // auth records mention JWT, not Redis
@@ -128,7 +126,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 4: verification_gaps is a closed, ordered set
   it('verification_gaps is an array and is empty when all checks pass', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const result = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     expect(Array.isArray(result.verification_gaps)).toBe(true);
     // In a fully readable repo, it should be empty
@@ -137,7 +134,6 @@ describe('commitlore_before_change', () => {
 
   // Fail-closed: non-existent cwd reports gap rather than empty context
   it('path outside the repository fails rather than returning empty context', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     // A non-existent cwd should report history-unavailable, not return empty context silently
     const result = beforeChange({ path: 'src/auth.ts', cwd: '/nonexistent-repo-path' });
     expect(result.verification_gaps).toContain('history-unavailable');
@@ -146,7 +142,6 @@ describe('commitlore_before_change', () => {
 
   // Fail-closed: unreadable repo reports gap
   it('unreadable repository reports verification gap rather than empty context', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const emptyTmp = mkdtempSync(join(tmpdir(), 'no-git-'));
     try {
       const result = beforeChange({ path: '.', cwd: emptyTmp });
@@ -159,7 +154,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 4: verification_gaps ordering is always history-unavailable, shallow-history, notes-unfetched
   it('verification_gaps are always in the canonical order', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     // Use a shallow clone to trigger shallow-history
     const shallowDir = join(tmpBase, 'shallow');
     createTestRepo({ path: shallowDir, source: repoDir, depth: 1 });
@@ -178,7 +172,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 5: cache_key scope — context-only key differs from proposal key
   it('cache_key for context-only differs from proposal-bearing key', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const contextOnly = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const withProposal = beforeChange({
       path: 'src/auth.ts',
@@ -190,7 +183,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 5: two different proposals produce different cache keys
   it('two different proposals produce different cache keys', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const r1 = beforeChange({
       path: 'src/auth.ts',
       proposal: 'use stateless JWT',
@@ -206,7 +198,6 @@ describe('commitlore_before_change', () => {
 
   // Amendment 5: context-snapshot key must never serve a proposal-bearing response
   it('context-snapshot key does not serve a proposal response (distinguishable forms)', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const contextOnly = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const withProposal = beforeChange({
       path: 'src/auth.ts',
@@ -222,10 +213,43 @@ describe('commitlore_before_change', () => {
 
   // Determinism: two calls at one HEAD produce identical payloads
   it('two calls at one HEAD produce identical payloads', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const r1 = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     const r2 = beforeChange({ path: 'src/auth.ts', cwd: repoDir });
     expect(r1).toEqual(r2);
+  });
+
+  it('changes its cache identity when the lifecycle day changes', () => {
+    const first = runBeforeChange({
+      path: 'src/auth.ts',
+      cwd: repoDir,
+      at: new Date('2026-08-11T00:00:00Z'),
+    });
+    const second = runBeforeChange({
+      path: 'src/auth.ts',
+      cwd: repoDir,
+      at: new Date('2026-08-12T00:00:00Z'),
+    });
+
+    expect(second.cache_key).not.toBe(first.cache_key);
+  });
+
+  it('does not return a date expiry that passed after HEAD', () => {
+    const expiryRepo = join(tmpBase, 'expiry-repo');
+    createTestRepo({ path: expiryRepo });
+    mkdirSync(join(expiryRepo, 'src'), { recursive: true });
+    writeFileSync(join(expiryRepo, 'src', 'expiry.ts'), 'export const expired = true;\n');
+    execFileSync('git', ['add', 'src/expiry.ts'], { cwd: expiryRepo });
+    execFileSync(
+      'git',
+      [
+        'commit',
+        '-m',
+        'feat: temporary limit\n\nRecord-Id: r-beforeexpiry01\nLimit: this must expire\nExpires: 2026-08-01',
+      ],
+      { cwd: expiryRepo },
+    );
+
+    expect(beforeChange({ path: 'src/expiry.ts', cwd: expiryRepo }).active_decisions).toEqual([]);
   });
 
   // Amendment 6: tool is registered with readOnlyHint: true
@@ -267,7 +291,6 @@ describe('commitlore_before_change withholds what it labels blocked', () => {
   });
 
   it('does not return the trailer value of a blocked record', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const surface = JSON.stringify(beforeChange({ path: 'src/hot.ts', cwd: blockedRepo }));
     expect(surface, 'the payload reached the model').not.toContain(PAYLOAD);
   });
@@ -275,13 +298,11 @@ describe('commitlore_before_change withholds what it labels blocked', () => {
   it('still says a record is there, rather than reporting a clean path', async () => {
     // Silence would be worse than the leak: an agent told "no records" edits
     // as if nothing was ever recorded about this path.
-    const { beforeChange } = await import('../src/core/before-change.js');
     const result = beforeChange({ path: 'src/hot.ts', cwd: blockedRepo });
     expect(result.active_decisions.length, 'the record vanished entirely').toBeGreaterThan(0);
   });
 
   it('leaves an ordinary record untouched', async () => {
-    const { beforeChange } = await import('../src/core/before-change.js');
     const surface = JSON.stringify(beforeChange({ path: 'src/calm.ts', cwd: blockedRepo }));
     expect(surface).toContain('sessions expire after 24h');
   });

@@ -22781,17 +22781,6 @@ var headSha = (cwd) => {
   const result = execGit(["rev-parse", "HEAD"], { cwd });
   return result.code === 0 ? result.stdout.trim() : "";
 };
-var EPOCH = /* @__PURE__ */ new Date(0);
-var resolveInstant = (cwd, at) => {
-  if (at !== void 0) {
-    if (Number.isNaN(at.getTime())) throw new Error("buildInjection: opts.at is not a valid Date");
-    return at;
-  }
-  const result = execGit(["log", "-1", "--format=%cI"], { cwd });
-  if (result.code !== 0) return EPOCH;
-  const parsed = Date.parse(result.stdout.trim());
-  return Number.isNaN(parsed) ? EPOCH : new Date(parsed);
-};
 var gradeMerged2 = (record2, authors, noteAuthors, at, trustedAuthors, requireSignedDirective) => gradeDeclarations(
   record2,
   {
@@ -22984,7 +22973,10 @@ var buildInjection = (opts) => {
   const path2 = ablation.noScope ? "." : requested;
   const budgetTokens = resolveBudget(opts.budget);
   const noIndex = opts.noIndex === true;
-  const at = resolveInstant(cwd, opts.at);
+  const at = opts.at;
+  if (at === void 0 || Number.isNaN(at.getTime())) {
+    throw new Error("buildInjection: opts.at is not a valid Date");
+  }
   const head = headSha(cwd);
   const cacheKey = cacheKeyOf({
     head,
@@ -23074,12 +23066,12 @@ var buildInjection = (opts) => {
 
 // src/commands/inject.ts
 var evaluationInstant2 = (raw) => {
-  if (raw === void 0) return void 0;
-  const parsed = new Date(raw);
+  const parsed = raw === void 0 ? /* @__PURE__ */ new Date() : new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error(`--at is not a valid ISO 8601 instant: ${raw}`);
   }
-  return parsed;
+  if (raw !== void 0) return parsed;
+  return /* @__PURE__ */ new Date(`${parsed.toISOString().slice(0, 10)}T23:59:59.999Z`);
 };
 var tokenBudget = (raw) => {
   if (raw === void 0) return void 0;
@@ -23182,7 +23174,7 @@ var injectOptions = (path2, options, cwd) => {
     path: path2,
     cwd,
     noIndex: options.index === false,
-    ...at === void 0 ? {} : { at },
+    at,
     ...budget === void 0 ? {} : { budget },
     ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
     ...requireSignedDirective ? { requireSignedDirective: true } : {}
@@ -23255,7 +23247,7 @@ var hookInput = (options) => ({
   ...options.command === void 0 ? {} : { command: options.command }
 });
 var register17 = (program3) => {
-  const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: HEAD commit instant)").option(
+  const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: current UTC day)").option(
     "--trusted-author <author>",
     "an author string whose records may render as instructions (repeatable; not identity proof)",
     collect,
@@ -32325,18 +32317,23 @@ var resolveHead2 = (cwd) => {
   }
   return result.stdout.trim();
 };
-var buildCacheKey = (head, path2, proposal) => {
+var buildCacheKey = (head, path2, proposal, at) => {
+  const lifecycleInstant = at.toISOString();
   const pathHash = createHash8("sha256").update(path2).digest("hex").slice(0, 16);
   if (proposal === void 0) {
-    return `ctx:${head}:${pathHash}`;
+    return `ctx:${head}:${lifecycleInstant}:${pathHash}`;
   }
   const normalised = proposal.trim().replace(/\s+/g, " ");
   const proposalHash = createHash8("sha256").update(normalised).digest("hex").slice(0, 16);
-  return `full:${head}:${pathHash}:${proposalHash}`;
+  return `full:${head}:${lifecycleInstant}:${pathHash}:${proposalHash}`;
 };
 var beforeChange = (opts) => {
   const cwd = opts.cwd ?? process.cwd();
   const path2 = opts.path;
+  const at = opts.at;
+  if (Number.isNaN(at.getTime())) {
+    throw new Error("commitlore_before_change: opts.at is not a valid Date");
+  }
   const gaps = deriveVerificationGaps(cwd);
   const historyUnavailable = gaps.includes("history-unavailable");
   let head;
@@ -32350,6 +32347,7 @@ var beforeChange = (opts) => {
     const queryResult = withholdBlocked(
       runQuery({
         cwd,
+        at,
         ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
         ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       })
@@ -32363,6 +32361,7 @@ var beforeChange = (opts) => {
       const guardResult = guard({
         proposal: opts.proposal,
         cwd,
+        at,
         ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
         ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       });
@@ -32372,7 +32371,7 @@ var beforeChange = (opts) => {
       confidence = "timed-out";
     }
   }
-  const cacheKey = buildCacheKey(head, path2, opts.proposal);
+  const cacheKey = buildCacheKey(head, path2, opts.proposal, at);
   return {
     active_decisions: activeDecisions,
     verification_gaps: gaps,
@@ -32442,12 +32441,15 @@ var contextUriPath = (uri) => {
 var contextJson = (root, kind, path2) => {
   const keys = KEYS_BY_KIND[kind];
   const trustedAuthors = configuredTrustedAuthors(root);
+  const now = /* @__PURE__ */ new Date();
+  const at = /* @__PURE__ */ new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
   const result = withholdBlocked(
     runQuery({
       // The agent's query surface answers like `context`: an empty result must
       // say whether the path was ever in the history (#307).
       explainEmptyResult: true,
       cwd: root,
+      at,
       trustedAuthors: configuredTrustedAuthors(root),
       ...configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {},
       ...path2 === "" ? {} : { paths: [path2] },
@@ -32676,11 +32678,14 @@ var createServer = (opts = {}) => {
       const path2 = pathArg(root, args);
       const proposal = stringArg(args, "proposal");
       const trustedAuthors = configuredTrustedAuthors(root);
+      const now = /* @__PURE__ */ new Date();
+      const at = /* @__PURE__ */ new Date(`${now.toISOString().slice(0, 10)}T23:59:59.999Z`);
       return asText(
         beforeChange({
           path: path2 === "" ? "." : path2,
           ...proposal === void 0 ? {} : { proposal },
           cwd: root,
+          at,
           ...trustedAuthors.length === 0 ? {} : { trustedAuthors }
         })
       );

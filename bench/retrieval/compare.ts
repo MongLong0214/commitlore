@@ -15,6 +15,7 @@ import {
   TOP_K_QUERY,
 } from '../deterministic/noise.ts';
 import type { NoiseRecord } from '../deterministic/noise.ts';
+import { repositoryInstant } from '../repository-instant.ts';
 import { git } from '../deterministic/shared.ts';
 import {
   RETRIEVAL_ROUTES,
@@ -308,7 +309,11 @@ export const retrieveCommitLore = (
   fixture: RetrievalFixture,
   budget = TOP_K,
 ): readonly RetrievalRecord[] => {
-  const text = buildInjection({ cwd: fixture.dir, path: TARGET_PATH }).text;
+  const text = buildInjection({
+    cwd: fixture.dir,
+    path: TARGET_PATH,
+    at: repositoryInstant(fixture.dir),
+  }).text;
   return fixture.corpus.records
     .filter((record) => text.includes(record.recordId))
     .slice(0, budget);
