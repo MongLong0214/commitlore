@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="许可证: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 或更高版本" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 或更高版本" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -20,6 +20,11 @@ CommitLore 把这些决策保存在 Git 中，并在它编辑文件之前，把�
 
 CommitLore 没有托管服务；它把 record 保存在 Git 中。其 MCP 服务器或 hook 返回
 上下文后，host 会按自己的政策处理这些上下文；CommitLore 无法控制那条数据流。
+
+**两半之中只有一半是自动的。** *delivery* —— 在代理编辑某个路径之前把仍然有效的
+决策交给它 —— 安装后即自动进行。*capture* —— 记录新的决策 —— 由代理在变更带有
+diff 无法展示的理由时执行。普通的 `git commit` 无法启动它：hook 拿到的是 diff，
+而 capture 需要会话。
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -164,7 +169,8 @@ delivery 给代理的是上下文，并不阻止编辑。
 | Claude Code | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Codex | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Hermes | **有——`commitlore hermes install`。** | **有——`commitlore hermes install`。** |
-| 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** MCP server 在每次连接时说明该流程；`commitlore init --agents-md` 也会写入 repository。host 可能遵循，也可能不遵循。 | **是 procedure，不自动。** host 可能遵循，也可能不遵循。 |
+| Gemini CLI、Cursor、Windsurf、opencode | **是 —— `install.sh` 会配置 MCP server。** | **是 procedure，不自动。** server 在每次连接时说明 prepare → verify → stage 流程。host 可能遵循，也可能不遵循。 |
+| 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** `commitlore init --agents-md` 会写入 repository。 | **是 procedure，不自动。** 同一个文件，同样的前提。 |
 
 “有”只表示该 layer 已安装，不表示每次 commit 都会得到 record。绝大多数 commit
 本就不应携带 record。只有前三行会自动运行 integration。在其他 `AGENTS.md` host 上，

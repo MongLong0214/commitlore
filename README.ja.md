@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MongLong0214/commitlore/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="ライセンス: MIT" src="https://img.shields.io/badge/license-MIT-3f6b52"></a>
-  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22-3f6b52"></a>
+  <a href="package.json"><img alt="Node.js 22 以上" src="https://img.shields.io/badge/Node.js-%3E%3D22.12-3f6b52"></a>
 </p>
 
 <p align="center">
@@ -22,6 +22,12 @@ CommitLore はその決定を Git に残し、ファイルを編集する前に�
 CommitLore にホスティングサービスはなく、record は Git に保管します。MCP サーバー
 または hook がコンテキストを返した後は、host が自身のポリシーでそのコンテキストを
 扱います。CommitLore はそのデータフローを制御しません。
+
+**半分は自動で、もう半分はそうではありません。** *delivery* — エージェントがパスを
+編集する前に、まだ有効な決定を渡すこと — はインストールすれば自動で行われます。
+*capture* — 新しい決定を書き残すこと — は、変更に diff では示せない理由があると
+エージェントが判断したときに行われます。通常の `git commit` はこれを開始できません。
+hook には diff があり、capture にはセッションが必要だからです。
 
 <p align="center">
   <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
@@ -168,7 +174,8 @@ signature も必要です。その signature も権限や record の真実を証
 | Claude Code | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Codex | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Hermes | **はい — `commitlore hermes install`.** | **はい — `commitlore hermes install`.** |
-| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** MCP server が接続ごとに手順を伝えます。`commitlore init --agents-md` を使えば repository にも書きます。host が従う場合も従わない場合もあります。 | **procedure であり自動ではありません。** host が従う場合も従わない場合もあります。 |
+| Gemini CLI, Cursor, Windsurf, opencode | **はい — `install.sh` が MCP server を配線します。** | **procedure であり自動ではありません。** server が接続ごとに prepare → verify → stage の手順を伝えます。host が従う場合も従わない場合もあります。 |
+| その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init --agents-md` が repository に書きます。 | **procedure であり自動ではありません。** 同じファイル、同じ但し書きです。 |
 
 「はい」は layer がインストールされるという意味であり、すべての commit に record が
 付くという意味ではありません。自動 integration は最初の三行だけです。その他の
