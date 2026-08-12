@@ -797,7 +797,7 @@ export const register = (program) => {
         .option('-c, --commit <sha>', 'validate the message of one commit')
         .option('-r, --range <a..b>', 'validate every commit message in a range')
         .option('--json', 'emit violations as JSON for the repair loop')
-        .addHelpText('after', '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10).')
+        .addHelpText('after', '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10),\n3 this installation is missing a file it ships, so nothing was examined.')
         .action((flags) => {
         const result = runValidate({
             ...(flags.messageFile === undefined ? {} : { messageFile: flags.messageFile }),

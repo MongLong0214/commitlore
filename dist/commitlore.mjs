@@ -33978,7 +33978,7 @@ var runValidate = (input = {}) => {
 var register24 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
-    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
+    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
   ).action((flags) => {
     const result = runValidate({
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },

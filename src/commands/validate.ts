@@ -996,7 +996,7 @@ export const register = (program: Command): void => {
     .option('--json', 'emit violations as JSON for the repair loop')
     .addHelpText(
       'after',
-      '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10).',
+      '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10),\n3 this installation is missing a file it ships, so nothing was examined.',
     )
     .action((flags: ValidateFlags) => {
       const result = runValidate({

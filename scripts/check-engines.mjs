@@ -2,8 +2,11 @@
 /**
  * Fails when a dependency demands a newer Node than this package promises.
  *
- * ADR-0002 sets the floor at Node 20. A dependency that requires 22 makes that
- * promise false for every user on the supported floor -- and the failure does
+ * The floor is whatever `engines.node` in package.json says -- 22.12.0 as of
+ * 0.8.1, raised from 20 when commander began requiring it. This script reads
+ * that field rather than repeating it, so the number cannot drift out of a
+ * comment. A dependency that requires more than the floor makes the package's
+ * promise false for every user on it -- and the failure does
  * not show up locally, because the person adding the dependency is usually on
  * a newer runtime than the floor they are breaking. It showed up here as two
  * test workers dying in CI with no explanation, on a module that had already

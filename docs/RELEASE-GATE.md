@@ -82,15 +82,31 @@ The tag workflow therefore blocks `publish` on both jobs below.
 | check | command | pass |
 |---|---|---|
 | release target | `scripts/check-release-target.mjs "$GITHUB_SHA" main` from a `fetch-depth: 0` checkout | the pushed commit is contained in `main`; a shallow checkout fails rather than guessing |
-| exact-head CI | `scripts/check-exact-head-ci.mjs <owner> <repo> <resolved-tag-sha>` | all six explicitly named check runs below are present at that SHA, `completed`, and concluded `success` |
+| exact-head CI | `scripts/check-exact-head-ci.mjs <owner> <repo> <resolved-tag-sha>` | every explicitly named check run below is present at that SHA, reported by the `github-actions` app, `completed`, and concluded `success` |
 
-The exact-head list is fixed rather than inferred from the API response:
-`check (22)`, `check (24)`, `git-matrix (ubuntu-latest)`, `git-matrix
-(macos-latest)`, `install-script`, and `install-ps1`. Any other conclusion —
-including `failure`, `cancelled`, `timed_out`, `skipped`, `neutral`, `stale`, or
-`action_required` — blocks publication. So do `queued` and `in_progress`, a
-check reported for another SHA, and an absent check; an empty result is six
-absent checks, not a clean result.
+The exact-head list is fixed rather than inferred from the API response. It
+lives in `REQUIRED_CHECKS` in `scripts/check-exact-head-ci.mjs` — read it from
+there rather than from here, and note that two tests compare it against
+`ci.yml`'s jobs in both directions so it cannot drift from what CI runs:
+
+    check (22.12.0)   check (24)   audit
+    git-matrix (ubuntu-latest)   git-matrix (macos-latest)
+    install-script   install-ps1   install-macos
+    install-alpine (linux/amd64)   install-alpine (linux/arm64)
+
+`lint` is deliberately absent: its job is conditioned on
+`github.event_name == 'pull_request'`, so it never runs on the push to `main`
+that produces a release commit's checks, and requiring it would block every
+release rather than qualify one.
+
+A name is not enough. Any GitHub App installed on the repository can open a
+check run called `check (24)` and conclude it `success`, so each run must also
+report `app.slug == "github-actions"`; a run with no app attributed is refused
+for the same reason. Any other conclusion — including `failure`, `cancelled`,
+`timed_out`, `skipped`, `neutral`, `stale`, or `action_required` — blocks
+publication. So do `queued` and `in_progress`, a check reported for another SHA,
+and an absent check; an empty result is every check absent, not a clean
+result.
 
 `release-target` exports the commit behind the tag only after the ancestry check
 passes. `exact-head-ci` consumes that exact commit, so annotated tags do not
