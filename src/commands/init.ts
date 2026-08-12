@@ -64,13 +64,14 @@ export interface InitOptions {
   /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
   force?: boolean;
   /**
-   * Whether to write CommitLore's capture procedure into `AGENTS.md`.
+   * Whether to also write CommitLore's capture procedure into `AGENTS.md`.
    *
-   * Absent means yes, which is the long-standing behaviour. `false` leaves the
-   * file untouched: the procedure also ships as a plugin skill, so a host that
-   * loads skills still captures without it, and a repository that does not use
-   * the AGENTS.md convention should not have one created or extended by an
-   * install step.
+   * Absent means no. The procedure ships in the MCP server's `instructions`,
+   * which every host this installer wires receives on initialize, so the file
+   * is redundant for delivering it — and writing it meant creating a file in
+   * repositories that use no such convention, or adding a hundred lines to one
+   * that does. `true` writes it anyway, for a host that reads AGENTS.md but
+   * does not honour MCP instructions.
    */
   agentsGuidance?: boolean;
   /**
@@ -130,7 +131,7 @@ interface PolicyStepDetail {
 }
 
 interface AgentIntegrationStepDetail {
-  /** `null` when `--no-agents-md` asked this step to leave the file alone. */
+  /** `null` unless `--agents-md` asked this step to write the file. */
   readonly guidance: AgentsGuidanceResult | null;
   readonly claude: ClaudeHookResult;
 }
@@ -285,9 +286,9 @@ const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
   // record, because the Claude plugin carries the same procedure as a skill.
   // What the file buys is hosts that load no skills. Somebody who does not use
   // AGENTS.md should be able to say so rather than delete it after every init.
-  if (opts.agentsGuidance === false) {
+  if (opts.agentsGuidance !== true) {
     const lines = [
-      'AGENTS.md left alone (--no-agents-md); hosts that load no skills will not see the capture procedure',
+      'AGENTS.md left alone — the capture procedure ships in the MCP server every host receives (--agents-md writes it into the repository as well)',
       ...result.stdout.trimEnd().split('\n').filter((line) => line.length > 0),
     ];
     if (result.stderr) {
@@ -766,8 +767,8 @@ export const register = (program: Command): void => {
       'leave unattended capture off if the repository has no policy file yet (skips the prompt; for scripts)',
     )
     .option(
-      '--no-agents-md',
-      'leave AGENTS.md untouched — the capture procedure also ships as a plugin skill',
+      '--agents-md',
+      'also write the capture procedure into AGENTS.md (off by default; the MCP server already carries it)',
     )
     .addHelpText(
       'after',
@@ -792,15 +793,14 @@ export const register = (program: Command): void => {
         'fix itself, an agent host still needs configuring for unattended capture, or a policy file exists that the resolver rejects (an actionable warning or failure — ' +
         'read the detail above), 2 hooks install, index rebuild, agent integration, or the policy write ' +
         'could not run at all (SPEC §10). Agent integration writes or refreshes only CommitLore\'s marked section in ' +
-        'AGENTS.md; every other line stays untouched, and `--no-agents-md` skips that write entirely -- the same procedure ships as a plugin skill, so a host that loads skills captures without the file. A repository MCP registration that cannot be written leaves the ' +
+        'AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server\'s instructions, which every wired host receives on initialize, so the file is not how the procedure travels. A repository MCP registration that cannot be written leaves the ' +
         'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.',
     )
     .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean; agentsMd?: boolean }) => {
       const choice = await resolveUnattendedChoice(options);
       const initOptions: InitOptions = options.force === undefined ? {} : { force: options.force };
       initOptions.unattended = choice;
-      // commander maps `--no-agents-md` to `agentsMd: false`; absent means true.
-      if (options.agentsMd === false) initOptions.agentsGuidance = false;
+      if (options.agentsMd === true) initOptions.agentsGuidance = true;
       const report = runInit(initOptions);
       let output: string;
       if (options.json === true) {

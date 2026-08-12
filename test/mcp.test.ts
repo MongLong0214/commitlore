@@ -493,6 +493,17 @@ describe('handshake and declarations', () => {
     expect(instructions).toContain('directive');
     expect(instructions).toContain('claim');
     expect(instructions).toContain('blocked');
+
+    // The recording half, because this is the only channel every host has.
+    // Four of the seven hosts the installer wires -- Gemini, Cursor, Windsurf,
+    // opencode -- receive an `mcpServers` entry and no skills, so describing
+    // only the read half left them holding the capture tools with nothing
+    // saying when to use them. AGENTS.md used to carry this; the server ships
+    // to every host and a file in somebody's repository does not.
+    expect(instructions).toContain('commitlore_prepare_capture');
+    expect(instructions).toContain('commitlore_verify_capture');
+    expect(instructions).toContain('commitlore_stage_capture');
+    expect(instructions).toContain('never blocks the commit');
     expect(instructions).not.toContain('treat an active Limit: as a constraint');
     expect(instructions).toContain('unknown, not empty');
   });

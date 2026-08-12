@@ -309,11 +309,17 @@ describe('commitlore init — repository MCP registration', () => {
   });
 });
 
-describe('commitlore init — repository-owned agent guidance', () => {
+/**
+ * `--agents-md` is opt-in: the capture procedure ships in the MCP server's
+ * `instructions`, which every wired host receives on initialize, so the file is
+ * not how the procedure travels. These cases describe what the flag does when
+ * somebody asks for it; the default is asserted below.
+ */
+describe('commitlore init --agents-md — repository-owned agent guidance', () => {
   it('creates AGENTS.md with the shared capture procedure when the repository has none', () => {
     const repo = initRepo('agents-created');
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, agentsGuidance: true });
     const guidance = readFileSync(join(repo, 'AGENTS.md'), 'utf8');
 
     expect(guidance).toContain('<!-- commitlore:begin -->');
@@ -332,7 +338,7 @@ describe('commitlore init — repository-owned agent guidance', () => {
     const existing = '# Project instructions\n\nKeep every one of these lines.\n';
     writeFileSync(path, existing);
 
-    runInitAsCli({ cwd: repo });
+    runInitAsCli({ cwd: repo, agentsGuidance: true });
     const guidance = readFileSync(path, 'utf8');
 
     expect(guidance.startsWith(existing)).toBe(true);
@@ -349,7 +355,7 @@ describe('commitlore init — repository-owned agent guidance', () => {
       '# Project instructions\n<!-- commitlore:begin -->\nold capture guidance\n<!-- commitlore:end -->\nKeep this line too.\n',
     );
 
-    const report = runInitAsCli({ cwd: repo });
+    const report = runInitAsCli({ cwd: repo, agentsGuidance: true });
     const guidance = readFileSync(path, 'utf8');
 
     expect(guidance).toContain('# Project instructions');
@@ -366,9 +372,9 @@ describe('commitlore init — repository-owned agent guidance', () => {
     const path = join(repo, 'AGENTS.md');
     writeFileSync(path, '# Local instructions\n');
 
-    runInitAsCli({ cwd: repo });
+    runInitAsCli({ cwd: repo, agentsGuidance: true });
     const afterFirst = readFileSync(path, 'utf8');
-    const second = runInitAsCli({ cwd: repo });
+    const second = runInitAsCli({ cwd: repo, agentsGuidance: true });
     const afterSecond = readFileSync(path, 'utf8');
 
     expect(afterSecond).toBe(afterFirst);
@@ -376,6 +382,29 @@ describe('commitlore init — repository-owned agent guidance', () => {
     expect(second.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
       'unchanged',
     );
+  });
+});
+
+describe('commitlore init leaves AGENTS.md alone by default', () => {
+  it('creates no AGENTS.md in a repository that has none', () => {
+    const repo = initRepo('agents-default-absent');
+
+    const report = runInitAsCli({ cwd: repo });
+
+    expect(existsSync(join(repo, 'AGENTS.md'))).toBe(false);
+    expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+      'AGENTS.md left alone',
+    );
+  });
+
+  it('does not touch an AGENTS.md the repository already had', () => {
+    const repo = initRepo('agents-default-existing');
+    const before = '# Project instructions\n\nKeep every line.\n';
+    writeFileSync(join(repo, 'AGENTS.md'), before);
+
+    runInitAsCli({ cwd: repo });
+
+    expect(readFileSync(join(repo, 'AGENTS.md'), 'utf8')).toBe(before);
   });
 });
 
