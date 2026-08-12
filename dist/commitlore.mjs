@@ -14614,11 +14614,12 @@ var scanInjection = (text) => {
   ).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+var isStructuralValue = (trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0;
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
   for (const trailer of record2.trailers) {
-    if (STRUCTURAL_TRAILER_KEYS.has(trailer.key)) continue;
+    if (isStructuralValue(trailer)) continue;
     const patterns = scanInjection(trailer.value);
     if (patterns.length === 0) continue;
     matchedKeys.add(trailer.key);

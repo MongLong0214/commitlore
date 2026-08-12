@@ -29,6 +29,7 @@ import { Buffer, isUtf8 } from 'node:buffer';
 import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle } from './stale.js';
+import { validateRecord } from './schema.js';
 import { STRUCTURAL_TRAILER_KEYS, } from './types.js';
 const PROVENANCE_KEY = 'Provenance';
 /** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
@@ -465,11 +466,29 @@ export const scanInjection = (text) => {
     return INJECTION_PATTERNS.filter((entry) => haystacks.some((haystack) => fires(haystack, entry))).map((entry) => entry.id);
 };
 const trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+/**
+ * Whether a structural key's value is actually structural.
+ *
+ * `STRUCTURAL_TRAILER_KEYS` names keys whose *validated* values cannot carry
+ * prose, and the scanner used to read that as a licence to skip them by name.
+ * Validation happens at commit time, and grading runs on records read back out
+ * of history — `--no-verify`, a contributor whose hooks are not installed, a
+ * rewritten branch, or a record written before a rule existed all produce
+ * trailers that never passed it. `Blast:` and `Certainty:` are rendered into
+ * the injection projection, so a key trusted on its name alone is a channel
+ * that reaches the agent unscanned.
+ *
+ * Asking the validator, rather than trusting the key, is the rule
+ * `commands/query.ts` already applies for the same reason. A value that does
+ * not validate is not structural, whatever its key says, and it gets scanned
+ * like any other prose.
+ */
+const isStructuralValue = (trailer) => STRUCTURAL_TRAILER_KEYS.has(trailer.key) && validateRecord([trailer]).length === 0;
 const scanRecord = (record) => {
     const matchedPatterns = new Set();
     const matchedKeys = new Set();
     for (const trailer of record.trailers) {
-        if (STRUCTURAL_TRAILER_KEYS.has(trailer.key))
+        if (isStructuralValue(trailer))
             continue;
         const patterns = scanInjection(trailer.value);
         if (patterns.length === 0)
