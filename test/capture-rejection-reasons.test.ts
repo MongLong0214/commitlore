@@ -57,6 +57,7 @@ describe('#309 capture reports why a draft record was rejected', () => {
       }),
     );
     const result = runCapture({ transcriptPath: transcript, draftPath: draft, cwd });
+    expect(result.outcome).toBe('rejected');
     expect(result.staged).toBe(false);
     expect(result.rejected).toBeDefined();
     expect(result.rejected!.length).toBeGreaterThan(0);
@@ -85,6 +86,7 @@ describe('#309 capture reports why a draft record was rejected', () => {
       }),
     );
     const result = runCapture({ transcriptPath: transcript, draftPath: draft, cwd });
+    expect(result.outcome).toBe('rejected');
     expect(result.staged).toBe(false);
     expect(result.rejected).toBeDefined();
     expect(result.rejected!.length).toBeGreaterThan(0);
@@ -110,6 +112,7 @@ describe('#309 capture reports why a draft record was rejected', () => {
       }),
     );
     const result = runCapture({ transcriptPath: transcript, draftPath: draft, cwd });
+    expect(result.outcome).toBe('staged');
     expect(result.rejected ?? []).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import { execGit } from '../core/git.js';
 import { markApplied } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
 import { KNOWN_KEYS } from '../core/types.js';
+import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 export const PREPARE_COMMIT_MSG_HOOK_MARKER = '# commitlore:prepare-commit-msg:v1';
 export const PREPARE_COMMIT_MSG_HOOK_NAME = 'prepare-commit-msg';
@@ -313,8 +314,7 @@ export const register = (program) => {
             applyCaptureRecord(messageFile, process.cwd());
         }
         catch (error) {
-            // Fail-closed: never block the commit
-            process.stderr.write(`commitlore: capture application error: ${error instanceof Error ? error.message : String(error)}\n`);
+            captureHookFailOpen('capture application error', error);
         }
     });
 };

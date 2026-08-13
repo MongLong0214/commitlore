@@ -8,6 +8,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { markCaptureError } from './capture-outcome.js';
 import { execGit, execGitOrThrow } from './git.js';
 export class PendingFormatError extends Error {
     constructor(message) {
@@ -53,7 +54,8 @@ const atomicWriteJson = (filePath, data) => {
             unlinkSync(temporary);
         }
         catch { /* best-effort cleanup */ }
-        throw error;
+        const thrown = error instanceof Error ? error : new Error(String(error));
+        throw markCaptureError(thrown, 'operational');
     }
 };
 // ---------------------------------------------------------------------------

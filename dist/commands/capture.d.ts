@@ -10,11 +10,14 @@
  * - The user never types trailer syntax.
  * - Most commits produce nothing.
  * - At most one record per commit by default.
- * - A verification failure produces no record and does not fail the command.
+ * - A verification failure produces no record and exits 0 as `rejected`.
+ * - A host failure exits 3; an unanticipated exception exits 4. Neither is
+ *   silence (#543). The hook wrapper, not this command, is what fails open.
  *
  * Structured for subcommand extension (T-1019 will add `capture gc`).
  */
 import type { Command } from 'commander';
+import { type CaptureOutcome } from '../core/capture-outcome.js';
 import { type CaptureShadowResult } from '../core/capture-shadow.js';
 import type { GuardAdvisory } from '../core/pending.js';
 /** Why a drafted record did not survive. Empty when everything was accepted. */
@@ -28,7 +31,13 @@ export interface CaptureRejectionReport {
     /** Present for a verification refusal, where reason and rule differ. */
     reason?: string;
 }
-interface CaptureResult {
+export interface CaptureResult {
+    /**
+     * What happened. Present on every path, including failures: `--json`
+     * callers parse this instead of treating empty stdout plus exit 0 as
+     * "nothing to record" (#543).
+     */
+    outcome: CaptureOutcome;
     nonce: string | null;
     staged: boolean;
     prompt?: string;
@@ -41,15 +50,18 @@ interface CaptureResult {
      * input.
      */
     rejected?: CaptureRejectionReport[];
+    /** Host or invariant failure. Absent on empty / staged / a clean rejection list. */
+    error?: string;
 }
 /** Render historical measurement output without ever echoing a blocked secret. */
 export declare const formatCaptureShadow: (result: CaptureShadowResult) => string;
 /**
  * Run the full capture pipeline: prepare → verify → stage.
  *
- * Returns a structured result. Never throws on pipeline failures (verification
- * failure, nothing to stage) — those are communicated via the result. Only
- * throws for true usage errors (unreadable files).
+ * Returns a typed outcome on every path. Never throws: a verification refusal
+ * is `rejected`, a git or filesystem failure is `operational`, and an
+ * exception the code did not anticipate is `internal`. Silence is a
+ * conclusion, not a place exceptions fall into (#543).
  */
 export declare const runCapture: (opts: {
     transcriptPath: string;
@@ -65,4 +77,3 @@ export declare const runCapture: (opts: {
     unattended?: boolean;
 }) => CaptureResult;
 export declare const register: (program: Command) => void;
-export {};

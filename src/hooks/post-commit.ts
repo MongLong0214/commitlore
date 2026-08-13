@@ -24,6 +24,7 @@ import { execGit } from '../core/git.js';
 import { consumePending, type PendingRecord } from '../core/pending.js';
 import { serializeTrailers } from '../core/trailers.js';
 import type { Trailer } from '../core/types.js';
+import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
 export const POST_COMMIT_HOOK_MARKER = '# commitlore:post-commit:v1';
@@ -259,9 +260,7 @@ const runPostCommitFinaliser = (cwd: string): void => {
     try {
       consumePending(pending.nonce, headSha, { cwd });
     } catch (error: unknown) {
-      process.stderr.write(
-        `commitlore: post-commit finalisation error: ${error instanceof Error ? error.message : String(error)}\n`,
-      );
+      captureHookFailOpen('post-commit finalisation error', error);
     }
 
     // First match wins — exactly one consumption
@@ -277,10 +276,8 @@ export const register = (program: Command): void => {
       try {
         runPostCommitFinaliser(process.cwd());
       } catch (error: unknown) {
-        // Never retroactively fail a successful Git commit
-        process.stderr.write(
-          `commitlore: post-commit error: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
+        // Fail-open: never retroactively fail a successful Git commit (#543).
+        captureHookFailOpen('post-commit error', error);
       }
     });
 };
