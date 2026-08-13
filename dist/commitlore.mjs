@@ -15812,6 +15812,10 @@ var headHasMovedPast = (baseHead, head) => {
   if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
   return baseHead !== head;
 };
+var pendingIsStale = (record2, head) => {
+  if (record2.phase === "consumed") return false;
+  return headHasMovedPast(record2.base_head, head);
+};
 var makePreparedPending = (opts) => {
   validateNonce(opts.nonce);
   if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
@@ -16165,7 +16169,7 @@ var classifyResult = (accepted, rejected) => {
   return "partial";
 };
 var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
-  if (hasShallowHistory(cwd)) return accepted;
+  if (hasShallowHistory(cwd)) return [...accepted];
   const historical = [...historyIds].map((id) => ({
     trailers: [{ key: "Record-Id", value: id }]
   }));
@@ -18487,7 +18491,7 @@ var summarise = (record2, head) => ({
   created_at: record2.created_at,
   expires_at: record2.expires_at,
   base_head: record2.base_head,
-  stale: headHasMovedPast(record2.base_head, head),
+  stale: pendingIsStale(record2, head),
   gc_eligible: gcEligible(record2)
 });
 var runPendingList = (opts) => {
@@ -18553,7 +18557,7 @@ var runPendingShow = (opts) => {
   return {
     transaction: {
       ...record2,
-      stale: headHasMovedPast(record2.base_head, head),
+      stale: pendingIsStale(record2, head),
       gc_eligible: gcEligible(record2)
     },
     error: null
@@ -18744,7 +18748,7 @@ var checkPendingBacklog = (ctx) => {
   }
   const stranded = listing.transactions.filter((transaction) => transaction.stale);
   if (stranded.length === 0) {
-    const held = listing.transactions.length;
+    const held = listing.transactions.filter((transaction) => transaction.phase !== "consumed").length;
     return check(
       id,
       category,
@@ -20909,6 +20913,15 @@ var allRecordIdsPresent = (commitMessage, records) => {
   if (ids.length === 0) return false;
   return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
+var COMMIT_ID_RE2 = /^[0-9a-f]{40}$/;
+var isAmendedBase = (baseHead, firstParent, cwd) => {
+  if (!COMMIT_ID_RE2.test(baseHead)) return false;
+  const previousHead = execGit(["rev-parse", "--verify", "HEAD@{1}"], { cwd });
+  if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;
+  const previousParent = execGit(["rev-parse", "--verify", `${baseHead}^`], { cwd });
+  if (firstParent === null) return previousParent.code !== 0;
+  return previousParent.code === 0 && previousParent.stdout.trim() === firstParent;
+};
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
   if (!pendingDirPath || !existsSync12(pendingDirPath)) return;
@@ -20923,8 +20936,7 @@ var runPostCommitFinaliser = (cwd) => {
   if (headResult.code !== 0) return;
   const headSha2 = headResult.stdout.trim();
   const parentResult = execGit(["rev-parse", "HEAD^"], { cwd });
-  if (parentResult.code !== 0) return;
-  const firstParent = parentResult.stdout.trim();
+  const firstParent = parentResult.code === 0 ? parentResult.stdout.trim() : null;
   const treeResult = execGit(["rev-parse", "HEAD^{tree}"], { cwd });
   if (treeResult.code !== 0) return;
   const committedTree = treeResult.stdout.trim();
@@ -20937,7 +20949,7 @@ var runPostCommitFinaliser = (cwd) => {
     if (!pending) continue;
     if (pending.phase !== "applied") continue;
     if (pending.consumed) continue;
-    if (pending.base_head !== firstParent) continue;
+    if (pending.base_head !== firstParent && !isAmendedBase(pending.base_head, firstParent, cwd)) continue;
     if (pending.staged_tree_oid !== committedTree) continue;
     if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
     const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
@@ -21241,6 +21253,32 @@ var messageContainsRecordId = (message, records) => {
   }
   return false;
 };
+var captureLabel = (pending) => {
+  for (const rec of pending.records) {
+    if (typeof rec !== "object" || rec === null) continue;
+    const trailers = rec.trailers;
+    if (!Array.isArray(trailers)) continue;
+    for (const trailer of trailers) {
+      if (trailer.key === "Record-Id") return trailer.value;
+    }
+  }
+  return pending.nonce;
+};
+var usesTemporaryCommitIndex = (cwd) => {
+  const currentIndex = process.env.GIT_INDEX_FILE;
+  if (!currentIndex) return false;
+  const gitDir = execGit(["rev-parse", "--git-dir"], { cwd });
+  if (gitDir.code !== 0) return false;
+  return resolve13(cwd, currentIndex) !== resolve13(cwd, gitDir.stdout.trim(), "index");
+};
+var reportDiffMismatch = (pending, cwd) => {
+  const label = captureLabel(pending);
+  const detail = usesTemporaryCommitIndex(cwd) ? "this commit uses a temporary index whose staged diff differs from the verified capture" : "the staged diff differs from the verified capture";
+  process.stderr.write(
+    `commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.
+`
+  );
+};
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
   if (!pendingDirPath || !existsSync14(pendingDirPath)) return;
@@ -21272,7 +21310,10 @@ var applyCaptureRecord = (messageFile, cwd) => {
     if (pending.phase !== "staged" && pending.phase !== "applied") continue;
     if (pending.consumed) continue;
     if (pending.base_head !== currentHead) continue;
-    if (pending.staged_diff_hash !== currentDiffHash) continue;
+    if (pending.staged_diff_hash !== currentDiffHash) {
+      reportDiffMismatch(pending, cwd);
+      continue;
+    }
     if (!pending.expires_at) continue;
     if (now >= new Date(pending.expires_at).getTime()) continue;
     if (pending.policy_identity_hash !== currentPolicyHash) continue;

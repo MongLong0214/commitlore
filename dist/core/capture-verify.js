@@ -115,8 +115,13 @@ const classifyResult = (accepted, rejected) => {
  * failing a valid record at the clone boundary.
  */
 const rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
+    // A copy, not the input. The caller empties `accepted` and refills it from
+    // what comes back, so returning the same array leaves it refilling from
+    // something it has just cleared — every record silently vanishes with no
+    // rejection recorded. Shallow history withdraws the check, it does not
+    // withdraw the records.
     if (hasShallowHistory(cwd))
-        return accepted;
+        return [...accepted];
     const historical = [...historyIds].map((id) => ({
         trailers: [{ key: 'Record-Id', value: id }],
     }));

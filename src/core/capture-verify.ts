@@ -186,7 +186,12 @@ const rejectDanglingRefs = (
   historyIds: ReadonlySet<string>,
   cwd: string,
 ): VerifiedRecord[] => {
-  if (hasShallowHistory(cwd)) return accepted;
+  // A copy, not the input. The caller empties `accepted` and refills it from
+  // what comes back, so returning the same array leaves it refilling from
+  // something it has just cleared — every record silently vanishes with no
+  // rejection recorded. Shallow history withdraws the check, it does not
+  // withdraw the records.
+  if (hasShallowHistory(cwd)) return [...accepted];
 
   const historical: StaleRecord[] = [...historyIds].map((id) => ({
     trailers: [{ key: 'Record-Id', value: id }],
