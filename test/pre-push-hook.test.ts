@@ -15,7 +15,8 @@
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { execGit } from '../src/core/git.js';
 import { NOTES_REF, writeRecord } from '../src/core/notes.js';
-import { installPrePushHook } from '../src/hooks/pre-push.js';
+import { installPrePushHook, PRE_PUSH_NOTES_SYNC_TIMEOUT_MS } from '../src/hooks/pre-push.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,9 +56,12 @@ const PUSH_DEADLINE_MS = 30_000;
 
 const pushWithDeadline = (
   cwd: string,
-): Promise<{ code: number | null; timedOut: boolean; stderr: string }> =>
+  env: NodeJS.ProcessEnv = process.env,
+  deadlineMs = PUSH_DEADLINE_MS,
+): Promise<{ code: number | null; timedOut: boolean; stderr: string; elapsedMs: number }> =>
   new Promise((resolveResult) => {
-    const child = spawn('git', ['push', 'origin', 'HEAD:refs/heads/main'], {
+    const started = performance.now();
+    const child = spawn('git', ['push', '--quiet', 'origin', 'HEAD:refs/heads/main'], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       // No `COMMITLORE_BIN`. The stub resolves through the `commitlore.bin` /
@@ -65,18 +69,18 @@ const pushWithDeadline = (
       // which is the path a real installation takes — and the only one that
       // names its own interpreter. Pointing the env var at `dist/cli.js`
       // instead runs the file directly, and that file is not executable.
-      env: process.env,
+      env,
     });
     let err = '';
     child.stderr?.on('data', (chunk) => { err += String(chunk); });
     child.stdout?.on('data', () => {});
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      resolveResult({ code: null, timedOut: true, stderr: err });
-    }, PUSH_DEADLINE_MS);
+      resolveResult({ code: null, timedOut: true, stderr: err, elapsedMs: performance.now() - started });
+    }, deadlineMs);
     child.on('exit', (code) => {
       clearTimeout(timer);
-      resolveResult({ code, timedOut: false, stderr: err });
+      resolveResult({ code, timedOut: false, stderr: err, elapsedMs: performance.now() - started });
     });
   });
 
@@ -110,6 +114,15 @@ const advance = (repo: string, body: string): void => {
   git(repo, ['commit', '--quiet', '-m', 'advance']);
 };
 
+/** Keep the branch remote usable while making only notes sync use this URL. */
+const failNotesFetchOnly = (repo: string, origin: string, fetchUrl: string): void => {
+  git(repo, ['remote', 'set-url', 'origin', fetchUrl]);
+  git(repo, ['remote', 'set-url', '--push', 'origin', origin]);
+};
+
+const commitloreLines = (stderr: string): string[] =>
+  stderr.split('\n').filter((line) => line.startsWith('commitlore:'));
+
 describe('the pre-push hook publishes the mirror without re-entering itself', () => {
   it('does not recurse: the push completes', async () => {
     const { repo } = repoWithHook('prepush-recursion');
@@ -132,6 +145,7 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
     const result = await pushWithDeadline(repo);
     expect(result.timedOut).toBe(false);
     expect(result.code).toBe(0);
+    expect(result.stderr, 'a successful notes sync should be silent').toBe('');
 
     // The mirror reached the remote, without anyone running a sync command.
     expect(execGit(['rev-parse', '--verify', '--quiet', NOTES_REF], { cwd: origin }).code).toBe(0);
@@ -152,17 +166,75 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
    * remote will refuse, so the sync fails and the code push must not.
    */
   it('a failing sync does not fail the push', async () => {
-    const { repo } = repoWithHook('prepush-sync-fails');
+    const { repo, origin } = repoWithHook('prepush-sync-fails');
     writeRecord(git(repo, ['rev-parse', 'HEAD']).trim(), [{ key: 'Warn', value: 'local' }], {
       cwd: repo,
     });
     advance(repo, 'export const a = 5;\n');
-    // A second remote that does not exist. `syncNotes` walks every remote, so
-    // this one fails while `origin` — the one being pushed to — is fine.
-    git(repo, ['remote', 'add', 'broken', join(temp('gone'), 'nowhere.git')]);
+    // A refused loopback connection is an unreachable transport, rather than
+    // the ordinary "remote has no notes ref" state that sync accepts.
+    failNotesFetchOnly(repo, origin, 'http://127.0.0.1:1/nowhere.git');
 
     const result = await pushWithDeadline(repo);
     expect(result.timedOut).toBe(false);
     expect(result.code, 'a notes failure took the code push down with it').toBe(0);
+    const lines = commitloreLines(result.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('notes mirror (origin) failed');
+    expect(lines[0]).toContain('branch push continues');
+  }, 60_000);
+
+  it('bounds a hanging notes transport without holding the branch push', async () => {
+    const { repo, origin } = repoWithHook('prepush-hanging-transport');
+    writeRecord(git(repo, ['rev-parse', 'HEAD']).trim(), [{ key: 'Warn', value: 'local' }], { cwd: repo });
+    advance(repo, 'export const a = 6;\n');
+    const ssh = join(temp('hanging-ssh'), 'ssh-that-never-answers.sh');
+    // Exit as soon as Git dies so the timeout test cannot leak a sleeping
+    // transport child after the process under test has returned.
+    writeFileSync(ssh, '#!/bin/sh\nparent=$PPID\nwhile kill -0 "$parent" 2>/dev/null; do sleep 0.1; done\n');
+    chmodSync(ssh, 0o755);
+    failNotesFetchOnly(repo, origin, 'ssh://git@example.invalid/commitlore.git');
+
+    const result = await pushWithDeadline(
+      repo,
+      { ...process.env, GIT_SSH_COMMAND: ssh },
+      PRE_PUSH_NOTES_SYNC_TIMEOUT_MS * 3,
+    );
+    expect(result.timedOut, 'the branch push exceeded its outer deadline').toBe(false);
+    expect(result.code).toBe(0);
+    expect(result.elapsedMs).toBeLessThan(PRE_PUSH_NOTES_SYNC_TIMEOUT_MS * 3);
+    const lines = commitloreLines(result.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('branch push continues');
+  }, 60_000);
+
+  it('disables terminal credential prompts and still lets the branch push through', async () => {
+    const { repo, origin } = repoWithHook('prepush-auth-prompt');
+    writeRecord(git(repo, ['rev-parse', 'HEAD']).trim(), [{ key: 'Warn', value: 'local' }], { cwd: repo });
+    advance(repo, 'export const a = 7;\n');
+    const server = createServer((_request, response) => {
+      response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="commitlore-test"' });
+      response.end();
+    });
+    await new Promise<void>((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('test server has no TCP address');
+    failNotesFetchOnly(repo, origin, `http://127.0.0.1:${address.port}/commitlore.git`);
+
+    try {
+      const result = await pushWithDeadline(repo, {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_CONFIG_SYSTEM: '/dev/null',
+      });
+      expect(result.timedOut).toBe(false);
+      expect(result.code).toBe(0);
+      const lines = commitloreLines(result.stderr);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('terminal prompts disabled');
+      expect(lines[0]).toContain('branch push continues');
+    } finally {
+      await new Promise<void>((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
+    }
   }, 60_000);
 });
