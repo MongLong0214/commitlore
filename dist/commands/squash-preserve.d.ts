@@ -32,6 +32,8 @@ export interface SquashPreserveInput {
     json?: boolean;
     /** Overwrite an existing note on `--target`. */
     force?: boolean;
+    /** Record identities the caller has already retained at the destination. */
+    excludeRecordIds?: readonly string[];
     cwd?: string;
 }
 /** Exit code plus the streams the caller writes, so tests can drive this in-process. */

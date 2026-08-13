@@ -33928,6 +33928,22 @@ var readDraft2 = (path2) => {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
+var recordIdOfBlock = (block) => block.find((trailer) => trailer.key === "Record-Id")?.value;
+var withoutRecordIds = (plan, excluded) => {
+  const ids = new Set(excluded);
+  if (ids.size === 0) return { plan, skippedRecordIds: [] };
+  const skippedRecordIds = plan.blocks.map(recordIdOfBlock).filter((id) => id !== void 0 && ids.has(id));
+  const kept = (recordId) => recordId === void 0 || !ids.has(recordId);
+  return {
+    plan: {
+      blocks: plan.blocks.filter((block) => kept(recordIdOfBlock(block))),
+      sources: plan.sources.filter((source) => kept(source.recordId)),
+      conflicts: plan.conflicts.filter((conflict) => kept(conflict.recordId)),
+      provenance: plan.provenance.filter((entry) => kept(entry.recordId))
+    },
+    skippedRecordIds
+  };
+};
 var writeDraft = (path2, text) => {
   try {
     writeFileSync18(path2, text);
@@ -33939,6 +33955,7 @@ var runSquashPreserve = (input = {}) => {
   const range = input.range;
   if (range === void 0 || range === "") return usageError("a range is required");
   let plan;
+  let skippedRecordIds = [];
   let commits;
   try {
     commits = countCommits(range, input.cwd);
@@ -33947,20 +33964,22 @@ var runSquashPreserve = (input = {}) => {
         `the range ${JSON.stringify(range)} holds no commits \u2014 nothing was squashed`
       );
     }
-    plan = planSquash(
+    const resolved = planSquash(
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
+    ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
   } catch (error2) {
     return usageError(messageOf8(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
   if (plan.sources.length === 0) {
-    const notice = `${PREFIX4} no records in ${range} (${commits} commit(s)) \u2014 nothing to preserve
+    const excluded = skippedRecordIds.length === 0 ? `no records in ${range} (${commits} commit(s))` : `all records in ${range} were already carried (${skippedRecordIds.join(", ")})`;
+    const notice = `${PREFIX4} ${excluded} \u2014 nothing to preserve
 `;
     return {
       code: 0,
-      stdout: input.json === true ? `${JSON.stringify({ range, ...plan }, null, 2)}
+      stdout: input.json === true ? `${JSON.stringify({ range, ...plan, skippedRecordIds }, null, 2)}
 ` : "",
       stderr: notice,
       plan
@@ -33986,7 +34005,7 @@ var runSquashPreserve = (input = {}) => {
   if (input.json === true) {
     return {
       code: 0,
-      stdout: `${JSON.stringify({ range, ...plan, applied }, null, 2)}
+      stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}
 `,
       stderr: warnings,
       plan
@@ -34009,7 +34028,12 @@ var runSquashPreserve = (input = {}) => {
 `, plan };
 };
 var register22 = (program3) => {
-  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
+  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
+    "--exclude-record-id <id>",
+    "do not apply a record identity the destination already carries (repeatable)",
+    (id, ids) => [...ids, id],
+    []
+  ).addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
   ).action((range, flags) => {
@@ -34018,7 +34042,8 @@ var register22 = (program3) => {
       ...flags.target === void 0 ? {} : { target: flags.target },
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
       ...flags.json === void 0 ? {} : { json: flags.json },
-      ...flags.force === void 0 ? {} : { force: flags.force }
+      ...flags.force === void 0 ? {} : { force: flags.force },
+      ...flags.excludeRecordId === void 0 ? {} : { excludeRecordIds: flags.excludeRecordId }
     });
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);
