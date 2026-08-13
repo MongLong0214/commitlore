@@ -24019,6 +24019,7 @@ var probeMcp = async (command, args) => {
         }
       }
     });
+    child.stdin.on("error", () => finish("command closed its input before MCP verification"));
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "commitlore-installer", version: "1" } } })}
 `);
   });

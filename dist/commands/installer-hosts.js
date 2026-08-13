@@ -128,6 +128,14 @@ export const probeMcp = async (command, args) => {
                 }
             }
         });
+        // A command that is not an MCP server usually proves it by exiting at once,
+        // and then this write lands on a closed pipe. Node delivers EPIPE as an
+        // `error` event on the stream, and an unhandled one takes the whole
+        // inspector down with it: the installer then exits non-zero having said
+        // nothing about any host — a worse answer than the `unhealthy` it was one
+        // step away from giving. Whether the write or the child's exit wins is a
+        // race, which is why this survived locally and died under CI load.
+        child.stdin.on('error', () => finish('command closed its input before MCP verification'));
         child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'commitlore-installer', version: '1' } } })}\n`);
     });
 };
