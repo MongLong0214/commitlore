@@ -33,7 +33,10 @@ does not report success when a requested host's MCP registration cannot be
 configured and live-verified.
 
 The preserve GitHub Action now supplies a git identity when the workflow has
-none, allowing it to write the note it found on a default runner.
+none, allowing it to write the note it found on a default runner. It also stops
+attaching a record the merge commit already carries: squashing a single commit
+keeps that commit's trailer block intact, so there was nothing to preserve and
+attaching anyway left two copies of one record.
 
 ### Capture no longer stages a reference the commit-msg hook will refuse
 

@@ -984,42 +984,29 @@ EOF
   record_skipped "opencode" "$config_path already exists and jq is not installed, so it cannot be merged without risking its other entries. Add manually under \"mcp\": {\"commitlore\":{\"type\":\"local\",\"command\":[\"$dest\",\"mcp\"],\"enabled\":true}}"
 }
 
-not_found=""
-for spec in \
-  "Claude Code:has_claude_code:wire_claude_code" \
-  "Codex:has_codex:wire_codex" \
-  "Gemini CLI:has_gemini:wire_gemini" \
-  "Cursor:has_cursor:wire_cursor" \
-  "Windsurf:has_windsurf:wire_windsurf" \
-  "Hermes:has_hermes:wire_hermes" \
-  "opencode:has_opencode:wire_opencode"; do
-  agent_name="${spec%%:*}"
-  agent_rest="${spec#*:}"
-  agent_has="${agent_rest%%:*}"
-  agent_wire="${agent_rest#*:}"
-  if "$agent_has"; then
-    "$agent_wire"
-  else
-    not_found="${not_found}${not_found:+, }${agent_name}"
-  fi
-done
-
 log ""
 log "== commitlore install summary =="
-if [ -s "$wired_log" ]; then
-  log ""
-  log "Wired:"
-  while IFS= read -r line; do log "  - $line"; done <"$wired_log"
-fi
-if [ -s "$skipped_log" ]; then
-  log ""
-  log "Skipped:"
-  while IFS= read -r line; do log "  - $line"; done <"$skipped_log"
-fi
-if [ -n "$not_found" ]; then
-  log ""
-  log "Not detected on this machine: $not_found"
+# Host inspection and all writes are deliberately delegated.  The installer
+# only activates the wrapper, prints this command's stable summary, and returns
+# its status; it must never turn a failed host into a successful install.
+host_status=0
+"$dest" installer-hosts --wrapper "$dest" --data-root "$data_root" --home "$HOME" --json \
+  >"$work/installer-hosts.json" 2>"$work/installer-hosts.err" || host_status=$?
+cat "$work/installer-hosts.json"
+# A non-zero status with nothing shown is the failure this installer exists to
+# stop making, inverted: the user is told the install did not succeed and never
+# told what is wrong or with which host.  Whatever the command managed to say is
+# surfaced here, and saying nothing at all is itself reported rather than
+# swallowed -- an exit code alone is not a diagnosis.
+if [ "$host_status" -ne 0 ]; then
+  if [ -s "$work/installer-hosts.err" ]; then
+    while IFS= read -r line; do log "  $line"; done <"$work/installer-hosts.err"
+  fi
+  if [ ! -s "$work/installer-hosts.json" ] && [ ! -s "$work/installer-hosts.err" ]; then
+    log "  host inspection exited $host_status and reported nothing: unhealthy, cause unknown"
+  fi
 fi
 log ""
 log "Next: cd into a repository and run 'commitlore init' to install its git hook and index."
 log "(install.sh never runs init for you -- it only installs the tool and wires agents, never touches a repository's .git.)"
+exit "$host_status"

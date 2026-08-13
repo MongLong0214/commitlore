@@ -28,6 +28,7 @@ import { register as registerHooks } from './commands/hooks.js';
 import { register as registerIndex } from './commands/index-cmd.js';
 import { register as registerInit } from './commands/init.js';
 import { register as registerInject } from './commands/inject.js';
+import { register as registerInstallerHosts } from './commands/installer-hosts.js';
 import { register as registerMcp } from './commands/mcp.js';
 import { register as registerPending } from './commands/pending.js';
 import { register as registerPlugin } from './commands/plugin.js';
@@ -169,6 +170,7 @@ registerDemo(program);
 registerMcp(program);
 registerPending(program);
 registerPlugin(program);
+registerInstallerHosts(program);
 
 /**
  * Exit codes are a protocol property, not a per-command habit (SPEC §10): 0
@@ -205,7 +207,7 @@ program.exitOverride();
 for (const command of program.commands) command.exitOverride();
 
 try {
-  program.parse(process.argv);
+  await program.parseAsync(process.argv);
 } catch (error) {
   const code = (error as { code?: string }).code ?? '';
   if (code === 'commander.helpDisplayed' || code === 'commander.version' || code === 'commander.help') {
