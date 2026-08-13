@@ -106,6 +106,26 @@ export declare const buildHarvestContract: () => string;
  */
 export declare const buildHarvestPrompt: (input: HarvestInput) => string;
 /**
+ * Structural check for records already decoded from JSON, before any of them
+ * reaches the verifier. Returns a one-line diagnostic naming the first
+ * offending record, or null when every record has the shape `DraftRecord`
+ * declares.
+ *
+ * This exists because the MCP boundary decodes `draft` itself and casts the
+ * result. The outer schema can say `draft` is a string and nothing more, so a
+ * null, a number, or a record whose `trailers` is a string reached
+ * `verifyCaptureRecords`, which accepted no record and reported
+ * `validation_result: "empty"` -- byte-identical to a legitimate verified-empty
+ * outcome. A caller could not tell a malformed request from a session that
+ * genuinely had no decision to record, which is the one distinction the capture
+ * contract is built on.
+ *
+ * The diagnostic names the record index and the field, and deliberately quotes
+ * neither the transcript nor the record: this is a caller error, and echoing
+ * the payload back would put session text into an error channel.
+ */
+export declare const decodedDraftError: (records: readonly unknown[]) => string | null;
+/**
  * Parses and format-checks a draft produced by an agent session.
  *
  * Throws only when the document itself cannot be read as a draft — malformed

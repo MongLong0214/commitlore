@@ -11984,6 +11984,31 @@ var reviewRecord = (entry, index) => {
   }
   return { trailers, evidence };
 };
+var decodedDraftError = (records) => {
+  const EVIDENCE_FIELDS2 = ["key", "source", "quote", "locator"];
+  for (const [index, record2] of records.entries()) {
+    const at = `record ${index}`;
+    if (!isObject(record2)) return `${at} is not an object`;
+    const trailers = record2["trailers"];
+    if (!Array.isArray(trailers)) return `${at}: "trailers" must be an array`;
+    const evidence = record2["evidence"];
+    if (!Array.isArray(evidence)) return `${at}: "evidence" must be an array`;
+    for (const [i, trailer] of trailers.entries()) {
+      if (!isObject(trailer)) return `${at}: trailers[${i}] is not an object`;
+      if (typeof trailer["key"] !== "string") return `${at}: trailers[${i}] has no string "key"`;
+      if (typeof trailer["value"] !== "string") return `${at}: trailers[${i}] has no string "value"`;
+    }
+    for (const [i, item] of evidence.entries()) {
+      if (!isObject(item)) return `${at}: evidence[${i}] is not an object`;
+      for (const field of EVIDENCE_FIELDS2) {
+        if (typeof item[field] !== "string") {
+          return `${at}: evidence[${i}] has no string "${field}"`;
+        }
+      }
+    }
+  }
+  return null;
+};
 var parseDocument = (raw) => {
   let parsed;
   try {
@@ -33468,6 +33493,10 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         }
       } catch (e) {
         throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      const structural = decodedDraftError(draft);
+      if (structural !== null) {
+        throw new Error(`malformed draft: ${structural}`);
       }
       const result = verifyCaptureRecords({
         nonce,
