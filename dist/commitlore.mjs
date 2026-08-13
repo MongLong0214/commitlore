@@ -11553,7 +11553,8 @@ var locate = (instancePath) => {
   const [, rawIndex = "", field = ""] = match;
   return { index: Number(rawIndex), field };
 };
-var isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key);
+var WELL_KNOWN_FOREIGN_KEYS = /* @__PURE__ */ new Set(["Signed-off-by", "Co-authored-by"]);
+var isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key) || WELL_KNOWN_FOREIGN_KEYS.has(key);
 var violationFor = (trailer, field) => {
   if (field === "key") {
     if (isDefinedKey(trailer.key)) return null;
