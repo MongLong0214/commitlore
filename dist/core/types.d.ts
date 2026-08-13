@@ -32,6 +32,19 @@ export declare const BLAST_VALUES: readonly ["local", "module", "system"];
 export declare const UNDO_VALUES: readonly ["easy", "costly", "permanent"];
 export declare const CERTAINTY_VALUES: readonly ["firm", "tentative", "guess"];
 export declare const PROVENANCE_PREFIXES: readonly ["authored", "drafted", "inherited", "reconstructed", "unknown"];
+/**
+ * `<sha>` in `Provenance: inherited <sha>` is a git object id. Bounds are
+ * git's, not ours: 4 is the shortest abbreviation git will emit
+ * (`core.abbrev`), 64 is a full SHA-256. A-F is accepted because git's
+ * object-name alphabet is hexadecimal and case-insensitive; squash-preserve
+ * writes whatever `git rev-parse` emits (lowercase), but a hand-copied id
+ * may be upper, and SPEC §3 writes `<sha>` with no case constraint.
+ */
+export declare const GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
+/** The schema `pattern` and the parser read this string. There is no third copy. */
+export declare const PROVENANCE_VALUE_PATTERN = "^(authored|drafted|reconstructed|unknown|inherited [0-9a-fA-F]{4,64})$";
+export declare const PROVENANCE_VALUE_RE: RegExp;
+export declare const PROVENANCE_FORMAT_WANT: string;
 export type Blast = (typeof BLAST_VALUES)[number];
 export type Undo = (typeof UNDO_VALUES)[number];
 export type Certainty = (typeof CERTAINTY_VALUES)[number];
@@ -69,6 +82,13 @@ export type Provenance = {
 } | {
     kind: 'unknown';
 };
+/**
+ * Reads a `Provenance:` value. Schema, grade and query all call this; a
+ * suffix the schema would refuse must not become `inherited` on a consumer
+ * route. Unrecognised input is `undefined` so the caller can choose
+ * `unknown` (grade) or omit the field (query).
+ */
+export declare const parseProvenance: (value: string | undefined) => Provenance | undefined;
 /** The lifecycle axis of trust grading (SPEC §7). Computed by the stale engine. */
 export type Lifecycle = 'active' | 'superseded' | 'expired';
 /**

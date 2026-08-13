@@ -79,8 +79,8 @@ import {
 } from './stale.js';
 import {
   SINGLE_VALUED,
+  parseProvenance,
   type Lifecycle,
-  type Provenance,
   type Record,
   type Trailer,
 } from './types.js';
@@ -720,20 +720,6 @@ const mergeTrailers = (into: Trailer[], from: readonly Trailer[]): void => {
     );
     if (!duplicate) into.push({ ...trailer });
   }
-};
-
-const parseProvenance = (value: string | undefined): Provenance | undefined => {
-  if (value === undefined) return undefined;
-  const trimmed = value.trim();
-  if (trimmed === 'authored') return { kind: 'authored' };
-  if (trimmed === 'reconstructed') return { kind: 'reconstructed' };
-  if (trimmed === 'unknown') return { kind: 'unknown' };
-  if (trimmed === 'inherited' || trimmed.startsWith('inherited ')) {
-    return { kind: 'inherited', sha: trimmed.slice('inherited'.length).trim() };
-  }
-  // Anything else is an `enum` violation for `commitlore validate` to report.
-  // Guessing what it meant here would launder a malformed claim into a grade.
-  return undefined;
 };
 
 /**

@@ -1,0 +1,4 @@
+Carry a record named by a six-digit abbreviation
+
+Provenance: inherited deadbe
+Limit: shared Redis instance caps sustained writes at 500/sec

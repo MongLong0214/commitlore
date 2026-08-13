@@ -27,6 +27,7 @@ import {
   BLAST_VALUES,
   CERTAINTY_VALUES,
   KNOWN_KEYS,
+  PROVENANCE_FORMAT_WANT,
   PROVENANCE_PREFIXES,
   RECORD_ID_RE,
   SINGLE_VALUED,
@@ -131,6 +132,7 @@ const GRAMMAR_FROM_TYPES: Readonly<Record<string, string>> = {
   Undo: UNDO_VALUES.join(' | '),
   Certainty: CERTAINTY_VALUES.join(' | '),
   'Record-Id': RECORD_ID_RE.source.replace(/^\^/, '').replace(/\$$/, ''),
+  Provenance: PROVENANCE_FORMAT_WANT,
 };
 
 const drift = (detail: string): Error =>

@@ -9,7 +9,7 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { readInstalledFile } from './paths.js';
 import { splitRuledOut } from './trailers.js';
-import { BLAST_VALUES, CERTAINTY_VALUES, EXTENSION_KEY_RE, KNOWN_KEYS, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
+import { BLAST_VALUES, CERTAINTY_VALUES, EXTENSION_KEY_RE, KNOWN_KEYS, PROVENANCE_FORMAT_WANT, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
  * Static import so a bundler can follow it.
  *
@@ -47,7 +47,7 @@ const FORMAT_WANT = {
     Supersedes: 'r-[a-z0-9]{6,}',
     Expires: 'YYYY-MM-DD or a free-text condition',
     Evidence: 'path, path#anchor, or a URL',
-    Provenance: 'authored | inherited <sha> | reconstructed | unknown',
+    Provenance: PROVENANCE_FORMAT_WANT,
     'CommitLore-Version': 'semver',
 };
 const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';

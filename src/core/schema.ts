@@ -21,6 +21,7 @@ import {
   CERTAINTY_VALUES,
   EXTENSION_KEY_RE,
   KNOWN_KEYS,
+  PROVENANCE_FORMAT_WANT,
   SINGLE_VALUED,
   UNDO_VALUES,
   type Trailer,
@@ -68,7 +69,7 @@ const FORMAT_WANT: Readonly<Record<string, string>> = {
   Supersedes: 'r-[a-z0-9]{6,}',
   Expires: 'YYYY-MM-DD or a free-text condition',
   Evidence: 'path, path#anchor, or a URL',
-  Provenance: 'authored | inherited <sha> | reconstructed | unknown',
+  Provenance: PROVENANCE_FORMAT_WANT,
   'CommitLore-Version': 'semver',
 };
 
