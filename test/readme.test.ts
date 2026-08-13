@@ -73,6 +73,19 @@ describe('README install one-liner and version pin', () => {
   }
 });
 
+describe('#597 README describes what [directive] actually means', () => {
+  const content = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
+
+  it('does not claim a trusted author recorded the record', () => {
+    expect(content).not.toContain('a trusted author of this repository recorded it');
+  });
+
+  it('says default mode is the commit author header, which anyone can set', () => {
+    expect(content).toMatch(/author header/i);
+    expect(content).toMatch(/anyone who can\s+write a commit can set that header/i);
+  });
+});
+
 describe('T-1021: Known limitations discloses guard precision and recall', () => {
   for (const file of README_FILES) {
     describe(file, () => {

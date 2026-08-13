@@ -512,6 +512,9 @@ describe('handshake and declarations', () => {
     expect(instructions).toContain('never blocks the commit');
     expect(instructions).not.toContain('treat an active Limit: as a constraint');
     expect(instructions).toContain('unknown, not empty');
+    // #597: default [directive] is the author header, not authentication.
+    expect(String(instructions)).not.toContain('a trusted author of this repository recorded it');
+    expect(String(instructions)).toMatch(/author header/i);
   });
 
   it('declares exactly the tools this server exposes', async () => {
@@ -948,6 +951,85 @@ describe('#594 advertised schemas are enforced at the handler boundary', () => {
     expect(query.result?.['isError']).toBeUndefined();
     const records = toolJson(query)['records'] as { recordId: string }[];
     expect(records.map((record) => record.recordId).sort()).toEqual(['r-auth02', 'r-auth03']);
+  });
+});
+
+/**
+ * #597: MCP guard and before_change used to call runQuery without the
+ * signature policy, so a repository with requireSignedDirective=true still
+ * served [directive] on the two routes four hosts actually use.
+ */
+describe('#597 signature-required policy reaches the MCP guard routes', () => {
+  let signedRepo = '';
+  let signedStub: Stub;
+
+  beforeAll(async () => {
+    signedRepo = makeRepo();
+    commitAt(
+      signedRepo,
+      '2026-02-01T00:00:00Z',
+      [
+        'Keep the session cache local',
+        '',
+        'Ruled-out: shared Redis cache | single point of failure',
+        'Record-Id: r-sigmcp1',
+        'Provenance: authored',
+      ].join('\n'),
+      { 'src/auth.ts': 'export const auth = true;' },
+    );
+    execGitOrThrow(
+      ['config', '--local', '--add', 'commitlore.trustedAuthor', 'test@example.invalid'],
+      { cwd: signedRepo },
+    );
+    execGitOrThrow(['config', '--local', 'commitlore.requireSignedDirective', 'true'], {
+      cwd: signedRepo,
+    });
+    signedStub = startStub(signedRepo);
+    await handshake(signedStub);
+  }, 120_000);
+
+  afterAll(async () => {
+    await signedStub?.close();
+  });
+
+  it('commitlore_guard does not return [directive] for an unsigned configured author', async () => {
+    const response = await signedStub.request('tools/call', {
+      name: 'commitlore_guard',
+      arguments: {
+        proposal: 'switch the session store to a shared Redis cache',
+        path: 'src/auth.ts',
+      },
+    });
+    expect(response.result?.['isError']).toBeFalsy();
+    const verdict = toolJson(response);
+    const matched = verdict['matched'] as { trust?: string }[];
+    expect(matched.length).toBeGreaterThan(0);
+    for (const match of matched) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(toolText(response)).not.toContain('[directive]');
+  });
+
+  it('commitlore_before_change does not return [directive] for an unsigned configured author', async () => {
+    const response = await signedStub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: {
+        path: 'src/auth.ts',
+        proposal: 'switch the session store to a shared Redis cache',
+      },
+    });
+    expect(response.result?.['isError']).toBeFalsy();
+    const answer = toolJson(response);
+    const decisions = answer['active_decisions'] as { trust?: string }[];
+    const matches = answer['possible_revival_matches'] as { trust?: string }[];
+    expect(decisions.length).toBeGreaterThan(0);
+    for (const decision of decisions) {
+      expect(decision.trust).not.toBe('directive');
+    }
+    for (const match of matches) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(toolText(response)).not.toContain('[directive]');
   });
 });
 

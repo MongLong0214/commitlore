@@ -11,6 +11,8 @@ export interface PrepareCaptureOptions {
     transcript: string;
     /** Authors whose guard-advisory records may render as directives. */
     trustedAuthors?: readonly string[];
+    /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+    requireSignedDirective?: boolean;
     /**
      * Declare that this capture runs without asking: the pipeline prepares,
      * verifies and stages it with no person in the loop (ADR-0030, #511).

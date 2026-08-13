@@ -57,6 +57,7 @@ const computeGuardAdvisory = (opts) => {
             cwd: opts.cwd,
             ...(opts.readOnly === true ? { noIndex: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+            ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         });
         return {
             matches: result.matches.map(renderGuardMatch),
@@ -118,6 +119,7 @@ const prepareValues = (opts) => {
             cwd,
             ...(opts.readOnly ? { readOnly: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+            ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         });
     return {
         base_head: baseHead,
