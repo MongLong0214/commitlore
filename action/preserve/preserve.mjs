@@ -206,13 +206,14 @@ const commitIdentityEnv = () => {
   return env;
 };
 
-const runCommitlore = (args) =>
+const runCommitlore = (args, options = {}) =>
   spawnSync(process.execPath, [CLI_PATH, ...args], {
     cwd: WORKSPACE,
     encoding: 'utf8',
     shell: false,
     maxBuffer: 64 * 1024 * 1024,
     env: commitIdentityEnv(),
+    ...options,
   });
 
 const requireWorkTree = () => {
@@ -489,8 +490,9 @@ const refetchNotes = () =>
  * blocked run rather than resolved, because the only way to resolve it is the
  * `--force` this action does not use.
  */
-const preserve = (range, target) => {
-  const result = runCommitlore(['squash-preserve', range, '--target', target, '--json']);
+const preserve = (range, target, carriedIds) => {
+  const excluded = carriedIds.flatMap((id) => ['--exclude-record-id', id]);
+  const result = runCommitlore(['squash-preserve', range, '--target', target, '--json', ...excluded]);
 
   if (result.status !== 0) {
     return die(
@@ -513,6 +515,35 @@ const preserve = (range, target) => {
     return JSON.parse(result.stdout);
   } catch {
     return die(BLOCKED, 'commitlore squash-preserve did not emit JSON', result.stdout.slice(0, 200));
+  }
+};
+
+/**
+ * The merge message is the first record channel. Parse it with the product's
+ * own multi-record grammar rather than treating any `Record-Id:`-shaped prose
+ * as a trailer. The IDs are passed to squash-preserve before it writes a note.
+ */
+const carriedRecordIds = (target) => {
+  const message = gitOrDie(
+    ['show', '--no-patch', '--format=%B', '--end-of-options', target],
+    `cannot read the merge message for ${short(target)}`,
+  );
+  const parsed = runCommitlore(['parse', '--json'], { input: message });
+  if (parsed.status !== 0) {
+    blocked(`cannot parse the merge message for ${short(target)}: ${firstLine(parsed.stderr)}`);
+  }
+  try {
+    const answer = JSON.parse(parsed.stdout);
+    const blocks = answer.blocks ?? [{ trailers: answer.trailers ?? [] }];
+    return [...new Set(
+      blocks.flatMap((block) =>
+        (block.trailers ?? [])
+          .filter((trailer) => trailer.key === 'Record-Id')
+          .map((trailer) => trailer.value),
+      ),
+    )];
+  } catch {
+    blocked(`commitlore parse did not emit JSON for ${short(target)}`, parsed.stdout.slice(0, 200));
   }
 };
 
@@ -569,13 +600,25 @@ const inherit = (range, mergeSha) => {
       return { action: 'already-inherited', records: 0, conflicts: 0, pushed: false };
     }
 
-    const plan = preserve(range, mergeSha);
+    const carriedIds = carriedRecordIds(mergeSha);
+    const plan = preserve(range, mergeSha, carriedIds);
     const records = plan.sources?.length ?? 0;
     const conflicts = plan.conflicts?.length ?? 0;
+    const skipped = plan.skippedRecordIds ?? [];
+
+    if (skipped.length > 0) {
+      say(
+        `${short(mergeSha)} already carries ${skipped.join(', ')} in its message — skipping it`,
+      );
+    }
 
     // A branch that recorded nothing is an ordinary branch (SPEC §4). The
     // command attaches nothing, so there is nothing to publish either.
     if (records === 0) {
+      if (skipped.length > 0) {
+        say(`all branch records were already carried by ${short(mergeSha)} — attached nothing`);
+        return { action: 'already-carried', records: 0, conflicts, pushed: false };
+      }
       say(`no records in ${range} — nothing to inherit onto ${short(mergeSha)}`);
       return { action: 'nothing-to-preserve', records: 0, conflicts, pushed: false };
     }
