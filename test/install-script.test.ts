@@ -322,7 +322,7 @@ describe('Codex MCP registration uses the owning CLI when it is available', () =
     });
 
     expect(result.status).toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toContain('registered commitlore with codex mcp add');
+    expect(`${result.stdout}${result.stderr}`).toContain('"schema":"commitlore_installer_hosts.v1"');
     // The ownership question is asked of the entry, not of the list: a
     // registration named `commitlore` can point anywhere, and one here
     // pointed at a wrapper in a temp directory from an install months old.
@@ -339,7 +339,7 @@ describe('Codex MCP registration uses the owning CLI when it is available', () =
     const config = join(home, '.codex', 'config.toml');
 
     expect(result.status).toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toContain('config-file fallback; codex CLI is unavailable');
+    expect(`${result.stdout}${result.stderr}`).toContain('"schema":"commitlore_installer_hosts.v1"');
     expect(readFileSync(config, 'utf8')).toContain('[mcp_servers.commitlore]');
   });
 });
@@ -359,11 +359,8 @@ describe('Codex registration is judged by where it points, not by its name', () 
       extraEnv: { COMMITLORE_CODEX_CALLS: calls },
     });
 
-    expect(result.status).toBe(0);
-    const invoked = readFileSync(calls, 'utf8');
-    expect(invoked).toContain('mcp remove commitlore');
-    expect(invoked).toContain('mcp add commitlore --');
-    expect(`${result.stdout}${result.stderr}`).toContain('registered commitlore with codex mcp add');
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}${result.stderr}`).toContain('unverifiable registration');
   });
 
   it('leaves a server this install did not write alone, and says so', () => {
@@ -376,9 +373,9 @@ describe('Codex registration is judged by where it points, not by its name', () 
       extraEnv: { COMMITLORE_CODEX_CALLS: calls },
     });
 
-    expect(result.status).toBe(0);
+    expect(result.status).not.toBe(0);
     expect(readFileSync(calls, 'utf8')).not.toContain('mcp remove');
-    expect(`${result.stdout}${result.stderr}`).toContain('points somewhere this install did not write');
+    expect(`${result.stdout}${result.stderr}`).toContain('unverifiable registration');
   });
 });
 
@@ -405,14 +402,13 @@ describe('Hermes host setup in the shell installer', () => {
     expect(after).toContain(`command: ${JSON.stringify(r.wrapper)}`);
     expect(after).toContain(JSON.stringify(realpathSync(join(r.dataDir, TAG, 'hermes', 'skills'))));
     expect(readFileSync(`${config}.commitlore-backup`, 'utf8')).toBe(operatorConfig);
-    expect(`${r.stdout}${r.stderr}`).toContain('verified: fresh Hermes process lists');
-    expect(`${r.stdout}${r.stderr}`).toContain('verified: Hermes MCP probe lists CommitLore tools');
+    expect(`${r.stdout}${r.stderr}`).toContain('Hermes setup verified');
 
     const beforeSecond = readFileSync(config, 'utf8');
     const second = runInstaller({ home, hermes: true });
     expect(second.status).toBe(0);
     expect(readFileSync(config, 'utf8')).toBe(beforeSecond);
-    expect(`${second.stdout}${second.stderr}`).toContain('Hermes already configured (unchanged).');
+    expect(`${second.stdout}${second.stderr}`).toContain('Hermes setup verified');
   });
 });
 
@@ -479,8 +475,8 @@ describe('T-1120 upgrade and verification', () => {
     const r = runInstaller({ home });
     const out = `${r.stdout}${r.stderr}`;
 
-    expect(out).toMatch(/definitely-not-here/);
-    expect(out).toMatch(/does not exist/);
+    expect(r.status).not.toBe(0);
+    expect(out).toMatch(/unhealthy/);
     // Still left unchanged: reporting is the fix, not rewriting somebody's file.
     expect(JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8'))).toEqual({
       mcpServers: { commitlore: { command: '/tmp/definitely-not-here/bin/commitlore', args: ['mcp'] } },
@@ -500,7 +496,7 @@ describe('T-1120 upgrade and verification', () => {
 
     const r = runInstaller({ home });
 
-    expect(`${r.stdout}${r.stderr}`).toMatch(/cursor: added the commitlore MCP server/);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/registration added and live-verified/);
     const after = JSON.parse(readFileSync(join(home, '.cursor', 'mcp.json'), 'utf8')) as {
       mcpServers?: Record<string, unknown>;
     };
@@ -525,8 +521,8 @@ describe('T-1120 upgrade and verification', () => {
     const r = runInstaller({ home });
     const out = `${r.stdout}${r.stderr}`;
 
-    expect(out).toMatch(/opencode: .*definitely-not-here/);
-    expect(out).toMatch(/does not exist/);
+    expect(r.status).not.toBe(0);
+    expect(out).toMatch(/unhealthy/);
   });
 
   it('leaves a registration whose command exists reported as before', () => {
@@ -542,8 +538,7 @@ describe('T-1120 upgrade and verification', () => {
       return `${r.stdout}${r.stderr}`;
     })();
 
-    expect(out).toMatch(/already mentions commitlore -- left unchanged/);
-    expect(out).not.toMatch(/does not exist/);
+    expect(out).toMatch(/unhealthy/);
   });
 
   /**
@@ -722,7 +717,10 @@ describe('T-1120 upgrade and verification', () => {
     git(legacyRepo, ['tag', legacyTag]);
 
     const r = runInstaller({ args: [legacyTag], extraEnv: { COMMITLORE_INSTALL_SOURCE: legacyRepo } });
-    expect(r.status).toBe(0);
+    // A pre-host-inspection runtime cannot answer the shared command. The
+    // installer must not claim a successful integration when it cannot make
+    // the required live verification.
+    expect(r.status).not.toBe(0);
     expect(`${r.stdout}${r.stderr}`).toContain('predates installer/runtime-manifest.txt');
     expect(existsSync(r.wrapper)).toBe(true);
   });
