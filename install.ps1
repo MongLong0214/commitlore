@@ -1,8 +1,8 @@
 <#
     Installs commitlore from source on Windows, for any agent that is not Claude Code.
 
-      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1 | iex
-      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
+      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.ps1 | iex
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.ps1))) v0.8.2
 
     Claude Code users do not need this script. The repository is itself a plugin
     marketplace (ADR-0011), so two /plugin commands register the MCP server, the
@@ -810,6 +810,14 @@ if (-not $onPath) {
 
 Write-Log ''
 Write-Log 'Detecting coding agents...'
+
+# Host inspection, configuration writes, and live MCP probes are one TypeScript
+# command shared with install.sh. This wrapper only activates the verified shim,
+# prints its stable summary, and propagates its exit status.
+$hostSummary = & $dest installer-hosts --wrapper $dest --data-root $dataRoot --home $env:USERPROFILE --json
+$hostExit = $LASTEXITCODE
+$hostSummary | Write-Output
+exit $hostExit
 
 $wired = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList

@@ -89,13 +89,13 @@ Prerequisites for either path: Node.js 22.23.2+ and Git. The script checks both 
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh | sh -s v0.8.1
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh | sh -s v0.8.2
 ```
 
 **Windows** — the same install, in PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.ps1))) v0.8.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.ps1))) v0.8.2
 ```
 
 **Hermes** — after installing the CLI, configure its host integration:
@@ -137,11 +137,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.1/install.sh
-sh install.sh v0.8.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh
+sh install.sh v0.8.2
 
 # Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v0.8.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v0.8.2 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 

@@ -410,11 +410,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants);
+          this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -431,10 +431,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants);
+        this.rhs = optimizeExpr(this.rhs, names, constants2);
         return this;
       }
       get names() {
@@ -495,8 +495,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants) {
-        this.code = optimizeExpr(this.code, names, constants);
+      optimizeNames(names, constants2) {
+        this.code = optimizeExpr(this.code, names, constants2);
         return this;
       }
       get names() {
@@ -525,12 +525,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants))
+          if (n.optimizeNames(names, constants2))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -583,12 +583,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        if (!(super.optimizeNames(names, constants) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        if (!(super.optimizeNames(names, constants2) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants);
+        this.condition = optimizeExpr(this.condition, names, constants2);
         return this;
       }
       get names() {
@@ -611,10 +611,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants);
+        this.iteration = optimizeExpr(this.iteration, names, constants2);
         return this;
       }
       get names() {
@@ -650,10 +650,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants) {
-        if (!super.optimizeNames(names, constants))
+      optimizeNames(names, constants2) {
+        if (!super.optimizeNames(names, constants2))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants);
+        this.iterable = optimizeExpr(this.iterable, names, constants2);
         return this;
       }
       get names() {
@@ -695,11 +695,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants) {
+      optimizeNames(names, constants2) {
         var _a3, _b;
-        super.optimizeNames(names, constants);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants);
+        super.optimizeNames(names, constants2);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
         return this;
       }
       get names() {
@@ -1000,7 +1000,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants) {
+    function optimizeExpr(expr, names, constants2) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1015,14 +1015,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants[n.str];
+        const c = constants2[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -7740,7 +7740,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync27 } from "node:fs";
+import { readFileSync as readFileSync28 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -11228,7 +11228,9 @@ var execGit = (args, opts = {}) => {
     encoding: "utf8",
     cwd: opts.cwd ?? process.cwd(),
     input: opts.stdin ?? "",
-    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER
+    env: opts.env,
+    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout
   });
   return gitResultFromSpawn(result);
 };
@@ -17993,8 +17995,8 @@ var defaultDoctorContext = (opts = {}) => ({
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 var evaluateInjectRun = (run, ctx) => {
-  const { id, category, title, executable, path: path2, fix, unavailableFix } = ctx;
-  const executionEvidence = { executable, path: path2 };
+  const { id, category, title, executable: executable2, path: path2, fix, unavailableFix } = ctx;
+  const executionEvidence = { executable: executable2, path: path2 };
   if (run.status === null || run.status === void 0) {
     if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
       return check(
@@ -18002,7 +18004,7 @@ var evaluateInjectRun = (run, ctx) => {
         category,
         title,
         "fail",
-        `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
+        `configured PreToolUse hook executable ${JSON.stringify(executable2)} is not resolvable from PATH`,
         unavailableFix,
         false,
         void 0,
@@ -18094,7 +18096,7 @@ var evaluateInjectRun = (run, ctx) => {
   );
 };
 var checkInjectRuntime = (ctx) => {
-  const { opts, spawn, env } = ctx;
+  const { opts, spawn: spawn2, env } = ctx;
   const title = "PreToolUse hook runtime";
   const id = "inject-runtime";
   const category = "delivery";
@@ -18205,9 +18207,9 @@ var checkInjectRuntime = (ctx) => {
     tool_input: { file_path: resolve5(cwd, path2) }
   });
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
-  const executable = configured.slice(0, configured.indexOf(" "));
-  const args = configured.slice(executable.length + 1).split(" ");
-  const run = spawn(executable, args, {
+  const executable2 = configured.slice(0, configured.indexOf(" "));
+  const args = configured.slice(executable2.length + 1).split(" ");
+  const run = spawn2(executable2, args, {
     shell: false,
     encoding: "utf8",
     cwd,
@@ -18217,7 +18219,7 @@ var checkInjectRuntime = (ctx) => {
       HOME: env["HOME"] ?? ""
     }
   });
-  const result = evaluateInjectRun(run, { id, category, title, executable, path: path2, fix, unavailableFix });
+  const result = evaluateInjectRun(run, { id, category, title, executable: executable2, path: path2, fix, unavailableFix });
   if (result.status === "fail" && run.status === null && run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
     return { ...result, needsAttention: false };
   }
@@ -18618,7 +18620,7 @@ import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFil
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
 var checkHookRuntime = (ctx) => {
-  const { opts, git: git2, spawn, env } = ctx;
+  const { opts, git: git2, spawn: spawn2, env } = ctx;
   const title = "hook runtime";
   const id = "hook-runtime";
   const category = "capture";
@@ -18661,7 +18663,7 @@ var checkHookRuntime = (ctx) => {
   const probe = join5(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync5(probe, PROBE_MESSAGE);
-    const run = spawn("/bin/sh", [hook, probe], {
+    const run = spawn2("/bin/sh", [hook, probe], {
       shell: false,
       encoding: "utf8",
       cwd,
@@ -19465,7 +19467,7 @@ var checkUnattendedCaptureInitiator = (ctx) => {
 // src/commands/doctor/checks/delivery-inject-version.ts
 var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
 var checkInjectVersion = (ctx, dependencies) => {
-  const { opts, spawn, env } = ctx;
+  const { opts, spawn: spawn2, env } = ctx;
   const title = "PreToolUse hook version";
   const id = "inject-version";
   const category = "delivery";
@@ -19511,8 +19513,8 @@ var checkInjectVersion = (ctx, dependencies) => {
     );
   }
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
-  const executable = configured.slice(0, configured.indexOf(" "));
-  const run = spawn(executable, ["--version"], {
+  const executable2 = configured.slice(0, configured.indexOf(" "));
+  const run = spawn2(executable2, ["--version"], {
     shell: false,
     encoding: "utf8",
     cwd,
@@ -19523,7 +19525,7 @@ var checkInjectVersion = (ctx, dependencies) => {
   });
   const reported = typeof run.stdout === "string" ? run.stdout : "";
   const versionEvidence = {
-    executable,
+    executable: executable2,
     theirs: boundedExcerpt(reported).firstLine || "unavailable",
     mine,
     exit_code: String(run.status ?? "unavailable"),
@@ -19535,7 +19537,7 @@ var checkInjectVersion = (ctx, dependencies) => {
       category,
       title,
       "skipped",
-      `${executable} did not report a version`,
+      `${executable2} did not report a version`,
       null,
       false,
       false,
@@ -19551,7 +19553,7 @@ var checkInjectVersion = (ctx, dependencies) => {
       category,
       title,
       "skipped",
-      `${executable} answered --version with something that is not a version`,
+      `${executable2} answered --version with something that is not a version`,
       null,
       false,
       false,
@@ -21263,8 +21265,13 @@ import { resolve as resolve12 } from "node:path";
 
 // src/core/sync.ts
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var transportGitOptions = (opts) => ({
+  ...gitOptions4(opts),
+  ...opts.transport?.env === void 0 ? {} : { env: opts.transport.env },
+  ...opts.transport?.timeout === void 0 ? {} : { timeout: opts.transport.timeout }
+});
 var FETCH_HEAD_REF = "refs/notes/commitlore-remote";
-var pushMirror = (remote, opts) => execGit(["push", "--no-verify", remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions4(opts));
+var pushMirror = (remote, opts) => execGit(["push", "--no-verify", remote, `${NOTES_REF}:${NOTES_REF}`], transportGitOptions(opts));
 var revParse2 = (ref, opts) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", ref], gitOptions4(opts));
   const sha = result.stdout.trim();
@@ -21279,7 +21286,7 @@ var failure2 = (remote, detail) => ({
 var syncRemote = (remote, opts = {}) => {
   const fetched = execGit(
     ["fetch", "--refmap=", "--force", remote, `${NOTES_REF}:${FETCH_HEAD_REF}`],
-    gitOptions4(opts)
+    transportGitOptions(opts)
   );
   const remoteMissing = fetched.code !== 0 && /couldn't find remote ref|does not appear to be a git repository/i.test(fetched.stderr);
   if (fetched.code !== 0 && !remoteMissing) {
@@ -21347,6 +21354,7 @@ var syncNeedsAttention = (results) => results.some((result) => result.outcome ==
 var PRE_PUSH_HOOK_MARKER = "# commitlore:pre-push:v1";
 var PRE_PUSH_HOOK_NAME = "pre-push";
 var PRE_PUSH_CHAINED_HOOK_NAME = `${PRE_PUSH_HOOK_NAME}${CHAINED_SUFFIX}`;
+var PRE_PUSH_NOTES_SYNC_TIMEOUT_MS = 2e3;
 var hookSuccess2 = (line2) => ({ code: 0, stdout: `${line2}
 `, stderr: "" });
 var hookFailure2 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${line2}
@@ -21388,16 +21396,30 @@ var installPrePushHook = (cwd = process.cwd()) => {
     );
   }
 };
-var describeSync = (results) => results.filter((result) => result.detail !== "" && result.outcome !== "nothing-to-do").map((result) => `commitlore: notes mirror (${result.remote}): ${result.detail}`);
+var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
+var describeSync = (results) => results.filter((result) => result.outcome === "failed" || result.outcome === "diverged").map(
+  (result) => `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}; branch push continues`
+);
+var nonInteractiveGitEnv = () => ({
+  ...process.env,
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes"
+});
 var register7 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     try {
-      const results = syncNotes(remote === void 0 || remote === "" ? {} : { remotes: [remote] });
+      const results = syncNotes({
+        ...remote === void 0 || remote === "" ? {} : { remotes: [remote] },
+        transport: {
+          env: nonInteractiveGitEnv(),
+          timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS
+        }
+      });
       for (const line2 of describeSync(results)) process.stderr.write(`${line2}
 `);
     } catch (error2) {
       process.stderr.write(
-        `commitlore: notes mirror not published: ${error2 instanceof Error ? error2.message : String(error2)}
+        `commitlore: notes mirror failed: ${oneLine(error2 instanceof Error ? error2.message : String(error2))}; branch push continues
 `
       );
     }
@@ -22885,13 +22907,13 @@ var harvestVerify = (options) => {
     exitCode: 0
   };
 };
-var oneLine = (text) => text.replace(/\s+/g, " ").trim();
+var oneLine2 = (text) => text.replace(/\s+/g, " ").trim();
 var runHarvestVerify = (options) => {
   try {
     return harvestVerify(options);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
-    return { stdout: "", stderr: `${PREFIX3} ${oneLine(detail)}
+    return { stdout: "", stderr: `${PREFIX3} ${oneLine2(detail)}
 `, exitCode: BAD_INPUT };
   }
 };
@@ -23389,7 +23411,7 @@ var INVISIBLE_RE2 = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]
 var GRADE_TOKEN_RE = /\[(directive|claim|blocked)\]/gi;
 var MAX_VALUE_CHARS = 400;
 var TRUNCATION_MARK = " ...[truncated]";
-var oneLine2 = (raw) => {
+var oneLine3 = (raw) => {
   const flattened = raw.replace(ANSI_ESCAPE_RE2, "").replace(CONTROL_RE2, " ").replace(INVISIBLE_RE2, "").replace(GRADE_TOKEN_RE, "\\[$1\\]").replace(/\s+/g, " ").trim();
   if (flattened.length <= MAX_VALUE_CHARS) return flattened;
   return `${flattened.slice(0, MAX_VALUE_CHARS)}${TRUNCATION_MARK}`;
@@ -23428,9 +23450,9 @@ var TRUST_TAGS = {
   blocked: "[blocked]  "
 };
 var entryLine = (record2, trailer, trust, tier) => {
-  const value = oneLine2(trailer.value);
-  const body = tier === OTHER_TIER ? `${oneLine2(trailer.key)}: ${value}` : value;
-  return `  ${TRUST_TAGS[trust]}  ${oneLine2(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
+  const value = oneLine3(trailer.value);
+  const body = tier === OTHER_TIER ? `${oneLine3(trailer.key)}: ${value}` : value;
+  return `  ${TRUST_TAGS[trust]}  ${oneLine3(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
 };
 var byRecency = (a, b) => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
@@ -23452,7 +23474,7 @@ var project = (records, grades) => {
     if (grade2.trust === "blocked") {
       withheldValues += payload.length;
       withheld.push({
-        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine2(record2.recordId) : "-",
+        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine3(record2.recordId) : "-",
         sha: shortSha3(record2.sha),
         patterns: grade2.matchedPatterns ?? [],
         keys: grade2.matchedTrailerKeys ?? [],
@@ -23483,14 +23505,14 @@ var withheldLine = (withheld) => {
   if (withheld.length === 0) return [];
   const collisions = withheld.filter((entry) => entry.reason === "identity-collision");
   const injections = withheld.filter((entry) => entry.reason === "injection");
-  const collisionNamed = oneLine2(
+  const collisionNamed = oneLine3(
     collisions.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const collisionLine = collisions.length === 0 ? [] : [
     `withheld: ${collisions.length} record(s) due to a Record-Id collision; content not shown: ${collisionNamed}.`
   ];
   if (injections.length === 0) return collisionLine;
-  const named = oneLine2(
+  const named = oneLine3(
     injections.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const patterns = [...new Set(injections.flatMap((entry) => entry.patterns))].sort();
@@ -23912,6 +23934,274 @@ var register17 = (program3) => {
   });
 };
 
+// src/commands/installer-hosts.ts
+import { accessSync, constants, existsSync as existsSync19, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync8, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync23 } from "node:fs";
+import { delimiter, dirname as dirname10, join as join14 } from "node:path";
+import { randomUUID } from "node:crypto";
+import { spawn, spawnSync as spawnSync5 } from "node:child_process";
+var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
+var isObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var ownEntry = (format, entry, wrapper) => {
+  if (!isObject3(entry)) return false;
+  if (format === "json-mcp") {
+    const command = entry.command;
+    return Array.isArray(command) && command.length === 2 && command[0] === wrapper && command[1] === "mcp";
+  }
+  return entry.command === wrapper && Array.isArray(entry.args) && entry.args.length === 1 && entry.args[0] === "mcp";
+};
+var commandOf = (format, entry) => {
+  if (!isObject3(entry)) return null;
+  if (format === "json-mcp") {
+    if (!Array.isArray(entry.command) || !entry.command.every((part) => typeof part === "string") || entry.command.length === 0) return null;
+    return { command: entry.command[0], args: entry.command.slice(1) };
+  }
+  if (typeof entry.command !== "string" || !Array.isArray(entry.args) || !entry.args.every((part) => typeof part === "string")) return null;
+  return { command: entry.command, args: entry.args };
+};
+var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", command: [wrapper, "mcp"], enabled: true } : { command: wrapper, args: ["mcp"] };
+var atomicJsonWrite = (path2, value) => {
+  mkdirSync11(dirname10(path2), { recursive: true });
+  const temporary = join14(dirname10(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+  try {
+    writeFileSync17(temporary, `${JSON.stringify(value, null, 2)}
+`, { encoding: "utf8", mode: 384 });
+    if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") {
+      throw new Error("interrupted before atomic rename");
+    }
+    JSON.parse(readFileSync23(temporary, "utf8"));
+    renameSync10(temporary, path2);
+  } finally {
+    try {
+      unlinkSync6(temporary);
+    } catch {
+    }
+  }
+};
+var executable = (command) => {
+  try {
+    if (statSync8(command).isDirectory()) return "command is a directory";
+    accessSync(command, constants.X_OK);
+    return null;
+  } catch {
+    return "command does not exist or is not executable";
+  }
+};
+var probeMcp = async (command, args) => {
+  const unusable = executable(command);
+  if (unusable !== null) return unusable;
+  return new Promise((resolve21) => {
+    let settled = false;
+    const finish = (problem) => {
+      if (settled) return;
+      settled = true;
+      child?.kill();
+      resolve21(problem);
+    };
+    let child;
+    try {
+      child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], shell: false });
+    } catch (error2) {
+      finish(`could not start command: ${error2 instanceof Error ? error2.message : String(error2)}`);
+      return;
+    }
+    let buffer = "";
+    let initialized = false;
+    const timer = setTimeout(() => finish("MCP initialize timed out"), 5e3);
+    child.once("error", (error2) => finish(`could not start command: ${error2.message}`));
+    child.once("exit", (code) => {
+      if (!settled) finish(`command exited before MCP verification (status ${String(code)})`);
+    });
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line2 of lines) {
+        let message;
+        try {
+          message = JSON.parse(line2);
+        } catch {
+          continue;
+        }
+        if (!initialized && message.id === 1) {
+          const info = message.result?.serverInfo;
+          if (info?.name !== "commitlore" || typeof info.version !== "string" || info.version === "") {
+            clearTimeout(timer);
+            finish("MCP initialize did not identify CommitLore with a version");
+            return;
+          }
+          initialized = true;
+          child?.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })}
+`);
+        } else if (initialized && message.id === 2) {
+          const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
+          clearTimeout(timer);
+          finish(tools.has("commitlore_query") && tools.has("commitlore_before_change") ? null : "MCP server lacks CommitLore minimum tools");
+          return;
+        }
+      }
+    });
+    child.stdin.on("error", () => finish("command closed its input before MCP verification"));
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "commitlore-installer", version: "1" } } })}
+`);
+  });
+};
+var jsonHost = async (host, path2, format, wrapper) => {
+  let config3;
+  let existed = true;
+  try {
+    config3 = JSON.parse(readFileSync23(path2, "utf8"));
+    if (!isObject3(config3)) throw new Error("root is not an object");
+  } catch (error2) {
+    if (!existsSync19(path2)) {
+      existed = false;
+      config3 = {};
+    } else {
+      return { host, requested: true, outcome: "failed", healthy: false, detail: `config is not parseable JSON: ${error2 instanceof Error ? error2.message : String(error2)}` };
+    }
+  }
+  const key = format === "json-mcp" ? "mcp" : "mcpServers";
+  if (config3[key] !== void 0 && !isObject3(config3[key])) {
+    return { host, requested: true, outcome: "failed", healthy: false, detail: `${key} is not an object` };
+  }
+  const group = config3[key] ?? {};
+  const entry = group.commitlore;
+  if (entry !== void 0) {
+    const launch = commandOf(format, entry);
+    if (launch === null) return { host, requested: true, outcome: "failed", healthy: false, detail: "commitlore registration has no runnable command and args" };
+    const problem2 = await probeMcp(launch.command, launch.args);
+    if (problem2 !== null) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2}` };
+    return { host, requested: true, outcome: ownEntry(format, entry, wrapper) ? "owned" : "custom-preserved", healthy: true, detail: ownEntry(format, entry, wrapper) ? "healthy installer-owned registration" : "healthy custom registration preserved" };
+  }
+  config3[key] = { ...group, commitlore: entryFor(format, wrapper) };
+  try {
+    atomicJsonWrite(path2, config3);
+  } catch (error2) {
+    return { host, requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${error2 instanceof Error ? error2.message : String(error2)}` };
+  }
+  const problem = await probeMcp(wrapper, ["mcp"]);
+  return problem === null ? { host, requested: true, outcome: "installed", healthy: true, detail: existed ? "registration added and live-verified" : "registration created and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `registration was written but is unhealthy: ${problem}` };
+};
+var tomlRegistration = (source) => {
+  const table = /^\s*\[mcp_servers\.commitlore\]\s*$/m.exec(source);
+  if (table === null || table.index === void 0) return null;
+  const body = source.slice(table.index + table[0].length).split(/^\s*\[/m, 1)[0] ?? "";
+  const command = /^\s*command\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/m.exec(body)?.[1];
+  const args = /^\s*args\s*=\s*\[\s*"mcp"\s*\]\s*$/m.test(body) ? ["mcp"] : null;
+  if (command === void 0 || args === null) throw new Error('CommitLore table does not contain command plus args = ["mcp"]');
+  try {
+    return { command: JSON.parse(`"${command}"`), args };
+  } catch {
+    throw new Error("CommitLore command is not a valid quoted string");
+  }
+};
+var tomlHost = async (path2, wrapper) => {
+  let source = "";
+  try {
+    source = readFileSync23(path2, "utf8");
+  } catch (error2) {
+    if (existsSync19(path2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `could not read config: ${String(error2)}` };
+  }
+  let existing;
+  try {
+    existing = tomlRegistration(source);
+  } catch (error2) {
+    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `config is not parseable TOML: ${String(error2)}` };
+  }
+  if (existing !== null) {
+    const problem2 = await probeMcp(existing.command, existing.args);
+    if (problem2 !== null) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2}` };
+    return { host: "codex", requested: true, outcome: existing.command === wrapper ? "owned" : "custom-preserved", healthy: true, detail: existing.command === wrapper ? "healthy installer-owned registration" : "healthy custom registration preserved" };
+  }
+  const escaped = JSON.stringify(wrapper);
+  const next = `${source}${source === "" || source.endsWith("\n") ? "" : "\n"}[mcp_servers.commitlore]
+command = ${escaped}
+args = ["mcp"]
+`;
+  try {
+    mkdirSync11(dirname10(path2), { recursive: true });
+    const temporary = join14(dirname10(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+    try {
+      writeFileSync17(temporary, next, { encoding: "utf8", mode: 384 });
+      if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
+      tomlRegistration(readFileSync23(temporary, "utf8"));
+      renameSync10(temporary, path2);
+    } finally {
+      try {
+        unlinkSync6(temporary);
+      } catch {
+      }
+    }
+  } catch (error2) {
+    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${String(error2)}` };
+  }
+  const problem = await probeMcp(wrapper, ["mcp"]);
+  return problem === null ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem}` };
+};
+var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter).some((directory) => {
+  const path2 = join14(directory, command);
+  try {
+    return !statSync8(path2).isDirectory();
+  } catch {
+    return false;
+  }
+});
+var commandResult = (command, args) => {
+  const result = spawnSync5(command, args, { encoding: "utf8", shell: false });
+  return { ok: result.status === 0 && result.error === void 0, stdout: result.stdout ?? "" };
+};
+var cliHost = async (host, wrapper) => {
+  const existing = commandResult("codex", ["mcp", "get", "commitlore"]);
+  if (existing.stdout.trim() !== "") {
+    const command = existing.stdout.match(/^\s*command:\s*(.+?)\s*$/m)?.[1];
+    const args = existing.stdout.match(/^\s*args:\s*\[?(.+?)\]?\s*$/m)?.[1]?.split(",").map((part) => part.trim().replace(/^"|"$/g, "")).filter(Boolean);
+    if (command === void 0 || args === void 0) {
+      return { host, requested: true, outcome: "failed", healthy: false, detail: "codex CLI returned an unverifiable registration" };
+    }
+    const problem2 = await probeMcp(command, args);
+    if (problem2 !== null) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2}` };
+    return { host, requested: true, outcome: command === wrapper && args.length === 1 && args[0] === "mcp" ? "owned" : "custom-preserved", healthy: true, detail: command === wrapper && args.length === 1 && args[0] === "mcp" ? "healthy installer-owned registration" : "healthy custom registration preserved" };
+  }
+  const added = commandResult("codex", ["mcp", "add", "commitlore", "--", wrapper, "mcp"]);
+  if (!added.ok) return { host, requested: true, outcome: "failed", healthy: false, detail: "codex mcp add failed" };
+  const problem = await probeMcp(wrapper, ["mcp"]);
+  return problem === null ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem}` };
+};
+var inspectAndApplyHosts = async (options) => {
+  const requested = [];
+  const notDetected = [];
+  const home = options.home;
+  if (hasCommand("codex")) {
+    requested.push(cliHost("codex", options.wrapper));
+  } else if (existsSync19(join14(home, ".codex"))) {
+    requested.push(tomlHost(join14(home, ".codex", "config.toml"), options.wrapper));
+  } else notDetected.push("codex");
+  const candidates = [
+    ["gemini-cli", join14(home, ".gemini", "settings.json"), "json-mcpServers", hasCommand("gemini") || existsSync19(join14(home, ".gemini"))],
+    ["cursor", join14(home, ".cursor", "mcp.json"), "json-mcpServers", hasCommand("cursor") || existsSync19(join14(home, ".cursor"))],
+    ["windsurf", join14(home, ".codeium", "windsurf", "mcp_config.json"), "json-mcpServers", hasCommand("windsurf") || existsSync19(join14(home, ".codeium", "windsurf"))],
+    ["opencode", join14(home, ".config", "opencode", "opencode.json"), "json-mcp", hasCommand("opencode") || existsSync19(join14(home, ".config", "opencode"))]
+  ];
+  for (const [host, path2, format, present2] of candidates) {
+    if (present2) requested.push(jsonHost(host, path2, format, options.wrapper));
+    else notDetected.push(host);
+  }
+  if (hasCommand("hermes") || existsSync19(join14(home, ".hermes"))) {
+    const result = spawnSync5(options.wrapper, ["hermes", "install", "--config", join14(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
+    requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
+  } else notDetected.push("hermes");
+  const hosts = await Promise.all(requested);
+  return { schema: INSTALLER_HOSTS_SCHEMA, ok: hosts.every((host) => host.healthy), hosts, notDetected };
+};
+var register18 = (program3) => {
+  program3.command("installer-hosts").description("inspect, apply, and live-verify detected CommitLore host registrations").requiredOption("--wrapper <path>", "the verified CommitLore wrapper path").requiredOption("--data-root <path>", "the CommitLore data root").requiredOption("--home <path>", "the target user home directory").option("--json", "emit the installer host summary as JSON").action(async (options) => {
+    const summary2 = await inspectAndApplyHosts(options);
+    process.stdout.write(`${JSON.stringify(summary2)}
+`);
+    if (!summary2.ok) process.exitCode = 1;
+  });
+};
+
 // src/mcp/server.ts
 import { Console } from "node:console";
 import { isAbsolute as isAbsolute3, relative as relative4, resolve as resolve20, sep as sep5 } from "node:path";
@@ -24025,7 +24315,7 @@ __export(util_exports, {
   getParsedType: () => getParsedType,
   getSizableOrigin: () => getSizableOrigin,
   hexToUint8Array: () => hexToUint8Array,
-  isObject: () => isObject3,
+  isObject: () => isObject4,
   isPlainObject: () => isPlainObject3,
   issue: () => issue,
   joinValues: () => joinValues,
@@ -24188,7 +24478,7 @@ function slugify(input) {
 }
 var captureStackTrace = "captureStackTrace" in Error ? Error.captureStackTrace : (..._args) => {
 };
-function isObject3(data) {
+function isObject4(data) {
   return typeof data === "object" && data !== null && !Array.isArray(data);
 }
 var allowsEval = /* @__PURE__ */ cached(() => {
@@ -24207,7 +24497,7 @@ var allowsEval = /* @__PURE__ */ cached(() => {
   }
 });
 function isPlainObject3(o) {
-  if (isObject3(o) === false)
+  if (isObject4(o) === false)
     return false;
   const ctor = o.constructor;
   if (ctor === void 0)
@@ -24215,7 +24505,7 @@ function isPlainObject3(o) {
   if (typeof ctor !== "function")
     return true;
   const prot = ctor.prototype;
-  if (isObject3(prot) === false)
+  if (isObject4(prot) === false)
     return false;
   if (Object.prototype.hasOwnProperty.call(prot, "isPrototypeOf") === false) {
     return false;
@@ -25971,13 +26261,13 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     }
     return propValues;
   });
-  const isObject4 = isObject3;
+  const isObject5 = isObject4;
   const catchall = def.catchall;
   let value;
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
     const input = payload.value;
-    if (!isObject4(input)) {
+    if (!isObject5(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -26104,7 +26394,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     return (payload, ctx) => fn(shape, payload, ctx);
   };
   let fastpass;
-  const isObject4 = isObject3;
+  const isObject5 = isObject4;
   const jit = !globalConfig.jitless;
   const allowsEval2 = allowsEval;
   const fastEnabled = jit && allowsEval2.value;
@@ -26113,7 +26403,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
     const input = payload.value;
-    if (!isObject4(input)) {
+    if (!isObject5(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -26236,7 +26526,7 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
   });
   inst._zod.parse = (payload, ctx) => {
     const input = payload.value;
-    if (!isObject3(input)) {
+    if (!isObject4(input)) {
       payload.issues.push({
         code: "invalid_type",
         expected: "object",
@@ -32755,7 +33045,7 @@ var define = (program3, name, description, keys, render2) => {
     }
   });
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   define(
     program3,
     "context",
@@ -32933,7 +33223,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register19 = (program3) => {
+var register20 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -33604,7 +33894,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register20 = (program3) => {
+var register21 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -33617,10 +33907,10 @@ var register20 = (program3) => {
 };
 
 // src/core/codex-plugin.ts
-import { spawnSync as spawnSync5 } from "node:child_process";
-import { existsSync as existsSync19, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
+import { spawnSync as spawnSync6 } from "node:child_process";
+import { existsSync as existsSync20, mkdirSync as mkdirSync12, readFileSync as readFileSync24, rmSync as rmSync5, writeFileSync as writeFileSync18 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join14 } from "node:path";
+import { join as join15 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
@@ -33695,14 +33985,14 @@ var isCommitloreEntry = (format, entry, wrapperPath) => {
 
 // src/core/codex-plugin.ts
 var MARKER_VERSION = 1;
-var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join14(homedir2(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join14(homedir2(), ".local", "share");
+var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join15(homedir2(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join15(homedir2(), ".local", "share");
 var codexSaid = (result) => {
   const said = (result.stderr.trim() || result.stdout.trim()).split("\n")[0]?.trim() ?? "";
   if (said === "") return [];
   return [`codex said: ${said}`];
 };
 var runCodexCommand = (args) => {
-  const result = spawnSync5("codex", args, { encoding: "utf8", timeout: 3e4 });
+  const result = spawnSync6("codex", args, { encoding: "utf8", timeout: 3e4 });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -33717,7 +34007,7 @@ var config2 = () => {
 };
 var codexPluginSelector = (plugin = config2()) => `${plugin.plugin}@${plugin.marketplace}`;
 var codexPluginInstallCommand = () => "commitlore plugin install-codex";
-var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join14(dataHome, ...plugin.dataRelativePath);
+var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join15(dataHome, ...plugin.dataRelativePath);
 var successful = (result) => result.status === 0 && result.error === void 0;
 var readMarketplaceState = (json, plugin) => {
   const namedInText = () => json.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `)) ? { kind: "unverifiable-present" } : { kind: "unverifiable-absent" };
@@ -33754,9 +34044,9 @@ var markerFor = (plugin) => ({
 });
 var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
-  if (!existsSync19(markerPath)) return null;
+  if (!existsSync20(markerPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync23(markerPath, "utf8"));
+    const parsed = JSON.parse(readFileSync24(markerPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
     const marker = parsed;
     const expected = markerFor(plugin);
@@ -33770,8 +34060,8 @@ var removeCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome())
 };
 var writeCodexPluginMarker = (plugin, dataHome) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
-  mkdirSync11(join14(markerPath, ".."), { recursive: true });
-  writeFileSync17(markerPath, `${JSON.stringify(markerFor(plugin), null, 2)}
+  mkdirSync12(join15(markerPath, ".."), { recursive: true });
+  writeFileSync18(markerPath, `${JSON.stringify(markerFor(plugin), null, 2)}
 `);
 };
 var installCodexPlugin = (options = {}) => {
@@ -33865,7 +34155,7 @@ var installCodexPlugin = (options = {}) => {
 };
 
 // src/commands/plugin.ts
-var register21 = (program3) => {
+var register22 = (program3) => {
   const plugin = program3.command("plugin").description("manage CommitLore coding-agent plugins");
   plugin.command("install-codex").description("install or repair the CommitLore Codex plugin through the Codex CLI").option("--print", "print the one command instead of running it").addHelpText(
     "after",
@@ -33882,7 +34172,7 @@ var register21 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync24, writeFileSync as writeFileSync18 } from "node:fs";
+import { readFileSync as readFileSync25, writeFileSync as writeFileSync19 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -33923,14 +34213,30 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync24(path2, "utf8");
+    return readFileSync25(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
+var recordIdOfBlock = (block) => block.find((trailer) => trailer.key === "Record-Id")?.value;
+var withoutRecordIds = (plan, excluded) => {
+  const ids = new Set(excluded);
+  if (ids.size === 0) return { plan, skippedRecordIds: [] };
+  const skippedRecordIds = plan.blocks.map(recordIdOfBlock).filter((id) => id !== void 0 && ids.has(id));
+  const kept = (recordId) => recordId === void 0 || !ids.has(recordId);
+  return {
+    plan: {
+      blocks: plan.blocks.filter((block) => kept(recordIdOfBlock(block))),
+      sources: plan.sources.filter((source) => kept(source.recordId)),
+      conflicts: plan.conflicts.filter((conflict) => kept(conflict.recordId)),
+      provenance: plan.provenance.filter((entry) => kept(entry.recordId))
+    },
+    skippedRecordIds
+  };
+};
 var writeDraft = (path2, text) => {
   try {
-    writeFileSync18(path2, text);
+    writeFileSync19(path2, text);
   } catch (error2) {
     throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
@@ -33939,6 +34245,7 @@ var runSquashPreserve = (input = {}) => {
   const range = input.range;
   if (range === void 0 || range === "") return usageError("a range is required");
   let plan;
+  let skippedRecordIds = [];
   let commits;
   try {
     commits = countCommits(range, input.cwd);
@@ -33947,20 +34254,22 @@ var runSquashPreserve = (input = {}) => {
         `the range ${JSON.stringify(range)} holds no commits \u2014 nothing was squashed`
       );
     }
-    plan = planSquash(
+    const resolved = planSquash(
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
+    ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
   } catch (error2) {
     return usageError(messageOf8(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
   if (plan.sources.length === 0) {
-    const notice = `${PREFIX4} no records in ${range} (${commits} commit(s)) \u2014 nothing to preserve
+    const excluded = skippedRecordIds.length === 0 ? `no records in ${range} (${commits} commit(s))` : `all records in ${range} were already carried (${skippedRecordIds.join(", ")})`;
+    const notice = `${PREFIX4} ${excluded} \u2014 nothing to preserve
 `;
     return {
       code: 0,
-      stdout: input.json === true ? `${JSON.stringify({ range, ...plan }, null, 2)}
+      stdout: input.json === true ? `${JSON.stringify({ range, ...plan, skippedRecordIds }, null, 2)}
 ` : "",
       stderr: notice,
       plan
@@ -33986,7 +34295,7 @@ var runSquashPreserve = (input = {}) => {
   if (input.json === true) {
     return {
       code: 0,
-      stdout: `${JSON.stringify({ range, ...plan, applied }, null, 2)}
+      stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}
 `,
       stderr: warnings,
       plan
@@ -34008,8 +34317,13 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register22 = (program3) => {
-  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
+var register23 = (program3) => {
+  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
+    "--exclude-record-id <id>",
+    "do not apply a record identity the destination already carries (repeatable)",
+    (id, ids) => [...ids, id],
+    []
+  ).addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
   ).action((range, flags) => {
@@ -34018,7 +34332,8 @@ var register22 = (program3) => {
       ...flags.target === void 0 ? {} : { target: flags.target },
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
       ...flags.json === void 0 ? {} : { json: flags.json },
-      ...flags.force === void 0 ? {} : { force: flags.force }
+      ...flags.force === void 0 ? {} : { force: flags.force },
+      ...flags.excludeRecordId === void 0 ? {} : { excludeRecordIds: flags.excludeRecordId }
     });
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);
@@ -34055,7 +34370,7 @@ var runSync = (options = {}) => {
 `
   };
 };
-var register23 = (program3) => {
+var register24 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
@@ -34067,7 +34382,7 @@ var register23 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync25 } from "node:fs";
+import { readFileSync as readFileSync26 } from "node:fs";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -34275,14 +34590,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync25(path2, "utf8");
+    return readFileSync26(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync25(0, "utf8");
+    return readFileSync26(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
   }
@@ -34572,7 +34887,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register24 = (program3) => {
+var register25 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
@@ -34594,10 +34909,10 @@ var register24 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync6 } from "node:child_process";
-import { existsSync as existsSync20, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
+import { spawnSync as spawnSync7 } from "node:child_process";
+import { existsSync as existsSync21, readFileSync as readFileSync27, rmSync as rmSync6, writeFileSync as writeFileSync20 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { join as join15 } from "node:path";
+import { join as join16 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
 var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var withoutJsonEntry = (parsed, format, wrapper) => {
@@ -34625,7 +34940,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync6(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync7(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -34641,7 +34956,7 @@ var listCodexMcp = (command) => {
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
   const home = options.home ?? homedir3();
-  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join15(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join15(home, ".local", "share"));
+  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join16(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join16(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
@@ -34649,11 +34964,11 @@ var runUninstall = async (options = {}) => {
   const kept = [];
   const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
-  const wrapper = join15(home, ".local", "bin", "commitlore");
-  if (existsSync20(wrapper)) {
+  const wrapper = join16(home, ".local", "bin", "commitlore");
+  if (existsSync21(wrapper)) {
     let contents;
     try {
-      contents = readFileSync26(wrapper, "utf8");
+      contents = readFileSync27(wrapper, "utf8");
     } catch {
       kept.push(wrapper);
       failures.push(wrapper);
@@ -34672,7 +34987,7 @@ var runUninstall = async (options = {}) => {
   let retainDataRoot = false;
   for (const config3 of AGENT_CONFIGS.filter(isCodexPluginConfig)) {
     const markerPath = codexPluginMarkerPath(config3, dataHome);
-    if (!existsSync20(markerPath)) continue;
+    if (!existsSync21(markerPath)) continue;
     if (readCodexPluginMarker(config3, dataHome) === null) {
       retainDataRoot = true;
       kept.push(markerPath);
@@ -34709,8 +35024,8 @@ var runUninstall = async (options = {}) => {
     removeCodexPluginMarker(config3, dataHome);
     removed.push(`${selector} (Codex plugin)`);
   }
-  const dataRoot = join15(dataHome, "commitlore");
-  if (existsSync20(dataRoot)) {
+  const dataRoot = join16(dataHome, "commitlore");
+  if (existsSync21(dataRoot)) {
     if (retainDataRoot) {
       kept.push(dataRoot);
       report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
@@ -34724,7 +35039,7 @@ var runUninstall = async (options = {}) => {
   const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
   const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
   if (codexConfig !== void 0 && codexList !== null) {
-    const path2 = join15(home, ...codexConfig.homeRelativePath);
+    const path2 = join16(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
       failures.push(path2);
@@ -34739,7 +35054,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync6(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync7(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
@@ -34755,11 +35070,11 @@ var runUninstall = async (options = {}) => {
   for (const config3 of AGENT_CONFIGS) {
     if (!isMcpAgentConfig(config3)) continue;
     if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
-    const path2 = join15(home, ...config3.homeRelativePath);
-    if (!existsSync20(path2)) continue;
+    const path2 = join16(home, ...config3.homeRelativePath);
+    if (!existsSync21(path2)) continue;
     let contents;
     try {
-      contents = readFileSync26(path2, "utf8");
+      contents = readFileSync27(path2, "utf8");
     } catch {
       kept.push(path2);
       failures.push(path2);
@@ -34769,19 +35084,19 @@ var runUninstall = async (options = {}) => {
     if (config3.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync19(path2, next2);
+      if (!dryRun) writeFileSync20(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
       continue;
     }
     if (config3.format === "yaml-mcp_servers") {
       const next2 = removeHermesConfig(contents, {
-        wrapperPath: [wrapper, join15(dataRoot, "bin", "commitlore.cmd")],
+        wrapperPath: [wrapper, join16(dataRoot, "bin", "commitlore.cmd")],
         dataRoot,
         installedSkillsDir: installedPath("hermes", "skills")
       });
       if (next2.removed.length === 0) continue;
-      if (!dryRun) writeFileSync19(path2, next2.contents);
+      if (!dryRun) writeFileSync20(path2, next2.contents);
       removed.push(`${path2} (${next2.removed.join(" and ")} ${SERVER_KEY} entries)`);
       report.push(`${say}: the ${next2.removed.join(" and ")} ${SERVER_KEY} entries in ${path2}`);
       continue;
@@ -34797,7 +35112,7 @@ var runUninstall = async (options = {}) => {
     }
     const next = withoutJsonEntry(parsed, config3.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync19(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync20(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -34828,11 +35143,11 @@ var registerUninstall = (program3) => {
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync27(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync28(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync27(STDIN_FD2, "utf8");
+  return readFileSync28(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -34887,21 +35202,21 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 ).action((options) => {
   runParse(options);
 });
-register23(program2);
-register7(program2);
 register24(program2);
+register7(program2);
+register25(program2);
 registerUninstall(program2);
 register9(program2);
 register16(program2);
-register18(program2);
 register19(program2);
+register20(program2);
 register5(program2);
 register10(program2);
 register2(program2);
 register12(program2);
 register14(program2);
 register15(program2);
-register22(program2);
+register23(program2);
 register8(program2);
 register6(program2);
 register13(program2);
@@ -34909,9 +35224,10 @@ register17(program2);
 register(program2);
 register3(program2);
 register11(program2);
-register20(program2);
-register4(program2);
 register21(program2);
+register4(program2);
+register22(program2);
+register18(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
@@ -34925,7 +35241,7 @@ var USAGE_ERRORS = /* @__PURE__ */ new Set([
 program2.exitOverride();
 for (const command of program2.commands) command.exitOverride();
 try {
-  program2.parse(process.argv);
+  await program2.parseAsync(process.argv);
 } catch (error2) {
   const code = error2.code ?? "";
   if (code === "commander.helpDisplayed" || code === "commander.version" || code === "commander.help") {

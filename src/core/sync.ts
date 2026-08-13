@@ -32,7 +32,7 @@
  * would be felt on every edit.
  */
 
-import { execGit } from './git.js';
+import { type ExecGitOptions, execGit } from './git.js';
 import { NOTES_REF, listRemotes, type NotesOptions } from './notes.js';
 
 /** What a sync did, per remote. */
@@ -66,10 +66,19 @@ export interface SyncOptions extends NotesOptions {
   readonly fetchOnly?: boolean;
   /** Report what would happen and change nothing, locally or remotely. */
   readonly dryRun?: boolean;
+  /** Limits applied only to network transport children (`git fetch` and `git push`). */
+  readonly transport?: Pick<ExecGitOptions, 'env' | 'timeout'>;
 }
 
 const gitOptions = (opts: NotesOptions): { cwd?: string } =>
   opts.cwd === undefined ? {} : { cwd: opts.cwd };
+
+/** Options for the only sync children that can contact a remote. */
+const transportGitOptions = (opts: SyncOptions): ExecGitOptions => ({
+  ...gitOptions(opts),
+  ...(opts.transport?.env === undefined ? {} : { env: opts.transport.env }),
+  ...(opts.transport?.timeout === undefined ? {} : { timeout: opts.transport.timeout }),
+});
 
 /** The ref a fetch lands on. Deliberately not `NOTES_REF`: see `syncRemote`. */
 const FETCH_HEAD_REF = 'refs/notes/commitlore-remote';
@@ -86,8 +95,8 @@ const FETCH_HEAD_REF = 'refs/notes/commitlore-remote';
  * of this push, not of the caller: nothing is served by a notes push running a
  * hook whose only job is to push notes.
  */
-const pushMirror = (remote: string, opts: NotesOptions): ReturnType<typeof execGit> =>
-  execGit(['push', '--no-verify', remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions(opts));
+const pushMirror = (remote: string, opts: SyncOptions): ReturnType<typeof execGit> =>
+  execGit(['push', '--no-verify', remote, `${NOTES_REF}:${NOTES_REF}`], transportGitOptions(opts));
 
 const revParse = (ref: string, opts: NotesOptions): string | null => {
   const result = execGit(['rev-parse', '--verify', '--quiet', ref], gitOptions(opts));
@@ -121,7 +130,7 @@ export const syncRemote = (remote: string, opts: SyncOptions = {}): SyncResult =
   // three-way comparison below, which is the same overwrite #417 is about.
   const fetched = execGit(
     ['fetch', '--refmap=', '--force', remote, `${NOTES_REF}:${FETCH_HEAD_REF}`],
-    gitOptions(opts),
+    transportGitOptions(opts),
   );
   // A remote with no notes ref is not an error: it is a remote nobody has
   // published to yet, which is the ordinary state of a fresh repository.

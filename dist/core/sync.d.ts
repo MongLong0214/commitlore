@@ -31,6 +31,7 @@
  * config only, with no network, and that stands: a fetch on the injection path
  * would be felt on every edit.
  */
+import { type ExecGitOptions } from './git.js';
 import { type NotesOptions } from './notes.js';
 /** What a sync did, per remote. */
 export type SyncOutcome = 
@@ -61,6 +62,8 @@ export interface SyncOptions extends NotesOptions {
     readonly fetchOnly?: boolean;
     /** Report what would happen and change nothing, locally or remotely. */
     readonly dryRun?: boolean;
+    /** Limits applied only to network transport children (`git fetch` and `git push`). */
+    readonly transport?: Pick<ExecGitOptions, 'env' | 'timeout'>;
 }
 /**
  * Synchronise one remote.
