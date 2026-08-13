@@ -70,7 +70,11 @@ describe('#303 user-facing text names only packages the manifest carries', () =>
 
   it('better-sqlite3 is genuinely not a declared dependency, so the rule has teeth', () => {
     expect(declared.has('better-sqlite3')).toBe(false);
-    expect(manifest.dependencies ?? {}).toEqual({});
+    // Not "no dependencies at all" -- #606 moved the packages the bundle
+    // actually imports into `dependencies` so the production audit examines
+    // them. The rule this test protects is narrower: the specific package this
+    // project once used and removed must not quietly come back.
+    expect(Object.keys(manifest.dependencies ?? {})).not.toContain('better-sqlite3');
   });
 });
 

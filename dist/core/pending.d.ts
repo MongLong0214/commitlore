@@ -3,7 +3,9 @@
  *
  * Owns the monotonic prepare → verify → stage → apply → consume lifecycle
  * of a single capture pipeline run. Every mutation is an atomic rename so
- * no concurrent reader can observe a partial file.
+ * no concurrent reader can observe a partial file. The prepared → verified
+ * write is also exclusive per nonce (#591): a rename makes one write complete,
+ * it does not make a read-modify-write exclusive.
  */
 import type { RenderedGuardMatch } from './guard.js';
 /** The three verification gaps, in canonical order (T-1024's closed vocabulary). */
@@ -50,6 +52,24 @@ export interface PendingRecord {
 export declare class PendingFormatError extends Error {
     constructor(message: string);
 }
+export interface PendingLock {
+    /** This process may mutate the nonce. */
+    held: boolean;
+    /** This call created the lock file and must release it. */
+    created: boolean;
+}
+/**
+ * Claim exclusive mutation of one pending nonce.
+ *
+ * `O_EXCL` (`wx`) makes the create the arbitration: two processes cannot both
+ * observe an absent lock and both proceed. Re-entry from the same pid is
+ * allowed so `verifyCaptureRecords` can hold the lock across the store.
+ * A lock whose owner pid is gone is stolen once — a crash must not pin the
+ * nonce forever.
+ */
+export declare const tryLockPending: (nonce: string, cwd: string) => PendingLock;
+/** Release a lock this process created. A lock owned by someone else is left. */
+export declare const unlockPending: (nonce: string, cwd: string) => void;
 /**
  * The current commit, or null when there is not one to read (unborn branch,
  * broken repository). Never throws: both callers treat "cannot tell" as an
@@ -155,7 +175,9 @@ export interface StoreVerificationOptions {
 }
 /**
  * Stores verification results in the pending transaction.
- * Only succeeds if the current phase is 'prepared'.
+ * Only succeeds if the current phase is 'prepared', and only for the caller
+ * that holds the nonce lock — a losing racer returns false rather than
+ * reporting a write that another process will overwrite (#591).
  */
 export declare const storeVerification: (nonce: string, opts: StoreVerificationOptions) => boolean;
 export interface StagePendingOptions {

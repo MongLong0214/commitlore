@@ -3,7 +3,9 @@
  *
  * Owns the monotonic prepare → verify → stage → apply → consume lifecycle
  * of a single capture pipeline run. Every mutation is an atomic rename so
- * no concurrent reader can observe a partial file.
+ * no concurrent reader can observe a partial file. The prepared → verified
+ * write is also exclusive per nonce (#591): a rename makes one write complete,
+ * it does not make a read-modify-write exclusive.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -36,6 +38,83 @@ const pendingFilePath = (nonce, cwd) => {
     validateNonce(nonce);
     const dir = pendingDir(cwd);
     return resolve(dir, `${nonce}.json`);
+};
+const pendingLockPath = (nonce, cwd) => `${pendingFilePath(nonce, cwd)}.lock`;
+const pidIsAlive = (pid) => {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch {
+        return false;
+    }
+};
+/**
+ * Claim exclusive mutation of one pending nonce.
+ *
+ * `O_EXCL` (`wx`) makes the create the arbitration: two processes cannot both
+ * observe an absent lock and both proceed. Re-entry from the same pid is
+ * allowed so `verifyCaptureRecords` can hold the lock across the store.
+ * A lock whose owner pid is gone is stolen once — a crash must not pin the
+ * nonce forever.
+ */
+export const tryLockPending = (nonce, cwd) => {
+    validateNonce(nonce);
+    const lockPath = pendingLockPath(nonce, cwd);
+    mkdirSync(pendingDir(cwd), { recursive: true });
+    const create = () => {
+        writeFileSync(lockPath, `${process.pid}\n`, { flag: 'wx' });
+        return { held: true, created: true };
+    };
+    try {
+        return create();
+    }
+    catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+            ? error.code
+            : 'unknown';
+        if (code !== 'EEXIST')
+            throw error;
+        let owner = '';
+        try {
+            owner = readFileSync(lockPath, 'utf8').trim();
+        }
+        catch {
+            return { held: false, created: false };
+        }
+        if (owner === String(process.pid))
+            return { held: true, created: false };
+        const pid = Number(owner);
+        if (!Number.isInteger(pid) || pid <= 0 || pidIsAlive(pid)) {
+            return { held: false, created: false };
+        }
+        try {
+            unlinkSync(lockPath);
+        }
+        catch {
+            return { held: false, created: false };
+        }
+        try {
+            return create();
+        }
+        catch {
+            return { held: false, created: false };
+        }
+    }
+};
+/** Release a lock this process created. A lock owned by someone else is left. */
+export const unlockPending = (nonce, cwd) => {
+    validateNonce(nonce);
+    const lockPath = pendingLockPath(nonce, cwd);
+    try {
+        const owner = readFileSync(lockPath, 'utf8').trim();
+        if (owner !== String(process.pid))
+            return;
+        unlinkSync(lockPath);
+    }
+    catch {
+        // Best-effort: the caller's result is already decided.
+    }
 };
 // ---------------------------------------------------------------------------
 // Atomic write helper (pattern: claude-settings.ts:283-293)
@@ -249,31 +328,42 @@ export const readPending = (nonce, opts) => {
 };
 /**
  * Stores verification results in the pending transaction.
- * Only succeeds if the current phase is 'prepared'.
+ * Only succeeds if the current phase is 'prepared', and only for the caller
+ * that holds the nonce lock — a losing racer returns false rather than
+ * reporting a write that another process will overwrite (#591).
  */
 export const storeVerification = (nonce, opts) => {
     validateNonce(nonce);
-    const record = readPending(nonce, { cwd: opts.cwd });
-    if (!record)
+    const lock = tryLockPending(nonce, opts.cwd);
+    if (!lock.held)
         return false;
-    if (record.phase !== 'prepared')
-        return false;
-    const now = new Date().toISOString();
-    const updated = {
-        ...record,
-        phase: 'verified',
-        verified_at: now,
-        // CEO amendment 1: expires_at remains null in verified phase
-        expires_at: null,
-        records: opts.accepted,
-        evidence_hash: opts.evidence_hash,
-        validation_result: opts.validation_result,
-        overlap_check: opts.overlap_check,
-        incomplete: opts.incomplete,
-    };
-    const filePath = pendingFilePath(nonce, opts.cwd);
-    atomicWriteJson(filePath, updated);
-    return true;
+    try {
+        const record = readPending(nonce, { cwd: opts.cwd });
+        if (!record)
+            return false;
+        if (record.phase !== 'prepared')
+            return false;
+        const now = new Date().toISOString();
+        const updated = {
+            ...record,
+            phase: 'verified',
+            verified_at: now,
+            // CEO amendment 1: expires_at remains null in verified phase
+            expires_at: null,
+            records: opts.accepted,
+            evidence_hash: opts.evidence_hash,
+            validation_result: opts.validation_result,
+            overlap_check: opts.overlap_check,
+            incomplete: opts.incomplete,
+        };
+        const filePath = pendingFilePath(nonce, opts.cwd);
+        atomicWriteJson(filePath, updated);
+        return true;
+    }
+    finally {
+        if (lock.created)
+            unlockPending(nonce, opts.cwd);
+    }
 };
 /**
  * Stages a verified transaction.
@@ -336,6 +426,12 @@ export const deletePending = (nonce, opts) => {
     const filePath = pendingFilePath(nonce, opts.cwd);
     try {
         unlinkSync(filePath);
+        try {
+            unlinkSync(pendingLockPath(nonce, opts.cwd));
+        }
+        catch {
+            // The json is gone; a leftover lock must not resurrect the transaction.
+        }
         return true;
     }
     catch {
