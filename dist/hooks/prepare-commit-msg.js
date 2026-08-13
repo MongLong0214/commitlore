@@ -209,10 +209,27 @@ const reportDiffMismatch = (pending, cwd) => {
     process.stderr.write(`commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.\n`);
 };
 /**
+ * Newer eligible capture first. `created_at` is the recorded instant, not the
+ * nonce filename — the filename is `randomBytes(16)` hex, so lexicographic
+ * order is a coin flip (#591).
+ *
+ * An `applied` file after a failed commit stays eligible (ADR-0021 §4, gate-a
+ * scenario 6). It is not ranked below `staged`. Preferring staged would attach
+ * an older leftover staged file over the capture that just nearly landed.
+ * Marking `applied` abandoned was rejected: Git has no hook for a failed
+ * commit, and abandoning would break the unchanged-index retry.
+ */
+export const compareCaptureCandidates = (left, right) => {
+    const byCreated = right.created_at.localeCompare(left.created_at);
+    if (byCreated !== 0)
+        return byCreated;
+    return left.nonce.localeCompare(right.nonce);
+};
+/**
  * The five-gate application check. Scans pending directory for a staged or
- * applied-but-unconsumed record that passes all five gates. On first match,
- * appends the trailer block and marks applied. On no match or any error, does
- * nothing (never blocks the commit).
+ * applied-but-unconsumed record that passes all five gates. The newest eligible
+ * candidate wins. On no match or any error, does nothing (never blocks the
+ * commit).
  */
 const applyCaptureRecord = (messageFile, cwd) => {
     // Fast path: resolve pending directory
@@ -248,7 +265,7 @@ const applyCaptureRecord = (messageFile, cwd) => {
     catch {
         return;
     }
-    // Check each candidate (first-match wins, ordered by filename = created_at approx)
+    const eligible = [];
     for (const file of files) {
         const filePath = resolve(pendingDirPath, file);
         const pending = readPendingFile(filePath);
@@ -276,29 +293,32 @@ const applyCaptureRecord = (messageFile, cwd) => {
         // Gate 5: Policy identity unchanged
         if (pending.policy_identity_hash !== currentPolicyHash)
             continue;
-        // All five gates pass. Check if already present (dedup).
-        if (messageContainsRecordId(currentMessage, pending.records))
-            return;
-        // Build and append the trailer block
-        const trailerBlock = buildTrailerBlock(pending.records);
-        if (!trailerBlock)
-            return;
-        const separator = currentMessage.endsWith('\n\n')
-            ? ''
-            : currentMessage.endsWith('\n')
-                ? '\n'
-                : '\n\n';
-        writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-        // Mark applied — hash the canonical trailer block, not the full message
-        const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
-        try {
-            markApplied(pending.nonce, recordHash, { cwd });
-        }
-        catch {
-            // Best-effort: message already written, crash here is recoverable by post-commit
-        }
-        // First-match wins — stop
+        eligible.push(pending);
+    }
+    eligible.sort(compareCaptureCandidates);
+    const pending = eligible[0];
+    if (!pending)
         return;
+    // All five gates pass. Check if already present (dedup).
+    if (messageContainsRecordId(currentMessage, pending.records))
+        return;
+    // Build and append the trailer block
+    const trailerBlock = buildTrailerBlock(pending.records);
+    if (!trailerBlock)
+        return;
+    const separator = currentMessage.endsWith('\n\n')
+        ? ''
+        : currentMessage.endsWith('\n')
+            ? '\n'
+            : '\n\n';
+    writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+    // Mark applied — hash the canonical trailer block, not the full message
+    const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
+    try {
+        markApplied(pending.nonce, recordHash, { cwd });
+    }
+    catch {
+        // Best-effort: message already written, crash here is recoverable by post-commit
     }
 };
 export const register = (program) => {

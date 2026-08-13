@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
-import { deletePending, isUnreadablePendingFile, readPending, storeVerification, } from './pending.js';
+import { deletePending, isUnreadablePendingFile, readPending, storeVerification, tryLockPending, unlockPending, } from './pending.js';
 import { hasShallowHistory } from './git.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
@@ -207,6 +207,35 @@ export const loadCaptureVerificationHistory = (cwd) => {
  * Never blocks: an empty or incomplete result is a valid outcome, not an error.
  */
 export const verifyCaptureRecords = (opts) => {
+    const { nonce, cwd } = opts;
+    // Hold the nonce for the whole call so a concurrent loser is refused before
+    // it computes a result it cannot store — and so its settle path cannot
+    // delete the winner's transaction. Sequential replay still acquires after
+    // the first call has released, sees `verified`, and settle deletes as
+    // before. A read-only check writes nothing and takes no lock.
+    let createdLock = false;
+    if (opts.readOnly !== true) {
+        const lock = tryLockPending(nonce, cwd);
+        if (!lock.held) {
+            return {
+                accepted: [],
+                rejected: [],
+                validation_result: 'empty',
+                incomplete: true,
+                overlap_check: 'canonical_exact_only',
+            };
+        }
+        createdLock = lock.created;
+    }
+    try {
+        return runVerifyCaptureRecords(opts);
+    }
+    finally {
+        if (createdLock)
+            unlockPending(nonce, cwd);
+    }
+};
+const runVerifyCaptureRecords = (opts) => {
     const { nonce, draft, transcript, diff, cwd } = opts;
     const accepted = [];
     const rejected = [];
