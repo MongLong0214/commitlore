@@ -86,7 +86,21 @@ const locate = (instancePath) => {
     return { index: Number(rawIndex), field };
 };
 /**
- * Whether the key is one the protocol defines, or a well-formed extension.
+ * Trailers git's own ecosystem writes that are not CommitLore's and never
+ * will be: DCO (`git commit -s`, and every Dependabot commit) and GitHub's
+ * co-author attribution. Reproduced: a `git commit -s` with no CommitLore
+ * content at all was refused outright by the hook with `unknown-key
+ * Signed-off-by`, which would make DCO and CommitLore mutually exclusive in
+ * the same repository. This list stays short on purpose — it admits trailers
+ * that are standardised and near-impossible to type by mistake, not a general
+ * escape hatch. A key merely resembling protocol vocabulary, such as
+ * `Constraint:`, must keep failing as `unknown-key`: that is the case
+ * spec/fixtures/invalid/03-unknown-key.txt exists to pin.
+ */
+const WELL_KNOWN_FOREIGN_KEYS = new Set(['Signed-off-by', 'Co-authored-by']);
+/**
+ * Whether the key is one the protocol defines, a well-formed extension, or a
+ * trailer CommitLore does not own and should not judge.
  *
  * Asked directly rather than inferred from where AJV anchored its error. The
  * schema checks cardinality with `contains`, and a `contains` probe emits a
@@ -98,7 +112,9 @@ const locate = (instancePath) => {
  * rendered three records into one commit and was told to stop using half the
  * vocabulary.
  */
-const isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key);
+const isDefinedKey = (key) => KNOWN_KEYS.includes(key) ||
+    EXTENSION_KEY_RE.test(key) ||
+    WELL_KNOWN_FOREIGN_KEYS.has(key);
 const violationFor = (trailer, field) => {
     if (field === 'key') {
         if (isDefinedKey(trailer.key))
