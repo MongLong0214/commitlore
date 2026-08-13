@@ -424,6 +424,83 @@ describe('commitlore_verify_capture accepts the contract draft shape (#291)', ()
     const description = verify?.inputSchema?.properties?.['draft']?.description ?? '';
     expect(description).toContain('records');
   });
+
+  /**
+   * R0-02. The outer schema checks that `draft` is a string; after `JSON.parse`
+   * each element was cast straight to `DraftRecord`. A null, a number, or a
+   * record whose `trailers` is not an array then reached the verifier, where it
+   * threw or produced no accepted record — and "no accepted record" is exactly
+   * what a legitimate verified-empty looks like, so a caller could not tell
+   * that its own request had been malformed.
+   */
+  describe('malformed decoded records are caller errors, not empty verifications (R0-02)', () => {
+    const malformed: [string, unknown[]][] = [
+      ['a null record', [null]],
+      ['a number record', [42]],
+      ['a string record', ['Ruled-out: x | y']],
+      ['a record with no trailers array', [{ evidence: [] }]],
+      ['a record whose trailers is a string', [{ trailers: 'Ruled-out: x', evidence: [] }]],
+      ['a record with no evidence array', [{ trailers: [] }]],
+      ['a record whose evidence is an object', [{ trailers: [], evidence: {} }]],
+      ['a trailer that is not an object', [{ trailers: ['Ruled-out'], evidence: [] }]],
+      ['a trailer missing its value', [{ trailers: [{ key: 'Ruled-out' }], evidence: [] }]],
+    ];
+
+    it.each(malformed)('reports %s as a caller error', async (_label, records) => {
+      const nonce = await prepareNonce();
+      const response = await stub.request('tools/call', {
+        name: 'commitlore_verify_capture',
+        arguments: {
+          nonce,
+          draft: JSON.stringify({ records }),
+          transcript: TRANSCRIPT,
+          diff: stagedDiff(),
+        },
+      });
+      const result = response.result as { isError?: boolean } | undefined;
+      const failed = response.error !== undefined || result?.isError === true;
+      expect(failed, `expected a caller error, got: ${JSON.stringify(response).slice(0, 300)}`).toBe(
+        true,
+      );
+      // The distinction that matters: never the ordinary empty outcome.
+      expect(JSON.stringify(response)).not.toMatch(/"validation_result"\s*:\s*"empty"/);
+    });
+
+    it('names the offending record without echoing the transcript back', async () => {
+      const nonce = await prepareNonce();
+      const response = await stub.request('tools/call', {
+        name: 'commitlore_verify_capture',
+        arguments: {
+          nonce,
+          draft: JSON.stringify({ records: [RECORD, { trailers: 'nope', evidence: [] }] }),
+          transcript: TRANSCRIPT,
+          diff: stagedDiff(),
+        },
+      });
+      const text = JSON.stringify(response);
+      expect(text).toMatch(/record 1/);
+      expect(text).toMatch(/trailers/);
+      expect(text).not.toContain(TRANSCRIPT);
+    });
+
+    it('stages nothing for the malformed call', async () => {
+      const bad = await prepareNonce();
+      await stub.request('tools/call', {
+        name: 'commitlore_verify_capture',
+        arguments: {
+          nonce: bad,
+          draft: JSON.stringify({ records: [null] }),
+          transcript: TRANSCRIPT,
+          diff: stagedDiff(),
+        },
+      });
+      const staged = await stub.request('tools/call', {
+        name: 'commitlore_stage_capture',
+        arguments: { nonce: bad },
+      });
+      expect(JSON.stringify(staged)).not.toMatch(/"staged"\s*:\s*true/);
+    });
+  });
 });
 
 // T-1007: commitlore_prepare_capture
