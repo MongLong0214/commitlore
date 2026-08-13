@@ -99,9 +99,15 @@ export const checkPendingBacklog = (ctx: DoctorContext): DoctorCheck => {
 
   // A stale transaction can no longer apply: its base_head is not HEAD, so the
   // commit it was prepared for either never happened or happened without it.
+  // `runPendingList` is what decides that, and since #584 it excludes the
+  // consumed phase — a transaction whose commit landed is behind HEAD because
+  // it succeeded, and counting it here made this alarm loudest on the healthy
+  // path it exists to distinguish from.
   const stranded = listing.transactions.filter((transaction) => transaction.stale);
   if (stranded.length === 0) {
-    const held = listing.transactions.length;
+    // A consumed transaction is not waiting either: it is the receipt of a
+    // capture that already reached a commit, kept on disk until gc collects it.
+    const held = listing.transactions.filter((transaction) => transaction.phase !== 'consumed').length;
     return check(
       id,
       category,

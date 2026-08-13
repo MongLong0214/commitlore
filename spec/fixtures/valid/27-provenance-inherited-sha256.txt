@@ -1,0 +1,4 @@
+Carry the rate limit across a SHA-256 squash
+
+Provenance: inherited e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Limit: shared Redis instance caps sustained writes at 500/sec

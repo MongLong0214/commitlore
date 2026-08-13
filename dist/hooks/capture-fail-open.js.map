@@ -1,0 +1,1 @@
+{"version":3,"file":"capture-fail-open.js","sourceRoot":"","sources":["../../src/hooks/capture-fail-open.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;;GAWG;AACH,MAAM,CAAC,MAAM,mBAAmB,GAAG,CAAC,KAAa,EAAE,KAAc,EAAQ,EAAE;IACzE,OAAO,CAAC,MAAM,CAAC,KAAK,CAClB,eAAe,KAAK,KAAK,KAAK,YAAY,KAAK,CAAC,CAAC,CAAC,KAAK,CAAC,OAAO,CAAC,CAAC,CAAC,MAAM,CAAC,KAAK,CAAC,IAAI,CACpF,CAAC;AACJ,CAAC,CAAC"}

@@ -9,6 +9,7 @@ import { execGit } from '../core/git.js';
 import { markApplied, type PendingRecord } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
 import { KNOWN_KEYS, type Trailer } from '../core/types.js';
+import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
 export const PREPARE_COMMIT_MSG_HOOK_MARKER = '# commitlore:prepare-commit-msg:v1';
@@ -184,11 +185,72 @@ const messageContainsRecordId = (message: string, records: unknown[]): boolean =
   return false;
 };
 
+/** The first Record-Id is the most useful name for a dropped capture. */
+const captureLabel = (pending: PendingRecord): string => {
+  for (const rec of pending.records) {
+    if (typeof rec !== 'object' || rec === null) continue;
+    const trailers = (rec as { trailers?: unknown[] }).trailers;
+    if (!Array.isArray(trailers)) continue;
+    for (const trailer of trailers as Trailer[]) {
+      if (trailer.key === 'Record-Id') return trailer.value;
+    }
+  }
+  return pending.nonce;
+};
+
+/**
+ * A path-limited commit and some other ordinary commit forms give hooks an
+ * alternate index. The capture must remain bound to the full index it was
+ * verified against, but naming this case is much more actionable than a bare
+ * hash mismatch.
+ */
+const usesTemporaryCommitIndex = (cwd: string): boolean => {
+  const currentIndex = process.env.GIT_INDEX_FILE;
+  if (!currentIndex) return false;
+
+  // `--git-path index` itself honours GIT_INDEX_FILE, so it would merely echo
+  // the temporary path we are trying to recognise. The repository git-dir does
+  // not, and its index is Git's normal persistent index for this worktree.
+  const gitDir = execGit(['rev-parse', '--git-dir'], { cwd });
+  if (gitDir.code !== 0) return false;
+  return resolve(cwd, currentIndex) !== resolve(cwd, gitDir.stdout.trim(), 'index');
+};
+
+const reportDiffMismatch = (pending: PendingRecord, cwd: string): void => {
+  const label = captureLabel(pending);
+  const detail = usesTemporaryCommitIndex(cwd)
+    ? 'this commit uses a temporary index whose staged diff differs from the verified capture'
+    : 'the staged diff differs from the verified capture';
+  process.stderr.write(
+    `commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.\n`,
+  );
+};
+
+/**
+ * Newer eligible capture first. `created_at` is the recorded instant, not the
+ * nonce filename — the filename is `randomBytes(16)` hex, so lexicographic
+ * order is a coin flip (#591).
+ *
+ * An `applied` file after a failed commit stays eligible (ADR-0021 §4, gate-a
+ * scenario 6). It is not ranked below `staged`. Preferring staged would attach
+ * an older leftover staged file over the capture that just nearly landed.
+ * Marking `applied` abandoned was rejected: Git has no hook for a failed
+ * commit, and abandoning would break the unchanged-index retry.
+ */
+export const compareCaptureCandidates = (
+  left: Pick<PendingRecord, 'created_at' | 'nonce'>,
+  right: Pick<PendingRecord, 'created_at' | 'nonce'>,
+): number => {
+  const byCreated = right.created_at.localeCompare(left.created_at);
+  if (byCreated !== 0) return byCreated;
+  return left.nonce.localeCompare(right.nonce);
+};
+
 /**
  * The five-gate application check. Scans pending directory for a staged or
- * applied-but-unconsumed record that passes all five gates. On first match,
- * appends the trailer block and marks applied. On no match or any error, does
- * nothing (never blocks the commit).
+ * applied-but-unconsumed record that passes all five gates. The newest eligible
+ * candidate wins. On no match or any error, does nothing (never blocks the
+ * commit).
  */
 const applyCaptureRecord = (messageFile: string, cwd: string): void => {
   // Fast path: resolve pending directory
@@ -225,7 +287,7 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
     return;
   }
 
-  // Check each candidate (first-match wins, ordered by filename = created_at approx)
+  const eligible: PendingRecord[] = [];
   for (const file of files) {
     const filePath = resolve(pendingDirPath, file);
     const pending = readPendingFile(filePath);
@@ -241,7 +303,10 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
     if (pending.base_head !== currentHead) continue;
 
     // Gate 2: Staged diff unchanged
-    if (pending.staged_diff_hash !== currentDiffHash) continue;
+    if (pending.staged_diff_hash !== currentDiffHash) {
+      reportDiffMismatch(pending, cwd);
+      continue;
+    }
 
     // Gate 3: Unexpired (expires_at must be non-null and in the future)
     if (!pending.expires_at) continue;
@@ -250,30 +315,33 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
     // Gate 5: Policy identity unchanged
     if (pending.policy_identity_hash !== currentPolicyHash) continue;
 
-    // All five gates pass. Check if already present (dedup).
-    if (messageContainsRecordId(currentMessage, pending.records)) return;
+    eligible.push(pending);
+  }
 
-    // Build and append the trailer block
-    const trailerBlock = buildTrailerBlock(pending.records);
-    if (!trailerBlock) return;
+  eligible.sort(compareCaptureCandidates);
+  const pending = eligible[0];
+  if (!pending) return;
 
-    const separator = currentMessage.endsWith('\n\n')
-      ? ''
-      : currentMessage.endsWith('\n')
-        ? '\n'
-        : '\n\n';
-    writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+  // All five gates pass. Check if already present (dedup).
+  if (messageContainsRecordId(currentMessage, pending.records)) return;
 
-    // Mark applied — hash the canonical trailer block, not the full message
-    const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
-    try {
-      markApplied(pending.nonce, recordHash, { cwd });
-    } catch {
-      // Best-effort: message already written, crash here is recoverable by post-commit
-    }
+  // Build and append the trailer block
+  const trailerBlock = buildTrailerBlock(pending.records);
+  if (!trailerBlock) return;
 
-    // First-match wins — stop
-    return;
+  const separator = currentMessage.endsWith('\n\n')
+    ? ''
+    : currentMessage.endsWith('\n')
+      ? '\n'
+      : '\n\n';
+  writeFileSync(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+
+  // Mark applied — hash the canonical trailer block, not the full message
+  const recordHash = createHash('sha256').update(trailerBlock).digest('hex');
+  try {
+    markApplied(pending.nonce, recordHash, { cwd });
+  } catch {
+    // Best-effort: message already written, crash here is recoverable by post-commit
   }
 };
 
@@ -289,10 +357,7 @@ export const register = (program: Command): void => {
       try {
         applyCaptureRecord(messageFile, process.cwd());
       } catch (error: unknown) {
-        // Fail-closed: never block the commit
-        process.stderr.write(
-          `commitlore: capture application error: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
+        captureHookFailOpen('capture application error', error);
       }
     });
 };

@@ -155,7 +155,7 @@ export interface InjectOptions {
   /** Answer from git alone, without the SQLite index. Same answers, slower. */
   noIndex?: boolean;
   /**
-   * Wall-clock ceiling on the no-index scan, in milliseconds.
+   * Wall-clock ceiling on a cold index build and on the no-index scan, in milliseconds.
    *
    * The hook sets this; `commitlore context`, which a person ran and is waiting
    * for, does not. Without an index the scan reads the whole history and builds
@@ -602,12 +602,11 @@ const omittedLine = (cut: number, total: number, tier: Tier | undefined): string
 const unreadLine = (unreadCommits: number): string[] => {
   if (unreadCommits === 0) return [];
   return [
-    `incomplete: this repository has no index, so answering meant reading its whole history; ` +
-      `the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
+    `incomplete: the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
       'treat the list above as some of what applies here, not all of it: records in those commits ' +
       'are missing, and because supersession and expiry are recorded in commits like any other ' +
       'record, one shown as active may since have been withdrawn. run `commitlore init` once to ' +
-      'index this repository, after which this answer is both complete and fast.',
+      'finish the index, after which this answer is both complete and fast.',
   ];
 };
 

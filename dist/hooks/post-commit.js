@@ -3,7 +3,8 @@
  *
  * After a successful commit, this hook inspects applied pending transactions
  * and consumes exactly the one whose:
- *   1. base_head equals the new commit's first parent
+ *   1. base_head equals the new commit's first parent, or the commit replaced
+ *      by an amend whose parent is the new commit's first parent
  *   2. staged_tree_oid equals the new commit's tree
  *   3. applied_record_hash matches the canonical record block in the message
  *   4. every applied Record-Id is present in the commit message
@@ -18,6 +19,7 @@ import { resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { consumePending } from '../core/pending.js';
 import { serializeTrailers } from '../core/trailers.js';
+import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 export const POST_COMMIT_HOOK_MARKER = '# commitlore:post-commit:v1';
 export const POST_COMMIT_HOOK_NAME = 'post-commit';
@@ -154,10 +156,28 @@ const allRecordIdsPresent = (commitMessage, records) => {
         return false;
     return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
+const COMMIT_ID_RE = /^[0-9a-f]{40}$/;
+/**
+ * An amend rewrites HEAD, so the pending base is no longer HEAD's parent.
+ * `HEAD@{1}` is the commit Git just replaced; accept it only when its parent
+ * is exactly the new commit's parent. That keeps a stale reflog entry from
+ * making an unrelated rewrite consume a pending transaction.
+ */
+const isAmendedBase = (baseHead, firstParent, cwd) => {
+    if (!COMMIT_ID_RE.test(baseHead))
+        return false;
+    const previousHead = execGit(['rev-parse', '--verify', 'HEAD@{1}'], { cwd });
+    if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead)
+        return false;
+    const previousParent = execGit(['rev-parse', '--verify', `${baseHead}^`], { cwd });
+    if (firstParent === null)
+        return previousParent.code !== 0;
+    return previousParent.code === 0 && previousParent.stdout.trim() === firstParent;
+};
 /**
  * The post-commit consumption finaliser.
  *
- * Reads HEAD's parent, tree, and message. Scans pending dir for applied,
+ * Reads HEAD's parent, tree, message, and latest reflog predecessor. Scans pending dir for applied,
  * unconsumed records that match all four conditions. Consumes exactly one.
  */
 const runPostCommitFinaliser = (cwd) => {
@@ -180,11 +200,10 @@ const runPostCommitFinaliser = (cwd) => {
     if (headResult.code !== 0)
         return;
     const headSha = headResult.stdout.trim();
-    // Get first parent of HEAD
+    // Get first parent of HEAD. A root commit can only be reached here by
+    // amending the root, which is still a valid capture transaction.
     const parentResult = execGit(['rev-parse', 'HEAD^'], { cwd });
-    if (parentResult.code !== 0)
-        return; // initial commit has no parent — nothing to match
-    const firstParent = parentResult.stdout.trim();
+    const firstParent = parentResult.code === 0 ? parentResult.stdout.trim() : null;
     // Get committed tree of HEAD
     const treeResult = execGit(['rev-parse', 'HEAD^{tree}'], { cwd });
     if (treeResult.code !== 0)
@@ -206,8 +225,10 @@ const runPostCommitFinaliser = (cwd) => {
             continue;
         if (pending.consumed)
             continue;
-        // Condition 1: base_head equals first parent
-        if (pending.base_head !== firstParent)
+        // Condition 1: ordinary commits name their base as HEAD's first parent.
+        // Amend replaces that base, so identify the rewritten commit through the
+        // immediately preceding HEAD reflog entry and require matching parents.
+        if (pending.base_head !== firstParent && !isAmendedBase(pending.base_head, firstParent, cwd))
             continue;
         // Condition 2: staged_tree_oid equals committed tree
         if (pending.staged_tree_oid !== committedTree)
@@ -225,7 +246,7 @@ const runPostCommitFinaliser = (cwd) => {
             consumePending(pending.nonce, headSha, { cwd });
         }
         catch (error) {
-            process.stderr.write(`commitlore: post-commit finalisation error: ${error instanceof Error ? error.message : String(error)}\n`);
+            captureHookFailOpen('post-commit finalisation error', error);
         }
         // First match wins — exactly one consumption
         return;
@@ -240,8 +261,8 @@ export const register = (program) => {
             runPostCommitFinaliser(process.cwd());
         }
         catch (error) {
-            // Never retroactively fail a successful Git commit
-            process.stderr.write(`commitlore: post-commit error: ${error instanceof Error ? error.message : String(error)}\n`);
+            // Fail-open: never retroactively fail a successful Git commit (#543).
+            captureHookFailOpen('post-commit error', error);
         }
     });
 };

@@ -1,0 +1,16 @@
+{
+  "description": "Provenance: inherited with no sha is not a git object id. The widened grammar still refuses it.",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "violations": [
+    {
+      "key": "Provenance",
+      "value": "inherited",
+      "rule": "format",
+      "got": "inherited",
+      "want": "authored | drafted | inherited <sha> | reconstructed | unknown"
+    }
+  ]
+}

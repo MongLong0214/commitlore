@@ -131,15 +131,16 @@ describe('#406 a classifier change invalidates an index built before it', () => 
       'a record cached under the previous classifier was served as current',
     ).toEqual([]);
 
-    // #522 changes the serving boundary: a consumer query must not turn this
-    // derived-file repair into an unbounded rebuild. It refuses the stale file,
-    // answers from git once, and leaves explicit `index`/`init` to heal it.
-    expect(result.fromIndex).toBe(false);
-    expect(result.corpusPasses).toBe(1);
-    const staleAfterQuery = openIndex({ cwd: dir, readonly: true });
-    expect(indexInfo(staleAfterQuery).schemaVersion).toBe('2');
-    expect(indexInfo(staleAfterQuery).trailers).toBe(1);
-    closeIndex(staleAfterQuery);
+    // A consumer query now heals a stale derived file rather than walking
+    // history every time and leaving the poison in place. The classifier
+    // change is why the schema version moved; the rebuilt index must not
+    // still serve the reserved trailer as a record.
+    expect(result.fromIndex).toBe(true);
+    expect(result.corpusPasses).toBe(0);
+    const afterQuery = openIndex({ cwd: dir, readonly: true });
+    expect(indexInfo(afterQuery).schemaVersion).toBe(String(SCHEMA_VERSION));
+    expect(indexInfo(afterQuery).trailers).toBe(0);
+    closeIndex(afterQuery);
   });
 
   /**

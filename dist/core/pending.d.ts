@@ -3,7 +3,9 @@
  *
  * Owns the monotonic prepare → verify → stage → apply → consume lifecycle
  * of a single capture pipeline run. Every mutation is an atomic rename so
- * no concurrent reader can observe a partial file.
+ * no concurrent reader can observe a partial file. The prepared → verified
+ * write is also exclusive per nonce (#591): a rename makes one write complete,
+ * it does not make a read-modify-write exclusive.
  */
 import type { RenderedGuardMatch } from './guard.js';
 /** The three verification gaps, in canonical order (T-1024's closed vocabulary). */
@@ -50,6 +52,24 @@ export interface PendingRecord {
 export declare class PendingFormatError extends Error {
     constructor(message: string);
 }
+export interface PendingLock {
+    /** This process may mutate the nonce. */
+    held: boolean;
+    /** This call created the lock file and must release it. */
+    created: boolean;
+}
+/**
+ * Claim exclusive mutation of one pending nonce.
+ *
+ * `O_EXCL` (`wx`) makes the create the arbitration: two processes cannot both
+ * observe an absent lock and both proceed. Re-entry from the same pid is
+ * allowed so `verifyCaptureRecords` can hold the lock across the store.
+ * A lock whose owner pid is gone is stolen once — a crash must not pin the
+ * nonce forever.
+ */
+export declare const tryLockPending: (nonce: string, cwd: string) => PendingLock;
+/** Release a lock this process created. A lock owned by someone else is left. */
+export declare const unlockPending: (nonce: string, cwd: string) => void;
 /**
  * The current commit, or null when there is not one to read (unborn branch,
  * broken repository). Never throws: both callers treat "cannot tell" as an
@@ -70,6 +90,23 @@ export declare const resolveHead: (cwd: string) => string | null;
  * recorded base, means the caller must fail closed rather than guess.
  */
 export declare const headHasMovedPast: (baseHead: unknown, head: string | null) => boolean;
+/**
+ * Whether this transaction can no longer reach a commit — the question `pending
+ * ls` prints as `stale` and doctor reads as a lost capture (#584).
+ *
+ * `headHasMovedPast` alone cannot answer it. A `consumed` transaction's
+ * `base_head` is behind HEAD *by construction*: the commit that consumed it is
+ * what moved HEAD past it, and `consumed_by` names that commit. So the gap the
+ * predicate measures is the signature of success on this phase, and reading it
+ * as staleness made every completed capture report itself as a decision that
+ * was never written — inverting the one alarm a user runs doctor to trust.
+ *
+ * Only `consumed` is excluded. `applied` looks similar and is not: the record
+ * hash is stamped before the commit object exists, so a commit the user aborted
+ * leaves an applied transaction whose decision really did go nowhere. Staleness
+ * there is a real warning, and the fix for a false alarm must not silence it.
+ */
+export declare const pendingIsStale: (record: Pick<PendingRecord, "phase" | "base_head">, head: string | null) => boolean;
 export interface CreatePendingOptions {
     cwd: string;
     source_hashes: {
@@ -138,7 +175,9 @@ export interface StoreVerificationOptions {
 }
 /**
  * Stores verification results in the pending transaction.
- * Only succeeds if the current phase is 'prepared'.
+ * Only succeeds if the current phase is 'prepared', and only for the caller
+ * that holds the nonce lock — a losing racer returns false rather than
+ * reporting a write that another process will overwrite (#591).
  */
 export declare const storeVerification: (nonce: string, opts: StoreVerificationOptions) => boolean;
 export interface StagePendingOptions {

@@ -25,6 +25,7 @@ import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
 import { buildInjection, type InjectOptions, type Injection } from '../core/inject.js';
+import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
 import {
   configuredSignedDirectivesRequired,
   configuredTrustedAuthors,
@@ -331,32 +332,16 @@ export const hookResponse = (
  * session that cannot open a file.
  */
 /**
- * How long the hook may spend scanning a repository that has no index.
+ * How long the hook may spend building a missing index, or scanning when it
+ * cannot write one.
  *
- * Only the hook sets a budget; `commitlore context` stays unbounded, because a
- * person ran it and is waiting for the whole answer. Here nobody chose to wait:
- * the hook fires before every edit, and without an index each firing reads the
- * entire history and builds nothing (ADR-0003 gives that work to `index` and
- * `init`). On an 823-commit repository that was 53 seconds, on every edit,
- * indefinitely.
- *
- * Three seconds is long enough that a repository of ordinary size is still
- * answered in full, and short enough that a large one costs a pause rather than
- * a stall. Exceeding it is never silent: the payload says how many commits went
- * unread and names `commitlore init`, which removes the cost for good.
- *
- * It bounds the scan, not the process. The deadline is read between batches and
- * again before each batch's expensive passes, so the work in flight when it
- * expires is one `git log` over at most 64 commits -- measured at 3.4s wall for
- * this budget on an 823-commit repository, against 6.0s when only the outer
- * check existed and 34.7s with no budget at all. Node startup, the path
- * resolution git calls and rendering sit outside it and cost about 0.4s
- * together; a repository whose *single* cheap pass is slower than that will
- * exceed the budget by that much, which is a ceiling on the scan rather than a
- * promise about the clock.
+ * Shared with `context` and the commit-msg hook (`CONSUMER_SCAN_BUDGET_MS`):
+ * a 21k-commit repository used to cost four minutes on every cold firing
+ * because the scan built nothing. The budget turns that into a pause and a
+ * labelled partial answer; the index it did write makes the next firing
+ * cheap. Exceeding it is never silent: the payload says how many commits
+ * went unread and names `commitlore init`.
  */
-const HOOK_SCAN_BUDGET_MS = 3_000;
-
 const runHookMode = (options: InjectCommandOptions): void => {
   try {
     // `path` is discarded: in hook mode it comes from the payload, not the flag.
@@ -364,7 +349,7 @@ const runHookMode = (options: InjectCommandOptions): void => {
     const result = hookResult(readStdin(), {
       ...base,
       cwd: process.cwd(),
-      scanBudgetMs: HOOK_SCAN_BUDGET_MS,
+      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
     });
     if (result.stdout !== '') process.stdout.write(result.stdout);
     if (result.stderr !== '') process.stderr.write(result.stderr);

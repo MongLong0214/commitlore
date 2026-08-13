@@ -336,6 +336,15 @@ export interface OpenIndexOptions {
    * equivalence tests use it to prove the two paths agree.
    */
   fts?: boolean;
+  /**
+   * Wall-clock ceiling on a rebuild. Absent means unbounded, which is right
+   * for `index` and `init`. A consumer that cannot wait — `context`, the
+   * commit-msg hook — passes one so a missing index costs a bounded pause
+   * and a labelled partial answer, not minutes of silence.
+   */
+  budget?: ScanBudget;
+  /** Filled in when `budget` trips. The same object the caller will report. */
+  cost?: ScanCost;
 }
 
 /** One record block as git reports it, before it reaches SQLite. */
@@ -961,6 +970,24 @@ const writeMeta = (db: IndexDatabase, key: string, value: string | null): void =
   );
 };
 
+/** How many commits a budgeted rebuild left unread. 0 means the index is whole. */
+const UNREAD_COMMITS_META = 'unread_commits';
+
+const persistUnread = (db: IndexDatabase, unread: number): void => {
+  writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
+};
+
+/**
+ * Commits a previous budgeted rebuild left unread, persisted so a later query
+ * can say so without walking history again. 0 when the index is whole.
+ */
+export const indexUnread = (handle: IndexHandle): number => {
+  const raw = readMeta(handle.db, UNREAD_COMMITS_META);
+  if (raw === null || raw === '') return 0;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
 /**
  * Opening a database must never overwrite what it says about itself. Stamping
  * the current version here unconditionally would erase the very mismatch the
@@ -1305,23 +1332,28 @@ const requireWritable = (handle: IndexHandle): void => {
  */
 export const rebuildIndex = (
   handle: IndexHandle,
-  opts: { reason?: string } = {},
+  opts: { reason?: string; budget?: ScanBudget; cost?: ScanCost } = {},
 ): IndexStats => {
   requireWritable(handle);
   const started = Date.now();
   const head = revParse(handle.cwd, 'HEAD');
   const shas = head === null ? [] : revList(handle.cwd, 'HEAD');
   const excluded: ExclusionCounts = new Map();
-  const records = readCommitRecords(handle.cwd, shas, excluded);
+  // A caller that did not pass `cost` still needs the unread count written to
+  // meta, so a later query can label the partial index. The object they did
+  // pass is mutated in place; this local one is only for the persist.
+  const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
+  const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
   const notesRef = revParseRef(handle.cwd, NOTES_REF);
   const noteRecords =
-    notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
+    notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
+  const unread = cost.unreadCommits + cost.unreadNotes;
   const stats: IndexStats = {
     ...emptyStats(handle, started),
     rebuilt: true,
     rebuildReason: opts.reason ?? null,
     headSha: head,
-    commitsScanned: shas.length,
+    commitsScanned: shas.length - cost.unreadCommits,
     notesScanned: noteRecords.length,
   };
 
@@ -1338,8 +1370,13 @@ export const rebuildIndex = (
     stats.noteTrailersIndexed = noteCounts.trailers;
     stats.pathsIndexed += noteCounts.paths;
 
+    // HEAD even when unread > 0: new commits after this point are a
+    // `last..HEAD` incremental, which is the cheap half. The unread older
+    // commits stay unread until `index`/`init` rebuilds without a budget, and
+    // `unread_commits` is what stops that from reading as a complete index.
     writeMeta(handle.db, 'last_indexed_sha', head);
     writeMeta(handle.db, 'notes_ref_sha', notesRef);
+    persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
@@ -1372,18 +1409,23 @@ const incrementalProblem = (handle: IndexHandle, head: string, last: string | nu
  */
 export const updateIndex = (
   handle: IndexHandle,
-  opts: { force?: boolean; allowRebuild?: boolean } = {},
+  opts: { force?: boolean; allowRebuild?: boolean; budget?: ScanBudget; cost?: ScanCost } = {},
 ): IndexStats => {
   requireWritable(handle);
   const started = Date.now();
 
-  // A consumer query may catch the index up but may not rebuild it: reading the
-  // whole history is the cost #522 is about, and it is unbounded from the
-  // caller's side. `index` and `init` own that work and pass nothing here.
+  // A consumer may rebuild when it has a budget: the wait is then bounded and
+  // the unread count is persisted, which is the #522 contract. Without a
+  // budget the full rebuild is still `index`/`init` work, and `openCurrentIndex`
+  // refuses it.
   const allowRebuild = opts.allowRebuild ?? true;
+  const rebuildOpts = {
+    ...(opts.budget === undefined ? {} : { budget: opts.budget }),
+    ...(opts.cost === undefined ? {} : { cost: opts.cost }),
+  };
   const rebuildOrRefuse = (reason: string): IndexStats => {
     if (!allowRebuild) throw new Error(reason);
-    return rebuildIndex(handle, { reason });
+    return rebuildIndex(handle, { reason, ...rebuildOpts });
   };
 
   const discarded = handle.discardedReason;
@@ -1396,9 +1438,9 @@ export const updateIndex = (
   if (problem !== null) {
     if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
-    return rebuildIndex(handle, { reason: problem });
+    return rebuildIndex(handle, { reason: problem, ...rebuildOpts });
   }
-  if (opts.force ?? false) return rebuildIndex(handle, { reason: 'rebuild requested' });
+  if (opts.force ?? false) return rebuildIndex(handle, { reason: 'rebuild requested', ...rebuildOpts });
 
   const excluded: ExclusionCounts = new Map();
   const head = revParse(handle.cwd, 'HEAD');
@@ -1415,6 +1457,14 @@ export const updateIndex = (
   const last = readMeta(handle.db, 'last_indexed_sha');
   const blocker = incrementalProblem(handle, head, last);
   if (blocker !== null) return rebuildOrRefuse(blocker);
+
+  // A budgeted consumer rebuild stamps last_indexed_sha = HEAD so new commits
+  // stay incremental, and persists unread_commits so the answer stays labelled.
+  // `index`/`init` pass no budget: they are the command the label names, so a
+  // leftover unread count here is a rebuild they still owe, not a no-op.
+  if (opts.budget === undefined && indexUnread(handle) > 0) {
+    return rebuildIndex(handle, { reason: 'finish a budgeted partial index', ...rebuildOpts });
+  }
 
   const stats: IndexStats = { ...emptyStats(handle, started), headSha: head };
 
@@ -1446,7 +1496,13 @@ export const ensureIndex = (
 ): { handle: IndexHandle; stats: IndexStats } => {
   const handle = openIndex(opts);
   try {
-    return { handle, stats: updateIndex(handle) };
+    return {
+      handle,
+      stats: updateIndex(handle, {
+        ...(opts.budget === undefined ? {} : { budget: opts.budget }),
+        ...(opts.cost === undefined ? {} : { cost: opts.cost }),
+      }),
+    };
   } catch (error) {
     closeIndex(handle);
     throw error;

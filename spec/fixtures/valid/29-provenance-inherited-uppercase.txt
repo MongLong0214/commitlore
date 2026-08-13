@@ -1,0 +1,4 @@
+Carry a record named with uppercase hex
+
+Provenance: inherited DEADBEE
+Limit: shared Redis instance caps sustained writes at 500/sec

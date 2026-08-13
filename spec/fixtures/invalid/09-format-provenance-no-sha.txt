@@ -1,0 +1,4 @@
+Refuse a provenance that names no origin commit
+
+Provenance: inherited
+Limit: shared Redis instance caps sustained writes at 500/sec

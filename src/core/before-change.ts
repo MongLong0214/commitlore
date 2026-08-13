@@ -26,14 +26,24 @@ import { execGit, hasShallowHistory, historyAvailability } from './git.js';
 import { guard, renderGuardMatch, type RenderedGuardMatch } from './guard.js';
 import { notesAvailability } from './notes.js';
 import { withholdBlocked } from '../commands/query.js';
-import { runQuery, valuesOf, type GradedRecord, type QueryResult } from './query.js';
+import {
+  CONSUMER_SCAN_BUDGET_MS,
+  runQuery,
+  valuesOf,
+  type GradedRecord,
+  type QueryResult,
+} from './query.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 /** The three verification gaps this codebase checks for, in canonical order. */
-export type VerificationGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched';
+export type VerificationGap =
+  | 'history-unavailable'
+  | 'shallow-history'
+  | 'notes-unfetched'
+  | 'unread-commits';
 
 /** Guard confidence enum — qualifies `possible_revival_matches` only. */
 export type GuardConfidence = 'not-run' | 'experimental' | 'timed-out';
@@ -73,7 +83,8 @@ export interface BeforeChangeOptions {
 /**
  * Derives the verification gaps from the repository state checks this codebase
  * already performs. The canonical order is fixed: `history-unavailable`,
- * `shallow-history`, `notes-unfetched`.
+ * `shallow-history`, `notes-unfetched`. `unread-commits` is appended after
+ * the query, because only the query knows whether a budget left history unread.
  */
 const deriveVerificationGaps = (cwd: string): VerificationGap[] => {
   const gaps: VerificationGap[] = [];
@@ -188,11 +199,13 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
       runQuery({
         cwd,
         at,
+        scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       }),
     );
     activeDecisions = extractActiveDecisions(queryResult);
+    if (queryResult.unreadCommits > 0) gaps.push('unread-commits');
   }
 
   // Run guard if a proposal was supplied

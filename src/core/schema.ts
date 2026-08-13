@@ -21,6 +21,7 @@ import {
   CERTAINTY_VALUES,
   EXTENSION_KEY_RE,
   KNOWN_KEYS,
+  PROVENANCE_FORMAT_WANT,
   SINGLE_VALUED,
   UNDO_VALUES,
   type Trailer,
@@ -68,7 +69,7 @@ const FORMAT_WANT: Readonly<Record<string, string>> = {
   Supersedes: 'r-[a-z0-9]{6,}',
   Expires: 'YYYY-MM-DD or a free-text condition',
   Evidence: 'path, path#anchor, or a URL',
-  Provenance: 'authored | inherited <sha> | reconstructed | unknown',
+  Provenance: PROVENANCE_FORMAT_WANT,
   'CommitLore-Version': 'semver',
 };
 
@@ -117,7 +118,22 @@ const locate = (instancePath: string): { index: number; field: string } | null =
 };
 
 /**
- * Whether the key is one the protocol defines, or a well-formed extension.
+ * Trailers git's own ecosystem writes that are not CommitLore's and never
+ * will be: DCO (`git commit -s`, and every Dependabot commit) and GitHub's
+ * co-author attribution. Reproduced: a `git commit -s` with no CommitLore
+ * content at all was refused outright by the hook with `unknown-key
+ * Signed-off-by`, which would make DCO and CommitLore mutually exclusive in
+ * the same repository. This list stays short on purpose — it admits trailers
+ * that are standardised and near-impossible to type by mistake, not a general
+ * escape hatch. A key merely resembling protocol vocabulary, such as
+ * `Constraint:`, must keep failing as `unknown-key`: that is the case
+ * spec/fixtures/invalid/03-unknown-key.txt exists to pin.
+ */
+const WELL_KNOWN_FOREIGN_KEYS: ReadonlySet<string> = new Set(['Signed-off-by', 'Co-authored-by']);
+
+/**
+ * Whether the key is one the protocol defines, a well-formed extension, or a
+ * trailer CommitLore does not own and should not judge.
  *
  * Asked directly rather than inferred from where AJV anchored its error. The
  * schema checks cardinality with `contains`, and a `contains` probe emits a
@@ -130,7 +146,9 @@ const locate = (instancePath: string): { index: number; field: string } | null =
  * vocabulary.
  */
 const isDefinedKey = (key: string): boolean =>
-  (KNOWN_KEYS as readonly string[]).includes(key) || EXTENSION_KEY_RE.test(key);
+  (KNOWN_KEYS as readonly string[]).includes(key) ||
+  EXTENSION_KEY_RE.test(key) ||
+  WELL_KNOWN_FOREIGN_KEYS.has(key);
 
 const violationFor = (trailer: Trailer, field: string): Violation | null => {
   if (field === 'key') {

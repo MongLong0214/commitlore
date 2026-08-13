@@ -1,0 +1,8 @@
+{
+  "description": "Provenance: inherited <sha> with a full SHA-256 object id (64 hex). squash-preserve writes the id git actually uses; validate must accept it.",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "canonical": "Limit: shared Redis instance caps sustained writes at 500/sec\nProvenance: inherited e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+}

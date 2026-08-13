@@ -21,6 +21,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { runPendingList, runPendingRemove, runPendingShow } from '../src/commands/pending.js';
 import { prepareCaptureContext } from '../src/core/capture-prepare.js';
+import { consumePending } from '../src/core/pending.js';
 
 const scratch: string[] = [];
 afterAll(() => {
@@ -88,6 +89,39 @@ describe('#311 pending transactions are reviewable with the CLI', () => {
     execFileSync('git', ['-c', 'user.email=t@e.invalid', '-c', 'user.name=T', 'commit', '--quiet', '-m', 'second'], { cwd });
     const [only] = runPendingList({ cwd }).transactions;
     expect(only?.stale).toBe(true);
+  });
+
+  it('does not mark a consumed transaction stale — HEAD moved because it landed (#584)', () => {
+    // A consumed transaction's base_head is behind HEAD by construction: the
+    // commit named in `consumed_by` is what moved HEAD past it. Comparing the
+    // two without asking the phase made every completed capture report itself
+    // as one that never reached a commit, here and in doctor, which reads this
+    // same listing.
+    const { cwd, nonce } = repoWithTransaction();
+    const relative = execFileSync('git', ['rev-parse', '--git-path', 'commitlore/pending'], {
+      cwd,
+      encoding: 'utf8',
+    }).trim();
+    const path = join(cwd, relative, `${nonce}.json`);
+    // `consumePending` only accepts `applied` — where prepare-commit-msg leaves
+    // a transaction whose record is already in the message being written.
+    const record: Record<string, unknown> = JSON.parse(readFileSync(path, 'utf8'));
+    record['phase'] = 'applied';
+    writeFileSync(path, JSON.stringify(record, null, 2));
+
+    execFileSync(
+      'git',
+      ['-c', 'user.email=t@e.invalid', '-c', 'user.name=T', 'commit', '--quiet', '-m', 'carries the record'],
+      { cwd },
+    );
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
+    expect(consumePending(nonce, head, { cwd })).toBe(true);
+
+    const [listed] = runPendingList({ cwd }).transactions;
+    expect(listed?.phase).toBe('consumed');
+    expect(listed?.stale).toBe(false);
+    // `show` derives the same fact from its own call: one rule, both sites.
+    expect(runPendingShow({ cwd, nonce }).transaction?.stale).toBe(false);
   });
 
   it('shows one transaction by a nonce prefix', () => {

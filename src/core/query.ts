@@ -53,8 +53,9 @@ import {
 } from './git.js';
 import {
   closeIndex,
+  ensureIndex,
   filterTrailers,
-  openCurrentIndex,
+  indexUnread,
   queryTrailers,
   scanTrailers,
   type ScanCost,
@@ -79,8 +80,8 @@ import {
 } from './stale.js';
 import {
   SINGLE_VALUED,
+  parseProvenance,
   type Lifecycle,
-  type Provenance,
   type Record,
   type Trailer,
 } from './types.js';
@@ -88,6 +89,17 @@ import {
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
 export const WARN_KEY = 'Warn';
+
+/**
+ * How long a consumer route may spend building a missing index, or scanning
+ * when it cannot write one.
+ *
+ * Three seconds is long enough that a repository of ordinary size is still
+ * answered in full, and short enough that a 21k-commit repository costs a
+ * pause rather than four minutes. Exceeding it is never silent: `unreadCommits`
+ * is set and the answer names `commitlore init`.
+ */
+export const CONSUMER_SCAN_BUDGET_MS = 3_000;
 
 const RECORD_ID_KEY = 'Record-Id';
 const PROVENANCE_KEY = 'Provenance';
@@ -139,16 +151,25 @@ export interface QueryOptions {
   /** Answer from git alone, with no SQLite index. Same answers, slower. */
   noIndex?: boolean;
   /**
-   * Wall-clock ceiling, in milliseconds, on the no-index scan.
+   * Wall-clock ceiling, in milliseconds, on a cold index build and on the
+   * no-index scan.
    *
-   * Absent means unbounded, which is right for a command a person ran and
-   * waited for. Latency-critical callers — the pre-edit hook above all — set it
-   * so a repository that has never been indexed costs a bounded pause once
-   * rather than an unbounded one on every edit. A budget that trips is always
-   * reported in `diagnostics`; a truncated answer that looked complete would be
-   * worse than a slow one.
+   * Absent means unbounded, which is right for `index` and `init`. Consumer
+   * routes — `context`, injection, the commit-msg hook — set it so a
+   * repository that has never been indexed costs a bounded pause and a
+   * labelled partial answer, not minutes of silence. A budget that trips is
+   * always reported in `unreadCommits` and `diagnostics`; a truncated answer
+   * that looked complete would be worse than a slow one.
    */
   scanBudgetMs?: number;
+  /**
+   * The clock `scanBudgetMs` is read against. Defaults to `Date.now`.
+   *
+   * Injectable because a budget that expires *partway* through is otherwise a
+   * race against the machine — the case this repository has already had a
+   * vacuous CI pass on.
+   */
+  scanNow?: () => number;
   /** The instant to evaluate against. Defaults to now. */
   at?: Date;
   /** Maximum records returned, applied after ordering. */
@@ -244,9 +265,10 @@ export interface QueryResult {
    *
    * A typed field for the same reason `notes` is one: the symptom is a
    * *smaller* answer, not an error, and "fewer records" is byte-identical to
-   * "this repository recorded less". Only a caller that set `scanBudgetMs` can
-   * see anything but 0 here, and one that did must say so rather than present a
-   * truncated answer as the whole of what a path is subject to.
+   * "this repository recorded less". Set when this call's budget tripped, or
+   * when a previous budgeted build persisted a partial index. A caller that
+   * sees anything but 0 must say so rather than present a truncated answer as
+   * the whole of what a path is subject to.
    */
   unreadCommits: number;
   /** Anything the caller should be told about how the answer was produced. */
@@ -286,10 +308,16 @@ interface RowSource {
   diagnostics: string[];
 }
 
-const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowSource => {
+const scanSource = (
+  cwd: string,
+  diagnostics: string[],
+  budgetMs?: number,
+  now?: () => number,
+): RowSource => {
   let rows: IndexedTrailer[] | undefined;
   let corpusPasses = 0;
   const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+  const clock = now ?? Date.now;
 
   return {
     fetch: (query) => {
@@ -302,7 +330,7 @@ const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowS
           {},
           budgetMs === undefined
             ? { cwd }
-            : { cwd, budget: { deadline: Date.now() + budgetMs }, cost },
+            : { cwd, budget: { deadline: clock() + budgetMs, now: clock }, cost },
         );
         corpusPasses += 1;
       }
@@ -317,23 +345,38 @@ const scanSource = (cwd: string, diagnostics: string[], budgetMs?: number): RowS
 };
 
 /**
- * Opens a current index, falling back to the scan path on any failure.
+ * Opens the index, building one when it is missing, and falls back to a scan
+ * only when writing is impossible or the caller asked for `--no-index`.
  *
- * The index is derived and disposable (ADR-0003), so a missing, stale or
- * invalid file is not a reason to refuse an answer. Nor may it make a
- * before-change query wait for an unbounded full rebuild: `index` and `init`
- * own that work. The fallback is reported, because "slower" and "wrong" must
- * not look alike from the outside.
+ * The earlier contract refused to create the file: a consumer query that
+ * found no index walked history every time and persisted nothing, so on a
+ * 21k-commit repository `context` was a permanent four-minute command until
+ * `validate` or `init` happened to build one. Building here turns that into a
+ * one-time cost. A budget, when the caller set one, stops the first call
+ * from blocking for minutes; what it did not read is persisted as
+ * `unread_commits` so the next call is fast and still labelled incomplete.
  */
-const openSource = (cwd: string, noIndex: boolean, budgetMs?: number): RowSource => {
-  if (noIndex) return scanSource(cwd, [], budgetMs);
+const openSource = (
+  cwd: string,
+  noIndex: boolean,
+  budgetMs?: number,
+  now?: () => number,
+): RowSource => {
+  if (noIndex) return scanSource(cwd, [], budgetMs, now);
+  const cost: ScanCost = { unreadCommits: 0, unreadNotes: 0 };
+  const clock = now ?? Date.now;
   try {
-    const handle = openCurrentIndex({ cwd });
+    const { handle } = ensureIndex({
+      cwd,
+      ...(budgetMs === undefined
+        ? {}
+        : { budget: { deadline: clock() + budgetMs, now: clock }, cost }),
+    });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
       corpusPasses: () => 0,
-      unreadCommits: () => 0,
+      unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
       close: () => closeIndex(handle),
       diagnostics: [],
     };
@@ -342,6 +385,7 @@ const openSource = (cwd: string, noIndex: boolean, budgetMs?: number): RowSource
       cwd,
       [`the index is unavailable (${errorMessage(error)}); answering with a full scan`],
       budgetMs,
+      now,
     );
   }
 };
@@ -722,20 +766,6 @@ const mergeTrailers = (into: Trailer[], from: readonly Trailer[]): void => {
   }
 };
 
-const parseProvenance = (value: string | undefined): Provenance | undefined => {
-  if (value === undefined) return undefined;
-  const trimmed = value.trim();
-  if (trimmed === 'authored') return { kind: 'authored' };
-  if (trimmed === 'reconstructed') return { kind: 'reconstructed' };
-  if (trimmed === 'unknown') return { kind: 'unknown' };
-  if (trimmed === 'inherited' || trimmed.startsWith('inherited ')) {
-    return { kind: 'inherited', sha: trimmed.slice('inherited'.length).trim() };
-  }
-  // Anything else is an `enum` violation for `commitlore validate` to report.
-  // Guessing what it meant here would launder a malformed claim into a grade.
-  return undefined;
-};
-
 /**
  * Grading is `core/grade.ts` — this route does not have its own rule.
  *
@@ -891,7 +921,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
 
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
   const diagnostics = [...source.diagnostics, ...scope.diagnostics];
 
   try {
@@ -931,9 +961,13 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
     const unread = source.unreadCommits();
     if (unread > 0) {
       diagnostics.push(
-        `this repository has no index, and the scan stopped after its time budget with ` +
-          `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
-          'fix: commitlore init (or commitlore index) to build the index once',
+        source.fromIndex
+          ? `the index is incomplete: the build stopped after its time budget with ` +
+              `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
+              'fix: commitlore init (or commitlore index) to finish the index'
+          : `this repository has no index, and the scan stopped after its time budget with ` +
+              `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
+              'fix: commitlore init (or commitlore index) to build the index once',
       );
     }
 

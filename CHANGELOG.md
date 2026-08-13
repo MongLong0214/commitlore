@@ -8,6 +8,33 @@ feature only from 22.16.0. The old 22.13.0 floor silently used the slower LIKE
 path on 22.13–22.15; the new floor guarantees full-text search. The engine
 floor check now records the FTS5 feature requirement rather than merely the
 earlier module import. See ADR-0034.
+### Capture no longer stages a reference the commit-msg hook will refuse
+
+`capture` treated `"validation_result": "pass"` as a shape question. The
+hook then ran `validate --message-file`, which also asks whether `Follows:`
+and `Supersedes:` resolve. A syntactically valid `Follows: r-zzzzzz` staged
+cleanly and the next `git commit` failed over a record the user never wrote.
+
+Verification now runs `findDanglingRefs` over the same declared set the hook
+uses — historical identities plus other records in this capture — so a pass
+from capture means a pass from validate. A dangling reference is a rejection
+with its own reason.
+### `context` builds the index it used to only read
+
+On a repository with no `index.db`, `context` walked history every time and
+persisted nothing. On a 21,770-commit repository that was 265s, then 271s
+again. The same call against an index the commit-msg hook had already built
+was 0.63s. `context` now builds and persists the index the way `validate`
+does, so the second call is the cheap one.
+
+A first call on a history that size still costs minutes if it is allowed to
+finish, so the same scan budget the injection hook already used (3s) now
+applies to `context`, MCP query, `before_change`, and the commit-msg
+`validate` path. A truncated answer is labelled through `unreadCommits` —
+never presented as complete — and a commit accepted against a partial
+reference check prints `references not checked`, not `references ok`.
+`--no-index` still writes nothing. `commitlore index` and `init` finish a
+partial index; a leftover unread count is not treated as already current.
 
 ## 0.8.1
 

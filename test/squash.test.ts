@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { runSquashPreserve } from '../src/commands/squash-preserve.js';
+import { runValidate } from '../src/commands/validate.js';
 import { execGit } from '../src/core/git.js';
 import { listRecordShas, readRecord, readRecordBlocks, writeRecord } from '../src/core/notes.js';
 import { validateRecord } from '../src/core/schema.js';
@@ -479,6 +480,48 @@ describe('squash-preserve', () => {
     expect(value(plan.blocks[1] ?? [], 'Undo')).toBe('permanent');
     expect(value(plan.blocks[1] ?? [], 'Blast')).toBeUndefined();
   });
+
+  it(
+    'on a SHA-256 repository, validate accepts the Provenance squash-preserve just wrote',
+    () => {
+      const repo = tempDir('squash-sha256');
+      git(repo, ['init', '--quiet', '--template=', '--initial-branch=main', '--object-format=sha256']);
+      git(repo, ['config', 'user.name', 'CommitLore Test']);
+      git(repo, ['config', 'user.email', 'test@example.invalid']);
+      git(repo, ['config', 'commit.gpgsign', 'false']);
+
+      writeFileSync(join(repo, 'README.md'), 'seed\n');
+      git(repo, ['add', '--', 'README.md']);
+      git(repo, ['commit', '--quiet', '-m', 'seed']);
+      const base = head(repo);
+
+      git(repo, ['checkout', '--quiet', '-b', 'feature']);
+      const sourceSha = commitFile(
+        repo,
+        'queue.ts',
+        'export const workers = 3;\n',
+        'add the worker pool\n\n' +
+          'Limit: the vendor caps us at 3 concurrent workers\n' +
+          'Record-Id: r-sha256a\n',
+      );
+      expect(sourceSha).toMatch(/^[0-9a-f]{64}$/);
+
+      git(repo, ['checkout', '--quiet', 'main']);
+      git(repo, ['merge', '--squash', 'feature']);
+      const draft = draftFile(repo, 'Add the worker pool (#7)\n');
+      expect(runSquashPreserve({ range: `${base}..feature`, messageFile: draft, cwd: repo }).code).toBe(0);
+      git(repo, ['commit', '--quiet', '-F', draft]);
+
+      const written = value(parseCommitMessage(messageOf(repo, head(repo))), 'Provenance');
+      expect(written).toBe(`inherited ${sourceSha}`);
+
+      const validated = runValidate({ commit: 'HEAD', cwd: repo });
+      expect(validated.violations).toEqual([]);
+      expect(validated.code).toBe(0);
+      expect(validateRecord(parseCommitMessage(messageOf(repo, head(repo))))).toEqual([]);
+    },
+    30_000,
+  );
 
   it('produces records that each pass validate, on both channels', () => {
     const { repo, range } = squashFixture('squash-valid');

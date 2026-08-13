@@ -29,6 +29,7 @@ import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { compareCaptureCandidates } from '../src/hooks/prepare-commit-msg.js';
 import { createTestRepo } from './git-fixtures.js';
 
 // ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ const policyIdentityHash = (): string => computePolicyIdentityHash();
 
 interface PendingFileOptions {
   nonce?: string;
+  created_at?: string;
   base_head?: string;
   staged_diff_hash?: string;
   staged_tree_oid?: string;
@@ -88,7 +90,7 @@ const writePendingFile = (cwd: string, opts: PendingFileOptions = {}): string =>
   const record = {
     version: 1,
     nonce,
-    created_at: now.toISOString(),
+    created_at: opts.created_at ?? now.toISOString(),
     expires_at: expiresAt,
     phase: opts.phase ?? 'staged',
     consumed: opts.consumed ?? false,
@@ -150,6 +152,28 @@ const runHook = async (messageFile: string, cwd: string): Promise<void> => {
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
+
+describe('compareCaptureCandidates', () => {
+  it('orders by injected created_at, newest first, ignoring nonce bytes', () => {
+    const older = { created_at: '2026-01-01T00:00:00.000Z', nonce: 'a'.repeat(32) };
+    const newer = { created_at: '2026-01-02T00:00:00.000Z', nonce: 'b'.repeat(32) };
+    expect(compareCaptureCandidates(older, newer)).toBeGreaterThan(0);
+    expect(compareCaptureCandidates(newer, older)).toBeLessThan(0);
+    expect([older, newer].sort(compareCaptureCandidates).map((c) => c.nonce)).toEqual([
+      newer.nonce,
+      older.nonce,
+    ]);
+  });
+
+  it('breaks a created_at tie on nonce so the choice is stable', () => {
+    const left = { created_at: '2026-01-01T00:00:00.000Z', nonce: 'b'.repeat(32) };
+    const right = { created_at: '2026-01-01T00:00:00.000Z', nonce: 'a'.repeat(32) };
+    expect([left, right].sort(compareCaptureCandidates).map((c) => c.nonce)).toEqual([
+      right.nonce,
+      left.nonce,
+    ]);
+  });
+});
 
 describe('prepare-commit-msg capture guard', () => {
   let repoDir: string;
@@ -365,6 +389,151 @@ describe('prepare-commit-msg capture guard', () => {
     // At most one Record-Id should be appended
     const recordIdMatches = msg.match(/Record-Id:/g);
     expect(recordIdMatches?.length ?? 0).toBe(1);
+  });
+
+  // -----------------------------------------------------------------------
+  // #591: selection is temporal, and an aborted apply does not outrank a
+  // later capture. created_at is injected — a wall clock would pass in CI
+  // for the wrong reason.
+  // -----------------------------------------------------------------------
+
+  it('applies the newer staged capture when filename order disagrees with created_at', async () => {
+    // `aa…` sorts first as a filename. It is the older capture.
+    writePendingFile(repoDir, {
+      nonce: 'a'.repeat(32),
+      created_at: '2026-01-01T00:00:00.000Z',
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-oldstaged1' },
+            { key: 'Limit', value: 'the older staged capture' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+    writePendingFile(repoDir, {
+      nonce: 'b'.repeat(32),
+      created_at: '2026-01-02T00:00:00.000Z',
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-newstaged1' },
+            { key: 'Limit', value: 'the newer staged capture' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+
+    await runHook(messageFile, repoDir);
+
+    const msg = readFileSync(messageFile, 'utf8');
+    expect(msg).toContain('Record-Id: r-newstaged1');
+    expect(msg).not.toContain('r-oldstaged1');
+  });
+
+  it('prefers a newer staged capture over an older applied one whose nonce would sort first', async () => {
+    // Aborted commit left A applied. Filename order picks A. A later capture
+    // B is what should land.
+    writePendingFile(repoDir, {
+      nonce: 'a'.repeat(32),
+      created_at: '2026-01-01T00:00:00.000Z',
+      phase: 'applied',
+      applied_record_hash: 'a'.repeat(64),
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-staleaa01' },
+            { key: 'Limit', value: 'the aborted capture' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+    writePendingFile(repoDir, {
+      nonce: 'b'.repeat(32),
+      created_at: '2026-01-02T00:00:00.000Z',
+      phase: 'staged',
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-freshbb01' },
+            { key: 'Limit', value: 'the later capture' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+
+    await runHook(messageFile, repoDir);
+
+    const msg = readFileSync(messageFile, 'utf8');
+    expect(msg).toContain('Record-Id: r-freshbb01');
+    expect(msg).not.toContain('r-staleaa01');
+  });
+
+  it('retries an applied capture when it is the newest eligible one', async () => {
+    // Ranking staged above applied would attach the leftover older staged
+    // file over the capture that just nearly landed. Newest-first does not.
+    writePendingFile(repoDir, {
+      nonce: 'b'.repeat(32),
+      created_at: '2026-01-01T00:00:00.000Z',
+      phase: 'staged',
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-leftover01' },
+            { key: 'Limit', value: 'an earlier unused capture' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+    writePendingFile(repoDir, {
+      nonce: 'a'.repeat(32),
+      created_at: '2026-01-02T00:00:00.000Z',
+      phase: 'applied',
+      applied_record_hash: 'a'.repeat(64),
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-retried01' },
+            { key: 'Limit', value: 'the capture that almost committed' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+
+    await runHook(messageFile, repoDir);
+
+    const msg = readFileSync(messageFile, 'utf8');
+    expect(msg).toContain('Record-Id: r-retried01');
+    expect(msg).not.toContain('r-leftover01');
+  });
+
+  it('retries a lone applied transaction with the index unchanged (gate-a scenario 6)', async () => {
+    writePendingFile(repoDir, {
+      nonce: 'c'.repeat(32),
+      created_at: '2026-01-01T00:00:00.000Z',
+      phase: 'applied',
+      applied_record_hash: 'c'.repeat(64),
+      records: [
+        {
+          trailers: [
+            { key: 'Record-Id', value: 'r-e2eabort01' },
+            { key: 'Limit', value: 'retry the aborted commit' },
+          ],
+          evidence: [],
+        },
+      ],
+    });
+
+    await runHook(messageFile, repoDir);
+
+    const msg = readFileSync(messageFile, 'utf8');
+    expect(msg).toContain('Record-Id: r-e2eabort01');
   });
 
   // -----------------------------------------------------------------------

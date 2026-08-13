@@ -131,7 +131,7 @@ export interface InjectOptions {
     /** Answer from git alone, without the SQLite index. Same answers, slower. */
     noIndex?: boolean;
     /**
-     * Wall-clock ceiling on the no-index scan, in milliseconds.
+     * Wall-clock ceiling on a cold index build and on the no-index scan, in milliseconds.
      *
      * The hook sets this; `commitlore context`, which a person ran and is waiting
      * for, does not. Without an index the scan reads the whole history and builds

@@ -724,6 +724,7 @@ describe('commitlore_query', () => {
       'paths',
       'records',
       'scanned',
+      'unreadCommits',
     ]);
     const [record] = overMcp['records'] as Record<string, unknown>[];
     expect(Object.keys(record ?? {}).sort()).toEqual([

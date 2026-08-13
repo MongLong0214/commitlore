@@ -354,7 +354,8 @@
             "properties": {
               "value": {
                 "type": "string",
-                "pattern": "^(authored|drafted|reconstructed|unknown|inherited [0-9a-f]{7,40})$"
+                "$comment": "inherited <sha> is a git object id: 4 (shortest abbreviation) to 64 (SHA-256), hex either case. Defined once as PROVENANCE_VALUE_PATTERN in src/core/types.ts; this pattern must stay identical.",
+                "pattern": "^(authored|drafted|reconstructed|unknown|inherited [0-9a-fA-F]{4,64})$"
               }
             }
           }

@@ -1,0 +1,4 @@
+Refuse a provenance whose suffix is not a git object id
+
+Provenance: inherited zzz
+Limit: shared Redis instance caps sustained writes at 500/sec

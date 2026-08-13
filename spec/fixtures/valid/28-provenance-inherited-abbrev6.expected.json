@@ -1,0 +1,8 @@
+{
+  "description": "Provenance: inherited <sha> with a 6-hex abbreviation. git's shortest abbreviation is 4; the old schema refused anything under 7.",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited deadbe" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "canonical": "Limit: shared Redis instance caps sustained writes at 500/sec\nProvenance: inherited deadbe\n"
+}

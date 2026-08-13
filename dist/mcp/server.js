@@ -54,7 +54,7 @@ import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
-import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
+import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from '../core/query.js';
 import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 export const SERVER_NAME = 'commitlore';
 /** Used when the package manifest cannot be read — a version is not an answer. */
@@ -179,6 +179,7 @@ const contextJson = (root, kind, path) => {
         explainEmptyResult: true,
         cwd: root,
         at,
+        scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         trustedAuthors: configuredTrustedAuthors(root),
         ...(configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {}),
         ...(path === '' ? {} : { paths: [path] }),

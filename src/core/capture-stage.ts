@@ -14,6 +14,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { markCaptureError } from './capture-outcome.js';
 import { readPending, stagePending, type PendingRecord } from './pending.js';
 import { resolvePolicy } from './capture-policy.js';
 import { execGitOrThrow } from './git.js';
@@ -63,33 +64,48 @@ export const stageCaptureRecord = (opts: StageCaptureOptions): string | null => 
   //    staging is rejected.
   const policy = resolvePolicy(cwd);
   if (record.records.length > policy.policy.max_records_per_commit) {
-    throw new Error(
-      `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`,
+    throw markCaptureError(
+      new Error(
+        `Staging rejected: ${record.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`,
+      ),
+      'internal',
     );
   }
 
   // 4. Recheck binding conditions (HEAD, staged diff, staged tree, policy)
   const currentHead = execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
   if (currentHead !== record.base_head) {
-    throw new Error(
-      `Staging rejected: HEAD moved since prepare (expected ${record.base_head}, got ${currentHead})`,
+    throw markCaptureError(
+      new Error(
+        `Staging rejected: HEAD moved since prepare (expected ${record.base_head}, got ${currentHead})`,
+      ),
+      'operational',
     );
   }
 
   const currentDiff = execGitOrThrow(['diff', '--cached'], { cwd });
   const currentDiffHash = createHash('sha256').update(currentDiff).digest('hex');
   if (currentDiffHash !== record.staged_diff_hash) {
-    throw new Error('Staging rejected: staged diff changed since prepare');
+    throw markCaptureError(
+      new Error('Staging rejected: staged diff changed since prepare'),
+      'operational',
+    );
   }
 
   const currentTree = execGitOrThrow(['write-tree'], { cwd }).trim();
   if (currentTree !== record.staged_tree_oid) {
-    throw new Error('Staging rejected: staged tree changed since prepare');
+    throw markCaptureError(
+      new Error('Staging rejected: staged tree changed since prepare'),
+      'operational',
+    );
   }
 
   const currentPolicy = policy.identityHash;
   if (currentPolicy !== record.policy_identity_hash) {
-    throw new Error('Staging rejected: policy identity changed since prepare');
+    throw markCaptureError(
+      new Error('Staging rejected: policy identity changed since prepare'),
+      'operational',
+    );
   }
 
   // 5. Advance phase via stagePending (atomic rename)

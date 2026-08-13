@@ -259,6 +259,7 @@ describe('commitlore capture', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed).toHaveProperty('nonce');
     expect(parsed).toHaveProperty('staged');
+    expect(parsed.outcome).toBe('staged');
   });
 
   // ---------------------------------------------------------------------------
@@ -347,6 +348,134 @@ describe('commitlore capture', () => {
       // And no record staged (prepared file exists but is not staged)
       const staged = listStagedPending(cwd);
       expect(staged.length).toBe(0);
+    });
+
+    it('#588 capture rejects a dangling Follows before git commit can see it', () => {
+      const cwd = makeRepo();
+      const init = spawnSync(process.execPath, [CLI, 'init', '--unattended'], {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_NO_WARNINGS: '1' },
+      });
+      expect(init.status, init.stdout + init.stderr).toBeLessThanOrEqual(1);
+
+      const { transcriptPath, diffPath } = makeFixtures(cwd);
+      const draftPath = join(cwd, 'dangling-follows.json');
+      writeFileSync(
+        draftPath,
+        JSON.stringify({
+          records: [
+            {
+              trailers: [
+                { key: 'Limit', value: 'use sha256 for integrity checking' },
+                { key: 'Follows', value: 'r-zzzzzz' },
+                { key: 'Record-Id', value: 'r-cap588e2e1' },
+              ],
+              evidence: [
+                {
+                  key: 'Limit',
+                  source: 'transcript',
+                  quote: 'chose sha256 because it is the standard hash function for integrity checking',
+                  locator: 'L1-L1',
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const captured = runCapture(
+        ['--transcript', transcriptPath, '--diff', diffPath, '--draft', draftPath, '--json'],
+        { cwd },
+      );
+      expect(captured.exitCode).toBe(0);
+      const parsed = JSON.parse(captured.stdout) as {
+        staged: boolean;
+        rejected?: { rule?: string; reason?: string; detail?: string }[];
+      };
+      expect(parsed.staged).toBe(false);
+      expect(parsed.rejected?.some((entry) => (entry.rule ?? entry.reason) === 'dangling-ref')).toBe(
+        true,
+      );
+      expect(listStagedPending(cwd)).toHaveLength(0);
+
+      // Capture refused first: a clean commit proceeds, and the dangling
+      // reference is not in the message the hook will see.
+      execSync('git commit -q -m "feat: keep sha256"', { cwd });
+      const body = execSync('git log -1 --format=%B', { cwd, encoding: 'utf8' });
+      expect(body).not.toContain('Follows: r-zzzzzz');
+      expect(body).not.toContain('r-cap588e2e1');
+
+      // The hook would have rejected the same trailers — the two paths agree.
+      writeFileSync(join(cwd, 'after.txt'), 'after\n');
+      execSync('git add after.txt', { cwd });
+      writeFileSync(
+        join(cwd, '.hook-message'),
+        'feat: keep sha256\n\nLimit: use sha256 for integrity checking\nFollows: r-zzzzzz\nRecord-Id: r-cap588e2e1\n',
+      );
+      const hooked = spawnSync('git', ['commit', '-q', '-F', '.hook-message'], {
+        cwd,
+        encoding: 'utf8',
+      });
+      expect(hooked.status).not.toBe(0);
+      expect(`${hooked.stdout}${hooked.stderr}`).toMatch(/dangling-ref/);
+    });
+
+    it('#588 capture and git commit both accept a Follows that resolves', () => {
+      const cwd = makeRepo();
+      const init = spawnSync(process.execPath, [CLI, 'init', '--unattended'], {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_NO_WARNINGS: '1' },
+      });
+      expect(init.status, init.stdout + init.stderr).toBeLessThanOrEqual(1);
+
+      writeFileSync(
+        join(cwd, '.seed-message'),
+        'Seed the identity a later capture will follow\n\nLimit: historical seed\nRecord-Id: r-seed588e2\n',
+      );
+      execSync('git commit --allow-empty -q --no-verify -F .seed-message', { cwd });
+      writeFileSync(join(cwd, 'init.txt'), 'initial content\nmodified again\n');
+      execSync('git add .', { cwd });
+
+      const { transcriptPath, diffPath } = makeFixtures(cwd);
+      const draftPath = join(cwd, 'resolving-follows.json');
+      writeFileSync(
+        draftPath,
+        JSON.stringify({
+          records: [
+            {
+              trailers: [
+                { key: 'Limit', value: 'use sha256 for integrity checking' },
+                { key: 'Follows', value: 'r-seed588e2' },
+                { key: 'Record-Id', value: 'r-cap588e2e2' },
+              ],
+              evidence: [
+                {
+                  key: 'Limit',
+                  source: 'transcript',
+                  quote: 'chose sha256 because it is the standard hash function for integrity checking',
+                  locator: 'L1-L1',
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const captured = runCapture(
+        ['--transcript', transcriptPath, '--diff', diffPath, '--draft', draftPath, '--json'],
+        { cwd },
+      );
+      expect(captured.exitCode).toBe(0);
+      const parsed = JSON.parse(captured.stdout) as { staged: boolean; rejected?: unknown[] };
+      expect(parsed.staged).toBe(true);
+      expect(parsed.rejected ?? []).toHaveLength(0);
+
+      execSync('git commit -q -m "feat: keep sha256"', { cwd });
+      const body = execSync('git log -1 --format=%B', { cwd, encoding: 'utf8' });
+      expect(body).toContain('Follows: r-seed588e2');
+      expect(body).toContain('Record-Id: r-cap588e2e2');
     });
 
     it('MUST PASS: valid capture with legitimate evidence produces a staged record', () => {
