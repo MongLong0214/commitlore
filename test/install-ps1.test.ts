@@ -120,8 +120,10 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     const text = body();
     for (const phrase of [
       // The floor is interpolated from one constant rather than typed twice, so
-      // the source carries the variable and the user sees the number.
-      'Node.js $NodeMajorMin or newer is required',
+      // the source carries the variable and the user sees the number. That
+      // constant is `$NodeFloor` — major, minor and patch — since the floor
+      // stopped being expressible as a major alone (ADR-0034).
+      'Node.js $NodeFloor or newer is required',
       'Git is required',
       'Nothing was installed',
     ]) {
@@ -133,7 +135,7 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     const text = body();
     // 1 prerequisite or usage, 2 fetch, 3 verified-unusable, 4 occupied
     // destination, 5 verification could not run.
-    expect(text).toMatch(/Stop-Install "Node\.js \$NodeMajorMin or newer is required[\s\S]*?" 1/);
+    expect(text).toMatch(/Stop-Install "Node\.js \$NodeFloor or newer is required[\s\S]*?" 1/);
     expect(text).toMatch(/could not fetch \$Version[\s\S]*?" 2/);
     expect(text).toMatch(/runtime verification ran and found an unusable path[\s\S]*?" 3/);
     expect(text).toMatch(/refusing to overwrite it[\s\S]*?" 4/);

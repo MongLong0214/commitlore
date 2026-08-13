@@ -211,7 +211,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
 
@@ -254,7 +254,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - name: Report git version
@@ -300,7 +300,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -360,7 +360,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -413,7 +413,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -537,7 +537,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
 
       - name: Tag this checkout so the installer has a pinned source
         shell: bash
