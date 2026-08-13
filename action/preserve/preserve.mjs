@@ -38,6 +38,10 @@ import { appendFileSync } from 'node:fs';
 /** The mirror a squashed record survives in (SPEC §1, ADR-0004). */
 const NOTES_REF = 'refs/notes/commitlore';
 
+/** The identity a note write falls back to when the workflow configured none. */
+const BOT_NAME = 'github-actions[bot]';
+const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
+
 /** What a clone needs before it can see anyone else's records (`core/notes.ts`). */
 const NOTES_REFSPEC = `+${NOTES_REF}:${NOTES_REF}`;
 
@@ -161,13 +165,55 @@ const gitOrDie = (args, what) => {
  * `cli-path` is required now. An action that cannot find its CLI must say so,
  * not reach for a name on a public registry.
  */
+/**
+ * Writing a record to `refs/notes/commitlore` creates a commit object, and git
+ * refuses to create one without an author and a committer. `actions/checkout`
+ * configures neither, so on a default runner the note write failed with
+ * `Author identity unknown` *after* the squash had already been detected
+ * correctly — this action's entire purpose, unreachable in the configuration it
+ * most often runs in.
+ *
+ * The identity is supplied here rather than in the product. Git's refusal to
+ * invent one is correct and worth keeping: a note is a commit, and a commit
+ * with a fabricated author is the kind of unattributable record this project
+ * exists to argue against. What was missing is CI telling git who it is, which
+ * is the integration's job, not the protocol's.
+ *
+ * Anything the repository already configured wins. `git config` is consulted
+ * rather than the environment alone, so a workflow that set `user.name` the
+ * ordinary way keeps its own identity.
+ */
+const hasGitConfig = (key) => {
+  const result = git(['config', '--get', key]);
+  return result.status === 0 && result.stdout.trim() !== '';
+};
+
+const commitIdentityEnv = () => {
+  const env = { ...process.env };
+  // An empty value is absence, not a choice. Git treats `GIT_COMMITTER_NAME=''`
+  // as `empty ident name not allowed` and refuses, so carrying it through would
+  // trade one unexplained refusal for another.
+  const set = (key) => (env[key] ?? '').trim() !== '';
+
+  if (!hasGitConfig('user.name') && !set('GIT_COMMITTER_NAME')) {
+    env['GIT_AUTHOR_NAME'] = BOT_NAME;
+    env['GIT_COMMITTER_NAME'] = BOT_NAME;
+  }
+  if (!hasGitConfig('user.email') && !set('GIT_COMMITTER_EMAIL')) {
+    env['GIT_AUTHOR_EMAIL'] = BOT_EMAIL;
+    env['GIT_COMMITTER_EMAIL'] = BOT_EMAIL;
+  }
+  return env;
+};
+
 const runCommitlore = (args) =>
   spawnSync(process.execPath, [CLI_PATH, ...args], {
-        cwd: WORKSPACE,
-        encoding: 'utf8',
-        shell: false,
-        maxBuffer: 64 * 1024 * 1024,
-      });
+    cwd: WORKSPACE,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+    env: commitIdentityEnv(),
+  });
 
 const requireWorkTree = () => {
   const inside = git(['rev-parse', '--is-inside-work-tree']);
