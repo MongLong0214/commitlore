@@ -10,6 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isFullObjectId } from './types.js';
 /**
  * `code` reported when git never ran to completion (binary missing, output
  * over `maxBuffer`, killed by a signal). Distinct from any real git exit code,
@@ -69,6 +70,33 @@ export const execGitOrThrow = (args, opts = {}) => {
         throw error;
     }
     return result.stdout;
+};
+// ---------------------------------------------------------------------------
+// Revisions — the one door an abbreviation comes through
+// ---------------------------------------------------------------------------
+/**
+ * Resolves a revision a user typed — a branch, a tag, `HEAD~3`, or an
+ * abbreviated object id — to the one full object id it names, or `null` when
+ * git will not resolve it to exactly one commit.
+ *
+ * This is the only place an abbreviation is allowed to become an identity.
+ * Everywhere downstream holds full ids and checks them with `isFullObjectId`,
+ * so the ambiguity is settled once, by git, at the boundary where the user's
+ * text arrives — rather than by a regex that cannot know what a prefix names.
+ *
+ * `--verify` is what makes an ambiguous prefix an error instead of a guess, and
+ * `^{commit}` peels a tag to the commit it points at so an annotated tag does
+ * not resolve to the tag object's own id. The result is checked rather than
+ * trusted: `--quiet` turns "no such revision" into an empty stdout with a
+ * non-zero code, and a caller reading stdout alone would accept `''` from a
+ * git that failed in a way it did not anticipate.
+ */
+export const resolveRevision = (cwd, revision) => {
+    const result = execGit(['rev-parse', '--verify', '--quiet', '--end-of-options', `${revision}^{commit}`], { cwd });
+    if (result.code !== 0)
+        return null;
+    const resolved = result.stdout.trim();
+    return isFullObjectId(resolved) ? resolved : null;
 };
 /** git's own exit code for "the ref does not exist", as opposed to a failure. */
 const GIT_NO_SUCH_REF = 1;
