@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { load } from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { REQUIRED_CHECKS } from '../scripts/check-exact-head-ci.mjs';
+import { CI_EVENT, CI_WORKFLOW_NAME, CI_WORKFLOW_PATH, REQUIRED_CHECKS } from '../scripts/check-exact-head-ci.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TAG_BINDING = join(REPO_ROOT, 'scripts', 'check-tag-binding.mjs');
@@ -195,24 +195,39 @@ describe('#499 the published tag is the commit the gates qualified', () => {
     expect(run(RELEASE_TARGET, [first, 'main'], clone).status).toBe(0);
     expect(run(RELEASE_TARGET, [second, 'main'], clone).status).toBe(0);
 
-    const green = join(tempDir('same-name-ci'), 'check-runs.json');
+    const green = join(tempDir('same-name-ci'), 'workflow-evidence.json');
     writeFileSync(
       green,
       JSON.stringify({
-        total_count: REQUIRED_CHECKS.length,
-        check_runs: REQUIRED_CHECKS.map((name) => ({
-          name,
+        workflow: { id: 499, path: CI_WORKFLOW_PATH, name: CI_WORKFLOW_NAME },
+        workflow_runs: [{
+          id: 4990,
+          workflow_id: 499,
+          path: `${CI_WORKFLOW_PATH}@refs/heads/main`,
+          name: CI_WORKFLOW_NAME,
+          event: CI_EVENT,
+          head_sha: first,
+          run_attempt: 1,
           status: 'completed',
           conclusion: 'success',
-          head_sha: first,
-          // The gate requires the producing app, not just the name (#571).
-          app: { slug: 'github-actions' },
-        })),
+        }],
+        jobs: {
+          '4990:1': {
+            jobs: REQUIRED_CHECKS.map((name) => ({
+              name,
+              status: 'completed',
+              conclusion: 'success',
+              head_sha: first,
+              started_at: '2026-01-01T00:00:00Z',
+              completed_at: '2026-01-01T00:01:00Z',
+            })),
+          },
+        },
       }),
     );
     const ci = run(EXACT_HEAD_CI, ['owner', 'repo', first, '--from-file', green], clone);
     expect(ci.status).toBe(0);
-    expect(ci.stdout).toContain(`all ${REQUIRED_CHECKS.length} required checks succeeded`);
+    expect(ci.stdout).toContain(`all ${REQUIRED_CHECKS.length} required jobs`);
 
     moveTag(clone, second, false);
 
