@@ -333,3 +333,62 @@ describe('commitlore_before_change withholds what it labels blocked', () => {
     expect(surface).not.toContain(hostilePath);
   });
 });
+
+/**
+ * #597: before-change called runQuery (and then guard) without the
+ * signature policy, so a repository that required signing still served
+ * [directive] on the path an agent reads before it edits.
+ */
+describe('#597 signature-required policy reaches before-change', () => {
+  const AUTHOR = 'test@example.invalid';
+  let unsigned: string;
+
+  beforeAll(() => {
+    unsigned = join(tmpBase, 'unsigned-directive');
+    createTestRepo({ path: unsigned });
+    mkdirSync(join(unsigned, 'src'), { recursive: true });
+    writeFileSync(join(unsigned, 'src', 'auth.ts'), 'export const auth = true;\n');
+    execFileSync('git', ['add', 'src/auth.ts'], { cwd: unsigned });
+    execFileSync(
+      'git',
+      [
+        'commit',
+        '-m',
+        'feat: add auth\n\nRecord-Id: r-sigbc01\nRuled-out: shared Redis cache | single point of failure\nProvenance: authored\n',
+      ],
+      { cwd: unsigned },
+    );
+    execFileSync('git', ['config', '--local', '--add', 'commitlore.trustedAuthor', AUTHOR], {
+      cwd: unsigned,
+    });
+    execFileSync('git', ['config', '--local', 'commitlore.requireSignedDirective', 'true'], {
+      cwd: unsigned,
+    });
+  });
+
+  it('does not return [directive] for an unsigned commit from the configured author', () => {
+    const result = beforeChange({
+      path: 'src/auth.ts',
+      proposal: 'switch the session store to a shared Redis cache',
+      cwd: unsigned,
+      trustedAuthors: [AUTHOR],
+      requireSignedDirective: true,
+    });
+    expect(result.active_decisions.length).toBeGreaterThan(0);
+    for (const decision of result.active_decisions) {
+      expect(decision.trust).not.toBe('directive');
+    }
+    for (const match of result.possible_revival_matches) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(JSON.stringify(result)).not.toContain('[directive]');
+
+    const control = beforeChange({
+      path: 'src/auth.ts',
+      proposal: 'switch the session store to a shared Redis cache',
+      cwd: unsigned,
+      trustedAuthors: [AUTHOR],
+    });
+    expect(control.active_decisions.some((decision) => decision.trust === 'directive')).toBe(true);
+  });
+});

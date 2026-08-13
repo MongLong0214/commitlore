@@ -511,6 +511,7 @@ export const guard = (opts) => {
         ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
         ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+        ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
     });
     const availability = {
         history: result.history,

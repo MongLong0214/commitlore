@@ -12,7 +12,6 @@ import { guard, renderGuardMatch } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
 import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
 import { createPending, makePreparedPending, } from './pending.js';
-import { isGitObjectId } from './types.js';
 // ---------------------------------------------------------------------------
 // Guard advisory — ADR-0020, T-1109
 // ---------------------------------------------------------------------------
@@ -58,6 +57,7 @@ const computeGuardAdvisory = (opts) => {
             cwd: opts.cwd,
             ...(opts.readOnly === true ? { noIndex: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+            ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         });
         return {
             matches: result.matches.map(renderGuardMatch),
@@ -74,6 +74,7 @@ const computeGuardAdvisory = (opts) => {
         };
     }
 };
+const isObjectId = (value) => /^[0-9a-f]{40}$/.test(value);
 /**
  * The shared, side-effect-free half of prepare. The ordinary capture path and
  * historical shadow differ only in where their staged snapshot comes from and
@@ -82,13 +83,13 @@ const computeGuardAdvisory = (opts) => {
 const prepareValues = (opts) => {
     const { cwd, transcript, snapshot } = opts;
     const baseHead = snapshot?.base_head ?? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
-    if (!isGitObjectId(baseHead)) {
+    if (!isObjectId(baseHead)) {
         throw markCaptureError(new Error('Cannot resolve HEAD — is this a git repository with at least one commit?'), 'operational');
     }
     const diff = snapshot?.staged_diff ?? execGitOrThrow(['diff', '--cached'], { cwd });
     const stagedDiffHash = createHash('sha256').update(diff).digest('hex');
     const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(['write-tree'], { cwd }).trim();
-    if (!isGitObjectId(stagedTreeOid)) {
+    if (!isObjectId(stagedTreeOid)) {
         throw markCaptureError(new Error('Cannot resolve staged tree — is this a git repository with at least one commit?'), 'operational');
     }
     const sourceHashes = {
@@ -118,6 +119,7 @@ const prepareValues = (opts) => {
             cwd,
             ...(opts.readOnly ? { readOnly: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+            ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         });
     return {
         base_head: baseHead,

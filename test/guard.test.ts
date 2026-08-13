@@ -1074,3 +1074,61 @@ describe('the flag a user actually reads', () => {
     expect(lines[4]).toMatch(/^ {2}recorded: {2}r-7c1a45 in [0-9a-f]{8}$/);
   });
 });
+
+/**
+ * #597: requireSignedDirective is not optional decoration on the query
+ * route. Guard used to call runQuery without it, so a repository that
+ * demanded signatures still served [directive] from this path.
+ */
+describe('#597 signature-required policy reaches guard', () => {
+  const AUTHOR = 'test@example.invalid';
+  const PROPOSAL = 'switch the session store to a shared Redis cache';
+  let unsigned: string;
+
+  beforeAll(() => {
+    unsigned = makeRepo([]);
+    mkdirSync(join(unsigned, 'src'), { recursive: true });
+    writeFileSync(join(unsigned, 'src', 'auth.ts'), 'export const auth = true;\n');
+    execGitOrThrow([...GIT_CONFIG, 'add', '-A'], { cwd: unsigned });
+    execGitOrThrow(
+      [...GIT_CONFIG, 'commit', '-q', '--no-verify', '--cleanup=verbatim', '-F', '-'],
+      {
+        cwd: unsigned,
+        stdin: [
+          'Keep the session cache local',
+          '',
+          'Ruled-out: shared Redis cache | single point of failure',
+          'Record-Id: r-siggrd1',
+          'Provenance: authored',
+        ].join('\n'),
+      },
+    );
+    execGitOrThrow(['config', '--local', '--add', 'commitlore.trustedAuthor', AUTHOR], {
+      cwd: unsigned,
+    });
+    execGitOrThrow(['config', '--local', 'commitlore.requireSignedDirective', 'true'], {
+      cwd: unsigned,
+    });
+  });
+
+  it('does not return [directive] for an unsigned commit from the configured author', () => {
+    const result = guard({
+      proposal: PROPOSAL,
+      cwd: unsigned,
+      trustedAuthors: [AUTHOR],
+      requireSignedDirective: true,
+    });
+    expect(result.matches.length).toBeGreaterThan(0);
+    for (const match of result.matches) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(JSON.stringify(result)).not.toContain('[directive]');
+
+    const control = guard({
+      proposal: PROPOSAL,
+      cwd: unsigned,
+      trustedAuthors: [AUTHOR],
+    });
+    expect(control.matches.some((match) => match.trust === 'directive')).toBe(true);
+  });
+});

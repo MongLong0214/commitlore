@@ -48,7 +48,13 @@ let CLI = '';
 let buildHarness = '';
 
 /** The files this ticket owns. The source guards below scan exactly these. */
-const OWNED_SOURCES = ['mcp/server.ts', 'mcp/main.ts', 'mcp/lifecycle.ts', 'commands/mcp.ts'];
+const OWNED_SOURCES = [
+  'mcp/server.ts',
+  'mcp/validate-args.ts',
+  'mcp/main.ts',
+  'mcp/lifecycle.ts',
+  'commands/mcp.ts',
+];
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -506,6 +512,9 @@ describe('handshake and declarations', () => {
     expect(instructions).toContain('never blocks the commit');
     expect(instructions).not.toContain('treat an active Limit: as a constraint');
     expect(instructions).toContain('unknown, not empty');
+    // #597: default [directive] is the author header, not authentication.
+    expect(String(instructions)).not.toContain('a trusted author of this repository recorded it');
+    expect(String(instructions)).toMatch(/author header/i);
   });
 
   it('declares exactly the tools this server exposes', async () => {
@@ -853,6 +862,177 @@ describe('commitlore_guard', () => {
   });
 });
 
+/**
+ * #594: the advertised schemas are the contract. A host that omits a required
+ * field, sends the near-miss `file_path`, or types `path` as null used to get
+ * a well-formed whole-repository answer. That is worse than a validation gap:
+ * four hosts reach CommitLore only through MCP, and a wider answer looks
+ * like the real one.
+ */
+describe('#594 advertised schemas are enforced at the handler boundary', () => {
+  it('rejects a missing path on before_change as isError, not whole-repo context', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: {},
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/path is required/i);
+    expect(toolText(response)).not.toContain('active_decisions');
+  });
+
+  it('rejects file_path in place of path — the near-miss a host will send', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: { file_path: 'src/auth.ts' },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/unknown argument: file_path/i);
+    expect(toolText(response)).not.toContain('active_decisions');
+  });
+
+  it('rejects path: null rather than widening it to the whole repository', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: { path: null },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/path must be a string/i);
+    expect(toolText(response)).not.toContain('active_decisions');
+  });
+
+  it('rejects paths as a string on query — that field is not in the schema', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_query',
+      arguments: { kind: 'context', paths: 'src/auth.ts' },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/unknown argument: paths/i);
+    // A silent ignore would answer the whole repository, including r-cache01.
+    expect(toolText(response)).not.toContain('r-cache01');
+  });
+
+  it('rejects an unknown extra field instead of dropping it', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_query',
+      arguments: { kind: 'context', path: 'src/auth.ts', extra: true },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/unknown argument: extra/i);
+  });
+
+  it('rejects an omitted diff on verify_capture as isError, not an empty verification', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: {
+        nonce: 'a'.repeat(32),
+        draft: '[]',
+        transcript: 'the session',
+      },
+    });
+    expect(response.result?.['isError']).toBe(true);
+    expect(toolText(response)).toMatch(/diff is required/i);
+    expect(toolText(response)).not.toContain('validation_result');
+  });
+
+  it('still answers a well-formed before_change and query', async () => {
+    const before = await stub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: { path: 'src/auth.ts' },
+    });
+    expect(before.result?.['isError']).toBeFalsy();
+    const decisions = toolJson(before)['active_decisions'] as { recordId: string }[];
+    expect(decisions.map((record) => record.recordId)).toContain('r-auth03');
+    expect(decisions.map((record) => record.recordId)).not.toContain('r-cache01');
+
+    const query = await stub.request('tools/call', {
+      name: 'commitlore_query',
+      arguments: { kind: 'context', path: 'src/auth.ts' },
+    });
+    expect(query.result?.['isError']).toBeUndefined();
+    const records = toolJson(query)['records'] as { recordId: string }[];
+    expect(records.map((record) => record.recordId).sort()).toEqual(['r-auth02', 'r-auth03']);
+  });
+});
+
+/**
+ * #597: MCP guard and before_change used to call runQuery without the
+ * signature policy, so a repository with requireSignedDirective=true still
+ * served [directive] on the two routes four hosts actually use.
+ */
+describe('#597 signature-required policy reaches the MCP guard routes', () => {
+  let signedRepo = '';
+  let signedStub: Stub;
+
+  beforeAll(async () => {
+    signedRepo = makeRepo();
+    commitAt(
+      signedRepo,
+      '2026-02-01T00:00:00Z',
+      [
+        'Keep the session cache local',
+        '',
+        'Ruled-out: shared Redis cache | single point of failure',
+        'Record-Id: r-sigmcp1',
+        'Provenance: authored',
+      ].join('\n'),
+      { 'src/auth.ts': 'export const auth = true;' },
+    );
+    execGitOrThrow(
+      ['config', '--local', '--add', 'commitlore.trustedAuthor', 'test@example.invalid'],
+      { cwd: signedRepo },
+    );
+    execGitOrThrow(['config', '--local', 'commitlore.requireSignedDirective', 'true'], {
+      cwd: signedRepo,
+    });
+    signedStub = startStub(signedRepo);
+    await handshake(signedStub);
+  }, 120_000);
+
+  afterAll(async () => {
+    await signedStub?.close();
+  });
+
+  it('commitlore_guard does not return [directive] for an unsigned configured author', async () => {
+    const response = await signedStub.request('tools/call', {
+      name: 'commitlore_guard',
+      arguments: {
+        proposal: 'switch the session store to a shared Redis cache',
+        path: 'src/auth.ts',
+      },
+    });
+    expect(response.result?.['isError']).toBeFalsy();
+    const verdict = toolJson(response);
+    const matched = verdict['matched'] as { trust?: string }[];
+    expect(matched.length).toBeGreaterThan(0);
+    for (const match of matched) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(toolText(response)).not.toContain('[directive]');
+  });
+
+  it('commitlore_before_change does not return [directive] for an unsigned configured author', async () => {
+    const response = await signedStub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: {
+        path: 'src/auth.ts',
+        proposal: 'switch the session store to a shared Redis cache',
+      },
+    });
+    expect(response.result?.['isError']).toBeFalsy();
+    const answer = toolJson(response);
+    const decisions = answer['active_decisions'] as { trust?: string }[];
+    const matches = answer['possible_revival_matches'] as { trust?: string }[];
+    expect(decisions.length).toBeGreaterThan(0);
+    for (const decision of decisions) {
+      expect(decision.trust).not.toBe('directive');
+    }
+    for (const match of matches) {
+      expect(match.trust).not.toBe('directive');
+    }
+    expect(toolText(response)).not.toContain('[directive]');
+  });
+});
+
 describe('the guard hook', () => {
   it('reports a claim without directive-only advice', () => {
     const run = runGuardHook(repo, 'switch to client-side clocks', 'src/auth.ts');
@@ -1151,6 +1331,7 @@ describe('no network, by inspection', () => {
       'lifecycle.ts',
       'main.ts',
       'server.ts',
+      'validate-args.ts',
     ]);
   });
 
@@ -1190,7 +1371,12 @@ describe('no network, by inspection', () => {
       const specifiers = [...sourceOf(owned).matchAll(/from\s+'([^']+)'/g)].map(
         (match) => match[1] ?? '',
       );
-      expect(specifiers.length, owned).toBeGreaterThan(0);
+      // validate-args.ts is a schema checker with no imports; every other
+      // owned file talks to a module and must keep doing so.
+      if (specifiers.length === 0) {
+        expect(owned).toBe('mcp/validate-args.ts');
+        continue;
+      }
       for (const specifier of specifiers) {
         if (specifier.startsWith('.')) continue;
         expect(allowed.has(specifier), `${owned} imports ${specifier}`).toBe(true);
