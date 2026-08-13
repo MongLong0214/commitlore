@@ -161,6 +161,9 @@ const toolJson = (response: RpcResponse): Record<string, unknown> => {
   return JSON.parse(first.text) as Record<string, unknown>;
 };
 
+const toolText = (response: RpcResponse): string =>
+  ((response.result?.['content'] ?? []) as ContentBlock[]).map((block) => block.text ?? '').join('\n');
+
 // ---------------------------------------------------------------------------
 // Build once before tests
 // ---------------------------------------------------------------------------
@@ -743,6 +746,30 @@ describe('commitlore_verify_capture', () => {
     expect(response.result?.['isError']).toBe(true);
     const content = (response.result?.['content'] ?? []) as ContentBlock[];
     expect(content[0]?.text).toMatch(/nonce/i);
+  });
+
+  it('#594 rejects an omitted diff as isError, not an empty verification', async () => {
+    const transcript = 'User chose Rust instead of Go for memory safety guarantees.';
+    const prepResponse = await stub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript },
+    });
+    const nonce = toolJson(prepResponse)['nonce'] as string;
+
+    const omitted = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: '{"records":[]}', transcript },
+    });
+    expect(omitted.result?.['isError']).toBe(true);
+    expect(toolText(omitted)).toMatch(/diff is required/i);
+    expect(toolText(omitted)).not.toContain('validation_result');
+
+    const wellFormed = await stub.request('tools/call', {
+      name: 'commitlore_verify_capture',
+      arguments: { nonce, draft: '{"records":[]}', transcript, diff: '' },
+    });
+    expect(wellFormed.result?.['isError']).not.toBe(true);
+    expect(toolJson(wellFormed)['validation_result']).toBeDefined();
   });
 });
 

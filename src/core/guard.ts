@@ -185,6 +185,8 @@ export interface GuardOptions {
   noIndex?: boolean;
   /** Authors whose records may render as directives. The caller supplies trust. */
   trustedAuthors?: readonly string[];
+  /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+  requireSignedDirective?: boolean;
   /**
    * Refuse to flag on a `Record-Id:` reference alone.
    *
@@ -678,6 +680,7 @@ export const guard = (opts: GuardOptions): GuardResult => {
     ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }),
     ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
     ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+    ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
   });
   const availability = {
     history: result.history,

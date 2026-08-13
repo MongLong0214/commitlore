@@ -166,13 +166,13 @@ Ruled-out
 `[claim]` matters: its author string did not match one this repository
 configured for directives, so the agent is told to weigh it as information, not
 obey it as an order. In the default author-string mode, `[directive]` means the
-repository chose to treat that string as a constraint — not that the identity is
-proven, because the commit author chose the string and anyone able to write a
-commit can forge it. A repository can opt into Git's authenticated boundary with
-`git config --local commitlore.requireSignedDirective true`; then `[directive]`
-also requires Git to verify the signature against this verifier's trust store.
-That signature still does not establish the signer's authority or the record's
-truth. Delivery gives the agent context; it does not block the edit.
+commit's author header matched a string this repository configured — not that a
+trusted author recorded it, and not that the identity is proven. Anyone who can
+write a commit can set that header. A repository can opt into Git's authenticated
+boundary with `git config --local commitlore.requireSignedDirective true`; then
+`[directive]` also requires Git to verify the signature against this verifier's
+trust store. That signature still does not establish the signer's authority or
+the record's truth. Delivery gives the agent context; it does not block the edit.
 
 ## What happens automatically — and what does not
 

@@ -135,6 +135,7 @@ export const beforeChange = (opts) => {
             scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+            ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
         }));
         activeDecisions = extractActiveDecisions(queryResult);
         if (queryResult.unreadCommits > 0)
@@ -151,6 +152,7 @@ export const beforeChange = (opts) => {
                 at,
                 ...(path === '' || path === '.' ? {} : { paths: [path] }),
                 ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+                ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
             });
             matches = guardResult.matches.map(renderGuardMatch);
             confidence = 'experimental';
