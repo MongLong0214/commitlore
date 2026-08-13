@@ -1,21 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.8.2
 
-SHA-256 repositories are usable again. #603 widened `Provenance: inherited
-<sha>` to 64 hex, but capture, pending transactions, author grading, shadow
-capture, and the commit hooks still treated a git object id as exactly 40
-characters. A valid SHA-256 `HEAD` made `capture` report that it could not
-resolve HEAD; `authorsOf` returned no author; a record from a configured
-trusted author graded `claim` instead of `directive`. Every reader now uses
-the same `GIT_OBJECT_ID_PATTERN` #603 already defined.
+SHA-256 repositories now distinguish a full object id from a revision a user
+typed. Canonical ids are exactly 40 or exactly 64 hexadecimal characters, and
+a branch, tag, `HEAD~3`, or abbreviation is resolved by git to one full id
+before it enters internal state. Previously one `{4,64}` pattern covered both
+jobs, allowing a truncated or corrupted id to validate and persist as though it
+were canonical.
 
 The Node floor is `>=22.23.2`, the current Node 22 LTS. `node:sqlite` is
 unflagged from 22.13, but its bundled SQLite supplies the FTS5 virtual-table
-feature only from 22.16.0. The old 22.13.0 floor silently used the slower LIKE
+feature only from 22.16.0. The old 22.12.0 floor silently used the slower LIKE
 path on 22.13–22.15; the new floor guarantees full-text search. The engine
 floor check now records the FTS5 feature requirement rather than merely the
 earlier module import. See ADR-0034.
+
+Commits carrying only GitHub or DCO trailers such as `Signed-off-by:` or
+`Co-authored-by:` are no longer rejected as malformed CommitLore records. This
+lets `git commit -s` coexist with CommitLore while still rejecting unrecognized
+trailer keys.
+
+MCP handlers now enforce their advertised schemas at the handler boundary. A
+missing, mistyped, or unknown argument is an error instead of silently widening
+a request to the whole repository. A malformed decoded capture draft is also a
+caller error rather than `validation_result: "empty"`, which was
+indistinguishable from a session with no decision to record.
+
+The pre-push notes sync now runs non-interactively and has a timeout, so an
+unreachable or hanging remote cannot stall a branch push. The installer likewise
+does not report success when a requested host's MCP registration cannot be
+configured and live-verified.
+
+The preserve GitHub Action now supplies a git identity when the workflow has
+none, allowing it to write the note it found on a default runner. It also stops
+attaching a record the merge commit already carries: squashing a single commit
+keeps that commit's trailer block intact, so there was nothing to preserve and
+attaching anyway left two copies of one record.
+
 ### Capture no longer stages a reference the commit-msg hook will refuse
 
 `capture` treated `"validation_result": "pass"` as a shape question. The
@@ -27,6 +49,7 @@ Verification now runs `findDanglingRefs` over the same declared set the hook
 uses — historical identities plus other records in this capture — so a pass
 from capture means a pass from validate. A dangling reference is a rejection
 with its own reason.
+
 ### `context` builds the index it used to only read
 
 On a repository with no `index.db`, `context` walked history every time and
