@@ -3,7 +3,8 @@
  *
  * After a successful commit, this hook inspects applied pending transactions
  * and consumes exactly the one whose:
- *   1. base_head equals the new commit's first parent
+ *   1. base_head equals the new commit's first parent, or the commit replaced
+ *      by an amend whose parent is the new commit's first parent
  *   2. staged_tree_oid equals the new commit's tree
  *   3. applied_record_hash matches the canonical record block in the message
  *   4. every applied Record-Id is present in the commit message
