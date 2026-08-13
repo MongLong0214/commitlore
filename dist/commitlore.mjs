@@ -11236,8 +11236,6 @@ var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
 var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
 var GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
-var GIT_OBJECT_ID_RE = new RegExp(`^${GIT_OBJECT_ID_PATTERN}$`);
-var isGitObjectId = (value) => GIT_OBJECT_ID_RE.test(value);
 var PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
 var PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
 var PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map(
@@ -11555,7 +11553,8 @@ var locate = (instancePath) => {
   const [, rawIndex = "", field = ""] = match;
   return { index: Number(rawIndex), field };
 };
-var isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key);
+var WELL_KNOWN_FOREIGN_KEYS = /* @__PURE__ */ new Set(["Signed-off-by", "Co-authored-by"]);
+var isDefinedKey = (key) => KNOWN_KEYS.includes(key) || EXTENSION_KEY_RE.test(key) || WELL_KNOWN_FOREIGN_KEYS.has(key);
 var violationFor = (trailer, field) => {
   if (field === "key") {
     if (isDefinedKey(trailer.key)) return null;
@@ -14869,9 +14868,10 @@ var restrictGrade = (a, b) => {
 var AUTHOR_BATCH = 200;
 var AUTHOR_RECORD_SEP = "";
 var AUTHOR_FIELD_SEP = "\0";
+var AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
 var AUTHOR_FORMAT = "--format=%x01%H%x00%an <%ae>%x00%G?";
 var authorsOf = (cwd, shas) => {
-  const wanted = [...new Set(shas)].filter((sha) => isGitObjectId(sha)).sort();
+  const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
   const authors = /* @__PURE__ */ new Map();
   for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
     const batch = wanted.slice(start, start + AUTHOR_BATCH);
@@ -14902,7 +14902,7 @@ var noteAuthorsOf = (cwd) => {
     const writer = { author: noteAuthor, signatureStatus: status.trim() };
     for (const line2 of pathLines) {
       const annotated = line2.trim().replace(/\//g, "");
-      if (!isGitObjectId(annotated)) continue;
+      if (!AUTHOR_SHA_RE.test(annotated)) continue;
       const seen = authors.get(annotated);
       if (seen === void 0) authors.set(annotated, [writer]);
       else if (!seen.some(
@@ -15930,15 +15930,16 @@ var atomicWriteJson = (filePath, data) => {
     throw markCaptureError(thrown, "operational");
   }
 };
+var COMMIT_ID_RE = /^[0-9a-f]{40}$/;
 var resolveHead = (cwd) => {
   const result = execGit(["rev-parse", "HEAD"], { cwd });
   if (result.code !== 0) return null;
   const head = result.stdout.trim();
-  return isGitObjectId(head) ? head : null;
+  return COMMIT_ID_RE.test(head) ? head : null;
 };
 var headHasMovedPast = (baseHead, head) => {
   if (head === null) return false;
-  if (typeof baseHead !== "string" || !isGitObjectId(baseHead)) return false;
+  if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
   return baseHead !== head;
 };
 var pendingIsStale = (record2, head) => {
@@ -15947,7 +15948,7 @@ var pendingIsStale = (record2, head) => {
 };
 var makePreparedPending = (opts) => {
   validateNonce(opts.nonce);
-  if (!isGitObjectId(opts.base_head)) {
+  if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
     throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
   return {
@@ -16182,10 +16183,11 @@ var computeGuardAdvisory = (opts) => {
     };
   }
 };
+var isObjectId = (value) => /^[0-9a-f]{40}$/.test(value);
 var prepareValues = (opts) => {
   const { cwd, transcript, snapshot } = opts;
   const baseHead = snapshot?.base_head ?? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
-  if (!isGitObjectId(baseHead)) {
+  if (!isObjectId(baseHead)) {
     throw markCaptureError(
       new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?"),
       "operational"
@@ -16194,7 +16196,7 @@ var prepareValues = (opts) => {
   const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
   const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
-  if (!isGitObjectId(stagedTreeOid)) {
+  if (!isObjectId(stagedTreeOid)) {
     throw markCaptureError(
       new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?"),
       "operational"
@@ -16879,7 +16881,7 @@ var historiesBeforeCommit = (cwd) => {
     entries.push(record2);
     bySha.set(record2.sha, entries);
   }
-  const shas = gitOutput(["rev-list", "--reverse", "HEAD"], cwd).split("\n").filter((sha) => isGitObjectId(sha));
+  const shas = gitOutput(["rev-list", "--reverse", "HEAD"], cwd).split("\n").filter((sha) => /^[0-9a-f]{40}$/.test(sha));
   const prior = [];
   const histories = /* @__PURE__ */ new Map();
   for (const sha of shas) {
@@ -16901,7 +16903,7 @@ var historicalCommits = (cwd, since) => {
     ["rev-parse", "--verify", "--quiet", "--end-of-options", `${since}^{commit}`],
     cwd
   ).trim();
-  if (!isGitObjectId(resolved)) {
+  if (!/^[0-9a-f]{40}$/.test(resolved)) {
     throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
   }
   const range = `${resolved}..HEAD`;
@@ -16934,15 +16936,15 @@ var historicalCommits = (cwd, since) => {
     const separator = record2.indexOf(FIELD_SEP3);
     if (separator === -1) continue;
     const sha = record2.slice(0, separator);
-    if (!isGitObjectId(sha)) continue;
+    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
     patchesBySha.set(sha, truncateDiff2(record2.slice(separator + 1)));
   }
   return splitGitRecords(metadata).flatMap((record2) => {
     const [sha, subject, parents, tree, message] = record2.split(FIELD_SEP3);
     if (sha === void 0 || subject === void 0 || parents === void 0 || tree === void 0 || message === void 0) return [];
     const baseHead = parents.split(" ")[0] ?? "";
-    if (!isGitObjectId(sha)) return [];
-    if (!isGitObjectId(baseHead) || !isGitObjectId(tree)) {
+    if (!/^[0-9a-f]{40}$/.test(sha)) return [];
+    if (!/^[0-9a-f]{40}$/.test(baseHead) || !/^[0-9a-f]{40}$/.test(tree)) {
       return [{ sha, subject: displaySubject(subject), sources: null }];
     }
     const diff = patchesBySha.get(sha) ?? "";
@@ -21159,8 +21161,9 @@ var allRecordIdsPresent = (commitMessage, records) => {
   if (ids.length === 0) return false;
   return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
+var COMMIT_ID_RE2 = /^[0-9a-f]{40}$/;
 var isAmendedBase = (baseHead, firstParent, cwd) => {
-  if (!isGitObjectId(baseHead)) return false;
+  if (!COMMIT_ID_RE2.test(baseHead)) return false;
   const previousHead = execGit(["rev-parse", "--verify", "HEAD@{1}"], { cwd });
   if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;
   const previousParent = execGit(["rev-parse", "--verify", `${baseHead}^`], { cwd });
@@ -21383,8 +21386,7 @@ var squashMessagePath = (cwd) => {
 };
 var squashCommitIds = (message) => {
   const ids = [];
-  const pattern = new RegExp(`^commit (${GIT_OBJECT_ID_PATTERN})$`, "gm");
-  for (const match of message.matchAll(pattern)) {
+  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
     const id = match[1];
     if (id !== void 0) ids.push(id);
   }

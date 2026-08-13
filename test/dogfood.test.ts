@@ -30,7 +30,7 @@ import { runValidate } from '../src/commands/validate.js';
 import { findDanglingRefs, findIdCollisions } from '../src/core/stale.js';
 import { parseCommitMessage } from '../src/core/trailers.js';
 import { validateRecord } from '../src/core/schema.js';
-import { RECORD_ID_RE, type Trailer } from '../src/core/types.js';
+import { RECORD_ID_RE, isCommitLoreKey, type Trailer } from '../src/core/types.js';
 import { createTestRepo } from './git-fixtures.js';
 
 const REPO_ROOT = new URL('..', import.meta.url).pathname;
@@ -91,7 +91,12 @@ const inScope =
   adoptionIndex === -1
     ? []
     : history.slice(adoptionIndex).filter((entry) => entry.parents.length <= 1);
-const withRecords = inScope.filter((entry) => entry.trailers.length > 0);
+// A git trailer is not a CommitLore record. `Signed-off-by:`, `Co-authored-by:`
+// and other DCO-style trailers parse as trailers too — Dependabot's commits
+// carry exactly one, and nothing else. Filtering on "has any trailer" reads
+// that as a record missing every required field, which is a shape violation
+// nobody wrote. Scope this suite to commits carrying a protocol key.
+const withRecords = inScope.filter((entry) => entry.trailers.some((t) => isCommitLoreKey(t.key)));
 
 const validateHistory = (messages: string[]) => {
   const repo = createTestRepo({ path: mkdtempSync(join(tmpdir(), 'commitlore-dogfood-')) });
