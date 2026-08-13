@@ -11211,8 +11211,26 @@ var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
 var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
+var GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
+var PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
+var PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
+var PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map(
+  (kind) => kind === "inherited" ? "inherited <sha>" : kind
+).join(" | ");
 var RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
+var parseProvenance = (value) => {
+  if (value === void 0) return void 0;
+  const trimmed = value.trim();
+  if (!PROVENANCE_VALUE_RE.test(trimmed)) return void 0;
+  if (trimmed.startsWith("inherited ")) {
+    return { kind: "inherited", sha: trimmed.slice("inherited ".length) };
+  }
+  if (trimmed === "authored" || trimmed === "drafted" || trimmed === "reconstructed" || trimmed === "unknown") {
+    return { kind: trimmed };
+  }
+  return void 0;
+};
 
 // src/core/trailers.ts
 var RECORD_ID_KEY = "Record-Id";
@@ -11485,7 +11503,7 @@ var FORMAT_WANT = {
   Supersedes: "r-[a-z0-9]{6,}",
   Expires: "YYYY-MM-DD or a free-text condition",
   Evidence: "path, path#anchor, or a URL",
-  Provenance: "authored | inherited <sha> | reconstructed | unknown",
+  Provenance: PROVENANCE_FORMAT_WANT,
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
@@ -11594,7 +11612,8 @@ var GRAMMAR_FROM_TYPES = {
   Blast: BLAST_VALUES.join(" | "),
   Undo: UNDO_VALUES.join(" | "),
   Certainty: CERTAINTY_VALUES.join(" | "),
-  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, "")
+  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, ""),
+  Provenance: PROVENANCE_FORMAT_WANT
 };
 var drift = (detail) => new Error(`SPEC \xA73 has drifted from src/core/types.ts: ${detail}`);
 var splitRow = (line2) => line2.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, "|").replace(/`/g, "").trim());
@@ -14291,7 +14310,6 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
 // src/core/grade.ts
 var PROVENANCE_KEY = "Provenance";
-var INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var INJECTION_PATTERNS = [
   {
@@ -14693,15 +14711,8 @@ var scanRecord = (record2) => {
 };
 var provenanceOf = (record2) => {
   if (record2.provenance !== void 0) return record2.provenance;
-  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0]?.trim();
-  if (raw === void 0) return { kind: "unknown" };
-  if (raw === "authored") return { kind: "authored" };
-  if (raw === "drafted") return { kind: "drafted" };
-  if (raw === "reconstructed") return { kind: "reconstructed" };
-  const inherited = INHERITED_RE.exec(raw);
-  const sha = inherited?.[1];
-  if (sha !== void 0) return { kind: "inherited", sha };
-  return { kind: "unknown" };
+  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0];
+  return parseProvenance(raw) ?? { kind: "unknown" };
 };
 var lifecycleOf = (record2, at, folded) => {
   if (record2.lifecycle !== void 0 && record2.lifecycle !== "active") return record2.lifecycle;
@@ -15112,17 +15123,6 @@ var mergeTrailers2 = (into, from) => {
     );
     if (!duplicate) into.push({ ...trailer });
   }
-};
-var parseProvenance = (value) => {
-  if (value === void 0) return void 0;
-  const trimmed = value.trim();
-  if (trimmed === "authored") return { kind: "authored" };
-  if (trimmed === "reconstructed") return { kind: "reconstructed" };
-  if (trimmed === "unknown") return { kind: "unknown" };
-  if (trimmed === "inherited" || trimmed.startsWith("inherited ")) {
-    return { kind: "inherited", sha: trimmed.slice("inherited".length).trim() };
-  }
-  return void 0;
 };
 var gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) => {
   if (merged.length === 0) return;

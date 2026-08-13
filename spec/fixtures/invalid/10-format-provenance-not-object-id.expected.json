@@ -1,0 +1,16 @@
+{
+  "description": "Provenance: inherited zzz is not a plausible object id. Widening the grammar must not start accepting nonsense.",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited zzz" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "violations": [
+    {
+      "key": "Provenance",
+      "value": "inherited zzz",
+      "rule": "format",
+      "got": "inherited zzz",
+      "want": "authored | drafted | inherited <sha> | reconstructed | unknown"
+    }
+  ]
+}

@@ -136,6 +136,26 @@ export const UNDO_VALUES = ['easy', 'costly', 'permanent'] as const;
 export const CERTAINTY_VALUES = ['firm', 'tentative', 'guess'] as const;
 export const PROVENANCE_PREFIXES = ['authored', 'drafted', 'inherited', 'reconstructed', 'unknown'] as const;
 
+/**
+ * `<sha>` in `Provenance: inherited <sha>` is a git object id. Bounds are
+ * git's, not ours: 4 is the shortest abbreviation git will emit
+ * (`core.abbrev`), 64 is a full SHA-256. A-F is accepted because git's
+ * object-name alphabet is hexadecimal and case-insensitive; squash-preserve
+ * writes whatever `git rev-parse` emits (lowercase), but a hand-copied id
+ * may be upper, and SPEC §3 writes `<sha>` with no case constraint.
+ */
+export const GIT_OBJECT_ID_PATTERN = '[0-9a-fA-F]{4,64}';
+
+/** The schema `pattern` and the parser read this string. There is no third copy. */
+export const PROVENANCE_VALUE_PATTERN =
+  `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
+
+export const PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
+
+export const PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map((kind) =>
+  kind === 'inherited' ? 'inherited <sha>' : kind,
+).join(' | ');
+
 export type Blast = (typeof BLAST_VALUES)[number];
 export type Undo = (typeof UNDO_VALUES)[number];
 export type Certainty = (typeof CERTAINTY_VALUES)[number];
@@ -170,6 +190,30 @@ export type Provenance =
   | { kind: 'inherited'; sha: string }
   | { kind: 'reconstructed' }
   | { kind: 'unknown' };
+
+/**
+ * Reads a `Provenance:` value. Schema, grade and query all call this; a
+ * suffix the schema would refuse must not become `inherited` on a consumer
+ * route. Unrecognised input is `undefined` so the caller can choose
+ * `unknown` (grade) or omit the field (query).
+ */
+export const parseProvenance = (value: string | undefined): Provenance | undefined => {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!PROVENANCE_VALUE_RE.test(trimmed)) return undefined;
+  if (trimmed.startsWith('inherited ')) {
+    return { kind: 'inherited', sha: trimmed.slice('inherited '.length) };
+  }
+  if (
+    trimmed === 'authored' ||
+    trimmed === 'drafted' ||
+    trimmed === 'reconstructed' ||
+    trimmed === 'unknown'
+  ) {
+    return { kind: trimmed };
+  }
+  return undefined;
+};
 
 /** The lifecycle axis of trust grading (SPEC §7). Computed by the stale engine. */
 export type Lifecycle = 'active' | 'superseded' | 'expired';

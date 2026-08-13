@@ -48,7 +48,7 @@ import { closeIndex, filterTrailers, openCurrentIndex, queryTrailers, scanTraile
 import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
-import { SINGLE_VALUED, } from './types.js';
+import { SINGLE_VALUED, parseProvenance, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
 export const WARN_KEY = 'Warn';
@@ -466,23 +466,6 @@ const mergeTrailers = (into, from) => {
         if (!duplicate)
             into.push({ ...trailer });
     }
-};
-const parseProvenance = (value) => {
-    if (value === undefined)
-        return undefined;
-    const trimmed = value.trim();
-    if (trimmed === 'authored')
-        return { kind: 'authored' };
-    if (trimmed === 'reconstructed')
-        return { kind: 'reconstructed' };
-    if (trimmed === 'unknown')
-        return { kind: 'unknown' };
-    if (trimmed === 'inherited' || trimmed.startsWith('inherited ')) {
-        return { kind: 'inherited', sha: trimmed.slice('inherited'.length).trim() };
-    }
-    // Anything else is an `enum` violation for `commitlore validate` to report.
-    // Guessing what it meant here would launder a malformed claim into a grade.
-    return undefined;
 };
 /**
  * Grading is `core/grade.ts` — this route does not have its own rule.

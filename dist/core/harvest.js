@@ -20,7 +20,7 @@
  */
 import { validateRecord } from './schema.js';
 import { readInstalledFile } from './paths.js';
-import { BLAST_VALUES, CERTAINTY_VALUES, KNOWN_KEYS, PROVENANCE_PREFIXES, RECORD_ID_RE, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
+import { BLAST_VALUES, CERTAINTY_VALUES, KNOWN_KEYS, PROVENANCE_FORMAT_WANT, PROVENANCE_PREFIXES, RECORD_ID_RE, SINGLE_VALUED, UNDO_VALUES, } from './types.js';
 /**
  * Read relative to this module's own installation, same arrangement as
  * `schema.ts` — a checkout's `spec/SPEC.md` on disk, or a compiled binary's
@@ -48,6 +48,7 @@ const GRAMMAR_FROM_TYPES = {
     Undo: UNDO_VALUES.join(' | '),
     Certainty: CERTAINTY_VALUES.join(' | '),
     'Record-Id': RECORD_ID_RE.source.replace(/^\^/, '').replace(/\$$/, ''),
+    Provenance: PROVENANCE_FORMAT_WANT,
 };
 const drift = (detail) => new Error(`SPEC §3 has drifted from src/core/types.ts: ${detail}`);
 /**

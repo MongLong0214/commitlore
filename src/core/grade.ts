@@ -32,6 +32,7 @@ import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
+  parseProvenance,
   type Lifecycle,
   type Provenance,
   type Record,
@@ -39,9 +40,6 @@ import {
 } from './types.js';
 
 const PROVENANCE_KEY = 'Provenance';
-
-/** `Provenance: inherited <sha>` (SPEC §3, mirrored by spec/schema/record.schema.json). */
-const INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 
 /** How a record's `Warn:` may be delivered. */
 export type Trust = 'directive' | 'claim' | 'blocked';
@@ -665,17 +663,8 @@ const scanRecord = (record: Record): { patterns: string[]; keys: string[] } => {
 const provenanceOf = (record: Record): Provenance => {
   if (record.provenance !== undefined) return record.provenance;
 
-  const raw = trailerValues(record.trailers, PROVENANCE_KEY)[0]?.trim();
-  if (raw === undefined) return { kind: 'unknown' };
-  if (raw === 'authored') return { kind: 'authored' };
-  if (raw === 'drafted') return { kind: 'drafted' };
-  if (raw === 'reconstructed') return { kind: 'reconstructed' };
-
-  const inherited = INHERITED_RE.exec(raw);
-  const sha = inherited?.[1];
-  if (sha !== undefined) return { kind: 'inherited', sha };
-
-  return { kind: 'unknown' };
+  const raw = trailerValues(record.trailers, PROVENANCE_KEY)[0];
+  return parseProvenance(raw) ?? { kind: 'unknown' };
 };
 
 /**

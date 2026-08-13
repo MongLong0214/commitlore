@@ -1,0 +1,8 @@
+{
+  "description": "Provenance: inherited <sha> with uppercase hex. SPEC §3 writes <sha> with no case constraint; git's object-id alphabet is case-insensitive.",
+  "trailers": [
+    { "key": "Provenance", "value": "inherited DEADBEE" },
+    { "key": "Limit", "value": "shared Redis instance caps sustained writes at 500/sec" }
+  ],
+  "canonical": "Limit: shared Redis instance caps sustained writes at 500/sec\nProvenance: inherited DEADBEE\n"
+}
