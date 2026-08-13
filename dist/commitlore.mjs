@@ -33,9 +33,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/ajv/dist/compile/codegen/code.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/code.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -187,9 +187,9 @@ var require_code = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/scope.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -332,9 +332,9 @@ var require_scope = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/codegen/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -1052,9 +1052,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/util.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/util.js
 var require_util = __commonJS({
-  "node_modules/ajv/dist/compile/util.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -1219,9 +1219,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/names.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "node_modules/ajv/dist/compile/names.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/names.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -1258,9 +1258,9 @@ var require_names = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/errors.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "node_modules/ajv/dist/compile/errors.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/errors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -1380,9 +1380,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -1431,9 +1431,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/rules.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "node_modules/ajv/dist/compile/rules.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/rules.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRules = exports.isJSONType = void 0;
@@ -1462,9 +1462,9 @@ var require_rules = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/applicability.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -1485,9 +1485,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/dataType.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -1669,9 +1669,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/defaults.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.assignDefaults = void 0;
@@ -1706,9 +1706,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/code.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/code.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -1839,9 +1839,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/keyword.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -1957,9 +1957,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/subschema.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -2040,9 +2040,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// node_modules/fast-deep-equal/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "node_modules/fast-deep-equal/index.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -2075,9 +2075,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// node_modules/json-schema-traverse/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "node_modules/json-schema-traverse/index.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/json-schema-traverse/index.js"(exports, module) {
     "use strict";
     var traverse = module.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -2163,9 +2163,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/resolve.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "node_modules/ajv/dist/compile/resolve.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/resolve.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -2319,9 +2319,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "node_modules/ajv/dist/compile/validate/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/validate/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -2827,9 +2827,9 @@ var require_validate = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/validation_error.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "node_modules/ajv/dist/runtime/validation_error.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/validation_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -2843,9 +2843,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/ref_error.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "node_modules/ajv/dist/compile/ref_error.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/ref_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -2860,9 +2860,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "node_modules/ajv/dist/compile/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/compile/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -3084,9 +3084,9 @@ var require_compile = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/data.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "node_modules/ajv/dist/refs/data.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/data.json"(exports, module) {
     module.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -3103,9 +3103,9 @@ var require_data = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/utils.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "node_modules/fast-uri/lib/utils.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/lib/utils.js"(exports, module) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -3416,9 +3416,9 @@ var require_utils = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/schemes.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "node_modules/fast-uri/lib/schemes.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
@@ -3626,9 +3626,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// node_modules/fast-uri/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "node_modules/fast-uri/index.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -3644,12 +3644,7 @@ var require_fast_uri = __commonJS({
     }
     function resolve21(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
-      const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
-      if (baseMalformed || relativeMalformed) {
-        throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
-      }
-      const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
+      const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
@@ -3775,7 +3770,6 @@ var require_fast_uri = __commonJS({
     }
     var URI_PARSE = /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
     var AUTHORITY_PREFIX = /^(?:[^#/:?]+:)?\/\/([^/?#]*)/;
-    var AUTHORITY_INTRODUCER_REGION = /^(?:[^#/:?]+:)?([/\\\t\n\r]*)/;
     function getParseError(parsed, matches) {
       if (matches[2] !== void 0 && parsed.path && parsed.path[0] !== "/") {
         return 'URI path must start with "/" when authority is present.';
@@ -3809,20 +3803,6 @@ var require_fast_uri = __commonJS({
       if (authorityMatch !== null && authorityMatch[1].indexOf("\\") !== -1) {
         parsed.error = "URI authority must not contain a literal backslash.";
         malformedAuthorityOrPort = true;
-      }
-      const introducerMatch = uri.match(AUTHORITY_INTRODUCER_REGION);
-      if (introducerMatch !== null) {
-        const region = introducerMatch[1];
-        const normalizedRegion = region.replace(/[\t\n\r]/g, "");
-        if (normalizedRegion.length >= 2) {
-          if (normalizedRegion.slice(0, 2) !== "//") {
-            parsed.error = parsed.error || "URI authority must not contain a literal backslash.";
-            malformedAuthorityOrPort = true;
-          } else if (region.length !== normalizedRegion.length) {
-            parsed.error = parsed.error || "URI authority introducer must not contain whitespace.";
-            malformedAuthorityOrPort = true;
-          }
-        }
       }
       const matches = uri.match(URI_PARSE);
       if (matches) {
@@ -3938,9 +3918,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/uri.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "node_modules/ajv/dist/runtime/uri.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/uri.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -3949,9 +3929,9 @@ var require_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/core.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "node_modules/ajv/dist/core.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/core.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -4560,9 +4540,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/id.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var def = {
@@ -4575,9 +4555,9 @@ var require_id = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/ref.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callRef = exports.getValidate = void 0;
@@ -4697,9 +4677,9 @@ var require_ref = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var id_1 = require_id();
@@ -4718,9 +4698,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4750,9 +4730,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4778,9 +4758,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/ucs2length.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -4804,9 +4784,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4836,9 +4816,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -4873,9 +4853,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -4902,9 +4882,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/required.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -4984,9 +4964,9 @@ var require_required = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5013,9 +4993,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/equal.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -5024,9 +5004,9 @@ var require_equal = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -5091,9 +5071,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/const.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5120,9 +5100,9 @@ var require_const = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5169,9 +5149,9 @@ var require_enum = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -5207,9 +5187,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateAdditionalItems = void 0;
@@ -5260,9 +5240,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateTuple = void 0;
@@ -5317,9 +5297,9 @@ var require_items = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var items_1 = require_items();
@@ -5334,9 +5314,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5369,9 +5349,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5463,9 +5443,9 @@ var require_contains = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -5557,9 +5537,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5600,9 +5580,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5706,9 +5686,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -5764,9 +5744,9 @@ var require_properties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5838,9 +5818,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -5869,9 +5849,9 @@ var require_not = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5886,9 +5866,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5944,9 +5924,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -5971,9 +5951,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6040,9 +6020,9 @@ var require_if = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6058,9 +6038,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -6106,9 +6086,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
 var require_dynamicAnchor = __commonJS({
-  "node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.dynamicAnchor = void 0;
@@ -6141,9 +6121,9 @@ var require_dynamicAnchor = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
 var require_dynamicRef = __commonJS({
-  "node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.dynamicRef = void 0;
@@ -6187,9 +6167,9 @@ var require_dynamicRef = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
 var require_recursiveAnchor = __commonJS({
-  "node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dynamicAnchor_1 = require_dynamicAnchor();
@@ -6208,9 +6188,9 @@ var require_recursiveAnchor = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
 var require_recursiveRef = __commonJS({
-  "node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dynamicRef_1 = require_dynamicRef();
@@ -6223,9 +6203,9 @@ var require_recursiveRef = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/dynamic/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/index.js
 var require_dynamic = __commonJS({
-  "node_modules/ajv/dist/vocabularies/dynamic/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/dynamic/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dynamicAnchor_1 = require_dynamicAnchor();
@@ -6237,9 +6217,9 @@ var require_dynamic = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
 var require_dependentRequired = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/dependentRequired.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dependencies_1 = require_dependencies();
@@ -6254,9 +6234,9 @@ var require_dependentRequired = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
 var require_dependentSchemas = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dependencies_1 = require_dependencies();
@@ -6270,9 +6250,9 @@ var require_dependentSchemas = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitContains.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitContains.js
 var require_limitContains = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitContains.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/validation/limitContains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6290,9 +6270,9 @@ var require_limitContains = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/next.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/next.js
 var require_next = __commonJS({
-  "node_modules/ajv/dist/vocabularies/next.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/next.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dependentRequired_1 = require_dependentRequired();
@@ -6303,9 +6283,9 @@ var require_next = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
 var require_unevaluatedProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6369,9 +6349,9 @@ var require_unevaluatedProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
 var require_unevaluatedItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6413,9 +6393,9 @@ var require_unevaluatedItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/unevaluated/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/index.js
 var require_unevaluated = __commonJS({
-  "node_modules/ajv/dist/vocabularies/unevaluated/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/unevaluated/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var unevaluatedProperties_1 = require_unevaluatedProperties();
@@ -6425,9 +6405,9 @@ var require_unevaluated = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/format.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6515,9 +6495,9 @@ var require_format = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
@@ -6526,9 +6506,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/metadata.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -6549,9 +6529,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/draft2020.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/draft2020.js
 var require_draft2020 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/draft2020.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/draft2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -6577,9 +6557,9 @@ var require_draft2020 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DiscrError = void 0;
@@ -6591,9 +6571,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6696,9 +6676,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
 var require_schema = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/schema.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/schema",
@@ -6756,9 +6736,9 @@ var require_schema = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
 var require_applicator2 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/applicator",
@@ -6809,9 +6789,9 @@ var require_applicator2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
 var require_unevaluated2 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
@@ -6829,9 +6809,9 @@ var require_unevaluated2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
 var require_content = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/content",
@@ -6850,9 +6830,9 @@ var require_content = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
 var require_core3 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/core",
@@ -6906,9 +6886,9 @@ var require_core3 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
 var require_format_annotation = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
@@ -6925,9 +6905,9 @@ var require_format_annotation = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
 var require_meta_data = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
@@ -6966,9 +6946,9 @@ var require_meta_data = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
 var require_validation2 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json"(exports, module) {
     module.exports = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://json-schema.org/draft/2020-12/meta/validation",
@@ -7061,9 +7041,9 @@ var require_validation2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-2020-12/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
 var require_json_schema_2020_12 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-2020-12/index.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-2020-12/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var metaSchema = require_schema();
@@ -7096,9 +7076,9 @@ var require_json_schema_2020_12 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/2020.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/2020.js
 var require__ = __commonJS({
-  "node_modules/ajv/dist/2020.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/2020.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2020 = void 0;
@@ -7173,9 +7153,9 @@ var require__ = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/formats.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "node_modules/ajv-formats/dist/formats.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -7376,9 +7356,9 @@ var require_formats = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/draft7.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -7398,9 +7378,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
     module.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -7555,9 +7535,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/ajv.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "node_modules/ajv/dist/ajv.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv/dist/ajv.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -7625,9 +7605,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/limit.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "node_modules/ajv-formats/dist/limit.js"(exports) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/limit.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatLimitDefinition = void 0;
@@ -7697,9 +7677,9 @@ var require_limit = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/ajv-formats/dist/index.js"(exports, module) {
+  "../../../Users/isaac/projects/wt/r81/node_modules/ajv-formats/dist/index.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -7742,7 +7722,7 @@ var require_dist = __commonJS({
 // src/cli.ts
 import { readFileSync as readFileSync27 } from "node:fs";
 
-// node_modules/commander/lib/error.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
   /**
    * Constructs the CommanderError class
@@ -7771,7 +7751,7 @@ var InvalidArgumentError = class extends CommanderError {
   }
 };
 
-// node_modules/commander/lib/argument.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/argument.js
 var Argument = class {
   /**
    * Initialize a new command argument with the given name and description.
@@ -7892,7 +7872,7 @@ function humanReadableArgName(arg) {
   return arg.required ? "<" + nameOutput + ">" : "[" + nameOutput + "]";
 }
 
-// node_modules/commander/lib/command.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/command.js
 import { EventEmitter } from "node:events";
 import childProcess from "node:child_process";
 import path from "node:path";
@@ -7900,7 +7880,7 @@ import fs from "node:fs";
 import process2 from "node:process";
 import { stripVTControlCharacters as stripVTControlCharacters2 } from "node:util";
 
-// node_modules/commander/lib/help.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/help.js
 import { stripVTControlCharacters } from "node:util";
 var Help = class {
   constructor() {
@@ -8492,7 +8472,7 @@ ${itemIndentStr}`);
   }
 };
 
-// node_modules/commander/lib/option.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/option.js
 var Option = class {
   /**
    * Initialize a new `Option` with the given `flags` and `description`.
@@ -8798,7 +8778,7 @@ function splitOptionFlags(flags) {
   return { shortFlag, longFlag };
 }
 
-// node_modules/commander/lib/suggestSimilar.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/suggestSimilar.js
 var maxDistance = 3;
 function editDistance(a, b) {
   if (Math.abs(a.length - b.length) > maxDistance)
@@ -8873,7 +8853,7 @@ function suggestSimilar(word, candidates) {
   return "";
 }
 
-// node_modules/commander/lib/command.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/lib/command.js
 var Command = class _Command extends EventEmitter {
   /**
    * Initialize a new `Command`.
@@ -11107,7 +11087,7 @@ function useColor() {
   return void 0;
 }
 
-// node_modules/commander/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/commander/index.js
 var program = new Command();
 
 // src/core/git.ts
@@ -11136,17 +11116,13 @@ var execGit = (args, opts = {}) => {
   });
   return gitResultFromSpawn(result);
 };
-var GIT_FAILURE = "commitloreGitFailure";
-var isGitFailure = (error2) => error2 instanceof Error && error2[GIT_FAILURE] === true;
 var execGitOrThrow = (args, opts = {}) => {
   const result = execGit(args, opts);
   if (result.code !== 0) {
-    const error2 = Object.assign(
+    throw Object.assign(
       new Error(`git ${args.join(" ")} failed (exit ${result.code}): ${result.stderr.trim()}`),
       { code: result.code, stderr: result.stderr }
     );
-    Object.defineProperty(error2, GIT_FAILURE, { value: true });
-    throw error2;
   }
   return result.stdout;
 };
@@ -11235,26 +11211,8 @@ var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
 var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
-var GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
-var PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
-var PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
-var PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map(
-  (kind) => kind === "inherited" ? "inherited <sha>" : kind
-).join(" | ");
 var RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
-var parseProvenance = (value) => {
-  if (value === void 0) return void 0;
-  const trimmed = value.trim();
-  if (!PROVENANCE_VALUE_RE.test(trimmed)) return void 0;
-  if (trimmed.startsWith("inherited ")) {
-    return { kind: "inherited", sha: trimmed.slice("inherited ".length) };
-  }
-  if (trimmed === "authored" || trimmed === "drafted" || trimmed === "reconstructed" || trimmed === "unknown") {
-    return { kind: trimmed };
-  }
-  return void 0;
-};
 
 // src/core/trailers.ts
 var RECORD_ID_KEY = "Record-Id";
@@ -11527,7 +11485,7 @@ var FORMAT_WANT = {
   Supersedes: "r-[a-z0-9]{6,}",
   Expires: "YYYY-MM-DD or a free-text condition",
   Evidence: "path, path#anchor, or a URL",
-  Provenance: PROVENANCE_FORMAT_WANT,
+  Provenance: "authored | inherited <sha> | reconstructed | unknown",
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
@@ -11636,8 +11594,7 @@ var GRAMMAR_FROM_TYPES = {
   Blast: BLAST_VALUES.join(" | "),
   Undo: UNDO_VALUES.join(" | "),
   Certainty: CERTAINTY_VALUES.join(" | "),
-  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, ""),
-  Provenance: PROVENANCE_FORMAT_WANT
+  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, "")
 };
 var drift = (detail) => new Error(`SPEC \xA73 has drifted from src/core/types.ts: ${detail}`);
 var splitRow = (line2) => line2.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, "|").replace(/`/g, "").trim());
@@ -12058,26 +12015,6 @@ var REJECTION_MARKERS = [
   "\uBABB \uC4F4\uB2E4",
   "\uC548 \uC4F4\uB2E4"
 ];
-var PAST_OUTCOME_PHRASES = [
-  "did not work",
-  "didn't work",
-  "did not help",
-  "didn't help",
-  "rolled back",
-  "regressed",
-  "made things worse",
-  "made it worse",
-  "made them worse"
-];
-var PAST_OUTCOME_PATTERNS = [
-  /\btried\b.{0,200}\b(higher|slower|worse) than\b/,
-  /\btried\b.{0,200}\bmade\b.{0,80}\bworse\b/,
-  /\bmade \w+( \w+){0,4} worse\b/,
-  /\bwhen we (used|tried)\b.{0,200}\b(higher|slower|worse) than\b/,
-  /\b(higher|slower|worse) than (it was|they were|before|without)\b/,
-  /\bcaused .{0,80}\bto (spike|climb|regress|worsen)\b/,
-  /\bcaused more \b/
-];
 var NEIGHBOUR_LINES = 1;
 var DETAIL_LIMIT = 80;
 var SPACE = /\s/;
@@ -12144,12 +12081,11 @@ var neighbourhood = (source, start, length) => {
   return source.raw.slice(from, to);
 };
 var forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
-var hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) || PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 var hasRejectionContext = (source, quote) => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
     const window = forMarkers(neighbourhood(source, at, normalized.length));
-    return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
+    return REJECTION_MARKERS.some((marker) => window.includes(marker));
   });
 };
 var brief = (text) => {
@@ -12640,16 +12576,6 @@ var writeMeta = (db, key, value) => {
     value
   );
 };
-var UNREAD_COMMITS_META = "unread_commits";
-var persistUnread = (db, unread) => {
-  writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
-};
-var indexUnread = (handle) => {
-  const raw = readMeta(handle.db, UNREAD_COMMITS_META);
-  if (raw === null || raw === "") return 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-};
 var initMeta = (db, key, value) => {
   db.prepare("INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)").run(key, value);
 };
@@ -12856,17 +12782,15 @@ var rebuildIndex = (handle, opts = {}) => {
   const head = revParse(handle.cwd, "HEAD");
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
   const excluded = /* @__PURE__ */ new Map();
-  const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
-  const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
+  const records = readCommitRecords(handle.cwd, shas, excluded);
   const notesRef = revParseRef(handle.cwd, NOTES_REF2);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
-  const unread = cost.unreadCommits + cost.unreadNotes;
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
     rebuildReason: opts.reason ?? null,
     headSha: head,
-    commitsScanned: shas.length - cost.unreadCommits,
+    commitsScanned: shas.length,
     notesScanned: noteRecords.length
   };
   runInTransaction(handle.db, () => {
@@ -12882,7 +12806,6 @@ var rebuildIndex = (handle, opts = {}) => {
     stats.pathsIndexed += noteCounts.paths;
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
-    persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
@@ -12904,13 +12827,9 @@ var updateIndex = (handle, opts = {}) => {
   requireWritable(handle);
   const started = Date.now();
   const allowRebuild = opts.allowRebuild ?? true;
-  const rebuildOpts = {
-    ...opts.budget === void 0 ? {} : { budget: opts.budget },
-    ...opts.cost === void 0 ? {} : { cost: opts.cost }
-  };
   const rebuildOrRefuse = (reason) => {
     if (!allowRebuild) throw new Error(reason);
-    return rebuildIndex(handle, { reason, ...rebuildOpts });
+    return rebuildIndex(handle, { reason });
   };
   const discarded = handle.discardedReason;
   if (discarded !== null) {
@@ -12921,9 +12840,9 @@ var updateIndex = (handle, opts = {}) => {
   if (problem !== null) {
     if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
-    return rebuildIndex(handle, { reason: problem, ...rebuildOpts });
+    return rebuildIndex(handle, { reason: problem });
   }
-  if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested", ...rebuildOpts });
+  if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested" });
   const excluded = /* @__PURE__ */ new Map();
   const head = revParse(handle.cwd, "HEAD");
   if (head === null) {
@@ -12937,9 +12856,6 @@ var updateIndex = (handle, opts = {}) => {
   const last = readMeta(handle.db, "last_indexed_sha");
   const blocker = incrementalProblem(handle, head, last);
   if (blocker !== null) return rebuildOrRefuse(blocker);
-  if (opts.budget === void 0 && indexUnread(handle) > 0) {
-    return rebuildIndex(handle, { reason: "finish a budgeted partial index", ...rebuildOpts });
-  }
   const stats = { ...emptyStats(handle, started), headSha: head };
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
@@ -12964,13 +12880,37 @@ var updateIndex = (handle, opts = {}) => {
 var ensureIndex = (opts = {}) => {
   const handle = openIndex(opts);
   try {
-    return {
-      handle,
-      stats: updateIndex(handle, {
-        ...opts.budget === void 0 ? {} : { budget: opts.budget },
-        ...opts.cost === void 0 ? {} : { cost: opts.cost }
-      })
-    };
+    return { handle, stats: updateIndex(handle) };
+  } catch (error2) {
+    closeIndex(handle);
+    throw error2;
+  }
+};
+var openCurrentIndex = (opts = {}) => {
+  const cwd = opts.cwd ?? process.cwd();
+  if (!existsSync3(indexDbPath(cwd))) throw new Error("the index has no baseline commit");
+  const handle = openIndex(opts);
+  try {
+    if (handle.discardedReason !== null) throw new Error(handle.discardedReason);
+    const problem = healthProblem(handle.db);
+    if (problem !== null) throw new Error(problem);
+    const head = revParse(handle.cwd, "HEAD");
+    if (head !== null) {
+      const blocker = incrementalProblem(handle, head, readMeta(handle.db, "last_indexed_sha"));
+      if (blocker !== null) throw new Error(blocker);
+    }
+    updateIndex(handle, { allowRebuild: false });
+    const indexedHead = readMeta(handle.db, "last_indexed_sha");
+    if (indexedHead !== head) {
+      throw new Error(
+        `index is at ${indexedHead?.slice(0, 12) ?? "(no baseline)"} but HEAD is ${head?.slice(0, 12) ?? "(unborn)"}`
+      );
+    }
+    const notesRef = revParseRef(handle.cwd, NOTES_REF2);
+    if (readMeta(handle.db, "notes_ref_sha") !== notesRef) {
+      throw new Error("index does not match refs/notes/commitlore");
+    }
+    return handle;
   } catch (error2) {
     closeIndex(handle);
     throw error2;
@@ -14096,50 +14036,6 @@ import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "
 // src/core/capture-prepare.ts
 import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
 
-// src/core/capture-outcome.ts
-var CAPTURE_KIND = "commitloreCaptureKind";
-var markCaptureError = (error2, kind) => {
-  Object.defineProperty(error2, CAPTURE_KIND, { value: kind });
-  return error2;
-};
-var captureKindOf = (error2) => {
-  if (!(error2 instanceof Error)) return void 0;
-  const kind = error2[CAPTURE_KIND];
-  if (kind === "usage" || kind === "rejected" || kind === "operational" || kind === "internal") {
-    return kind;
-  }
-  return void 0;
-};
-var errnoCode = (error2) => {
-  if (typeof error2 !== "object" || error2 === null || !("code" in error2)) return void 0;
-  return typeof error2.code === "string" ? error2.code : void 0;
-};
-var classifyCaptureError = (error2) => {
-  const marked = captureKindOf(error2);
-  if (marked !== void 0) return marked;
-  if (isGitFailure(error2)) return "operational";
-  const code = errnoCode(error2);
-  if (code === "ENOENT" || code === "EACCES" || code === "EPERM" || code === "ENOTDIR" || code === "EROFS") {
-    return "operational";
-  }
-  return "internal";
-};
-var exitCodeForCaptureOutcome = (outcome) => {
-  switch (outcome) {
-    case "staged":
-    case "empty":
-    case "rejected":
-      return 0;
-    case "usage":
-      return 2;
-    case "operational":
-      return 3;
-    case "internal":
-      return 4;
-  }
-};
-var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-
 // src/core/grade.ts
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
 
@@ -14374,6 +14270,7 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
 // src/core/grade.ts
 var PROVENANCE_KEY = "Provenance";
+var INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var INJECTION_PATTERNS = [
   {
@@ -14754,14 +14651,11 @@ var scanInjection = (text) => {
   ).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
-var renderedTrailer = (trailer) => `${trailer.key}: ${trailer.value}`;
-var scanTrailer = (trailer) => scanInjection(renderedTrailer(trailer));
-var identityCarriesInjection = (recordId) => scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
   for (const trailer of record2.trailers) {
-    const patterns = scanTrailer(trailer);
+    const patterns = scanInjection(trailer.value);
     if (patterns.length === 0) continue;
     matchedKeys.add(trailer.key);
     patterns.forEach((pattern) => matchedPatterns.add(pattern));
@@ -14775,8 +14669,15 @@ var scanRecord = (record2) => {
 };
 var provenanceOf = (record2) => {
   if (record2.provenance !== void 0) return record2.provenance;
-  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0];
-  return parseProvenance(raw) ?? { kind: "unknown" };
+  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0]?.trim();
+  if (raw === void 0) return { kind: "unknown" };
+  if (raw === "authored") return { kind: "authored" };
+  if (raw === "drafted") return { kind: "drafted" };
+  if (raw === "reconstructed") return { kind: "reconstructed" };
+  const inherited = INHERITED_RE.exec(raw);
+  const sha = inherited?.[1];
+  if (sha !== void 0) return { kind: "inherited", sha };
+  return { kind: "unknown" };
 };
 var lifecycleOf = (record2, at, folded) => {
   if (record2.lifecycle !== void 0 && record2.lifecycle !== "active") return record2.lifecycle;
@@ -14941,7 +14842,6 @@ var gradeDeclarations = (record2, declarations2, ctx) => {
 var LIMIT_KEY = "Limit";
 var RULED_OUT_KEY = "Ruled-out";
 var WARN_KEY = "Warn";
-var CONSUMER_SCAN_BUDGET_MS = 3e3;
 var RECORD_ID_KEY3 = "Record-Id";
 var PROVENANCE_KEY2 = "Provenance";
 var LIFECYCLE_KEYS = [RECORD_ID_KEY3, "Supersedes", "Expires"];
@@ -14959,17 +14859,16 @@ var normalizePaths = (opts) => {
   }
   return kept;
 };
-var scanSource = (cwd, diagnostics, budgetMs, now) => {
+var scanSource = (cwd, diagnostics, budgetMs) => {
   let rows;
   let corpusPasses = 0;
   const cost = { unreadCommits: 0, unreadNotes: 0 };
-  const clock = now ?? Date.now;
   return {
     fetch: (query) => {
       if (rows === void 0) {
         rows = scanTrailers(
           {},
-          budgetMs === void 0 ? { cwd } : { cwd, budget: { deadline: clock() + budgetMs, now: clock }, cost }
+          budgetMs === void 0 ? { cwd } : { cwd, budget: { deadline: Date.now() + budgetMs }, cost }
         );
         corpusPasses += 1;
       }
@@ -14983,20 +14882,15 @@ var scanSource = (cwd, diagnostics, budgetMs, now) => {
     diagnostics
   };
 };
-var openSource = (cwd, noIndex, budgetMs, now) => {
-  if (noIndex) return scanSource(cwd, [], budgetMs, now);
-  const cost = { unreadCommits: 0, unreadNotes: 0 };
-  const clock = now ?? Date.now;
+var openSource = (cwd, noIndex, budgetMs) => {
+  if (noIndex) return scanSource(cwd, [], budgetMs);
   try {
-    const { handle } = ensureIndex({
-      cwd,
-      ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
-    });
+    const handle = openCurrentIndex({ cwd });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
       corpusPasses: () => 0,
-      unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
+      unreadCommits: () => 0,
       close: () => closeIndex(handle),
       diagnostics: []
     };
@@ -15004,8 +14898,7 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
     return scanSource(
       cwd,
       [`the index is unavailable (${errorMessage3(error2)}); answering with a full scan`],
-      budgetMs,
-      now
+      budgetMs
     );
   }
 };
@@ -15196,6 +15089,17 @@ var mergeTrailers2 = (into, from) => {
     if (!duplicate) into.push({ ...trailer });
   }
 };
+var parseProvenance = (value) => {
+  if (value === void 0) return void 0;
+  const trimmed = value.trim();
+  if (trimmed === "authored") return { kind: "authored" };
+  if (trimmed === "reconstructed") return { kind: "reconstructed" };
+  if (trimmed === "unknown") return { kind: "unknown" };
+  if (trimmed === "inherited" || trimmed.startsWith("inherited ")) {
+    return { kind: "inherited", sha: trimmed.slice("inherited".length).trim() };
+  }
+  return void 0;
+};
 var gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) => {
   if (merged.length === 0) return;
   const authors = authorsOf(
@@ -15300,7 +15204,7 @@ var runQuery = (opts = {}) => {
   if (Number.isNaN(cutoff)) throw new Error("runQuery: opts.at is not a valid Date");
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
   const diagnostics = [...source.diagnostics, ...scope.diagnostics];
   try {
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
@@ -15328,7 +15232,7 @@ var runQuery = (opts = {}) => {
     const unread = source.unreadCommits();
     if (unread > 0) {
       diagnostics.push(
-        source.fromIndex ? `the index is incomplete: the build stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to finish the index` : `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
+        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
       );
     }
     const shallow = hasShallowHistory(cwd);
@@ -15362,29 +15266,19 @@ var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.ke
 
 // src/core/guard.ts
 var renderGuardMatch = (match) => {
+  const identity = {
+    recordId: match.recordId ?? null,
+    sha: match.sha,
+    score: match.score,
+    signals: [...match.signals]
+  };
   switch (match.trust) {
-    case "blocked": {
-      const rawId = match.recordId ?? null;
-      const identityUnsafe = rawId !== null && (!RECORD_ID_RE.test(rawId) || identityCarriesInjection(rawId));
-      return {
-        recordId: identityUnsafe ? null : rawId,
-        sha: match.sha,
-        score: match.score,
-        signals: match.signals.filter((signal) => {
-          if (identityUnsafe && rawId !== null && signal.includes(rawId)) return false;
-          return scanInjection(signal).length === 0;
-        }),
-        trust: match.trust,
-        withheld: BLOCKED_RECORD_WITHHELD
-      };
-    }
+    case "blocked":
+      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
     case "claim":
     case "directive":
       return {
-        recordId: match.recordId ?? null,
-        sha: match.sha,
-        score: match.score,
-        signals: [...match.signals],
+        ...identity,
         trust: match.trust,
         alternative: match.alternative,
         reason: match.reason
@@ -15807,7 +15701,7 @@ var guard = (opts) => {
     history: result.history,
     shallow: result.shallow,
     notes: result.notes,
-    incomplete: result.history === "unavailable" || result.notes === "unfetched" || result.unreadCommits > 0
+    incomplete: result.history === "unavailable" || result.notes === "unfetched"
   };
   if (proposal.stems.size === 0 && ids.size === 0) {
     return { matches: [], ...availability };
@@ -15833,7 +15727,7 @@ var guard = (opts) => {
 
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15856,62 +15750,6 @@ var pendingFilePath = (nonce, cwd) => {
   const dir = pendingDir(cwd);
   return resolve3(dir, `${nonce}.json`);
 };
-var pendingLockPath = (nonce, cwd) => `${pendingFilePath(nonce, cwd)}.lock`;
-var pidIsAlive = (pid) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-var tryLockPending = (nonce, cwd) => {
-  validateNonce(nonce);
-  const lockPath = pendingLockPath(nonce, cwd);
-  mkdirSync2(pendingDir(cwd), { recursive: true });
-  const create = () => {
-    writeFileSync2(lockPath, `${process.pid}
-`, { flag: "wx" });
-    return { held: true, created: true };
-  };
-  try {
-    return create();
-  } catch (error2) {
-    const code = typeof error2 === "object" && error2 !== null && "code" in error2 && typeof error2.code === "string" ? error2.code : "unknown";
-    if (code !== "EEXIST") throw error2;
-    let owner = "";
-    try {
-      owner = readFileSync4(lockPath, "utf8").trim();
-    } catch {
-      return { held: false, created: false };
-    }
-    if (owner === String(process.pid)) return { held: true, created: false };
-    const pid = Number(owner);
-    if (!Number.isInteger(pid) || pid <= 0 || pidIsAlive(pid)) {
-      return { held: false, created: false };
-    }
-    try {
-      unlinkSync(lockPath);
-    } catch {
-      return { held: false, created: false };
-    }
-    try {
-      return create();
-    } catch {
-      return { held: false, created: false };
-    }
-  }
-};
-var unlockPending = (nonce, cwd) => {
-  validateNonce(nonce);
-  const lockPath = pendingLockPath(nonce, cwd);
-  try {
-    const owner = readFileSync4(lockPath, "utf8").trim();
-    if (owner !== String(process.pid)) return;
-    unlinkSync(lockPath);
-  } catch {
-  }
-};
 var atomicWriteJson = (filePath, data) => {
   const dir = resolve3(filePath, "..");
   mkdirSync2(dir, { recursive: true });
@@ -15925,8 +15763,7 @@ var atomicWriteJson = (filePath, data) => {
       unlinkSync(temporary);
     } catch {
     }
-    const thrown = error2 instanceof Error ? error2 : new Error(String(error2));
-    throw markCaptureError(thrown, "operational");
+    throw error2;
   }
 };
 var COMMIT_ID_RE = /^[0-9a-f]{40}$/;
@@ -15940,10 +15777,6 @@ var headHasMovedPast = (baseHead, head) => {
   if (head === null) return false;
   if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
   return baseHead !== head;
-};
-var pendingIsStale = (record2, head) => {
-  if (record2.phase === "consumed") return false;
-  return headHasMovedPast(record2.base_head, head);
 };
 var makePreparedPending = (opts) => {
   validateNonce(opts.nonce);
@@ -15989,8 +15822,6 @@ var createPending = (opts) => {
   return nonce;
 };
 var errorCode = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 && typeof error2.code === "string" ? error2.code : "unknown";
-var UNREADABLE_PENDING_FILE = "commitloreUnreadablePendingFile";
-var isUnreadablePendingFile = (error2) => error2 instanceof Error && error2[UNREADABLE_PENDING_FILE] === true;
 var listPendingNonces = (cwd) => {
   let dir;
   try {
@@ -16015,18 +15846,12 @@ var listPendingNonces = (cwd) => {
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
   const filePath = pendingFilePath(nonce, opts.cwd);
+  if (!existsSync5(filePath)) return null;
   let content;
   try {
     content = readFileSync4(filePath, "utf8");
-  } catch (error2) {
-    const code = errorCode(error2);
-    if (code === "ENOENT" || code === "ENOTDIR") return null;
-    const unreadable = new Error(
-      `Could not read pending file for nonce ${nonce} at ${filePath} (${code})`
-    );
-    Object.defineProperty(unreadable, UNREADABLE_PENDING_FILE, { value: true });
-    unreadable.cause = error2;
-    throw unreadable;
+  } catch {
+    return null;
   }
   let parsed;
   try {
@@ -16047,31 +15872,25 @@ var readPending = (nonce, opts) => {
 };
 var storeVerification = (nonce, opts) => {
   validateNonce(nonce);
-  const lock = tryLockPending(nonce, opts.cwd);
-  if (!lock.held) return false;
-  try {
-    const record2 = readPending(nonce, { cwd: opts.cwd });
-    if (!record2) return false;
-    if (record2.phase !== "prepared") return false;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const updated = {
-      ...record2,
-      phase: "verified",
-      verified_at: now,
-      // CEO amendment 1: expires_at remains null in verified phase
-      expires_at: null,
-      records: opts.accepted,
-      evidence_hash: opts.evidence_hash,
-      validation_result: opts.validation_result,
-      overlap_check: opts.overlap_check,
-      incomplete: opts.incomplete
-    };
-    const filePath = pendingFilePath(nonce, opts.cwd);
-    atomicWriteJson(filePath, updated);
-    return true;
-  } finally {
-    if (lock.created) unlockPending(nonce, opts.cwd);
-  }
+  const record2 = readPending(nonce, { cwd: opts.cwd });
+  if (!record2) return false;
+  if (record2.phase !== "prepared") return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const updated = {
+    ...record2,
+    phase: "verified",
+    verified_at: now,
+    // CEO amendment 1: expires_at remains null in verified phase
+    expires_at: null,
+    records: opts.accepted,
+    evidence_hash: opts.evidence_hash,
+    validation_result: opts.validation_result,
+    overlap_check: opts.overlap_check,
+    incomplete: opts.incomplete
+  };
+  const filePath = pendingFilePath(nonce, opts.cwd);
+  atomicWriteJson(filePath, updated);
+  return true;
 };
 var stagePending = (nonce, opts) => {
   validateNonce(nonce);
@@ -16112,10 +15931,6 @@ var deletePending = (nonce, opts) => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   try {
     unlinkSync(filePath);
-    try {
-      unlinkSync(pendingLockPath(nonce, opts.cwd));
-    } catch {
-    }
     return true;
   } catch {
     return false;
@@ -16187,19 +16002,13 @@ var prepareValues = (opts) => {
   const { cwd, transcript, snapshot } = opts;
   const baseHead = snapshot?.base_head ?? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
   if (!isObjectId(baseHead)) {
-    throw markCaptureError(
-      new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?"),
-      "operational"
-    );
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
   const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
   const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
   if (!isObjectId(stagedTreeOid)) {
-    throw markCaptureError(
-      new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?"),
-      "operational"
-    );
+    throw new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?");
   }
   const sourceHashes = {
     transcript: createHash2("sha256").update(transcript).digest("hex"),
@@ -16207,19 +16016,13 @@ var prepareValues = (opts) => {
   };
   const policy = resolvePolicy(cwd);
   if (policy.policy.mode === "off") {
-    throw markCaptureError(
-      new Error(
-        `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
-      ),
-      "rejected"
+    throw new Error(
+      `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
     );
   }
   if (opts.unattended === true && !(policy.policy.mode === "auto" && policy.policy.unattended)) {
-    throw markCaptureError(
-      new Error(
-        `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
-      ),
-      "rejected"
+    throw new Error(
+      `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
     );
   }
   const diffPaths = extractPathsFromDiff(diff);
@@ -16319,38 +16122,6 @@ var classifyResult = (accepted, rejected) => {
   if (rejected.length === 0) return "pass";
   return "partial";
 };
-var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
-  if (hasShallowHistory(cwd)) return [...accepted];
-  const historical = [...historyIds].map((id) => ({
-    trailers: [{ key: "Record-Id", value: id }]
-  }));
-  let remaining = [...accepted];
-  let dropped = true;
-  while (dropped) {
-    dropped = false;
-    const next = [];
-    for (const verified of remaining) {
-      const siblings = remaining.filter((other) => other !== verified).map((other) => ({ trailers: other.record.trailers }));
-      const dangling = findDanglingRefs([...historical, ...siblings], [
-        { trailers: verified.record.trailers }
-      ]);
-      if (dangling.length === 0) {
-        next.push(verified);
-        continue;
-      }
-      dropped = true;
-      rejected.push({
-        record: verified.record,
-        reason: "dangling-ref",
-        detail: dangling.map(
-          (violation) => `${violation.key}: ${JSON.stringify(violation.got)} (${violation.rule}, want ${violation.want})`
-        ).join("; ")
-      });
-    }
-    remaining = next;
-  }
-  return remaining;
-};
 var loadCaptureVerificationHistory = (cwd) => {
   try {
     const recordIds = /* @__PURE__ */ new Set();
@@ -16365,38 +16136,12 @@ var loadCaptureVerificationHistory = (cwd) => {
       ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
       activeCanonicalTuples.add(tuple);
     }
-    return {
-      recordIds,
-      activeCanonicalTuples,
-      incomplete: queryResult.shallow || queryResult.unreadCommits > 0
-    };
+    return { recordIds, activeCanonicalTuples };
   } catch {
     return null;
   }
 };
 var verifyCaptureRecords = (opts) => {
-  const { nonce, cwd } = opts;
-  let createdLock = false;
-  if (opts.readOnly !== true) {
-    const lock = tryLockPending(nonce, cwd);
-    if (!lock.held) {
-      return {
-        accepted: [],
-        rejected: [],
-        validation_result: "empty",
-        incomplete: true,
-        overlap_check: "canonical_exact_only"
-      };
-    }
-    createdLock = lock.created;
-  }
-  try {
-    return runVerifyCaptureRecords(opts);
-  } finally {
-    if (createdLock) unlockPending(nonce, cwd);
-  }
-};
-var runVerifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
   const rejected = [];
@@ -16511,9 +16256,6 @@ var runVerifyCaptureRecords = (opts) => {
       accepted.push(verified);
       if (id) reservedRecordIds.add(id);
     }
-    const surviving = rejectDanglingRefs(accepted, rejected, history.recordIds, cwd);
-    accepted.length = 0;
-    accepted.push(...surviving);
     if (resolvePolicy(cwd).policy.mode === "auto") {
       for (const verified of accepted) {
         const trailers = verified.record.trailers.filter(
@@ -16541,12 +16283,11 @@ var runVerifyCaptureRecords = (opts) => {
       accepted,
       rejected,
       validation_result: validationResult,
-      incomplete: history.incomplete,
+      incomplete: false,
       overlap_check: "canonical_exact_only"
     };
     return settle(result);
-  } catch (error2) {
-    if (isUnreadablePendingFile(error2)) throw error2;
+  } catch {
     const result = {
       accepted: [],
       rejected: [],
@@ -16586,43 +16327,28 @@ var stageCaptureRecord = (opts) => {
   if (record2.incomplete) return null;
   const policy = resolvePolicy(cwd);
   if (record2.records.length > policy.policy.max_records_per_commit) {
-    throw markCaptureError(
-      new Error(
-        `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
-      ),
-      "internal"
+    throw new Error(
+      `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
     );
   }
   const currentHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
   if (currentHead !== record2.base_head) {
-    throw markCaptureError(
-      new Error(
-        `Staging rejected: HEAD moved since prepare (expected ${record2.base_head}, got ${currentHead})`
-      ),
-      "operational"
+    throw new Error(
+      `Staging rejected: HEAD moved since prepare (expected ${record2.base_head}, got ${currentHead})`
     );
   }
   const currentDiff = execGitOrThrow(["diff", "--cached"], { cwd });
   const currentDiffHash = createHash4("sha256").update(currentDiff).digest("hex");
   if (currentDiffHash !== record2.staged_diff_hash) {
-    throw markCaptureError(
-      new Error("Staging rejected: staged diff changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: staged diff changed since prepare");
   }
   const currentTree = execGitOrThrow(["write-tree"], { cwd }).trim();
   if (currentTree !== record2.staged_tree_oid) {
-    throw markCaptureError(
-      new Error("Staging rejected: staged tree changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: staged tree changed since prepare");
   }
   const currentPolicy = policy.identityHash;
   if (currentPolicy !== record2.policy_identity_hash) {
-    throw markCaptureError(
-      new Error("Staging rejected: policy identity changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: policy identity changed since prepare");
   }
   const stageOpts = expiryMinutes !== void 0 ? { cwd, expiryMinutes } : { cwd };
   const success3 = stagePending(nonce, stageOpts);
@@ -16869,7 +16595,7 @@ var verificationHistory = (records) => {
     const tuple = captureCanonicalTuple(state.resolvedTrailers);
     if (tuple !== "") activeCanonicalTuples.add(tuple);
   }
-  return { recordIds, activeCanonicalTuples, incomplete: false };
+  return { recordIds, activeCanonicalTuples };
 };
 var historiesBeforeCommit = (cwd) => {
   const records = readHistoricalRecords(cwd);
@@ -17160,7 +16886,7 @@ var seedTrustedAuthor = (cwd) => {
 };
 
 // src/core/pending-gc.ts
-import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var UNSTAMPED_RETENTION_MS = 24 * 60 * 60 * 1e3;
@@ -17190,7 +16916,7 @@ var gcPending = (cwd) => {
   const removed = [];
   const kept = [];
   const dir = resolvePendingDir(cwd);
-  if (!existsSync5(dir)) return { removed, kept };
+  if (!existsSync6(dir)) return { removed, kept };
   let files;
   try {
     files = readdirSync2(dir).filter((f) => f.endsWith(".json"));
@@ -17344,35 +17070,10 @@ var formatCaptureShadow = (result) => {
   return `${lines.join("\n")}
 `;
 };
-var errnoCode2 = (error2) => {
-  if (typeof error2 !== "object" || error2 === null || !("code" in error2)) return void 0;
-  return typeof error2.code === "string" ? error2.code : void 0;
-};
-var readCallerFile = (path2) => {
-  try {
-    return readFileSync6(path2, "utf8");
-  } catch (error2) {
-    const wrapped = new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf2(error2)}`);
-    throw markCaptureError(wrapped, errnoCode2(error2) === "ENOENT" ? "usage" : "operational");
-  }
-};
-var failureResult = (error2) => ({
-  outcome: classifyCaptureError(error2),
-  nonce: null,
-  staged: false,
-  error: messageOf2(error2)
-});
 var runCapture = (opts) => {
-  try {
-    return runCapturePipeline(opts);
-  } catch (error2) {
-    return failureResult(error2);
-  }
-};
-var runCapturePipeline = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
-  const transcript = readCallerFile(transcriptPath);
-  const diff = diffPath ? readCallerFile(diffPath) : execGitOrThrow(["diff", "--cached"], { cwd });
+  const transcript = readFileSync6(transcriptPath, "utf8");
+  const diff = diffPath ? readFileSync6(diffPath, "utf8") : execGitOrThrow(["diff", "--cached"], { cwd });
   const prepareResult = prepareCaptureContext({
     cwd,
     transcript,
@@ -17387,15 +17088,9 @@ commitlore capture: the built-in defaults were used for this capture
     );
   }
   if (!draftPath) {
-    return {
-      outcome: "empty",
-      nonce: null,
-      staged: false,
-      prompt: prepareResult.prompt,
-      guard_advisory: prepareResult.guard_advisory
-    };
+    return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
   }
-  const rawDraft = readCallerFile(draftPath);
+  const rawDraft = readFileSync6(draftPath, "utf8");
   let draftRecords;
   const draftRejections = [];
   const collect3 = (review) => {
@@ -17434,73 +17129,12 @@ commitlore capture: the built-in defaults were used for this capture
       reason: rejection.reason
     }))
   ];
-  if (stagedNonce !== null) {
-    return {
-      outcome: "staged",
-      nonce: stagedNonce,
-      staged: true,
-      guard_advisory: prepareResult.guard_advisory,
-      rejected
-    };
-  }
   return {
-    outcome: rejected.length > 0 ? "rejected" : "empty",
-    nonce: prepareResult.nonce,
-    staged: false,
+    nonce: stagedNonce ?? prepareResult.nonce,
+    staged: stagedNonce !== null,
     guard_advisory: prepareResult.guard_advisory,
     rejected
   };
-};
-var writeGuardMatches = (advisory) => {
-  for (const match of advisory.matches) {
-    if (match.trust === "blocked") {
-      process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
-`);
-    } else {
-      process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
-`);
-    }
-  }
-};
-var emitCaptureOutcome = (result, opts) => {
-  if (opts.json) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-  } else if (result.prompt) {
-    process.stdout.write(result.prompt);
-    if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-      process.stdout.write("\n--- guard advisory ---\n");
-      process.stdout.write(`${result.guard_advisory.disclosure}
-`);
-      writeGuardMatches(result.guard_advisory);
-    } else if (result.guard_advisory) {
-      process.stdout.write("\n--- guard advisory ---\n");
-      process.stdout.write(`${result.guard_advisory.disclosure}
-`);
-    }
-  } else if (result.staged) {
-    process.stdout.write(`staged: ${result.nonce}
-`);
-    if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-      process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):
-`);
-      writeGuardMatches(result.guard_advisory);
-    }
-  } else if (result.outcome === "empty" || result.outcome === "rejected") {
-    process.stdout.write("no record staged\n");
-  }
-  for (const rejection of result.rejected ?? []) {
-    process.stderr.write(
-      `commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}
-`
-    );
-  }
-  if (result.error !== void 0) {
-    const prefix = opts.humanPrefix ?? "commitlore capture";
-    process.stderr.write(`${prefix}: ${result.error}
-`);
-  }
-  process.exitCode = exitCodeForCaptureOutcome(result.outcome);
 };
 var register3 = (program3) => {
   const capture = program3.command("capture").description(
@@ -17508,9 +17142,6 @@ var register3 = (program3) => {
   ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
     "--unattended",
     `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
-  ).addHelpText(
-    "after",
-    "\nExit codes: 0 staged, empty, or rejected (rejected names the reason), 2 usage, 3 operational (git, filesystem, host), 4 internal (unanticipated exception)."
   ).action((options) => {
     if (options.shadow === true) {
       if (options.since === void 0) {
@@ -17529,9 +17160,9 @@ var register3 = (program3) => {
         return;
       }
       try {
-        const result2 = runCaptureShadow({ cwd: process.cwd(), since: options.since });
-        process.stdout.write(options.json === true ? `${JSON.stringify(result2, null, 2)}
-` : formatCaptureShadow(result2));
+        const result = runCaptureShadow({ cwd: process.cwd(), since: options.since });
+        process.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}
+` : formatCaptureShadow(result));
         process.exitCode = 0;
       } catch (error2) {
         process.stderr.write(
@@ -17543,36 +17174,82 @@ var register3 = (program3) => {
       return;
     }
     if (options.transcript === void 0) {
-      emitCaptureOutcome(
-        {
-          outcome: "usage",
-          nonce: null,
-          staged: false,
-          error: "required option '--transcript <path>' not specified"
-        },
-        { json: options.json === true, humanPrefix: "error" }
-      );
+      process.stderr.write("error: required option '--transcript <path>' not specified\n");
+      process.exitCode = 2;
       return;
     }
-    const cwd = process.cwd();
-    const runOpts = { transcriptPath: options.transcript, cwd };
-    if (options.diff !== void 0) runOpts.diffPath = options.diff;
-    if (options.draft !== void 0) runOpts.draftPath = options.draft;
-    runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
-    if (options.unattended === true) runOpts.unattended = true;
-    let result = runCapture(runOpts);
-    if (options.out && result.nonce) {
-      try {
-        writeFileSync3(options.out, result.nonce + "\n");
-      } catch (error2) {
-        result = {
-          ...result,
-          outcome: "operational",
-          error: `cannot write ${JSON.stringify(options.out)}: ${messageOf2(error2)}`
-        };
+    try {
+      const cwd = process.cwd();
+      const runOpts = { transcriptPath: options.transcript, cwd };
+      if (options.diff !== void 0) runOpts.diffPath = options.diff;
+      if (options.draft !== void 0) runOpts.draftPath = options.draft;
+      runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
+      if (options.unattended === true) runOpts.unattended = true;
+      const result = runCapture(runOpts);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      } else if (result.prompt) {
+        process.stdout.write(result.prompt);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        } else if (result.guard_advisory) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+        }
+      } else if (result.staged) {
+        process.stdout.write(`staged: ${result.nonce}
+`);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        }
+      } else {
+        process.stdout.write("no record staged\n");
       }
+      for (const rejection of result.rejected ?? []) {
+        process.stderr.write(
+          `commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}
+`
+        );
+      }
+      if (options.out && result.nonce) {
+        writeFileSync3(options.out, result.nonce + "\n");
+      }
+      process.exitCode = 0;
+    } catch (error2) {
+      if (error2 instanceof Error && "code" in error2 && error2.code === "ENOENT") {
+        process.stderr.write(`commitlore capture: ${error2.message}
+`);
+        process.exitCode = 2;
+        return;
+      }
+      process.stderr.write(
+        `commitlore capture: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
+      process.exitCode = 0;
     }
-    emitCaptureOutcome(result, { json: options.json === true });
   });
   capture.command("gc").description("remove expired pending transaction files").option("--json", "emit structured JSON output").action((options, command) => {
     const parentOpts = command.parent?.opts();
@@ -17642,21 +17319,21 @@ CommitLore-Version: 2.0.0
 
 // src/commands/init.ts
 import { createInterface } from "node:readline";
-import { existsSync as existsSync17 } from "node:fs";
+import { existsSync as existsSync18 } from "node:fs";
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync7, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
 var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
-var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure = (settingsPath, message) => ({
   code: 2,
@@ -17675,12 +17352,12 @@ var success = (status, lines, changed) => ({
   changed
 });
 var load = (settingsPath) => {
-  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
+  if (!existsSync7(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
     raw = readFileSync7(settingsPath, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
   }
   if (raw.trim() === "") return { settings: {}, existed: true };
   let parsed;
@@ -17688,7 +17365,7 @@ var load = (settingsPath) => {
     parsed = JSON.parse(raw);
   } catch (error2) {
     throw new Error(
-      `${settingsPath} is not valid JSON (${messageOf3(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
+      `${settingsPath} is not valid JSON (${messageOf2(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
     );
   }
   if (!isPlainObject(parsed)) {
@@ -17733,7 +17410,7 @@ var readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
       state: "unreadable",
       entries: 0,
       commands: [],
-      problem: messageOf3(error2)
+      problem: messageOf2(error2)
     };
   }
   const commands = ourCommands(loaded.settings);
@@ -17788,7 +17465,7 @@ var writeAtomic = (settingsPath, settings) => {
       unlinkSync3(temporary);
     } catch {
     }
-    throw new Error(`cannot write ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot write ${settingsPath}: ${messageOf2(error2)}`);
   }
 };
 var validateCommand = (command) => {
@@ -17807,7 +17484,7 @@ var installClaudeHook = (input) => {
     validateCommand(command);
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   const before = ourCommands(loaded.settings);
   const { groups } = withoutOurs(eventGroups(loaded.settings));
@@ -17821,7 +17498,7 @@ var installClaudeHook = (input) => {
     try {
       writeAtomic(settingsPath, next);
     } catch (error2) {
-      return failure(settingsPath, messageOf3(error2));
+      return failure(settingsPath, messageOf2(error2));
     }
   }
   const headline = {
@@ -17844,7 +17521,7 @@ var uninstallClaudeHook = (input) => {
   try {
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   if (!loaded.existed) {
     return success(readClaudeHookStatus(settingsPath, command), [
@@ -17860,7 +17537,7 @@ var uninstallClaudeHook = (input) => {
   try {
     writeAtomic(settingsPath, withGroups(loaded.settings, groups));
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   return success(readClaudeHookStatus(settingsPath, command), [
     `removed ${removed} injection hook entr${removed === 1 ? "y" : "ies"}: ${settingsPath}`
@@ -18188,7 +17865,7 @@ var checkInjectRuntime = (ctx) => {
 };
 
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
-import { existsSync as existsSync7, readFileSync as readFileSync9 } from "node:fs";
+import { existsSync as existsSync8, readFileSync as readFileSync9 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 
 // src/core/hook-target.ts
@@ -18471,7 +18148,7 @@ var checkHook = (ctx, runtime) => {
     ...describeRecordedHookTarget(target),
     ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
   ].join("; ");
-  if (!existsSync7(path2)) {
+  if (!existsSync8(path2)) {
     return check(
       id,
       category,
@@ -18577,7 +18254,7 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync9, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
 var checkHookRuntime = (ctx) => {
@@ -18608,7 +18285,7 @@ var checkHookRuntime = (ctx) => {
     );
   }
   const hook = resolve8(cwd, located.stdout.trim());
-  if (!existsSync8(hook)) {
+  if (!existsSync9(hook)) {
     return check(
       id,
       category,
@@ -18728,7 +18405,7 @@ var summarise = (record2, head) => ({
   created_at: record2.created_at,
   expires_at: record2.expires_at,
   base_head: record2.base_head,
-  stale: pendingIsStale(record2, head),
+  stale: headHasMovedPast(record2.base_head, head),
   gc_eligible: gcEligible(record2)
 });
 var runPendingList = (opts) => {
@@ -18794,7 +18471,7 @@ var runPendingShow = (opts) => {
   return {
     transaction: {
       ...record2,
-      stale: pendingIsStale(record2, head),
+      stale: headHasMovedPast(record2.base_head, head),
       gc_eligible: gcEligible(record2)
     },
     error: null
@@ -18985,7 +18662,7 @@ var checkPendingBacklog = (ctx) => {
   }
   const stranded = listing.transactions.filter((transaction) => transaction.stale);
   if (stranded.length === 0) {
-    const held = listing.transactions.filter((transaction) => transaction.phase !== "consumed").length;
+    const held = listing.transactions.length;
     return check(
       id,
       category,
@@ -19030,7 +18707,7 @@ var checkPendingBacklog = (ctx) => {
 // src/core/mcp-registration.ts
 import { randomBytes as randomBytes4 } from "node:crypto";
 import {
-  existsSync as existsSync9,
+  existsSync as existsSync10,
   lstatSync as lstatSync2,
   readFileSync as readFileSync10,
   renameSync as renameSync3,
@@ -19044,7 +18721,7 @@ var MCP_SERVER_KEY = "commitlore";
 var MCP_SERVER_COMMAND = "commitlore";
 var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
 var registeredMcpCommand = (cwd) => {
   const path2 = mcpRegistrationPath(cwd);
@@ -19238,12 +18915,12 @@ var registerCommitloreMcpServer = (cwd) => {
   if (path2 === null) {
     return { ok: false, path: null, error: "no git repository found here \u2014 MCP registration needs a repository" };
   }
-  if (!existsSync9(path2)) {
+  if (!existsSync10(path2)) {
     try {
       writeAtomic2(path2, freshConfig());
       return { ok: true, path: path2, state: "created", changed: true };
     } catch (error2) {
-      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf4(error2)}` };
+      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf3(error2)}` };
     }
   }
   try {
@@ -19251,19 +18928,19 @@ var registerCommitloreMcpServer = (cwd) => {
       return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is a symbolic link \u2014 left unchanged` };
     }
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf3(error2)}` };
   }
   let source;
   try {
     source = readFileSync10(path2, "utf8");
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf3(error2)}` };
   }
   let parsed;
   try {
     parsed = JSON.parse(source);
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf3(error2)}` };
   }
   if (!isJsonObject(parsed)) {
     return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} must contain a JSON object \u2014 left unchanged` };
@@ -19313,7 +18990,7 @@ var registerCommitloreMcpServer = (cwd) => {
     writeAtomic2(path2, next);
     return { ok: true, path: path2, state: "merged", changed: true };
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf3(error2)}` };
   }
 };
 
@@ -20302,13 +19979,13 @@ var checkIndex = (ctx) => {
 };
 
 // src/commands/doctor/checks/runtime-cli-runtime.ts
-import { existsSync as existsSync10 } from "node:fs";
+import { existsSync as existsSync11 } from "node:fs";
 var checkRuntime = (ctx) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const category = "runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync10(path2));
+  const entry = candidates.find((path2) => existsSync11(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -20387,65 +20064,6 @@ var checkRuntime = (ctx) => {
         entry,
         version: boundedExcerpt(run.stdout).firstLine,
         ...streamEvidence("stdout", run.stdout)
-      }
-    }
-  );
-};
-
-// src/commands/doctor/checks/runtime-installation-integrity.ts
-var SHIPPED_ASSETS = [
-  ["package.json"],
-  ["spec", "schema", "record.schema.json"],
-  ["spec", "SPEC.md"]
-];
-var relativeOf = (segments) => segments.join("/");
-var checkInstallationIntegrity = (_ctx) => {
-  const title = "installation integrity";
-  const id = "installation-integrity";
-  const category = "runtime";
-  const present2 = [];
-  const missing = [];
-  for (const segments of SHIPPED_ASSETS) {
-    try {
-      readInstalledFile(...segments);
-      present2.push(relativeOf(segments));
-    } catch (error2) {
-      if (!isMissingInstalledFile(error2)) throw error2;
-      const detail = error2 instanceof Error ? error2.message : String(error2);
-      missing.push({ relative: relativeOf(segments), detail });
-    }
-  }
-  const [first] = missing;
-  if (first !== void 0) {
-    return check(
-      id,
-      category,
-      title,
-      "fail",
-      first.detail,
-      null,
-      false,
-      void 0,
-      {
-        evidence: {
-          missing: missing.map((entry) => entry.relative).join(", "),
-          present: present2.join(", ") || "none"
-        }
-      }
-    );
-  }
-  return check(
-    id,
-    category,
-    title,
-    "ok",
-    `${String(present2.length)} shipped files are present and readable`,
-    null,
-    false,
-    void 0,
-    {
-      evidence: {
-        files: present2.join(", ")
       }
     }
   );
@@ -20781,7 +20399,6 @@ var hookRuntimeOf = (ctx) => {
 var selectedHookRuntimeOf = (ctx) => ctx.selectedIds?.has("hook-runtime") === false ? void 0 : hookRuntimeOf(ctx);
 var CHECK_REGISTRY = [
   { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
-  { id: "installation-integrity", title: "installation integrity", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkInstallationIntegrity(ctx) },
   { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
   { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
   { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },
@@ -20868,7 +20485,7 @@ ${formatCheckReport(report, options)}`;
 };
 
 // src/commands/doctor/report.ts
-import { existsSync as existsSync11, readFileSync as readFileSync12 } from "node:fs";
+import { existsSync as existsSync12, readFileSync as readFileSync12 } from "node:fs";
 import { join as join8, resolve as resolve10, sep as sep2 } from "node:path";
 
 // src/commands/doctor/runner.ts
@@ -20981,7 +20598,7 @@ var deriveInstallSource = ({
   if (segments.includes("node_modules")) return "npm";
   try {
     const manifest = JSON.parse(readFileSync12(join8(packageRoot, "package.json"), "utf8"));
-    if (manifest.name === "commitlore" && existsSync11(join8(packageRoot, ".git"))) return "source";
+    if (manifest.name === "commitlore" && existsSync12(join8(packageRoot, ".git"))) return "source";
   } catch {
   }
   return "unknown";
@@ -21047,7 +20664,7 @@ var register5 = (program3) => {
 import { randomBytes as randomBytes8 } from "node:crypto";
 import {
   chmodSync as chmodSync4,
-  existsSync as existsSync15,
+  existsSync as existsSync16,
   mkdirSync as mkdirSync8,
   readFileSync as readFileSync16,
   realpathSync as realpathSync2,
@@ -21060,18 +20677,8 @@ import { join as join9, resolve as resolve14 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync, existsSync as existsSync12, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
+import { chmodSync, existsSync as existsSync13, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve11 } from "node:path";
-
-// src/hooks/capture-fail-open.ts
-var captureHookFailOpen = (label, error2) => {
-  process.stderr.write(
-    `commitlore: ${label}: ${error2 instanceof Error ? error2.message : String(error2)}
-`
-  );
-};
-
-// src/hooks/post-commit.ts
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
 var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -21097,7 +20704,7 @@ var installPostCommitHook = (cwd = process.cwd()) => {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync12(hookPath)) {
+    if (existsSync13(hookPath)) {
       const current = readFileSync13(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -21160,18 +20767,9 @@ var allRecordIdsPresent = (commitMessage, records) => {
   if (ids.length === 0) return false;
   return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
-var COMMIT_ID_RE2 = /^[0-9a-f]{40}$/;
-var isAmendedBase = (baseHead, firstParent, cwd) => {
-  if (!COMMIT_ID_RE2.test(baseHead)) return false;
-  const previousHead = execGit(["rev-parse", "--verify", "HEAD@{1}"], { cwd });
-  if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;
-  const previousParent = execGit(["rev-parse", "--verify", `${baseHead}^`], { cwd });
-  if (firstParent === null) return previousParent.code !== 0;
-  return previousParent.code === 0 && previousParent.stdout.trim() === firstParent;
-};
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
-  if (!pendingDirPath || !existsSync12(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync13(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -21183,7 +20781,8 @@ var runPostCommitFinaliser = (cwd) => {
   if (headResult.code !== 0) return;
   const headSha2 = headResult.stdout.trim();
   const parentResult = execGit(["rev-parse", "HEAD^"], { cwd });
-  const firstParent = parentResult.code === 0 ? parentResult.stdout.trim() : null;
+  if (parentResult.code !== 0) return;
+  const firstParent = parentResult.stdout.trim();
   const treeResult = execGit(["rev-parse", "HEAD^{tree}"], { cwd });
   if (treeResult.code !== 0) return;
   const committedTree = treeResult.stdout.trim();
@@ -21196,7 +20795,7 @@ var runPostCommitFinaliser = (cwd) => {
     if (!pending) continue;
     if (pending.phase !== "applied") continue;
     if (pending.consumed) continue;
-    if (pending.base_head !== firstParent && !isAmendedBase(pending.base_head, firstParent, cwd)) continue;
+    if (pending.base_head !== firstParent) continue;
     if (pending.staged_tree_oid !== committedTree) continue;
     if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
     const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
@@ -21205,7 +20804,10 @@ var runPostCommitFinaliser = (cwd) => {
     try {
       consumePending(pending.nonce, headSha2, { cwd });
     } catch (error2) {
-      captureHookFailOpen("post-commit finalisation error", error2);
+      process.stderr.write(
+        `commitlore: post-commit finalisation error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
     return;
   }
@@ -21215,14 +20817,17 @@ var register6 = (program3) => {
     try {
       runPostCommitFinaliser(process.cwd());
     } catch (error2) {
-      captureHookFailOpen("post-commit error", error2);
+      process.stderr.write(
+        `commitlore: post-commit error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
   });
 };
 
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync13, mkdirSync as mkdirSync6, readFileSync as readFileSync14, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync14, mkdirSync as mkdirSync6, readFileSync as readFileSync14, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 
 // src/core/sync.ts
@@ -21333,7 +20938,7 @@ var installPrePushHook = (cwd = process.cwd()) => {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync13(hookPath)) {
+    if (existsSync14(hookPath)) {
       const current = readFileSync14(hookPath, "utf8");
       if (!current.includes(PRE_PUSH_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -21370,7 +20975,7 @@ var register7 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes7 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync14, mkdirSync as mkdirSync7, readFileSync as readFileSync15, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync15, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
 import { resolve as resolve13 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -21404,7 +21009,7 @@ var recordsFromSquashMessage = (cwd, message) => {
 };
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
-  if (squashPath === null || !existsSync14(squashPath)) return false;
+  if (squashPath === null || !existsSync15(squashPath)) return false;
   const draft = readFileSync15(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
   const blocks = recordsFromSquashMessage(cwd, readFileSync15(squashPath, "utf8"));
@@ -21437,7 +21042,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync14(path2)) {
+    if (existsSync15(path2)) {
       const current = readFileSync15(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure3(`${path2} is not a commitlore hook \u2014 left in place`);
@@ -21494,40 +21099,9 @@ var messageContainsRecordId = (message, records) => {
   }
   return false;
 };
-var captureLabel = (pending) => {
-  for (const rec of pending.records) {
-    if (typeof rec !== "object" || rec === null) continue;
-    const trailers = rec.trailers;
-    if (!Array.isArray(trailers)) continue;
-    for (const trailer of trailers) {
-      if (trailer.key === "Record-Id") return trailer.value;
-    }
-  }
-  return pending.nonce;
-};
-var usesTemporaryCommitIndex = (cwd) => {
-  const currentIndex = process.env.GIT_INDEX_FILE;
-  if (!currentIndex) return false;
-  const gitDir = execGit(["rev-parse", "--git-dir"], { cwd });
-  if (gitDir.code !== 0) return false;
-  return resolve13(cwd, currentIndex) !== resolve13(cwd, gitDir.stdout.trim(), "index");
-};
-var reportDiffMismatch = (pending, cwd) => {
-  const label = captureLabel(pending);
-  const detail = usesTemporaryCommitIndex(cwd) ? "this commit uses a temporary index whose staged diff differs from the verified capture" : "the staged diff differs from the verified capture";
-  process.stderr.write(
-    `commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.
-`
-  );
-};
-var compareCaptureCandidates = (left, right) => {
-  const byCreated = right.created_at.localeCompare(left.created_at);
-  if (byCreated !== 0) return byCreated;
-  return left.nonce.localeCompare(right.nonce);
-};
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync14(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync15(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -21549,35 +21123,28 @@ var applyCaptureRecord = (messageFile, cwd) => {
   } catch {
     return;
   }
-  const eligible = [];
   for (const file of files) {
     const filePath = resolve13(pendingDirPath, file);
-    const pending2 = readPendingFile2(filePath);
-    if (!pending2) continue;
-    if (pending2.phase !== "staged" && pending2.phase !== "applied") continue;
-    if (pending2.consumed) continue;
-    if (pending2.base_head !== currentHead) continue;
-    if (pending2.staged_diff_hash !== currentDiffHash) {
-      reportDiffMismatch(pending2, cwd);
-      continue;
+    const pending = readPendingFile2(filePath);
+    if (!pending) continue;
+    if (pending.phase !== "staged" && pending.phase !== "applied") continue;
+    if (pending.consumed) continue;
+    if (pending.base_head !== currentHead) continue;
+    if (pending.staged_diff_hash !== currentDiffHash) continue;
+    if (!pending.expires_at) continue;
+    if (now >= new Date(pending.expires_at).getTime()) continue;
+    if (pending.policy_identity_hash !== currentPolicyHash) continue;
+    if (messageContainsRecordId(currentMessage, pending.records)) return;
+    const trailerBlock = buildTrailerBlock(pending.records);
+    if (!trailerBlock) return;
+    const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
+    writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+    const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
+    try {
+      markApplied(pending.nonce, recordHash, { cwd });
+    } catch {
     }
-    if (!pending2.expires_at) continue;
-    if (now >= new Date(pending2.expires_at).getTime()) continue;
-    if (pending2.policy_identity_hash !== currentPolicyHash) continue;
-    eligible.push(pending2);
-  }
-  eligible.sort(compareCaptureCandidates);
-  const pending = eligible[0];
-  if (!pending) return;
-  if (messageContainsRecordId(currentMessage, pending.records)) return;
-  const trailerBlock = buildTrailerBlock(pending.records);
-  if (!trailerBlock) return;
-  const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
-  writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-  const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
-  try {
-    markApplied(pending.nonce, recordHash, { cwd });
-  } catch {
+    return;
   }
 };
 var register8 = (program3) => {
@@ -21586,13 +21153,16 @@ var register8 = (program3) => {
     try {
       applyCaptureRecord(messageFile, process.cwd());
     } catch (error2) {
-      captureHookFailOpen("capture application error", error2);
+      process.stderr.write(
+        `commitlore: capture application error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
   });
 };
 
 // src/commands/hooks.ts
-var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure3 = (message) => ({
   code: 2,
@@ -21622,7 +21192,7 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync15(hookPath)) return "absent";
+  if (!existsSync16(hookPath)) return "absent";
   let contents;
   try {
     contents = readFileSync16(hookPath, "utf8");
@@ -21641,7 +21211,7 @@ var readHookStatus = (cwd = process.cwd()) => {
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync15(chainedPath),
+    chained: existsSync16(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -21691,7 +21261,7 @@ var installHook = (input = {}) => {
     mkdirSync8(resolveHooksDir(cwd), { recursive: true });
     before = readHookStatus(cwd);
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   try {
     if (before.state === "foreign") {
@@ -21705,7 +21275,7 @@ var installHook = (input = {}) => {
     writeStub(before.hookPath);
     recordBinPath(cwd);
   } catch (error2) {
-    return failure3(`could not install the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
+    return failure3(`could not install the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
   }
   const after = readHookStatus(cwd);
   const headline = {
@@ -21738,7 +21308,7 @@ var CAPTURE_HOOKS = [
 var removeCaptureHook = (hooksDir, hook) => {
   const hookPath = join9(hooksDir, hook.name);
   const chainedPath = join9(hooksDir, hook.chainedName);
-  if (!existsSync15(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+  if (!existsSync16(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
     contents = readFileSync16(hookPath, "utf8");
@@ -21749,7 +21319,7 @@ var removeCaptureHook = (hooksDir, hook) => {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
   unlinkSync5(hookPath);
-  if (!existsSync15(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  if (!existsSync16(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
   renameSync7(chainedPath, hookPath);
   return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
 };
@@ -21759,7 +21329,7 @@ var uninstallHook = (input = {}) => {
   try {
     before = readHookStatus(cwd);
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   const lines = [];
   if (before.state === "absent") {
@@ -21774,7 +21344,7 @@ var uninstallHook = (input = {}) => {
       unlinkSync5(before.hookPath);
       if (before.chained) renameSync7(before.chainedPath, before.hookPath);
     } catch (error2) {
-      return failure3(`could not remove the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
+      return failure3(`could not remove the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
     }
     lines.push(`removed ${HOOK_NAME} hook: ${before.hookPath}`);
     if (before.chained) lines.push(`restored the previous hook: ${before.hookPath}`);
@@ -21783,7 +21353,7 @@ var uninstallHook = (input = {}) => {
     try {
       lines.push(...removeCaptureHook(before.hooksDir, hook));
     } catch (error2) {
-      return failure3(`could not remove the ${hook.name} hook: ${messageOf5(error2)}`);
+      return failure3(`could not remove the ${hook.name} hook: ${messageOf4(error2)}`);
     }
   }
   return success2(readHookStatus(cwd), lines);
@@ -21793,7 +21363,7 @@ var hookStatus = (input = {}) => {
   try {
     status = readHookStatus(input.cwd ?? process.cwd());
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   const state = {
     absent: "not installed",
@@ -21833,12 +21403,12 @@ var register9 = (program3) => {
 };
 
 // src/core/agents-guidance.ts
-import { existsSync as existsSync16, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
+import { existsSync as existsSync17, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
 import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve15 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
-var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
   const here = dirname6(source);
@@ -21862,7 +21432,7 @@ var replaceFile = (path2, contents) => {
     renameSync8(temporary, path2);
   } catch (error2) {
     try {
-      if (existsSync16(temporary)) rmSync3(temporary, { force: true });
+      if (existsSync17(temporary)) rmSync3(temporary, { force: true });
     } catch {
     }
     throw error2;
@@ -21874,21 +21444,21 @@ var installAgentsGuidance = (cwd) => {
   try {
     section2 = readCommitloreAgentsSection();
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
-  if (!existsSync16(path2)) {
+  if (!existsSync17(path2)) {
     try {
       writeFileSync12(path2, section2);
       return { state: "created", path: path2, error: null };
     } catch (error2) {
-      return { state: "write-failed", path: path2, error: messageOf6(error2) };
+      return { state: "write-failed", path: path2, error: messageOf5(error2) };
     }
   }
   let contents;
   try {
     contents = readFileSync17(path2, "utf8");
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
   const begins = markerCount(contents, AGENTS_SECTION_BEGIN);
   const ends = markerCount(contents, AGENTS_SECTION_END);
@@ -21915,12 +21485,12 @@ var installAgentsGuidance = (cwd) => {
     replaceFile(path2, next);
     return { state, path: path2, error: null };
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
 };
 
 // src/commands/init.ts
-var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
@@ -21955,7 +21525,7 @@ var runIndexStep = (opts) => {
   try {
     handle = openIndex({ cwd });
   } catch (error2) {
-    const message = `could not open the index: ${messageOf7(error2)}`;
+    const message = `could not open the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -21976,7 +21546,7 @@ var runIndexStep = (opts) => {
       detail: { ok: true, message, stats }
     };
   } catch (error2) {
-    const message = `could not rebuild the index: ${messageOf7(error2)}`;
+    const message = `could not rebuild the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -22303,7 +21873,7 @@ var resolveUnattendedChoice = async (options) => {
   if (options.unattended === true) return "enable";
   if (options.unattended === false) return "decline";
   const existing = capturePolicyPath(process.cwd());
-  if (existing !== null && existsSync17(existing)) return "no-answer";
+  if (existing !== null && existsSync18(existing)) return "no-answer";
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
       `Unattended capture authorises an agent host to prepare, verify and stage a record without asking.
@@ -22870,7 +22440,7 @@ var register14 = (program3) => {
 
 // src/commands/hermes.ts
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { copyFileSync, existsSync as existsSync18, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
+import { copyFileSync, existsSync as existsSync19, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
 import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve18 } from "node:path";
 
@@ -23095,10 +22665,10 @@ var commandExists = (command) => {
 };
 var backupPathFor = (configPath) => {
   const base = `${configPath}.commitlore-backup`;
-  if (!existsSync18(base)) return base;
+  if (!existsSync19(base)) return base;
   for (let index = 1; ; index += 1) {
     const candidate = `${base}.${index}`;
-    if (!existsSync18(candidate)) return candidate;
+    if (!existsSync19(candidate)) return candidate;
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
@@ -23147,7 +22717,7 @@ var runHermesInstall = (options = {}) => {
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join12(home, ".local", "share");
   const dataRoot = options.dataRoot ?? join12(dataHome, "commitlore");
   const skillsDir = options.skillsDir ?? installedPath("hermes", "skills");
-  const detected = options.detected ?? (existsSync18(dirname8(configPath)) || commandExists("hermes"));
+  const detected = options.detected ?? (existsSync19(dirname8(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
   if (!detected) {
@@ -23158,7 +22728,7 @@ var runHermesInstall = (options = {}) => {
       verified
     };
   }
-  if (!existsSync18(skillsDir)) {
+  if (!existsSync19(skillsDir)) {
     return {
       exitCode: 2,
       report: [`could not find the CommitLore Hermes skill bundle at ${skillsDir}`],
@@ -23167,7 +22737,7 @@ var runHermesInstall = (options = {}) => {
     };
   }
   const wrapperPath = options.wrapperPath ?? join12(home, ".local", "bin", "commitlore");
-  const before = existsSync18(configPath) ? readFileSync21(configPath, "utf8") : "";
+  const before = existsSync19(configPath) ? readFileSync21(configPath, "utf8") : "";
   const edit = addHermesConfig(before, {
     wrapperPath,
     skillsDir: resolve18(skillsDir),
@@ -23180,12 +22750,12 @@ var runHermesInstall = (options = {}) => {
   if (edit.added.length > 0) {
     try {
       mkdirSync10(dirname8(configPath), { recursive: true });
-      if (existsSync18(configPath)) {
+      if (existsSync19(configPath)) {
         const backup = backupPathFor(configPath);
         copyFileSync(configPath, backup);
         report.push(`backed up: ${configPath} -> ${backup}`);
       }
-      const mode = existsSync18(configPath) ? statSync7(configPath).mode : void 0;
+      const mode = existsSync19(configPath) ? statSync7(configPath).mode : void 0;
       atomicallyWrite(configPath, edit.contents, mode);
       report.push(`configured: ${edit.added.join(" and ")} in ${configPath}`);
     } catch (error2) {
@@ -23472,7 +23042,7 @@ var omittedLine = (cut, total, tier) => {
 var unreadLine = (unreadCommits) => {
   if (unreadCommits === 0) return [];
   return [
-    `incomplete: the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to finish the index, after which this answer is both complete and fast.`
+    `incomplete: this repository has no index, so answering meant reading its whole history; the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to index this repository, after which this answer is both complete and fast.`
   ];
 };
 var render = (input) => {
@@ -23806,13 +23376,14 @@ var hookResult = (raw, base) => {
     };
   }
 };
+var HOOK_SCAN_BUDGET_MS = 3e3;
 var runHookMode = (options) => {
   try {
     const { path: _fromFlag, ...base } = injectOptions(".", options, process.cwd());
     const result = hookResult(readStdin(), {
       ...base,
       cwd: process.cwd(),
-      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
+      scanBudgetMs: HOOK_SCAN_BUDGET_MS
     });
     if (result.stdout !== "") process.stdout.write(result.stdout);
     if (result.stderr !== "") process.stderr.write(result.stderr);
@@ -23877,7 +23448,7 @@ var register17 = (program3) => {
 import { Console } from "node:console";
 import { isAbsolute as isAbsolute3, relative as relative4, resolve as resolve20, sep as sep5 } from "node:path";
 
-// node_modules/zod/v4/core/core.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/core.js
 var _a;
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer3, params) {
@@ -23950,7 +23521,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// node_modules/zod/v4/core/util.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -24646,7 +24217,7 @@ var Class = class {
   }
 };
 
-// node_modules/zod/v4/core/errors.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/errors.js
 var initializer = (inst, def) => {
   inst.name = "$ZodError";
   Object.defineProperty(inst, "_zod", {
@@ -24715,7 +24286,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// node_modules/zod/v4/core/parse.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
   const result = schema._zod.run({ value, issues: [] }, ctx);
@@ -24793,7 +24364,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// node_modules/zod/v4/core/regexes.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
@@ -24851,7 +24422,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// node_modules/zod/v4/core/checks.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -25241,7 +24812,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// node_modules/zod/v4/core/doc.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = []) {
     this.content = [];
@@ -25277,14 +24848,14 @@ var Doc = class {
   }
 };
 
-// node_modules/zod/v4/core/versions.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 4,
   patch: 3
 };
 
-// node_modules/zod/v4/core/schemas.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -26764,7 +26335,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// node_modules/zod/v4/locales/en.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -26877,7 +26448,7 @@ function en_default() {
   };
 }
 
-// node_modules/zod/v4/core/registries.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/registries.js
 var _a2;
 var $ZodRegistry = class {
   constructor() {
@@ -26925,7 +26496,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// node_modules/zod/v4/core/api.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/api.js
 // @__NO_SIDE_EFFECTS__
 function _string(Class2, params) {
   return new Class2({
@@ -27453,7 +27024,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// node_modules/zod/v4/core/to-json-schema.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/to-json-schema.js
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4")
@@ -27812,7 +27383,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// node_modules/zod/v4/core/json-schema-processors.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/core/json-schema-processors.js
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -28145,7 +27716,7 @@ var optionalProcessor = (schema, ctx, _json, params) => {
   seen.ref = def.innerType;
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
   const schema = s;
   return !!schema._zod;
@@ -28208,7 +27779,7 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// node_modules/zod/v4/classic/iso.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -28249,7 +27820,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// node_modules/zod/v4/classic/errors.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/classic/errors.js
 var initializer2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";
@@ -28288,7 +27859,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, {
   Parent: Error
 });
 
-// node_modules/zod/v4/classic/parse.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/classic/parse.js
 var parse3 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse3 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -28302,7 +27873,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// node_modules/zod/v4/classic/schemas.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/classic/schemas.js
 var _installedGroups = /* @__PURE__ */ new WeakMap();
 function _installLazyMethods(inst, group, methods) {
   const proto = Object.getPrototypeOf(inst);
@@ -29144,10 +28715,10 @@ function preprocess(fn, schema) {
   });
 }
 
-// node_modules/zod/v4/classic/external.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
 var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
@@ -30666,15 +30237,15 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var ALPHA_NUMERIC = new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function getMethodLiteral(schema) {
   const shape = getObjectShape(schema);
   const methodSchema = shape?.method;
@@ -30695,7 +30266,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -31649,7 +31220,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats2 = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -31717,7 +31288,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -31930,7 +31501,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -31965,7 +31536,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -32345,10 +31916,10 @@ var Server = class extends Protocol {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 import process4 from "node:process";
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
 var ReadBuffer = class {
   append(chunk) {
     this._buffer = this._buffer ? Buffer.concat([this._buffer, chunk]) : chunk;
@@ -32376,7 +31947,7 @@ function serializeMessage(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../../../Users/isaac/projects/wt/r81/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 var StdioServerTransport = class {
   constructor(_stdin = process4.stdin, _stdout = process4.stdout) {
     this._stdin = _stdin;
@@ -32471,14 +32042,10 @@ var withholdBlocked = (result) => {
       recordId: _unsafeRecordId,
       provenanceValue: _unsafeProvenanceValue,
       expiresAt: _unsafeExpiresAt,
-      paths: _unsafePaths,
       ...safeRecord
     } = record2;
     return {
       ...safeRecord,
-      // Filenames are attacker-controlled. A withheld record whose paths are
-      // still printed is not withheld (#596).
-      paths: [],
       ...recordId === void 0 ? {} : { recordId },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
       withheldTrailerKeys: [
@@ -32539,10 +32106,6 @@ var queryOptions = (paths, options, keys) => {
     // whether the path was ever there (#307). The hook path deliberately does
     // not set this: a new file has no history and that is not a finding.
     explainEmptyResult: true,
-    // Bound the first call on a missing index, and the `--no-index` scan, so
-    // a 21k-commit repository costs a pause rather than four minutes. The
-    // engine persists what it did read; unreadCommits labels what it did not.
-    scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
     ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
     ...requireSignedDirective ? { requireSignedDirective: true } : {},
     ...keys === void 0 ? {} : { keys },
@@ -32593,17 +32156,13 @@ var toJson2 = (command, result) => {
     },
     history: presented.history,
     notes: presented.notes,
-    unreadCommits: presented.unreadCommits,
     diagnostics: presented.diagnostics,
     records: presented.records.map(toJsonRecord)
   };
 };
 var shortSha4 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var scopeSuffix = (result) => result.paths.length === 0 ? "" : ` for ${result.paths.join(", ")}`;
-var provenanceSuffix = (result) => {
-  const base = `${result.fromIndex ? "index" : "no index"}, ${result.scanned} commit record(s) scanned`;
-  return result.unreadCommits === 0 ? base : `${base}, ${result.unreadCommits} commit(s) unread`;
-};
+var provenanceSuffix = (result) => `${result.fromIndex ? "index" : "no index"}, ${result.scanned} commit record(s) scanned`;
 var plural2 = (count2, one, many) => `${count2} ${count2 === 1 ? one : many}`;
 var stateTag = (record2) => {
   const tags = [
@@ -32648,7 +32207,6 @@ var otherLines = (records) => {
   });
 };
 var emptyLine = (result, what) => result.history === "unavailable" ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} \u2014 this is unknown, not empty
-` : result.unreadCommits > 0 ? `no active ${what}${scopeSuffix(result)} \u2014 but ${result.unreadCommits} commit(s) went unread, so this is not the same as "none exist" (commitlore init)
 ` : result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
 ` : `no active ${what}${scopeSuffix(result)}
 `;
@@ -32691,9 +32249,7 @@ var emit4 = (name, result, options, render2) => {
 ` : render2(presented)
   );
   if (presented.history === "unavailable") process.exitCode = USAGE_EXIT_CODE3;
-  else if (presented.notes === "unfetched" || presented.unreadCommits > 0) {
-    process.exitCode = INCOMPLETE_EXIT_CODE2;
-  }
+  else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
 };
 var define = (program3, name, description, keys, render2) => {
   program3.command(name).description(description).argument("[paths...]", "limit paths; renames follow only when one path is given").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
@@ -32703,7 +32259,7 @@ var define = (program3, name, description, keys, render2) => {
     []
   ).addHelpText(
     "after",
-    "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror is unfetched or the scan was truncated (SPEC \xA710)."
+    "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror has not been fetched (SPEC \xA710)."
   ).action((paths, options) => {
     try {
       emit4(name, runQuery(queryOptions(paths, options, keys)), options, render2);
@@ -32791,19 +32347,13 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source === "notes")
 ];
 var withheldIfInjection = (record2) => {
-  const identityHits = identityCarriesInjection(record2.recordId) ? [.../* @__PURE__ */ new Set([...scanInjection(record2.recordId), ...scanInjection(`Record-Id: ${record2.recordId}`)])] : [];
   const matched = [
-    .../* @__PURE__ */ new Set([
-      ...record2.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
-      ...identityHits
-    ])
+    ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
   ];
   if (matched.length === 0) return record2;
   const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
   return {
     ...record2,
-    // A withheld record whose id is still printed is not withheld.
-    recordId: identityHits.length > 0 ? withheld : record2.recordId,
     resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
       key: trailer.key,
       value: withheld
@@ -32982,13 +32532,11 @@ var beforeChange = (opts) => {
       runQuery({
         cwd,
         at,
-        scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
         ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       })
     );
     activeDecisions = extractActiveDecisions(queryResult);
-    if (queryResult.unreadCommits > 0) gaps.push("unread-commits");
   }
   let matches = [];
   let confidence = "not-run";
@@ -33015,6 +32563,63 @@ var beforeChange = (opts) => {
     guard_confidence: confidence,
     cache_key: cacheKey
   };
+};
+
+// src/mcp/validate-args.ts
+var isPlainObject5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var typeOf = (value) => {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+};
+var checkType = (name, value, expected) => {
+  if (expected === "string" && typeof value !== "string") {
+    throw new Error(`${name} must be a string`);
+  }
+  if (expected === "boolean" && typeof value !== "boolean") {
+    throw new Error(`${name} must be a boolean`);
+  }
+  if (expected === "object" && !isPlainObject5(value)) {
+    throw new Error(`${name} must be an object`);
+  }
+  if (expected === "array" && !Array.isArray(value)) {
+    throw new Error(`${name} must be an array`);
+  }
+  if (expected !== "string" && expected !== "boolean" && expected !== "object" && expected !== "array" && typeOf(value) !== expected) {
+    throw new Error(`${name} must be a ${expected}`);
+  }
+};
+var validateToolArguments = (schema, raw) => {
+  if (!isPlainObject5(raw)) {
+    throw new Error("arguments must be an object");
+  }
+  const properties = schema.properties ?? {};
+  const required3 = schema.required ?? [];
+  if (schema.additionalProperties === false) {
+    for (const key of Object.keys(raw)) {
+      if (!Object.prototype.hasOwnProperty.call(properties, key)) {
+        throw new Error(`unknown argument: ${key}`);
+      }
+    }
+  }
+  for (const name of required3) {
+    if (!Object.prototype.hasOwnProperty.call(raw, name) || raw[name] === void 0) {
+      throw new Error(`${name} is required`);
+    }
+  }
+  for (const [name, property] of Object.entries(properties)) {
+    if (!Object.prototype.hasOwnProperty.call(raw, name) || raw[name] === void 0) {
+      continue;
+    }
+    const value = raw[name];
+    if (property.type !== void 0) {
+      checkType(name, value, property.type);
+    }
+    if (property.enum !== void 0 && !property.enum.includes(value)) {
+      throw new Error(`${name} must be one of ${property.enum.join(", ")}`);
+    }
+  }
+  return raw;
 };
 
 // src/mcp/server.ts
@@ -33086,7 +32691,6 @@ var contextJson = (root, kind, path2) => {
       explainEmptyResult: true,
       cwd: root,
       at,
-      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
       trustedAuthors: configuredTrustedAuthors(root),
       ...configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {},
       ...path2 === "" ? {} : { paths: [path2] },
@@ -33374,7 +32978,10 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       }
       const draftRaw = requiredString(args, "draft");
       const transcript = requiredString(args, "transcript");
-      const diff = stringArg(args, "diff") ?? "";
+      const diff = stringArg(args, "diff");
+      if (diff === void 0) {
+        throw new Error("diff is required");
+      }
       let draft;
       try {
         const parsed = JSON.parse(draftRaw);
@@ -33422,7 +33029,13 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
     try {
       const handler = handlers[request.params.name];
       if (handler === void 0) throw new Error(`unknown tool: ${request.params.name}`);
-      return handler(request.params.arguments ?? {});
+      const tool = TOOLS.find((candidate) => candidate.name === request.params.name);
+      if (tool === void 0) throw new Error(`unknown tool: ${request.params.name}`);
+      const args = validateToolArguments(
+        tool.inputSchema,
+        request.params.arguments ?? {}
+      );
+      return handler(args);
     } catch (error2) {
       return {
         content: [{ type: "text", text: `commitlore: ${errorMessage5(error2)}` }],
@@ -33504,7 +33117,7 @@ var register20 = (program3) => {
 
 // src/core/codex-plugin.ts
 import { spawnSync as spawnSync5 } from "node:child_process";
-import { existsSync as existsSync19, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
+import { existsSync as existsSync20, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join14 } from "node:path";
 
@@ -33640,7 +33253,7 @@ var markerFor = (plugin) => ({
 });
 var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
-  if (!existsSync19(markerPath)) return null;
+  if (!existsSync20(markerPath)) return null;
   try {
     const parsed = JSON.parse(readFileSync23(markerPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
@@ -33772,7 +33385,7 @@ import { readFileSync as readFileSync24, writeFileSync as writeFileSync18 } from
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
-var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
 var usageError = (message) => ({
@@ -33811,14 +33424,14 @@ var readDraft2 = (path2) => {
   try {
     return readFileSync24(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
     writeFileSync18(path2, text);
   } catch (error2) {
-    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var runSquashPreserve = (input = {}) => {
@@ -33837,7 +33450,7 @@ var runSquashPreserve = (input = {}) => {
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
   } catch (error2) {
-    return usageError(messageOf8(error2));
+    return usageError(messageOf7(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
@@ -33866,7 +33479,7 @@ var runSquashPreserve = (input = {}) => {
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf8(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf7(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -33980,7 +33593,7 @@ var installationError = (message) => ({
   secrets: [],
   checks: []
 });
-var messageOf9 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
 var CONTINUATION = /^[ \t]/;
@@ -34163,14 +33776,14 @@ var readMessageFile = (path2) => {
   try {
     return readFileSync25(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
     return readFileSync25(0, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
+    throw new Error(`cannot read the commit message from stdin: ${messageOf8(error2)}`);
   }
 };
 var collectSources2 = (input, cwd) => {
@@ -34183,16 +33796,9 @@ var collectSources2 = (input, cwd) => {
   return [{ message: (input.readStdin ?? readStdinSync)() }];
 };
 var SHALLOW_REFERENCE_REASON = "shallow history \u2014 a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)";
-var PARTIAL_INDEX_REASON = "the index is incomplete \u2014 a time budget left commits unread, so a Follows: or Supersedes: target may exist in history this check did not read (fix: commitlore init)";
 var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
-var indexedHeadRecords = (cwd, input = {}) => {
-  const clock = input.scanNow ?? Date.now;
-  const cost = { unreadCommits: 0, unreadNotes: 0 };
-  const { handle } = ensureIndex({
-    cwd,
-    cost,
-    ...input.scanBudgetMs === void 0 ? {} : { budget: { deadline: clock() + input.scanBudgetMs, now: clock } }
-  });
+var indexedHeadRecords = (cwd) => {
+  const { handle } = ensureIndex({ cwd });
   try {
     const records = /* @__PURE__ */ new Map();
     for (const row of queryTrailers(handle)) {
@@ -34209,27 +33815,19 @@ var indexedHeadRecords = (cwd, input = {}) => {
         trailers: [{ key: row.key, value: row.value }]
       });
     }
-    return {
-      records: [...records.values()],
-      unreadCommits: Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes)
-    };
+    return [...records.values()];
   } finally {
     closeIndex(handle);
   }
 };
-var recordsFor = (source, cwd, input = {}) => {
+var recordsFor = (source, cwd) => {
   if (source.sha !== void 0) {
-    return { ...collectRecords({ cwd, allHistory: true, revision: source.sha }), unreadCommits: 0 };
+    return collectRecords({ cwd, allHistory: true, revision: source.sha });
   }
   try {
-    const indexed = indexedHeadRecords(cwd, input);
-    return {
-      records: indexed.records,
-      notes: notesAvailability({ cwd }),
-      unreadCommits: indexed.unreadCommits
-    };
+    return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
   } catch {
-    return { ...collectRecords({ cwd, allHistory: true, revision: "HEAD" }), unreadCommits: 0 };
+    return collectRecords({ cwd, allHistory: true, revision: "HEAD" });
   }
 };
 var reachableShas = (revision, cwd) => {
@@ -34256,9 +33854,8 @@ var checkReferences = (input, sources, cwd) => {
     const violations = [];
     const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
     let tipAllRecords;
-    let unreadCommits = 0;
     if (tipSha !== void 0) {
-      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd, input);
+      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd);
       if (tipScan.notes === "unfetched") {
         return {
           check: {
@@ -34276,8 +33873,7 @@ var checkReferences = (input, sources, cwd) => {
     }
     for (const source of sources) {
       const blocks = parseRecordBlocks(source.message);
-      const scan2 = recordsFor(source, cwd, input);
-      if (scan2.unreadCommits > unreadCommits) unreadCommits = scan2.unreadCommits;
+      const scan2 = recordsFor(source, cwd);
       if (scan2.notes === "unfetched") {
         return {
           check: {
@@ -34315,24 +33911,16 @@ var checkReferences = (input, sources, cwd) => {
         );
       }
     }
-    const danglingPresent = violations.some((violation) => violation.rule === "dangling-ref");
-    const shallow = danglingPresent && hasShallowHistory(cwd);
-    const partial2 = unreadCommits > 0;
-    const withdrawDangling = shallow || partial2 && danglingPresent;
-    const reported = withdrawDangling ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
-    const reasons = [
-      ...partial2 ? [PARTIAL_INDEX_REASON] : [],
-      ...shallow ? [SHALLOW_REFERENCE_REASON] : []
-    ];
+    const suppressed = violations.some((violation) => violation.rule === "dangling-ref") && hasShallowHistory(cwd);
+    const reported = suppressed ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
     return {
       check: {
         class: "reference",
         // `not-checked` rather than `ok` when something was withheld: the
         // green would be the part a reader carries away, and this command has
-        // no verdict to offer on the reference it could not resolve. A commit
-        // accepted against a partial index must not read as fully checked.
-        status: reported.length > 0 ? "failed" : reasons.length > 0 ? "not-checked" : "ok",
-        ...reasons.length > 0 ? { reason: reasons.join("; ") } : {}
+        // no verdict to offer on the reference it could not resolve.
+        status: reported.length > 0 ? "failed" : suppressed ? "not-checked" : "ok",
+        ...suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}
       },
       violations: reported
     };
@@ -34341,7 +33929,7 @@ var checkReferences = (input, sources, cwd) => {
       check: {
         class: "reference",
         status: "not-checked",
-        reason: `repository scan failed: ${firstLine5(messageOf9(error2))}`
+        reason: `repository scan failed: ${firstLine5(messageOf8(error2))}`
       },
       violations: []
     };
@@ -34393,8 +33981,8 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
-    if (isMissingInstalledFile(error2)) return installationError(messageOf9(error2));
-    return usageError2(messageOf9(error2));
+    if (isMissingInstalledFile(error2)) return installationError(messageOf8(error2));
+    return usageError2(messageOf8(error2));
   }
   const references = checkReferences(input, sources, cwd);
   const alreadyReported = new Set(shapeViolations.map(violationIdentity));
@@ -34419,12 +34007,7 @@ var runValidate = (input = {}) => {
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
-      // `examined` is how many messages were actually read. Without it a
-      // report of an empty range is indistinguishable from a clean one — both
-      // are `ok`/`ok` with no violations — so a gate reading this JSON can
-      // report success having checked nothing (the shape #542 was about, one
-      // level along).
-      stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}
+      stdout: `${JSON.stringify({ checks, violations, secrets })}
 `,
       stderr: warningText,
       violations,
@@ -34461,17 +34044,13 @@ var runValidate = (input = {}) => {
 var register24 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
-    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
+    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
   ).action((flags) => {
     const result = runValidate({
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
       ...flags.commit === void 0 ? {} : { commit: flags.commit },
       ...flags.range === void 0 ? {} : { range: flags.range },
-      ...flags.json === void 0 ? {} : { json: flags.json },
-      // The commit-msg hook is this command with `--message-file`. Four
-      // minutes to accept one commit is worse than a partial check that
-      // says it is partial.
-      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
+      ...flags.json === void 0 ? {} : { json: flags.json }
     });
     if (result.stdout !== "") process.stdout.write(result.stdout);
     if (result.stderr !== "") process.stderr.write(result.stderr);
@@ -34481,7 +34060,7 @@ var register24 = (program3) => {
 
 // src/commands/uninstall.ts
 import { spawnSync as spawnSync6 } from "node:child_process";
-import { existsSync as existsSync20, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
+import { existsSync as existsSync21, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join15 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
@@ -34536,7 +34115,7 @@ var runUninstall = async (options = {}) => {
   const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
   const wrapper = join15(home, ".local", "bin", "commitlore");
-  if (existsSync20(wrapper)) {
+  if (existsSync21(wrapper)) {
     let contents;
     try {
       contents = readFileSync26(wrapper, "utf8");
@@ -34558,7 +34137,7 @@ var runUninstall = async (options = {}) => {
   let retainDataRoot = false;
   for (const config3 of AGENT_CONFIGS.filter(isCodexPluginConfig)) {
     const markerPath = codexPluginMarkerPath(config3, dataHome);
-    if (!existsSync20(markerPath)) continue;
+    if (!existsSync21(markerPath)) continue;
     if (readCodexPluginMarker(config3, dataHome) === null) {
       retainDataRoot = true;
       kept.push(markerPath);
@@ -34596,7 +34175,7 @@ var runUninstall = async (options = {}) => {
     removed.push(`${selector} (Codex plugin)`);
   }
   const dataRoot = join15(dataHome, "commitlore");
-  if (existsSync20(dataRoot)) {
+  if (existsSync21(dataRoot)) {
     if (retainDataRoot) {
       kept.push(dataRoot);
       report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
@@ -34642,7 +34221,7 @@ var runUninstall = async (options = {}) => {
     if (!isMcpAgentConfig(config3)) continue;
     if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
     const path2 = join15(home, ...config3.homeRelativePath);
-    if (!existsSync20(path2)) continue;
+    if (!existsSync21(path2)) continue;
     let contents;
     try {
       contents = readFileSync26(path2, "utf8");

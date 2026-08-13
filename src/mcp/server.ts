@@ -77,6 +77,7 @@ import {
   configuredSignedDirectivesRequired,
   configuredTrustedAuthors,
 } from '../core/trusted-authors.js';
+import { validateToolArguments, type JsonObjectSchema } from './validate-args.js';
 
 export const SERVER_NAME = 'commitlore';
 
@@ -593,7 +594,13 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
       }
       const draftRaw = requiredString(args, 'draft');
       const transcript = requiredString(args, 'transcript');
-      const diff = stringArg(args, 'diff') ?? '';
+      // Schema already required a string; do not substitute '' for an omission.
+      // That substitution was #594: a malformed call looked like an empty
+      // verification, which is the ordinary "nothing survived" outcome.
+      const diff = stringArg(args, 'diff');
+      if (diff === undefined) {
+        throw new Error('diff is required');
+      }
 
       // Parse draft JSON — malformed input is a caller error
       let draft: unknown[];
@@ -658,7 +665,13 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
     try {
       const handler = handlers[request.params.name];
       if (handler === undefined) throw new Error(`unknown tool: ${request.params.name}`);
-      return handler(request.params.arguments ?? {});
+      const tool = TOOLS.find((candidate) => candidate.name === request.params.name);
+      if (tool === undefined) throw new Error(`unknown tool: ${request.params.name}`);
+      const args = validateToolArguments(
+        tool.inputSchema as JsonObjectSchema,
+        request.params.arguments ?? {},
+      );
+      return handler(args);
     } catch (error) {
       return {
         content: [{ type: 'text', text: `commitlore: ${errorMessage(error)}` }],

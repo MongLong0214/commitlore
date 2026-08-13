@@ -54,8 +54,9 @@ import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
-import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from '../core/query.js';
+import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery } from '../core/query.js';
 import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
+import { validateToolArguments } from './validate-args.js';
 export const SERVER_NAME = 'commitlore';
 /** Used when the package manifest cannot be read — a version is not an answer. */
 const FALLBACK_VERSION = '0.0.0';
@@ -179,7 +180,6 @@ const contextJson = (root, kind, path) => {
         explainEmptyResult: true,
         cwd: root,
         at,
-        scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         trustedAuthors: configuredTrustedAuthors(root),
         ...(configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {}),
         ...(path === '' ? {} : { paths: [path] }),
@@ -516,7 +516,13 @@ export const createServer = (opts = {}) => {
             }
             const draftRaw = requiredString(args, 'draft');
             const transcript = requiredString(args, 'transcript');
-            const diff = stringArg(args, 'diff') ?? '';
+            // Schema already required a string; do not substitute '' for an omission.
+            // That substitution was #594: a malformed call looked like an empty
+            // verification, which is the ordinary "nothing survived" outcome.
+            const diff = stringArg(args, 'diff');
+            if (diff === undefined) {
+                throw new Error('diff is required');
+            }
             // Parse draft JSON — malformed input is a caller error
             let draft;
             try {
@@ -577,7 +583,11 @@ export const createServer = (opts = {}) => {
             const handler = handlers[request.params.name];
             if (handler === undefined)
                 throw new Error(`unknown tool: ${request.params.name}`);
-            return handler(request.params.arguments ?? {});
+            const tool = TOOLS.find((candidate) => candidate.name === request.params.name);
+            if (tool === undefined)
+                throw new Error(`unknown tool: ${request.params.name}`);
+            const args = validateToolArguments(tool.inputSchema, request.params.arguments ?? {});
+            return handler(args);
         }
         catch (error) {
             return {
