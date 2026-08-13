@@ -443,6 +443,57 @@ const reviewRecord = (entry, index) => {
     }
     return { trailers, evidence };
 };
+/**
+ * Structural check for records already decoded from JSON, before any of them
+ * reaches the verifier. Returns a one-line diagnostic naming the first
+ * offending record, or null when every record has the shape `DraftRecord`
+ * declares.
+ *
+ * This exists because the MCP boundary decodes `draft` itself and casts the
+ * result. The outer schema can say `draft` is a string and nothing more, so a
+ * null, a number, or a record whose `trailers` is a string reached
+ * `verifyCaptureRecords`, which accepted no record and reported
+ * `validation_result: "empty"` -- byte-identical to a legitimate verified-empty
+ * outcome. A caller could not tell a malformed request from a session that
+ * genuinely had no decision to record, which is the one distinction the capture
+ * contract is built on.
+ *
+ * The diagnostic names the record index and the field, and deliberately quotes
+ * neither the transcript nor the record: this is a caller error, and echoing
+ * the payload back would put session text into an error channel.
+ */
+export const decodedDraftError = (records) => {
+    const EVIDENCE_FIELDS = ['key', 'source', 'quote', 'locator'];
+    for (const [index, record] of records.entries()) {
+        const at = `record ${index}`;
+        if (!isObject(record))
+            return `${at} is not an object`;
+        const trailers = record['trailers'];
+        if (!Array.isArray(trailers))
+            return `${at}: "trailers" must be an array`;
+        const evidence = record['evidence'];
+        if (!Array.isArray(evidence))
+            return `${at}: "evidence" must be an array`;
+        for (const [i, trailer] of trailers.entries()) {
+            if (!isObject(trailer))
+                return `${at}: trailers[${i}] is not an object`;
+            if (typeof trailer['key'] !== 'string')
+                return `${at}: trailers[${i}] has no string "key"`;
+            if (typeof trailer['value'] !== 'string')
+                return `${at}: trailers[${i}] has no string "value"`;
+        }
+        for (const [i, item] of evidence.entries()) {
+            if (!isObject(item))
+                return `${at}: evidence[${i}] is not an object`;
+            for (const field of EVIDENCE_FIELDS) {
+                if (typeof item[field] !== 'string') {
+                    return `${at}: evidence[${i}] has no string "${field}"`;
+                }
+            }
+        }
+    }
+    return null;
+};
 const parseDocument = (raw) => {
     let parsed;
     try {
