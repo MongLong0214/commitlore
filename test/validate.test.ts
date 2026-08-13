@@ -343,6 +343,30 @@ describe('validate — check classes and reference integrity', () => {
     expect(result.code).toBe(0);
   });
 
+  it('does not report a partial reference check as fully checked', () => {
+    // The commit-msg hook is `validate --message-file`. A spent budget is the
+    // injected-clock form of "the rebuild did not finish": no wall-clock race,
+    // and without the bound the hook would build the whole index and print
+    // `references ok`.
+    const repo = makeRepo();
+    commit(repo, 'a.txt', 'Base\n\nRecord-Id: r-base01\n');
+    const messageFile = join(repo, 'COMMIT_EDITMSG');
+    writeFileSync(messageFile, 'Follow up\n\nFollows: r-base01\nRecord-Id: r-next01\n');
+
+    const result = runValidate({
+      messageFile,
+      cwd: repo,
+      scanBudgetMs: -1,
+      scanNow: () => 0,
+    });
+
+    expect(result.checks[1]?.status).toBe('not-checked');
+    expect(result.checks[1]?.reason).toMatch(/incomplete|unread/i);
+    expect(result.stdout).toContain('not checked');
+    expect(result.stdout).not.toMatch(/references ok(?:\n|$)/);
+    expect(result.code).toBe(0);
+  });
+
   it.each([
     ['annals 03b4bfe', 'r-8c31f7'],
     ['gitseed 4d99a48', 'r-gsa007'],

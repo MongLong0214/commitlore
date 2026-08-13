@@ -21,6 +21,7 @@ import type { Command } from 'commander';
 
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import {
+  CONSUMER_SCAN_BUDGET_MS,
   LIMIT_KEY,
   RULED_OUT_KEY,
   WARN_KEY,
@@ -208,6 +209,10 @@ const queryOptions = (
       // whether the path was ever there (#307). The hook path deliberately does
       // not set this: a new file has no history and that is not a finding.
       explainEmptyResult: true,
+    // Bound the first call on a missing index, and the `--no-index` scan, so
+    // a 21k-commit repository costs a pause rather than four minutes. The
+    // engine persists what it did read; unreadCommits labels what it did not.
+    scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
     ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
     ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
     ...(keys === undefined ? {} : { keys }),
@@ -266,6 +271,11 @@ export interface JsonOutput {
    */
   history: string;
   notes: string;
+  /**
+   * Commits a budget left unread. Always present: 0 means the answer was drawn
+   * from the whole history, and anything else means it was not.
+   */
+  unreadCommits: number;
   diagnostics: string[];
   records: JsonRecord[];
 }
@@ -318,6 +328,7 @@ export const toJson = (command: string, result: QueryResult): JsonOutput => {
     },
     history: presented.history,
     notes: presented.notes,
+    unreadCommits: presented.unreadCommits,
     diagnostics: presented.diagnostics,
     records: presented.records.map(toJsonRecord),
   };
@@ -337,8 +348,12 @@ const scopeSuffix = (result: QueryResult): string =>
  * the header: an agent that gets a thin answer needs to know whether it was
  * reading a stale index or an empty repository.
  */
-const provenanceSuffix = (result: QueryResult): string =>
-  `${result.fromIndex ? 'index' : 'no index'}, ${result.scanned} commit record(s) scanned`;
+const provenanceSuffix = (result: QueryResult): string => {
+  const base = `${result.fromIndex ? 'index' : 'no index'}, ${result.scanned} commit record(s) scanned`;
+  return result.unreadCommits === 0
+    ? base
+    : `${base}, ${result.unreadCommits} commit(s) unread`;
+};
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
@@ -449,6 +464,9 @@ const emptyLine = (result: QueryResult, what: string): string =>
   result.history === 'unavailable'
     ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} — ` +
       'this is unknown, not empty\n'
+    : result.unreadCommits > 0
+    ? `no active ${what}${scopeSuffix(result)} — but ${result.unreadCommits} commit(s) went unread, ` +
+      'so this is not the same as "none exist" (commitlore init)\n'
     : result.notes === 'unfetched'
     ? `no active ${what}${scopeSuffix(result)} — but the notes mirror has not been ` +
       'fetched here, so this is not the same as "none exist" (commitlore doctor --fix)\n'
@@ -523,7 +541,9 @@ const emit = (
   // error (SPEC §10), not a finding; exit 3 means git answered from a
   // known-incomplete store, matching guard so callers can distinguish the two.
   if (presented.history === 'unavailable') process.exitCode = USAGE_EXIT_CODE;
-  else if (presented.notes === 'unfetched') process.exitCode = INCOMPLETE_EXIT_CODE;
+  else if (presented.notes === 'unfetched' || presented.unreadCommits > 0) {
+    process.exitCode = INCOMPLETE_EXIT_CODE;
+  }
 };
 
 const define = (
@@ -551,7 +571,7 @@ const define = (
     .addHelpText(
       'after',
       '\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), ' +
-        '3 answered, but the notes mirror has not been fetched (SPEC §10).',
+        '3 answered, but the notes mirror is unfetched or the scan was truncated (SPEC §10).',
     )
     .action((paths: string[], options: QueryCommandOptions) => {
       try {

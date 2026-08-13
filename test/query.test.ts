@@ -26,7 +26,7 @@ import { formatContext, register, toJson, withholdBlocked } from '../src/command
 import { buildReport, collectRecords } from '../src/commands/stale.js';
 import { execGitOrThrow } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
-import { closeIndex, ensureIndex, indexDbPath, scanTrailers } from '../src/core/index-db.js';
+import { closeIndex, ensureIndex, indexDbPath, indexUnread, scanTrailers } from '../src/core/index-db.js';
 import { NOTES_REFSPEC, notesAbsenceEvidenceKey, writeRecord } from '../src/core/notes.js';
 import { runQuery, valuesOf, type GradedRecord, type QueryOptions } from '../src/core/query.js';
 import { loadFixtures } from './fixtures.js';
@@ -1068,22 +1068,39 @@ describe('the --no-index fallback answers identically', () => {
 });
 
 describe('#522 cold path queries', () => {
-  it('scans a substantial history once and never rebuilds the index while answering', () => {
-    const dir = syntheticRepo(1024);
+  it('builds and persists the index when context is asked on a repository that has none', () => {
+    const dir = syntheticRepo(256);
 
     // Establish the answer through the normal correctness path, then remove
     // the derived file to reproduce a genuinely cold before-change query.
     warmIndex(dir);
     const indexed = runQuery({ cwd: dir, path: 'src', limit: 1 });
     rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+    expect(existsSync(indexDbPath(dir))).toBe(false);
 
     const cold = runQuery({ cwd: dir, path: 'src', limit: 1 });
 
     expect(cold.records).toEqual(indexed.records);
-    expect(cold.fromIndex).toBe(false);
-    // This is the regression bound: folding lifecycle state and applying the
-    // path alias both reuse one materialized corpus, independent of --limit.
-    expect(cold.corpusPasses).toBe(1);
+    expect(cold.fromIndex).toBe(true);
+    expect(cold.corpusPasses).toBe(0);
+    expect(existsSync(indexDbPath(dir))).toBe(true);
+
+    // The second call is what the measurements were about: without a
+    // persisted index this is another full-history walk. With one it is not.
+    const warm = runQuery({ cwd: dir, path: 'src', limit: 1 });
+    expect(warm.fromIndex).toBe(true);
+    expect(warm.corpusPasses).toBe(0);
+    expect(warm.records).toEqual(indexed.records);
+  }, 120_000);
+
+  it('leaves the scan fallback for --no-index and does not create the file', () => {
+    const dir = syntheticRepo(256);
+    rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+    const scanned = runQuery({ cwd: dir, path: 'src', limit: 1, noIndex: true });
+
+    expect(scanned.fromIndex).toBe(false);
+    expect(scanned.corpusPasses).toBe(1);
     expect(existsSync(indexDbPath(dir))).toBe(false);
   }, 120_000);
 
@@ -1123,7 +1140,7 @@ describe('#522 cold path queries', () => {
    */
   describe('a scan budget bounds the wait and says what it cost', () => {
     it('leaves an unbudgeted query exactly as it was', () => {
-      const dir = syntheticRepo(1024);
+      const dir = syntheticRepo(256);
       warmIndex(dir);
       const indexed = runQuery({ cwd: dir, path: 'src', limit: 1 });
       rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
@@ -1131,19 +1148,87 @@ describe('#522 cold path queries', () => {
       const cold = runQuery({ cwd: dir, path: 'src', limit: 1 });
 
       expect(cold.records).toEqual(indexed.records);
+      expect(cold.fromIndex).toBe(true);
       expect(cold.unreadCommits).toBe(0);
       expect(cold.diagnostics.join(' ')).not.toContain('unread');
     }, 120_000);
 
-    it('stops a cold scan at the budget and reports the commits it skipped', () => {
-      const dir = syntheticRepo(1024);
+    it('stops a cold index build at the budget, persists what it has, and reports the rest', () => {
+      const dir = syntheticRepo(256);
       rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
 
-      // Already spent: the first deadline check must stop the scan before any
-      // batch is read.
+      // Already spent: the first deadline check must stop the rebuild before
+      // any batch is read. The file is still created, so the next call is
+      // not another four-minute walk.
       const cold = runQuery({ cwd: dir, path: 'src', scanBudgetMs: -1 });
 
+      expect(cold.fromIndex).toBe(true);
+      expect(existsSync(indexDbPath(dir))).toBe(true);
+      expect(cold.unreadCommits).toBeGreaterThan(0);
+      expect(cold.diagnostics.join(' ')).toContain('unread');
+      expect(formatContext(cold)).toMatch(/unread|not the same as/);
+      expect(toJson('context', cold).unreadCommits).toBe(cold.unreadCommits);
+      expect(toJson('context', cold).unreadCommits).toBeGreaterThan(0);
+    }, 120_000);
+
+    it('lets an unbudgeted index rebuild finish what a budgeted context call left unread', () => {
+      const dir = syntheticRepo(256);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      const cold = runQuery({ cwd: dir, path: 'src', scanBudgetMs: -1 });
+      expect(cold.unreadCommits).toBeGreaterThan(0);
+      expect(existsSync(indexDbPath(dir))).toBe(true);
+
+      const { handle, stats } = ensureIndex({ cwd: dir });
+      try {
+        expect(stats.rebuilt).toBe(true);
+        expect(indexUnread(handle)).toBe(0);
+      } finally {
+        closeIndex(handle);
+      }
+
+      const finished = runQuery({ cwd: dir, path: 'src' });
+      expect(finished.fromIndex).toBe(true);
+      expect(finished.unreadCommits).toBe(0);
+    }, 120_000);
+
+    it('honours an injected clock that expires partway through a rebuild', () => {
+      const total = 256;
+      const dir = syntheticRepo(total);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      let ticks = 0;
+      const cold = runQuery({
+        cwd: dir,
+        path: 'src',
+        scanBudgetMs: 10,
+        // One extra tick over the scanTrailers case: openSource reads the
+        // clock to compute the deadline before the rebuild's first check.
+        scanNow: () => (++ticks <= 3 ? 0 : 20),
+      });
+
+      expect(cold.fromIndex).toBe(true);
+      expect(existsSync(indexDbPath(dir))).toBe(true);
+      expect(cold.unreadCommits).toBeGreaterThan(0);
+      expect(cold.unreadCommits).toBeLessThan(total);
+
+      // A later consumer call still carries a budget, the way `context` does.
+      // It must read the partial index rather than walk the corpus, and it
+      // must not look complete. An unbudgeted `index` is what finishes it.
+      const again = runQuery({ cwd: dir, path: 'src', scanBudgetMs: 3_000 });
+      expect(again.fromIndex).toBe(true);
+      expect(again.corpusPasses).toBe(0);
+      expect(again.unreadCommits).toBeGreaterThan(0);
+    }, 120_000);
+
+    it('stops a --no-index scan at the budget and does not create the file', () => {
+      const dir = syntheticRepo(256);
+      rmSync(join(dir, '.git', 'commitlore'), { recursive: true, force: true });
+
+      const cold = runQuery({ cwd: dir, path: 'src', noIndex: true, scanBudgetMs: -1 });
+
       expect(cold.fromIndex).toBe(false);
+      expect(existsSync(indexDbPath(dir))).toBe(false);
       expect(cold.unreadCommits).toBeGreaterThan(0);
       expect(cold.diagnostics.join(' ')).toContain('commitlore init');
     }, 120_000);
@@ -1680,6 +1765,7 @@ describe('--json', () => {
           },
         ],
         "scanned": 2,
+        "unreadCommits": 0,
       }
     `);
   });
@@ -1717,6 +1803,7 @@ describe('--json', () => {
       counts: { records: 0, limits: 0, ruledOut: 0, warnings: 0, other: 0 },
       // The fixture carries the local doctor evidence for an empty remote.
       notes: 'absent',
+      unreadCommits: 0,
       diagnostics: [],
       records: [],
     });

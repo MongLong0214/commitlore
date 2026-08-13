@@ -51,6 +51,16 @@ export declare const LIMIT_KEY = "Limit";
 export declare const RULED_OUT_KEY = "Ruled-out";
 export declare const WARN_KEY = "Warn";
 /**
+ * How long a consumer route may spend building a missing index, or scanning
+ * when it cannot write one.
+ *
+ * Three seconds is long enough that a repository of ordinary size is still
+ * answered in full, and short enough that a 21k-commit repository costs a
+ * pause rather than four minutes. Exceeding it is never silent: `unreadCommits`
+ * is set and the answer names `commitlore init`.
+ */
+export declare const CONSUMER_SCAN_BUDGET_MS = 3000;
+/**
  * Trust grade, the output half of SPEC §7. `blocked` is reserved: the minimal
  * rule below never produces it.
  */
@@ -79,16 +89,25 @@ export interface QueryOptions {
     /** Answer from git alone, with no SQLite index. Same answers, slower. */
     noIndex?: boolean;
     /**
-     * Wall-clock ceiling, in milliseconds, on the no-index scan.
+     * Wall-clock ceiling, in milliseconds, on a cold index build and on the
+     * no-index scan.
      *
-     * Absent means unbounded, which is right for a command a person ran and
-     * waited for. Latency-critical callers — the pre-edit hook above all — set it
-     * so a repository that has never been indexed costs a bounded pause once
-     * rather than an unbounded one on every edit. A budget that trips is always
-     * reported in `diagnostics`; a truncated answer that looked complete would be
-     * worse than a slow one.
+     * Absent means unbounded, which is right for `index` and `init`. Consumer
+     * routes — `context`, injection, the commit-msg hook — set it so a
+     * repository that has never been indexed costs a bounded pause and a
+     * labelled partial answer, not minutes of silence. A budget that trips is
+     * always reported in `unreadCommits` and `diagnostics`; a truncated answer
+     * that looked complete would be worse than a slow one.
      */
     scanBudgetMs?: number;
+    /**
+     * The clock `scanBudgetMs` is read against. Defaults to `Date.now`.
+     *
+     * Injectable because a budget that expires *partway* through is otherwise a
+     * race against the machine — the case this repository has already had a
+     * vacuous CI pass on.
+     */
+    scanNow?: () => number;
     /** The instant to evaluate against. Defaults to now. */
     at?: Date;
     /** Maximum records returned, applied after ordering. */
@@ -182,9 +201,10 @@ export interface QueryResult {
      *
      * A typed field for the same reason `notes` is one: the symptom is a
      * *smaller* answer, not an error, and "fewer records" is byte-identical to
-     * "this repository recorded less". Only a caller that set `scanBudgetMs` can
-     * see anything but 0 here, and one that did must say so rather than present a
-     * truncated answer as the whole of what a path is subject to.
+     * "this repository recorded less". Set when this call's budget tripped, or
+     * when a previous budgeted build persisted a partial index. A caller that
+     * sees anything but 0 must say so rather than present a truncated answer as
+     * the whole of what a path is subject to.
      */
     unreadCommits: number;
     /** Anything the caller should be told about how the answer was produced. */

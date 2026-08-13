@@ -24,14 +24,15 @@ import { execGit, hasShallowHistory, historyAvailability } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
 import { notesAvailability } from './notes.js';
 import { withholdBlocked } from '../commands/query.js';
-import { runQuery } from './query.js';
+import { CONSUMER_SCAN_BUDGET_MS, runQuery, } from './query.js';
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 /**
  * Derives the verification gaps from the repository state checks this codebase
  * already performs. The canonical order is fixed: `history-unavailable`,
- * `shallow-history`, `notes-unfetched`.
+ * `shallow-history`, `notes-unfetched`. `unread-commits` is appended after
+ * the query, because only the query knows whether a budget left history unread.
  */
 const deriveVerificationGaps = (cwd) => {
     const gaps = [];
@@ -131,10 +132,13 @@ export const beforeChange = (opts) => {
         const queryResult = withholdBlocked(runQuery({
             cwd,
             at,
+            scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         }));
         activeDecisions = extractActiveDecisions(queryResult);
+        if (queryResult.unreadCommits > 0)
+            gaps.push('unread-commits');
     }
     // Run guard if a proposal was supplied
     let matches = [];

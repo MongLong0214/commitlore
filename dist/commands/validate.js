@@ -21,10 +21,10 @@
 import { readFileSync } from 'node:fs';
 import { collectRecords } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
-import { closeIndex, ensureIndex, queryTrailers } from '../core/index-db.js';
+import { closeIndex, ensureIndex, indexUnread, queryTrailers } from '../core/index-db.js';
 import { notesAvailability } from '../core/notes.js';
 import { isMissingInstalledFile } from '../core/paths.js';
-import { RULED_OUT_KEY } from '../core/query.js';
+import { CONSUMER_SCAN_BUDGET_MS, RULED_OUT_KEY } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
 import { findDanglingRefs, findIdCollisions, isSuccessionDeclared, UNIQUE_ID_WANT, } from '../core/stale.js';
 import { labelRecordBlocks, parseCommitMessage, parseRecordBlocks, splitRuledOut, } from '../core/trailers.js';
@@ -428,9 +428,19 @@ const collectSources = (input, cwd) => {
  */
 const SHALLOW_REFERENCE_REASON = 'shallow history — a Record-Id declared below the clone boundary is not visible here ' +
     '(fix: git fetch --unshallow)';
+const PARTIAL_INDEX_REASON = 'the index is incomplete — a time budget left commits unread, so a Follows: or Supersedes: ' +
+    'target may exist in history this check did not read (fix: commitlore init)';
 const repositoryAvailable = (cwd) => execGit(['rev-parse', '--git-dir'], { cwd }).code === 0;
-const indexedHeadRecords = (cwd) => {
-    const { handle } = ensureIndex({ cwd });
+const indexedHeadRecords = (cwd, input = {}) => {
+    const clock = input.scanNow ?? Date.now;
+    const cost = { unreadCommits: 0, unreadNotes: 0 };
+    const { handle } = ensureIndex({
+        cwd,
+        cost,
+        ...(input.scanBudgetMs === undefined
+            ? {}
+            : { budget: { deadline: clock() + input.scanBudgetMs, now: clock } }),
+    });
     try {
         const records = new Map();
         for (const row of queryTrailers(handle)) {
@@ -456,21 +466,29 @@ const indexedHeadRecords = (cwd) => {
                 trailers: [{ key: row.key, value: row.value }],
             });
         }
-        return [...records.values()];
+        return {
+            records: [...records.values()],
+            unreadCommits: Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
+        };
     }
     finally {
         closeIndex(handle);
     }
 };
-const recordsFor = (source, cwd) => {
+const recordsFor = (source, cwd, input = {}) => {
     if (source.sha !== undefined) {
-        return collectRecords({ cwd, allHistory: true, revision: source.sha });
+        return { ...collectRecords({ cwd, allHistory: true, revision: source.sha }), unreadCommits: 0 };
     }
     try {
-        return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
+        const indexed = indexedHeadRecords(cwd, input);
+        return {
+            records: indexed.records,
+            notes: notesAvailability({ cwd }),
+            unreadCommits: indexed.unreadCommits,
+        };
     }
     catch {
-        return collectRecords({ cwd, allHistory: true, revision: 'HEAD' });
+        return { ...collectRecords({ cwd, allHistory: true, revision: 'HEAD' }), unreadCommits: 0 };
     }
 };
 const reachableShas = (revision, cwd) => {
@@ -507,8 +525,9 @@ const checkReferences = (input, sources, cwd) => {
             ? sources[sources.length - 1].sha
             : undefined;
         let tipAllRecords;
+        let unreadCommits = 0;
         if (tipSha !== undefined) {
-            const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd);
+            const tipScan = recordsFor({ sha: tipSha, message: '' }, cwd, input);
             if (tipScan.notes === 'unfetched') {
                 return {
                     check: {
@@ -538,7 +557,9 @@ const checkReferences = (input, sources, cwd) => {
             // for the commit's own record and wrong for the block beside it
             // (bug-issue-352).
             const blocks = parseRecordBlocks(source.message);
-            const scan = recordsFor(source, cwd);
+            const scan = recordsFor(source, cwd, input);
+            if (scan.unreadCommits > unreadCommits)
+                unreadCommits = scan.unreadCommits;
             if (scan.notes === 'unfetched') {
                 return {
                     check: {
@@ -607,18 +628,29 @@ const checkReferences = (input, sources, cwd) => {
         // is not: `hasShallowHistory` spawns `git rev-parse`, and this function runs
         // inside the commit-msg hook on every commit. The overwhelmingly common case
         // is a clean record with nothing to explain, and it should pay nothing.
-        const suppressed = violations.some((violation) => violation.rule === 'dangling-ref') && hasShallowHistory(cwd);
-        const reported = suppressed
+        const danglingPresent = violations.some((violation) => violation.rule === 'dangling-ref');
+        const shallow = danglingPresent && hasShallowHistory(cwd);
+        const partial = unreadCommits > 0;
+        // A dangling-ref against a partial or shallow corpus is not a verdict
+        // about the record: the target may sit in the unread or uncloned half.
+        // Duplicate ids we *did* see are still failures.
+        const withdrawDangling = shallow || (partial && danglingPresent);
+        const reported = withdrawDangling
             ? violations.filter((violation) => violation.rule !== 'dangling-ref')
             : violations;
+        const reasons = [
+            ...(partial ? [PARTIAL_INDEX_REASON] : []),
+            ...(shallow ? [SHALLOW_REFERENCE_REASON] : []),
+        ];
         return {
             check: {
                 class: 'reference',
                 // `not-checked` rather than `ok` when something was withheld: the
                 // green would be the part a reader carries away, and this command has
-                // no verdict to offer on the reference it could not resolve.
-                status: reported.length > 0 ? 'failed' : suppressed ? 'not-checked' : 'ok',
-                ...(suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}),
+                // no verdict to offer on the reference it could not resolve. A commit
+                // accepted against a partial index must not read as fully checked.
+                status: reported.length > 0 ? 'failed' : reasons.length > 0 ? 'not-checked' : 'ok',
+                ...(reasons.length > 0 ? { reason: reasons.join('; ') } : {}),
             },
             violations: reported,
         };
@@ -809,6 +841,10 @@ export const register = (program) => {
             ...(flags.commit === undefined ? {} : { commit: flags.commit }),
             ...(flags.range === undefined ? {} : { range: flags.range }),
             ...(flags.json === undefined ? {} : { json: flags.json }),
+            // The commit-msg hook is this command with `--message-file`. Four
+            // minutes to accept one commit is worse than a partial check that
+            // says it is partial.
+            scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         });
         if (result.stdout !== '')
             process.stdout.write(result.stdout);

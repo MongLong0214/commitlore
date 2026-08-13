@@ -683,7 +683,10 @@ export const guard = (opts: GuardOptions): GuardResult => {
     history: result.history,
     shallow: result.shallow,
     notes: result.notes,
-    incomplete: result.history === 'unavailable' || result.notes === 'unfetched',
+    incomplete:
+      result.history === 'unavailable' ||
+      result.notes === 'unfetched' ||
+      result.unreadCommits > 0,
   };
 
   if (proposal.stems.size === 0 && ids.size === 0) {

@@ -70,6 +70,11 @@ export interface JsonOutput {
      */
     history: string;
     notes: string;
+    /**
+     * Commits a budget left unread. Always present: 0 means the answer was drawn
+     * from the whole history, and anything else means it was not.
+     */
+    unreadCommits: number;
     diagnostics: string[];
     records: JsonRecord[];
 }

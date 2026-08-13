@@ -21,7 +21,7 @@
  */
 import { type RenderedGuardMatch } from './guard.js';
 /** The three verification gaps this codebase checks for, in canonical order. */
-export type VerificationGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched';
+export type VerificationGap = 'history-unavailable' | 'shallow-history' | 'notes-unfetched' | 'unread-commits';
 /** Guard confidence enum — qualifies `possible_revival_matches` only. */
 export type GuardConfidence = 'not-run' | 'experimental' | 'timed-out';
 /** One active decision record, as surfaced to the caller. */
