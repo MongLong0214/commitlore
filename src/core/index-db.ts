@@ -73,7 +73,8 @@ import {
  * `better-sqlite3`: importing this file must never throw before a caller can
  * choose `--no-index`. `node:sqlite` is experimental and version-gated: it
  * exists behind `--experimental-sqlite` from Node 22.5 and is unflagged only
- * from 22.13, which is why the package floor is `>=22.13.0` and not 22.5.
+ * from 22.13. The index also requires SQLite FTS5, available from 22.16; the
+ * package tracks current Node 22 LTS at `>=22.23.2`, which guarantees both.
  * A Node that only has the flagged module still throws here. The construct
  * signature is declared locally to name exactly the surface this file uses;
  * `@types/node` exports `DatabaseSync` itself directly, unlike
@@ -990,8 +991,8 @@ const createSchema = (db: IndexDatabase): void => {
  * depth 1+ opens a named `SAVEPOINT` and releases or rolls back to it on exit,
  * leaving the outer transaction open either way. Depth is tracked per
  * database in JS rather than read back from SQLite (`db.isTransaction` would
- * also work, but only since Node 22.16 — this needs nothing past the 22.13
- * floor `node:sqlite` itself sets once it is unflagged).
+ * also work, but only since Node 22.16 — the 22.23.2 floor already guarantees
+ * it, although this implementation does not need that newer primitive).
  */
 const transactionDepth = new WeakMap<IndexDatabase, number>();
 

@@ -125,15 +125,16 @@ describe('ordering', () => {
 /**
  * The gap that let 22.12.0 ship: check-engines read declared dependency
  * ranges and could not see a bare `node:` builtin. The product's index
- * imports `node:sqlite`, which is unflagged only from 22.13.0.
+ * imports `node:sqlite` and needs its FTS5 surface, which is complete only
+ * from 22.16.0.
  *
  * The 22.12.0 case below is the bug. If it starts passing, the table no
  * longer knows what sqlite needs, and the next too-low floor will ship
  * the same way.
  */
 describe('imported node: builtins against the declared floor', () => {
-  it('treats node:sqlite as unflagged from 22.13.0', () => {
-    expect(UNFLAGGED_SINCE['node:sqlite']).toEqual([22, 13, 0]);
+  it('treats node:sqlite as requiring FTS5 from 22.16.0', () => {
+    expect(UNFLAGGED_SINCE['node:sqlite']).toEqual([22, 16, 0]);
   });
 
   it('finds node:sqlite in the product source, including createRequire', () => {
@@ -146,16 +147,16 @@ describe('imported node: builtins against the declared floor', () => {
     ).toEqual(['node:sqlite']);
   });
 
-  it('refuses a 22.12.0 floor when src/ imports node:sqlite', () => {
+  it('refuses a 22.15.0 floor when src/ imports node:sqlite without FTS5', () => {
     const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
-    expect(gatedBuiltinOffenders([22, 12, 0], imported)).toEqual([
-      { specifier: 'node:sqlite', needed: [22, 13, 0] },
+    expect(gatedBuiltinOffenders([22, 15, 0], imported)).toEqual([
+      { specifier: 'node:sqlite', needed: [22, 16, 0] },
     ]);
   });
 
-  it('accepts a 22.13.0 floor for the same import', () => {
+  it('accepts a 22.16.0 floor for the same import', () => {
     const imported = scanNodeBuiltins(readSourceFiles().map(([, source]) => source));
-    expect(gatedBuiltinOffenders([22, 13, 0], imported)).toEqual([]);
+    expect(gatedBuiltinOffenders([22, 16, 0], imported)).toEqual([]);
   });
 
   it('the declared engines.node floor covers every gated builtin src/ imports', () => {

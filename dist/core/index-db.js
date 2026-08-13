@@ -709,8 +709,8 @@ const createSchema = (db) => {
  * depth 1+ opens a named `SAVEPOINT` and releases or rolls back to it on exit,
  * leaving the outer transaction open either way. Depth is tracked per
  * database in JS rather than read back from SQLite (`db.isTransaction` would
- * also work, but only since Node 22.16 — this needs nothing past the 22.13
- * floor `node:sqlite` itself sets once it is unflagged).
+ * also work, but only since Node 22.16 — the 22.23.2 floor already guarantees
+ * it, although this implementation does not need that newer primitive).
  */
 const transactionDepth = new WeakMap();
 const runInTransaction = (db, fn) => {

@@ -1,6 +1,7 @@
 /**
  * Skip seam for bench/cdeb tests that need zlib.zstdCompressSync (Node 22.15.0).
- * The package floor is 22.13.0; these tests must not raise it.
+ * The package floor is 22.23.2, which includes zstd. This seam still makes
+ * local runs on unsupported older Nodes report a skip rather than a load error.
  */
 import { describe as vitestDescribe } from "vitest";
 

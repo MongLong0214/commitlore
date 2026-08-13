@@ -12,10 +12,10 @@
  * been reviewed and its issue closed.
  *
  * Declared ranges still cannot see a bare `node:` builtin. The product's
- * index imports `node:sqlite`, which is unflagged only from 22.13.0, and a
- * 22.12.0 floor shipped because this script never looked at src/. It does
- * now: every `node:` specifier under src/ is checked against the version
- * that provides it unflagged.
+ * index imports `node:sqlite` and requires its bundled FTS5 support, which
+ * begins at 22.16.0. A 22.12.0 floor shipped because this script never looked
+ * at src/. It does now: every `node:` specifier under src/ is checked against
+ * the version that provides the surface this product needs.
  *
  * npm prints EBADENGINE as a warning and installs anyway, so the signal exists
  * but does not stop anything. This turns it into a failure.

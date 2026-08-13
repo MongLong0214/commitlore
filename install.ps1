@@ -54,10 +54,13 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = 'MongLong0214/commitlore'
 $NodeMajorMin = 22
-# Two requirements meet here: `node:sqlite` unflagged (22.13) and the
-# `commander` dependency (22.12). The floor is the higher, and `engines.node`
-# says the same.
-$NodeMinorMin = 13
+# The index needs FTS5 as well as the `node:sqlite` module. The module is
+# unflagged from 22.13, but bundled SQLite exposes FTS5 only from 22.16. The
+# package tracks the current stable Node 22 LTS, 22.23.2, which guarantees both
+# requirements; `engines.node` says the same.
+$NodeMinorMin = 23
+$NodePatchMin = 2
+$NodeFloor = '{0}.{1}.{2}' -f $NodeMajorMin, $NodeMinorMin, $NodePatchMin
 $WrapperMarker = ':: commitlore:wrapper:v1'
 
 $SourceUrl = $env:COMMITLORE_INSTALL_SOURCE
@@ -448,7 +451,7 @@ function Invoke-LegacySmoke {
 # also the right one -- it is what typing `node` would run.
 $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -eq $nodeCommand) {
-    Stop-Install "Node.js $NodeMajorMin or newer is required and no ""node"" was found on PATH. Install Node.js $NodeMajorMin+ (https://nodejs.org), then run this again. Nothing was installed." 1
+    Stop-Install "Node.js $NodeFloor or newer is required and no ""node"" was found on PATH. Install Node.js $NodeFloor+ (https://nodejs.org), then run this again. Nothing was installed." 1
 }
 $nodeBin = $nodeCommand.Source
 
@@ -465,13 +468,16 @@ if ($nodeVersion -notmatch '^v[0-9]+') {
 }
 $nodeMajor = [int]($nodeVersion.TrimStart('v').Split('.')[0])
 $nodeMinorRaw = ($nodeVersion.TrimStart('v').Split('.') + @('0'))[1]
+$nodePatchRaw = ($nodeVersion.TrimStart('v').Split('.') + @('0', '0'))[2]
 $nodeMinor = 0
+$nodePatch = 0
 [void][int]::TryParse($nodeMinorRaw, [ref]$nodeMinor)
-if ($nodeMajor -eq $NodeMajorMin -and $nodeMinor -lt $NodeMinorMin) {
-    Stop-Install "Node.js $nodeVersion is too old: this release needs Node $NodeMajorMin.$NodeMinorMin or newer (node:sqlite for the index, and a direct dependency). Upgrade Node.js, then run this again. Nothing was installed." 1
+[void][int]::TryParse($nodePatchRaw, [ref]$nodePatch)
+if ($nodeMajor -eq $NodeMajorMin -and ($nodeMinor -lt $NodeMinorMin -or ($nodeMinor -eq $NodeMinorMin -and $nodePatch -lt $NodePatchMin))) {
+    Stop-Install "Node.js $nodeVersion is too old: this release needs Node $NodeFloor or newer (node:sqlite with FTS5 for the index). Upgrade Node.js, then run this again. Nothing was installed." 1
 }
 if ($nodeMajor -lt $NodeMajorMin) {
-    Stop-Install "Node.js $NodeMajorMin or newer is required; this machine has $nodeVersion. Upgrade Node.js, then run this again. Nothing was installed." 1
+    Stop-Install "Node.js $NodeFloor or newer is required; this machine has $nodeVersion. Upgrade Node.js, then run this again. Nothing was installed." 1
 }
 
 # Run it rather than only look for it: a git that cannot execute is as useless

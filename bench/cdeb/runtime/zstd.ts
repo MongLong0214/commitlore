@@ -1,11 +1,13 @@
 /**
- * Lazy zstd wrappers so bench/cdeb loads on Node 22.13–22.14.
+ * Lazy zstd wrappers so bench/cdeb can still be inspected on an unsupported
+ * older Node.
  *
  * `zstdCompressSync` is a 22.15.0 API and is used only in this harness, never
  * in src/ or dist/. A named import of it fails the whole module on an older
  * 22, which would force the package floor up to dodge a path users do not
- * run. Namespace import plus a thrown Error keeps the module loadable; the
- * tests skip when the function is missing.
+ * run. The published floor is now 22.23.2, so supported runtimes have zstd;
+ * the namespace import plus a thrown Error keeps local older-node runs
+ * loadable, and the tests skip when the function is missing.
  */
 import * as zlib from "node:zlib";
 

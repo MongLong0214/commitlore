@@ -1,6 +1,11 @@
 # ADR-0033: raise the supported Node floor to 22.13.0
 
-- Status: Accepted (2026-08-13)
+> ⚠️ **Superseded by [ADR-0034](ADR-0034-node-floor-22-23.md).**
+> This ADR correctly guaranteed the unflagged `node:sqlite` module, but not
+> FTS5 in the SQLite bundled with Node 22.13–22.15.
+
+- Status: Superseded (2026-08-13)
+- Superseded by: [ADR-0034](ADR-0034-node-floor-22-23.md)
 - Owner: CTO
 - Issue: [#586](https://github.com/MongLong0214/commitlore/issues/586)
 - Supersedes: [ADR-0010](ADR-0010-node-floor.md)'s floor of `>=22` (later written

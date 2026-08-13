@@ -82,20 +82,25 @@ export const admits = (range, version) => {
 };
 
 /**
- * Built-ins that exist earlier than they are usable without a flag.
+ * Built-ins and bundled capabilities that the product needs, expressed as the
+ * lowest Node release that provides the complete required surface.
  *
  * `check-engines.mjs` used to read only declared `engines.node` ranges. A
  * bare `node:` import has no range, so the product's own storage layer
- * (`node:sqlite`, unflagged at 22.13.0) sat below a 22.12.0 floor and
+ * (`node:sqlite`, whose FTS5 surface is complete at 22.16.0) sat below a
+ * 22.12.0 floor and
  * nobody's check could see it. This table is that check.
  *
  * A specifier not in this table is treated as unflagged at 22.0. Add an
- * entry when src/ starts importing a builtin that is still flagged at the
- * current floor. Do not put bench-only APIs here — `zlib.zstdCompressSync`
- * is 22.15.0 and lives only in bench/cdeb.
+ * entry when src/ starts importing a builtin or using a capability that the
+ * current floor lacks. Do not put bench-only APIs here —
+ * `zlib.zstdCompressSync` is 22.15.0 and lives only in bench/cdeb.
  */
 export const UNFLAGGED_SINCE = Object.freeze({
-  'node:sqlite': Object.freeze([22, 13, 0]),
+  // The module is unflagged at 22.13.0, but the index's FTS5 virtual table
+  // works only from 22.16.0. This table records what this code needs, not the
+  // earlier version from which a narrower import happens to resolve.
+  'node:sqlite': Object.freeze([22, 16, 0]),
 });
 
 const NODE_SPECIFIER =
@@ -111,8 +116,8 @@ export const scanNodeBuiltins = (sources) => {
 };
 
 /**
- * Specifiers whose unflagged version is newer than `floor`. Empty when the
- * floor covers every gated builtin in `specifiers`.
+ * Specifiers whose required version is newer than `floor`. Empty when the
+ * floor covers every gated builtin/capability in `specifiers`.
  */
 export const gatedBuiltinOffenders = (floor, specifiers) => {
   const offenders = [];

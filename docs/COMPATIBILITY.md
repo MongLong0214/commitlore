@@ -52,12 +52,12 @@ message naming what is missing. The MCP server runs the bundle directly.
 
 | Prerequisite | Required by | Checked by `install.sh` | Checked by `install.ps1` |
 |---|---|---|---|
-| Node.js ≥ 22.13 | plugin path, `install.sh`, `install.ps1` | yes | yes |
+| Node.js ≥ 22.23.2 | plugin path, `install.sh`, `install.ps1` | yes | yes |
 | Git | plugin path, `install.sh`, `install.ps1` | yes | yes |
 | A POSIX shell (`bash`) | plugin path only | — | — |
 
-The Node floor is the one the package declares ([ADR-0033](adr/ADR-0033-node-floor-22-13.md),
-superseding [ADR-0010](adr/ADR-0010-node-floor.md)),
+The Node floor is the one the package declares ([ADR-0034](adr/ADR-0034-node-floor-22-23.md),
+superseding [ADR-0033](adr/ADR-0033-node-floor-22-13.md)),
 and the table states the same number both scripts hold.
 
 The shell row is the prerequisite that is easiest to miss: `commitlore-run.sh`
