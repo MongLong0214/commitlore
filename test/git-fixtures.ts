@@ -5,6 +5,7 @@ interface InitRepo {
   readonly path: string;
   readonly bare?: boolean;
   readonly env?: NodeJS.ProcessEnv;
+  readonly objectFormat?: 'sha1' | 'sha256';
   readonly source?: never;
 }
 
@@ -35,6 +36,9 @@ export const createTestRepo = (options: InitRepo | CloneRepo): string => {
           '--quiet',
           '--template=',
           '--initial-branch=main',
+          ...('objectFormat' in options && options.objectFormat !== undefined
+            ? [`--object-format=${options.objectFormat}`]
+            : []),
           ...(options.bare === true ? ['--bare'] : []),
           options.path,
         ];

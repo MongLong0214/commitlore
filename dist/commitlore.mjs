@@ -11114,58 +11114,6 @@ var program = new Command();
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-var GIT_SPAWN_FAILED = -1;
-var DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
-var gitResultFromSpawn = (result) => {
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-  if (result.status !== null) return { stdout, stderr, code: result.status };
-  if (result.error !== void 0) {
-    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
-  }
-  const signal = result.signal ?? "unknown";
-  return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
-};
-var execGit = (args, opts = {}) => {
-  const result = spawnSync("git", args, {
-    shell: false,
-    encoding: "utf8",
-    cwd: opts.cwd ?? process.cwd(),
-    input: opts.stdin ?? "",
-    env: opts.env,
-    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
-    timeout: opts.timeout
-  });
-  return gitResultFromSpawn(result);
-};
-var GIT_FAILURE = "commitloreGitFailure";
-var isGitFailure = (error2) => error2 instanceof Error && error2[GIT_FAILURE] === true;
-var execGitOrThrow = (args, opts = {}) => {
-  const result = execGit(args, opts);
-  if (result.code !== 0) {
-    const error2 = Object.assign(
-      new Error(`git ${args.join(" ")} failed (exit ${result.code}): ${result.stderr.trim()}`),
-      { code: result.code, stderr: result.stderr }
-    );
-    Object.defineProperty(error2, GIT_FAILURE, { value: true });
-    throw error2;
-  }
-  return result.stdout;
-};
-var GIT_NO_SUCH_REF = 1;
-var historyAvailability = (cwd) => {
-  const dir = execGit(["rev-parse", "--git-dir"], { cwd });
-  if (dir.code !== 0) return "unavailable";
-  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { cwd });
-  if (head.code === 0 && head.stdout.trim() !== "") return "ready";
-  if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === "") return "empty";
-  return "unavailable";
-};
-var SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
-var hasShallowHistory = (cwd) => {
-  const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
-  return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
-};
 
 // src/core/types.ts
 var KNOWN_KEYS = [
@@ -11238,6 +11186,9 @@ var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
 var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
 var GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
+var FULL_OBJECT_ID_PATTERN = "(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})";
+var FULL_OBJECT_ID_RE = new RegExp(`^${FULL_OBJECT_ID_PATTERN}$`);
+var isFullObjectId = (value) => FULL_OBJECT_ID_RE.test(value);
 var PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
 var PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
 var PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map(
@@ -11256,6 +11207,69 @@ var parseProvenance = (value) => {
     return { kind: trimmed };
   }
   return void 0;
+};
+
+// src/core/git.ts
+var GIT_SPAWN_FAILED = -1;
+var DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
+var gitResultFromSpawn = (result) => {
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  if (result.status !== null) return { stdout, stderr, code: result.status };
+  if (result.error !== void 0) {
+    return { stdout, stderr: `${stderr}${result.error.message}`, code: GIT_SPAWN_FAILED };
+  }
+  const signal = result.signal ?? "unknown";
+  return { stdout, stderr: `${stderr}git terminated by signal ${signal}`, code: GIT_SPAWN_FAILED };
+};
+var execGit = (args, opts = {}) => {
+  const result = spawnSync("git", args, {
+    shell: false,
+    encoding: "utf8",
+    cwd: opts.cwd ?? process.cwd(),
+    input: opts.stdin ?? "",
+    env: opts.env,
+    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout
+  });
+  return gitResultFromSpawn(result);
+};
+var GIT_FAILURE = "commitloreGitFailure";
+var isGitFailure = (error2) => error2 instanceof Error && error2[GIT_FAILURE] === true;
+var execGitOrThrow = (args, opts = {}) => {
+  const result = execGit(args, opts);
+  if (result.code !== 0) {
+    const error2 = Object.assign(
+      new Error(`git ${args.join(" ")} failed (exit ${result.code}): ${result.stderr.trim()}`),
+      { code: result.code, stderr: result.stderr }
+    );
+    Object.defineProperty(error2, GIT_FAILURE, { value: true });
+    throw error2;
+  }
+  return result.stdout;
+};
+var resolveRevision = (cwd, revision) => {
+  const result = execGit(
+    ["rev-parse", "--verify", "--quiet", "--end-of-options", `${revision}^{commit}`],
+    { cwd }
+  );
+  if (result.code !== 0) return null;
+  const resolved = result.stdout.trim();
+  return isFullObjectId(resolved) ? resolved : null;
+};
+var GIT_NO_SUCH_REF = 1;
+var historyAvailability = (cwd) => {
+  const dir = execGit(["rev-parse", "--git-dir"], { cwd });
+  if (dir.code !== 0) return "unavailable";
+  const head = execGit(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { cwd });
+  if (head.code === 0 && head.stdout.trim() !== "") return "ready";
+  if (head.code === GIT_NO_SUCH_REF && head.stderr.trim() === "") return "empty";
+  return "unavailable";
+};
+var SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
+var hasShallowHistory = (cwd) => {
+  const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
+  return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
 
 // src/core/trailers.ts
@@ -11971,6 +11985,31 @@ var reviewRecord = (entry, index) => {
     );
   }
   return { trailers, evidence };
+};
+var decodedDraftError = (records) => {
+  const EVIDENCE_FIELDS2 = ["key", "source", "quote", "locator"];
+  for (const [index, record2] of records.entries()) {
+    const at = `record ${index}`;
+    if (!isObject(record2)) return `${at} is not an object`;
+    const trailers = record2["trailers"];
+    if (!Array.isArray(trailers)) return `${at}: "trailers" must be an array`;
+    const evidence = record2["evidence"];
+    if (!Array.isArray(evidence)) return `${at}: "evidence" must be an array`;
+    for (const [i, trailer] of trailers.entries()) {
+      if (!isObject(trailer)) return `${at}: trailers[${i}] is not an object`;
+      if (typeof trailer["key"] !== "string") return `${at}: trailers[${i}] has no string "key"`;
+      if (typeof trailer["value"] !== "string") return `${at}: trailers[${i}] has no string "value"`;
+    }
+    for (const [i, item] of evidence.entries()) {
+      if (!isObject(item)) return `${at}: evidence[${i}] is not an object`;
+      for (const field of EVIDENCE_FIELDS2) {
+        if (typeof item[field] !== "string") {
+          return `${at}: evidence[${i}] has no string "${field}"`;
+        }
+      }
+    }
+  }
+  return null;
 };
 var parseDocument = (raw) => {
   let parsed;
@@ -14870,10 +14909,9 @@ var restrictGrade = (a, b) => {
 var AUTHOR_BATCH = 200;
 var AUTHOR_RECORD_SEP = "";
 var AUTHOR_FIELD_SEP = "\0";
-var AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
 var AUTHOR_FORMAT = "--format=%x01%H%x00%an <%ae>%x00%G?";
 var authorsOf = (cwd, shas) => {
-  const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
+  const wanted = [...new Set(shas)].filter((sha) => isFullObjectId(sha)).sort();
   const authors = /* @__PURE__ */ new Map();
   for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
     const batch = wanted.slice(start, start + AUTHOR_BATCH);
@@ -14904,7 +14942,7 @@ var noteAuthorsOf = (cwd) => {
     const writer = { author: noteAuthor, signatureStatus: status.trim() };
     for (const line2 of pathLines) {
       const annotated = line2.trim().replace(/\//g, "");
-      if (!AUTHOR_SHA_RE.test(annotated)) continue;
+      if (!isFullObjectId(annotated)) continue;
       const seen = authors.get(annotated);
       if (seen === void 0) authors.set(annotated, [writer]);
       else if (!seen.some(
@@ -15933,16 +15971,15 @@ var atomicWriteJson = (filePath, data) => {
     throw markCaptureError(thrown, "operational");
   }
 };
-var COMMIT_ID_RE = /^[0-9a-f]{40}$/;
 var resolveHead = (cwd) => {
   const result = execGit(["rev-parse", "HEAD"], { cwd });
   if (result.code !== 0) return null;
   const head = result.stdout.trim();
-  return COMMIT_ID_RE.test(head) ? head : null;
+  return isFullObjectId(head) ? head : null;
 };
 var headHasMovedPast = (baseHead, head) => {
   if (head === null) return false;
-  if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
+  if (typeof baseHead !== "string" || !isFullObjectId(baseHead)) return false;
   return baseHead !== head;
 };
 var pendingIsStale = (record2, head) => {
@@ -15951,7 +15988,7 @@ var pendingIsStale = (record2, head) => {
 };
 var makePreparedPending = (opts) => {
   validateNonce(opts.nonce);
-  if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
+  if (!isFullObjectId(opts.base_head)) {
     throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
   return {
@@ -16187,11 +16224,10 @@ var computeGuardAdvisory = (opts) => {
     };
   }
 };
-var isObjectId = (value) => /^[0-9a-f]{40}$/.test(value);
 var prepareValues = (opts) => {
   const { cwd, transcript, snapshot } = opts;
   const baseHead = snapshot?.base_head ?? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
-  if (!isObjectId(baseHead)) {
+  if (!isFullObjectId(baseHead)) {
     throw markCaptureError(
       new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?"),
       "operational"
@@ -16200,7 +16236,7 @@ var prepareValues = (opts) => {
   const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
   const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
-  if (!isObjectId(stagedTreeOid)) {
+  if (!isFullObjectId(stagedTreeOid)) {
     throw markCaptureError(
       new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?"),
       "operational"
@@ -16886,7 +16922,7 @@ var historiesBeforeCommit = (cwd) => {
     entries.push(record2);
     bySha.set(record2.sha, entries);
   }
-  const shas = gitOutput(["rev-list", "--reverse", "HEAD"], cwd).split("\n").filter((sha) => /^[0-9a-f]{40}$/.test(sha));
+  const shas = gitOutput(["rev-list", "--reverse", "HEAD"], cwd).split("\n").filter((sha) => isFullObjectId(sha));
   const prior = [];
   const histories = /* @__PURE__ */ new Map();
   for (const sha of shas) {
@@ -16904,11 +16940,8 @@ var truncateDiff2 = (diff) => {
 `;
 };
 var historicalCommits = (cwd, since) => {
-  const resolved = gitOutput(
-    ["rev-parse", "--verify", "--quiet", "--end-of-options", `${since}^{commit}`],
-    cwd
-  ).trim();
-  if (!/^[0-9a-f]{40}$/.test(resolved)) {
+  const resolved = resolveRevision(cwd, since);
+  if (resolved === null) {
     throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
   }
   const range = `${resolved}..HEAD`;
@@ -16941,15 +16974,15 @@ var historicalCommits = (cwd, since) => {
     const separator = record2.indexOf(FIELD_SEP3);
     if (separator === -1) continue;
     const sha = record2.slice(0, separator);
-    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    if (!isFullObjectId(sha)) continue;
     patchesBySha.set(sha, truncateDiff2(record2.slice(separator + 1)));
   }
   return splitGitRecords(metadata).flatMap((record2) => {
     const [sha, subject, parents, tree, message] = record2.split(FIELD_SEP3);
     if (sha === void 0 || subject === void 0 || parents === void 0 || tree === void 0 || message === void 0) return [];
     const baseHead = parents.split(" ")[0] ?? "";
-    if (!/^[0-9a-f]{40}$/.test(sha)) return [];
-    if (!/^[0-9a-f]{40}$/.test(baseHead) || !/^[0-9a-f]{40}$/.test(tree)) {
+    if (!isFullObjectId(sha)) return [];
+    if (!isFullObjectId(baseHead) || !isFullObjectId(tree)) {
       return [{ sha, subject: displaySubject(subject), sources: null }];
     }
     const diff = patchesBySha.get(sha) ?? "";
@@ -21166,9 +21199,8 @@ var allRecordIdsPresent = (commitMessage, records) => {
   if (ids.length === 0) return false;
   return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
-var COMMIT_ID_RE2 = /^[0-9a-f]{40}$/;
 var isAmendedBase = (baseHead, firstParent, cwd) => {
-  if (!COMMIT_ID_RE2.test(baseHead)) return false;
+  if (!isFullObjectId(baseHead)) return false;
   const previousHead = execGit(["rev-parse", "--verify", "HEAD@{1}"], { cwd });
   if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;
   const previousParent = execGit(["rev-parse", "--verify", `${baseHead}^`], { cwd });
@@ -21411,7 +21443,8 @@ var squashMessagePath = (cwd) => {
 };
 var squashCommitIds = (message) => {
   const ids = [];
-  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+  const pattern = new RegExp(`^commit (${FULL_OBJECT_ID_PATTERN})$`, "gm");
+  for (const match of message.matchAll(pattern)) {
     const id = match[1];
     if (id !== void 0) ids.push(id);
   }
@@ -33482,6 +33515,10 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
         }
       } catch (e) {
         throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      const structural = decodedDraftError(draft);
+      if (structural !== null) {
+        throw new Error(`malformed draft: ${structural}`);
       }
       const result = verifyCaptureRecords({
         nonce,

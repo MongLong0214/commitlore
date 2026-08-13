@@ -161,8 +161,6 @@ const headSha = (cwd) => {
     const result = execGit(['rev-parse', 'HEAD'], { cwd });
     return result.code === 0 ? result.stdout.trim() : '';
 };
-/** Object names as git writes them. Anything else never reaches a git argument. */
-const SHA_RE = /^[0-9a-f]{4,40}$/;
 // ---------------------------------------------------------------------------
 // Grading
 // ---------------------------------------------------------------------------
