@@ -43,15 +43,17 @@
     "url": "https://github.com/MongLong0214/commitlore/issues"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
-    "commander": "^15.0.0",
     "esbuild": "^0.28.1",
     "js-yaml": "^5.2.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "commander": "^15.0.0"
   }
 }
