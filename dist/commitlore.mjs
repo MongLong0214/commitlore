@@ -15812,6 +15812,10 @@ var headHasMovedPast = (baseHead, head) => {
   if (typeof baseHead !== "string" || !COMMIT_ID_RE.test(baseHead)) return false;
   return baseHead !== head;
 };
+var pendingIsStale = (record2, head) => {
+  if (record2.phase === "consumed") return false;
+  return headHasMovedPast(record2.base_head, head);
+};
 var makePreparedPending = (opts) => {
   validateNonce(opts.nonce);
   if (!/^[0-9a-f]{40}$/.test(opts.base_head)) {
@@ -18452,7 +18456,7 @@ var summarise = (record2, head) => ({
   created_at: record2.created_at,
   expires_at: record2.expires_at,
   base_head: record2.base_head,
-  stale: headHasMovedPast(record2.base_head, head),
+  stale: pendingIsStale(record2, head),
   gc_eligible: gcEligible(record2)
 });
 var runPendingList = (opts) => {
@@ -18518,7 +18522,7 @@ var runPendingShow = (opts) => {
   return {
     transaction: {
       ...record2,
-      stale: headHasMovedPast(record2.base_head, head),
+      stale: pendingIsStale(record2, head),
       gc_eligible: gcEligible(record2)
     },
     error: null
@@ -18709,7 +18713,7 @@ var checkPendingBacklog = (ctx) => {
   }
   const stranded = listing.transactions.filter((transaction) => transaction.stale);
   if (stranded.length === 0) {
-    const held = listing.transactions.length;
+    const held = listing.transactions.filter((transaction) => transaction.phase !== "consumed").length;
     return check(
       id,
       category,

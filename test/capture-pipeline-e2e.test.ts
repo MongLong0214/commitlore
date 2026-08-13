@@ -167,6 +167,22 @@ describe('a decision recorded through the MCP tools reaches the next agent', () 
 
     // And it reaches whoever edits that path next.
     expect(cli(dir, ['context', 'src/app.js']).out).toContain('hot loop');
+
+    // #584: the transaction the commit consumed is not a lost capture. Its
+    // `base_head` is behind HEAD by construction — the commit that consumed it
+    // is what moved HEAD — so reading that gap as staleness made success itself
+    // the evidence of loss. This is the state a user is in every time capture
+    // works, which is why it is asserted here rather than on a hand-written file.
+    const listed = cli(dir, ['pending', 'ls', '--json']);
+    const rows = JSON.parse(listed.out) as { transactions: { phase: string; stale: boolean }[] };
+    expect(rows.transactions.map((row) => row.phase)).toContain('consumed');
+    expect(rows.transactions.filter((row) => row.stale)).toEqual([]);
+
+    const health = cli(dir, ['doctor']);
+    expect(health.out, `doctor called a consumed capture lost:\n${health.out}`).not.toContain(
+      'never written to the history',
+    );
+    expect(health.out).not.toMatch(/can no longer apply/);
   }, 180_000);
 
   it('leaves no record when the evidence is not in the transcript', async () => {

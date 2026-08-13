@@ -93,6 +93,27 @@ export const headHasMovedPast = (baseHead, head) => {
     return baseHead !== head;
 };
 /**
+ * Whether this transaction can no longer reach a commit — the question `pending
+ * ls` prints as `stale` and doctor reads as a lost capture (#584).
+ *
+ * `headHasMovedPast` alone cannot answer it. A `consumed` transaction's
+ * `base_head` is behind HEAD *by construction*: the commit that consumed it is
+ * what moved HEAD past it, and `consumed_by` names that commit. So the gap the
+ * predicate measures is the signature of success on this phase, and reading it
+ * as staleness made every completed capture report itself as a decision that
+ * was never written — inverting the one alarm a user runs doctor to trust.
+ *
+ * Only `consumed` is excluded. `applied` looks similar and is not: the record
+ * hash is stamped before the commit object exists, so a commit the user aborted
+ * leaves an applied transaction whose decision really did go nowhere. Staleness
+ * there is a real warning, and the fix for a false alarm must not silence it.
+ */
+export const pendingIsStale = (record, head) => {
+    if (record.phase === 'consumed')
+        return false;
+    return headHasMovedPast(record.base_head, head);
+};
+/**
  * The in-memory form of a newly prepared transaction.
  *
  * `createPending` persists this exact shape. Read-only callers such as capture

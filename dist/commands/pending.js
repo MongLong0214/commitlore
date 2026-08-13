@@ -1,4 +1,4 @@
-import { deletePending, headHasMovedPast, listPendingNonces, readPending, resolveHead, } from '../core/pending.js';
+import { deletePending, listPendingNonces, pendingIsStale, readPending, resolveHead, } from '../core/pending.js';
 /**
  * The two phases the post-commit hook can still turn into a record. `gcPending`
  * refuses to collect them and `rm` refuses to delete them, for that one reason —
@@ -23,7 +23,7 @@ const summarise = (record, head) => ({
     created_at: record.created_at,
     expires_at: record.expires_at,
     base_head: record.base_head,
-    stale: headHasMovedPast(record.base_head, head),
+    stale: pendingIsStale(record, head),
     gc_eligible: gcEligible(record),
 });
 export const runPendingList = (opts) => {
@@ -100,7 +100,7 @@ export const runPendingShow = (opts) => {
     return {
         transaction: {
             ...record,
-            stale: headHasMovedPast(record.base_head, head),
+            stale: pendingIsStale(record, head),
             gc_eligible: gcEligible(record),
         },
         error: null,

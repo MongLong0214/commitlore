@@ -56,12 +56,14 @@ const nonceOf = (seed: string): string => seed.repeat(32).slice(0, 32);
  */
 const pending = (
   nonce: string,
-  phase: 'prepared' | 'verified' | 'staged',
+  phase: 'prepared' | 'verified' | 'staged' | 'consumed',
   head: string,
+  consumedBy?: string,
 ): void => {
   const dir = join(repo, '.git', 'commitlore', 'pending');
   mkdirSync(dir, { recursive: true });
-  const staged = phase === 'staged';
+  const staged = phase === 'staged' || phase === 'consumed';
+  const consumed = phase === 'consumed';
   writeFileSync(
     join(dir, `${nonce}.json`),
     `${JSON.stringify(
@@ -74,11 +76,11 @@ const pending = (
         verified_at: '2026-07-31T05:09:58.000Z',
         staged_at: staged ? '2026-07-31T05:09:59.000Z' : null,
         expires_at: staged ? '2026-07-31T05:14:59.000Z' : null,
-        applied_at: null,
-        applied_record_hash: null,
-        consumed: false,
-        consumed_at: null,
-        consumed_by: null,
+        applied_at: consumed ? '2026-07-31T05:10:00.000Z' : null,
+        applied_record_hash: consumed ? 'r'.repeat(64) : null,
+        consumed,
+        consumed_at: consumed ? '2026-07-31T05:10:01.000Z' : null,
+        consumed_by: consumed ? (consumedBy ?? '9'.repeat(40)) : null,
         incomplete: false,
         records: [],
         validation_result: staged ? 'pass' : 'empty',
@@ -101,11 +103,16 @@ const backlogCheck = (): { status: string; detail: string } => {
   return { status: found.status, detail: found.detail };
 };
 
-/** Moves HEAD on, which is what makes an existing transaction stale. */
-const advance = (): void => {
+/**
+ * Moves HEAD on, which is what makes an existing transaction stale — and
+ * returns the commit that did it, so a consumed transaction can name the commit
+ * that consumed it rather than a plausible-looking sha.
+ */
+const advance = (): string => {
   writeFileSync(join(repo, 'b.ts'), 'export const b = 2;\n');
   execGit(['add', '-A'], { cwd: repo });
   execGit(['commit', '--no-verify', '-m', 'feat: b'], { cwd: repo });
+  return execGit(['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
 };
 
 describe('#458 doctor: pending captures', () => {
@@ -176,6 +183,37 @@ describe('#458 doctor: pending captures', () => {
     expect(result.status).toBe('warn');
     expect(result.detail).toMatch(/can no longer apply/);
     expect(result.detail).not.toMatch(/expired before reaching a commit/);
+  });
+
+  it('does not call a consumed capture lost — HEAD moved because it landed (#584)', () => {
+    // The reported case: phase `consumed`, `consumed_by` naming a commit that
+    // is in the history and carries the record. Its base_head is behind HEAD by
+    // construction, so a staleness test that only compares the two reports the
+    // successful path as the failure this check exists to catch.
+    const head = execGit(['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
+    const consumer = advance();
+    pending(nonceOf('9'), 'consumed', head, consumer);
+
+    const result = backlogCheck();
+    expect(result.status).toBe('ok');
+    expect(result.detail).not.toMatch(/never written to the history/);
+    expect(result.detail).not.toMatch(/can no longer apply/);
+    // Nor is it waiting: it is the receipt of a capture that already landed.
+    expect(result.detail).toMatch(/no captures are waiting/);
+  });
+
+  it('still counts a genuine loss when a consumed capture sits beside it', () => {
+    // The alarm must survive the fix: one capture landed, one was dropped, and
+    // only the dropped one is reported — neither silenced nor doubled.
+    const head = execGit(['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
+    pending(nonceOf('c'), 'staged', head);
+    const consumer = advance();
+    pending(nonceOf('d'), 'consumed', head, consumer);
+
+    const result = backlogCheck();
+    expect(result.status).toBe('warn');
+    expect(result.detail).toMatch(/1 staged capture\(s\) expired before reaching a commit/);
+    expect(result.detail).not.toMatch(/alongside/);
   });
 
   it('names the oldest capture so the age is visible without a second command', () => {

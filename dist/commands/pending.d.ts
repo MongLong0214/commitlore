@@ -10,8 +10,10 @@
  * Two facts are derived here rather than stored, because both are relative to the
  * repository as it is now:
  *
- * - `stale` — `base_head` no longer matches `HEAD`. The transaction will not apply
- *   to the commit being written, and at commit time that is a silent no-op.
+ * - `stale` — `base_head` no longer matches `HEAD` and the transaction has not
+ *   been consumed. It will not apply to the commit being written, and at commit
+ *   time that is a silent no-op. A consumed one is never stale however far HEAD
+ *   has moved: it moved because that transaction landed (#584).
  * - `gc_eligible` — whether `capture gc` would ever remove this file. Since #367
  *   that is a question about the phase alone: `staged` and `applied` are
  *   protected outright, and everything else is collected once its window has
@@ -31,7 +33,7 @@ export interface PendingSummary {
     created_at: string;
     expires_at: string | null;
     base_head: string;
-    /** `base_head` is no longer HEAD, so this transaction cannot apply. */
+    /** `base_head` is no longer HEAD and nothing consumed it, so it cannot apply. */
     stale: boolean;
     /** Whether `capture gc` would ever remove this file. */
     gc_eligible: boolean;
