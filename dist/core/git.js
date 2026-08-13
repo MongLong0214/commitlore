@@ -45,7 +45,9 @@ export const execGit = (args, opts = {}) => {
         encoding: 'utf8',
         cwd: opts.cwd ?? process.cwd(),
         input: opts.stdin ?? '',
+        env: opts.env,
         maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+        timeout: opts.timeout,
     });
     return gitResultFromSpawn(result);
 };

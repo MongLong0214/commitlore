@@ -18,8 +18,12 @@ export interface ExecGitOptions {
     /** Written to git's stdin. */
     stdin?: string;
     cwd?: string;
+    /** Environment passed to git. Defaults to this process's environment. */
+    env?: NodeJS.ProcessEnv;
     /** Max bytes buffered from stdout/stderr. Defaults to 64 MiB. */
     maxBuffer?: number;
+    /** Maximum time to wait for git before terminating it, in milliseconds. */
+    timeout?: number;
 }
 /**
  * `code` reported when git never ran to completion (binary missing, output

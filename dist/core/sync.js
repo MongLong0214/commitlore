@@ -34,6 +34,12 @@
 import { execGit } from './git.js';
 import { NOTES_REF, listRemotes } from './notes.js';
 const gitOptions = (opts) => opts.cwd === undefined ? {} : { cwd: opts.cwd };
+/** Options for the only sync children that can contact a remote. */
+const transportGitOptions = (opts) => ({
+    ...gitOptions(opts),
+    ...(opts.transport?.env === undefined ? {} : { env: opts.transport.env }),
+    ...(opts.transport?.timeout === undefined ? {} : { timeout: opts.transport.timeout }),
+});
 /** The ref a fetch lands on. Deliberately not `NOTES_REF`: see `syncRemote`. */
 const FETCH_HEAD_REF = 'refs/notes/commitlore-remote';
 /**
@@ -48,7 +54,7 @@ const FETCH_HEAD_REF = 'refs/notes/commitlore-remote';
  * of this push, not of the caller: nothing is served by a notes push running a
  * hook whose only job is to push notes.
  */
-const pushMirror = (remote, opts) => execGit(['push', '--no-verify', remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions(opts));
+const pushMirror = (remote, opts) => execGit(['push', '--no-verify', remote, `${NOTES_REF}:${NOTES_REF}`], transportGitOptions(opts));
 const revParse = (ref, opts) => {
     const result = execGit(['rev-parse', '--verify', '--quiet', ref], gitOptions(opts));
     const sha = result.stdout.trim();
@@ -75,7 +81,7 @@ export const syncRemote = (remote, opts = {}) => {
     // in addition to the one on the command line. Without this, a repository
     // configured for the mirror would move `refs/notes/commitlore` underneath the
     // three-way comparison below, which is the same overwrite #417 is about.
-    const fetched = execGit(['fetch', '--refmap=', '--force', remote, `${NOTES_REF}:${FETCH_HEAD_REF}`], gitOptions(opts));
+    const fetched = execGit(['fetch', '--refmap=', '--force', remote, `${NOTES_REF}:${FETCH_HEAD_REF}`], transportGitOptions(opts));
     // A remote with no notes ref is not an error: it is a remote nobody has
     // published to yet, which is the ordinary state of a fresh repository.
     const remoteMissing = fetched.code !== 0 && /couldn't find remote ref|does not appear to be a git repository/i.test(fetched.stderr);
