@@ -591,6 +591,121 @@ describe('verifyCaptureRecords', () => {
     expect(result.rejected[0]!.reason).toBe('canonical-duplicate');
   });
 
+  // === #588: capture must run the same reference check as validate --message-file ===
+  const LIMIT_QUOTE = 'Do not use shared mutable state for config because it causes race conditions';
+  const LIMIT_TRANSCRIPT = `We decided: ${LIMIT_QUOTE}.`;
+
+  const draftFollowing = (follows: string, id: string): DraftRecord => ({
+    trailers: [
+      { key: 'Limit', value: 'Do not use shared mutable state for config' },
+      { key: 'Follows', value: follows },
+      { key: 'Record-Id', value: id },
+    ],
+    evidence: [
+      {
+        key: 'Limit',
+        source: 'transcript',
+        quote: LIMIT_QUOTE,
+        locator: 'L1-L2',
+      },
+    ],
+  });
+
+  const seedHistory = (id: string): void => {
+    writeFileSync(join(cwd, '.record-message'), `Seed\n\nLimit: historical seed\nRecord-Id: ${id}\n`);
+    execSync('git commit --allow-empty -F .record-message', { cwd, stdio: 'ignore' });
+  };
+
+  it('rejects a draft whose Follows names no record in history', () => {
+    const nonce = prepare(cwd, LIMIT_TRANSCRIPT, '');
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [draftFollowing('r-zzzzzz', 'r-cap588a01')],
+      transcript: LIMIT_TRANSCRIPT,
+      diff: '',
+      cwd,
+    });
+
+    expect(result.accepted).toHaveLength(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]!.reason).toBe('dangling-ref');
+    expect(result.rejected[0]!.detail).toMatch(/Follows/);
+    expect(result.rejected[0]!.detail).toMatch(/r-zzzzzz/);
+    expect(result.validation_result).toBe('empty');
+
+    const pending = readPending(nonce, { cwd });
+    expect(pending).not.toBeNull();
+    expect(pending!.validation_result).toBe('empty');
+    expect(pending!.records).toHaveLength(0);
+  });
+
+  it('accepts a draft whose Follows names a Record-Id already in history', () => {
+    seedHistory('r-seed58801');
+    const nonce = prepare(cwd, LIMIT_TRANSCRIPT, '');
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [draftFollowing('r-seed58801', 'r-cap588b01')],
+      transcript: LIMIT_TRANSCRIPT,
+      diff: '',
+      cwd,
+    });
+
+    expect(result.accepted).toHaveLength(1);
+    expect(result.rejected).toHaveLength(0);
+    expect(result.validation_result).toBe('pass');
+    expect(recordId(result.accepted[0]!.record)).toBe('r-cap588b01');
+  });
+
+  it('resolves a Follows to a Record-Id accepted earlier in the same capture', () => {
+    const nonce = prepare(cwd, LIMIT_TRANSCRIPT, '');
+    const earlier: DraftRecord = {
+      trailers: [
+        { key: 'Limit', value: 'Do not use shared mutable state for config' },
+        { key: 'Record-Id', value: 'r-batch5881' },
+      ],
+      evidence: [
+        {
+          key: 'Limit',
+          source: 'transcript',
+          quote: LIMIT_QUOTE,
+          locator: 'L1-L2',
+        },
+      ],
+    };
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [earlier, draftFollowing('r-batch5881', 'r-batch5882')],
+      transcript: LIMIT_TRANSCRIPT,
+      diff: '',
+      cwd,
+    });
+
+    expect(result.accepted).toHaveLength(2);
+    expect(result.rejected).toHaveLength(0);
+    expect(result.validation_result).toBe('pass');
+  });
+
+  it('does not let a same-batch Follows resolve against a sibling that itself has a dangling ref', () => {
+    const nonce = prepare(cwd, LIMIT_TRANSCRIPT, '');
+    const ghost: DraftRecord = draftFollowing('r-zzzzzz', 'r-ghost588');
+    const follower: DraftRecord = draftFollowing('r-ghost588', 'r-child588');
+
+    const result = verifyCaptureRecords({
+      nonce,
+      draft: [ghost, follower],
+      transcript: LIMIT_TRANSCRIPT,
+      diff: '',
+      cwd,
+    });
+
+    expect(result.accepted).toHaveLength(0);
+    expect(result.rejected.map((entry) => entry.reason)).toEqual(['dangling-ref', 'dangling-ref']);
+    expect(result.validation_result).toBe('empty');
+  });
+
   // === Paraphrase boundary is honest ===
   it('result says canonical_exact_only', () => {
     const transcript = 'We decided on immutability.';

@@ -16229,6 +16229,38 @@ var classifyResult = (accepted, rejected) => {
   if (rejected.length === 0) return "pass";
   return "partial";
 };
+var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
+  if (hasShallowHistory(cwd)) return [...accepted];
+  const historical = [...historyIds].map((id) => ({
+    trailers: [{ key: "Record-Id", value: id }]
+  }));
+  let remaining = [...accepted];
+  let dropped = true;
+  while (dropped) {
+    dropped = false;
+    const next = [];
+    for (const verified of remaining) {
+      const siblings = remaining.filter((other) => other !== verified).map((other) => ({ trailers: other.record.trailers }));
+      const dangling = findDanglingRefs([...historical, ...siblings], [
+        { trailers: verified.record.trailers }
+      ]);
+      if (dangling.length === 0) {
+        next.push(verified);
+        continue;
+      }
+      dropped = true;
+      rejected.push({
+        record: verified.record,
+        reason: "dangling-ref",
+        detail: dangling.map(
+          (violation) => `${violation.key}: ${JSON.stringify(violation.got)} (${violation.rule}, want ${violation.want})`
+        ).join("; ")
+      });
+    }
+    remaining = next;
+  }
+  return remaining;
+};
 var loadCaptureVerificationHistory = (cwd) => {
   try {
     const recordIds = /* @__PURE__ */ new Set();
@@ -16367,6 +16399,9 @@ var verifyCaptureRecords = (opts) => {
       accepted.push(verified);
       if (id) reservedRecordIds.add(id);
     }
+    const surviving = rejectDanglingRefs(accepted, rejected, history.recordIds, cwd);
+    accepted.length = 0;
+    accepted.push(...surviving);
     if (resolvePolicy(cwd).policy.mode === "auto") {
       for (const verified of accepted) {
         const trailers = verified.record.trailers.filter(
