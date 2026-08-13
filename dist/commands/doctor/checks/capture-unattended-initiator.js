@@ -6,7 +6,8 @@
  * commit can begin that run.
  */
 import { POLICY_FILE_NAME, resolvePolicy } from '../../../core/capture-policy.js';
-import { MCP_REGISTRATION_FILE, registeredMcpCommand, registersCommitloreMcpServer, registrationIsOurs, } from '../../../core/mcp-registration.js';
+import { MCP_REGISTRATION_FILE, registeredMcpCommand, registeredMcpLaunch, registersCommitloreMcpServer, registrationIsOurs, } from '../../../core/mcp-registration.js';
+import { probeMcpSync } from '../../../core/mcp-probe.js';
 import { check } from '../model.js';
 /**
  * #527: a policy file said unattended capture was enabled, while normal Git
@@ -56,33 +57,30 @@ export const checkUnattendedCaptureInitiator = (ctx) => {
             },
         });
     }
-    if (registersCommitloreMcpServer(cwd)) {
-        // Registered and *ours* is the only combination this can vouch for.
-        // Anything else is an entry an operator chose, which is theirs to keep and
-        // not this report's to call verified: `{"command": "false"}` was reading as
-        // a working capture server.
+    const launch = registeredMcpLaunch(cwd);
+    if (launch !== null && registersCommitloreMcpServer(cwd)) {
         const command = registeredMcpCommand(cwd);
         const ours = registrationIsOurs(cwd);
-        if (!ours) {
-            return check(id, category, title, 'warn', `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, which is not the command ` +
-                'this tool writes — it is left alone, and whether it starts a capture server is unverified', `check that ${JSON.stringify(command)} is a CommitLore MCP server, or remove the entry and run commitlore init`, false, undefined, {
+        const problem = probeMcpSync(launch.command, launch.args);
+        if (problem !== null) {
+            return check(id, category, title, 'warn', `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${problem.detail}`, `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`, false, undefined, {
                 evidence: {
                     policy: 'unattended',
                     ordinary_git_commit: 'cannot-initiate',
-                    initiator: 'registered-command-unverified',
+                    initiator: 'registered-command-unhealthy',
                     command: command ?? '',
+                    probe: problem.kind,
                 },
             });
         }
-        return check(id, category, title, 'ok', `${MCP_REGISTRATION_FILE} registers the capture server, so a host loading it can start unattended capture; ` +
+        return check(id, category, title, 'ok', `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? '' : ' through a custom wrapper'}, so a host loading it can start unattended capture; ` +
             'an ordinary git commit outside that host still cannot', null, false, undefined, {
             evidence: {
                 policy: 'unattended',
                 ordinary_git_commit: 'cannot-initiate',
-                initiator: 'mcp-server-registered',
-                // Registration is configuration, not observation: nothing here
-                // proves a host has ever called the tool.
-                verified: 'registration-only',
+                initiator: 'mcp-server-verified',
+                registration: ours ? 'installer-owned' : 'custom-preserved',
+                verified: 'initialize-serverInfo-and-tools',
             },
         });
     }
