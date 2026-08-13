@@ -25,8 +25,12 @@ export interface ExecGitOptions {
   /** Written to git's stdin. */
   stdin?: string;
   cwd?: string;
+  /** Environment passed to git. Defaults to this process's environment. */
+  env?: NodeJS.ProcessEnv;
   /** Max bytes buffered from stdout/stderr. Defaults to 64 MiB. */
   maxBuffer?: number;
+  /** Maximum time to wait for git before terminating it, in milliseconds. */
+  timeout?: number;
 }
 
 /**
@@ -68,7 +72,9 @@ export const execGit = (args: string[], opts: ExecGitOptions = {}): GitResult =>
     encoding: 'utf8',
     cwd: opts.cwd ?? process.cwd(),
     input: opts.stdin ?? '',
+    env: opts.env,
     maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout,
   });
 
   return gitResultFromSpawn(result);

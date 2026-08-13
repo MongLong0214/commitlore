@@ -86,6 +86,30 @@ const readDraft = (path) => {
         throw new Error(`cannot read ${JSON.stringify(path)}: ${messageOf(error)}`);
     }
 };
+const recordIdOfBlock = (block) => block.find((trailer) => trailer.key === 'Record-Id')?.value;
+/**
+ * Keep the command's canonical writer while letting a caller retain records
+ * that are already present at its destination. A `Record-Id` is the protocol
+ * identity, so content equality is neither necessary nor sufficient here.
+ */
+const withoutRecordIds = (plan, excluded) => {
+    const ids = new Set(excluded);
+    if (ids.size === 0)
+        return { plan, skippedRecordIds: [] };
+    const skippedRecordIds = plan.blocks
+        .map(recordIdOfBlock)
+        .filter((id) => id !== undefined && ids.has(id));
+    const kept = (recordId) => recordId === undefined || !ids.has(recordId);
+    return {
+        plan: {
+            blocks: plan.blocks.filter((block) => kept(recordIdOfBlock(block))),
+            sources: plan.sources.filter((source) => kept(source.recordId)),
+            conflicts: plan.conflicts.filter((conflict) => kept(conflict.recordId)),
+            provenance: plan.provenance.filter((entry) => kept(entry.recordId)),
+        },
+        skippedRecordIds,
+    };
+};
 const writeDraft = (path, text) => {
     try {
         writeFileSync(path, text);
@@ -104,13 +128,15 @@ export const runSquashPreserve = (input = {}) => {
     if (range === undefined || range === '')
         return usageError('a range is required');
     let plan;
+    let skippedRecordIds = [];
     let commits;
     try {
         commits = countCommits(range, input.cwd);
         if (commits === 0) {
             return usageError(`the range ${JSON.stringify(range)} holds no commits — nothing was squashed`);
         }
-        plan = planSquash(collectRange(range, input.cwd === undefined ? {} : { cwd: input.cwd }));
+        const resolved = planSquash(collectRange(range, input.cwd === undefined ? {} : { cwd: input.cwd }));
+        ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
     }
     catch (error) {
         return usageError(messageOf(error));
@@ -121,10 +147,15 @@ export const runSquashPreserve = (input = {}) => {
     // A branch that recorded nothing is an ordinary branch (SPEC §4). There is
     // nothing to write and nothing to complain about.
     if (plan.sources.length === 0) {
-        const notice = `${PREFIX} no records in ${range} (${commits} commit(s)) — nothing to preserve\n`;
+        const excluded = skippedRecordIds.length === 0
+            ? `no records in ${range} (${commits} commit(s))`
+            : `all records in ${range} were already carried (${skippedRecordIds.join(', ')})`;
+        const notice = `${PREFIX} ${excluded} — nothing to preserve\n`;
         return {
             code: 0,
-            stdout: input.json === true ? `${JSON.stringify({ range, ...plan }, null, 2)}\n` : '',
+            stdout: input.json === true
+                ? `${JSON.stringify({ range, ...plan, skippedRecordIds }, null, 2)}\n`
+                : '',
             stderr: notice,
             plan,
         };
@@ -149,7 +180,7 @@ export const runSquashPreserve = (input = {}) => {
     if (input.json === true) {
         return {
             code: 0,
-            stdout: `${JSON.stringify({ range, ...plan, applied }, null, 2)}\n`,
+            stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}\n`,
             stderr: warnings,
             plan,
         };
@@ -180,6 +211,7 @@ export const register = (program) => {
         .option('--message-file <file>', 'rewrite this merge message draft with the inherited trailers')
         .option('--json', 'emit the plan as JSON')
         .option('--force', 'replace an existing note on --target')
+        .option('--exclude-record-id <id>', 'do not apply a record identity the destination already carries (repeatable)', (id, ids) => [...ids, id], [])
         .addHelpText('after', '\nWith neither --message-file nor --target the plan is printed and nothing is written.' +
         '\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.' +
         '\nExit codes: 0 done — conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC §10).')
@@ -190,6 +222,7 @@ export const register = (program) => {
             ...(flags.messageFile === undefined ? {} : { messageFile: flags.messageFile }),
             ...(flags.json === undefined ? {} : { json: flags.json }),
             ...(flags.force === undefined ? {} : { force: flags.force }),
+            ...(flags.excludeRecordId === undefined ? {} : { excludeRecordIds: flags.excludeRecordId }),
         });
         if (outcome.stdout !== '')
             process.stdout.write(outcome.stdout);

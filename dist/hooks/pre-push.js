@@ -30,6 +30,11 @@ import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 export const PRE_PUSH_HOOK_MARKER = '# commitlore:pre-push:v1';
 export const PRE_PUSH_HOOK_NAME = 'pre-push';
 export const PRE_PUSH_CHAINED_HOOK_NAME = `${PRE_PUSH_HOOK_NAME}${CHAINED_SUFFIX}`;
+/**
+ * A notes mirror is auxiliary to a branch push, so two seconds is enough to
+ * fail a stalled transport without making an offline push feel stuck.
+ */
+export const PRE_PUSH_NOTES_SYNC_TIMEOUT_MS = 2_000;
 const hookSuccess = (line) => ({ code: 0, stdout: `${line}\n`, stderr: '' });
 const hookFailure = (line) => ({ code: 2, stdout: '', stderr: `commitlore: ${line}\n` });
 /**
@@ -79,10 +84,22 @@ export const installPrePushHook = (cwd = process.cwd()) => {
         return hookFailure(`could not install the ${PRE_PUSH_HOOK_NAME} hook: ${error instanceof Error ? error.message : String(error)}`);
     }
 };
-/** One line per remote, for stderr. Silence when there was nothing to say. */
+/** A child-process diagnostic must not turn one hook warning into many lines. */
+const oneLine = (detail) => detail.replace(/\s+/g, ' ').trim();
+/** One fail-open line per unsuccessful remote. Successful sync stays quiet. */
 export const describeSync = (results) => results
-    .filter((result) => result.detail !== '' && result.outcome !== 'nothing-to-do')
-    .map((result) => `commitlore: notes mirror (${result.remote}): ${result.detail}`);
+    .filter((result) => result.outcome === 'failed' || result.outcome === 'diverged')
+    .map((result) => `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}; branch push continues`);
+/**
+ * Git itself must not prompt, and the default SSH command refuses interactive
+ * authentication. A caller's SSH wrapper is preserved because it may carry
+ * required corporate routing or key-selection settings.
+ */
+const nonInteractiveGitEnv = () => ({
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes',
+});
 export const register = (program) => {
     program
         .command(PRE_PUSH_HOOK_NAME)
@@ -91,13 +108,19 @@ export const register = (program) => {
         .description('internal hook command: publish the notes mirror alongside a push')
         .action((remote) => {
         try {
-            const results = syncNotes(remote === undefined || remote === '' ? {} : { remotes: [remote] });
+            const results = syncNotes({
+                ...(remote === undefined || remote === '' ? {} : { remotes: [remote] }),
+                transport: {
+                    env: nonInteractiveGitEnv(),
+                    timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS,
+                },
+            });
             for (const line of describeSync(results))
                 process.stderr.write(`${line}\n`);
         }
         catch (error) {
             // A push must never fail because the mirror could not be published.
-            process.stderr.write(`commitlore: notes mirror not published: ${error instanceof Error ? error.message : String(error)}\n`);
+            process.stderr.write(`commitlore: notes mirror failed: ${oneLine(error instanceof Error ? error.message : String(error))}; branch push continues\n`);
         }
     });
 };

@@ -162,6 +162,10 @@ const squashBranch = (
   branch: string,
   messages: string[],
   number: number,
+  mergeMessage = squashMessage(
+    number,
+    messages.map((message) => message.split('\n')[0] ?? ''),
+  ),
 ): { mergeSha: string; headSha: string } => {
   git(repo, ['checkout', '--quiet', '-b', branch, 'main']);
   messages.forEach((message, index) => {
@@ -173,28 +177,21 @@ const squashBranch = (
   // `--squash` stages the branch and leaves the commit to be written, which is
   // exactly the shape GitHub produces: one parent, a message nobody wrote.
   git(repo, ['merge', '--squash', branch]);
-  git(
-    repo,
-    ['commit', '--quiet', '-F', '-'],
-    squashMessage(
-      number,
-      messages.map((message) => message.split('\n')[0] ?? ''),
-    ),
-  );
+  git(repo, ['commit', '--quiet', '-F', '-'], mergeMessage);
   const mergeSha = head(repo);
 
   git(repo, ['push', '--quiet', 'origin', 'main']);
   return { mergeSha, headSha };
 };
 
-const squashScenario = (label: string, messages = RECORDS): Scenario => {
+const squashScenario = (label: string, messages = RECORDS, mergeMessage?: string): Scenario => {
   const origin = initBare(`${label}-origin`);
   const repo = initRepo(label);
   git(repo, ['remote', 'add', 'origin', `file://${origin}`]);
   commit(repo, 'seed.txt', 'seed\n', 'Seed the repository\n');
   git(repo, ['push', '--quiet', 'origin', 'main']);
 
-  const { mergeSha, headSha } = squashBranch(repo, 'feat', messages, 7);
+  const { mergeSha, headSha } = squashBranch(repo, 'feat', messages, 7, mergeMessage);
   return { repo, origin, mergeSha, headSha };
 };
 
@@ -353,6 +350,41 @@ describe('a squash merge', () => {
 
     expect(noteOn(scenario.repo, scenario.mergeSha)).toBeNull();
     expect(notedShas(scenario.origin)).toEqual([]);
+  });
+
+  it('does not attach a record the merge message already carries', () => {
+    const scenario = squashScenario(
+      'already-carried',
+      [RECORDS[0] ?? ''],
+      ['Cap and document the widget (#7)', '', RECORDS[0] ?? ''].join('\n'),
+    );
+    const run = runPreserve(scenario);
+
+    expect(run.status, run.stderr).toBe(0);
+    expect(noteOn(scenario.repo, scenario.mergeSha)).toBeNull();
+    expect(notedShas(scenario.origin)).toEqual([]);
+    expect(run.outputs['action']).toBe('already-carried');
+    expect(run.outputs['records']).toBe('0');
+    expect(run.outputs['pushed']).toBe('false');
+    expect(run.stdout).toContain('already carries r-000101');
+    expect(run.stdout).toContain('attached nothing');
+  });
+
+  it('attaches only records the merge message genuinely lost', () => {
+    const scenario = squashScenario(
+      'mixed-carried',
+      RECORDS.slice(0, 2),
+      ['Cap and document the widget (#7)', '', RECORDS[0] ?? ''].join('\n'),
+    );
+    const run = runPreserve(scenario);
+
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.outputs['action']).toBe('inherited');
+    expect(run.outputs['records']).toBe('1');
+    expect(run.stdout).toContain('already carries r-000101');
+    const note = noteOn(scenario.repo, scenario.mergeSha);
+    expect(note).toContain('Record-Id: r-000102');
+    expect(note).not.toContain('Record-Id: r-000101');
   });
 });
 

@@ -11228,7 +11228,9 @@ var execGit = (args, opts = {}) => {
     encoding: "utf8",
     cwd: opts.cwd ?? process.cwd(),
     input: opts.stdin ?? "",
-    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER
+    env: opts.env,
+    maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
+    timeout: opts.timeout
   });
   return gitResultFromSpawn(result);
 };
@@ -21263,8 +21265,13 @@ import { resolve as resolve12 } from "node:path";
 
 // src/core/sync.ts
 var gitOptions4 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
+var transportGitOptions = (opts) => ({
+  ...gitOptions4(opts),
+  ...opts.transport?.env === void 0 ? {} : { env: opts.transport.env },
+  ...opts.transport?.timeout === void 0 ? {} : { timeout: opts.transport.timeout }
+});
 var FETCH_HEAD_REF = "refs/notes/commitlore-remote";
-var pushMirror = (remote, opts) => execGit(["push", "--no-verify", remote, `${NOTES_REF}:${NOTES_REF}`], gitOptions4(opts));
+var pushMirror = (remote, opts) => execGit(["push", "--no-verify", remote, `${NOTES_REF}:${NOTES_REF}`], transportGitOptions(opts));
 var revParse2 = (ref, opts) => {
   const result = execGit(["rev-parse", "--verify", "--quiet", ref], gitOptions4(opts));
   const sha = result.stdout.trim();
@@ -21279,7 +21286,7 @@ var failure2 = (remote, detail) => ({
 var syncRemote = (remote, opts = {}) => {
   const fetched = execGit(
     ["fetch", "--refmap=", "--force", remote, `${NOTES_REF}:${FETCH_HEAD_REF}`],
-    gitOptions4(opts)
+    transportGitOptions(opts)
   );
   const remoteMissing = fetched.code !== 0 && /couldn't find remote ref|does not appear to be a git repository/i.test(fetched.stderr);
   if (fetched.code !== 0 && !remoteMissing) {
@@ -21347,6 +21354,7 @@ var syncNeedsAttention = (results) => results.some((result) => result.outcome ==
 var PRE_PUSH_HOOK_MARKER = "# commitlore:pre-push:v1";
 var PRE_PUSH_HOOK_NAME = "pre-push";
 var PRE_PUSH_CHAINED_HOOK_NAME = `${PRE_PUSH_HOOK_NAME}${CHAINED_SUFFIX}`;
+var PRE_PUSH_NOTES_SYNC_TIMEOUT_MS = 2e3;
 var hookSuccess2 = (line2) => ({ code: 0, stdout: `${line2}
 `, stderr: "" });
 var hookFailure2 = (line2) => ({ code: 2, stdout: "", stderr: `commitlore: ${line2}
@@ -21388,16 +21396,30 @@ var installPrePushHook = (cwd = process.cwd()) => {
     );
   }
 };
-var describeSync = (results) => results.filter((result) => result.detail !== "" && result.outcome !== "nothing-to-do").map((result) => `commitlore: notes mirror (${result.remote}): ${result.detail}`);
+var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
+var describeSync = (results) => results.filter((result) => result.outcome === "failed" || result.outcome === "diverged").map(
+  (result) => `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}; branch push continues`
+);
+var nonInteractiveGitEnv = () => ({
+  ...process.env,
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes"
+});
 var register7 = (program3) => {
   program3.command(PRE_PUSH_HOOK_NAME).argument("[remote]", "the remote git is pushing to").argument("[url]", "its URL, as git passes it").description("internal hook command: publish the notes mirror alongside a push").action((remote) => {
     try {
-      const results = syncNotes(remote === void 0 || remote === "" ? {} : { remotes: [remote] });
+      const results = syncNotes({
+        ...remote === void 0 || remote === "" ? {} : { remotes: [remote] },
+        transport: {
+          env: nonInteractiveGitEnv(),
+          timeout: PRE_PUSH_NOTES_SYNC_TIMEOUT_MS
+        }
+      });
       for (const line2 of describeSync(results)) process.stderr.write(`${line2}
 `);
     } catch (error2) {
       process.stderr.write(
-        `commitlore: notes mirror not published: ${error2 instanceof Error ? error2.message : String(error2)}
+        `commitlore: notes mirror failed: ${oneLine(error2 instanceof Error ? error2.message : String(error2))}; branch push continues
 `
       );
     }
@@ -22885,13 +22907,13 @@ var harvestVerify = (options) => {
     exitCode: 0
   };
 };
-var oneLine = (text) => text.replace(/\s+/g, " ").trim();
+var oneLine2 = (text) => text.replace(/\s+/g, " ").trim();
 var runHarvestVerify = (options) => {
   try {
     return harvestVerify(options);
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
-    return { stdout: "", stderr: `${PREFIX3} ${oneLine(detail)}
+    return { stdout: "", stderr: `${PREFIX3} ${oneLine2(detail)}
 `, exitCode: BAD_INPUT };
   }
 };
@@ -23389,7 +23411,7 @@ var INVISIBLE_RE2 = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]
 var GRADE_TOKEN_RE = /\[(directive|claim|blocked)\]/gi;
 var MAX_VALUE_CHARS = 400;
 var TRUNCATION_MARK = " ...[truncated]";
-var oneLine2 = (raw) => {
+var oneLine3 = (raw) => {
   const flattened = raw.replace(ANSI_ESCAPE_RE2, "").replace(CONTROL_RE2, " ").replace(INVISIBLE_RE2, "").replace(GRADE_TOKEN_RE, "\\[$1\\]").replace(/\s+/g, " ").trim();
   if (flattened.length <= MAX_VALUE_CHARS) return flattened;
   return `${flattened.slice(0, MAX_VALUE_CHARS)}${TRUNCATION_MARK}`;
@@ -23428,9 +23450,9 @@ var TRUST_TAGS = {
   blocked: "[blocked]  "
 };
 var entryLine = (record2, trailer, trust, tier) => {
-  const value = oneLine2(trailer.value);
-  const body = tier === OTHER_TIER ? `${oneLine2(trailer.key)}: ${value}` : value;
-  return `  ${TRUST_TAGS[trust]}  ${oneLine2(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
+  const value = oneLine3(trailer.value);
+  const body = tier === OTHER_TIER ? `${oneLine3(trailer.key)}: ${value}` : value;
+  return `  ${TRUST_TAGS[trust]}  ${oneLine3(record2.recordId ?? "-")}  ${shortSha3(record2.sha)}  ${body}`;
 };
 var byRecency = (a, b) => {
   if (a.committedTs !== b.committedTs) return b.committedTs - a.committedTs;
@@ -23452,7 +23474,7 @@ var project = (records, grades) => {
     if (grade2.trust === "blocked") {
       withheldValues += payload.length;
       withheld.push({
-        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine2(record2.recordId) : "-",
+        recordId: record2.recordId !== void 0 && RECORD_ID_RE.test(record2.recordId) ? oneLine3(record2.recordId) : "-",
         sha: shortSha3(record2.sha),
         patterns: grade2.matchedPatterns ?? [],
         keys: grade2.matchedTrailerKeys ?? [],
@@ -23483,14 +23505,14 @@ var withheldLine = (withheld) => {
   if (withheld.length === 0) return [];
   const collisions = withheld.filter((entry) => entry.reason === "identity-collision");
   const injections = withheld.filter((entry) => entry.reason === "injection");
-  const collisionNamed = oneLine2(
+  const collisionNamed = oneLine3(
     collisions.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const collisionLine = collisions.length === 0 ? [] : [
     `withheld: ${collisions.length} record(s) due to a Record-Id collision; content not shown: ${collisionNamed}.`
   ];
   if (injections.length === 0) return collisionLine;
-  const named = oneLine2(
+  const named = oneLine3(
     injections.map((entry) => `${entry.recordId} ${entry.sha}`).join(", ")
   );
   const patterns = [...new Set(injections.flatMap((entry) => entry.patterns))].sort();
@@ -33928,6 +33950,22 @@ var readDraft2 = (path2) => {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
+var recordIdOfBlock = (block) => block.find((trailer) => trailer.key === "Record-Id")?.value;
+var withoutRecordIds = (plan, excluded) => {
+  const ids = new Set(excluded);
+  if (ids.size === 0) return { plan, skippedRecordIds: [] };
+  const skippedRecordIds = plan.blocks.map(recordIdOfBlock).filter((id) => id !== void 0 && ids.has(id));
+  const kept = (recordId) => recordId === void 0 || !ids.has(recordId);
+  return {
+    plan: {
+      blocks: plan.blocks.filter((block) => kept(recordIdOfBlock(block))),
+      sources: plan.sources.filter((source) => kept(source.recordId)),
+      conflicts: plan.conflicts.filter((conflict) => kept(conflict.recordId)),
+      provenance: plan.provenance.filter((entry) => kept(entry.recordId))
+    },
+    skippedRecordIds
+  };
+};
 var writeDraft = (path2, text) => {
   try {
     writeFileSync18(path2, text);
@@ -33939,6 +33977,7 @@ var runSquashPreserve = (input = {}) => {
   const range = input.range;
   if (range === void 0 || range === "") return usageError("a range is required");
   let plan;
+  let skippedRecordIds = [];
   let commits;
   try {
     commits = countCommits(range, input.cwd);
@@ -33947,20 +33986,22 @@ var runSquashPreserve = (input = {}) => {
         `the range ${JSON.stringify(range)} holds no commits \u2014 nothing was squashed`
       );
     }
-    plan = planSquash(
+    const resolved = planSquash(
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
+    ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
   } catch (error2) {
     return usageError(messageOf8(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
   if (plan.sources.length === 0) {
-    const notice = `${PREFIX4} no records in ${range} (${commits} commit(s)) \u2014 nothing to preserve
+    const excluded = skippedRecordIds.length === 0 ? `no records in ${range} (${commits} commit(s))` : `all records in ${range} were already carried (${skippedRecordIds.join(", ")})`;
+    const notice = `${PREFIX4} ${excluded} \u2014 nothing to preserve
 `;
     return {
       code: 0,
-      stdout: input.json === true ? `${JSON.stringify({ range, ...plan }, null, 2)}
+      stdout: input.json === true ? `${JSON.stringify({ range, ...plan, skippedRecordIds }, null, 2)}
 ` : "",
       stderr: notice,
       plan
@@ -33986,7 +34027,7 @@ var runSquashPreserve = (input = {}) => {
   if (input.json === true) {
     return {
       code: 0,
-      stdout: `${JSON.stringify({ range, ...plan, applied }, null, 2)}
+      stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}
 `,
       stderr: warnings,
       plan
@@ -34009,7 +34050,12 @@ var runSquashPreserve = (input = {}) => {
 `, plan };
 };
 var register22 = (program3) => {
-  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").addHelpText(
+  program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
+    "--exclude-record-id <id>",
+    "do not apply a record identity the destination already carries (repeatable)",
+    (id, ids) => [...ids, id],
+    []
+  ).addHelpText(
     "after",
     "\nWith neither --message-file nor --target the plan is printed and nothing is written.\nNotes are written locally; publishing them (git push origin refs/notes/commitlore) is yours to do.\nExit codes: 0 done \u2014 conflicts warn but do not block, 2 bad range, empty range, or a failed write (SPEC \xA710)."
   ).action((range, flags) => {
@@ -34018,7 +34064,8 @@ var register22 = (program3) => {
       ...flags.target === void 0 ? {} : { target: flags.target },
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
       ...flags.json === void 0 ? {} : { json: flags.json },
-      ...flags.force === void 0 ? {} : { force: flags.force }
+      ...flags.force === void 0 ? {} : { force: flags.force },
+      ...flags.excludeRecordId === void 0 ? {} : { excludeRecordIds: flags.excludeRecordId }
     });
     if (outcome.stdout !== "") process.stdout.write(outcome.stdout);
     if (outcome.stderr !== "") process.stderr.write(outcome.stderr);

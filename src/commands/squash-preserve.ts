@@ -45,6 +45,8 @@ export interface SquashPreserveInput {
   json?: boolean;
   /** Overwrite an existing note on `--target`. */
   force?: boolean;
+  /** Record identities the caller has already retained at the destination. */
+  excludeRecordIds?: readonly string[];
   cwd?: string;
 }
 
@@ -141,6 +143,37 @@ const readDraft = (path: string): string => {
   }
 };
 
+const recordIdOfBlock = (block: readonly { key: string; value: string }[]): string | undefined =>
+  block.find((trailer) => trailer.key === 'Record-Id')?.value;
+
+/**
+ * Keep the command's canonical writer while letting a caller retain records
+ * that are already present at its destination. A `Record-Id` is the protocol
+ * identity, so content equality is neither necessary nor sufficient here.
+ */
+const withoutRecordIds = (
+  plan: SquashPlan,
+  excluded: readonly string[],
+): { plan: SquashPlan; skippedRecordIds: string[] } => {
+  const ids = new Set(excluded);
+  if (ids.size === 0) return { plan, skippedRecordIds: [] };
+
+  const skippedRecordIds = plan.blocks
+    .map(recordIdOfBlock)
+    .filter((id): id is string => id !== undefined && ids.has(id));
+  const kept = (recordId: string | undefined): boolean => recordId === undefined || !ids.has(recordId);
+
+  return {
+    plan: {
+      blocks: plan.blocks.filter((block) => kept(recordIdOfBlock(block))),
+      sources: plan.sources.filter((source) => kept(source.recordId)),
+      conflicts: plan.conflicts.filter((conflict) => kept(conflict.recordId)),
+      provenance: plan.provenance.filter((entry) => kept(entry.recordId)),
+    },
+    skippedRecordIds,
+  };
+};
+
 const writeDraft = (path: string, text: string): void => {
   try {
     writeFileSync(path, text);
@@ -164,6 +197,7 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
   if (range === undefined || range === '') return usageError('a range is required');
 
   let plan: SquashPlan;
+  let skippedRecordIds: string[] = [];
   let commits: number;
   try {
     commits = countCommits(range, input.cwd);
@@ -172,9 +206,10 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
         `the range ${JSON.stringify(range)} holds no commits — nothing was squashed`,
       );
     }
-    plan = planSquash(
+    const resolved = planSquash(
       collectRange(range, input.cwd === undefined ? {} : { cwd: input.cwd }),
     );
+    ({ plan, skippedRecordIds } = withoutRecordIds(resolved, input.excludeRecordIds ?? []));
   } catch (error) {
     return usageError(messageOf(error));
   }
@@ -186,10 +221,16 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
   // A branch that recorded nothing is an ordinary branch (SPEC §4). There is
   // nothing to write and nothing to complain about.
   if (plan.sources.length === 0) {
-    const notice = `${PREFIX} no records in ${range} (${commits} commit(s)) — nothing to preserve\n`;
+    const excluded = skippedRecordIds.length === 0
+      ? `no records in ${range} (${commits} commit(s))`
+      : `all records in ${range} were already carried (${skippedRecordIds.join(', ')})`;
+    const notice = `${PREFIX} ${excluded} — nothing to preserve\n`;
     return {
       code: 0,
-      stdout: input.json === true ? `${JSON.stringify({ range, ...plan }, null, 2)}\n` : '',
+      stdout:
+        input.json === true
+          ? `${JSON.stringify({ range, ...plan, skippedRecordIds }, null, 2)}\n`
+          : '',
       stderr: notice,
       plan,
     };
@@ -215,7 +256,7 @@ export const runSquashPreserve = (input: SquashPreserveInput = {}): SquashPreser
   if (input.json === true) {
     return {
       code: 0,
-      stdout: `${JSON.stringify({ range, ...plan, applied }, null, 2)}\n`,
+      stdout: `${JSON.stringify({ range, ...plan, skippedRecordIds, applied }, null, 2)}\n`,
       stderr: warnings,
       plan,
     };
@@ -247,6 +288,7 @@ interface SquashPreserveFlags {
   messageFile?: string;
   json?: boolean;
   force?: boolean;
+  excludeRecordId?: string[];
 }
 
 export const register = (program: Command): void => {
@@ -258,6 +300,12 @@ export const register = (program: Command): void => {
     .option('--message-file <file>', 'rewrite this merge message draft with the inherited trailers')
     .option('--json', 'emit the plan as JSON')
     .option('--force', 'replace an existing note on --target')
+    .option(
+      '--exclude-record-id <id>',
+      'do not apply a record identity the destination already carries (repeatable)',
+      (id: string, ids: string[]) => [...ids, id],
+      [],
+    )
     .addHelpText(
       'after',
       '\nWith neither --message-file nor --target the plan is printed and nothing is written.' +
@@ -271,6 +319,7 @@ export const register = (program: Command): void => {
         ...(flags.messageFile === undefined ? {} : { messageFile: flags.messageFile }),
         ...(flags.json === undefined ? {} : { json: flags.json }),
         ...(flags.force === undefined ? {} : { force: flags.force }),
+        ...(flags.excludeRecordId === undefined ? {} : { excludeRecordIds: flags.excludeRecordId }),
       });
 
       if (outcome.stdout !== '') process.stdout.write(outcome.stdout);
