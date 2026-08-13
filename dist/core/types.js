@@ -116,18 +116,39 @@ export const UNDO_VALUES = ['easy', 'costly', 'permanent'];
 export const CERTAINTY_VALUES = ['firm', 'tentative', 'guess'];
 export const PROVENANCE_PREFIXES = ['authored', 'drafted', 'inherited', 'reconstructed', 'unknown'];
 /**
- * `<sha>` in `Provenance: inherited <sha>` is a git object id. Bounds are
+ * `<sha>` in `Provenance: inherited <sha>`, as SPEC §3 writes it. Bounds are
  * git's, not ours: 4 is the shortest abbreviation git will emit
  * (`core.abbrev`), 64 is a full SHA-256. A-F is accepted because git's
  * object-name alphabet is hexadecimal and case-insensitive; squash-preserve
  * writes whatever `git rev-parse` emits (lowercase), but a hand-copied id
  * may be upper, and SPEC §3 writes `<sha>` with no case constraint.
+ *
+ * This is the **trailer grammar** and nothing else. It admits abbreviations on
+ * purpose, because a person writing a record may reasonably paste a short id.
+ * It therefore cannot answer whether a value is an object id the product may
+ * store, compare, or hand to git as an identity — {@link isFullObjectId} does
+ * that. `spec/schema/record.schema.json` carries a synchronised copy of
+ * {@link PROVENANCE_VALUE_PATTERN}; the two must stay identical.
  */
 export const GIT_OBJECT_ID_PATTERN = '[0-9a-fA-F]{4,64}';
-/** Anchored form of {@link GIT_OBJECT_ID_PATTERN}. One definition, every reader. */
-export const GIT_OBJECT_ID_RE = new RegExp(`^${GIT_OBJECT_ID_PATTERN}$`);
-/** Whether `value` is a plausible git object id (abbrev 4 … full SHA-1 or SHA-256). */
-export const isGitObjectId = (value) => GIT_OBJECT_ID_RE.test(value);
+/**
+ * A full git object id is exactly 40 hex (SHA-1) or exactly 64 hex (SHA-256).
+ * Nothing lies between: 41 through 63 name no object format git has, and
+ * anything shorter is an abbreviation — a request to resolve, not an identity.
+ *
+ * Kept separate from {@link GIT_OBJECT_ID_PATTERN} deliberately. One shared
+ * `{4,64}` predicate reads as "is this hex-ish", and under it a truncated or
+ * corrupted id passes as canonical and is then persisted and compared as
+ * though it named an object; the failure surfaces later, somewhere else, as a
+ * record bound to nothing. Persisted and internal state is checked with this.
+ * A revision a user typed goes through `resolveRevision` first, which asks git
+ * to turn it into exactly one full id or refuse.
+ */
+export const FULL_OBJECT_ID_PATTERN = '(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})';
+/** Anchored form of {@link FULL_OBJECT_ID_PATTERN}. One definition, every reader. */
+export const FULL_OBJECT_ID_RE = new RegExp(`^${FULL_OBJECT_ID_PATTERN}$`);
+/** Whether `value` is a full SHA-1 or SHA-256 object id (exact 40 or exact 64 hex). */
+export const isFullObjectId = (value) => FULL_OBJECT_ID_RE.test(value);
 /** The schema `pattern` and the parser read this string. There is no third copy. */
 export const PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
 export const PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);

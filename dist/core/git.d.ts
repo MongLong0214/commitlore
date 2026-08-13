@@ -46,6 +46,24 @@ export declare const isGitFailure: (error: unknown) => boolean;
  */
 export declare const execGitOrThrow: (args: string[], opts?: ExecGitOptions) => string;
 /**
+ * Resolves a revision a user typed — a branch, a tag, `HEAD~3`, or an
+ * abbreviated object id — to the one full object id it names, or `null` when
+ * git will not resolve it to exactly one commit.
+ *
+ * This is the only place an abbreviation is allowed to become an identity.
+ * Everywhere downstream holds full ids and checks them with `isFullObjectId`,
+ * so the ambiguity is settled once, by git, at the boundary where the user's
+ * text arrives — rather than by a regex that cannot know what a prefix names.
+ *
+ * `--verify` is what makes an ambiguous prefix an error instead of a guess, and
+ * `^{commit}` peels a tag to the commit it points at so an annotated tag does
+ * not resolve to the tag object's own id. The result is checked rather than
+ * trusted: `--quiet` turns "no such revision" into an empty stdout with a
+ * non-zero code, and a caller reading stdout alone would accept `''` from a
+ * git that failed in a way it did not anticipate.
+ */
+export declare const resolveRevision: (cwd: string, revision: string) => string | null;
+/**
  * Whether this repository's history can be read, and if not, why.
  *
  * - `ready`       — git answered; an empty result is a statement about content

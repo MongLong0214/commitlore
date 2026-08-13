@@ -19,7 +19,7 @@ import { resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { consumePending } from '../core/pending.js';
 import { serializeTrailers } from '../core/trailers.js';
-import { isGitObjectId } from '../core/types.js';
+import { isFullObjectId } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 export const POST_COMMIT_HOOK_MARKER = '# commitlore:post-commit:v1';
@@ -164,7 +164,7 @@ const allRecordIdsPresent = (commitMessage, records) => {
  * making an unrelated rewrite consume a pending transaction.
  */
 const isAmendedBase = (baseHead, firstParent, cwd) => {
-    if (!isGitObjectId(baseHead))
+    if (!isFullObjectId(baseHead))
         return false;
     const previousHead = execGit(['rev-parse', '--verify', 'HEAD@{1}'], { cwd });
     if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead)

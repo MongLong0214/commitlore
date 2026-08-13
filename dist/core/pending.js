@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFile
 import { resolve } from 'node:path';
 import { markCaptureError } from './capture-outcome.js';
 import { execGit, execGitOrThrow } from './git.js';
-import { isGitObjectId } from './types.js';
+import { isFullObjectId } from './types.js';
 export class PendingFormatError extends Error {
     constructor(message) {
         super(message);
@@ -151,7 +151,7 @@ export const resolveHead = (cwd) => {
     if (result.code !== 0)
         return null;
     const head = result.stdout.trim();
-    return isGitObjectId(head) ? head : null;
+    return isFullObjectId(head) ? head : null;
 };
 /**
  * Whether HEAD has left this transaction's base behind.
@@ -169,7 +169,7 @@ export const resolveHead = (cwd) => {
 export const headHasMovedPast = (baseHead, head) => {
     if (head === null)
         return false;
-    if (typeof baseHead !== 'string' || !isGitObjectId(baseHead))
+    if (typeof baseHead !== 'string' || !isFullObjectId(baseHead))
         return false;
     return baseHead !== head;
 };
@@ -203,7 +203,7 @@ export const pendingIsStale = (record, head) => {
  */
 export const makePreparedPending = (opts) => {
     validateNonce(opts.nonce);
-    if (!isGitObjectId(opts.base_head)) {
+    if (!isFullObjectId(opts.base_head)) {
         throw new Error('Cannot resolve HEAD — is this a git repository with at least one commit?');
     }
     return {

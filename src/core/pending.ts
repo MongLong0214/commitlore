@@ -14,7 +14,7 @@ import { resolve } from 'node:path';
 import { markCaptureError } from './capture-outcome.js';
 import { execGit, execGitOrThrow } from './git.js';
 import type { RenderedGuardMatch } from './guard.js';
-import { isGitObjectId } from './types.js';
+import { isFullObjectId } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -213,7 +213,7 @@ export const resolveHead = (cwd: string): string | null => {
   const result = execGit(['rev-parse', 'HEAD'], { cwd });
   if (result.code !== 0) return null;
   const head = result.stdout.trim();
-  return isGitObjectId(head) ? head : null;
+  return isFullObjectId(head) ? head : null;
 };
 
 /**
@@ -231,7 +231,7 @@ export const resolveHead = (cwd: string): string | null => {
  */
 export const headHasMovedPast = (baseHead: unknown, head: string | null): boolean => {
   if (head === null) return false;
-  if (typeof baseHead !== 'string' || !isGitObjectId(baseHead)) return false;
+  if (typeof baseHead !== 'string' || !isFullObjectId(baseHead)) return false;
   return baseHead !== head;
 };
 
@@ -285,7 +285,7 @@ export const makePreparedPending = (
   opts: CreatePendingOptions & { nonce: string; base_head: string; created_at?: string },
 ): PendingRecord => {
   validateNonce(opts.nonce);
-  if (!isGitObjectId(opts.base_head)) {
+  if (!isFullObjectId(opts.base_head)) {
     throw new Error('Cannot resolve HEAD — is this a git repository with at least one commit?');
   }
 

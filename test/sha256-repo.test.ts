@@ -21,7 +21,7 @@ import { runCaptureShadow } from '../src/core/capture-shadow.js';
 import { stageCaptureRecord } from '../src/core/capture-stage.js';
 import { verifyCaptureRecords } from '../src/core/capture-verify.js';
 import { authorsOf } from '../src/core/grade.js';
-import { execGit } from '../src/core/git.js';
+import { execGit, resolveRevision } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import { resolveHead } from '../src/core/pending.js';
 import {
@@ -29,7 +29,7 @@ import {
   configuredTrustedAuthors,
   seedTrustedAuthor,
 } from '../src/core/trusted-authors.js';
-import { GIT_OBJECT_ID_PATTERN, isGitObjectId } from '../src/core/types.js';
+import { GIT_OBJECT_ID_PATTERN, isFullObjectId } from '../src/core/types.js';
 import { preserveSquashRecords } from '../src/hooks/prepare-commit-msg.js';
 import { readSourceFiles } from './fixtures.js';
 import { createTestRepo } from './git-fixtures.js';
@@ -190,22 +190,119 @@ const installHooks = (cwd: string): void => {
   );
 };
 
-describe('shared git object-id definition', () => {
-  it('accepts a full SHA-1, a full SHA-256, and git abbreviations down to 4 hex', () => {
-    expect(isGitObjectId('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).toBe(true);
-    expect(
-      isGitObjectId('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'),
-    ).toBe(true);
-    expect(isGitObjectId('DEAD')).toBe(true);
-    expect(isGitObjectId('abc')).toBe(false);
-    expect(
-      isGitObjectId('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8550'),
-    ).toBe(false);
+const SHA1 = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+const SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+describe('full object id is exactly 40 or exactly 64 hex (R0-03)', () => {
+  it('accepts a full SHA-1 and a full SHA-256, in either case', () => {
+    expect(isFullObjectId(SHA1)).toBe(true);
+    expect(isFullObjectId(SHA256)).toBe(true);
+    expect(isFullObjectId(SHA1.toUpperCase())).toBe(true);
   });
 
-  it('is the #603 pattern, not a third copy', () => {
+  /**
+   * The lengths that matter. 41 through 63 are the reason this predicate is
+   * separate from the trailer grammar: under a shared `{4,64}` they validated
+   * as canonical, so a truncated id was persisted and compared as though it
+   * named an object.
+   */
+  it.each([4, 7, 39, 41, 63, 65])('rejects a %d-character id at the persisted boundary', (n) => {
+    expect(isFullObjectId('a'.repeat(n))).toBe(false);
+  });
+
+  it('rejects non-hex and empty input', () => {
+    expect(isFullObjectId('')).toBe(false);
+    expect(isFullObjectId('z'.repeat(40))).toBe(false);
+    expect(isFullObjectId(` ${SHA1}`)).toBe(false);
+    expect(isFullObjectId(`${SHA1}\n`)).toBe(false);
+  });
+
+  it('keeps the trailer grammar separate and still abbreviation-tolerant', () => {
+    // SPEC §3 writes `Provenance: inherited <sha>` with no length constraint,
+    // and record.schema.json carries a synchronised copy. Tightening the
+    // trailer grammar is a spec change; this issue is about internal state.
     expect(GIT_OBJECT_ID_PATTERN).toBe('[0-9a-fA-F]{4,64}');
-    expect(isGitObjectId.toString()).toContain('GIT_OBJECT_ID');
+    expect(new RegExp(`^${GIT_OBJECT_ID_PATTERN}$`).test('dead')).toBe(true);
+    expect(isFullObjectId('dead')).toBe(false);
+  });
+
+  it('leaves no loose object-id predicate for new code to reach for', () => {
+    const types = readFileSync(resolve(PACKAGE_ROOT, '..', 'src', 'core', 'types.ts'), 'utf8');
+    expect(types).not.toContain('isGitObjectId');
+  });
+});
+
+describe('resolveRevision turns user input into one full id, or refuses (R0-03)', () => {
+  it('resolves an abbreviation to the full id it names', () => {
+    const cwd = sha1Repo('resolve');
+    stageChange(cwd, 'first.txt', 'first\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'first']);
+    const full = git(cwd, ['rev-parse', 'HEAD']).trim();
+    const abbrev = full.slice(0, 7);
+
+    expect(isFullObjectId(abbrev)).toBe(false);
+    expect(resolveRevision(cwd, abbrev)).toBe(full);
+    expect(isFullObjectId(resolveRevision(cwd, abbrev) ?? '')).toBe(true);
+  });
+
+  it('resolves a branch, a tag and a relative revision to full ids', () => {
+    const cwd = sha1Repo('resolve');
+    stageChange(cwd, 'first.txt', 'first\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'first']);
+    const first = git(cwd, ['rev-parse', 'HEAD']).trim();
+    stageChange(cwd, 'second.txt', 'second\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'second']);
+    const second = git(cwd, ['rev-parse', 'HEAD']).trim();
+    git(cwd, ['tag', '-a', 'v1', '-m', 'release']);
+
+    expect(resolveRevision(cwd, 'HEAD')).toBe(second);
+    expect(resolveRevision(cwd, 'HEAD~1')).toBe(first);
+    // An annotated tag must peel to the commit, not to the tag object.
+    expect(resolveRevision(cwd, 'v1')).toBe(second);
+  });
+
+  it('refuses an unknown revision instead of inventing one', () => {
+    const cwd = sha1Repo('resolve');
+    stageChange(cwd, 'first.txt', 'first\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'first']);
+    expect(resolveRevision(cwd, 'no-such-branch')).toBeNull();
+    expect(resolveRevision(cwd, 'f'.repeat(40))).toBeNull();
+    expect(resolveRevision(cwd, '')).toBeNull();
+  });
+
+  it('refuses an ambiguous prefix rather than picking one', () => {
+    const cwd = sha1Repo('resolve');
+    // Commit until two commits share a 3-hex prefix, then ask git with it.
+    // 4096 buckets against ~120 commits makes a collision likely but not
+    // certain, so the search is bounded and the assertion is skipped rather
+    // than faked when this run does not produce one.
+    const seen = new Map<string, string>();
+    let ambiguous: string | null = null;
+    for (let i = 0; i < 120 && ambiguous === null; i += 1) {
+      stageChange(cwd, `c${i}.txt`, `body ${i}\n`);
+      git(cwd, ['commit', '--quiet', '--no-verify', '-m', `c${i}`]);
+      const sha = git(cwd, ['rev-parse', 'HEAD']).trim();
+      const prefix = sha.slice(0, 3);
+      if (seen.has(prefix)) ambiguous = prefix;
+      else seen.set(prefix, sha);
+    }
+    if (ambiguous === null) return;
+
+    // Guard the guard: git itself must consider this prefix ambiguous, or the
+    // refusal below would prove nothing.
+    const direct = execGit(['rev-parse', '--verify', '--quiet', `${ambiguous}^{commit}`], { cwd });
+    expect(direct.code).not.toBe(0);
+    expect(resolveRevision(cwd, ambiguous)).toBeNull();
+  });
+
+  it('resolves against a real SHA-256 repository too', () => {
+    const cwd = sha256Repo('resolve');
+    stageChange(cwd, 'first.txt', 'first\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'first']);
+    const full = git(cwd, ['rev-parse', 'HEAD']).trim();
+    expect(full).toMatch(/^[0-9a-f]{64}$/);
+    expect(resolveRevision(cwd, full.slice(0, 10))).toBe(full);
+    expect(isFullObjectId(full)).toBe(true);
   });
 });
 
@@ -397,12 +494,26 @@ describe('SHA-256 squash commit-id extraction in prepare-commit-msg', () => {
 });
 
 describe('no leftover 40-only git object-id assumptions under src/', () => {
-  it('every reader uses the shared pattern instead of a local {40} copy', () => {
+  /**
+   * `core/types.ts` is where the two object-id contracts are defined, so it is
+   * the one file allowed to spell the lengths out. Every other reader has to
+   * import a predicate rather than re-deriving one — a local copy is how the
+   * SHA-256 blindness got spread across six modules in the first place.
+   */
+  it('every reader imports a predicate instead of writing a local length copy', () => {
     const offenders: string[] = [];
     for (const [path, body] of readSourceFiles()) {
       if (path.endsWith('hooks/secret-rules.ts')) continue;
-      if (/\[0-9a-f(?:A-F)?\]\{(?:40|4,40)\}/.test(body)) offenders.push(path);
+      if (path.endsWith('core/types.ts')) continue;
+      if (/\[0-9a-f(?:A-F)?\]\{(?:40|4,40|4,64)\}/.test(body)) offenders.push(path);
     }
     expect(offenders, offenders.join('\n')).toEqual([]);
+  });
+
+  it('defines both contracts exactly once, in core/types.ts', () => {
+    const definitions = readSourceFiles().filter(([, body]) =>
+      /export const (FULL_OBJECT_ID_PATTERN|GIT_OBJECT_ID_PATTERN)/.test(body),
+    );
+    expect(definitions.map(([path]) => path)).toEqual(['core/types.ts']);
   });
 });

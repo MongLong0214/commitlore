@@ -32,7 +32,7 @@ import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
-  isGitObjectId,
+  isFullObjectId,
   parseProvenance,
   type Lifecycle,
   type Provenance,
@@ -903,7 +903,7 @@ const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
  * `directive`.
  */
 export const authorsOf = (cwd: string, shas: readonly string[]): Map<string, string> => {
-  const wanted = [...new Set(shas)].filter((sha) => isGitObjectId(sha)).sort();
+  const wanted = [...new Set(shas)].filter((sha) => isFullObjectId(sha)).sort();
   const authors = new Map<string, string>();
 
   for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
@@ -971,7 +971,7 @@ export const noteAuthorsOf = (cwd: string): Map<string, NoteAuthor[]> => {
 
     for (const line of pathLines) {
       const annotated = line.trim().replace(/\//g, '');
-      if (!isGitObjectId(annotated)) continue;
+      if (!isFullObjectId(annotated)) continue;
       const seen = authors.get(annotated);
       if (seen === undefined) authors.set(annotated, [writer]);
       else if (

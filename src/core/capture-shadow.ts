@@ -8,7 +8,7 @@
  * record.
  */
 
-import { execGit } from './git.js';
+import { execGit, resolveRevision } from './git.js';
 import {
   prepareCaptureContextReadOnly,
   type HistoricalCaptureSnapshot,
@@ -25,7 +25,7 @@ import { serializeTrailers } from './trailers.js';
 import {
   isCommitLoreKey,
   isConventionalTrailerKey,
-  isGitObjectId,
+  isFullObjectId,
   KNOWN_KEYS,
   type Trailer,
 } from './types.js';
@@ -217,7 +217,7 @@ const historiesBeforeCommit = (
   }
   const shas = gitOutput(['rev-list', '--reverse', 'HEAD'], cwd)
     .split('\n')
-    .filter((sha) => isGitObjectId(sha));
+    .filter((sha) => isFullObjectId(sha));
   const prior: HistoricalRecord[] = [];
   const histories = new Map<string, CaptureVerificationHistory>();
   for (const sha of shas) {
@@ -235,11 +235,11 @@ const truncateDiff = (diff: string): string => {
 };
 
 const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
-  const resolved = gitOutput(
-    ['rev-parse', '--verify', '--quiet', '--end-of-options', `${since}^{commit}`],
-    cwd,
-  ).trim();
-  if (!isGitObjectId(resolved)) {
+  // `--since` is the one place a user hands this module a revision, so it is
+  // the one place an abbreviation is resolved. Everything below holds the full
+  // id git returned.
+  const resolved = resolveRevision(cwd, since);
+  if (resolved === null) {
     throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
   }
 
@@ -273,7 +273,7 @@ const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
     const separator = record.indexOf(FIELD_SEP);
     if (separator === -1) continue;
     const sha = record.slice(0, separator);
-    if (!isGitObjectId(sha)) continue;
+    if (!isFullObjectId(sha)) continue;
     patchesBySha.set(sha, truncateDiff(record.slice(separator + 1)));
   }
 
@@ -281,8 +281,8 @@ const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
     const [sha, subject, parents, tree, message] = record.split(FIELD_SEP);
     if (sha === undefined || subject === undefined || parents === undefined || tree === undefined || message === undefined) return [];
     const baseHead = parents.split(' ')[0] ?? '';
-    if (!isGitObjectId(sha)) return [];
-    if (!isGitObjectId(baseHead) || !isGitObjectId(tree)) {
+    if (!isFullObjectId(sha)) return [];
+    if (!isFullObjectId(baseHead) || !isFullObjectId(tree)) {
       return [{ sha, subject: displaySubject(subject), sources: null }];
     }
     const diff = patchesBySha.get(sha) ?? '';

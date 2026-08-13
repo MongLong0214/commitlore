@@ -19,7 +19,7 @@ import {
   type GuardGap,
   type PendingRecord,
 } from './pending.js';
-import { isGitObjectId } from './types.js';
+import { isFullObjectId } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Guard advisory — ADR-0020, T-1109
@@ -175,7 +175,7 @@ const prepareValues = (opts: {
   const { cwd, transcript, snapshot } = opts;
 
   const baseHead = snapshot?.base_head ?? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
-  if (!isGitObjectId(baseHead)) {
+  if (!isFullObjectId(baseHead)) {
     throw markCaptureError(
       new Error('Cannot resolve HEAD — is this a git repository with at least one commit?'),
       'operational',
@@ -187,7 +187,7 @@ const prepareValues = (opts: {
 
   const stagedTreeOid =
     snapshot?.staged_tree_oid ?? execGitOrThrow(['write-tree'], { cwd }).trim();
-  if (!isGitObjectId(stagedTreeOid)) {
+  if (!isFullObjectId(stagedTreeOid)) {
     throw markCaptureError(
       new Error('Cannot resolve staged tree — is this a git repository with at least one commit?'),
       'operational',

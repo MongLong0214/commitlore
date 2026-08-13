@@ -23,7 +23,7 @@ import type { Command } from 'commander';
 import { execGit } from '../core/git.js';
 import { consumePending, type PendingRecord } from '../core/pending.js';
 import { serializeTrailers } from '../core/trailers.js';
-import { isGitObjectId, type Trailer } from '../core/types.js';
+import { isFullObjectId, type Trailer } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
@@ -177,7 +177,7 @@ const allRecordIdsPresent = (commitMessage: string, records: unknown[]): boolean
  * making an unrelated rewrite consume a pending transaction.
  */
 const isAmendedBase = (baseHead: string, firstParent: string | null, cwd: string): boolean => {
-  if (!isGitObjectId(baseHead)) return false;
+  if (!isFullObjectId(baseHead)) return false;
 
   const previousHead = execGit(['rev-parse', '--verify', 'HEAD@{1}'], { cwd });
   if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;

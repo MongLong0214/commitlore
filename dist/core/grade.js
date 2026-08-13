@@ -29,7 +29,7 @@ import { Buffer, isUtf8 } from 'node:buffer';
 import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle } from './stale.js';
-import { isGitObjectId, parseProvenance, } from './types.js';
+import { isFullObjectId, parseProvenance, } from './types.js';
 const PROVENANCE_KEY = 'Provenance';
 export const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it matched an injection pattern.';
 /**
@@ -728,7 +728,7 @@ const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
  * `directive`.
  */
 export const authorsOf = (cwd, shas) => {
-    const wanted = [...new Set(shas)].filter((sha) => isGitObjectId(sha)).sort();
+    const wanted = [...new Set(shas)].filter((sha) => isFullObjectId(sha)).sort();
     const authors = new Map();
     for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
         const batch = wanted.slice(start, start + AUTHOR_BATCH);
@@ -764,7 +764,7 @@ export const noteAuthorsOf = (cwd) => {
         const writer = { author: noteAuthor, signatureStatus: status.trim() };
         for (const line of pathLines) {
             const annotated = line.trim().replace(/\//g, '');
-            if (!isGitObjectId(annotated))
+            if (!isFullObjectId(annotated))
                 continue;
             const seen = authors.get(annotated);
             if (seen === undefined)
