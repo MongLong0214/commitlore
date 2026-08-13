@@ -14,7 +14,7 @@ import { parseDraft } from './harvest.js';
 import { scanForSecrets } from './secret-guard.js';
 import { foldLifecycle } from './stale.js';
 import { serializeTrailers } from './trailers.js';
-import { isCommitLoreKey, isConventionalTrailerKey, KNOWN_KEYS } from './types.js';
+import { isCommitLoreKey, isConventionalTrailerKey, isGitObjectId, KNOWN_KEYS, } from './types.js';
 const MAX_DIFF_BYTES = 64 * 1024;
 const DIFF_MAX_BUFFER = 256 * 1024 * 1024;
 const RECORD_SEP = '\x01';
@@ -134,7 +134,7 @@ const historiesBeforeCommit = (cwd) => {
     }
     const shas = gitOutput(['rev-list', '--reverse', 'HEAD'], cwd)
         .split('\n')
-        .filter((sha) => /^[0-9a-f]{40}$/.test(sha));
+        .filter((sha) => isGitObjectId(sha));
     const prior = [];
     const histories = new Map();
     for (const sha of shas) {
@@ -152,7 +152,7 @@ const truncateDiff = (diff) => {
 };
 const historicalCommits = (cwd, since) => {
     const resolved = gitOutput(['rev-parse', '--verify', '--quiet', '--end-of-options', `${since}^{commit}`], cwd).trim();
-    if (!/^[0-9a-f]{40}$/.test(resolved)) {
+    if (!isGitObjectId(resolved)) {
         throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
     }
     const range = `${resolved}..HEAD`;
@@ -180,7 +180,7 @@ const historicalCommits = (cwd, since) => {
         if (separator === -1)
             continue;
         const sha = record.slice(0, separator);
-        if (!/^[0-9a-f]{40}$/.test(sha))
+        if (!isGitObjectId(sha))
             continue;
         patchesBySha.set(sha, truncateDiff(record.slice(separator + 1)));
     }
@@ -189,9 +189,9 @@ const historicalCommits = (cwd, since) => {
         if (sha === undefined || subject === undefined || parents === undefined || tree === undefined || message === undefined)
             return [];
         const baseHead = parents.split(' ')[0] ?? '';
-        if (!/^[0-9a-f]{40}$/.test(sha))
+        if (!isGitObjectId(sha))
             return [];
-        if (!/^[0-9a-f]{40}$/.test(baseHead) || !/^[0-9a-f]{40}$/.test(tree)) {
+        if (!isGitObjectId(baseHead) || !isGitObjectId(tree)) {
             return [{ sha, subject: displaySubject(subject), sources: null }];
         }
         const diff = patchesBySha.get(sha) ?? '';

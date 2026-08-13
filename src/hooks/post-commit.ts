@@ -23,7 +23,7 @@ import type { Command } from 'commander';
 import { execGit } from '../core/git.js';
 import { consumePending, type PendingRecord } from '../core/pending.js';
 import { serializeTrailers } from '../core/trailers.js';
-import type { Trailer } from '../core/types.js';
+import { isGitObjectId, type Trailer } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
@@ -170,8 +170,6 @@ const allRecordIdsPresent = (commitMessage: string, records: unknown[]): boolean
   return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
 };
 
-const COMMIT_ID_RE = /^[0-9a-f]{40}$/;
-
 /**
  * An amend rewrites HEAD, so the pending base is no longer HEAD's parent.
  * `HEAD@{1}` is the commit Git just replaced; accept it only when its parent
@@ -179,7 +177,7 @@ const COMMIT_ID_RE = /^[0-9a-f]{40}$/;
  * making an unrelated rewrite consume a pending transaction.
  */
 const isAmendedBase = (baseHead: string, firstParent: string | null, cwd: string): boolean => {
-  if (!COMMIT_ID_RE.test(baseHead)) return false;
+  if (!isGitObjectId(baseHead)) return false;
 
   const previousHead = execGit(['rev-parse', '--verify', 'HEAD@{1}'], { cwd });
   if (previousHead.code !== 0 || previousHead.stdout.trim() !== baseHead) return false;

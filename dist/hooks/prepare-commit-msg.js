@@ -5,7 +5,7 @@ import { resolvePolicy } from '../core/capture-policy.js';
 import { execGit } from '../core/git.js';
 import { markApplied } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
-import { KNOWN_KEYS } from '../core/types.js';
+import { GIT_OBJECT_ID_PATTERN, KNOWN_KEYS } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 export const PREPARE_COMMIT_MSG_HOOK_MARKER = '# commitlore:prepare-commit-msg:v1';
@@ -30,7 +30,8 @@ const squashMessagePath = (cwd) => {
 };
 const squashCommitIds = (message) => {
     const ids = [];
-    for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+    const pattern = new RegExp(`^commit (${GIT_OBJECT_ID_PATTERN})$`, 'gm');
+    for (const match of message.matchAll(pattern)) {
         const id = match[1];
         if (id !== undefined)
             ids.push(id);

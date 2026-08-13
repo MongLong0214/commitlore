@@ -32,6 +32,7 @@ import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import {
+  isGitObjectId,
   parseProvenance,
   type Lifecycle,
   type Provenance,
@@ -877,7 +878,7 @@ const AUTHOR_BATCH = 200;
 
 const AUTHOR_RECORD_SEP = '\x01';
 const AUTHOR_FIELD_SEP = '\0';
-const AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
+
 
 /**
  * `%x01`/`%x00` rather than the literal bytes: `spawnSync` refuses an argument
@@ -902,7 +903,7 @@ const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
  * `directive`.
  */
 export const authorsOf = (cwd: string, shas: readonly string[]): Map<string, string> => {
-  const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
+  const wanted = [...new Set(shas)].filter((sha) => isGitObjectId(sha)).sort();
   const authors = new Map<string, string>();
 
   for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
@@ -970,7 +971,7 @@ export const noteAuthorsOf = (cwd: string): Map<string, NoteAuthor[]> => {
 
     for (const line of pathLines) {
       const annotated = line.trim().replace(/\//g, '');
-      if (!AUTHOR_SHA_RE.test(annotated)) continue;
+      if (!isGitObjectId(annotated)) continue;
       const seen = authors.get(annotated);
       if (seen === undefined) authors.set(annotated, [writer]);
       else if (

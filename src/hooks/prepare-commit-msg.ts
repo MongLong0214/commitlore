@@ -8,7 +8,7 @@ import { resolvePolicy } from '../core/capture-policy.js';
 import { execGit } from '../core/git.js';
 import { markApplied, type PendingRecord } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
-import { KNOWN_KEYS, type Trailer } from '../core/types.js';
+import { GIT_OBJECT_ID_PATTERN, KNOWN_KEYS, type Trailer } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
@@ -40,7 +40,8 @@ const squashMessagePath = (cwd: string): string | null => {
 
 const squashCommitIds = (message: string): readonly string[] => {
   const ids: string[] = [];
-  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+  const pattern = new RegExp(`^commit (${GIT_OBJECT_ID_PATTERN})$`, 'gm');
+  for (const match of message.matchAll(pattern)) {
     const id = match[1];
     if (id !== undefined) ids.push(id);
   }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+SHA-256 repositories are usable again. #603 widened `Provenance: inherited
+<sha>` to 64 hex, but capture, pending transactions, author grading, shadow
+capture, and the commit hooks still treated a git object id as exactly 40
+characters. A valid SHA-256 `HEAD` made `capture` report that it could not
+resolve HEAD; `authorsOf` returned no author; a record from a configured
+trusted author graded `claim` instead of `directive`. Every reader now uses
+the same `GIT_OBJECT_ID_PATTERN` #603 already defined.
+
 The Node floor is `>=22.23.2`, the current Node 22 LTS. `node:sqlite` is
 unflagged from 22.13, but its bundled SQLite supplies the FTS5 virtual-table
 feature only from 22.16.0. The old 22.13.0 floor silently used the slower LIKE

@@ -41,6 +41,10 @@ export declare const PROVENANCE_PREFIXES: readonly ["authored", "drafted", "inhe
  * may be upper, and SPEC §3 writes `<sha>` with no case constraint.
  */
 export declare const GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
+/** Anchored form of {@link GIT_OBJECT_ID_PATTERN}. One definition, every reader. */
+export declare const GIT_OBJECT_ID_RE: RegExp;
+/** Whether `value` is a plausible git object id (abbrev 4 … full SHA-1 or SHA-256). */
+export declare const isGitObjectId: (value: string) => boolean;
 /** The schema `pattern` and the parser read this string. There is no third copy. */
 export declare const PROVENANCE_VALUE_PATTERN = "^(authored|drafted|reconstructed|unknown|inherited [0-9a-fA-F]{4,64})$";
 export declare const PROVENANCE_VALUE_RE: RegExp;

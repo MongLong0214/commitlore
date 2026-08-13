@@ -146,6 +146,12 @@ export const PROVENANCE_PREFIXES = ['authored', 'drafted', 'inherited', 'reconst
  */
 export const GIT_OBJECT_ID_PATTERN = '[0-9a-fA-F]{4,64}';
 
+/** Anchored form of {@link GIT_OBJECT_ID_PATTERN}. One definition, every reader. */
+export const GIT_OBJECT_ID_RE = new RegExp(`^${GIT_OBJECT_ID_PATTERN}$`);
+
+/** Whether `value` is a plausible git object id (abbrev 4 … full SHA-1 or SHA-256). */
+export const isGitObjectId = (value: string): boolean => GIT_OBJECT_ID_RE.test(value);
+
 /** The schema `pattern` and the parser read this string. There is no third copy. */
 export const PROVENANCE_VALUE_PATTERN =
   `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
