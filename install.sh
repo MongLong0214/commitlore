@@ -991,8 +991,21 @@ log "== commitlore install summary =="
 # its status; it must never turn a failed host into a successful install.
 host_status=0
 "$dest" installer-hosts --wrapper "$dest" --data-root "$data_root" --home "$HOME" --json \
-  >"$work/installer-hosts.json" || host_status=$?
+  >"$work/installer-hosts.json" 2>"$work/installer-hosts.err" || host_status=$?
 cat "$work/installer-hosts.json"
+# A non-zero status with nothing shown is the failure this installer exists to
+# stop making, inverted: the user is told the install did not succeed and never
+# told what is wrong or with which host.  Whatever the command managed to say is
+# surfaced here, and saying nothing at all is itself reported rather than
+# swallowed -- an exit code alone is not a diagnosis.
+if [ "$host_status" -ne 0 ]; then
+  if [ -s "$work/installer-hosts.err" ]; then
+    while IFS= read -r line; do log "  $line"; done <"$work/installer-hosts.err"
+  fi
+  if [ ! -s "$work/installer-hosts.json" ] && [ ! -s "$work/installer-hosts.err" ]; then
+    log "  host inspection exited $host_status and reported nothing: unhealthy, cause unknown"
+  fi
+fi
 log ""
 log "Next: cd into a repository and run 'commitlore init' to install its git hook and index."
 log "(install.sh never runs init for you -- it only installs the tool and wires agents, never touches a repository's .git.)"
