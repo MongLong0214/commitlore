@@ -21,8 +21,10 @@ import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
 import { deletePending, isUnreadablePendingFile, readPending, storeVerification, } from './pending.js';
+import { hasShallowHistory } from './git.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
+import { findDanglingRefs } from './stale.js';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -97,6 +99,57 @@ const classifyResult = (accepted, rejected) => {
     return 'partial';
 };
 /**
+ * The reference half of SPEC §6.1 — the class `validateRecord` cannot see.
+ *
+ * Declared set is historical identities plus the other records still in this
+ * batch. That is the same set `validate --message-file` hands `findDanglingRefs`
+ * (`prior` + siblings): a `Follows:` to an earlier record in this capture
+ * becomes a sibling block in the commit message the hook will check, so it
+ * must resolve here too. A sibling that itself fails is dropped and no longer
+ * resolves anything, otherwise capture would stage a `Follows:` the hook then
+ * rejects.
+ *
+ * Capture always has a repository by the time this runs (prepare wrote into
+ * `.git/`, and a missing history already returned `incomplete`). Shallow
+ * clones are left alone: the hook withdraws `dangling-ref` there rather than
+ * failing a valid record at the clone boundary.
+ */
+const rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
+    if (hasShallowHistory(cwd))
+        return accepted;
+    const historical = [...historyIds].map((id) => ({
+        trailers: [{ key: 'Record-Id', value: id }],
+    }));
+    let remaining = [...accepted];
+    let dropped = true;
+    while (dropped) {
+        dropped = false;
+        const next = [];
+        for (const verified of remaining) {
+            const siblings = remaining
+                .filter((other) => other !== verified)
+                .map((other) => ({ trailers: other.record.trailers }));
+            const dangling = findDanglingRefs([...historical, ...siblings], [
+                { trailers: verified.record.trailers },
+            ]);
+            if (dangling.length === 0) {
+                next.push(verified);
+                continue;
+            }
+            dropped = true;
+            rejected.push({
+                record: verified.record,
+                reason: 'dangling-ref',
+                detail: dangling
+                    .map((violation) => `${violation.key}: ${JSON.stringify(violation.got)} (${violation.rule}, want ${violation.want})`)
+                    .join('; '),
+            });
+        }
+        remaining = next;
+    }
+    return remaining;
+};
+/**
  * Read the active records exactly as verification does, without touching the
  * derived index. A caller with a known read-only history can provide it through
  * `VerifyCaptureOptions.history` instead.
@@ -141,6 +194,8 @@ export const loadCaptureVerificationHistory = (cwd) => {
  * - Source hash verification (transcript/diff match what prepare stored)
  * - Duplicate Record-Id detection against every historical identity
  * - Canonical duplicate detection
+ * - Reference resolution (`findDanglingRefs`) against the same declared set
+ *   `validate --message-file` uses: history plus same-batch siblings
  * - Notes availability check (unfetched → incomplete)
  *
  * Never throws on a record-verification failure — returns `"empty"` instead.
@@ -302,6 +357,12 @@ export const verifyCaptureRecords = (opts) => {
             if (id)
                 reservedRecordIds.add(id);
         }
+        // Shape passed. The hook's next step is `validate --message-file`, which
+        // also asks whether Follows:/Supersedes: resolve. A pass here that the
+        // hook then refuses is the #588 split: capture told the user it worked.
+        const surviving = rejectDanglingRefs(accepted, rejected, history.recordIds, cwd);
+        accepted.length = 0;
+        accepted.push(...surviving);
         // ADR-0030. In `auto` the host stages without asking, so nobody read this
         // record — whatever the model wrote in its `Provenance:` line. Stamping
         // `drafted` here is the only moment the pipeline knows that for certain,

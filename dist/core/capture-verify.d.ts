@@ -78,6 +78,8 @@ export declare const loadCaptureVerificationHistory: (cwd: string) => CaptureVer
  * - Source hash verification (transcript/diff match what prepare stored)
  * - Duplicate Record-Id detection against every historical identity
  * - Canonical duplicate detection
+ * - Reference resolution (`findDanglingRefs`) against the same declared set
+ *   `validate --message-file` uses: history plus same-batch siblings
  * - Notes availability check (unfetched → incomplete)
  *
  * Never throws on a record-verification failure — returns `"empty"` instead.
