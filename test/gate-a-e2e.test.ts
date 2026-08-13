@@ -537,6 +537,66 @@ describe('Scenario 3: HEAD moves between prepare and commit', () => {
 });
 
 // ===========================================================================
+// Scenario 3b: ordinary commit forms must not silently strand a capture
+// Proves: a pathspec's temporary index still fails closed, but tells the user
+// why their verified capture was not attached; an amend consumes the record it
+// did attach instead of leaving an applied transaction behind forever (#592).
+// ===========================================================================
+
+describe('#592 ordinary git commands do not silently lose capture state', () => {
+  it('reports a pathspec commit whose temporary index no longer matches the verified diff', () => {
+    const repo = makeRepo();
+
+    writeFileSync(join(repo, 'one.ts'), 'export const one = 1;\n');
+    writeFileSync(join(repo, 'two.ts'), 'export const two = 2;\n');
+    runGit(repo, ['add', 'one.ts', 'two.ts']);
+
+    const capture = runCapturePipeline(repo, 'r-pathsp01');
+    expect(capture.staged, capture.stderr).toBe(true);
+
+    // Git gives prepare-commit-msg a narrowed temporary index here. The record
+    // is deliberately not attached: it was verified for one.ts + two.ts.
+    const commit = runGit(repo, ['commit', '-m', 'feat: add one', '--', 'one.ts']);
+    expect(commit.status, commit.stderr).toBe(0);
+    expect(commit.stderr).toContain('commitlore: staged capture r-pathsp01 was not attached');
+    expect(commit.stderr).toContain('temporary index');
+
+    const message = runGit(repo, ['log', '-1', '--format=%B']).stdout;
+    expect(message).not.toContain('Record-Id: r-pathsp01');
+
+    const pending = readPendingFiles(repo).find((file) => file.nonce === capture.nonce);
+    expect(pending?.data['phase']).toBe('staged');
+    expect(pending?.data['consumed']).toBe(false);
+  });
+
+  it('consumes a capture attached by git commit --amend --no-edit', () => {
+    const repo = makeRepo();
+
+    writeFileSync(join(repo, 'amended.ts'), 'export const amended = true;\n');
+    runGit(repo, ['add', 'amended.ts']);
+
+    const capture = runCapturePipeline(repo, 'r-amend592');
+    expect(capture.staged, capture.stderr).toBe(true);
+
+    const commit = runGit(repo, ['commit', '--amend', '--no-edit']);
+    expect(commit.status, commit.stderr).toBe(0);
+    expect(runGit(repo, ['log', '-1', '--format=%B']).stdout).toContain('Record-Id: r-amend592');
+
+    const pending = readPendingFiles(repo).find((file) => file.nonce === capture.nonce);
+    expect(pending?.data['phase']).toBe('consumed');
+    expect(pending?.data['consumed']).toBe(true);
+
+    // Consumed transactions are retained for audit, but `pending ls` must have
+    // no live staged/applied backlog after the amend finaliser runs.
+    const listed = runCli(repo, ['pending', 'ls', '--json']);
+    expect(listed.status, listed.stderr).toBe(0);
+    const transactions = (JSON.parse(listed.stdout) as { transactions: Array<{ phase: string }> }).transactions;
+    expect(transactions).toEqual([expect.objectContaining({ phase: 'consumed' })]);
+    expect(transactions.some((transaction) => transaction.phase === 'staged' || transaction.phase === 'applied')).toBe(false);
+  });
+});
+
+// ===========================================================================
 // Scenario 4: stage_capture with fabricated nonce or one from another repo
 // Proves: fails closed, nothing attaches
 // RED condition: would fail if stage_capture accepts a nonce that was never

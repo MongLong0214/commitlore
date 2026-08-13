@@ -184,6 +184,47 @@ const messageContainsRecordId = (message: string, records: unknown[]): boolean =
   return false;
 };
 
+/** The first Record-Id is the most useful name for a dropped capture. */
+const captureLabel = (pending: PendingRecord): string => {
+  for (const rec of pending.records) {
+    if (typeof rec !== 'object' || rec === null) continue;
+    const trailers = (rec as { trailers?: unknown[] }).trailers;
+    if (!Array.isArray(trailers)) continue;
+    for (const trailer of trailers as Trailer[]) {
+      if (trailer.key === 'Record-Id') return trailer.value;
+    }
+  }
+  return pending.nonce;
+};
+
+/**
+ * A path-limited commit and some other ordinary commit forms give hooks an
+ * alternate index. The capture must remain bound to the full index it was
+ * verified against, but naming this case is much more actionable than a bare
+ * hash mismatch.
+ */
+const usesTemporaryCommitIndex = (cwd: string): boolean => {
+  const currentIndex = process.env.GIT_INDEX_FILE;
+  if (!currentIndex) return false;
+
+  // `--git-path index` itself honours GIT_INDEX_FILE, so it would merely echo
+  // the temporary path we are trying to recognise. The repository git-dir does
+  // not, and its index is Git's normal persistent index for this worktree.
+  const gitDir = execGit(['rev-parse', '--git-dir'], { cwd });
+  if (gitDir.code !== 0) return false;
+  return resolve(cwd, currentIndex) !== resolve(cwd, gitDir.stdout.trim(), 'index');
+};
+
+const reportDiffMismatch = (pending: PendingRecord, cwd: string): void => {
+  const label = captureLabel(pending);
+  const detail = usesTemporaryCommitIndex(cwd)
+    ? 'this commit uses a temporary index whose staged diff differs from the verified capture'
+    : 'the staged diff differs from the verified capture';
+  process.stderr.write(
+    `commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.\n`,
+  );
+};
+
 /**
  * The five-gate application check. Scans pending directory for a staged or
  * applied-but-unconsumed record that passes all five gates. On first match,
@@ -241,7 +282,10 @@ const applyCaptureRecord = (messageFile: string, cwd: string): void => {
     if (pending.base_head !== currentHead) continue;
 
     // Gate 2: Staged diff unchanged
-    if (pending.staged_diff_hash !== currentDiffHash) continue;
+    if (pending.staged_diff_hash !== currentDiffHash) {
+      reportDiffMismatch(pending, cwd);
+      continue;
+    }
 
     // Gate 3: Unexpired (expires_at must be non-null and in the future)
     if (!pending.expires_at) continue;
