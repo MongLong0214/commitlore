@@ -15856,6 +15856,62 @@ var pendingFilePath = (nonce, cwd) => {
   const dir = pendingDir(cwd);
   return resolve3(dir, `${nonce}.json`);
 };
+var pendingLockPath = (nonce, cwd) => `${pendingFilePath(nonce, cwd)}.lock`;
+var pidIsAlive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var tryLockPending = (nonce, cwd) => {
+  validateNonce(nonce);
+  const lockPath = pendingLockPath(nonce, cwd);
+  mkdirSync2(pendingDir(cwd), { recursive: true });
+  const create = () => {
+    writeFileSync2(lockPath, `${process.pid}
+`, { flag: "wx" });
+    return { held: true, created: true };
+  };
+  try {
+    return create();
+  } catch (error2) {
+    const code = typeof error2 === "object" && error2 !== null && "code" in error2 && typeof error2.code === "string" ? error2.code : "unknown";
+    if (code !== "EEXIST") throw error2;
+    let owner = "";
+    try {
+      owner = readFileSync4(lockPath, "utf8").trim();
+    } catch {
+      return { held: false, created: false };
+    }
+    if (owner === String(process.pid)) return { held: true, created: false };
+    const pid = Number(owner);
+    if (!Number.isInteger(pid) || pid <= 0 || pidIsAlive(pid)) {
+      return { held: false, created: false };
+    }
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      return { held: false, created: false };
+    }
+    try {
+      return create();
+    } catch {
+      return { held: false, created: false };
+    }
+  }
+};
+var unlockPending = (nonce, cwd) => {
+  validateNonce(nonce);
+  const lockPath = pendingLockPath(nonce, cwd);
+  try {
+    const owner = readFileSync4(lockPath, "utf8").trim();
+    if (owner !== String(process.pid)) return;
+    unlinkSync(lockPath);
+  } catch {
+  }
+};
 var atomicWriteJson = (filePath, data) => {
   const dir = resolve3(filePath, "..");
   mkdirSync2(dir, { recursive: true });
@@ -15991,25 +16047,31 @@ var readPending = (nonce, opts) => {
 };
 var storeVerification = (nonce, opts) => {
   validateNonce(nonce);
-  const record2 = readPending(nonce, { cwd: opts.cwd });
-  if (!record2) return false;
-  if (record2.phase !== "prepared") return false;
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const updated = {
-    ...record2,
-    phase: "verified",
-    verified_at: now,
-    // CEO amendment 1: expires_at remains null in verified phase
-    expires_at: null,
-    records: opts.accepted,
-    evidence_hash: opts.evidence_hash,
-    validation_result: opts.validation_result,
-    overlap_check: opts.overlap_check,
-    incomplete: opts.incomplete
-  };
-  const filePath = pendingFilePath(nonce, opts.cwd);
-  atomicWriteJson(filePath, updated);
-  return true;
+  const lock = tryLockPending(nonce, opts.cwd);
+  if (!lock.held) return false;
+  try {
+    const record2 = readPending(nonce, { cwd: opts.cwd });
+    if (!record2) return false;
+    if (record2.phase !== "prepared") return false;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updated = {
+      ...record2,
+      phase: "verified",
+      verified_at: now,
+      // CEO amendment 1: expires_at remains null in verified phase
+      expires_at: null,
+      records: opts.accepted,
+      evidence_hash: opts.evidence_hash,
+      validation_result: opts.validation_result,
+      overlap_check: opts.overlap_check,
+      incomplete: opts.incomplete
+    };
+    const filePath = pendingFilePath(nonce, opts.cwd);
+    atomicWriteJson(filePath, updated);
+    return true;
+  } finally {
+    if (lock.created) unlockPending(nonce, opts.cwd);
+  }
 };
 var stagePending = (nonce, opts) => {
   validateNonce(nonce);
@@ -16050,6 +16112,10 @@ var deletePending = (nonce, opts) => {
   const filePath = pendingFilePath(nonce, opts.cwd);
   try {
     unlinkSync(filePath);
+    try {
+      unlinkSync(pendingLockPath(nonce, opts.cwd));
+    } catch {
+    }
     return true;
   } catch {
     return false;
@@ -16309,6 +16375,28 @@ var loadCaptureVerificationHistory = (cwd) => {
   }
 };
 var verifyCaptureRecords = (opts) => {
+  const { nonce, cwd } = opts;
+  let createdLock = false;
+  if (opts.readOnly !== true) {
+    const lock = tryLockPending(nonce, cwd);
+    if (!lock.held) {
+      return {
+        accepted: [],
+        rejected: [],
+        validation_result: "empty",
+        incomplete: true,
+        overlap_check: "canonical_exact_only"
+      };
+    }
+    createdLock = lock.created;
+  }
+  try {
+    return runVerifyCaptureRecords(opts);
+  } finally {
+    if (createdLock) unlockPending(nonce, cwd);
+  }
+};
+var runVerifyCaptureRecords = (opts) => {
   const { nonce, draft, transcript, diff, cwd } = opts;
   const accepted = [];
   const rejected = [];
@@ -21432,6 +21520,11 @@ var reportDiffMismatch = (pending, cwd) => {
 `
   );
 };
+var compareCaptureCandidates = (left, right) => {
+  const byCreated = right.created_at.localeCompare(left.created_at);
+  if (byCreated !== 0) return byCreated;
+  return left.nonce.localeCompare(right.nonce);
+};
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
   if (!pendingDirPath || !existsSync14(pendingDirPath)) return;
@@ -21456,31 +21549,35 @@ var applyCaptureRecord = (messageFile, cwd) => {
   } catch {
     return;
   }
+  const eligible = [];
   for (const file of files) {
     const filePath = resolve13(pendingDirPath, file);
-    const pending = readPendingFile2(filePath);
-    if (!pending) continue;
-    if (pending.phase !== "staged" && pending.phase !== "applied") continue;
-    if (pending.consumed) continue;
-    if (pending.base_head !== currentHead) continue;
-    if (pending.staged_diff_hash !== currentDiffHash) {
-      reportDiffMismatch(pending, cwd);
+    const pending2 = readPendingFile2(filePath);
+    if (!pending2) continue;
+    if (pending2.phase !== "staged" && pending2.phase !== "applied") continue;
+    if (pending2.consumed) continue;
+    if (pending2.base_head !== currentHead) continue;
+    if (pending2.staged_diff_hash !== currentDiffHash) {
+      reportDiffMismatch(pending2, cwd);
       continue;
     }
-    if (!pending.expires_at) continue;
-    if (now >= new Date(pending.expires_at).getTime()) continue;
-    if (pending.policy_identity_hash !== currentPolicyHash) continue;
-    if (messageContainsRecordId(currentMessage, pending.records)) return;
-    const trailerBlock = buildTrailerBlock(pending.records);
-    if (!trailerBlock) return;
-    const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
-    writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-    const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
-    try {
-      markApplied(pending.nonce, recordHash, { cwd });
-    } catch {
-    }
-    return;
+    if (!pending2.expires_at) continue;
+    if (now >= new Date(pending2.expires_at).getTime()) continue;
+    if (pending2.policy_identity_hash !== currentPolicyHash) continue;
+    eligible.push(pending2);
+  }
+  eligible.sort(compareCaptureCandidates);
+  const pending = eligible[0];
+  if (!pending) return;
+  if (messageContainsRecordId(currentMessage, pending.records)) return;
+  const trailerBlock = buildTrailerBlock(pending.records);
+  if (!trailerBlock) return;
+  const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
+  writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
+  const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
+  try {
+    markApplied(pending.nonce, recordHash, { cwd });
+  } catch {
   }
 };
 var register8 = (program3) => {

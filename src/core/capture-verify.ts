@@ -27,6 +27,8 @@ import {
   isUnreadablePendingFile,
   readPending,
   storeVerification,
+  tryLockPending,
+  unlockPending,
   type PendingRecord,
 } from './pending.js';
 import { hasShallowHistory } from './git.js';
@@ -287,6 +289,36 @@ export const loadCaptureVerificationHistory = (cwd: string): CaptureVerification
  * Never blocks: an empty or incomplete result is a valid outcome, not an error.
  */
 export const verifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResult => {
+  const { nonce, cwd } = opts;
+
+  // Hold the nonce for the whole call so a concurrent loser is refused before
+  // it computes a result it cannot store — and so its settle path cannot
+  // delete the winner's transaction. Sequential replay still acquires after
+  // the first call has released, sees `verified`, and settle deletes as
+  // before. A read-only check writes nothing and takes no lock.
+  let createdLock = false;
+  if (opts.readOnly !== true) {
+    const lock = tryLockPending(nonce, cwd);
+    if (!lock.held) {
+      return {
+        accepted: [],
+        rejected: [],
+        validation_result: 'empty',
+        incomplete: true,
+        overlap_check: 'canonical_exact_only',
+      };
+    }
+    createdLock = lock.created;
+  }
+
+  try {
+    return runVerifyCaptureRecords(opts);
+  } finally {
+    if (createdLock) unlockPending(nonce, cwd);
+  }
+};
+
+const runVerifyCaptureRecords = (opts: VerifyCaptureOptions): VerifyCaptureResult => {
   const { nonce, draft, transcript, diff, cwd } = opts;
 
   const accepted: VerifiedRecord[] = [];
