@@ -19,6 +19,7 @@ import {
   type GuardGap,
   type PendingRecord,
 } from './pending.js';
+import { isFullObjectId } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Guard advisory — ADR-0020, T-1109
@@ -156,8 +157,6 @@ interface PreparedValues {
   policy_error: string | null;
 }
 
-const isObjectId = (value: string): boolean => /^[0-9a-f]{40}$/.test(value);
-
 /**
  * The shared, side-effect-free half of prepare. The ordinary capture path and
  * historical shadow differ only in where their staged snapshot comes from and
@@ -176,7 +175,7 @@ const prepareValues = (opts: {
   const { cwd, transcript, snapshot } = opts;
 
   const baseHead = snapshot?.base_head ?? execGitOrThrow(['rev-parse', 'HEAD'], { cwd }).trim();
-  if (!isObjectId(baseHead)) {
+  if (!isFullObjectId(baseHead)) {
     throw markCaptureError(
       new Error('Cannot resolve HEAD — is this a git repository with at least one commit?'),
       'operational',
@@ -188,7 +187,7 @@ const prepareValues = (opts: {
 
   const stagedTreeOid =
     snapshot?.staged_tree_oid ?? execGitOrThrow(['write-tree'], { cwd }).trim();
-  if (!isObjectId(stagedTreeOid)) {
+  if (!isFullObjectId(stagedTreeOid)) {
     throw markCaptureError(
       new Error('Cannot resolve staged tree — is this a git repository with at least one commit?'),
       'operational',

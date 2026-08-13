@@ -8,7 +8,7 @@ import { resolvePolicy } from '../core/capture-policy.js';
 import { execGit } from '../core/git.js';
 import { markApplied, type PendingRecord } from '../core/pending.js';
 import { parseRecordBlocks, serializeTrailers } from '../core/trailers.js';
-import { KNOWN_KEYS, type Trailer } from '../core/types.js';
+import { FULL_OBJECT_ID_PATTERN, KNOWN_KEYS, type Trailer } from '../core/types.js';
 import { captureHookFailOpen } from './capture-fail-open.js';
 import { CHAINED_SUFFIX, HOOK_MODE, captureHookStub } from './commit-msg.js';
 
@@ -40,7 +40,12 @@ const squashMessagePath = (cwd: string): string | null => {
 
 const squashCommitIds = (message: string): readonly string[] => {
   const ids: string[] = [];
-  for (const match of message.matchAll(/^commit ([0-9a-f]{40})$/gm)) {
+  // Git writes SQUASH_MSG itself and always spells these ids in full, so the
+  // full-id pattern is what actually appears. Matching abbreviations here would
+  // also catch a prose line in a squashed commit body that happens to begin
+  // `commit ` followed by a short hex word, and then `git show` that.
+  const pattern = new RegExp(`^commit (${FULL_OBJECT_ID_PATTERN})$`, 'gm');
+  for (const match of message.matchAll(pattern)) {
     const id = match[1];
     if (id !== undefined) ids.push(id);
   }

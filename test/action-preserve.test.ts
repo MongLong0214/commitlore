@@ -679,3 +679,69 @@ describe('no host but the git remote', () => {
     expect(runner).not.toMatch(/'-c',\s*`?http\./);
   });
 });
+
+/**
+ * #620. `git notes add` creates a commit object, and git refuses to create one
+ * without an author and a committer. `actions/checkout` configures neither, so
+ * on a default runner the action detected the squash correctly and then died
+ * writing the note — `Author identity unknown`, exit 128 — which made its whole
+ * purpose unreachable in the configuration it most often runs in.
+ *
+ * `initRepo` sets a local identity, so these cases strip it back out to
+ * reproduce what a runner actually looks like.
+ */
+describe('#620 the note write has an identity on a runner that configured none', () => {
+  const stripIdentity = (repo: string): void => {
+    git(repo, ['config', '--unset-all', 'user.name']);
+    git(repo, ['config', '--unset-all', 'user.email']);
+  };
+
+  /** Nothing may reach git's own lookup, which would find the machine's identity. */
+  const RUNNER_ENV = {
+    GIT_AUTHOR_NAME: '',
+    GIT_AUTHOR_EMAIL: '',
+    GIT_COMMITTER_NAME: '',
+    GIT_COMMITTER_EMAIL: '',
+    GIT_CONFIG_GLOBAL: '/nonexistent/commitlore-620',
+    GIT_CONFIG_SYSTEM: '/nonexistent/commitlore-620',
+    EMAIL: '',
+  };
+
+  it('writes the record instead of failing with Author identity unknown', () => {
+    const scenario = squashScenario('identity');
+    stripIdentity(scenario.repo);
+
+    const run = runPreserve(scenario, RUNNER_ENV);
+
+    expect(run.stderr).not.toContain('Author identity unknown');
+    expect(run.status, `stderr: ${run.stderr}`).toBe(0);
+
+    const note = git(scenario.repo, ['notes', NOTES_ARG, 'show', scenario.mergeSha]);
+    expect(note).toContain('Record-Id:');
+  });
+
+  it('attributes the note to the bot rather than to nobody', () => {
+    const scenario = squashScenario('identity-author');
+    stripIdentity(scenario.repo);
+    runPreserve(scenario, RUNNER_ENV);
+
+    const author = git(scenario.repo, [
+      'log', '-1', '--format=%an <%ae>', NOTES_REF,
+    ]).trim();
+    expect(author).toContain('github-actions[bot]');
+  });
+
+  it('does not override an identity the workflow already configured', () => {
+    const scenario = squashScenario('identity-kept');
+    git(scenario.repo, ['config', 'user.name', 'Release Bot']);
+    git(scenario.repo, ['config', 'user.email', 'release@example.invalid']);
+
+    runPreserve(scenario, {
+      GIT_CONFIG_GLOBAL: '/nonexistent/commitlore-620',
+      GIT_CONFIG_SYSTEM: '/nonexistent/commitlore-620',
+    });
+
+    const author = git(scenario.repo, ['log', '-1', '--format=%an <%ae>', NOTES_REF]).trim();
+    expect(author).toBe('Release Bot <release@example.invalid>');
+  });
+});

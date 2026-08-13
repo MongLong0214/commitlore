@@ -54,6 +54,7 @@ import { DEFAULT_THRESHOLD, guard, renderGuardMatch } from '../core/guard.js';
 import { prepareCaptureContext } from '../core/capture-prepare.js';
 import { verifyCaptureRecords } from '../core/capture-verify.js';
 import { stageCaptureRecord } from '../core/capture-stage.js';
+import { decodedDraftError } from '../core/harvest.js';
 import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from '../core/query.js';
 import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { validateToolArguments } from './validate-args.js';
@@ -555,6 +556,12 @@ export const createServer = (opts = {}) => {
             }
             catch (e) {
                 throw new Error(`malformed draft JSON: ${e instanceof Error ? e.message : String(e)}`);
+            }
+            // R0-02: the decoded shape is the caller's responsibility, and a
+            // malformed one must not be answerable with the ordinary empty outcome.
+            const structural = decodedDraftError(draft);
+            if (structural !== null) {
+                throw new Error(`malformed draft: ${structural}`);
             }
             const result = verifyCaptureRecords({
                 nonce,

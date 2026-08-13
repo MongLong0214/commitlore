@@ -8,7 +8,7 @@
  * record.
  */
 
-import { execGit } from './git.js';
+import { execGit, resolveRevision } from './git.js';
 import {
   prepareCaptureContextReadOnly,
   type HistoricalCaptureSnapshot,
@@ -22,7 +22,13 @@ import { parseDraft, type DraftRecord, type EvidenceSource } from './harvest.js'
 import { scanForSecrets, type SecretFinding } from './secret-guard.js';
 import { foldLifecycle, type StaleRecord } from './stale.js';
 import { serializeTrailers } from './trailers.js';
-import { isCommitLoreKey, isConventionalTrailerKey, KNOWN_KEYS, type Trailer } from './types.js';
+import {
+  isCommitLoreKey,
+  isConventionalTrailerKey,
+  isFullObjectId,
+  KNOWN_KEYS,
+  type Trailer,
+} from './types.js';
 
 const MAX_DIFF_BYTES = 64 * 1024;
 const DIFF_MAX_BUFFER = 256 * 1024 * 1024;
@@ -211,7 +217,7 @@ const historiesBeforeCommit = (
   }
   const shas = gitOutput(['rev-list', '--reverse', 'HEAD'], cwd)
     .split('\n')
-    .filter((sha) => /^[0-9a-f]{40}$/.test(sha));
+    .filter((sha) => isFullObjectId(sha));
   const prior: HistoricalRecord[] = [];
   const histories = new Map<string, CaptureVerificationHistory>();
   for (const sha of shas) {
@@ -229,11 +235,11 @@ const truncateDiff = (diff: string): string => {
 };
 
 const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
-  const resolved = gitOutput(
-    ['rev-parse', '--verify', '--quiet', '--end-of-options', `${since}^{commit}`],
-    cwd,
-  ).trim();
-  if (!/^[0-9a-f]{40}$/.test(resolved)) {
+  // `--since` is the one place a user hands this module a revision, so it is
+  // the one place an abbreviation is resolved. Everything below holds the full
+  // id git returned.
+  const resolved = resolveRevision(cwd, since);
+  if (resolved === null) {
     throw new Error(`--since does not name a commit: ${JSON.stringify(since)}`);
   }
 
@@ -267,7 +273,7 @@ const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
     const separator = record.indexOf(FIELD_SEP);
     if (separator === -1) continue;
     const sha = record.slice(0, separator);
-    if (!/^[0-9a-f]{40}$/.test(sha)) continue;
+    if (!isFullObjectId(sha)) continue;
     patchesBySha.set(sha, truncateDiff(record.slice(separator + 1)));
   }
 
@@ -275,8 +281,8 @@ const historicalCommits = (cwd: string, since: string): HistoricalCommit[] => {
     const [sha, subject, parents, tree, message] = record.split(FIELD_SEP);
     if (sha === undefined || subject === undefined || parents === undefined || tree === undefined || message === undefined) return [];
     const baseHead = parents.split(' ')[0] ?? '';
-    if (!/^[0-9a-f]{40}$/.test(sha)) return [];
-    if (!/^[0-9a-f]{40}$/.test(baseHead) || !/^[0-9a-f]{40}$/.test(tree)) {
+    if (!isFullObjectId(sha)) return [];
+    if (!isFullObjectId(baseHead) || !isFullObjectId(tree)) {
       return [{ sha, subject: displaySubject(subject), sources: null }];
     }
     const diff = patchesBySha.get(sha) ?? '';

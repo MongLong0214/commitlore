@@ -29,7 +29,7 @@ import { Buffer, isUtf8 } from 'node:buffer';
 import { execGit } from './git.js';
 import { NOTES_REF } from './notes.js';
 import { foldLifecycle } from './stale.js';
-import { parseProvenance, } from './types.js';
+import { isFullObjectId, parseProvenance, } from './types.js';
 const PROVENANCE_KEY = 'Provenance';
 export const BLOCKED_RECORD_WITHHELD = 'Record content was withheld because it matched an injection pattern.';
 /**
@@ -706,7 +706,6 @@ export const gradeAll = (records, ctx) => {
 const AUTHOR_BATCH = 200;
 const AUTHOR_RECORD_SEP = '\x01';
 const AUTHOR_FIELD_SEP = '\0';
-const AUTHOR_SHA_RE = /^[0-9a-f]{4,40}$/;
 /**
  * `%x01`/`%x00` rather than the literal bytes: `spawnSync` refuses an argument
  * containing a NUL, and these reach git as text and come back as bytes.
@@ -729,7 +728,7 @@ const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
  * `directive`.
  */
 export const authorsOf = (cwd, shas) => {
-    const wanted = [...new Set(shas)].filter((sha) => AUTHOR_SHA_RE.test(sha)).sort();
+    const wanted = [...new Set(shas)].filter((sha) => isFullObjectId(sha)).sort();
     const authors = new Map();
     for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
         const batch = wanted.slice(start, start + AUTHOR_BATCH);
@@ -765,7 +764,7 @@ export const noteAuthorsOf = (cwd) => {
         const writer = { author: noteAuthor, signatureStatus: status.trim() };
         for (const line of pathLines) {
             const annotated = line.trim().replace(/\//g, '');
-            if (!AUTHOR_SHA_RE.test(annotated))
+            if (!isFullObjectId(annotated))
                 continue;
             const seen = authors.get(annotated);
             if (seen === undefined)
