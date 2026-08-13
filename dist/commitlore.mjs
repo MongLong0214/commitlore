@@ -3644,7 +3644,12 @@ var require_fast_uri = __commonJS({
     }
     function resolve21(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
+      const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
+      const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
+      if (baseMalformed || relativeMalformed) {
+        throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
+      }
+      const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
@@ -3770,6 +3775,7 @@ var require_fast_uri = __commonJS({
     }
     var URI_PARSE = /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
     var AUTHORITY_PREFIX = /^(?:[^#/:?]+:)?\/\/([^/?#]*)/;
+    var AUTHORITY_INTRODUCER_REGION = /^(?:[^#/:?]+:)?([/\\\t\n\r]*)/;
     function getParseError(parsed, matches) {
       if (matches[2] !== void 0 && parsed.path && parsed.path[0] !== "/") {
         return 'URI path must start with "/" when authority is present.';
@@ -3803,6 +3809,20 @@ var require_fast_uri = __commonJS({
       if (authorityMatch !== null && authorityMatch[1].indexOf("\\") !== -1) {
         parsed.error = "URI authority must not contain a literal backslash.";
         malformedAuthorityOrPort = true;
+      }
+      const introducerMatch = uri.match(AUTHORITY_INTRODUCER_REGION);
+      if (introducerMatch !== null) {
+        const region = introducerMatch[1];
+        const normalizedRegion = region.replace(/[\t\n\r]/g, "");
+        if (normalizedRegion.length >= 2) {
+          if (normalizedRegion.slice(0, 2) !== "//") {
+            parsed.error = parsed.error || "URI authority must not contain a literal backslash.";
+            malformedAuthorityOrPort = true;
+          } else if (region.length !== normalizedRegion.length) {
+            parsed.error = parsed.error || "URI authority introducer must not contain whitespace.";
+            malformedAuthorityOrPort = true;
+          }
+        }
       }
       const matches = uri.match(URI_PARSE);
       if (matches) {
@@ -11116,17 +11136,13 @@ var execGit = (args, opts = {}) => {
   });
   return gitResultFromSpawn(result);
 };
-var GIT_FAILURE = "commitloreGitFailure";
-var isGitFailure = (error2) => error2 instanceof Error && error2[GIT_FAILURE] === true;
 var execGitOrThrow = (args, opts = {}) => {
   const result = execGit(args, opts);
   if (result.code !== 0) {
-    const error2 = Object.assign(
+    throw Object.assign(
       new Error(`git ${args.join(" ")} failed (exit ${result.code}): ${result.stderr.trim()}`),
       { code: result.code, stderr: result.stderr }
     );
-    Object.defineProperty(error2, GIT_FAILURE, { value: true });
-    throw error2;
   }
   return result.stdout;
 };
@@ -11215,26 +11231,8 @@ var BLAST_VALUES = ["local", "module", "system"];
 var UNDO_VALUES = ["easy", "costly", "permanent"];
 var CERTAINTY_VALUES = ["firm", "tentative", "guess"];
 var PROVENANCE_PREFIXES = ["authored", "drafted", "inherited", "reconstructed", "unknown"];
-var GIT_OBJECT_ID_PATTERN = "[0-9a-fA-F]{4,64}";
-var PROVENANCE_VALUE_PATTERN = `^(authored|drafted|reconstructed|unknown|inherited ${GIT_OBJECT_ID_PATTERN})$`;
-var PROVENANCE_VALUE_RE = new RegExp(PROVENANCE_VALUE_PATTERN);
-var PROVENANCE_FORMAT_WANT = PROVENANCE_PREFIXES.map(
-  (kind) => kind === "inherited" ? "inherited <sha>" : kind
-).join(" | ");
 var RECORD_ID_RE = /^r-[a-z0-9]{6,}$/;
 var EXTENSION_KEY_RE = /^X-[A-Za-z][A-Za-z0-9-]*$/;
-var parseProvenance = (value) => {
-  if (value === void 0) return void 0;
-  const trimmed = value.trim();
-  if (!PROVENANCE_VALUE_RE.test(trimmed)) return void 0;
-  if (trimmed.startsWith("inherited ")) {
-    return { kind: "inherited", sha: trimmed.slice("inherited ".length) };
-  }
-  if (trimmed === "authored" || trimmed === "drafted" || trimmed === "reconstructed" || trimmed === "unknown") {
-    return { kind: trimmed };
-  }
-  return void 0;
-};
 
 // src/core/trailers.ts
 var RECORD_ID_KEY = "Record-Id";
@@ -11507,7 +11505,7 @@ var FORMAT_WANT = {
   Supersedes: "r-[a-z0-9]{6,}",
   Expires: "YYYY-MM-DD or a free-text condition",
   Evidence: "path, path#anchor, or a URL",
-  Provenance: PROVENANCE_FORMAT_WANT,
+  Provenance: "authored | inherited <sha> | reconstructed | unknown",
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
@@ -11616,8 +11614,7 @@ var GRAMMAR_FROM_TYPES = {
   Blast: BLAST_VALUES.join(" | "),
   Undo: UNDO_VALUES.join(" | "),
   Certainty: CERTAINTY_VALUES.join(" | "),
-  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, ""),
-  Provenance: PROVENANCE_FORMAT_WANT
+  "Record-Id": RECORD_ID_RE.source.replace(/^\^/, "").replace(/\$$/, "")
 };
 var drift = (detail) => new Error(`SPEC \xA73 has drifted from src/core/types.ts: ${detail}`);
 var splitRow = (line2) => line2.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, "|").replace(/`/g, "").trim());
@@ -14080,50 +14077,6 @@ import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "
 // src/core/capture-prepare.ts
 import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
 
-// src/core/capture-outcome.ts
-var CAPTURE_KIND = "commitloreCaptureKind";
-var markCaptureError = (error2, kind) => {
-  Object.defineProperty(error2, CAPTURE_KIND, { value: kind });
-  return error2;
-};
-var captureKindOf = (error2) => {
-  if (!(error2 instanceof Error)) return void 0;
-  const kind = error2[CAPTURE_KIND];
-  if (kind === "usage" || kind === "rejected" || kind === "operational" || kind === "internal") {
-    return kind;
-  }
-  return void 0;
-};
-var errnoCode = (error2) => {
-  if (typeof error2 !== "object" || error2 === null || !("code" in error2)) return void 0;
-  return typeof error2.code === "string" ? error2.code : void 0;
-};
-var classifyCaptureError = (error2) => {
-  const marked = captureKindOf(error2);
-  if (marked !== void 0) return marked;
-  if (isGitFailure(error2)) return "operational";
-  const code = errnoCode(error2);
-  if (code === "ENOENT" || code === "EACCES" || code === "EPERM" || code === "ENOTDIR" || code === "EROFS") {
-    return "operational";
-  }
-  return "internal";
-};
-var exitCodeForCaptureOutcome = (outcome) => {
-  switch (outcome) {
-    case "staged":
-    case "empty":
-    case "rejected":
-      return 0;
-    case "usage":
-      return 2;
-    case "operational":
-      return 3;
-    case "internal":
-      return 4;
-  }
-};
-var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
-
 // src/core/grade.ts
 import { Buffer as Buffer2, isUtf8 } from "node:buffer";
 
@@ -14358,6 +14311,7 @@ var isStale = (state) => state.lifecycle !== "active" || state.flags.length > 0;
 
 // src/core/grade.ts
 var PROVENANCE_KEY = "Provenance";
+var INHERITED_RE = /^inherited\s+([0-9a-f]{7,40})$/;
 var BLOCKED_RECORD_WITHHELD = "Record content was withheld because it matched an injection pattern.";
 var INJECTION_PATTERNS = [
   {
@@ -14759,8 +14713,15 @@ var scanRecord = (record2) => {
 };
 var provenanceOf = (record2) => {
   if (record2.provenance !== void 0) return record2.provenance;
-  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0];
-  return parseProvenance(raw) ?? { kind: "unknown" };
+  const raw = trailerValues(record2.trailers, PROVENANCE_KEY)[0]?.trim();
+  if (raw === void 0) return { kind: "unknown" };
+  if (raw === "authored") return { kind: "authored" };
+  if (raw === "drafted") return { kind: "drafted" };
+  if (raw === "reconstructed") return { kind: "reconstructed" };
+  const inherited = INHERITED_RE.exec(raw);
+  const sha = inherited?.[1];
+  if (sha !== void 0) return { kind: "inherited", sha };
+  return { kind: "unknown" };
 };
 var lifecycleOf = (record2, at, folded) => {
   if (record2.lifecycle !== void 0 && record2.lifecycle !== "active") return record2.lifecycle;
@@ -15171,6 +15132,17 @@ var mergeTrailers2 = (into, from) => {
     );
     if (!duplicate) into.push({ ...trailer });
   }
+};
+var parseProvenance = (value) => {
+  if (value === void 0) return void 0;
+  const trimmed = value.trim();
+  if (trimmed === "authored") return { kind: "authored" };
+  if (trimmed === "reconstructed") return { kind: "reconstructed" };
+  if (trimmed === "unknown") return { kind: "unknown" };
+  if (trimmed === "inherited" || trimmed.startsWith("inherited ")) {
+    return { kind: "inherited", sha: trimmed.slice("inherited".length).trim() };
+  }
+  return void 0;
 };
 var gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) => {
   if (merged.length === 0) return;
@@ -15845,8 +15817,7 @@ var atomicWriteJson = (filePath, data) => {
       unlinkSync(temporary);
     } catch {
     }
-    const thrown = error2 instanceof Error ? error2 : new Error(String(error2));
-    throw markCaptureError(thrown, "operational");
+    throw error2;
   }
 };
 var COMMIT_ID_RE = /^[0-9a-f]{40}$/;
@@ -16097,19 +16068,13 @@ var prepareValues = (opts) => {
   const { cwd, transcript, snapshot } = opts;
   const baseHead = snapshot?.base_head ?? execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
   if (!isObjectId(baseHead)) {
-    throw markCaptureError(
-      new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?"),
-      "operational"
-    );
+    throw new Error("Cannot resolve HEAD \u2014 is this a git repository with at least one commit?");
   }
   const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
   const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
   const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
   if (!isObjectId(stagedTreeOid)) {
-    throw markCaptureError(
-      new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?"),
-      "operational"
-    );
+    throw new Error("Cannot resolve staged tree \u2014 is this a git repository with at least one commit?");
   }
   const sourceHashes = {
     transcript: createHash2("sha256").update(transcript).digest("hex"),
@@ -16117,19 +16082,13 @@ var prepareValues = (opts) => {
   };
   const policy = resolvePolicy(cwd);
   if (policy.policy.mode === "off") {
-    throw markCaptureError(
-      new Error(
-        `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
-      ),
-      "rejected"
+    throw new Error(
+      `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
     );
   }
   if (opts.unattended === true && !(policy.policy.mode === "auto" && policy.policy.unattended)) {
-    throw markCaptureError(
-      new Error(
-        `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
-      ),
-      "rejected"
+    throw new Error(
+      `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
     );
   }
   const diffPaths = extractPathsFromDiff(diff);
@@ -16228,38 +16187,6 @@ var classifyResult = (accepted, rejected) => {
   if (accepted.length === 0) return "empty";
   if (rejected.length === 0) return "pass";
   return "partial";
-};
-var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
-  if (hasShallowHistory(cwd)) return [...accepted];
-  const historical = [...historyIds].map((id) => ({
-    trailers: [{ key: "Record-Id", value: id }]
-  }));
-  let remaining = [...accepted];
-  let dropped = true;
-  while (dropped) {
-    dropped = false;
-    const next = [];
-    for (const verified of remaining) {
-      const siblings = remaining.filter((other) => other !== verified).map((other) => ({ trailers: other.record.trailers }));
-      const dangling = findDanglingRefs([...historical, ...siblings], [
-        { trailers: verified.record.trailers }
-      ]);
-      if (dangling.length === 0) {
-        next.push(verified);
-        continue;
-      }
-      dropped = true;
-      rejected.push({
-        record: verified.record,
-        reason: "dangling-ref",
-        detail: dangling.map(
-          (violation) => `${violation.key}: ${JSON.stringify(violation.got)} (${violation.rule}, want ${violation.want})`
-        ).join("; ")
-      });
-    }
-    remaining = next;
-  }
-  return remaining;
 };
 var loadCaptureVerificationHistory = (cwd) => {
   try {
@@ -16399,9 +16326,6 @@ var verifyCaptureRecords = (opts) => {
       accepted.push(verified);
       if (id) reservedRecordIds.add(id);
     }
-    const surviving = rejectDanglingRefs(accepted, rejected, history.recordIds, cwd);
-    accepted.length = 0;
-    accepted.push(...surviving);
     if (resolvePolicy(cwd).policy.mode === "auto") {
       for (const verified of accepted) {
         const trailers = verified.record.trailers.filter(
@@ -16474,43 +16398,28 @@ var stageCaptureRecord = (opts) => {
   if (record2.incomplete) return null;
   const policy = resolvePolicy(cwd);
   if (record2.records.length > policy.policy.max_records_per_commit) {
-    throw markCaptureError(
-      new Error(
-        `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
-      ),
-      "internal"
+    throw new Error(
+      `Staging rejected: ${record2.records.length} records exceed max_records_per_commit (${policy.policy.max_records_per_commit})`
     );
   }
   const currentHead = execGitOrThrow(["rev-parse", "HEAD"], { cwd }).trim();
   if (currentHead !== record2.base_head) {
-    throw markCaptureError(
-      new Error(
-        `Staging rejected: HEAD moved since prepare (expected ${record2.base_head}, got ${currentHead})`
-      ),
-      "operational"
+    throw new Error(
+      `Staging rejected: HEAD moved since prepare (expected ${record2.base_head}, got ${currentHead})`
     );
   }
   const currentDiff = execGitOrThrow(["diff", "--cached"], { cwd });
   const currentDiffHash = createHash4("sha256").update(currentDiff).digest("hex");
   if (currentDiffHash !== record2.staged_diff_hash) {
-    throw markCaptureError(
-      new Error("Staging rejected: staged diff changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: staged diff changed since prepare");
   }
   const currentTree = execGitOrThrow(["write-tree"], { cwd }).trim();
   if (currentTree !== record2.staged_tree_oid) {
-    throw markCaptureError(
-      new Error("Staging rejected: staged tree changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: staged tree changed since prepare");
   }
   const currentPolicy = policy.identityHash;
   if (currentPolicy !== record2.policy_identity_hash) {
-    throw markCaptureError(
-      new Error("Staging rejected: policy identity changed since prepare"),
-      "operational"
-    );
+    throw new Error("Staging rejected: policy identity changed since prepare");
   }
   const stageOpts = expiryMinutes !== void 0 ? { cwd, expiryMinutes } : { cwd };
   const success3 = stagePending(nonce, stageOpts);
@@ -17232,35 +17141,10 @@ var formatCaptureShadow = (result) => {
   return `${lines.join("\n")}
 `;
 };
-var errnoCode2 = (error2) => {
-  if (typeof error2 !== "object" || error2 === null || !("code" in error2)) return void 0;
-  return typeof error2.code === "string" ? error2.code : void 0;
-};
-var readCallerFile = (path2) => {
-  try {
-    return readFileSync6(path2, "utf8");
-  } catch (error2) {
-    const wrapped = new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf2(error2)}`);
-    throw markCaptureError(wrapped, errnoCode2(error2) === "ENOENT" ? "usage" : "operational");
-  }
-};
-var failureResult = (error2) => ({
-  outcome: classifyCaptureError(error2),
-  nonce: null,
-  staged: false,
-  error: messageOf2(error2)
-});
 var runCapture = (opts) => {
-  try {
-    return runCapturePipeline(opts);
-  } catch (error2) {
-    return failureResult(error2);
-  }
-};
-var runCapturePipeline = (opts) => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
-  const transcript = readCallerFile(transcriptPath);
-  const diff = diffPath ? readCallerFile(diffPath) : execGitOrThrow(["diff", "--cached"], { cwd });
+  const transcript = readFileSync6(transcriptPath, "utf8");
+  const diff = diffPath ? readFileSync6(diffPath, "utf8") : execGitOrThrow(["diff", "--cached"], { cwd });
   const prepareResult = prepareCaptureContext({
     cwd,
     transcript,
@@ -17275,15 +17159,9 @@ commitlore capture: the built-in defaults were used for this capture
     );
   }
   if (!draftPath) {
-    return {
-      outcome: "empty",
-      nonce: null,
-      staged: false,
-      prompt: prepareResult.prompt,
-      guard_advisory: prepareResult.guard_advisory
-    };
+    return { nonce: null, staged: false, prompt: prepareResult.prompt, guard_advisory: prepareResult.guard_advisory };
   }
-  const rawDraft = readCallerFile(draftPath);
+  const rawDraft = readFileSync6(draftPath, "utf8");
   let draftRecords;
   const draftRejections = [];
   const collect3 = (review) => {
@@ -17322,73 +17200,12 @@ commitlore capture: the built-in defaults were used for this capture
       reason: rejection.reason
     }))
   ];
-  if (stagedNonce !== null) {
-    return {
-      outcome: "staged",
-      nonce: stagedNonce,
-      staged: true,
-      guard_advisory: prepareResult.guard_advisory,
-      rejected
-    };
-  }
   return {
-    outcome: rejected.length > 0 ? "rejected" : "empty",
-    nonce: prepareResult.nonce,
-    staged: false,
+    nonce: stagedNonce ?? prepareResult.nonce,
+    staged: stagedNonce !== null,
     guard_advisory: prepareResult.guard_advisory,
     rejected
   };
-};
-var writeGuardMatches = (advisory) => {
-  for (const match of advisory.matches) {
-    if (match.trust === "blocked") {
-      process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
-`);
-    } else {
-      process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
-`);
-    }
-  }
-};
-var emitCaptureOutcome = (result, opts) => {
-  if (opts.json) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}
-`);
-  } else if (result.prompt) {
-    process.stdout.write(result.prompt);
-    if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-      process.stdout.write("\n--- guard advisory ---\n");
-      process.stdout.write(`${result.guard_advisory.disclosure}
-`);
-      writeGuardMatches(result.guard_advisory);
-    } else if (result.guard_advisory) {
-      process.stdout.write("\n--- guard advisory ---\n");
-      process.stdout.write(`${result.guard_advisory.disclosure}
-`);
-    }
-  } else if (result.staged) {
-    process.stdout.write(`staged: ${result.nonce}
-`);
-    if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
-      process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):
-`);
-      writeGuardMatches(result.guard_advisory);
-    }
-  } else if (result.outcome === "empty" || result.outcome === "rejected") {
-    process.stdout.write("no record staged\n");
-  }
-  for (const rejection of result.rejected ?? []) {
-    process.stderr.write(
-      `commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}
-`
-    );
-  }
-  if (result.error !== void 0) {
-    const prefix = opts.humanPrefix ?? "commitlore capture";
-    process.stderr.write(`${prefix}: ${result.error}
-`);
-  }
-  process.exitCode = exitCodeForCaptureOutcome(result.outcome);
 };
 var register3 = (program3) => {
   const capture = program3.command("capture").description(
@@ -17396,9 +17213,6 @@ var register3 = (program3) => {
   ).option("--transcript <path>", "path to the session transcript file").option("--diff <path>", "path to the diff file (defaults to the staged diff)").option("--draft <path>", "path to the draft JSON file (omit for prompt-only mode)").option("--out <path>", "write the pending nonce to a file").option("--shadow", "measure historical capture candidates without writing anything").option("--since <rev>", "exclusive historical lower bound for --shadow").option("--json", "emit structured JSON output").option(
     "--unattended",
     `declare this capture unattended: prepared, verified and staged without asking. Refused unless the repository opted in (${POLICY_FILE_NAME}: "unattended": true, mode "auto")`
-  ).addHelpText(
-    "after",
-    "\nExit codes: 0 staged, empty, or rejected (rejected names the reason), 2 usage, 3 operational (git, filesystem, host), 4 internal (unanticipated exception)."
   ).action((options) => {
     if (options.shadow === true) {
       if (options.since === void 0) {
@@ -17417,9 +17231,9 @@ var register3 = (program3) => {
         return;
       }
       try {
-        const result2 = runCaptureShadow({ cwd: process.cwd(), since: options.since });
-        process.stdout.write(options.json === true ? `${JSON.stringify(result2, null, 2)}
-` : formatCaptureShadow(result2));
+        const result = runCaptureShadow({ cwd: process.cwd(), since: options.since });
+        process.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}
+` : formatCaptureShadow(result));
         process.exitCode = 0;
       } catch (error2) {
         process.stderr.write(
@@ -17431,36 +17245,82 @@ var register3 = (program3) => {
       return;
     }
     if (options.transcript === void 0) {
-      emitCaptureOutcome(
-        {
-          outcome: "usage",
-          nonce: null,
-          staged: false,
-          error: "required option '--transcript <path>' not specified"
-        },
-        { json: options.json === true, humanPrefix: "error" }
-      );
+      process.stderr.write("error: required option '--transcript <path>' not specified\n");
+      process.exitCode = 2;
       return;
     }
-    const cwd = process.cwd();
-    const runOpts = { transcriptPath: options.transcript, cwd };
-    if (options.diff !== void 0) runOpts.diffPath = options.diff;
-    if (options.draft !== void 0) runOpts.draftPath = options.draft;
-    runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
-    if (options.unattended === true) runOpts.unattended = true;
-    let result = runCapture(runOpts);
-    if (options.out && result.nonce) {
-      try {
-        writeFileSync3(options.out, result.nonce + "\n");
-      } catch (error2) {
-        result = {
-          ...result,
-          outcome: "operational",
-          error: `cannot write ${JSON.stringify(options.out)}: ${messageOf2(error2)}`
-        };
+    try {
+      const cwd = process.cwd();
+      const runOpts = { transcriptPath: options.transcript, cwd };
+      if (options.diff !== void 0) runOpts.diffPath = options.diff;
+      if (options.draft !== void 0) runOpts.draftPath = options.draft;
+      runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
+      if (options.unattended === true) runOpts.unattended = true;
+      const result = runCapture(runOpts);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      } else if (result.prompt) {
+        process.stdout.write(result.prompt);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        } else if (result.guard_advisory) {
+          process.stdout.write("\n--- guard advisory ---\n");
+          process.stdout.write(`${result.guard_advisory.disclosure}
+`);
+        }
+      } else if (result.staged) {
+        process.stdout.write(`staged: ${result.nonce}
+`);
+        if (result.guard_advisory && result.guard_advisory.matches.length > 0) {
+          process.stdout.write(`guard advisory (${result.guard_advisory.disclosure}):
+`);
+          for (const match of result.guard_advisory.matches) {
+            if (match.trust === "blocked") {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.withheld}
+`);
+            } else {
+              process.stdout.write(`  ${match.sha.slice(0, 7)} [${match.trust}] ${match.alternative} | ${match.reason}
+`);
+            }
+          }
+        }
+      } else {
+        process.stdout.write("no record staged\n");
       }
+      for (const rejection of result.rejected ?? []) {
+        process.stderr.write(
+          `commitlore: discarded record ${rejection.index} (${rejection.rule}): ${rejection.detail}
+`
+        );
+      }
+      if (options.out && result.nonce) {
+        writeFileSync3(options.out, result.nonce + "\n");
+      }
+      process.exitCode = 0;
+    } catch (error2) {
+      if (error2 instanceof Error && "code" in error2 && error2.code === "ENOENT") {
+        process.stderr.write(`commitlore capture: ${error2.message}
+`);
+        process.exitCode = 2;
+        return;
+      }
+      process.stderr.write(
+        `commitlore capture: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
+      process.exitCode = 0;
     }
-    emitCaptureOutcome(result, { json: options.json === true });
   });
   capture.command("gc").description("remove expired pending transaction files").option("--json", "emit structured JSON output").action((options, command) => {
     const parentOpts = command.parent?.opts();
@@ -17544,7 +17404,7 @@ var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
 var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
-var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf2 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var failure = (settingsPath, message) => ({
   code: 2,
@@ -17568,7 +17428,7 @@ var load = (settingsPath) => {
   try {
     raw = readFileSync7(settingsPath, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot read ${settingsPath}: ${messageOf2(error2)}`);
   }
   if (raw.trim() === "") return { settings: {}, existed: true };
   let parsed;
@@ -17576,7 +17436,7 @@ var load = (settingsPath) => {
     parsed = JSON.parse(raw);
   } catch (error2) {
     throw new Error(
-      `${settingsPath} is not valid JSON (${messageOf3(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
+      `${settingsPath} is not valid JSON (${messageOf2(error2)}) \u2014 refusing to overwrite it; fix the file, or move it aside, and run this again`
     );
   }
   if (!isPlainObject(parsed)) {
@@ -17621,7 +17481,7 @@ var readClaudeHookStatus = (settingsPath, command = CLAUDE_HOOK_COMMAND) => {
       state: "unreadable",
       entries: 0,
       commands: [],
-      problem: messageOf3(error2)
+      problem: messageOf2(error2)
     };
   }
   const commands = ourCommands(loaded.settings);
@@ -17676,7 +17536,7 @@ var writeAtomic = (settingsPath, settings) => {
       unlinkSync3(temporary);
     } catch {
     }
-    throw new Error(`cannot write ${settingsPath}: ${messageOf3(error2)}`);
+    throw new Error(`cannot write ${settingsPath}: ${messageOf2(error2)}`);
   }
 };
 var validateCommand = (command) => {
@@ -17695,7 +17555,7 @@ var installClaudeHook = (input) => {
     validateCommand(command);
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   const before = ourCommands(loaded.settings);
   const { groups } = withoutOurs(eventGroups(loaded.settings));
@@ -17709,7 +17569,7 @@ var installClaudeHook = (input) => {
     try {
       writeAtomic(settingsPath, next);
     } catch (error2) {
-      return failure(settingsPath, messageOf3(error2));
+      return failure(settingsPath, messageOf2(error2));
     }
   }
   const headline = {
@@ -17732,7 +17592,7 @@ var uninstallClaudeHook = (input) => {
   try {
     loaded = load(settingsPath);
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   if (!loaded.existed) {
     return success(readClaudeHookStatus(settingsPath, command), [
@@ -17748,7 +17608,7 @@ var uninstallClaudeHook = (input) => {
   try {
     writeAtomic(settingsPath, withGroups(loaded.settings, groups));
   } catch (error2) {
-    return failure(settingsPath, messageOf3(error2));
+    return failure(settingsPath, messageOf2(error2));
   }
   return success(readClaudeHookStatus(settingsPath, command), [
     `removed ${removed} injection hook entr${removed === 1 ? "y" : "ies"}: ${settingsPath}`
@@ -18932,7 +18792,7 @@ var MCP_SERVER_KEY = "commitlore";
 var MCP_SERVER_COMMAND = "commitlore";
 var MCP_SERVER_ARGS = ["mcp"];
 var isJsonObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf3 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var isLaunchableEntry = (value) => isJsonObject(value) && typeof value["command"] === "string" && value["command"].trim() !== "";
 var registeredMcpCommand = (cwd) => {
   const path2 = mcpRegistrationPath(cwd);
@@ -19131,7 +18991,7 @@ var registerCommitloreMcpServer = (cwd) => {
       writeAtomic2(path2, freshConfig());
       return { ok: true, path: path2, state: "created", changed: true };
     } catch (error2) {
-      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf4(error2)}` };
+      return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf3(error2)}` };
     }
   }
   try {
@@ -19139,19 +18999,19 @@ var registerCommitloreMcpServer = (cwd) => {
       return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is a symbolic link \u2014 left unchanged` };
     }
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be inspected: ${messageOf3(error2)}` };
   }
   let source;
   try {
     source = readFileSync10(path2, "utf8");
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be read: ${messageOf3(error2)}` };
   }
   let parsed;
   try {
     parsed = JSON.parse(source);
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} is not valid JSON \u2014 left unchanged: ${messageOf3(error2)}` };
   }
   if (!isJsonObject(parsed)) {
     return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} must contain a JSON object \u2014 left unchanged` };
@@ -19201,7 +19061,7 @@ var registerCommitloreMcpServer = (cwd) => {
     writeAtomic2(path2, next);
     return { ok: true, path: path2, state: "merged", changed: true };
   } catch (error2) {
-    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf4(error2)}` };
+    return { ok: false, path: path2, error: `${MCP_REGISTRATION_FILE} could not be written: ${messageOf3(error2)}` };
   }
 };
 
@@ -20950,16 +20810,6 @@ import { join as join9, resolve as resolve14 } from "node:path";
 import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
 import { chmodSync, existsSync as existsSync12, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve11 } from "node:path";
-
-// src/hooks/capture-fail-open.ts
-var captureHookFailOpen = (label, error2) => {
-  process.stderr.write(
-    `commitlore: ${label}: ${error2 instanceof Error ? error2.message : String(error2)}
-`
-  );
-};
-
-// src/hooks/post-commit.ts
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
 var POST_COMMIT_CHAINED_HOOK_NAME = `${POST_COMMIT_HOOK_NAME}${CHAINED_SUFFIX}`;
@@ -21093,7 +20943,10 @@ var runPostCommitFinaliser = (cwd) => {
     try {
       consumePending(pending.nonce, headSha2, { cwd });
     } catch (error2) {
-      captureHookFailOpen("post-commit finalisation error", error2);
+      process.stderr.write(
+        `commitlore: post-commit finalisation error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
     return;
   }
@@ -21103,7 +20956,10 @@ var register6 = (program3) => {
     try {
       runPostCommitFinaliser(process.cwd());
     } catch (error2) {
-      captureHookFailOpen("post-commit error", error2);
+      process.stderr.write(
+        `commitlore: post-commit error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
   });
 };
@@ -21465,13 +21321,16 @@ var register8 = (program3) => {
     try {
       applyCaptureRecord(messageFile, process.cwd());
     } catch (error2) {
-      captureHookFailOpen("capture application error", error2);
+      process.stderr.write(
+        `commitlore: capture application error: ${error2 instanceof Error ? error2.message : String(error2)}
+`
+      );
     }
   });
 };
 
 // src/commands/hooks.ts
-var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf4 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine3 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var failure3 = (message) => ({
   code: 2,
@@ -21570,7 +21429,7 @@ var installHook = (input = {}) => {
     mkdirSync8(resolveHooksDir(cwd), { recursive: true });
     before = readHookStatus(cwd);
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   try {
     if (before.state === "foreign") {
@@ -21584,7 +21443,7 @@ var installHook = (input = {}) => {
     writeStub(before.hookPath);
     recordBinPath(cwd);
   } catch (error2) {
-    return failure3(`could not install the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
+    return failure3(`could not install the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
   }
   const after = readHookStatus(cwd);
   const headline = {
@@ -21638,7 +21497,7 @@ var uninstallHook = (input = {}) => {
   try {
     before = readHookStatus(cwd);
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   const lines = [];
   if (before.state === "absent") {
@@ -21653,7 +21512,7 @@ var uninstallHook = (input = {}) => {
       unlinkSync5(before.hookPath);
       if (before.chained) renameSync7(before.chainedPath, before.hookPath);
     } catch (error2) {
-      return failure3(`could not remove the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
+      return failure3(`could not remove the ${HOOK_NAME} hook: ${messageOf4(error2)}`);
     }
     lines.push(`removed ${HOOK_NAME} hook: ${before.hookPath}`);
     if (before.chained) lines.push(`restored the previous hook: ${before.hookPath}`);
@@ -21662,7 +21521,7 @@ var uninstallHook = (input = {}) => {
     try {
       lines.push(...removeCaptureHook(before.hooksDir, hook));
     } catch (error2) {
-      return failure3(`could not remove the ${hook.name} hook: ${messageOf5(error2)}`);
+      return failure3(`could not remove the ${hook.name} hook: ${messageOf4(error2)}`);
     }
   }
   return success2(readHookStatus(cwd), lines);
@@ -21672,7 +21531,7 @@ var hookStatus = (input = {}) => {
   try {
     status = readHookStatus(input.cwd ?? process.cwd());
   } catch (error2) {
-    return failure3(messageOf5(error2));
+    return failure3(messageOf4(error2));
   }
   const state = {
     absent: "not installed",
@@ -21717,7 +21576,7 @@ import { basename as basename2, dirname as dirname6, join as join10, resolve as 
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
-var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf5 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
   const here = dirname6(source);
@@ -21753,21 +21612,21 @@ var installAgentsGuidance = (cwd) => {
   try {
     section2 = readCommitloreAgentsSection();
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
   if (!existsSync16(path2)) {
     try {
       writeFileSync12(path2, section2);
       return { state: "created", path: path2, error: null };
     } catch (error2) {
-      return { state: "write-failed", path: path2, error: messageOf6(error2) };
+      return { state: "write-failed", path: path2, error: messageOf5(error2) };
     }
   }
   let contents;
   try {
     contents = readFileSync17(path2, "utf8");
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
   const begins = markerCount(contents, AGENTS_SECTION_BEGIN);
   const ends = markerCount(contents, AGENTS_SECTION_END);
@@ -21794,12 +21653,12 @@ var installAgentsGuidance = (cwd) => {
     replaceFile(path2, next);
     return { state, path: path2, error: null };
   } catch (error2) {
-    return { state: "write-failed", path: path2, error: messageOf6(error2) };
+    return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
 };
 
 // src/commands/init.ts
-var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var cwdOption = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var runDoctorStep = (opts) => {
   const report = runDoctor({ ...cwdOption(opts), fix: true });
@@ -21834,7 +21693,7 @@ var runIndexStep = (opts) => {
   try {
     handle = openIndex({ cwd });
   } catch (error2) {
-    const message = `could not open the index: ${messageOf7(error2)}`;
+    const message = `could not open the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -21855,7 +21714,7 @@ var runIndexStep = (opts) => {
       detail: { ok: true, message, stats }
     };
   } catch (error2) {
-    const message = `could not rebuild the index: ${messageOf7(error2)}`;
+    const message = `could not rebuild the index: ${messageOf6(error2)}`;
     return {
       step: "index",
       title: "index --rebuild",
@@ -33638,7 +33497,7 @@ import { readFileSync as readFileSync24, writeFileSync as writeFileSync18 } from
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
-var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf7 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine4 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var shortSha6 = (sha) => sha.length > SHORT_SHA ? sha.slice(0, SHORT_SHA) : sha;
 var usageError = (message) => ({
@@ -33677,14 +33536,14 @@ var readDraft2 = (path2) => {
   try {
     return readFileSync24(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var writeDraft = (path2, text) => {
   try {
     writeFileSync18(path2, text);
   } catch (error2) {
-    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
+    throw new Error(`cannot write ${JSON.stringify(path2)}: ${messageOf7(error2)}`);
   }
 };
 var runSquashPreserve = (input = {}) => {
@@ -33703,7 +33562,7 @@ var runSquashPreserve = (input = {}) => {
       collectRange(range, input.cwd === void 0 ? {} : { cwd: input.cwd })
     );
   } catch (error2) {
-    return usageError(messageOf8(error2));
+    return usageError(messageOf7(error2));
   }
   const warnings = warningsFor(plan).map((line2) => `${line2}
 `).join("");
@@ -33732,7 +33591,7 @@ var runSquashPreserve = (input = {}) => {
       applied.messageFile = input.messageFile;
     }
   } catch (error2) {
-    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf8(error2)}
+    return { code: 2, stdout: "", stderr: `${warnings}${PREFIX4} ${messageOf7(error2)}
 `, plan };
   }
   if (input.json === true) {
@@ -33846,7 +33705,7 @@ var installationError = (message) => ({
   secrets: [],
   checks: []
 });
-var messageOf9 = (error2) => error2 instanceof Error ? error2.message : String(error2);
+var messageOf8 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var firstLine5 = (text) => (text.trim().split("\n")[0] ?? "").trim();
 var stripCr = (line2) => line2.endsWith("\r") ? line2.slice(0, -1) : line2;
 var CONTINUATION = /^[ \t]/;
@@ -34029,14 +33888,14 @@ var readMessageFile = (path2) => {
   try {
     return readFileSync25(path2, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
+    throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
     return readFileSync25(0, "utf8");
   } catch (error2) {
-    throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
+    throw new Error(`cannot read the commit message from stdin: ${messageOf8(error2)}`);
   }
 };
 var collectSources2 = (input, cwd) => {
@@ -34182,7 +34041,7 @@ var checkReferences = (input, sources, cwd) => {
       check: {
         class: "reference",
         status: "not-checked",
-        reason: `repository scan failed: ${firstLine5(messageOf9(error2))}`
+        reason: `repository scan failed: ${firstLine5(messageOf8(error2))}`
       },
       violations: []
     };
@@ -34234,8 +34093,8 @@ var runValidate = (input = {}) => {
     warnings = inspections.flatMap((inspection) => inspection.warnings);
     secrets = sources.flatMap((source) => scanForSecrets(source.message));
   } catch (error2) {
-    if (isMissingInstalledFile(error2)) return installationError(messageOf9(error2));
-    return usageError2(messageOf9(error2));
+    if (isMissingInstalledFile(error2)) return installationError(messageOf8(error2));
+    return usageError2(messageOf8(error2));
   }
   const references = checkReferences(input, sources, cwd);
   const alreadyReported = new Set(shapeViolations.map(violationIdentity));
