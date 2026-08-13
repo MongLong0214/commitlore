@@ -187,6 +187,8 @@ export interface GuardOptions {
   trustedAuthors?: readonly string[];
   /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
   requireSignedDirective?: boolean;
+  /** Git `%GF` signing-key fingerprints authorized by repository policy. */
+  trustedSignerFingerprints?: readonly string[];
   /**
    * Refuse to flag on a `Record-Id:` reference alone.
    *
@@ -681,6 +683,9 @@ export const guard = (opts: GuardOptions): GuardResult => {
     ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
     ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+    ...(opts.trustedSignerFingerprints === undefined
+      ? {}
+      : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
   });
   const availability = {
     history: result.history,

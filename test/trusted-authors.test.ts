@@ -26,9 +26,11 @@ import { execGit } from '../src/core/git.js';
 import { buildInjection } from '../src/core/inject.js';
 import {
   REQUIRE_SIGNED_DIRECTIVE_KEY,
+  TRUSTED_SIGNER_KEY,
   configuredDirectiveTrustSetting,
   TRUSTED_AUTHOR_KEY,
   configuredSignedDirectivesRequired,
+  configuredTrustedSignerFingerprints,
   configuredTrustedAuthors,
   seedTrustedAuthor,
 } from '../src/core/trusted-authors.js';
@@ -251,6 +253,14 @@ describe('#415 through the command line, which is the only path the hook uses', 
  * somebody asking for something the code could not read.
  */
 describe('a directive-trust setting nobody can parse does not turn the boundary off', () => {
+  it('reads absent and blank signer policy as authorizing nobody', () => {
+    expect(configuredTrustedSignerFingerprints(repo)).toEqual([]);
+    execGit(['config', '--local', '--add', TRUSTED_SIGNER_KEY, '   '], { cwd: repo });
+    expect(configuredTrustedSignerFingerprints(repo)).toEqual([]);
+    execGit(['config', '--local', '--add', TRUSTED_SIGNER_KEY, 'ABCDEF012345'], { cwd: repo });
+    expect(configuredTrustedSignerFingerprints(repo)).toEqual(['ABCDEF012345']);
+  });
+
   it('reads an absent setting as the author-string default', () => {
     const repo = createTestRepo({ path: mkdtempSync(join(realpathSync(tmpdir()), 'cl-trustcfg-')) });
     expect(configuredDirectiveTrustSetting(repo)).toBe('author-string');

@@ -27,15 +27,28 @@
  * restores trust-nobody) without editing a hook command by hand. A repository
  * that needs an authenticated boundary can additionally set
  * `commitlore.requireSignedDirective=true`; Git must then report a verified
- * signature from the verifier's own trust store before a record is directive.
+ * signature from the verifier's own trust store and its `%GF` fingerprint must
+ * be listed in `commitlore.trustedSigner` before a record is directive.
  */
 import { execGit } from './git.js';
 /** Local git config key holding directive author strings, one value each. */
 export declare const TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
 /** Local opt-in: directives also require Git to report a verified signature. */
 export declare const REQUIRE_SIGNED_DIRECTIVE_KEY = "commitlore.requireSignedDirective";
+/** Local signer-authority allowlist, one Git-reported key fingerprint per value. */
+export declare const TRUSTED_SIGNER_KEY = "commitlore.trustedSigner";
 /** Every directive author string this repository records. Empty means trust nobody. */
 export declare const configuredTrustedAuthors: (cwd: string) => string[];
+/**
+ * Every signing-key fingerprint this repository authorizes in signature mode.
+ *
+ * These are the exact strings Git reports through `%GF`, not names or email
+ * addresses. Missing, empty, and unreadable config all elect no signer: a
+ * repository that opted into signature mode must name its authorities before
+ * any signed record can direct. The default author-string mode does not read
+ * this allowlist, preserving its established opt-in behavior.
+ */
+export declare const configuredTrustedSignerFingerprints: (cwd: string) => string[];
 /** What the repository's directive-trust setting says, including "it is broken". */
 export type DirectiveTrustSetting = 'author-string' | 'signature-required' | 'malformed';
 /**

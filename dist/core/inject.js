@@ -65,7 +65,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execGit } from './git.js';
-import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
+import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, } from './query.js';
 import { INJECT_OMITTED_KEYS, RECORD_ID_RE } from './types.js';
 const NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
@@ -172,16 +172,18 @@ const headSha = (cwd) => {
  * `core/grade.ts`. All this does is refuse to let the friendliest of several
  * declarations speak for the record.
  */
-const gradeMerged = (record, authors, noteAuthors, at, trustedAuthors, requireSignedDirective) => gradeDeclarations(record, {
+const gradeMerged = (record, authors, signerFingerprints, noteAuthors, at, trustedAuthors, requireSignedDirective, trustedSignerFingerprints) => gradeDeclarations(record, {
     shas: record.shas.length > 0 ? record.shas : [record.sha],
     sources: record.sources,
     commitAuthors: authors,
     commitSignatures: record.commitSignatures,
+    commitSignerFingerprints: signerFingerprints,
     noteAuthors,
 }, {
     at,
     ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
     ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+    ...(trustedSignerFingerprints === undefined ? {} : { trustedSignerFingerprints }),
 });
 /**
  * What stands in for a grade when `ablation.noGrade` removes grading.
@@ -437,6 +439,9 @@ const cacheKeyOf = (parts) => {
         // Keep the established default tuple intact; only the opt-in mode needs a
         // separate cache entry because it changes a record's rendered tier.
         ...(parts.requireSignedDirective ? [true] : []),
+        ...(parts.requireSignedDirective
+            ? [[...new Set(parts.trustedSignerFingerprints ?? [])].sort()]
+            : []),
         parts.noIndex,
         // Appended only when something was ablated, so a baseline projection keeps
         // the key it had before ablations existed. Every arm is read against that
@@ -509,6 +514,7 @@ export const buildInjection = (opts) => {
         at: at.toISOString(),
         trustedAuthors: opts.trustedAuthors,
         requireSignedDirective: opts.requireSignedDirective === true,
+        trustedSignerFingerprints: opts.trustedSignerFingerprints,
         noIndex,
         ablation: activeAblations(ablation),
     });
@@ -520,6 +526,9 @@ export const buildInjection = (opts) => {
         ...(opts.scanBudgetMs === undefined ? {} : { scanBudgetMs: opts.scanBudgetMs }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+        ...(opts.trustedSignerFingerprints === undefined
+            ? {}
+            : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         // `runQuery` drops superseded and expired records unless told otherwise, so
         // the ablation has to be asked for at the source; filtering them back in
         // afterwards is not possible.
@@ -552,6 +561,9 @@ export const buildInjection = (opts) => {
     const authors = ablation.noGrade
         ? new Map()
         : authorsOf(cwd, active.flatMap((record) => record.shas));
+    const signerFingerprints = ablation.noGrade || opts.requireSignedDirective !== true
+        ? new Map()
+        : signerFingerprintsOf(cwd, active.flatMap((record) => record.shas));
     // Walked only when something actually came from the mirror, so a repository
     // with no notes pays nothing for the check (#409).
     const noteAuthors = ablation.noGrade || !active.some((record) => record.sources.includes('notes'))
@@ -569,7 +581,7 @@ export const buildInjection = (opts) => {
             }
             : ablation.noGrade
                 ? ungraded(record)
-                : gradeMerged(record, authors, noteAuthors, at, opts.trustedAuthors, opts.requireSignedDirective === true),
+                : gradeMerged(record, authors, signerFingerprints, noteAuthors, at, opts.trustedAuthors, opts.requireSignedDirective === true, opts.trustedSignerFingerprints),
     ]));
     const { entries, withheld, withheldValues } = project(active, grades);
     if (entries.length === 0 && withheld.length === 0)

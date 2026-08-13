@@ -13,6 +13,7 @@ export interface PrepareCaptureOptions {
     trustedAuthors?: readonly string[];
     /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
     requireSignedDirective?: boolean;
+    trustedSignerFingerprints?: readonly string[];
     /**
      * Declare that this capture runs without asking: the pipeline prepares,
      * verifies and stages it with no person in the loop (ADR-0030, #511).

@@ -28,6 +28,7 @@ import { buildInjection, type InjectOptions, type Injection } from '../core/inje
 import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
 import {
   configuredSignedDirectivesRequired,
+  configuredTrustedSignerFingerprints,
   configuredTrustedAuthors,
 } from '../core/trusted-authors.js';
 import {
@@ -254,6 +255,7 @@ const injectOptions = (
   const flagged = options.trustedAuthor ?? [];
   const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
   const requireSignedDirective = configuredSignedDirectivesRequired(cwd);
+  const trustedSignerFingerprints = configuredTrustedSignerFingerprints(cwd);
   return {
     path,
     cwd,
@@ -262,6 +264,7 @@ const injectOptions = (
     ...(budget === undefined ? {} : { budget }),
     ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
     ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+    ...(trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints }),
   };
 };
 

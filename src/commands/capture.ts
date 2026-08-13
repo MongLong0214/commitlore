@@ -34,7 +34,11 @@ import {
 } from '../core/capture-outcome.js';
 import { runCaptureShadow, type CaptureShadowResult } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import {
+  configuredSignedDirectivesRequired,
+  configuredTrustedSignerFingerprints,
+  configuredTrustedAuthors,
+} from '../core/trusted-authors.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
 import type { GuardAdvisory } from '../core/pending.js';
@@ -171,6 +175,8 @@ export const runCapture = (opts: {
   cwd: string;
   /** Authors whose guard-advisory records may render as directives. */
   trustedAuthors?: readonly string[];
+  requireSignedDirective?: boolean;
+  trustedSignerFingerprints?: readonly string[];
   /**
    * Declare the whole run unattended (#511). Refused by prepare unless the
    * repository opted in — the CLI never decides consent on its own.
@@ -190,6 +196,8 @@ const runCapturePipeline = (opts: {
   draftPath?: string;
   cwd: string;
   trustedAuthors?: readonly string[];
+  requireSignedDirective?: boolean;
+  trustedSignerFingerprints?: readonly string[];
   unattended?: boolean;
 }): CaptureResult => {
   const { transcriptPath, diffPath, draftPath, cwd } = opts;
@@ -209,6 +217,10 @@ const runCapturePipeline = (opts: {
     cwd,
     transcript,
     ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+    ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+    ...(opts.trustedSignerFingerprints === undefined
+      ? {}
+      : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
     ...(opts.unattended === true ? { unattended: true } : {}),
   });
   if (prepareResult.policy_error !== null) {
@@ -436,11 +448,15 @@ export const register = (program: Command): void => {
         draftPath?: string;
         cwd: string;
         trustedAuthors?: readonly string[];
+        requireSignedDirective?: boolean;
+        trustedSignerFingerprints?: readonly string[];
         unattended?: boolean;
       } = { transcriptPath: options.transcript, cwd };
       if (options.diff !== undefined) runOpts.diffPath = options.diff;
       if (options.draft !== undefined) runOpts.draftPath = options.draft;
       runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
+      runOpts.requireSignedDirective = configuredSignedDirectivesRequired(cwd);
+      runOpts.trustedSignerFingerprints = configuredTrustedSignerFingerprints(cwd);
       if (options.unattended === true) runOpts.unattended = true;
 
       let result = runCapture(runOpts);

@@ -73,6 +73,7 @@ import {
   gradeRecord,
   noteAuthorsOf,
   restrictGrade,
+  signerFingerprintsOf,
   type Grade,
   type NoteAuthor,
   type Trust,
@@ -152,6 +153,8 @@ export interface InjectOptions {
   trustedAuthors?: readonly string[];
   /** Opt-in: a directive also needs Git's verified `G` signature status. */
   requireSignedDirective?: boolean;
+  /** Git `%GF` signing-key fingerprints authorized by repository policy. */
+  trustedSignerFingerprints?: readonly string[];
   /** Answer from git alone, without the SQLite index. Same answers, slower. */
   noIndex?: boolean;
   /**
@@ -362,10 +365,12 @@ const headSha = (cwd: string): string => {
 const gradeMerged = (
   record: GradedRecord,
   authors: ReadonlyMap<string, string>,
+  signerFingerprints: ReadonlyMap<string, string>,
   noteAuthors: ReadonlyMap<string, readonly NoteAuthor[]>,
   at: Date,
   trustedAuthors: readonly string[] | undefined,
   requireSignedDirective: boolean,
+  trustedSignerFingerprints: readonly string[] | undefined,
 ): Grade =>
   gradeDeclarations(
     record,
@@ -374,12 +379,14 @@ const gradeMerged = (
       sources: record.sources,
       commitAuthors: authors,
       commitSignatures: record.commitSignatures,
+      commitSignerFingerprints: signerFingerprints,
       noteAuthors,
     },
     {
       at,
       ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
       ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+      ...(trustedSignerFingerprints === undefined ? {} : { trustedSignerFingerprints }),
     },
   );
 
@@ -706,6 +713,7 @@ const cacheKeyOf = (parts: {
   at: string;
   trustedAuthors: readonly string[] | undefined;
   requireSignedDirective: boolean;
+  trustedSignerFingerprints: readonly string[] | undefined;
   noIndex: boolean;
   /** The set ablation flags, sorted. Empty for a baseline projection. */
   ablation: readonly string[];
@@ -720,6 +728,9 @@ const cacheKeyOf = (parts: {
     // Keep the established default tuple intact; only the opt-in mode needs a
     // separate cache entry because it changes a record's rendered tier.
     ...(parts.requireSignedDirective ? [true] : []),
+    ...(parts.requireSignedDirective
+      ? [[...new Set(parts.trustedSignerFingerprints ?? [])].sort()]
+      : []),
     parts.noIndex,
     // Appended only when something was ablated, so a baseline projection keeps
     // the key it had before ablations existed. Every arm is read against that
@@ -800,6 +811,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     at: at.toISOString(),
     trustedAuthors: opts.trustedAuthors,
     requireSignedDirective: opts.requireSignedDirective === true,
+    trustedSignerFingerprints: opts.trustedSignerFingerprints,
     noIndex,
     ablation: activeAblations(ablation),
   });
@@ -812,6 +824,9 @@ export const buildInjection = (opts: InjectOptions): Injection => {
     ...(opts.scanBudgetMs === undefined ? {} : { scanBudgetMs: opts.scanBudgetMs }),
     ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
     ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+    ...(opts.trustedSignerFingerprints === undefined
+      ? {}
+      : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
     // `runQuery` drops superseded and expired records unless told otherwise, so
     // the ablation has to be asked for at the source; filtering them back in
     // afterwards is not possible.
@@ -845,6 +860,10 @@ export const buildInjection = (opts: InjectOptions): Injection => {
   const authors = ablation.noGrade
     ? new Map<string, string>()
     : authorsOf(cwd, active.flatMap((record) => record.shas));
+  const signerFingerprints =
+    ablation.noGrade || opts.requireSignedDirective !== true
+      ? new Map<string, string>()
+      : signerFingerprintsOf(cwd, active.flatMap((record) => record.shas));
   // Walked only when something actually came from the mirror, so a repository
   // with no notes pays nothing for the check (#409).
   const noteAuthors =
@@ -867,10 +886,12 @@ export const buildInjection = (opts: InjectOptions): Injection => {
           : gradeMerged(
               record,
               authors,
+              signerFingerprints,
               noteAuthors,
               at,
               opts.trustedAuthors,
               opts.requireSignedDirective === true,
+              opts.trustedSignerFingerprints,
             ),
     ]),
   );

@@ -23,4 +23,4 @@ v0.1 establishes a minimum defense with **rule-based grades + demoted rendering*
 ## Consequences
 
 - The demotion rule is a required route-contract test case (F1): "a record whose author string does not match must render as a claim."
-- `commitlore.requireSignedDirective=true` now extends the grading axis without changing consumer routing: only Git status `G` is verified. This confirms a signature trusted by the verifier, not a person's authority or the content's truth.
+- `commitlore.requireSignedDirective=true` remains opt-in and extends the grading axis without changing default consumer routing: Git status `G` and an exact `%GF` fingerprint in the repository-local `commitlore.trustedSigner` allowlist are required. Missing, empty, or unreadable allowlists authorize nobody. A signature confirms a key trusted by the verifier signed the commit; it does not itself establish repository authority or the content's truth.

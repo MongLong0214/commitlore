@@ -59,6 +59,9 @@ const computeGuardAdvisory = (opts) => {
             ...(opts.readOnly === true ? { noIndex: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
             ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+            ...(opts.trustedSignerFingerprints === undefined
+                ? {}
+                : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         });
         return {
             matches: result.matches.map(renderGuardMatch),
@@ -120,6 +123,9 @@ const prepareValues = (opts) => {
             ...(opts.readOnly ? { readOnly: true } : {}),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
             ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+            ...(opts.trustedSignerFingerprints === undefined
+                ? {}
+                : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         });
     return {
         base_head: baseHead,

@@ -136,6 +136,9 @@ export const beforeChange = (opts) => {
             ...(path === '' || path === '.' ? {} : { paths: [path] }),
             ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
             ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+            ...(opts.trustedSignerFingerprints === undefined
+                ? {}
+                : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         }));
         activeDecisions = extractActiveDecisions(queryResult);
         if (queryResult.unreadCommits > 0)
@@ -153,6 +156,9 @@ export const beforeChange = (opts) => {
                 ...(path === '' || path === '.' ? {} : { paths: [path] }),
                 ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
                 ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+                ...(opts.trustedSignerFingerprints === undefined
+                    ? {}
+                    : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
             });
             matches = guardResult.matches.map(renderGuardMatch);
             confidence = 'experimental';
