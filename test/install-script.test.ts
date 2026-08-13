@@ -229,6 +229,11 @@ const runInstaller = (opts: {
 }): RunResult => {
   const home = opts.home ?? tempDir('home');
   const run = spawnSync('/bin/sh', [INSTALLER, ...(opts.args ?? [TAG])], {
+    // The checked-out worktree is a linked Git worktree. Its .git file points
+    // at the host's absolute Git directory, which does not exist when this
+    // suite runs in Docker. Runtime smoke validation invokes git, so run the
+    // installer from the self-contained fixture repository instead.
+    cwd: sourceRepo,
     encoding: 'utf8',
     env: {
       PATH: stubPath({ node: opts.node ?? 'current', git: opts.git, codex: opts.codex, hermes: opts.hermes, ...(opts.nodeVersion === undefined ? {} : { nodeVersion: opts.nodeVersion }) }),
@@ -525,7 +530,7 @@ describe('T-1120 upgrade and verification', () => {
     expect(out).toMatch(/unhealthy/);
   });
 
-  it('leaves a registration whose command exists reported as before', () => {
+  it('rejects a registration whose executable cannot serve CommitLore MCP', () => {
     const home = tempDir('live-agent-path');
     mkdirSync(join(home, '.cursor'), { recursive: true });
     writeFileSync(
@@ -533,11 +538,10 @@ describe('T-1120 upgrade and verification', () => {
       JSON.stringify({ mcpServers: { commitlore: { command: '/bin/sh', args: ['mcp'] } } }),
     );
 
-    const out = (() => {
-      const r = runInstaller({ home });
-      return `${r.stdout}${r.stderr}`;
-    })();
+    const r = runInstaller({ home });
+    const out = `${r.stdout}${r.stderr}`;
 
+    expect(r.status).not.toBe(0);
     expect(out).toMatch(/unhealthy/);
   });
 
