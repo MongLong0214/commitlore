@@ -3,7 +3,9 @@
 //
 // 이 프로젝트에서 README는 마케팅 문서가 아니라 스펙의 요약본이다. 표에 스펙에 없는
 // 키가 실리면 사용자가 그걸 쓰고 검증기에 거부당한다(`Decision-Id:` 가 실제로 그랬다).
-// 반대로 키가 빠지면 그 필드는 존재하지 않는 것과 같다.
+// 반대로 키나 값 문법이 빠지면 그 필드는 존재하지 않는 것과 같다. 특히
+// `Provenance:`의 값은 제품이 실제로 쓰는 trust grade이므로 `drafted`나
+// `unknown`을 표가 생략하면 사용자는 존재하지 않는 값을 보게 된다.
 //
 // 사용: node spec/schema/readme-vocab-check.mjs <SPEC.md> <README.md> [README.*.md ...]
 
@@ -29,6 +31,21 @@ const specKeys = (() => {
   return keys;
 })();
 
+/** SPEC §3의 Provenance 값 문법 — 키만 비교하면 값 하나가 빠져도 통과한다. */
+const specProvenanceGrammar = (() => {
+  const spec = fs.readFileSync(specPath, 'utf8');
+  const section = spec.split(/^## /m).find((s) => s.startsWith('3. Vocabulary'));
+  const row = section?.match(/^\| `Provenance:` \| (.+) \|/m)?.[1];
+  const grammar = row === undefined
+    ? undefined
+    : [...row.matchAll(/`([^`]+)`/g)].map((match) => match[1]).join(' | ');
+  if (grammar === undefined) {
+    console.error(`${specPath}: Provenance 값 문법을 찾지 못했다`);
+    process.exit(1);
+  }
+  return grammar;
+})();
+
 if (specKeys.size === 0) {
   console.error(`${specPath}: 어휘표에서 키를 하나도 뽑지 못했다 — 표 형식이 바뀌었나`);
   process.exit(1);
@@ -49,14 +66,22 @@ for (const readmePath of readmes) {
 
   const missing = [...specKeys].filter((k) => !found.has(k));
   const extra = [...found].filter((k) => !specKeys.has(k));
+  const provenanceRow = md.match(/^\| `Provenance:` \| (.+) \|$/m)?.[1];
+  const readmeProvenanceGrammar = provenanceRow === undefined
+    ? undefined
+    : [...provenanceRow.matchAll(/`([^`]+)`/g)].map((match) => match[1]).join(' | ');
 
-  if (missing.length || extra.length) {
+  if (missing.length || extra.length || readmeProvenanceGrammar !== specProvenanceGrammar) {
     failed = true;
     console.error(`${readmePath}:`);
     if (missing.length) console.error(`  SPEC에 있으나 README 표에 없음: ${missing.join(', ')}`);
     if (extra.length) console.error(`  README 표에 있으나 SPEC에 없음: ${extra.join(', ')}`);
+    if (readmeProvenanceGrammar !== specProvenanceGrammar) {
+      console.error(`  Provenance 값 문법이 SPEC과 다름: ${readmeProvenanceGrammar ?? '행 없음'}`);
+      console.error(`  SPEC: ${specProvenanceGrammar}`);
+    }
   }
 }
 
 if (failed) process.exit(1);
-console.log(`vocab table matches SPEC (${specKeys.size} keys × ${readmes.length} READMEs)`);
+console.log(`vocab table and Provenance grammar match SPEC (${specKeys.size} keys × ${readmes.length} READMEs)`);

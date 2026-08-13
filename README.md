@@ -254,23 +254,23 @@ above, rather than an instruction reconstructed from a review comment.
 The module boundary is in front of the agent before it proposes the change,
 rather than in a review comment after.
 
-**Whether it acts on that is now measured.** Across 1,160 registered runs, an
+**Whether it acts on that is now measured.** Across 1,169 registered runs, an
 agent handed the repository's active records re-proposed a ruled-out approach in
-**2.8%** of them (16/580). Without them: **18.8%** (109/579).
+**2.7%** of them (16/585). Without them: **18.8%** (110/584).
 
 | arm | re-proposed a ruled-out approach |
 |---|---:|
-| the agent alone | **18.8%** (109/579) |
-| **with CommitLore** | **2.8%** (16/580) |
+| the agent alone | **18.8%** (110/584) |
+| **with CommitLore** | **2.7%** (16/585) |
 
 **The threshold was registered before the run**, and the preregistration
 predicted a *smaller* effect than it got — that prediction, with its stated
 probabilities, is in
 [bench/PREREGISTRATION-M5.md](bench/PREREGISTRATION-M5.md) §A.2, and it was
 wrong. The significance test, the interval and the registered threshold are in
-[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here: a statistic
-retyped into prose drifts from the log that produced it, and this repository
-gates against exactly that (`scripts/check-readme-numbers.mjs`).
+[bench/VERDICT-M5.md](bench/VERDICT-M5.md) rather than here. The headline's
+counts, denominators, and rates are checked against that analysis by
+`scripts/check-readme-numbers.mjs`; it does not own the surrounding prose.
 
 ## What it is, in full
 
@@ -499,7 +499,7 @@ CommitLore-Version: 2.0.0
 | `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
 | `Expires:` | Date or condition that ends a limit |
 | `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
 Read a path's history with `commitlore context <path>`. Smaller examples, and how to read records with plain Git instead, are in [docs/protocol.md](docs/protocol.md); the normative definitions are in [SPEC §3](spec/SPEC.md).

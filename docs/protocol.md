@@ -40,8 +40,9 @@ and fails if the two drift apart. See [A complete record](../README.md).
 The summary table of every trailer key also stays in the README, in every
 language, and is checked against SPEC §3 by
 `spec/schema/readme-vocab-check.mjs`: a key in the table that the spec does not
-define is a key a user would write and the validator would reject, and a key the
-spec defines but the table omits is a field that effectively does not exist.
+define is a key a user would write and the validator would reject, and a key or
+`Provenance:` value grammar the table omits is a field that effectively does not
+exist.
 
 For the normative meaning, cardinality, and value grammar of each key, read
 [SPEC §3](../spec/SPEC.md).

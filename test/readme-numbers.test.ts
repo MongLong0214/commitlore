@@ -13,6 +13,7 @@ const PUBLIC_READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh-
 const WITHDRAWAL_MARKER = '<!-- BENCH:WITHDRAWN -->';
 const GENERATED_BEGIN = '<!-- BENCH:BEGIN -->';
 const tempDirs: string[] = [];
+const PRODUCT_TYPES = path.join(REPO_ROOT, 'src', 'core', 'types.ts');
 
 const runChecker = (...args: string[]) => {
   const result = spawnSync(process.execPath, ['scripts/check-readme-numbers.mjs', ...args], {
@@ -28,6 +29,16 @@ const tempFile = (name: string, contents: string): string => {
   const target = path.join(dir, name);
   fs.writeFileSync(target, contents);
   return target;
+};
+
+const tempReadmePair = (english: string, korean: string): { english: string; korean: string } => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'commitlore-readme-facts-'));
+  tempDirs.push(dir);
+  const englishPath = path.join(dir, 'README.md');
+  const koreanPath = path.join(dir, 'README.ko.md');
+  fs.writeFileSync(englishPath, english);
+  fs.writeFileSync(koreanPath, korean);
+  return { english: englishPath, korean: koreanPath };
 };
 
 afterEach(() => {
@@ -71,5 +82,51 @@ describe('README benchmark publication state', () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/provenanced dataset.*withdrawal/i);
+  });
+});
+
+describe('#590 generated README fact contract', () => {
+  it('states its owned facts instead of implying that all README numbers are guarded', () => {
+    const result = runChecker();
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('README fact contract matches:');
+    expect(result.stdout).toContain('headline re-proposal counts, denominators, rates, and analysis-set size');
+    expect(result.stdout).toContain('the generated BENCH block in every public README');
+  });
+
+  it('rejects a guarded denominator that disagrees between English and Korean, naming both documents', () => {
+    const english = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
+    const korean = fs.readFileSync(path.join(REPO_ROOT, 'README.ko.md'), 'utf8').replace('110/584', '110/583');
+    const copies = tempReadmePair(english, korean);
+    const result = runChecker('--facts-readme', copies.english, '--facts-readme', copies.korean);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('README.md and');
+    expect(result.stderr).toContain('README.ko.md');
+    expect(result.stderr).toContain('110/583');
+  });
+
+  it('rejects a provenance value the product gains before the docs mention it', () => {
+    const original = fs.readFileSync(PRODUCT_TYPES, 'utf8');
+    expect(original).toContain("'unknown'] as const");
+    try {
+      const productWithFutureProvenance = original
+        .replace("'unknown'] as const", "'unknown', 'future'] as const")
+        .replace('reconstructed|unknown|inherited', 'reconstructed|unknown|future|inherited')
+        .replace("  | { kind: 'unknown' };", "  | { kind: 'unknown' }\n  | { kind: 'future' };")
+        .replace(
+          "    trimmed === 'unknown'\n",
+          "    trimmed === 'unknown' ||\n    trimmed === 'future'\n",
+        );
+      fs.writeFileSync(PRODUCT_TYPES, productWithFutureProvenance);
+      const result = runChecker();
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Provenance grammar');
+      expect(result.stderr).toContain('future');
+    } finally {
+      fs.writeFileSync(PRODUCT_TYPES, original);
+    }
   });
 });

@@ -422,7 +422,7 @@ CommitLore-Version: 2.0.0
 | `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
 | `Expires:` | Date or condition that ends a limit |
 | `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
 用 `commitlore context <path>` 读取 path 的历史。更小的示例，以及只用 Git 读取 record 的方法，在 [docs/protocol.md](docs/protocol.md)；规范定义在 [SPEC §3](spec/SPEC.md)。

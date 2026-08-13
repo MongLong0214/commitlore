@@ -222,8 +222,8 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 모듈 경계가 리뷰 코멘트로 뒤늦게가 아니라, 에이전트가 변경을 제안하기 **전에** 그 앞에
 놓인다.
 
-등록된 실행 1,160회에서 이는 기각된 방안을 다시 제안하는 비율을 **18.8%**에서
-**2.8%**로 낮췄습니다. 이 수치가 보여 주지 않는 것은 위의
+분석 집합 1,169회에서 이는 기각된 방안을 다시 제안하는 비율을 **18.8%** (110/584)에서
+**2.7%** (16/585)로 낮췄습니다. 이 수치가 보여 주지 않는 것은 위의
 [이것이 도움이 되지 않는 경우](#이것이-도움이-되지-않는-경우)에 있다.
 
 ## CommitLore를 자세히 보면
@@ -436,7 +436,7 @@ CommitLore-Version: 2.0.0
 | `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
 | `Expires:` | Date or condition that ends a limit |
 | `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
 경로의 이력은 `commitlore context <path>`로 읽는다. 더 작은 예시와 Git만으로 record를 읽는 방법은 [docs/protocol.md](docs/protocol.md)에, 규범적 정의는 [SPEC §3](spec/SPEC.md)에 있다.

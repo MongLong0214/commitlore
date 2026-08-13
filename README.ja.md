@@ -442,7 +442,7 @@ CommitLore-Version: 2.0.0
 | `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
 | `Expires:` | Date or condition that ends a limit |
 | `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
 path の履歴は `commitlore context <path>` で読みます。より小さな例と、Git だけで record を読む方法は [docs/protocol.md](docs/protocol.md) に、規範的な定義は [SPEC §3](spec/SPEC.md) にあります。
