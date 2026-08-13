@@ -51,6 +51,8 @@ export interface BeforeChangeOptions {
     at: Date;
     /** Authors whose active records may direct the caller. */
     trustedAuthors?: readonly string[];
+    /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+    requireSignedDirective?: boolean;
 }
 /**
  * The unified before-change query. Returns exactly five fields.

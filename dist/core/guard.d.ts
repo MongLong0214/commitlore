@@ -132,6 +132,8 @@ export interface GuardOptions {
     noIndex?: boolean;
     /** Authors whose records may render as directives. The caller supplies trust. */
     trustedAuthors?: readonly string[];
+    /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+    requireSignedDirective?: boolean;
     /**
      * Refuse to flag on a `Record-Id:` reference alone.
      *

@@ -74,6 +74,8 @@ export interface BeforeChangeOptions {
   at: Date;
   /** Authors whose active records may direct the caller. */
   trustedAuthors?: readonly string[];
+  /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
+  requireSignedDirective?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +204,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
         scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+        ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
       }),
     );
     activeDecisions = extractActiveDecisions(queryResult);
@@ -220,6 +223,7 @@ export const beforeChange = (opts: BeforeChangeOptions): BeforeChangeResult => {
         at,
         ...(path === '' || path === '.' ? {} : { paths: [path] }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+        ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
       });
       matches = guardResult.matches.map(renderGuardMatch);
       confidence = 'experimental';
