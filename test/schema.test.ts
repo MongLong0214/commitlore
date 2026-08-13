@@ -213,4 +213,38 @@ describe('validateRecord', () => {
       expect(violations.map((v) => v.key).sort()).toEqual(['Blast', 'Undo']);
     });
   });
+
+  describe("foreign trailers from git's own ecosystem", () => {
+    // Reproduced against a real `git commit -s`: the hook refused the commit
+    // outright with `unknown-key Signed-off-by`, which would make DCO and
+    // CommitLore mutually exclusive in the same repository. Every Dependabot
+    // commit carries exactly this trailer and nothing else.
+    it('does not flag Signed-off-by as an unknown key', () => {
+      expect(validateRecord([{ key: 'Signed-off-by', value: 'T <t@t>' }])).toEqual([]);
+    });
+
+    it('does not flag Co-authored-by as an unknown key', () => {
+      expect(validateRecord([{ key: 'Co-authored-by', value: 'T <t@t>' }])).toEqual([]);
+    });
+
+    // The whitelist is short on purpose. A key that merely resembles protocol
+    // vocabulary must keep failing -- that is what 03-unknown-key.txt pins,
+    // and the case is repeated here so this describe block cannot pass by
+    // silently loosening isDefinedKey instead of naming an exception.
+    it('still flags an arbitrary foreign key as unknown', () => {
+      const violations = validateRecord([{ key: 'Constraint', value: 'must ship by friday' }]);
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+    });
+
+    // A real record alongside a DCO trailer in the same block: the foreign
+    // trailer must not count against cardinality or shape, and the record's
+    // own violations (if any) must still be found.
+    it('validates a real record normally when a DCO trailer sits beside it', () => {
+      const violations = validateRecord([
+        { key: 'Blast', value: 'bogus-enum-value' },
+        { key: 'Signed-off-by', value: 'T <t@t>' },
+      ]);
+      expect(violations.map((v) => v.rule)).toEqual(['enum']);
+    });
+  });
 });
