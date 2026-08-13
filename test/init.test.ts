@@ -63,6 +63,13 @@ beforeAll(() => {
   if (build.status !== 0) {
     throw new Error(`tsc build failed (exit ${build.status}):\n${build.stdout}${build.stderr}`);
   }
+
+  writeFileSync(
+    injectCommand,
+    `#!/bin/sh\nexec "${process.execPath}" "${CLI_JS}" "$@"\n`,
+    { mode: 0o755 },
+  );
+  chmodSync(injectCommand, 0o755);
 }, 120_000);
 
 const scratch: string[] = [];
@@ -78,12 +85,6 @@ const tempDir = (label: string): string => {
 
 const injectBin = tempDir('inject-bin');
 const injectCommand = join(injectBin, 'commitlore');
-writeFileSync(
-  injectCommand,
-  '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n',
-  { mode: 0o755 },
-);
-chmodSync(injectCommand, 0o755);
 
 const runInitAsCli = (opts: InitOptions): InitReport => {
   const originalArgv = process.argv[1];
