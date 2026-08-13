@@ -14,7 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { load } from 'js-yaml';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { REQUIRED_CHECKS } from '../scripts/check-exact-head-ci.mjs';
+import {
+  CI_EVENT,
+  CI_WORKFLOW_NAME,
+  CI_WORKFLOW_PATH,
+  REQUIRED_CHECKS,
+  workflowIntegrityProblems,
+} from '../scripts/check-exact-head-ci.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const RELEASE_TARGET = join(REPO_ROOT, 'scripts', 'check-release-target.mjs');
@@ -113,22 +119,60 @@ describe('the tagged commit is in main history', () => {
 const RELEASE_SHA = 'a'.repeat(40);
 const OTHER_SHA = 'b'.repeat(40);
 
-interface CheckRun {
+interface WorkflowJob {
   name: string;
   head_sha: string;
   status: string;
   conclusion: string | null;
-  app: { slug: string } | null;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
-const successfulPayload = (): { check_runs: CheckRun[] } => ({
-  check_runs: REQUIRED_CHECKS.map((name) => ({
-    name,
+interface WorkflowEvidence {
+  workflow: { id: number; path: string; name: string };
+  workflow_runs: Array<{
+    id: number;
+    workflow_id: number;
+    path: string;
+    name: string;
+    event: string;
+    head_sha: string;
+    run_attempt: number;
+    status: string;
+    conclusion: string | null;
+  }>;
+  jobs: Record<string, { jobs: WorkflowJob[] }>;
+}
+
+const RUN_ID = 607;
+const RUN_ATTEMPT = 1;
+const runKey = () => `${RUN_ID}:${RUN_ATTEMPT}`;
+
+const successfulPayload = (): WorkflowEvidence => ({
+  workflow: { id: 42, path: CI_WORKFLOW_PATH, name: CI_WORKFLOW_NAME },
+  workflow_runs: [{
+    id: RUN_ID,
+    workflow_id: 42,
+    path: `${CI_WORKFLOW_PATH}@refs/heads/main`,
+    name: CI_WORKFLOW_NAME,
+    event: CI_EVENT,
     head_sha: RELEASE_SHA,
+    run_attempt: RUN_ATTEMPT,
     status: 'completed',
     conclusion: 'success',
-    app: { slug: 'github-actions' },
-  })),
+  }],
+  jobs: {
+    [runKey()]: {
+      jobs: REQUIRED_CHECKS.map((name) => ({
+        name,
+        head_sha: RELEASE_SHA,
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-01-01T00:00:00Z',
+        completed_at: '2026-01-01T00:01:00Z',
+      })),
+    },
+  },
 });
 
 const runPayload = (payload: unknown): RunResult => {
@@ -143,96 +187,114 @@ const rejectedPayload = (payload: unknown, detail: string): void => {
   expect(result.stderr).toContain(detail);
 };
 
-describe('the required CI checks passed at the exact tagged SHA', () => {
-  it('accepts only a complete set of successful required checks', () => {
+describe('the required CI workflow ran at the exact tagged SHA', () => {
+  const jobs = (payload: WorkflowEvidence) => payload.jobs[runKey()]!.jobs;
+
+  it('accepts a complete successful CI workflow run and its exact job attempt', () => {
     const result = runPayload(successfulPayload());
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('exact-head CI accepted');
+    expect(result.stdout).toContain(`attempt ${RUN_ATTEMPT}`);
   });
 
-  it('refuses a required check that failed', () => {
+  it('refuses a required job that failed', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.conclusion = 'failure';
+    jobs(payload)[0]!.conclusion = 'failure';
     rejectedPayload(payload, 'conclusion "failure"');
   });
 
-  it('refuses a required check that was cancelled', () => {
+  it('refuses a required job that was cancelled', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.conclusion = 'cancelled';
+    jobs(payload)[0]!.conclusion = 'cancelled';
     rejectedPayload(payload, 'conclusion "cancelled"');
   });
 
-  it('refuses a required check that timed out', () => {
+  it('refuses a required job that timed out', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.conclusion = 'timed_out';
+    jobs(payload)[0]!.conclusion = 'timed_out';
     rejectedPayload(payload, 'conclusion "timed_out"');
   });
 
-  it('refuses a required check that was skipped', () => {
+  it.each(['skipped', 'neutral'])('refuses a required job that was %s', (conclusion) => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.conclusion = 'skipped';
-    rejectedPayload(payload, 'conclusion "skipped"');
+    jobs(payload)[0]!.conclusion = conclusion;
+    rejectedPayload(payload, `conclusion "${conclusion}"`);
   });
 
-  it('refuses a required check that is still in progress', () => {
+  it('refuses a required job that is still in progress', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.status = 'in_progress';
-    payload.check_runs[0]!.conclusion = null;
+    jobs(payload)[0]!.status = 'in_progress';
+    jobs(payload)[0]!.conclusion = null;
     rejectedPayload(payload, 'status "in_progress"');
   });
 
-  it('refuses a payload that omits one required check entirely', () => {
+  it('refuses a payload that omits one required job entirely', () => {
     const payload = successfulPayload();
-    payload.check_runs = payload.check_runs.slice(1);
-    rejectedPayload(payload, 'required check is absent');
+    payload.jobs[runKey()]!.jobs = jobs(payload).slice(1);
+    rejectedPayload(payload, 'required job is absent');
   });
 
-  it('refuses an empty payload', () => {
-    rejectedPayload({ check_runs: [] }, 'required check is absent');
+  it('refuses a workflow evidence payload with no run', () => {
+    const payload = successfulPayload();
+    payload.workflow_runs = [];
+    rejectedPayload(payload, 'required CI workflow run is absent');
   });
 
-  it('refuses successes reported for a different SHA', () => {
+  it('refuses a workflow run or job reported for a different SHA', () => {
     const payload = successfulPayload();
-    for (const check of payload.check_runs) check.head_sha = OTHER_SHA;
+    payload.workflow_runs[0]!.head_sha = OTHER_SHA;
+    for (const job of jobs(payload)) job.head_sha = OTHER_SHA;
     rejectedPayload(payload, 'head SHA');
   });
 
-  // A check run's name says nothing about who created it. Any GitHub App
-  // installed on the repository can post one under a required check's name and
-  // conclude it `success`; matching on the name alone took that for CI (#571).
-  it('refuses a required check reported by an app other than Actions', () => {
+  it.each([
+    ['workflow ID', (payload: WorkflowEvidence) => { payload.workflow_runs[0]!.workflow_id = 999; }],
+    ['path', (payload: WorkflowEvidence) => { payload.workflow_runs[0]!.path = '.github/workflows/other.yml@main'; }],
+    ['name', (payload: WorkflowEvidence) => { payload.workflow_runs[0]!.name = 'Other CI'; }],
+    ['event', (payload: WorkflowEvidence) => { payload.workflow_runs[0]!.event = 'workflow_dispatch'; }],
+    ['run attempt', (payload: WorkflowEvidence) => { payload.workflow_runs[0]!.run_attempt = 0; }],
+  ])('binds the verdict to CI workflow %s', (field, mutate) => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.app = { slug: 'some-other-app' };
-    rejectedPayload(payload, 'reported by app "some-other-app"');
+    mutate(payload);
+    rejectedPayload(payload, field);
   });
 
-  it('refuses a required check with no app attributed at all', () => {
+  it('rejects same-name job successes from a different workflow', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.app = null;
-    rejectedPayload(payload, 'reported by app "none"');
+    payload.workflow_runs[0]!.workflow_id = 999;
+    payload.workflow_runs[0]!.path = '.github/workflows/counterfeit.yml@main';
+    rejectedPayload(payload, 'workflow ID "999"');
   });
 
-  // The impersonation must not be able to stand in for the real run: with the
-  // genuine check absent, a look-alike leaves the required check unsatisfied.
-  it('does not let a look-alike check substitute for the genuine one', () => {
+  it('rejects the ten invented github-actions check-run successes from the original attack', () => {
+    const result = runPayload({
+      check_runs: REQUIRED_CHECKS.map((name) => ({
+        name,
+        head_sha: RELEASE_SHA,
+        status: 'completed',
+        conclusion: 'success',
+        app: { slug: 'github-actions' },
+      })),
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('does not contain a workflow object');
+  });
+
+  it('refuses a job without recorded execution timestamps', () => {
     const payload = successfulPayload();
-    payload.check_runs[0]!.app = { slug: 'some-other-app' };
+    jobs(payload)[0]!.started_at = null;
     const result = runPayload(payload);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('required check is absent');
+    expect(result.stderr).toContain('no recorded execution timestamps');
   });
 
-  // ...and must not be able to hide behind it either: a genuine success plus a
-  // forged duplicate is still a refusal, so an attacker cannot add noise to a
-  // passing set and have it pass anyway.
-  it('refuses a forged duplicate alongside a genuine success', () => {
-    const payload = successfulPayload();
-    payload.check_runs.push({
-      ...payload.check_runs[0]!,
-      app: { slug: 'some-other-app' },
-      conclusion: 'success',
-    });
-    rejectedPayload(payload, 'reported by app "some-other-app"');
+  it('rejects a no-op replacement of the reviewed CI workflow body', () => {
+    const source = readFileSync(join(REPO_ROOT, CI_WORKFLOW_PATH), 'utf8');
+    const noOp = source.replace('run: npm audit --omit=dev --audit-level=low', 'run: true');
+
+    expect(noOp).not.toBe(source);
+    expect(workflowIntegrityProblems(source)).toEqual([]);
+    expect(workflowIntegrityProblems(noOp)).toContainEqual(expect.stringContaining('expected reviewed workflow'));
   });
 });
 
@@ -293,6 +355,20 @@ describe('the release gate requires every job CI runs on a push', () => {
     const expected = expectedCheckNames();
     const orphaned = REQUIRED_CHECKS.filter((check) => !expected.includes(check));
     expect(orphaned).toEqual([]);
+  });
+
+  it('keeps every release-required CI job unconditional and non-empty', () => {
+    const workflow = load(readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')) as {
+      jobs: Record<string, { if?: unknown; 'continue-on-error'?: unknown; steps?: unknown[] }>;
+    };
+
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      if (name === 'lint') continue;
+      expect(job.if, `${name} may not be skipped`).toBeUndefined();
+      expect(job['continue-on-error'], `${name} may not be allowed to fail`).toBeUndefined();
+      expect(job.steps, `${name} needs executable work`).toEqual(expect.any(Array));
+      expect(job.steps!.length, `${name} may not be empty`).toBeGreaterThan(0);
+    }
   });
 });
 
