@@ -12620,6 +12620,16 @@ var writeMeta = (db, key, value) => {
     value
   );
 };
+var UNREAD_COMMITS_META = "unread_commits";
+var persistUnread = (db, unread) => {
+  writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
+};
+var indexUnread = (handle) => {
+  const raw = readMeta(handle.db, UNREAD_COMMITS_META);
+  if (raw === null || raw === "") return 0;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
 var initMeta = (db, key, value) => {
   db.prepare("INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)").run(key, value);
 };
@@ -12826,15 +12836,17 @@ var rebuildIndex = (handle, opts = {}) => {
   const head = revParse(handle.cwd, "HEAD");
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
   const excluded = /* @__PURE__ */ new Map();
-  const records = readCommitRecords(handle.cwd, shas, excluded);
+  const cost = opts.cost ?? { unreadCommits: 0, unreadNotes: 0 };
+  const records = readCommitRecords(handle.cwd, shas, excluded, opts.budget, cost);
   const notesRef = revParseRef(handle.cwd, NOTES_REF2);
-  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded);
+  const noteRecords = notesRef === null ? [] : readNoteRecords(handle.cwd, new Set(shas), excluded, opts.budget, cost);
+  const unread = cost.unreadCommits + cost.unreadNotes;
   const stats = {
     ...emptyStats(handle, started),
     rebuilt: true,
     rebuildReason: opts.reason ?? null,
     headSha: head,
-    commitsScanned: shas.length,
+    commitsScanned: shas.length - cost.unreadCommits,
     notesScanned: noteRecords.length
   };
   runInTransaction(handle.db, () => {
@@ -12850,6 +12862,7 @@ var rebuildIndex = (handle, opts = {}) => {
     stats.pathsIndexed += noteCounts.paths;
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
+    persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
   stats.elapsedMs = Date.now() - started;
@@ -12871,9 +12884,13 @@ var updateIndex = (handle, opts = {}) => {
   requireWritable(handle);
   const started = Date.now();
   const allowRebuild = opts.allowRebuild ?? true;
+  const rebuildOpts = {
+    ...opts.budget === void 0 ? {} : { budget: opts.budget },
+    ...opts.cost === void 0 ? {} : { cost: opts.cost }
+  };
   const rebuildOrRefuse = (reason) => {
     if (!allowRebuild) throw new Error(reason);
-    return rebuildIndex(handle, { reason });
+    return rebuildIndex(handle, { reason, ...rebuildOpts });
   };
   const discarded = handle.discardedReason;
   if (discarded !== null) {
@@ -12884,9 +12901,9 @@ var updateIndex = (handle, opts = {}) => {
   if (problem !== null) {
     if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
-    return rebuildIndex(handle, { reason: problem });
+    return rebuildIndex(handle, { reason: problem, ...rebuildOpts });
   }
-  if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested" });
+  if (opts.force ?? false) return rebuildIndex(handle, { reason: "rebuild requested", ...rebuildOpts });
   const excluded = /* @__PURE__ */ new Map();
   const head = revParse(handle.cwd, "HEAD");
   if (head === null) {
@@ -12900,6 +12917,9 @@ var updateIndex = (handle, opts = {}) => {
   const last = readMeta(handle.db, "last_indexed_sha");
   const blocker = incrementalProblem(handle, head, last);
   if (blocker !== null) return rebuildOrRefuse(blocker);
+  if (opts.budget === void 0 && indexUnread(handle) > 0) {
+    return rebuildIndex(handle, { reason: "finish a budgeted partial index", ...rebuildOpts });
+  }
   const stats = { ...emptyStats(handle, started), headSha: head };
   if (last !== null && last !== head) {
     const shas = revList(handle.cwd, `${last}..HEAD`);
@@ -12924,37 +12944,13 @@ var updateIndex = (handle, opts = {}) => {
 var ensureIndex = (opts = {}) => {
   const handle = openIndex(opts);
   try {
-    return { handle, stats: updateIndex(handle) };
-  } catch (error2) {
-    closeIndex(handle);
-    throw error2;
-  }
-};
-var openCurrentIndex = (opts = {}) => {
-  const cwd = opts.cwd ?? process.cwd();
-  if (!existsSync3(indexDbPath(cwd))) throw new Error("the index has no baseline commit");
-  const handle = openIndex(opts);
-  try {
-    if (handle.discardedReason !== null) throw new Error(handle.discardedReason);
-    const problem = healthProblem(handle.db);
-    if (problem !== null) throw new Error(problem);
-    const head = revParse(handle.cwd, "HEAD");
-    if (head !== null) {
-      const blocker = incrementalProblem(handle, head, readMeta(handle.db, "last_indexed_sha"));
-      if (blocker !== null) throw new Error(blocker);
-    }
-    updateIndex(handle, { allowRebuild: false });
-    const indexedHead = readMeta(handle.db, "last_indexed_sha");
-    if (indexedHead !== head) {
-      throw new Error(
-        `index is at ${indexedHead?.slice(0, 12) ?? "(no baseline)"} but HEAD is ${head?.slice(0, 12) ?? "(unborn)"}`
-      );
-    }
-    const notesRef = revParseRef(handle.cwd, NOTES_REF2);
-    if (readMeta(handle.db, "notes_ref_sha") !== notesRef) {
-      throw new Error("index does not match refs/notes/commitlore");
-    }
-    return handle;
+    return {
+      handle,
+      stats: updateIndex(handle, {
+        ...opts.budget === void 0 ? {} : { budget: opts.budget },
+        ...opts.cost === void 0 ? {} : { cost: opts.cost }
+      })
+    };
   } catch (error2) {
     closeIndex(handle);
     throw error2;
@@ -14925,6 +14921,7 @@ var gradeDeclarations = (record2, declarations2, ctx) => {
 var LIMIT_KEY = "Limit";
 var RULED_OUT_KEY = "Ruled-out";
 var WARN_KEY = "Warn";
+var CONSUMER_SCAN_BUDGET_MS = 3e3;
 var RECORD_ID_KEY3 = "Record-Id";
 var PROVENANCE_KEY2 = "Provenance";
 var LIFECYCLE_KEYS = [RECORD_ID_KEY3, "Supersedes", "Expires"];
@@ -14942,16 +14939,17 @@ var normalizePaths = (opts) => {
   }
   return kept;
 };
-var scanSource = (cwd, diagnostics, budgetMs) => {
+var scanSource = (cwd, diagnostics, budgetMs, now) => {
   let rows;
   let corpusPasses = 0;
   const cost = { unreadCommits: 0, unreadNotes: 0 };
+  const clock = now ?? Date.now;
   return {
     fetch: (query) => {
       if (rows === void 0) {
         rows = scanTrailers(
           {},
-          budgetMs === void 0 ? { cwd } : { cwd, budget: { deadline: Date.now() + budgetMs }, cost }
+          budgetMs === void 0 ? { cwd } : { cwd, budget: { deadline: clock() + budgetMs, now: clock }, cost }
         );
         corpusPasses += 1;
       }
@@ -14965,15 +14963,20 @@ var scanSource = (cwd, diagnostics, budgetMs) => {
     diagnostics
   };
 };
-var openSource = (cwd, noIndex, budgetMs) => {
-  if (noIndex) return scanSource(cwd, [], budgetMs);
+var openSource = (cwd, noIndex, budgetMs, now) => {
+  if (noIndex) return scanSource(cwd, [], budgetMs, now);
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
+  const clock = now ?? Date.now;
   try {
-    const handle = openCurrentIndex({ cwd });
+    const { handle } = ensureIndex({
+      cwd,
+      ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
+    });
     return {
       fetch: (query) => queryTrailers(handle, query),
       fromIndex: true,
       corpusPasses: () => 0,
-      unreadCommits: () => 0,
+      unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
       close: () => closeIndex(handle),
       diagnostics: []
     };
@@ -14981,7 +14984,8 @@ var openSource = (cwd, noIndex, budgetMs) => {
     return scanSource(
       cwd,
       [`the index is unavailable (${errorMessage3(error2)}); answering with a full scan`],
-      budgetMs
+      budgetMs,
+      now
     );
   }
 };
@@ -15276,7 +15280,7 @@ var runQuery = (opts = {}) => {
   if (Number.isNaN(cutoff)) throw new Error("runQuery: opts.at is not a valid Date");
   const paths = normalizePaths(opts);
   const scope = resolveScope(cwd, paths);
-  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
+  const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
   const diagnostics = [...source.diagnostics, ...scope.diagnostics];
   try {
     if (opts.explainEmptyResult === true) diagnostics.push(...pathPresenceDiagnostics(cwd, paths));
@@ -15304,7 +15308,7 @@ var runQuery = (opts = {}) => {
     const unread = source.unreadCommits();
     if (unread > 0) {
       diagnostics.push(
-        `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
+        source.fromIndex ? `the index is incomplete: the build stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to finish the index` : `this repository has no index, and the scan stopped after its time budget with ${String(unread)} commit(s) or note(s) unread \u2014 records in them are missing from this answer. fix: commitlore init (or commitlore index) to build the index once`
       );
     }
     const shallow = hasShallowHistory(cwd);
@@ -15783,7 +15787,7 @@ var guard = (opts) => {
     history: result.history,
     shallow: result.shallow,
     notes: result.notes,
-    incomplete: result.history === "unavailable" || result.notes === "unfetched"
+    incomplete: result.history === "unavailable" || result.notes === "unfetched" || result.unreadCommits > 0
   };
   if (proposal.stems.size === 0 && ids.size === 0) {
     return { matches: [], ...availability };
@@ -23351,7 +23355,7 @@ var omittedLine = (cut, total, tier) => {
 var unreadLine = (unreadCommits) => {
   if (unreadCommits === 0) return [];
   return [
-    `incomplete: this repository has no index, so answering meant reading its whole history; the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to index this repository, after which this answer is both complete and fast.`
+    `incomplete: the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to finish the index, after which this answer is both complete and fast.`
   ];
 };
 var render = (input) => {
@@ -23685,14 +23689,13 @@ var hookResult = (raw, base) => {
     };
   }
 };
-var HOOK_SCAN_BUDGET_MS = 3e3;
 var runHookMode = (options) => {
   try {
     const { path: _fromFlag, ...base } = injectOptions(".", options, process.cwd());
     const result = hookResult(readStdin(), {
       ...base,
       cwd: process.cwd(),
-      scanBudgetMs: HOOK_SCAN_BUDGET_MS
+      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
     });
     if (result.stdout !== "") process.stdout.write(result.stdout);
     if (result.stderr !== "") process.stderr.write(result.stderr);
@@ -32419,6 +32422,10 @@ var queryOptions = (paths, options, keys) => {
     // whether the path was ever there (#307). The hook path deliberately does
     // not set this: a new file has no history and that is not a finding.
     explainEmptyResult: true,
+    // Bound the first call on a missing index, and the `--no-index` scan, so
+    // a 21k-commit repository costs a pause rather than four minutes. The
+    // engine persists what it did read; unreadCommits labels what it did not.
+    scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
     ...trustedAuthors.length === 0 ? {} : { trustedAuthors },
     ...requireSignedDirective ? { requireSignedDirective: true } : {},
     ...keys === void 0 ? {} : { keys },
@@ -32469,13 +32476,17 @@ var toJson2 = (command, result) => {
     },
     history: presented.history,
     notes: presented.notes,
+    unreadCommits: presented.unreadCommits,
     diagnostics: presented.diagnostics,
     records: presented.records.map(toJsonRecord)
   };
 };
 var shortSha4 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var scopeSuffix = (result) => result.paths.length === 0 ? "" : ` for ${result.paths.join(", ")}`;
-var provenanceSuffix = (result) => `${result.fromIndex ? "index" : "no index"}, ${result.scanned} commit record(s) scanned`;
+var provenanceSuffix = (result) => {
+  const base = `${result.fromIndex ? "index" : "no index"}, ${result.scanned} commit record(s) scanned`;
+  return result.unreadCommits === 0 ? base : `${base}, ${result.unreadCommits} commit(s) unread`;
+};
 var plural2 = (count2, one, many) => `${count2} ${count2 === 1 ? one : many}`;
 var stateTag = (record2) => {
   const tags = [
@@ -32520,6 +32531,7 @@ var otherLines = (records) => {
   });
 };
 var emptyLine = (result, what) => result.history === "unavailable" ? `git could not read this repository, so there is no answer about ${what}${scopeSuffix(result)} \u2014 this is unknown, not empty
+` : result.unreadCommits > 0 ? `no active ${what}${scopeSuffix(result)} \u2014 but ${result.unreadCommits} commit(s) went unread, so this is not the same as "none exist" (commitlore init)
 ` : result.notes === "unfetched" ? `no active ${what}${scopeSuffix(result)} \u2014 but the notes mirror has not been fetched here, so this is not the same as "none exist" (commitlore doctor --fix)
 ` : `no active ${what}${scopeSuffix(result)}
 `;
@@ -32562,7 +32574,9 @@ var emit4 = (name, result, options, render2) => {
 ` : render2(presented)
   );
   if (presented.history === "unavailable") process.exitCode = USAGE_EXIT_CODE3;
-  else if (presented.notes === "unfetched") process.exitCode = INCOMPLETE_EXIT_CODE2;
+  else if (presented.notes === "unfetched" || presented.unreadCommits > 0) {
+    process.exitCode = INCOMPLETE_EXIT_CODE2;
+  }
 };
 var define = (program3, name, description, keys, render2) => {
   program3.command(name).description(description).argument("[paths...]", "limit paths; renames follow only when one path is given").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
@@ -32572,7 +32586,7 @@ var define = (program3, name, description, keys, render2) => {
     []
   ).addHelpText(
     "after",
-    "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror has not been fetched (SPEC \xA710)."
+    "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror is unfetched or the scan was truncated (SPEC \xA710)."
   ).action((paths, options) => {
     try {
       emit4(name, runQuery(queryOptions(paths, options, keys)), options, render2);
@@ -32851,11 +32865,13 @@ var beforeChange = (opts) => {
       runQuery({
         cwd,
         at,
+        scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         ...path2 === "" || path2 === "." ? {} : { paths: [path2] },
         ...opts.trustedAuthors === void 0 ? {} : { trustedAuthors: opts.trustedAuthors }
       })
     );
     activeDecisions = extractActiveDecisions(queryResult);
+    if (queryResult.unreadCommits > 0) gaps.push("unread-commits");
   }
   let matches = [];
   let confidence = "not-run";
@@ -32953,6 +32969,7 @@ var contextJson = (root, kind, path2) => {
       explainEmptyResult: true,
       cwd: root,
       at,
+      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
       trustedAuthors: configuredTrustedAuthors(root),
       ...configuredSignedDirectivesRequired(root) ? { requireSignedDirective: true } : {},
       ...path2 === "" ? {} : { paths: [path2] },
@@ -34049,9 +34066,16 @@ var collectSources2 = (input, cwd) => {
   return [{ message: (input.readStdin ?? readStdinSync)() }];
 };
 var SHALLOW_REFERENCE_REASON = "shallow history \u2014 a Record-Id declared below the clone boundary is not visible here (fix: git fetch --unshallow)";
+var PARTIAL_INDEX_REASON = "the index is incomplete \u2014 a time budget left commits unread, so a Follows: or Supersedes: target may exist in history this check did not read (fix: commitlore init)";
 var repositoryAvailable = (cwd) => execGit(["rev-parse", "--git-dir"], { cwd }).code === 0;
-var indexedHeadRecords = (cwd) => {
-  const { handle } = ensureIndex({ cwd });
+var indexedHeadRecords = (cwd, input = {}) => {
+  const clock = input.scanNow ?? Date.now;
+  const cost = { unreadCommits: 0, unreadNotes: 0 };
+  const { handle } = ensureIndex({
+    cwd,
+    cost,
+    ...input.scanBudgetMs === void 0 ? {} : { budget: { deadline: clock() + input.scanBudgetMs, now: clock } }
+  });
   try {
     const records = /* @__PURE__ */ new Map();
     for (const row of queryTrailers(handle)) {
@@ -34068,19 +34092,27 @@ var indexedHeadRecords = (cwd) => {
         trailers: [{ key: row.key, value: row.value }]
       });
     }
-    return [...records.values()];
+    return {
+      records: [...records.values()],
+      unreadCommits: Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes)
+    };
   } finally {
     closeIndex(handle);
   }
 };
-var recordsFor = (source, cwd) => {
+var recordsFor = (source, cwd, input = {}) => {
   if (source.sha !== void 0) {
-    return collectRecords({ cwd, allHistory: true, revision: source.sha });
+    return { ...collectRecords({ cwd, allHistory: true, revision: source.sha }), unreadCommits: 0 };
   }
   try {
-    return { records: indexedHeadRecords(cwd), notes: notesAvailability({ cwd }) };
+    const indexed = indexedHeadRecords(cwd, input);
+    return {
+      records: indexed.records,
+      notes: notesAvailability({ cwd }),
+      unreadCommits: indexed.unreadCommits
+    };
   } catch {
-    return collectRecords({ cwd, allHistory: true, revision: "HEAD" });
+    return { ...collectRecords({ cwd, allHistory: true, revision: "HEAD" }), unreadCommits: 0 };
   }
 };
 var reachableShas = (revision, cwd) => {
@@ -34107,8 +34139,9 @@ var checkReferences = (input, sources, cwd) => {
     const violations = [];
     const tipSha = input.range !== void 0 && sources.length > 0 ? sources[sources.length - 1].sha : void 0;
     let tipAllRecords;
+    let unreadCommits = 0;
     if (tipSha !== void 0) {
-      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd);
+      const tipScan = recordsFor({ sha: tipSha, message: "" }, cwd, input);
       if (tipScan.notes === "unfetched") {
         return {
           check: {
@@ -34126,7 +34159,8 @@ var checkReferences = (input, sources, cwd) => {
     }
     for (const source of sources) {
       const blocks = parseRecordBlocks(source.message);
-      const scan2 = recordsFor(source, cwd);
+      const scan2 = recordsFor(source, cwd, input);
+      if (scan2.unreadCommits > unreadCommits) unreadCommits = scan2.unreadCommits;
       if (scan2.notes === "unfetched") {
         return {
           check: {
@@ -34164,16 +34198,24 @@ var checkReferences = (input, sources, cwd) => {
         );
       }
     }
-    const suppressed = violations.some((violation) => violation.rule === "dangling-ref") && hasShallowHistory(cwd);
-    const reported = suppressed ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
+    const danglingPresent = violations.some((violation) => violation.rule === "dangling-ref");
+    const shallow = danglingPresent && hasShallowHistory(cwd);
+    const partial2 = unreadCommits > 0;
+    const withdrawDangling = shallow || partial2 && danglingPresent;
+    const reported = withdrawDangling ? violations.filter((violation) => violation.rule !== "dangling-ref") : violations;
+    const reasons = [
+      ...partial2 ? [PARTIAL_INDEX_REASON] : [],
+      ...shallow ? [SHALLOW_REFERENCE_REASON] : []
+    ];
     return {
       check: {
         class: "reference",
         // `not-checked` rather than `ok` when something was withheld: the
         // green would be the part a reader carries away, and this command has
-        // no verdict to offer on the reference it could not resolve.
-        status: reported.length > 0 ? "failed" : suppressed ? "not-checked" : "ok",
-        ...suppressed ? { reason: SHALLOW_REFERENCE_REASON } : {}
+        // no verdict to offer on the reference it could not resolve. A commit
+        // accepted against a partial index must not read as fully checked.
+        status: reported.length > 0 ? "failed" : reasons.length > 0 ? "not-checked" : "ok",
+        ...reasons.length > 0 ? { reason: reasons.join("; ") } : {}
       },
       violations: reported
     };
@@ -34308,7 +34350,11 @@ var register24 = (program3) => {
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
       ...flags.commit === void 0 ? {} : { commit: flags.commit },
       ...flags.range === void 0 ? {} : { range: flags.range },
-      ...flags.json === void 0 ? {} : { json: flags.json }
+      ...flags.json === void 0 ? {} : { json: flags.json },
+      // The commit-msg hook is this command with `--message-file`. Four
+      // minutes to accept one commit is worse than a partial check that
+      // says it is partial.
+      scanBudgetMs: CONSUMER_SCAN_BUDGET_MS
     });
     if (result.stdout !== "") process.stdout.write(result.stdout);
     if (result.stderr !== "") process.stderr.write(result.stderr);

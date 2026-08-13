@@ -39,6 +39,13 @@ export interface ValidateInput {
     cwd?: string;
     /** Injectable so tests never depend on the process's real stdin. */
     readStdin?: () => string;
+    /**
+     * Wall-clock ceiling on a cold index build. The commit-msg hook passes
+     * `CONSUMER_SCAN_BUDGET_MS`; tests inject a spent budget or a fake clock.
+     */
+    scanBudgetMs?: number;
+    /** The clock `scanBudgetMs` is read against. Defaults to `Date.now`. */
+    scanNow?: () => number;
 }
 /** Exit code, plus the streams the caller writes. Returned rather than printed so tests can drive the command in-process. */
 export interface ValidateResult {

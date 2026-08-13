@@ -120,7 +120,16 @@ describe('#420 concurrent injections keep using a current index', () => {
     ).toEqual([]);
   }, 120_000);
 
-  it('leaves a cold index absent after concurrent fallback scans', async () => {
+  /**
+   * This used to assert the opposite: that a cold index stayed absent, because
+   * the read paths only ever read an index and never built one. That was the
+   * defect in #522 — on a 21,770-commit repository it made `context` a
+   * permanently multi-minute command, 265s cold and 271s again immediately
+   * after, with nothing persisted between them. The read paths now build the
+   * index, so a cold start under concurrency must converge on a healthy one
+   * rather than leave every future call paying the full scan.
+   */
+  it('builds a usable index even when the cold start is concurrent', async () => {
     const dir = repoWithRecords('concurrency-health');
     const files = Array.from({ length: FANOUT }, (_, i) => `f${i + 1}.ts`);
 
@@ -132,7 +141,7 @@ describe('#420 concurrent injections keep using a current index', () => {
       checks: { id: string; status: string; detail: string }[];
     };
     const health = report.checks.find((entry) => entry.id === 'index-health');
-    expect(health?.status, health?.detail).toBe('warn');
-    expect(health?.detail).toContain('no index yet');
+    expect(health?.status, health?.detail).not.toBe('fail');
+    expect(health?.detail, health?.detail).not.toContain('no index yet');
   }, 120_000);
 });

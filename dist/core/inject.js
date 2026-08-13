@@ -350,12 +350,11 @@ const unreadLine = (unreadCommits) => {
     if (unreadCommits === 0)
         return [];
     return [
-        `incomplete: this repository has no index, so answering meant reading its whole history; ` +
-            `the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
+        `incomplete: the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. ` +
             'treat the list above as some of what applies here, not all of it: records in those commits ' +
             'are missing, and because supersession and expiry are recorded in commits like any other ' +
             'record, one shown as active may since have been withdrawn. run `commitlore init` once to ' +
-            'index this repository, after which this answer is both complete and fast.',
+            'finish the index, after which this answer is both complete and fast.',
     ];
 };
 /**

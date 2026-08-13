@@ -44,7 +44,7 @@
  * date-form `Expires:` still retires them through the same fold.
  */
 import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
-import { closeIndex, filterTrailers, openCurrentIndex, queryTrailers, scanTrailers, } from './index-db.js';
+import { closeIndex, ensureIndex, filterTrailers, indexUnread, queryTrailers, scanTrailers, } from './index-db.js';
 import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
@@ -52,6 +52,16 @@ import { SINGLE_VALUED, parseProvenance, } from './types.js';
 export const LIMIT_KEY = 'Limit';
 export const RULED_OUT_KEY = 'Ruled-out';
 export const WARN_KEY = 'Warn';
+/**
+ * How long a consumer route may spend building a missing index, or scanning
+ * when it cannot write one.
+ *
+ * Three seconds is long enough that a repository of ordinary size is still
+ * answered in full, and short enough that a 21k-commit repository costs a
+ * pause rather than four minutes. Exceeding it is never silent: `unreadCommits`
+ * is set and the answer names `commitlore init`.
+ */
+export const CONSUMER_SCAN_BUDGET_MS = 3_000;
 const RECORD_ID_KEY = 'Record-Id';
 const PROVENANCE_KEY = 'Provenance';
 /** Every key `foldLifecycle` reads. The global pass fetches exactly these. */
@@ -84,10 +94,11 @@ const normalizePaths = (opts) => {
     }
     return kept;
 };
-const scanSource = (cwd, diagnostics, budgetMs) => {
+const scanSource = (cwd, diagnostics, budgetMs, now) => {
     let rows;
     let corpusPasses = 0;
     const cost = { unreadCommits: 0, unreadNotes: 0 };
+    const clock = now ?? Date.now;
     return {
         fetch: (query) => {
             if (rows === undefined) {
@@ -97,7 +108,7 @@ const scanSource = (cwd, diagnostics, budgetMs) => {
                 // fetch made a single path query parse that corpus repeatedly.
                 rows = scanTrailers({}, budgetMs === undefined
                     ? { cwd }
-                    : { cwd, budget: { deadline: Date.now() + budgetMs }, cost });
+                    : { cwd, budget: { deadline: clock() + budgetMs, now: clock }, cost });
                 corpusPasses += 1;
             }
             return filterTrailers(rows, query);
@@ -110,30 +121,40 @@ const scanSource = (cwd, diagnostics, budgetMs) => {
     };
 };
 /**
- * Opens a current index, falling back to the scan path on any failure.
+ * Opens the index, building one when it is missing, and falls back to a scan
+ * only when writing is impossible or the caller asked for `--no-index`.
  *
- * The index is derived and disposable (ADR-0003), so a missing, stale or
- * invalid file is not a reason to refuse an answer. Nor may it make a
- * before-change query wait for an unbounded full rebuild: `index` and `init`
- * own that work. The fallback is reported, because "slower" and "wrong" must
- * not look alike from the outside.
+ * The earlier contract refused to create the file: a consumer query that
+ * found no index walked history every time and persisted nothing, so on a
+ * 21k-commit repository `context` was a permanent four-minute command until
+ * `validate` or `init` happened to build one. Building here turns that into a
+ * one-time cost. A budget, when the caller set one, stops the first call
+ * from blocking for minutes; what it did not read is persisted as
+ * `unread_commits` so the next call is fast and still labelled incomplete.
  */
-const openSource = (cwd, noIndex, budgetMs) => {
+const openSource = (cwd, noIndex, budgetMs, now) => {
     if (noIndex)
-        return scanSource(cwd, [], budgetMs);
+        return scanSource(cwd, [], budgetMs, now);
+    const cost = { unreadCommits: 0, unreadNotes: 0 };
+    const clock = now ?? Date.now;
     try {
-        const handle = openCurrentIndex({ cwd });
+        const { handle } = ensureIndex({
+            cwd,
+            ...(budgetMs === undefined
+                ? {}
+                : { budget: { deadline: clock() + budgetMs, now: clock }, cost }),
+        });
         return {
             fetch: (query) => queryTrailers(handle, query),
             fromIndex: true,
             corpusPasses: () => 0,
-            unreadCommits: () => 0,
+            unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
             close: () => closeIndex(handle),
             diagnostics: [],
         };
     }
     catch (error) {
-        return scanSource(cwd, [`the index is unavailable (${errorMessage(error)}); answering with a full scan`], budgetMs);
+        return scanSource(cwd, [`the index is unavailable (${errorMessage(error)}); answering with a full scan`], budgetMs, now);
     }
 };
 // ---------------------------------------------------------------------------
@@ -606,7 +627,7 @@ export const runQuery = (opts = {}) => {
         throw new Error('runQuery: opts.at is not a valid Date');
     const paths = normalizePaths(opts);
     const scope = resolveScope(cwd, paths);
-    const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs);
+    const source = openSource(cwd, opts.noIndex === true, opts.scanBudgetMs, opts.scanNow);
     const diagnostics = [...source.diagnostics, ...scope.diagnostics];
     try {
         if (opts.explainEmptyResult === true)
@@ -638,9 +659,13 @@ export const runQuery = (opts = {}) => {
         }
         const unread = source.unreadCommits();
         if (unread > 0) {
-            diagnostics.push(`this repository has no index, and the scan stopped after its time budget with ` +
-                `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
-                'fix: commitlore init (or commitlore index) to build the index once');
+            diagnostics.push(source.fromIndex
+                ? `the index is incomplete: the build stopped after its time budget with ` +
+                    `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
+                    'fix: commitlore init (or commitlore index) to finish the index'
+                : `this repository has no index, and the scan stopped after its time budget with ` +
+                    `${String(unread)} commit(s) or note(s) unread — records in them are missing from this answer. ` +
+                    'fix: commitlore init (or commitlore index) to build the index once');
         }
         const shallow = hasShallowHistory(cwd);
         if (shallow)

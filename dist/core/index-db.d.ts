@@ -174,6 +174,15 @@ export interface OpenIndexOptions {
      * equivalence tests use it to prove the two paths agree.
      */
     fts?: boolean;
+    /**
+     * Wall-clock ceiling on a rebuild. Absent means unbounded, which is right
+     * for `index` and `init`. A consumer that cannot wait — `context`, the
+     * commit-msg hook — passes one so a missing index costs a bounded pause
+     * and a labelled partial answer, not minutes of silence.
+     */
+    budget?: ScanBudget;
+    /** Filled in when `budget` trips. The same object the caller will report. */
+    cost?: ScanCost;
 }
 /**
  * Absolute path of the index file. `--git-path` is what makes this correct
@@ -228,6 +237,11 @@ export interface ScanCost {
     unreadNotes: number;
 }
 /**
+ * Commits a previous budgeted rebuild left unread, persisted so a later query
+ * can say so without walking history again. 0 when the index is whole.
+ */
+export declare const indexUnread: (handle: IndexHandle) => number;
+/**
  * Opens the index, creating it if absent. A file that SQLite refuses to open
  * at all is deleted and recreated rather than reported: the bytes are a cache.
  */
@@ -250,6 +264,8 @@ export declare const indexNotes: (handle: IndexHandle, opts?: {
  */
 export declare const rebuildIndex: (handle: IndexHandle, opts?: {
     reason?: string;
+    budget?: ScanBudget;
+    cost?: ScanCost;
 }) => IndexStats;
 /**
  * Incremental update: only `last_indexed_sha..HEAD` is read. Falls back to a
@@ -260,6 +276,8 @@ export declare const rebuildIndex: (handle: IndexHandle, opts?: {
 export declare const updateIndex: (handle: IndexHandle, opts?: {
     force?: boolean;
     allowRebuild?: boolean;
+    budget?: ScanBudget;
+    cost?: ScanCost;
 }) => IndexStats;
 /** Opens the index and brings it up to date. The one call a query command needs. */
 export declare const ensureIndex: (opts?: OpenIndexOptions) => {

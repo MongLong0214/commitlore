@@ -159,7 +159,12 @@ describe('commitlore_before_change', () => {
     createTestRepo({ path: shallowDir, source: repoDir, depth: 1 });
     const result = beforeChange({ path: '.', cwd: shallowDir });
     // If multiple gaps are present, they must be in canonical order
-    const validOrder = ['history-unavailable', 'shallow-history', 'notes-unfetched'];
+    const validOrder = [
+      'history-unavailable',
+      'shallow-history',
+      'notes-unfetched',
+      'unread-commits',
+    ];
     for (let i = 0; i < result.verification_gaps.length; i++) {
       expect(validOrder).toContain(result.verification_gaps[i]);
       if (i > 0) {
