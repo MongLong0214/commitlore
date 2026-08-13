@@ -26,6 +26,11 @@ import { type SyncResult } from '../core/sync.js';
 export declare const PRE_PUSH_HOOK_MARKER = "# commitlore:pre-push:v1";
 export declare const PRE_PUSH_HOOK_NAME = "pre-push";
 export declare const PRE_PUSH_CHAINED_HOOK_NAME = "pre-push.commitlore-chained";
+/**
+ * A notes mirror is auxiliary to a branch push, so two seconds is enough to
+ * fail a stalled transport without making an offline push feel stuck.
+ */
+export declare const PRE_PUSH_NOTES_SYNC_TIMEOUT_MS = 2000;
 export interface PrePushHookResult {
     readonly code: 0 | 2;
     readonly stdout: string;
@@ -39,6 +44,6 @@ export interface PrePushHookResult {
  */
 export declare const prePushStub: () => string;
 export declare const installPrePushHook: (cwd?: string) => PrePushHookResult;
-/** One line per remote, for stderr. Silence when there was nothing to say. */
+/** One fail-open line per unsuccessful remote. Successful sync stays quiet. */
 export declare const describeSync: (results: readonly SyncResult[]) => string[];
 export declare const register: (program: Command) => void;
