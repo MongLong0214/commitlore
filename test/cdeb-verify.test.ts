@@ -17,9 +17,11 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zstdCompressSync } from 'node:zlib';
+import * as zlib from 'node:zlib';
 
 import { afterAll, describe, expect, it } from 'vitest';
+
+import { hasZstd, zstdUnavailableMessage } from './cdeb-zstd.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VERIFIER = join(REPO_ROOT, 'bench', 'cdeb', 'verify.mjs');
@@ -209,7 +211,8 @@ const writeRunWithProviderArtifact = (root: string, rawStreamSha256: string): vo
   const runDir = join(root, 'cdeb-test-01', 'runs', 'repo-a__task-a__on__r1');
   mkdirSync(runDir, { recursive: true });
   const raw = readFileSync('test/fixtures/claude-stream/partial-messages.jsonl');
-  writeFileSync(join(runDir, 'provider.ndjson.zst'), zstdCompressSync(raw));
+  if (typeof zlib.zstdCompressSync !== 'function') throw new Error(zstdUnavailableMessage);
+  writeFileSync(join(runDir, 'provider.ndjson.zst'), zlib.zstdCompressSync(raw));
   writeFileSync(join(runDir, 'provider.ndjson.sha256'), `${createHash('sha256').update(raw).digest('hex')}  provider.ndjson\n`);
   const row = validRow();
   (row.usage as Record<string, unknown>).raw_stream_sha256 = rawStreamSha256;
@@ -266,7 +269,11 @@ describe('#443 the CDEB recursive verifier', () => {
     expect(result.output).toMatch(/total_token_volume 1999 != raw category sum 2000/);
   });
 
-  it('fails a per-run row whose raw usage digest does not match its compressed NDJSON artifact', () => {
+  it.skipIf(!hasZstd)(
+    hasZstd
+      ? 'fails a per-run row whose raw usage digest does not match its compressed NDJSON artifact'
+      : `fails a per-run row whose raw usage digest does not match its compressed NDJSON artifact — ${zstdUnavailableMessage}`,
+    () => {
     const root = study('artifact-digest', []);
     writeRunWithProviderArtifact(root, HEX64);
     const result = verify(root);

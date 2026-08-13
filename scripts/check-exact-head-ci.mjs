@@ -34,7 +34,7 @@ import { resolve } from 'node:path';
 // that produces the checks at a release commit. Requiring a check that cannot
 // exist would block every release rather than qualify one.
 export const REQUIRED_CHECKS = Object.freeze([
-  'check (22)',
+  'check (22.23.2)',
   'check (24)',
   'audit',
   'git-matrix (ubuntu-latest)',

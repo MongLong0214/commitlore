@@ -272,16 +272,23 @@ describe('T-1122 the documented prerequisites are the ones the installers check 
 
   it('names exactly the prerequisites, with none dropped', () => {
     expect(keysOf(rows()).map((k) => k.replace(/\s*\(.*\)$/, ''))).toEqual([
-      'Node.js ≥ 22.12',
+      'Node.js ≥ 22.23.2',
       'Git',
       'A POSIX shell',
     ]);
   });
 
   it('the Node floor in the table is the floor both installers enforce', () => {
-    const floor = sh().match(/NODE_MAJOR_MIN=(\d+)/)?.[1];
-    expect(floor, 'install.sh must declare NODE_MAJOR_MIN').toBeDefined();
-    expect(ps1(), 'install.ps1 must declare the same floor').toContain(`$NodeMajorMin = ${floor}`);
+    const major = sh().match(/NODE_MAJOR_MIN=(\d+)/)?.[1];
+    const minor = sh().match(/NODE_MINOR_MIN=(\d+)/)?.[1];
+    const patch = sh().match(/NODE_PATCH_MIN=(\d+)/)?.[1];
+    expect(major, 'install.sh must declare NODE_MAJOR_MIN').toBeDefined();
+    expect(minor, 'install.sh must declare NODE_MINOR_MIN').toBeDefined();
+    expect(patch, 'install.sh must declare NODE_PATCH_MIN').toBeDefined();
+    const floor = `${major}.${minor}.${patch}`;
+    expect(ps1(), 'install.ps1 must declare the same floor').toContain(`$NodeMajorMin = ${major}`);
+    expect(ps1(), 'install.ps1 must declare the same floor').toContain(`$NodeMinorMin = ${minor}`);
+    expect(ps1(), 'install.ps1 must declare the same floor').toContain(`$NodePatchMin = ${patch}`);
     const row = rows().find(([n]) => /node/i.test(n));
     expect(row![0], 'the table states a floor the installers do not enforce').toContain(floor!);
   });

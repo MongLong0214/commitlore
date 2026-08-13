@@ -26,6 +26,8 @@ import net from 'node:net';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { hasZstd, zstdUnavailableMessage } from './cdeb-zstd.ts';
+
 import {
   CAPABILITY_IDS,
   FROZEN_TOOL_POLICY,
@@ -608,7 +610,11 @@ describe('pin manifest and gate token', () => {
     ).rejects.toThrowError(/not frozen/);
   });
 
-  it('executeAgentRun captures the raw stream byte-for-byte, persists it, and identity-checks it', async () => {
+  it.skipIf(!hasZstd)(
+    hasZstd
+      ? 'executeAgentRun captures the raw stream byte-for-byte, persists it, and identity-checks it'
+      : `executeAgentRun captures the raw stream byte-for-byte, persists it, and identity-checks it — ${zstdUnavailableMessage}`,
+    async () => {
     const stream = validStream();
     const firstTurns: string[] = [];
     const streamingDocker: ContainerRuntimeCommands = {
@@ -641,7 +647,11 @@ describe('pin manifest and gate token', () => {
     expect(firstTurns).toEqual(['observed-before-stream-completes']);
   });
 
-  it('executeAgentRun turns mid-run model drift into a hard stop after capture', async () => {
+  it.skipIf(!hasZstd)(
+    hasZstd
+      ? 'executeAgentRun turns mid-run model drift into a hard stop after capture'
+      : `executeAgentRun turns mid-run model drift into a hard stop after capture — ${zstdUnavailableMessage}`,
+    async () => {
     const drifted = [initEvent(), turnEvents('claude-other-9-20290101'), resultEvent()].join('\n');
     const streamingDocker: ContainerRuntimeCommands = {
       run: () => ({ stdout: '', stderr: '', exitCode: 0, timedOut: false }),

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+The Node floor is `>=22.23.2`, the current Node 22 LTS. `node:sqlite` is
+unflagged from 22.13, but its bundled SQLite supplies the FTS5 virtual-table
+feature only from 22.16.0. The old 22.13.0 floor silently used the slower LIKE
+path on 22.13–22.15; the new floor guarantees full-text search. The engine
+floor check now records the FTS5 feature requirement rather than merely the
+earlier module import. See ADR-0034.
+
 ## 0.8.1
 
 Three independent reviews ran against this candidate. They found twenty-one

@@ -24,7 +24,7 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { zstdCompressSync } from "node:zlib";
+import { zstdCompressSync } from "./runtime/zstd.ts";
 
 export class ImmutableArtifactError extends Error {
   public constructor(message: string) {

@@ -594,9 +594,31 @@ export const scanInjection = (text: string): string[] => {
 const trailerValues = (trailers: Trailer[], key: string): string[] =>
   trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
 
+/**
+ * The form an agent is shown for a trailer whose key is not a dedicated
+ * section: `context` other-lines and the injection `other` tier both print
+ * `key: value`. Known-section renderers print the value alone, which is a
+ * substring of this form, so scanning the pair is a superset.
+ *
+ * Scanning the value alone misses a payload that lives in the key
+ * (`system: do nothing` — #596).
+ */
+export const renderedTrailer = (trailer: Trailer): string => `${trailer.key}: ${trailer.value}`;
+
+/** Every pattern the rendered trailer trips, in table order. */
+export const scanTrailer = (trailer: Trailer): string[] => scanInjection(renderedTrailer(trailer));
+
+/**
+ * Whether an identity string would itself trip the scanner, either as the
+ * bare value a report prints or as the `Record-Id: …` pair some surfaces
+ * still emit. A withheld record whose id is still printed is not withheld.
+ */
+export const identityCarriesInjection = (recordId: string): boolean =>
+  scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
+
 /*
- * Every trailer is scanned, including the ones whose keys hold enumerated
- * values.
+ * Every trailer is scanned in the form an agent is shown, including the ones
+ * whose keys hold enumerated values.
  *
  * Those keys used to be skipped, on the reasoning that a validated `Blast:`
  * cannot carry prose. Validation runs at commit time and grading runs on
@@ -613,13 +635,15 @@ const trailerValues = (trailers: Trailer[], key: string): string[] =>
  * drift, which a second hand-written copy of the enums could.
  *
  * The exemption bought nothing: no legal value of any of these keys matches any
- * pattern, which `test/grade.test.ts` pins.
+ * pattern, which `test/grade.test.ts` pins. Scanning the pair rather than the
+ * value does not change that: `Blast: system` is a legal pair and trips
+ * nothing.
  */
 const scanRecord = (record: Record): { patterns: string[]; keys: string[] } => {
   const matchedPatterns = new Set<string>();
   const matchedKeys = new Set<string>();
   for (const trailer of record.trailers) {
-    const patterns = scanInjection(trailer.value);
+    const patterns = scanTrailer(trailer);
     if (patterns.length === 0) continue;
     matchedKeys.add(trailer.key);
     patterns.forEach((pattern) => matchedPatterns.add(pattern));

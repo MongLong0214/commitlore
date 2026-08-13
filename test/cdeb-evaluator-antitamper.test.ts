@@ -25,7 +25,9 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, expect, it } from 'vitest';
+
+import { describeZstd as describe } from './cdeb-zstd.ts';
 
 import { ingestFinalTree } from '../bench/cdeb/evaluator/ingest.ts';
 import {

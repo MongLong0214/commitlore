@@ -18,7 +18,7 @@ import { closeSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, u
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { TextDecoder } from "node:util";
-import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { zstdCompressSync, zstdDecompressSync } from "./zstd.ts";
 
 export interface TokenUsage {
   readonly input_tokens: number;

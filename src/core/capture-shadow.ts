@@ -194,7 +194,7 @@ const verificationHistory = (records: readonly HistoricalRecord[]): CaptureVerif
     const tuple = captureCanonicalTuple(state.resolvedTrailers);
     if (tuple !== '') activeCanonicalTuples.add(tuple);
   }
-  return { recordIds, activeCanonicalTuples };
+  return { recordIds, activeCanonicalTuples, incomplete: false };
 };
 
 /** The ordinary verifier sees only records made before the commit being replayed. */

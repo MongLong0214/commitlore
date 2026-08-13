@@ -8,7 +8,7 @@
  * the evaluation instant — the one place `new Date()` is legitimate, and only
  * as the default for `--at`.
  */
-import { scanInjection } from '../core/grade.js';
+import { identityCarriesInjection, scanInjection, scanTrailer } from '../core/grade.js';
 import { execGit } from '../core/git.js';
 import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
 import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
@@ -134,18 +134,29 @@ const oldestFirst = (records) => [
  * to be stale, which is the one state nobody is watching.
  *
  * The record still appears: what is stale is the operator's business, and
- * hiding it would trade one silence for another. Its *values* do not. The keys
- * are kept because a key is a closed vocabulary and cannot carry prose.
+ * hiding it would trade one silence for another. Its *values* do not. Keys are
+ * kept because a listed key without its value cannot reconstruct the pair the
+ * scanner matched; identity is not a key, and `foldLifecycle` strips
+ * `Record-Id` out of `resolvedTrailers` before this scan, so a payload that
+ * lives only in the id has to be scanned — and redacted — on its own (#596).
  */
 const withheldIfInjection = (record) => {
+    const identityHits = identityCarriesInjection(record.recordId)
+        ? [...new Set([...scanInjection(record.recordId), ...scanInjection(`Record-Id: ${record.recordId}`)])]
+        : [];
     const matched = [
-        ...new Set(record.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value))),
+        ...new Set([
+            ...record.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
+            ...identityHits,
+        ]),
     ];
     if (matched.length === 0)
         return record;
     const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(', ')}]`;
     return {
         ...record,
+        // A withheld record whose id is still printed is not withheld.
+        recordId: identityHits.length > 0 ? withheld : record.recordId,
         resolvedTrailers: record.resolvedTrailers.map((trailer) => ({
             key: trailer.key,
             value: withheld,

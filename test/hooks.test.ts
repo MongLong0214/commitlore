@@ -1286,6 +1286,9 @@ describe('validate — exit codes through the built binary', () => {
     const result = runCli(PACKAGE_ROOT, ['validate', '--json'], {}, 'Subject\n\nBlast: wide\n');
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout)).toEqual({
+      // The count of messages read. Without it an empty range is
+      // indistinguishable from a clean one, so the gate requires it (r-4f8d13).
+      examined: 1,
       checks: [
         { class: 'shape', status: 'failed' },
         { class: 'reference', status: 'not-checked', reason: 'no repository' },

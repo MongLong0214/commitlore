@@ -2,12 +2,20 @@
 /**
  * Fails when a dependency demands a newer Node than this package promises.
  *
- * ADR-0002 sets the floor at Node 20. A dependency that requires 22 makes that
- * promise false for every user on the supported floor -- and the failure does
+ * The floor is whatever `engines.node` in package.json says. This script
+ * reads that field rather than repeating it, so the number cannot drift
+ * out of a comment. A dependency that requires more than the floor makes
+ * the package's promise false for every user on it -- and the failure does
  * not show up locally, because the person adding the dependency is usually on
  * a newer runtime than the floor they are breaking. It showed up here as two
  * test workers dying in CI with no explanation, on a module that had already
  * been reviewed and its issue closed.
+ *
+ * Declared ranges still cannot see a bare `node:` builtin. The product's
+ * index imports `node:sqlite` and requires its bundled FTS5 support, which
+ * begins at 22.16.0. A 22.12.0 floor shipped because this script never looked
+ * at src/. It does now: every `node:` specifier under src/ is checked against
+ * the version that provides the surface this product needs.
  *
  * npm prints EBADENGINE as a warning and installs anyway, so the signal exists
  * but does not stop anything. This turns it into a failure.
@@ -21,7 +29,7 @@ import { join, resolve } from 'node:path';
 const REPO_ROOT = resolve(new URL('..', import.meta.url).pathname);
 const NODE_MODULES = join(REPO_ROOT, 'node_modules');
 
-import { rangeMinimum, admits } from './engine-floor.mjs';
+import { rangeMinimum, admits, gatedBuiltinOffenders, scanNodeBuiltins } from './engine-floor.mjs';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -63,4 +71,29 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
+const walkTs = (dir, acc = []) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walkTs(path, acc);
+    else if (entry.isFile() && entry.name.endsWith('.ts')) acc.push(readFileSync(path, 'utf8'));
+  }
+  return acc;
+};
+
+const srcRoot = join(REPO_ROOT, 'src');
+const imported = existsSync(srcRoot) ? scanNodeBuiltins(walkTs(srcRoot)) : [];
+const builtinOffenders = gatedBuiltinOffenders(floor, imported);
+if (builtinOffenders.length > 0) {
+  console.error(
+    `ERROR: src/ imports ${builtinOffenders.length} node: builtin(s) that are not unflagged at Node ${floorText} (${declared}):`,
+  );
+  for (const { specifier, needed } of builtinOffenders) {
+    console.error(`  → ${specifier} is unflagged from ${needed.join('.')}`);
+  }
+  console.error('  A dependency range cannot see a bare node: builtin. This is the check that can.');
+  console.error('  Raise the floor in an ADR that supersedes the current one, or stop importing the builtin.');
+  process.exit(1);
+}
+
 console.log(`all ${directDeps.length} direct dependencies support Node ${floorText} (${declared})`);
+console.log(`all imported node: builtins are unflagged at Node ${floorText}`);

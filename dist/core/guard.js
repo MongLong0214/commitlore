@@ -76,7 +76,8 @@
  * All three are the honest limit of lexical matching, and the reason `guard`
  * warns rather than blocks.
  */
-import { BLOCKED_RECORD_WITHHELD, normalizeForMatch } from './grade.js';
+import { BLOCKED_RECORD_WITHHELD, identityCarriesInjection, normalizeForMatch, scanInjection, } from './grade.js';
+import { RECORD_ID_RE } from './types.js';
 import { splitRuledOut } from './trailers.js';
 import { RULED_OUT_KEY, runQuery, valuesOf, } from './query.js';
 /**
@@ -84,19 +85,30 @@ import { RULED_OUT_KEY, runQuery, valuesOf, } from './query.js';
  * every output surface receives a shape that cannot quote it accidentally.
  */
 export const renderGuardMatch = (match) => {
-    const identity = {
-        recordId: match.recordId ?? null,
-        sha: match.sha,
-        score: match.score,
-        signals: [...match.signals],
-    };
     switch (match.trust) {
-        case 'blocked':
-            return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+        case 'blocked': {
+            const rawId = match.recordId ?? null;
+            const identityUnsafe = rawId !== null && (!RECORD_ID_RE.test(rawId) || identityCarriesInjection(rawId));
+            return {
+                recordId: identityUnsafe ? null : rawId,
+                sha: match.sha,
+                score: match.score,
+                signals: match.signals.filter((signal) => {
+                    if (identityUnsafe && rawId !== null && signal.includes(rawId))
+                        return false;
+                    return scanInjection(signal).length === 0;
+                }),
+                trust: match.trust,
+                withheld: BLOCKED_RECORD_WITHHELD,
+            };
+        }
         case 'claim':
         case 'directive':
             return {
-                ...identity,
+                recordId: match.recordId ?? null,
+                sha: match.sha,
+                score: match.score,
+                signals: [...match.signals],
                 trust: match.trust,
                 alternative: match.alternative,
                 reason: match.reason,

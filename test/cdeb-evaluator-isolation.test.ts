@@ -19,7 +19,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, expect, it } from 'vitest';
+
+import { describeZstd as describe } from './cdeb-zstd.ts';
 
 import { HOST_SECRETS_NEVER_PASSED, hermeticEnv } from '../bench/cdeb/evaluator/env.ts';
 import { ingestFinalTree } from '../bench/cdeb/evaluator/ingest.ts';

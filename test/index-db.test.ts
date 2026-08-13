@@ -409,6 +409,10 @@ describe('index-db: --no-index fallback returns identical rows', () => {
     const handle = openIndex({ cwd: dir });
     try {
       updateIndex(handle);
+      // The declared floor is above the Node release that first bundles FTS5,
+      // so this is a product guarantee rather than a property of whichever
+      // Node happened to run the suite (#593). The sibling case below still
+      // pins the LIKE path deliberately.
       expect(handle.fts).toBe(true);
       expectFallbackAgrees(handle, dir, [...QUERY_MATRIX, ...withShaQueries(dir)]);
     } finally {

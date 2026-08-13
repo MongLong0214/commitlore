@@ -40,12 +40,13 @@ set -eu
 REPO="MongLong0214/commitlore"
 SOURCE_URL="${COMMITLORE_INSTALL_SOURCE:-https://github.com/$REPO.git}"
 NODE_MAJOR_MIN=22
-# Two requirements meet here. `node:sqlite`, which the index needs, does not
-# exist before 22.5; `commander`, a direct dependency, needs 22.12. The floor is
-# the higher of the two, and `engines.node` says the same. Checking the major
-# alone let everything below it install cleanly and then fail, which reads as
-# "no records" rather than "your Node is too old".
-NODE_MINOR_MIN=12
+# The index needs FTS5 as well as the `node:sqlite` module. The module is
+# unflagged from 22.13, but bundled SQLite exposes FTS5 only from 22.16. The
+# package tracks the current stable Node 22 LTS, 22.23.2, which guarantees both
+# requirements; `engines.node` says the same.
+NODE_MINOR_MIN=23
+NODE_PATCH_MIN=2
+NODE_FLOOR="$NODE_MAJOR_MIN.$NODE_MINOR_MIN.$NODE_PATCH_MIN"
 
 log() { printf 'commitlore-install: %s\n' "$1"; }
 die() {
@@ -354,7 +355,7 @@ verify_legacy_smoke() {
 # with what to do about it, and nothing is installed.
 
 node_bin="$(command -v node 2>/dev/null || true)"
-[ -n "$node_bin" ] || die "Node.js $NODE_MAJOR_MIN or newer is required and no \"node\" was found on PATH. Install Node.js $NODE_MAJOR_MIN+ (https://nodejs.org), then run this again. Nothing was installed." 1
+[ -n "$node_bin" ] || die "Node.js $NODE_FLOOR or newer is required and no \"node\" was found on PATH. Install Node.js $NODE_FLOOR+ (https://nodejs.org), then run this again. Nothing was installed." 1
 
 node_version="$("$node_bin" --version 2>/dev/null || true)"
 case "$node_version" in
@@ -363,12 +364,14 @@ case "$node_version" in
 esac
 node_major="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f1)"
 node_minor="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f2)"
+node_patch="$(printf '%s' "$node_version" | sed 's/^v//' | cut -d. -f3)"
 case "$node_minor" in ''|*[!0-9]*) node_minor=0 ;; esac
-if [ "$node_major" -eq "$NODE_MAJOR_MIN" ] && [ "$node_minor" -lt "$NODE_MINOR_MIN" ]; then
-  die "Node.js $node_version is too old: this release needs Node $NODE_MAJOR_MIN.$NODE_MINOR_MIN or newer (node:sqlite for the index, and a direct dependency). Upgrade Node.js, then run this again. Nothing was installed." 1
+case "$node_patch" in ''|*[!0-9]*) node_patch=0 ;; esac
+if [ "$node_major" -eq "$NODE_MAJOR_MIN" ] && { [ "$node_minor" -lt "$NODE_MINOR_MIN" ] || { [ "$node_minor" -eq "$NODE_MINOR_MIN" ] && [ "$node_patch" -lt "$NODE_PATCH_MIN" ]; }; }; then
+  die "Node.js $node_version is too old: this release needs Node $NODE_FLOOR or newer (node:sqlite with FTS5 for the index). Upgrade Node.js, then run this again. Nothing was installed." 1
 fi
 if [ "$node_major" -lt "$NODE_MAJOR_MIN" ]; then
-  die "Node.js $NODE_MAJOR_MIN or newer is required; this machine has $node_version. Upgrade Node.js, then run this again. Nothing was installed." 1
+  die "Node.js $NODE_FLOOR or newer is required; this machine has $node_version. Upgrade Node.js, then run this again. Nothing was installed." 1
 fi
 
 # Run it rather than only look for it: a git that cannot execute is as useless

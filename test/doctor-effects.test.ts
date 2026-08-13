@@ -20,6 +20,7 @@ import { checkHistoryDepth } from '../src/commands/doctor/checks/history-history
 import { checkSquashConservation } from '../src/commands/doctor/checks/history-squash-conservation.js';
 import { checkIndex } from '../src/commands/doctor/checks/index-index-health.js';
 import { checkRuntime } from '../src/commands/doctor/checks/runtime-cli-runtime.js';
+import { checkInstallationIntegrity } from '../src/commands/doctor/checks/runtime-installation-integrity.js';
 import { checkGit } from '../src/commands/doctor/checks/runtime-git-trailers.js';
 import { checkPush } from '../src/commands/doctor/checks/transport-notes-push.js';
 import { checkRefspec } from '../src/commands/doctor/checks/transport-notes-refspec.js';
@@ -80,6 +81,13 @@ describe('doctor check effects', () => {
 
     expect(row.status).toBe('fail');
     expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  it('runs installation-integrity against the running installation', () => {
+    // This check reads PACKAGE_ROOT through readInstalledFile; there is no
+    // injected filesystem to point at a missing tree. The missing-file fail
+    // is asserted by spawning a copied install in doctor.test.ts.
+    expect(checkInstallationIntegrity(context()).status).toBe('ok');
   });
 
   it('runs notes-refspec without a fixture repository', () => {

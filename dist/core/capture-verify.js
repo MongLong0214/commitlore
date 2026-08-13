@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { verifyDraft } from './harvest-verify.js';
 import { resolvePolicy } from './capture-policy.js';
 const PROVENANCE_KEY = 'Provenance';
-import { deletePending, readPending, storeVerification, } from './pending.js';
+import { deletePending, isUnreadablePendingFile, readPending, storeVerification, } from './pending.js';
 import { runQuery } from './query.js';
 import { notesAvailability } from './notes.js';
 // ---------------------------------------------------------------------------
@@ -121,7 +121,11 @@ export const loadCaptureVerificationHistory = (cwd) => {
                 .join('|');
             activeCanonicalTuples.add(tuple);
         }
-        return { recordIds, activeCanonicalTuples };
+        return {
+            recordIds,
+            activeCanonicalTuples,
+            incomplete: queryResult.shallow || queryResult.unreadCommits > 0,
+        };
     }
     catch {
         return null;
@@ -339,12 +343,14 @@ export const verifyCaptureRecords = (opts) => {
             accepted,
             rejected,
             validation_result: validationResult,
-            incomplete: false,
+            incomplete: history.incomplete,
             overlap_check: 'canonical_exact_only',
         };
         return settle(result);
     }
-    catch {
+    catch (error) {
+        if (isUnreadablePendingFile(error))
+            throw error;
         // Never throws — return empty on any unhandled error.
         //
         // `incomplete` is true because that is what it means: nothing here

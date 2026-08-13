@@ -756,7 +756,12 @@ export const runValidate = (input = {}) => {
     if (input.json === true) {
         return {
             code: failed ? 1 : 0,
-            stdout: `${JSON.stringify({ checks, violations, secrets })}\n`,
+            // `examined` is how many messages were actually read. Without it a
+            // report of an empty range is indistinguishable from a clean one — both
+            // are `ok`/`ok` with no violations — so a gate reading this JSON can
+            // report success having checked nothing (the shape #542 was about, one
+            // level along).
+            stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}\n`,
             stderr: warningText,
             violations,
             secrets,
@@ -797,7 +802,7 @@ export const register = (program) => {
         .option('-c, --commit <sha>', 'validate the message of one commit')
         .option('-r, --range <a..b>', 'validate every commit message in a range')
         .option('--json', 'emit violations as JSON for the repair loop')
-        .addHelpText('after', '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10).')
+        .addHelpText('after', '\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC §10),\n3 this installation is missing a file it ships, so nothing was examined.')
         .action((flags) => {
         const result = runValidate({
             ...(flags.messageFile === undefined ? {} : { messageFile: flags.messageFile }),

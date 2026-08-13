@@ -53,6 +53,8 @@ export interface CaptureVerificationHistory {
     recordIds: Set<string>;
     /** Canonical tuples of active records, which are the only duplicate content. */
     activeCanonicalTuples: Set<string>;
+    /** Whether the history scan could not cover the whole repository. */
+    incomplete: boolean;
 }
 /**
  * Canonical identity tuple for de-duplication: lowercased key + value, no scope

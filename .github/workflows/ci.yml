@@ -14,10 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor this package promises (ADR-0010) and the current Active LTS.
-        # Running only the floor misses breakage on newer runtimes; running only
-        # the newest makes the floor a claim nobody checks.
-        node: [22, 24]
+        # The floor this package promises (`engines.node`) and the current
+        # Active LTS. Running only the floor misses breakage on newer runtimes;
+        # running only the newest makes the floor a claim nobody checks.
+        #
+        # The floor is pinned exactly. `22` asks setup-node for the newest 22.x
+        # — 22.23.2 at the time of writing — so a declared floor must name the
+        # exact release CI executes. The installers reject 22.23.1 and accept
+        # 22.23.2 in `test/install-script.test.ts`; this job exercises both.
+        node: ['22.23.2', 24]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -206,7 +211,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
 
@@ -249,7 +254,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - name: Report git version
@@ -295,7 +300,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -355,7 +360,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -408,7 +413,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -532,7 +537,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: '22.23.2'
 
       - name: Tag this checkout so the installer has a pinned source
         shell: bash

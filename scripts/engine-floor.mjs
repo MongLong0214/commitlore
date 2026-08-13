@@ -42,17 +42,91 @@ export const rangeMinimum = (range) => {
  * admit 22.5.0, and reading only the major said it did.
  */
 export const admits = (range, version) => {
-  const major = version[0];
   for (const clause of range.split('||').map((s) => s.trim())) {
-    if (/^\*$/.test(clause)) return true;
+    if (/^\*$/.test(clause) || /^x$/i.test(clause)) return true;
+
     const gte = clause.match(/^>=\s*(\d[\d.]*)/);
     if (gte) {
       const bound = parseVersion(gte[1]);
       if (bound !== null && compare(version, bound) >= 0) return true;
       continue;
     }
-    const exact = clause.match(/^\^?~?(\d+)(?:\.[\dx*]+)*$/);
-    if (exact && Number(exact[1]) === major) return true;
+
+    // `^`, `~`, and a bare version each denote a window with a lower bound and
+    // an upper one. Reading only the major treated every window as "any
+    // release of this major", so `^22.13.0` admitted 22.12.0 — the same defect
+    // the `>=` branch above was fixed for, still alive in this branch. Both
+    // ends are compared now.
+    const window = clause.match(/^([\^~]?)(\d+)(?:\.(\d+|[x*]))?(?:\.(\d+|[x*]))?$/);
+    if (window === null) continue;
+    const [, operator, rawMajor, rawMinor, rawPatch] = window;
+    const wild = (part) => part === undefined || part === 'x' || part === 'X' || part === '*';
+    const major = Number(rawMajor);
+    const minor = wild(rawMinor) ? 0 : Number(rawMinor);
+    const patch = wild(rawPatch) ? 0 : Number(rawPatch);
+    const lower = [major, minor, patch];
+    if (compare(version, lower) < 0) continue;
+
+    // Where the window ends: `^` allows the rest of the major, `~` the rest of
+    // the minor, and a bare version is bounded by whatever it left unstated —
+    // `22` is all of 22, `22.13` is all of 22.13, `22.13.0` is only itself.
+    let upper;
+    if (operator === '^') upper = [major + 1, 0, 0];
+    else if (operator === '~') upper = [major, minor + 1, 0];
+    else if (wild(rawMinor)) upper = [major + 1, 0, 0];
+    else if (wild(rawPatch)) upper = [major, minor + 1, 0];
+    else upper = [major, minor, patch + 1];
+    if (compare(version, upper) < 0) return true;
   }
   return false;
+};
+
+/**
+ * Built-ins and bundled capabilities that the product needs, expressed as the
+ * lowest Node release that provides the complete required surface.
+ *
+ * `check-engines.mjs` used to read only declared `engines.node` ranges. A
+ * bare `node:` import has no range, so the product's own storage layer
+ * (`node:sqlite`, whose FTS5 surface is complete at 22.16.0) sat below a
+ * 22.12.0 floor and
+ * nobody's check could see it. This table is that check.
+ *
+ * A specifier not in this table is treated as unflagged at 22.0. Add an
+ * entry when src/ starts importing a builtin or using a capability that the
+ * current floor lacks. Do not put bench-only APIs here —
+ * `zlib.zstdCompressSync` is 22.15.0 and lives only in bench/cdeb.
+ */
+export const UNFLAGGED_SINCE = Object.freeze({
+  // The module is unflagged at 22.13.0, but the index's FTS5 virtual table
+  // works only from 22.16.0. This table records what this code needs, not the
+  // earlier version from which a narrower import happens to resolve.
+  'node:sqlite': Object.freeze([22, 16, 0]),
+});
+
+const NODE_SPECIFIER =
+  /(?:from|import\(|(?:require|createRequire\([^;]*?\))\()\s*['"](node:[^'"]+)['"]/g;
+
+/** Every `node:` specifier a list of source texts mentions. */
+export const scanNodeBuiltins = (sources) => {
+  const found = new Set();
+  for (const source of sources) {
+    for (const match of source.matchAll(NODE_SPECIFIER)) found.add(match[1]);
+  }
+  return [...found].sort();
+};
+
+/**
+ * Specifiers whose required version is newer than `floor`. Empty when the
+ * floor covers every gated builtin/capability in `specifiers`.
+ */
+export const gatedBuiltinOffenders = (floor, specifiers) => {
+  const offenders = [];
+  for (const specifier of specifiers) {
+    const needed = UNFLAGGED_SINCE[specifier];
+    if (needed === undefined) continue;
+    if (compare(floor, needed) < 0) {
+      offenders.push({ specifier, needed: [...needed] });
+    }
+  }
+  return offenders;
 };

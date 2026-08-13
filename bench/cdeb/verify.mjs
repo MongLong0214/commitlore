@@ -29,7 +29,16 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { zstdDecompressSync } from "node:zlib";
+import * as zlib from "node:zlib";
+
+const zstdDecompressSync = (bytes) => {
+  if (typeof zlib.zstdDecompressSync !== "function") {
+    throw new Error(
+      "zlib.zstdDecompressSync needs Node 22.15.0 or newer; the research harness does not raise the package floor",
+    );
+  }
+  return zlib.zstdDecompressSync(bytes);
+};
 
 // `ajv`'s default export ships the draft-07 meta-schema only; these schemas
 // declare draft 2020-12, which lives in its own entry point.

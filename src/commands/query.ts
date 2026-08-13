@@ -89,11 +89,15 @@ export const withholdBlocked = (result: QueryResult): QueryResult => {
       recordId: _unsafeRecordId,
       provenanceValue: _unsafeProvenanceValue,
       expiresAt: _unsafeExpiresAt,
+      paths: _unsafePaths,
       ...safeRecord
     } = record;
 
     return {
       ...safeRecord,
+      // Filenames are attacker-controlled. A withheld record whose paths are
+      // still printed is not withheld (#596).
+      paths: [],
       ...(recordId === undefined ? {} : { recordId }),
       ...(provenanceValue === undefined ? {} : { provenanceValue }),
       withheldTrailerKeys: [

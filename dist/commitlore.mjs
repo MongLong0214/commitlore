@@ -12015,6 +12015,26 @@ var REJECTION_MARKERS = [
   "\uBABB \uC4F4\uB2E4",
   "\uC548 \uC4F4\uB2E4"
 ];
+var PAST_OUTCOME_PHRASES = [
+  "did not work",
+  "didn't work",
+  "did not help",
+  "didn't help",
+  "rolled back",
+  "regressed",
+  "made things worse",
+  "made it worse",
+  "made them worse"
+];
+var PAST_OUTCOME_PATTERNS = [
+  /\btried\b.{0,200}\b(higher|slower|worse) than\b/,
+  /\btried\b.{0,200}\bmade\b.{0,80}\bworse\b/,
+  /\bmade \w+( \w+){0,4} worse\b/,
+  /\bwhen we (used|tried)\b.{0,200}\b(higher|slower|worse) than\b/,
+  /\b(higher|slower|worse) than (it was|they were|before|without)\b/,
+  /\bcaused .{0,80}\bto (spike|climb|regress|worsen)\b/,
+  /\bcaused more \b/
+];
 var NEIGHBOUR_LINES = 1;
 var DETAIL_LIMIT = 80;
 var SPACE = /\s/;
@@ -12081,11 +12101,12 @@ var neighbourhood = (source, start, length) => {
   return source.raw.slice(from, to);
 };
 var forMarkers = (text) => normalize(text).toLowerCase().replace(/[’‘]/g, "'");
+var hasOutcomeRejection = (window) => PAST_OUTCOME_PHRASES.some((phrase) => window.includes(phrase)) || PAST_OUTCOME_PATTERNS.some((pattern) => pattern.test(window));
 var hasRejectionContext = (source, quote) => {
   const normalized = normalize(quote);
   return occurrences(source, normalized).some((at) => {
     const window = forMarkers(neighbourhood(source, at, normalized.length));
-    return REJECTION_MARKERS.some((marker) => window.includes(marker));
+    return REJECTION_MARKERS.some((marker) => window.includes(marker)) || hasOutcomeRejection(window);
   });
 };
 var brief = (text) => {
@@ -14651,11 +14672,14 @@ var scanInjection = (text) => {
   ).map((entry) => entry.id);
 };
 var trailerValues = (trailers, key) => trailers.filter((trailer) => trailer.key === key).map((trailer) => trailer.value);
+var renderedTrailer = (trailer) => `${trailer.key}: ${trailer.value}`;
+var scanTrailer = (trailer) => scanInjection(renderedTrailer(trailer));
+var identityCarriesInjection = (recordId) => scanInjection(recordId).length > 0 || scanInjection(`Record-Id: ${recordId}`).length > 0;
 var scanRecord = (record2) => {
   const matchedPatterns = /* @__PURE__ */ new Set();
   const matchedKeys = /* @__PURE__ */ new Set();
   for (const trailer of record2.trailers) {
-    const patterns = scanInjection(trailer.value);
+    const patterns = scanTrailer(trailer);
     if (patterns.length === 0) continue;
     matchedKeys.add(trailer.key);
     patterns.forEach((pattern) => matchedPatterns.add(pattern));
@@ -15266,19 +15290,29 @@ var valuesOf = (record2, key) => record2.trailers.filter((trailer) => trailer.ke
 
 // src/core/guard.ts
 var renderGuardMatch = (match) => {
-  const identity = {
-    recordId: match.recordId ?? null,
-    sha: match.sha,
-    score: match.score,
-    signals: [...match.signals]
-  };
   switch (match.trust) {
-    case "blocked":
-      return { ...identity, trust: match.trust, withheld: BLOCKED_RECORD_WITHHELD };
+    case "blocked": {
+      const rawId = match.recordId ?? null;
+      const identityUnsafe = rawId !== null && (!RECORD_ID_RE.test(rawId) || identityCarriesInjection(rawId));
+      return {
+        recordId: identityUnsafe ? null : rawId,
+        sha: match.sha,
+        score: match.score,
+        signals: match.signals.filter((signal) => {
+          if (identityUnsafe && rawId !== null && signal.includes(rawId)) return false;
+          return scanInjection(signal).length === 0;
+        }),
+        trust: match.trust,
+        withheld: BLOCKED_RECORD_WITHHELD
+      };
+    }
     case "claim":
     case "directive":
       return {
-        ...identity,
+        recordId: match.recordId ?? null,
+        sha: match.sha,
+        score: match.score,
+        signals: [...match.signals],
         trust: match.trust,
         alternative: match.alternative,
         reason: match.reason
@@ -15727,7 +15761,7 @@ var guard = (opts) => {
 
 // src/core/pending.ts
 import { randomBytes } from "node:crypto";
-import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, renameSync, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 var PendingFormatError = class extends Error {
   constructor(message) {
@@ -15822,6 +15856,8 @@ var createPending = (opts) => {
   return nonce;
 };
 var errorCode = (error2) => typeof error2 === "object" && error2 !== null && "code" in error2 && typeof error2.code === "string" ? error2.code : "unknown";
+var UNREADABLE_PENDING_FILE = "commitloreUnreadablePendingFile";
+var isUnreadablePendingFile = (error2) => error2 instanceof Error && error2[UNREADABLE_PENDING_FILE] === true;
 var listPendingNonces = (cwd) => {
   let dir;
   try {
@@ -15846,12 +15882,18 @@ var listPendingNonces = (cwd) => {
 var readPending = (nonce, opts) => {
   validateNonce(nonce);
   const filePath = pendingFilePath(nonce, opts.cwd);
-  if (!existsSync5(filePath)) return null;
   let content;
   try {
     content = readFileSync4(filePath, "utf8");
-  } catch {
-    return null;
+  } catch (error2) {
+    const code = errorCode(error2);
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    const unreadable = new Error(
+      `Could not read pending file for nonce ${nonce} at ${filePath} (${code})`
+    );
+    Object.defineProperty(unreadable, UNREADABLE_PENDING_FILE, { value: true });
+    unreadable.cause = error2;
+    throw unreadable;
   }
   let parsed;
   try {
@@ -16136,7 +16178,11 @@ var loadCaptureVerificationHistory = (cwd) => {
       ).map((t) => `${t.key.toLowerCase()}=${t.value.toLowerCase()}`).sort().join("|");
       activeCanonicalTuples.add(tuple);
     }
-    return { recordIds, activeCanonicalTuples };
+    return {
+      recordIds,
+      activeCanonicalTuples,
+      incomplete: queryResult.shallow || queryResult.unreadCommits > 0
+    };
   } catch {
     return null;
   }
@@ -16283,11 +16329,12 @@ var verifyCaptureRecords = (opts) => {
       accepted,
       rejected,
       validation_result: validationResult,
-      incomplete: false,
+      incomplete: history.incomplete,
       overlap_check: "canonical_exact_only"
     };
     return settle(result);
-  } catch {
+  } catch (error2) {
+    if (isUnreadablePendingFile(error2)) throw error2;
     const result = {
       accepted: [],
       rejected: [],
@@ -16595,7 +16642,7 @@ var verificationHistory = (records) => {
     const tuple = captureCanonicalTuple(state.resolvedTrailers);
     if (tuple !== "") activeCanonicalTuples.add(tuple);
   }
-  return { recordIds, activeCanonicalTuples };
+  return { recordIds, activeCanonicalTuples, incomplete: false };
 };
 var historiesBeforeCommit = (cwd) => {
   const records = readHistoricalRecords(cwd);
@@ -16886,7 +16933,7 @@ var seedTrustedAuthor = (cwd) => {
 };
 
 // src/core/pending-gc.ts
-import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
+import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync5, unlinkSync as unlinkSync2 } from "node:fs";
 import { resolve as resolve4 } from "node:path";
 var CONSUMED_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var UNSTAMPED_RETENTION_MS = 24 * 60 * 60 * 1e3;
@@ -16916,7 +16963,7 @@ var gcPending = (cwd) => {
   const removed = [];
   const kept = [];
   const dir = resolvePendingDir(cwd);
-  if (!existsSync6(dir)) return { removed, kept };
+  if (!existsSync5(dir)) return { removed, kept };
   let files;
   try {
     files = readdirSync2(dir).filter((f) => f.endsWith(".json"));
@@ -17319,14 +17366,14 @@ CommitLore-Version: 2.0.0
 
 // src/commands/init.ts
 import { createInterface } from "node:readline";
-import { existsSync as existsSync18 } from "node:fs";
+import { existsSync as existsSync17 } from "node:fs";
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync7, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -17352,7 +17399,7 @@ var success = (status, lines, changed) => ({
   changed
 });
 var load = (settingsPath) => {
-  if (!existsSync7(settingsPath)) return { settings: {}, existed: false };
+  if (!existsSync6(settingsPath)) return { settings: {}, existed: false };
   let raw;
   try {
     raw = readFileSync7(settingsPath, "utf8");
@@ -17865,7 +17912,7 @@ var checkInjectRuntime = (ctx) => {
 };
 
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
-import { existsSync as existsSync8, readFileSync as readFileSync9 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync9 } from "node:fs";
 import { resolve as resolve7 } from "node:path";
 
 // src/core/hook-target.ts
@@ -18148,7 +18195,7 @@ var checkHook = (ctx, runtime) => {
     ...describeRecordedHookTarget(target),
     ...override === void 0 || override === "" ? [] : [`COMMITLORE_BIN: ${override}`]
   ].join("; ");
-  if (!existsSync8(path2)) {
+  if (!existsSync7(path2)) {
     return check(
       id,
       category,
@@ -18254,7 +18301,7 @@ var checkHook = (ctx, runtime) => {
 };
 
 // src/commands/doctor/checks/capture-hook-runtime.ts
-import { existsSync as existsSync9, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync8, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join5, resolve as resolve8 } from "node:path";
 var checkHookRuntime = (ctx) => {
@@ -18285,7 +18332,7 @@ var checkHookRuntime = (ctx) => {
     );
   }
   const hook = resolve8(cwd, located.stdout.trim());
-  if (!existsSync9(hook)) {
+  if (!existsSync8(hook)) {
     return check(
       id,
       category,
@@ -18707,7 +18754,7 @@ var checkPendingBacklog = (ctx) => {
 // src/core/mcp-registration.ts
 import { randomBytes as randomBytes4 } from "node:crypto";
 import {
-  existsSync as existsSync10,
+  existsSync as existsSync9,
   lstatSync as lstatSync2,
   readFileSync as readFileSync10,
   renameSync as renameSync3,
@@ -18915,7 +18962,7 @@ var registerCommitloreMcpServer = (cwd) => {
   if (path2 === null) {
     return { ok: false, path: null, error: "no git repository found here \u2014 MCP registration needs a repository" };
   }
-  if (!existsSync10(path2)) {
+  if (!existsSync9(path2)) {
     try {
       writeAtomic2(path2, freshConfig());
       return { ok: true, path: path2, state: "created", changed: true };
@@ -19979,13 +20026,13 @@ var checkIndex = (ctx) => {
 };
 
 // src/commands/doctor/checks/runtime-cli-runtime.ts
-import { existsSync as existsSync11 } from "node:fs";
+import { existsSync as existsSync10 } from "node:fs";
 var checkRuntime = (ctx) => {
   const title = "cli runtime";
   const id = "cli-runtime";
   const category = "runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
-  const entry = candidates.find((path2) => existsSync11(path2));
+  const entry = candidates.find((path2) => existsSync10(path2));
   if (entry === void 0) {
     return check(
       id,
@@ -20064,6 +20111,65 @@ var checkRuntime = (ctx) => {
         entry,
         version: boundedExcerpt(run.stdout).firstLine,
         ...streamEvidence("stdout", run.stdout)
+      }
+    }
+  );
+};
+
+// src/commands/doctor/checks/runtime-installation-integrity.ts
+var SHIPPED_ASSETS = [
+  ["package.json"],
+  ["spec", "schema", "record.schema.json"],
+  ["spec", "SPEC.md"]
+];
+var relativeOf = (segments) => segments.join("/");
+var checkInstallationIntegrity = (_ctx) => {
+  const title = "installation integrity";
+  const id = "installation-integrity";
+  const category = "runtime";
+  const present2 = [];
+  const missing = [];
+  for (const segments of SHIPPED_ASSETS) {
+    try {
+      readInstalledFile(...segments);
+      present2.push(relativeOf(segments));
+    } catch (error2) {
+      if (!isMissingInstalledFile(error2)) throw error2;
+      const detail = error2 instanceof Error ? error2.message : String(error2);
+      missing.push({ relative: relativeOf(segments), detail });
+    }
+  }
+  const [first] = missing;
+  if (first !== void 0) {
+    return check(
+      id,
+      category,
+      title,
+      "fail",
+      first.detail,
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          missing: missing.map((entry) => entry.relative).join(", "),
+          present: present2.join(", ") || "none"
+        }
+      }
+    );
+  }
+  return check(
+    id,
+    category,
+    title,
+    "ok",
+    `${String(present2.length)} shipped files are present and readable`,
+    null,
+    false,
+    void 0,
+    {
+      evidence: {
+        files: present2.join(", ")
       }
     }
   );
@@ -20399,6 +20505,7 @@ var hookRuntimeOf = (ctx) => {
 var selectedHookRuntimeOf = (ctx) => ctx.selectedIds?.has("hook-runtime") === false ? void 0 : hookRuntimeOf(ctx);
 var CHECK_REGISTRY = [
   { id: "cli-runtime", title: "cli runtime", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
+  { id: "installation-integrity", title: "installation integrity", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkInstallationIntegrity(ctx) },
   { id: "notes-refspec", title: "notes fetch refspec", category: "transport", dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
   { id: "notes-push", title: "notes push", category: "transport", dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
   { id: "commit-msg-hook", title: "commit-msg hook", category: "capture", dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },
@@ -20485,7 +20592,7 @@ ${formatCheckReport(report, options)}`;
 };
 
 // src/commands/doctor/report.ts
-import { existsSync as existsSync12, readFileSync as readFileSync12 } from "node:fs";
+import { existsSync as existsSync11, readFileSync as readFileSync12 } from "node:fs";
 import { join as join8, resolve as resolve10, sep as sep2 } from "node:path";
 
 // src/commands/doctor/runner.ts
@@ -20598,7 +20705,7 @@ var deriveInstallSource = ({
   if (segments.includes("node_modules")) return "npm";
   try {
     const manifest = JSON.parse(readFileSync12(join8(packageRoot, "package.json"), "utf8"));
-    if (manifest.name === "commitlore" && existsSync12(join8(packageRoot, ".git"))) return "source";
+    if (manifest.name === "commitlore" && existsSync11(join8(packageRoot, ".git"))) return "source";
   } catch {
   }
   return "unknown";
@@ -20664,7 +20771,7 @@ var register5 = (program3) => {
 import { randomBytes as randomBytes8 } from "node:crypto";
 import {
   chmodSync as chmodSync4,
-  existsSync as existsSync16,
+  existsSync as existsSync15,
   mkdirSync as mkdirSync8,
   readFileSync as readFileSync16,
   realpathSync as realpathSync2,
@@ -20677,7 +20784,7 @@ import { join as join9, resolve as resolve14 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
-import { chmodSync, existsSync as existsSync13, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
+import { chmodSync, existsSync as existsSync12, mkdirSync as mkdirSync5, readFileSync as readFileSync13, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve11 } from "node:path";
 var POST_COMMIT_HOOK_MARKER = "# commitlore:post-commit:v1";
 var POST_COMMIT_HOOK_NAME = "post-commit";
@@ -20704,7 +20811,7 @@ var installPostCommitHook = (cwd = process.cwd()) => {
     return hookFailure(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync13(hookPath)) {
+    if (existsSync12(hookPath)) {
       const current = readFileSync13(hookPath, "utf8");
       if (!current.includes(POST_COMMIT_HOOK_MARKER)) {
         return hookFailure(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -20769,7 +20876,7 @@ var allRecordIdsPresent = (commitMessage, records) => {
 };
 var runPostCommitFinaliser = (cwd) => {
   const pendingDirPath = resolvePendingDir2(cwd);
-  if (!pendingDirPath || !existsSync13(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync12(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync3(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -20827,7 +20934,7 @@ var register6 = (program3) => {
 
 // src/hooks/pre-push.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync14, mkdirSync as mkdirSync6, readFileSync as readFileSync14, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync13, mkdirSync as mkdirSync6, readFileSync as readFileSync14, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 
 // src/core/sync.ts
@@ -20938,7 +21045,7 @@ var installPrePushHook = (cwd = process.cwd()) => {
     return hookFailure2(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync14(hookPath)) {
+    if (existsSync13(hookPath)) {
       const current = readFileSync14(hookPath, "utf8");
       if (!current.includes(PRE_PUSH_HOOK_MARKER)) {
         return hookFailure2(`${hookPath} is not a commitlore hook \u2014 left in place`);
@@ -20975,7 +21082,7 @@ var register7 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash6, randomBytes as randomBytes7 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync15, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync14, mkdirSync as mkdirSync7, readFileSync as readFileSync15, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
 import { resolve as resolve13 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -21009,7 +21116,7 @@ var recordsFromSquashMessage = (cwd, message) => {
 };
 var preserveSquashRecords = (messageFile, cwd = process.cwd()) => {
   const squashPath = squashMessagePath(cwd);
-  if (squashPath === null || !existsSync15(squashPath)) return false;
+  if (squashPath === null || !existsSync14(squashPath)) return false;
   const draft = readFileSync15(messageFile, "utf8");
   if (parseRecordBlocks(draft).some(isRecordBlock)) return false;
   const blocks = recordsFromSquashMessage(cwd, readFileSync15(squashPath, "utf8"));
@@ -21042,7 +21149,7 @@ var installPrepareCommitMsgHook = (cwd = process.cwd()) => {
     return hookFailure3(error2 instanceof Error ? error2.message : String(error2));
   }
   try {
-    if (existsSync15(path2)) {
+    if (existsSync14(path2)) {
       const current = readFileSync15(path2, "utf8");
       if (!current.includes(PREPARE_COMMIT_MSG_HOOK_MARKER)) {
         return hookFailure3(`${path2} is not a commitlore hook \u2014 left in place`);
@@ -21101,7 +21208,7 @@ var messageContainsRecordId = (message, records) => {
 };
 var applyCaptureRecord = (messageFile, cwd) => {
   const pendingDirPath = resolvePendingDir3(cwd);
-  if (!pendingDirPath || !existsSync15(pendingDirPath)) return;
+  if (!pendingDirPath || !existsSync14(pendingDirPath)) return;
   let files;
   try {
     files = readdirSync4(pendingDirPath).filter((f) => f.endsWith(".json")).sort();
@@ -21192,7 +21299,7 @@ var isExecutable = (path2) => {
   }
 };
 var readHookState = (hookPath) => {
-  if (!existsSync16(hookPath)) return "absent";
+  if (!existsSync15(hookPath)) return "absent";
   let contents;
   try {
     contents = readFileSync16(hookPath, "utf8");
@@ -21211,7 +21318,7 @@ var readHookStatus = (cwd = process.cwd()) => {
     hookPath,
     state: readHookState(hookPath),
     chainedPath,
-    chained: existsSync16(chainedPath),
+    chained: existsSync15(chainedPath),
     chainedExecutable: isExecutable(chainedPath),
     recordedTarget: readRecordedHookTarget(cwd)
   };
@@ -21308,7 +21415,7 @@ var CAPTURE_HOOKS = [
 var removeCaptureHook = (hooksDir, hook) => {
   const hookPath = join9(hooksDir, hook.name);
   const chainedPath = join9(hooksDir, hook.chainedName);
-  if (!existsSync16(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
+  if (!existsSync15(hookPath)) return [`no ${hook.name} hook to remove: ${hookPath}`];
   let contents;
   try {
     contents = readFileSync16(hookPath, "utf8");
@@ -21319,7 +21426,7 @@ var removeCaptureHook = (hooksDir, hook) => {
     return [`${hookPath} was not installed by commitlore \u2014 left in place`];
   }
   unlinkSync5(hookPath);
-  if (!existsSync16(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
+  if (!existsSync15(chainedPath)) return [`removed ${hook.name} hook: ${hookPath}`];
   renameSync7(chainedPath, hookPath);
   return [`removed ${hook.name} hook: ${hookPath}`, `restored the previous hook: ${hookPath}`];
 };
@@ -21403,7 +21510,7 @@ var register9 = (program3) => {
 };
 
 // src/core/agents-guidance.ts
-import { existsSync as existsSync17, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
 import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve15 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
@@ -21432,7 +21539,7 @@ var replaceFile = (path2, contents) => {
     renameSync8(temporary, path2);
   } catch (error2) {
     try {
-      if (existsSync17(temporary)) rmSync3(temporary, { force: true });
+      if (existsSync16(temporary)) rmSync3(temporary, { force: true });
     } catch {
     }
     throw error2;
@@ -21446,7 +21553,7 @@ var installAgentsGuidance = (cwd) => {
   } catch (error2) {
     return { state: "write-failed", path: path2, error: messageOf5(error2) };
   }
-  if (!existsSync17(path2)) {
+  if (!existsSync16(path2)) {
     try {
       writeFileSync12(path2, section2);
       return { state: "created", path: path2, error: null };
@@ -21873,7 +21980,7 @@ var resolveUnattendedChoice = async (options) => {
   if (options.unattended === true) return "enable";
   if (options.unattended === false) return "decline";
   const existing = capturePolicyPath(process.cwd());
-  if (existing !== null && existsSync18(existing)) return "no-answer";
+  if (existing !== null && existsSync17(existing)) return "no-answer";
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
       `Unattended capture authorises an agent host to prepare, verify and stage a record without asking.
@@ -22440,7 +22547,7 @@ var register14 = (program3) => {
 
 // src/commands/hermes.ts
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { copyFileSync, existsSync as existsSync19, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
+import { copyFileSync, existsSync as existsSync18, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
 import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve18 } from "node:path";
 
@@ -22665,10 +22772,10 @@ var commandExists = (command) => {
 };
 var backupPathFor = (configPath) => {
   const base = `${configPath}.commitlore-backup`;
-  if (!existsSync19(base)) return base;
+  if (!existsSync18(base)) return base;
   for (let index = 1; ; index += 1) {
     const candidate = `${base}.${index}`;
-    if (!existsSync19(candidate)) return candidate;
+    if (!existsSync18(candidate)) return candidate;
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
@@ -22717,7 +22824,7 @@ var runHermesInstall = (options = {}) => {
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join12(home, ".local", "share");
   const dataRoot = options.dataRoot ?? join12(dataHome, "commitlore");
   const skillsDir = options.skillsDir ?? installedPath("hermes", "skills");
-  const detected = options.detected ?? (existsSync19(dirname8(configPath)) || commandExists("hermes"));
+  const detected = options.detected ?? (existsSync18(dirname8(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
   if (!detected) {
@@ -22728,7 +22835,7 @@ var runHermesInstall = (options = {}) => {
       verified
     };
   }
-  if (!existsSync19(skillsDir)) {
+  if (!existsSync18(skillsDir)) {
     return {
       exitCode: 2,
       report: [`could not find the CommitLore Hermes skill bundle at ${skillsDir}`],
@@ -22737,7 +22844,7 @@ var runHermesInstall = (options = {}) => {
     };
   }
   const wrapperPath = options.wrapperPath ?? join12(home, ".local", "bin", "commitlore");
-  const before = existsSync19(configPath) ? readFileSync21(configPath, "utf8") : "";
+  const before = existsSync18(configPath) ? readFileSync21(configPath, "utf8") : "";
   const edit = addHermesConfig(before, {
     wrapperPath,
     skillsDir: resolve18(skillsDir),
@@ -22750,12 +22857,12 @@ var runHermesInstall = (options = {}) => {
   if (edit.added.length > 0) {
     try {
       mkdirSync10(dirname8(configPath), { recursive: true });
-      if (existsSync19(configPath)) {
+      if (existsSync18(configPath)) {
         const backup = backupPathFor(configPath);
         copyFileSync(configPath, backup);
         report.push(`backed up: ${configPath} -> ${backup}`);
       }
-      const mode = existsSync19(configPath) ? statSync7(configPath).mode : void 0;
+      const mode = existsSync18(configPath) ? statSync7(configPath).mode : void 0;
       atomicallyWrite(configPath, edit.contents, mode);
       report.push(`configured: ${edit.added.join(" and ")} in ${configPath}`);
     } catch (error2) {
@@ -32042,10 +32149,14 @@ var withholdBlocked = (result) => {
       recordId: _unsafeRecordId,
       provenanceValue: _unsafeProvenanceValue,
       expiresAt: _unsafeExpiresAt,
+      paths: _unsafePaths,
       ...safeRecord
     } = record2;
     return {
       ...safeRecord,
+      // Filenames are attacker-controlled. A withheld record whose paths are
+      // still printed is not withheld (#596).
+      paths: [],
       ...recordId === void 0 ? {} : { recordId },
       ...provenanceValue === void 0 ? {} : { provenanceValue },
       withheldTrailerKeys: [
@@ -32347,13 +32458,19 @@ var oldestFirst2 = (records) => [
   ...records.filter((record2) => record2.source === "notes")
 ];
 var withheldIfInjection = (record2) => {
+  const identityHits = identityCarriesInjection(record2.recordId) ? [.../* @__PURE__ */ new Set([...scanInjection(record2.recordId), ...scanInjection(`Record-Id: ${record2.recordId}`)])] : [];
   const matched = [
-    ...new Set(record2.resolvedTrailers.flatMap((trailer) => scanInjection(trailer.value)))
+    .../* @__PURE__ */ new Set([
+      ...record2.resolvedTrailers.flatMap((trailer) => scanTrailer(trailer)),
+      ...identityHits
+    ])
   ];
   if (matched.length === 0) return record2;
   const withheld = `[withheld: matched ${String(matched.length)} injection pattern(s): ${matched.join(", ")}]`;
   return {
     ...record2,
+    // A withheld record whose id is still printed is not withheld.
+    recordId: identityHits.length > 0 ? withheld : record2.recordId,
     resolvedTrailers: record2.resolvedTrailers.map((trailer) => ({
       key: trailer.key,
       value: withheld
@@ -33051,7 +33168,7 @@ var register20 = (program3) => {
 
 // src/core/codex-plugin.ts
 import { spawnSync as spawnSync5 } from "node:child_process";
-import { existsSync as existsSync20, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
+import { existsSync as existsSync19, mkdirSync as mkdirSync11, readFileSync as readFileSync23, rmSync as rmSync5, writeFileSync as writeFileSync17 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join14 } from "node:path";
 
@@ -33187,7 +33304,7 @@ var markerFor = (plugin) => ({
 });
 var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
-  if (!existsSync20(markerPath)) return null;
+  if (!existsSync19(markerPath)) return null;
   try {
     const parsed = JSON.parse(readFileSync23(markerPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
@@ -33941,7 +34058,12 @@ var runValidate = (input = {}) => {
   if (input.json === true) {
     return {
       code: failed ? 1 : 0,
-      stdout: `${JSON.stringify({ checks, violations, secrets })}
+      // `examined` is how many messages were actually read. Without it a
+      // report of an empty range is indistinguishable from a clean one — both
+      // are `ok`/`ok` with no violations — so a gate reading this JSON can
+      // report success having checked nothing (the shape #542 was about, one
+      // level along).
+      stdout: `${JSON.stringify({ examined: sources.length, checks, violations, secrets })}
 `,
       stderr: warningText,
       violations,
@@ -33978,7 +34100,7 @@ var runValidate = (input = {}) => {
 var register24 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
-    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710)."
+    "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
   ).action((flags) => {
     const result = runValidate({
       ...flags.messageFile === void 0 ? {} : { messageFile: flags.messageFile },
@@ -33994,7 +34116,7 @@ var register24 = (program3) => {
 
 // src/commands/uninstall.ts
 import { spawnSync as spawnSync6 } from "node:child_process";
-import { existsSync as existsSync21, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
+import { existsSync as existsSync20, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync19 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join15 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
@@ -34049,7 +34171,7 @@ var runUninstall = async (options = {}) => {
   const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
   const wrapper = join15(home, ".local", "bin", "commitlore");
-  if (existsSync21(wrapper)) {
+  if (existsSync20(wrapper)) {
     let contents;
     try {
       contents = readFileSync26(wrapper, "utf8");
@@ -34071,7 +34193,7 @@ var runUninstall = async (options = {}) => {
   let retainDataRoot = false;
   for (const config3 of AGENT_CONFIGS.filter(isCodexPluginConfig)) {
     const markerPath = codexPluginMarkerPath(config3, dataHome);
-    if (!existsSync21(markerPath)) continue;
+    if (!existsSync20(markerPath)) continue;
     if (readCodexPluginMarker(config3, dataHome) === null) {
       retainDataRoot = true;
       kept.push(markerPath);
@@ -34109,7 +34231,7 @@ var runUninstall = async (options = {}) => {
     removed.push(`${selector} (Codex plugin)`);
   }
   const dataRoot = join15(dataHome, "commitlore");
-  if (existsSync21(dataRoot)) {
+  if (existsSync20(dataRoot)) {
     if (retainDataRoot) {
       kept.push(dataRoot);
       report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
@@ -34155,7 +34277,7 @@ var runUninstall = async (options = {}) => {
     if (!isMcpAgentConfig(config3)) continue;
     if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
     const path2 = join15(home, ...config3.homeRelativePath);
-    if (!existsSync21(path2)) continue;
+    if (!existsSync20(path2)) continue;
     let contents;
     try {
       contents = readFileSync26(path2, "utf8");

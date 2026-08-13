@@ -6,7 +6,7 @@
  * no concurrent reader can observe a partial file.
  */
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execGit, execGitOrThrow } from './git.js';
 export class PendingFormatError extends Error {
@@ -149,6 +149,9 @@ export const createPending = (opts) => {
 const errorCode = (error) => typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
     ? error.code
     : 'unknown';
+const UNREADABLE_PENDING_FILE = 'commitloreUnreadablePendingFile';
+export const isUnreadablePendingFile = (error) => error instanceof Error &&
+    error[UNREADABLE_PENDING_FILE] === true;
 export const listPendingNonces = (cwd) => {
     // Resolving the path and reading it are different questions, and collapsing
     // them puts "this is not a repository" in the same bucket as "the directory
@@ -187,18 +190,23 @@ export const listPendingNonces = (cwd) => {
  * Reads a pending transaction by nonce.
  * Returns null if the file is absent.
  * Throws PendingFormatError for corrupt or unknown-version content.
+ * Throws a marked plain Error when the file exists but cannot be read.
  */
 export const readPending = (nonce, opts) => {
     validateNonce(nonce);
     const filePath = pendingFilePath(nonce, opts.cwd);
-    if (!existsSync(filePath))
-        return null;
     let content;
     try {
         content = readFileSync(filePath, 'utf8');
     }
-    catch {
-        return null;
+    catch (error) {
+        const code = errorCode(error);
+        if (code === 'ENOENT' || code === 'ENOTDIR')
+            return null;
+        const unreadable = new Error(`Could not read pending file for nonce ${nonce} at ${filePath} (${code})`);
+        Object.defineProperty(unreadable, UNREADABLE_PENDING_FILE, { value: true });
+        unreadable.cause = error;
+        throw unreadable;
     }
     let parsed;
     try {

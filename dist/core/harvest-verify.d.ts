@@ -63,8 +63,9 @@ export interface Sources {
  * queue worker" quote equally well, and only the second is a record.
  *
  * The table is deliberately short. Every phrase added here is a phrase that can
- * launder a mention into a rejection, and the cost of a missing marker (a true
- * `Ruled-out:` discarded) is one the protocol has already agreed to pay.
+ * launder a mention into a rejection. Missing *refusal* language is still a
+ * cost the protocol pays; missing a *measured outcome* is not — that was #585,
+ * and those forms live in the outcome layer below rather than in this list.
  *
  * Matched case-insensitively against the whitespace-collapsed neighbourhood of
  * the quote, with curly apostrophes folded to straight ones so that `won’t` and
