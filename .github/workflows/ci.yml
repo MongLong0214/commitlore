@@ -955,6 +955,31 @@ jobs:
             Write-Host $answer.Trim()
           }
           if (Test-Path -LiteralPath $selfErr) { Write-Host "selftest stderr: $("$(Get-Content -LiteralPath $selfErr -Raw)".Trim())" }
+
+          # The hand-drive above uses a redirected file; the probe uses a Node
+          # spawn with shell:true and a pipe. Reproduce that mechanism exactly,
+          # outside the probe, so the difference is attributable to the spawn
+          # rather than to anything else mcp-probe.ts does.
+          $nodeDriver = Join-Path $repo 'drive.cjs'
+          @'
+          const { spawn } = require('node:child_process');
+          const child = spawn(process.argv[2], [], { stdio: ['pipe', 'pipe', 'pipe'], shell: true });
+          let out = '';
+          child.stdout.setEncoding('utf8');
+          child.stdout.on('data', (chunk) => { out += chunk; });
+          setTimeout(() => {
+            child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) + '\n');
+          }, 200);
+          setTimeout(() => {
+            console.log(out.trim() === '' ? 'NODE-SPAWN: silent' : 'NODE-SPAWN: answered ' + out.trim());
+            try { process.kill(child.pid); } catch {}
+            process.exit(0);
+          }, 5000);
+          '@ | Set-Content -LiteralPath $nodeDriver -NoNewline
+          $env:MCP_PROBE_CHILD_PID = Join-Path $repo 'nodedrive.pid'
+          Write-Host "--- driven the way the probe drives it ---"
+          & node $nodeDriver $wrapper
+          Write-Host "--- node-driven child saw stdin: $(Test-Path -LiteralPath (Join-Path $repo 'nodedrive.pid.sawinput')) ---"
           $env:MCP_PROBE_CHILD_PID = $pidFile
           # Reclamation is not conditional on the probe's verdict: `finish()` in
           # mcp-probe.ts runs stopProbeChild on every exit, and the timeout path
