@@ -820,6 +820,97 @@ jobs:
           echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
           "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
 
+      # `commitlore.cmd` is the installed program. The registration uses the
+      # bare command a host records, so this exercises Windows PATH + PATHEXT
+      # resolution inside the MCP probe without asserting the unrelated doctor
+      # findings described above.
+      - name: A bare installed MCP command is healthy through PATHEXT (#640)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          $bin = Split-Path -Parent $shim
+          $repo = Join-Path $env:RUNNER_TEMP 'commitlore-bare-mcp-probe'
+          Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $repo | Out-Null
+          git -C $repo init -q -b main
+          Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
+          Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline '{ "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }'
+          $env:Path = "$bin;$env:Path"
+          $stdout = Join-Path $repo 'doctor.json'
+          $stderr = Join-Path $repo 'doctor.err'
+          $process = Start-Process -FilePath $shim -ArgumentList @('doctor', '--json') -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'doctor did not return within 20 seconds'
+          }
+          Get-Content -LiteralPath $stderr | Write-Host
+          $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
+          $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
+          $probe | ConvertTo-Json -Depth 8 | Write-Host
+          if ($probe.status -ne 'ok' -or $probe.evidence.initiator -ne 'capture-tools-advertised') {
+            throw 'the bare installed command was not verified as a healthy capture initiator'
+          }
+
+      # A cmd launcher starts a separate Node MCP server, then waits. The PID
+      # file lets this step distinguish a probe that returned from one that
+      # actually reclaimed the launcher's descendant.
+      - name: An MCP probe reclaims a cmd launcher's child tree (#640)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          $repo = Join-Path $env:RUNNER_TEMP 'commitlore-mcp-child-tree'
+          Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $repo | Out-Null
+          git -C $repo init -q -b main
+          $pidFile = Join-Path $repo 'child.pid'
+          $server = Join-Path $repo 'child-server.cjs'
+          $wrapper = Join-Path $repo 'launcher.cmd'
+          @'
+          const { writeFileSync } = require('node:fs');
+          writeFileSync(process.env.MCP_PROBE_CHILD_PID, String(process.pid));
+          let buffer = '';
+          process.stdin.setEncoding('utf8');
+          process.stdin.on('data', (chunk) => {
+            buffer += chunk;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              const message = JSON.parse(line);
+              if (message.id === 1) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'commitlore', version: '1.0.0' } } }) + '\n');
+              if (message.id === 2) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'commitlore_query' }, { name: 'commitlore_before_change' }, { name: 'commitlore_prepare_capture' }, { name: 'commitlore_verify_capture' }, { name: 'commitlore_stage_capture' }] } }) + '\n');
+            }
+          });
+          setInterval(() => {}, 1_000);
+          '@ | Set-Content -LiteralPath $server -NoNewline
+          @"
+          @echo off
+          start "" /b "$env:ProgramFiles\nodejs\node.exe" "$server"
+          timeout /t 30 /nobreak >nul
+          "@ | Set-Content -LiteralPath $wrapper -NoNewline
+          Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
+          @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
+          $env:MCP_PROBE_CHILD_PID = $pidFile
+          $stdout = Join-Path $repo 'doctor.json'
+          $stderr = Join-Path $repo 'doctor.err'
+          $process = Start-Process -FilePath $shim -ArgumentList @('doctor', '--json') -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'doctor did not return within 20 seconds'
+          }
+          Get-Content -LiteralPath $stderr | Write-Host
+          $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
+          $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
+          $probe | ConvertTo-Json -Depth 8 | Write-Host
+          if ($probe.status -ne 'ok') { throw 'the wrapper MCP server was not healthy before cleanup' }
+          if (-not (Test-Path -LiteralPath $pidFile)) { throw 'the wrapper never started its child server' }
+          $childPid = [int](Get-Content -LiteralPath $pidFile -Raw)
+          Start-Sleep -Milliseconds 250
+          if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+            throw "MCP child process $childPid survived probe cleanup"
+          }
+
       # T-1124 (#283): #71's install-root containment, executed on Windows against
       # a wrapper install. A property verified on one platform is not a property of
       # the product, and macOS is the only place it has ever been executed.
