@@ -1,0 +1,3 @@
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports the merged tree; hooks suite against the rebuilt bundle
+Record-Id: r-canon629m
+Provenance: inherited 924fbfb8649ff58da675772973cb868ee19c954d
