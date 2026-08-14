@@ -50,6 +50,11 @@ const isLaunchableEntry = (value) => isJsonObject(value) && typeof value['comman
  * second: `{"command": "false"}` read as a working capture server.
  */
 export const registeredMcpCommand = (cwd) => {
+    const launch = registeredMcpLaunch(cwd);
+    return launch?.command ?? null;
+};
+/** The complete launch command a host will use, when its argv is parseable. */
+export const registeredMcpLaunch = (cwd) => {
     const path = mcpRegistrationPath(cwd);
     if (path === null)
         return null;
@@ -68,7 +73,10 @@ export const registeredMcpCommand = (cwd) => {
     const entry = servers[MCP_SERVER_KEY];
     if (!isLaunchableEntry(entry))
         return null;
-    return String(entry['command']);
+    const args = entry['args'];
+    if (args !== undefined && (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string')))
+        return null;
+    return { command: String(entry['command']), args: (args ?? []) };
 };
 /**
  * Whether the registered command is the one `init` writes.

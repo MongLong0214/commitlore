@@ -70,6 +70,12 @@ const isLaunchableEntry = (value: unknown): boolean =>
  * second: `{"command": "false"}` read as a working capture server.
  */
 export const registeredMcpCommand = (cwd: string): string | null => {
+  const launch = registeredMcpLaunch(cwd);
+  return launch?.command ?? null;
+};
+
+/** The complete launch command a host will use, when its argv is parseable. */
+export const registeredMcpLaunch = (cwd: string): { command: string; args: string[] } | null => {
   const path = mcpRegistrationPath(cwd);
   if (path === null) return null;
   let parsed: unknown;
@@ -83,7 +89,9 @@ export const registeredMcpCommand = (cwd: string): string | null => {
   if (!isJsonObject(servers)) return null;
   const entry = servers[MCP_SERVER_KEY];
   if (!isLaunchableEntry(entry)) return null;
-  return String((entry as JsonObject)['command']);
+  const args = (entry as JsonObject)['args'];
+  if (args !== undefined && (!Array.isArray(args) || !args.every((arg) => typeof arg === 'string'))) return null;
+  return { command: String((entry as JsonObject)['command']), args: (args ?? []) as string[] };
 };
 
 /**

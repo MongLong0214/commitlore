@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "afa98028ec4993fbc08c1c82786217af028a1b04b38ba78b60b29c689dbebabe"
+    "sha256": "fd058ff6cc0198ec9063443972199e1ef7de5cf3bba50ece7ead6a3fb60f892b"
   },
   "artifact": {
-    "sha256": "9a6217b0f57f566d1eeff74e3238204e4c037b6f210e7dae68eb8c38ce07bcd9",
+    "sha256": "90b51c8513ffc97d127c711228310fda22e37669152196856397fd407d009990",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -26,11 +26,11 @@
       },
       {
         "path": "dist/cli.js",
-        "sha256": "423e394b295326cee604419adcb7c83d7685ee966f80273b71aba980bbe253fc"
+        "sha256": "0d44931c331fdf39859db71aeb16e367266db887266c4a9e288873781ad594dd"
       },
       {
         "path": "dist/cli.js.map",
-        "sha256": "cd50af620163af8ef14e2ad8e5ddb8fa44b0299f9cd5d504855ffc4ce2c1b3c2"
+        "sha256": "290a365c8f44aa961e1797f617f619c959281f7394d0a1c88ea310db0a933647"
       },
       {
         "path": "dist/commands/auto.d.ts",
@@ -134,11 +134,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js",
-        "sha256": "07aafa7f42f3cfaa535177a4d451105d30755062e907c7f53b16c14f8ee1b6c0"
+        "sha256": "e9e8c5783b5f4f499a4b2a788e81773c2e6ab574cc088e9dd5003599b42605f5"
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js.map",
-        "sha256": "6783c3b27cb5ecd2c8a891ef8be7c3b7be27c2413b88e4e93a46e42a4db58582"
+        "sha256": "4d1334fd9e2f35f4924668578b3c60ee0f3c1cf53885091f86ae176ba8f0dd6a"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-directive-trust-mode.d.ts",
@@ -454,15 +454,15 @@
       },
       {
         "path": "dist/commands/installer-hosts.d.ts",
-        "sha256": "9a0cd789d71aaf614bfe43489bbe26fd3a94de52a423c57964aad473a4a9decc"
+        "sha256": "b6461546d217aa9fef0d1aea8e10561e560396676da7a2a54a2156af3acd5dc8"
       },
       {
         "path": "dist/commands/installer-hosts.js",
-        "sha256": "aed67cb5fe1093df3e6ee0a745bf27b1fa901bb25a8bc7a34d1e3a0da52c5d13"
+        "sha256": "86ff3416516d96127b0eec884d8b0213fdd27f2bde38a688c8533d55eafa69bc"
       },
       {
         "path": "dist/commands/installer-hosts.js.map",
-        "sha256": "3e2d4f7712e25def2499e36c761093cf71b58c992ea4ebeadb8c885cd3d5f9df"
+        "sha256": "a04d4cde2809f2171bcd7613b30311d9070488529b85957eb9398d1d3c24bede"
       },
       {
         "path": "dist/commands/mcp.d.ts",
@@ -574,7 +574,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "74e5e530404eb139511dadc7eb80cc4e0ab1f08ae543debb337a3dd0dcebddb3"
+        "sha256": "c226d187a8717b7e47a97b1f6f299534bb571d824b06b7c12e7bf6bbee64fb38"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -817,16 +817,28 @@
         "sha256": "b195e0942ce3a342093db21cd45f56cd7ec14263bdaf1e1a4b7b538dad762a33"
       },
       {
+        "path": "dist/core/mcp-probe.d.ts",
+        "sha256": "261ff43acd9c48ad58937851f30a344206bad8f560bfde2ee33fdddb01c987d9"
+      },
+      {
+        "path": "dist/core/mcp-probe.js",
+        "sha256": "ca3e1e7e0b267b963a442b565c3709e2915445b80931b57b79c3f19553608e08"
+      },
+      {
+        "path": "dist/core/mcp-probe.js.map",
+        "sha256": "37db93a21e516a85f75ca5f66006e97d8160b0c94a2f4c8b7699768eccb662dd"
+      },
+      {
         "path": "dist/core/mcp-registration.d.ts",
-        "sha256": "fad8293a25b0c121751b6972f840ac45e7c5e24149928c9b6d48bbed583922c7"
+        "sha256": "0f4100ae9ab0b6762b1cdd29d10c6333a85606d93598521465a778cf3b0d55fd"
       },
       {
         "path": "dist/core/mcp-registration.js",
-        "sha256": "08aec31bf1a7b97fbf0f363643b9eb1cbcc749007ef30bc699d1f2b0f707cbc3"
+        "sha256": "5f271b7e159691b26f0b0fe13298ccd19ee643c14be872e0fad1dc4725dfc139"
       },
       {
         "path": "dist/core/mcp-registration.js.map",
-        "sha256": "4c58a270d3589dae9636553ceeaf40a0519343acbf32ad160e3d9dc7ed15a033"
+        "sha256": "81626fd1c88c788e5fe6d716cc429af3bd1fe9eed83d6b0b1a1942436bb6b351"
       },
       {
         "path": "dist/core/notes.d.ts",

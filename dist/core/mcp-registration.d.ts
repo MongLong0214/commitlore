@@ -26,6 +26,11 @@ export declare const MCP_SERVER_ARGS: readonly ["mcp"];
  * second: `{"command": "false"}` read as a working capture server.
  */
 export declare const registeredMcpCommand: (cwd: string) => string | null;
+/** The complete launch command a host will use, when its argv is parseable. */
+export declare const registeredMcpLaunch: (cwd: string) => {
+    command: string;
+    args: string[];
+} | null;
 /**
  * Whether the registered command is the one `init` writes.
  *

@@ -30,8 +30,6 @@ interface Options {
     dataRoot: string;
     home: string;
 }
-/** Speak enough MCP to distinguish an executable from a usable CommitLore server. */
-export declare const probeMcp: (command: string, args: string[]) => Promise<string | null>;
 export declare const inspectAndApplyHosts: (options: Options) => Promise<HostSummary>;
 export declare const register: (program: Command) => void;
 export {};
