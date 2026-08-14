@@ -105,13 +105,27 @@ export const installPrePushHook = (cwd = process.cwd()): PrePushHookResult => {
 /** A child-process diagnostic must not turn one hook warning into many lines. */
 const oneLine = (detail: string): string => detail.replace(/\s+/g, ' ').trim();
 
-/** One fail-open line per unsuccessful remote. Successful sync stays quiet. */
+/**
+ * One fail-open line per unsuccessful remote. Successful sync stays quiet.
+ *
+ * The line has to answer what the operator will actually ask, which is not
+ * "what went wrong" but "where are my records now, and do I have to do
+ * something" (#632). It also has to answer it differently for the two
+ * outcomes, because their answers are opposite: a failed push is transient and
+ * the next push retries it — `syncNotes` keeps no state and recompares the
+ * refs every time — while a divergence is two mirrors neither of which
+ * fast-forwards, and retrying that forever changes nothing.
+ *
+ * Saying only "branch push continues" reported the half the operator could
+ * already see and left the half they were asking about unstated.
+ */
 export const describeSync = (results: readonly SyncResult[]): string[] =>
   results
     .filter((result) => result.outcome === 'failed' || result.outcome === 'diverged')
-    .map(
-      (result) =>
-        `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}; branch push continues`,
+    .map((result) =>
+      result.outcome === 'diverged'
+        ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it — run "commitlore sync" to merge them.`
+        : `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`,
     );
 
 /**
@@ -142,9 +156,11 @@ export const register = (program: Command): void => {
         });
         for (const line of describeSync(results)) process.stderr.write(`${line}\n`);
       } catch (error: unknown) {
-        // A push must never fail because the mirror could not be published.
+        // A push must never fail because the mirror could not be published —
+        // and the line must still say where the records ended up, for the same
+        // reason `describeSync` does (#632).
         process.stderr.write(
-          `commitlore: notes mirror failed: ${oneLine(error instanceof Error ? error.message : String(error))}; branch push continues\n`,
+          `commitlore: notes mirror failed: ${oneLine(error instanceof Error ? error.message : String(error))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.\n`,
         );
       }
     });
