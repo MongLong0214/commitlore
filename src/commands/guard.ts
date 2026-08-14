@@ -36,6 +36,7 @@ import {
 import { SHALLOW_HISTORY_CAVEAT } from '../core/git.js';
 import {
   configuredSignedDirectivesRequired,
+  configuredTrustedSignerFingerprints,
   configuredTrustedAuthors,
 } from '../core/trusted-authors.js';
 
@@ -309,6 +310,9 @@ const runAsHook = async (options: GuardCommandOptions): Promise<void> => {
     ...(configuredSignedDirectivesRequired(process.cwd())
       ? { requireSignedDirective: true }
       : {}),
+    ...(configuredTrustedSignerFingerprints(process.cwd()).length === 0
+      ? {}
+      : { trustedSignerFingerprints: configuredTrustedSignerFingerprints(process.cwd()) }),
     // A hook fires on compliance too, so the citation signal is off here for the
     // reason it exists: naming a record is what obeying one looks like.
     requireContent: true,
@@ -377,6 +381,9 @@ export const register = (program: Command): void => {
           ...(configuredSignedDirectivesRequired(process.cwd())
             ? { requireSignedDirective: true }
             : {}),
+          ...(configuredTrustedSignerFingerprints(process.cwd()).length === 0
+            ? {}
+            : { trustedSignerFingerprints: configuredTrustedSignerFingerprints(process.cwd()) }),
           ...(options.requireContent === true ? { requireContent: true } : {}),
         });
 

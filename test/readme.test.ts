@@ -84,6 +84,11 @@ describe('#597 README describes what [directive] actually means', () => {
     expect(content).toMatch(/author header/i);
     expect(content).toMatch(/anyone who can\s+write a commit can set that header/i);
   });
+
+  it('says signature mode needs explicit signer authority and fails closed without it', () => {
+    expect(content).toContain('commitlore.trustedSigner');
+    expect(content).toMatch(/absent, empty, or unreadable signer allowlist authorizes nobody/i);
+  });
 });
 
 describe('T-1021: Known limitations discloses guard precision and recall', () => {

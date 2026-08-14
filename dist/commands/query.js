@@ -19,7 +19,7 @@
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
-import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
+import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { splitRuledOut } from '../core/trailers.js';
 import { STRUCTURAL_TRAILER_KEYS } from '../core/types.js';
 /** Identity is printed in its own column, never as a trailer line. */
@@ -136,6 +136,7 @@ const queryOptions = (paths, options, keys) => {
     // in, the same one `runQuery` resolves against.
     const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
     const requireSignedDirective = configuredSignedDirectivesRequired(process.cwd());
+    const trustedSignerFingerprints = configuredTrustedSignerFingerprints(process.cwd());
     return {
         paths,
         allHistory: options.allHistory === true,
@@ -150,6 +151,7 @@ const queryOptions = (paths, options, keys) => {
         scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
         ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+        ...(trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints }),
         ...(keys === undefined ? {} : { keys }),
         ...(at === undefined ? {} : { at }),
         ...(limit === undefined ? {} : { limit }),

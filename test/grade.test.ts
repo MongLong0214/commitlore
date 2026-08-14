@@ -207,9 +207,27 @@ describe('trust contract cases', () => {
       at: new Date('2026-01-12T00:00:00Z'),
       trustedAuthors: ['alice'],
       requireSignedDirective: true,
+      trustedSignerFingerprints: ['approved-fingerprint'],
     };
 
-    expect(gradeRecord({ ...base, signatureStatus: 'G' }, context).trust).toBe('directive');
+    expect(
+      gradeRecord(
+        { ...base, signatureStatus: 'G', signerFingerprint: 'approved-fingerprint' },
+        context,
+      ).trust,
+    ).toBe('directive');
+    expect(
+      gradeRecord(
+        { ...base, signatureStatus: 'G', signerFingerprint: 'unapproved-fingerprint' },
+        context,
+      ).trust,
+    ).toBe('claim');
+    expect(
+      gradeRecord(
+        { ...base, signatureStatus: 'G', signerFingerprint: 'approved-fingerprint' },
+        { ...context, trustedSignerFingerprints: [] },
+      ).trust,
+    ).toBe('claim');
     for (const status of ['U', 'B', 'N', 'X', 'Y', 'R', 'E', '']) {
       expect(gradeRecord({ ...base, signatureStatus: status }, context).trust, status).toBe('claim');
     }

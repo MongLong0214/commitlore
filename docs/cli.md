@@ -27,7 +27,9 @@ for structured output, `--all-history` to include superseded and expired records
 <author>` (repeatable) to name an author string whose records may render as
 instructions rather than as claims. The default string match is forgeable by a
 commit author; `commitlore.requireSignedDirective=true` additionally requires
-Git's verified signature from this verifier's trust store. `stale` takes `--json`, `--at` and
+Git's verified signature from this verifier's trust store and an exact `%GF`
+fingerprint in repository-local `commitlore.trustedSigner`. An absent, empty,
+or unreadable allowlist authorizes nobody. `stale` takes `--json`, `--at` and
 `--all-history`, which there means scanning the whole history rather than the
 most recent 1000 commits.
 
@@ -137,7 +139,9 @@ picking a winner, because concatenating two sets of records loses nothing.
 configured directive string** — a note two people wrote is attributed to both,
 and the most restrictive grade takes the floor (SPEC §7). The default string
 match is forgeable by a commit author; in signature mode, every note-writing
-commit must also have Git's verified `G` status in this verifier's trust store.
+commit must also have Git's verified `G` status and a `%GF` fingerprint listed
+in repository-local `commitlore.trustedSigner`. Missing, empty, or unreadable
+allowlists authorize nobody.
 
 The fetch refspec is deliberately **not** forced. A forced one overwrites this
 clone's mirror on every fetch, which destroys a record written here and not yet

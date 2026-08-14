@@ -18,7 +18,7 @@
  * than when this file goes stale.
  */
 
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   existsSync,
   chmodSync,
@@ -1043,6 +1043,113 @@ describe('#597 signature-required policy reaches the MCP guard routes', () => {
       expect(match.trust).not.toBe('directive');
     }
     expect(toolText(response)).not.toContain('[directive]');
+  });
+});
+
+/**
+ * The unsigned regression above proves route propagation. This one proves the
+ * missing authority binding through the actual stdio server with a throwaway
+ * signing key; a mock `%G?` result would not exercise Git's verifier.
+ */
+describe('#597 MCP signer-authority routes use real signed commits', () => {
+  const AUTHOR = 'maintainer@example.invalid';
+  const PROPOSAL = 'switch the session store to a shared Redis cache';
+  let signerHome = '';
+  let signerFingerprint = '';
+  let signedRepo = '';
+  let signedStub: Stub;
+  let previousGpgHome: string | undefined;
+
+  beforeAll(async () => {
+    signerHome = mkdtempSync(join(tmpdir(), 'commitlore-mcp-signer-gpg-'));
+    execFileSync('chmod', ['700', signerHome]);
+    previousGpgHome = process.env.GNUPGHOME;
+    process.env.GNUPGHOME = signerHome;
+    execFileSync(
+      'gpg',
+      ['--batch', '--passphrase', '', '--quick-generate-key', `Maintainer <${AUTHOR}>`, 'rsa2048', 'sign', '0'],
+      { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const listing = execFileSync('gpg', ['--batch', '--with-colons', '--list-secret-keys', AUTHOR], {
+      env: process.env,
+      encoding: 'utf8',
+    });
+    signerFingerprint = listing.split('\n').find((line) => line.startsWith('fpr:'))?.split(':')[9] ?? '';
+    if (signerFingerprint === '') throw new Error('throwaway signing key has no fingerprint');
+
+    signedRepo = makeRepo();
+    mkdirSync(join(signedRepo, 'src'), { recursive: true });
+    writeFileSync(join(signedRepo, 'src', 'auth.ts'), 'export const auth = true;\n');
+    execGitOrThrow(['add', 'src/auth.ts'], { cwd: signedRepo });
+    execGitOrThrow(
+      [
+        'commit',
+        '--no-verify',
+        `-S${signerFingerprint}`,
+        `--author=Maintainer <${AUTHOR}>`,
+        '-m',
+        'approved signer\n\nRuled-out: shared Redis cache | single point of failure\nRecord-Id: r-mcpsigner597\nProvenance: authored',
+      ],
+      { cwd: signedRepo, env: process.env },
+    );
+    const verified = execGitOrThrow(['log', '-1', '--format=%G?%x00%GF'], {
+      cwd: signedRepo,
+      env: process.env,
+    });
+    expect(verified).toContain(`G\0${signerFingerprint}`);
+    execGitOrThrow(['config', '--local', '--add', 'commitlore.trustedAuthor', AUTHOR], {
+      cwd: signedRepo,
+    });
+    execGitOrThrow(['config', '--local', 'commitlore.requireSignedDirective', 'true'], {
+      cwd: signedRepo,
+    });
+    execGitOrThrow(['config', '--local', '--add', 'commitlore.trustedSigner', signerFingerprint], {
+      cwd: signedRepo,
+    });
+    signedStub = startStub(signedRepo);
+    await handshake(signedStub);
+  }, 120_000);
+
+  afterAll(async () => {
+    await signedStub?.close();
+    if (previousGpgHome === undefined) delete process.env.GNUPGHOME;
+    else process.env.GNUPGHOME = previousGpgHome;
+    rmSync(signerHome, { recursive: true, force: true });
+  });
+
+  it('returns directive consistently from MCP query, guard, before-change, and capture advisory', async () => {
+    const query = await signedStub.request('tools/call', {
+      name: 'commitlore_query',
+      arguments: { kind: 'context', path: 'src/auth.ts' },
+    });
+    const queryRecords = toolJson(query)['records'] as { recordId?: string; trust?: string }[];
+    expect(queryRecords.find((record) => record.recordId === 'r-mcpsigner597')?.trust).toBe('directive');
+
+    const guarded = await signedStub.request('tools/call', {
+      name: 'commitlore_guard',
+      arguments: { path: 'src/auth.ts', proposal: PROPOSAL },
+    });
+    const matches = toolJson(guarded)['matched'] as { recordId?: string; trust?: string }[];
+    expect(matches.find((record) => record.recordId === 'r-mcpsigner597')?.trust).toBe('directive');
+
+    const before = await signedStub.request('tools/call', {
+      name: 'commitlore_before_change',
+      arguments: { path: 'src/auth.ts', proposal: PROPOSAL },
+    });
+    const beforeAnswer = toolJson(before);
+    const decisions = beforeAnswer['active_decisions'] as { recordId?: string; trust?: string }[];
+    const beforeMatches = beforeAnswer['possible_revival_matches'] as { recordId?: string; trust?: string }[];
+    expect(decisions.find((record) => record.recordId === 'r-mcpsigner597')?.trust).toBe('directive');
+    expect(beforeMatches.find((record) => record.recordId === 'r-mcpsigner597')?.trust).toBe('directive');
+
+    writeFileSync(join(signedRepo, 'src', 'auth.ts'), 'export const auth = false;\n');
+    execGitOrThrow(['add', 'src/auth.ts'], { cwd: signedRepo });
+    const prepared = await signedStub.request('tools/call', {
+      name: 'commitlore_prepare_capture',
+      arguments: { transcript: `We ruled out ${PROPOSAL}.` },
+    });
+    const advisory = toolJson(prepared)['guard_advisory'] as { matches?: { recordId?: string; trust?: string }[] };
+    expect(advisory.matches?.find((record) => record.recordId === 'r-mcpsigner597')?.trust).toBe('directive');
   });
 });
 

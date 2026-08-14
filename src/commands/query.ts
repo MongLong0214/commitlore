@@ -35,6 +35,7 @@ import {
 import { validateRecord } from '../core/schema.js';
 import {
   configuredSignedDirectivesRequired,
+  configuredTrustedSignerFingerprints,
   configuredTrustedAuthors,
 } from '../core/trusted-authors.js';
 import { splitRuledOut } from '../core/trailers.js';
@@ -201,6 +202,7 @@ const queryOptions = (
   // in, the same one `runQuery` resolves against.
   const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(process.cwd());
   const requireSignedDirective = configuredSignedDirectivesRequired(process.cwd());
+  const trustedSignerFingerprints = configuredTrustedSignerFingerprints(process.cwd());
   return {
     paths,
     allHistory: options.allHistory === true,
@@ -215,6 +217,7 @@ const queryOptions = (
     scanBudgetMs: CONSUMER_SCAN_BUDGET_MS,
     ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
     ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+    ...(trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints }),
     ...(keys === undefined ? {} : { keys }),
     ...(at === undefined ? {} : { at }),
     ...(limit === undefined ? {} : { limit }),

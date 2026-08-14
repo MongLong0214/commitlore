@@ -159,8 +159,10 @@ Ruled-out
 기본 author-string 모드에서 `[directive]`는 저장소가 그 문자열을 제약으로 취급하기로
 정했다는 뜻일 뿐 신원 증명은 아니다. commit 작성자가 문자열을 고르므로 commit을 쓸 수
 있는 누구나 위조할 수 있다. `commitlore.requireSignedDirective=true`를 설정하면 Git이
-검증자의 trust store에 대해 확인한 서명도 필요하다. 그 서명 역시 권한이나 record의
-진실을 증명하지는 않는다. delivery는 맥락을 주며, 편집을 막지 않는다.
+검증자의 trust store에 대해 확인한 서명과 Git이 보고한 `%GF` 지문이 repository-local
+`commitlore.trustedSigner` allowlist에 있어야 한다. allowlist가 없거나 비어 있거나 읽을 수
+없으면 누구도 권한을 얻지 않는다. 그 서명 역시 권한이나 record의 진실을 증명하지는 않는다.
+delivery는 맥락을 주며, 편집을 막지 않는다.
 
 ## 자동으로 되는 것과 아닌 것
 

@@ -53,7 +53,8 @@ The obvious objection to unattended capture is that it mints instructions nobody
 read. `gradeRecord` returns `directive` for a record that is `Provenance:
 authored`, active, from a configured author string, and free of injection
 patterns — and, in the opt-in signature mode, only after Git also verifies the
-signature in the verifier's trust store. In default author-string mode, the
+signature in the verifier's trust store and its `%GF` signer fingerprint matches
+the repository-local allowlist. In default author-string mode, the
 match is not identity proof because the commit author selected it; a commit the
 user made satisfies that policy test whether or not they read the trailer block.
 

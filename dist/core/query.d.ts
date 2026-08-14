@@ -123,6 +123,8 @@ export interface QueryOptions {
     trustedAuthors?: readonly string[];
     /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
     requireSignedDirective?: boolean;
+    /** Git `%GF` signing-key fingerprints authorized by repository policy. */
+    trustedSignerFingerprints?: readonly string[];
     cwd?: string;
 }
 /**

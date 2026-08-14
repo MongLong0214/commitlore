@@ -512,6 +512,9 @@ export const guard = (opts) => {
         ...(opts.noIndex === undefined ? {} : { noIndex: opts.noIndex }),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+        ...(opts.trustedSignerFingerprints === undefined
+            ? {}
+            : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
     });
     const availability = {
         history: result.history,

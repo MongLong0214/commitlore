@@ -156,8 +156,10 @@ Ruled-out
 mode 的 `[directive]` 仅表示仓库决定将该字符串视为约束，并不证明身份；commit author
 自己选择该字符串，任何能写入 commit 的人都可以伪造它。设置
 `commitlore.requireSignedDirective=true` 后，还需要 Git 按验证者自己的 trust store
-验证 signature。该 signature 同样不证明签名者有权指挥仓库，也不证明 record 的真实性。
-delivery 给代理的是上下文，并不阻止编辑。
+验证 signature，并要求 Git 报告的 `%GF` fingerprint 在 repository-local
+`commitlore.trustedSigner` allowlist 中。allowlist 缺失、为空或不可读取时，任何人都不会被
+授权。该 signature 同样不证明签名者有权指挥仓库，也不证明 record 的真实性。delivery 给代理
+的是上下文，并不阻止编辑。
 
 ## 哪些是自动的，哪些不是
 

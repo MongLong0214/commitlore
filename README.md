@@ -169,9 +169,21 @@ obey it as an order. In the default author-string mode, `[directive]` means the
 commit's author header matched a string this repository configured — not that a
 trusted author recorded it, and not that the identity is proven. Anyone who can
 write a commit can set that header. A repository can opt into Git's authenticated
-boundary with `git config --local commitlore.requireSignedDirective true`; then
-`[directive]` also requires Git to verify the signature against this verifier's
-trust store. That signature still does not establish the signer's authority or
+boundary with `git config --local commitlore.requireSignedDirective true`. In
+that mode, `[directive]` requires Git to verify the signature against this
+verifier's trust store **and** the exact signing-key fingerprint Git reports
+(`%GF`) must be listed in the repository-local allowlist:
+
+```bash
+git config --local --add commitlore.trustedSigner <Git-%GF-fingerprint>
+```
+
+An absent, empty, or unreadable signer allowlist authorizes nobody, so every
+record remains `[claim]`; it never means every valid signer is authorized.
+Signature mode remains opt-in, so existing author-string policy is unchanged
+until a repository enables it. A signature proves that a key accepted by this
+verifier signed the commit. It does not prove that the key has authority for
+this repository, which is what the local allowlist supplies, nor does it prove
 the record's truth. Delivery gives the agent context; it does not block the edit.
 
 ## What happens automatically — and what does not
@@ -218,7 +230,9 @@ Read this before installing, not after.
 - **Signature verification is opt-in, not key distribution.** Default mode
   matches a forgeable author string. Setting
   `commitlore.requireSignedDirective=true` also requires Git's verified
-  signature status from this verifier's trust store; that verifies neither a
+  signature status from this verifier's trust store and an exact `%GF`
+  fingerprint in repository-local `commitlore.trustedSigner`; a missing,
+  empty, or unreadable allowlist authorizes nobody. That verifies neither a
   person's authority nor the record's truth. Repository-wide coverage, symbol anchors,
   and an interactive record builder remain open:
   [#32](https://github.com/MongLong0214/commitlore/issues/32),

@@ -161,8 +161,10 @@ directive 用に設定した文字列と一致しないため、エージェン�
 制約として扱うというリポジトリの選択であり、身元の証明ではありません。commit author が
 文字列を選ぶため、commit を書ける者は誰でも偽装できます。
 `commitlore.requireSignedDirective=true` では、検証者の trust store で Git が検証した
-signature も必要です。その signature も権限や record の真実を証明しません。delivery は
-コンテキストを渡すものであり、編集を止めるものではありません。
+signature と、Git が報告する `%GF` fingerprint が repository-local の
+`commitlore.trustedSigner` allowlist にあることも必要です。allowlist が未設定、空、または
+読めない場合は誰も認可されません。その signature も権限や record の真実を証明しません。
+delivery はコンテキストを渡すものであり、編集を止めるものではありません。
 
 ## 自動になること、ならないこと
 

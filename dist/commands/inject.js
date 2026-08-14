@@ -22,7 +22,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { execGit } from '../core/git.js';
 import { buildInjection } from '../core/inject.js';
 import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
-import { configuredSignedDirectivesRequired, configuredTrustedAuthors, } from '../core/trusted-authors.js';
+import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_EVENT, claudeHookStatus, claudeSettingsPath, installClaudeHook, uninstallClaudeHook, } from '../hooks/claude-settings.js';
 // ---------------------------------------------------------------------------
 // Option parsing
@@ -194,6 +194,7 @@ const injectOptions = (path, options, cwd) => {
     const flagged = options.trustedAuthor ?? [];
     const trustedAuthors = flagged.length > 0 ? flagged : configuredTrustedAuthors(cwd);
     const requireSignedDirective = configuredSignedDirectivesRequired(cwd);
+    const trustedSignerFingerprints = configuredTrustedSignerFingerprints(cwd);
     return {
         path,
         cwd,
@@ -202,6 +203,7 @@ const injectOptions = (path, options, cwd) => {
         ...(budget === undefined ? {} : { budget }),
         ...(trustedAuthors.length === 0 ? {} : { trustedAuthors }),
         ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+        ...(trustedSignerFingerprints.length === 0 ? {} : { trustedSignerFingerprints }),
     };
 };
 const emitInjection = (injection, options) => {

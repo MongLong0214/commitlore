@@ -24,7 +24,7 @@ import { POLICY_FILE_NAME } from '../core/capture-policy.js';
 import { classifyCaptureError, exitCodeForCaptureOutcome, markCaptureError, messageOf, } from '../core/capture-outcome.js';
 import { runCaptureShadow } from '../core/capture-shadow.js';
 import { execGitOrThrow } from '../core/git.js';
-import { configuredTrustedAuthors } from '../core/trusted-authors.js';
+import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { parseDraft } from '../core/harvest.js';
 import { gcPending } from '../core/pending-gc.js';
 /** Render historical measurement output without ever echoing a blocked secret. */
@@ -113,6 +113,10 @@ const runCapturePipeline = (opts) => {
         cwd,
         transcript,
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
+        ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+        ...(opts.trustedSignerFingerprints === undefined
+            ? {}
+            : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
         ...(opts.unattended === true ? { unattended: true } : {}),
     });
     if (prepareResult.policy_error !== null) {
@@ -315,6 +319,8 @@ export const register = (program) => {
         if (options.draft !== undefined)
             runOpts.draftPath = options.draft;
         runOpts.trustedAuthors = configuredTrustedAuthors(cwd);
+        runOpts.requireSignedDirective = configuredSignedDirectivesRequired(cwd);
+        runOpts.trustedSignerFingerprints = configuredTrustedSignerFingerprints(cwd);
         if (options.unattended === true)
             runOpts.unattended = true;
         let result = runCapture(runOpts);

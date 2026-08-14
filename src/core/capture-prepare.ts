@@ -67,6 +67,7 @@ const computeGuardAdvisory = (opts: {
   readOnly?: boolean;
   trustedAuthors?: readonly string[];
   requireSignedDirective?: boolean;
+  trustedSignerFingerprints?: readonly string[];
 }): GuardAdvisory => {
   try {
     const result = guard({
@@ -76,6 +77,9 @@ const computeGuardAdvisory = (opts: {
       ...(opts.readOnly === true ? { noIndex: true } : {}),
       ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
       ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+      ...(opts.trustedSignerFingerprints === undefined
+        ? {}
+        : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
     });
     return {
       matches: result.matches.map(renderGuardMatch),
@@ -103,6 +107,7 @@ export interface PrepareCaptureOptions {
   trustedAuthors?: readonly string[];
   /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
   requireSignedDirective?: boolean;
+  trustedSignerFingerprints?: readonly string[];
   /**
    * Declare that this capture runs without asking: the pipeline prepares,
    * verifies and stages it with no person in the loop (ADR-0030, #511).
@@ -171,6 +176,7 @@ const prepareValues = (opts: {
   unattended?: boolean;
   trustedAuthors?: readonly string[];
   requireSignedDirective?: boolean;
+  trustedSignerFingerprints?: readonly string[];
 }): PreparedValues => {
   const { cwd, transcript, snapshot } = opts;
 
@@ -237,6 +243,9 @@ const prepareValues = (opts: {
         ...(opts.readOnly ? { readOnly: true } : {}),
         ...(opts.trustedAuthors === undefined ? {} : { trustedAuthors: opts.trustedAuthors }),
         ...(opts.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+        ...(opts.trustedSignerFingerprints === undefined
+          ? {}
+          : { trustedSignerFingerprints: opts.trustedSignerFingerprints }),
       });
 
   return {
