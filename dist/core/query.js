@@ -45,7 +45,7 @@
  */
 import { execGit, hasShallowHistory, historyAvailability, SHALLOW_HISTORY_CAVEAT, } from './git.js';
 import { closeIndex, ensureIndex, filterTrailers, indexUnread, queryTrailers, scanTrailers, } from './index-db.js';
-import { authorsOf, gradeDeclarations, noteAuthorsOf, } from './grade.js';
+import { authorsOf, gradeDeclarations, noteAuthorsOf, signerFingerprintsOf, } from './grade.js';
 import { NOTES_REF, notesAvailability } from './notes.js';
 import { foldLifecycle, hasAmbiguousIdCollision, } from './stale.js';
 import { SINGLE_VALUED, parseProvenance, } from './types.js';
@@ -504,10 +504,11 @@ const mergeTrailers = (into, from) => {
  * index does not store it: one `git show -s` over the surviving shas costs a
  * single spawn and cannot go stale against the commits it just read.
  */
-const gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) => {
+const gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective, trustedSignerFingerprints) => {
     if (merged.length === 0)
         return;
     const authors = authorsOf(cwd, merged.flatMap((record) => record.shas));
+    const signerFingerprints = requireSignedDirective ? signerFingerprintsOf(cwd, merged.flatMap((record) => record.shas)) : new Map();
     // Walked only when something actually came from the mirror, so a repository
     // with no notes pays nothing for the check (#409).
     const noteAuthors = merged.some((record) => record.sources.includes('notes'))
@@ -520,11 +521,13 @@ const gradeMerged = (merged, cwd, at, trustedAuthors, requireSignedDirective) =>
             sources: record.sources,
             commitAuthors: authors,
             commitSignatures: record.commitSignatures,
+            commitSignerFingerprints: signerFingerprints,
             noteAuthors,
         }, {
             at,
             ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
             ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+            ...(trustedSignerFingerprints === undefined ? {} : { trustedSignerFingerprints }),
         });
         record.trust = resolved.trust;
         if (resolved.matchedTrailerKeys !== undefined) {
@@ -643,7 +646,7 @@ export const runQuery = (opts = {}) => {
             .filter((record) => carriesKey(record, opts.keys))
             .sort(compareRecords);
         // After the filters, so the one `git show` prices only the records that survive.
-        gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true);
+        gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true, opts.trustedSignerFingerprints);
         for (const record of records) {
             if (record.identityCollision !== true)
                 continue;

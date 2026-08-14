@@ -583,6 +583,19 @@ export const isTrustedAuthor = (author, trustedAuthors) => {
         return false;
     return identitiesOf(author).some((identity) => trusted.has(identity));
 };
+/**
+ * Whether Git's exact signing-key fingerprint is in repository policy.
+ *
+ * This deliberately has no partial, email, or case-folded matching. `%GF` is
+ * Git's signer identifier; accepting a lookalike turns an allowlist into a
+ * hint. Missing and empty lists therefore authorize nobody.
+ */
+export const isTrustedSignerFingerprint = (fingerprint, trustedSignerFingerprints) => {
+    if (fingerprint === undefined || trustedSignerFingerprints === undefined)
+        return false;
+    const trusted = new Set(trustedSignerFingerprints.map((entry) => entry.trim()).filter((entry) => entry !== ''));
+    return trusted.has(fingerprint.trim());
+};
 const quoted = (value) => JSON.stringify(value);
 const grade = (input, ctx) => {
     const { record, author, folded } = input;
@@ -630,6 +643,14 @@ const grade = (input, ctx) => {
     if (ctx.requireSignedDirective === true && signatureStatus !== 'G') {
         return claim(`commit signature status ${quoted(signatureStatus ?? 'unavailable')} is not Git-verified by this verifier`);
     }
+    if (ctx.requireSignedDirective === true && (ctx.trustedSignerFingerprints?.length ?? 0) === 0) {
+        return claim('no authorized signer fingerprints are configured for signature mode');
+    }
+    const signerFingerprint = record.signerFingerprint;
+    if (ctx.requireSignedDirective === true &&
+        !isTrustedSignerFingerprint(signerFingerprint, ctx.trustedSignerFingerprints)) {
+        return claim(`verified signer fingerprint ${quoted(signerFingerprint ?? 'unavailable')} is not authorized by repository policy`);
+    }
     if (lifecycle !== 'active') {
         return claim(`record is ${lifecycle} and no longer directs anything`);
     }
@@ -638,7 +659,7 @@ const grade = (input, ctx) => {
         lifecycle,
         trust: 'directive',
         reason: ctx.requireSignedDirective === true
-            ? `authored by configured author string ${quoted(author)}, Git signature verified, active, no injection pattern matched`
+            ? `authored by configured author string ${quoted(author)}, Git signature verified by an authorized signer fingerprint, active, no injection pattern matched`
             : `authored by configured author string ${quoted(author)}, active, no injection pattern matched (author strings are unauthenticated)`,
     };
 };
@@ -710,7 +731,7 @@ const AUTHOR_FIELD_SEP = '\0';
  * `%x01`/`%x00` rather than the literal bytes: `spawnSync` refuses an argument
  * containing a NUL, and these reach git as text and come back as bytes.
  */
-const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?';
+const AUTHOR_FORMAT = '--format=%x01%H%x00%an <%ae>%x00%G?%x00%GF';
 /**
  * Maps each commit to its **author** identity, `Name <email>`.
  *
@@ -744,6 +765,24 @@ export const authorsOf = (cwd, shas) => {
     }
     return authors;
 };
+/** Maps each commit to Git's exact `%GF` signing-key fingerprint. */
+export const signerFingerprintsOf = (cwd, shas) => {
+    const wanted = [...new Set(shas)].filter((sha) => isFullObjectId(sha)).sort();
+    const fingerprints = new Map();
+    for (let start = 0; start < wanted.length; start += AUTHOR_BATCH) {
+        const batch = wanted.slice(start, start + AUTHOR_BATCH);
+        const result = execGit(['show', '-s', AUTHOR_FORMAT, ...batch], { cwd });
+        if (result.code !== 0)
+            continue;
+        for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
+            const [sha = '', _author = '', _status = '', fingerprint = ''] = chunk.split(AUTHOR_FIELD_SEP);
+            if (sha.trim() === '' || fingerprint.trim() === '')
+                continue;
+            fingerprints.set(sha.trim(), fingerprint.trim());
+        }
+    }
+    return fingerprints;
+};
 export const noteAuthorsOf = (cwd) => {
     const authors = new Map();
     const result = execGit(['log', AUTHOR_FORMAT, '--name-only', '--no-renames', '--no-color', NOTES_REF], { cwd });
@@ -754,14 +793,18 @@ export const noteAuthorsOf = (cwd) => {
     for (const chunk of result.stdout.split(AUTHOR_RECORD_SEP)) {
         if (chunk === '')
             continue;
-        const [head = '', authorField = '', statusAndPaths = ''] = chunk.split(AUTHOR_FIELD_SEP);
+        const [head = '', authorField = '', status = '', fingerprintAndPaths = ''] = chunk.split(AUTHOR_FIELD_SEP);
         if (head.trim() === '')
             continue;
-        const [status = '', ...pathLines] = statusAndPaths.split('\n');
+        const [fingerprint = '', ...pathLines] = fingerprintAndPaths.split('\n');
         const noteAuthor = authorField.trim();
         if (noteAuthor === '')
             continue;
-        const writer = { author: noteAuthor, signatureStatus: status.trim() };
+        const writer = {
+            author: noteAuthor,
+            signatureStatus: status.trim(),
+            signerFingerprint: fingerprint.trim(),
+        };
         for (const line of pathLines) {
             const annotated = line.trim().replace(/\//g, '');
             if (!isFullObjectId(annotated))
@@ -769,7 +812,9 @@ export const noteAuthorsOf = (cwd) => {
             const seen = authors.get(annotated);
             if (seen === undefined)
                 authors.set(annotated, [writer]);
-            else if (!seen.some((existing) => existing.author === writer.author && existing.signatureStatus === writer.signatureStatus)) {
+            else if (!seen.some((existing) => existing.author === writer.author &&
+                existing.signatureStatus === writer.signatureStatus &&
+                existing.signerFingerprint === writer.signerFingerprint)) {
                 seen.push(writer);
             }
         }
@@ -799,7 +844,7 @@ export const noteAuthorsOf = (cwd) => {
  * one policy is one implementation and one hole.
  */
 export const gradeDeclarations = (record, declarations, ctx) => {
-    const { shas, sources, commitAuthors, commitSignatures, noteAuthors } = declarations;
+    const { shas, sources, commitAuthors, commitSignatures, commitSignerFingerprints, noteAuthors } = declarations;
     // An empty `sources` predates the field; treat it as a commit declaration so
     // an older caller keeps the behaviour it had.
     const fromNotes = sources.includes('notes');
@@ -813,23 +858,28 @@ export const gradeDeclarations = (record, declarations, ctx) => {
         at: ctx.at,
         ...(ctx.trustedAuthors === undefined ? {} : { trustedAuthors: ctx.trustedAuthors }),
         ...(ctx.requireSignedDirective === true ? { requireSignedDirective: true } : {}),
+        ...(ctx.trustedSignerFingerprints === undefined
+            ? {}
+            : { trustedSignerFingerprints: ctx.trustedSignerFingerprints }),
     };
     let worst;
-    const consider = (author, signatureStatus) => {
-        const one = gradeRecord({ ...record, author, signatureStatus }, base);
+    const consider = (author, signatureStatus, signerFingerprint) => {
+        const one = gradeRecord({ ...record, author, signatureStatus, signerFingerprint }, base);
         worst = worst === undefined ? one : restrictGrade(worst, one);
     };
     for (const sha of shas) {
-        if (fromCommit)
-            consider(commitAuthors.get(sha), commitSignatures.get(sha));
+        if (fromCommit) {
+            consider(commitAuthors.get(sha), commitSignatures.get(sha), commitSignerFingerprints.get(sha));
+        }
         if (!fromNotes)
             continue;
         const writers = noteAuthors.get(sha);
         if (writers === undefined || writers.length === 0)
-            consider(undefined, undefined);
+            consider(undefined, undefined, undefined);
         else
-            for (const writer of writers)
-                consider(writer.author, writer.signatureStatus);
+            for (const writer of writers) {
+                consider(writer.author, writer.signatureStatus, writer.signerFingerprint);
+            }
     }
     return worst ?? gradeRecord(record, ctx);
 };

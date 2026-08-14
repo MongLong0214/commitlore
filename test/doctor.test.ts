@@ -1024,7 +1024,7 @@ describe('doctor: report', () => {
     expect(report.exitCode).toBe(0);
   });
 
-  it('reports either supported directive trust mode without a warning', () => {
+  it('warns when signature mode has no authorized signer, then reports configured authority', () => {
     const { repo } = repoWithRemote('doctor-directive-trust-mode');
 
     const defaultMode = runDoctor({ cwd: repo }).checks.find(
@@ -1038,9 +1038,17 @@ describe('doctor: report', () => {
     const signatureMode = runDoctor({ cwd: repo }).checks.find(
       (entry) => entry.id === 'directive-trust-mode',
     );
-    expect(signatureMode?.status).toBe('ok');
+    expect(signatureMode?.status).toBe('warn');
     expect(signatureMode?.detail).toContain('signature mode');
-    expect(signatureMode?.detail).toContain('trust store');
+    expect(signatureMode?.detail).toContain('no authorized signer');
+
+    git(repo, ['config', '--local', '--add', 'commitlore.trustedSigner', '0123456789ABCDEF']);
+    const authorized = runDoctor({ cwd: repo }).checks.find(
+      (entry) => entry.id === 'directive-trust-mode',
+    );
+    expect(authorized?.status).toBe('ok');
+    expect(authorized?.detail).toContain('signature mode');
+    expect(authorized?.detail).toContain('authorized signing-key fingerprint');
   });
 
   it('serializes to JSON that parses back with a status per check', () => {

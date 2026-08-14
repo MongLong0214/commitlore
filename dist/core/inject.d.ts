@@ -128,6 +128,8 @@ export interface InjectOptions {
     trustedAuthors?: readonly string[];
     /** Opt-in: a directive also needs Git's verified `G` signature status. */
     requireSignedDirective?: boolean;
+    /** Git `%GF` signing-key fingerprints authorized by repository policy. */
+    trustedSignerFingerprints?: readonly string[];
     /** Answer from git alone, without the SQLite index. Same answers, slower. */
     noIndex?: boolean;
     /**

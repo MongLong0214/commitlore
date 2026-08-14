@@ -1,10 +1,9 @@
 /**
  * Reports the configured boundary for the `[directive]` tier.
  *
- * Both supported modes are an `ok` row: author-string mode is the default for
- * repositories that have not chosen an adversarial threat model, and signature
- * mode is an explicit extra boundary. Doctor's job is to make the choice
- * legible, not to turn one supported choice into a recurring warning.
+ * Author-string mode is an `ok` default for repositories that have not chosen
+ * an adversarial threat model. Signature mode is an explicit extra boundary;
+ * it is `ok` only after the repository authorizes at least one signer.
  *
  * A third state is not a choice. When the setting is present and unparseable,
  * somebody wrote it deliberately and it does not say what they meant. Grading

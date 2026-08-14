@@ -45,6 +45,8 @@ export interface GradeContext {
     trustedAuthors?: readonly string[];
     /** Opt-in: only Git's `G` (good, verifier-trusted) signature status can direct. */
     requireSignedDirective?: boolean;
+    /** Git `%GF` signing-key fingerprints this repository authorizes in signature mode. */
+    trustedSignerFingerprints?: readonly string[];
     /** 커밋 메타 — 작성자 판정에 쓴다 */
     author?: string;
     at: Date;
@@ -64,6 +66,8 @@ export interface AuthoredRecord extends StaleRecord {
     author?: string;
     /** Git's `%G?` status for the commit that wrote this declaration. */
     signatureStatus?: string;
+    /** Git's `%GF` fingerprint for the key that signed this declaration. */
+    signerFingerprint?: string;
 }
 export type InjectionFamily = 'tool-invocation' | 'policy-bypass' | 'privilege-escalation' | 'credential-exfiltration' | 'output-manipulation';
 export interface InjectionPattern {
@@ -165,6 +169,14 @@ export declare const identityCarriesInjection: (recordId: string) => boolean;
  */
 export declare const isTrustedAuthor: (author: string | undefined, trustedAuthors: readonly string[] | undefined) => boolean;
 /**
+ * Whether Git's exact signing-key fingerprint is in repository policy.
+ *
+ * This deliberately has no partial, email, or case-folded matching. `%GF` is
+ * Git's signer identifier; accepting a lookalike turns an allowlist into a
+ * hint. Missing and empty lists therefore authorize nobody.
+ */
+export declare const isTrustedSignerFingerprint: (fingerprint: string | undefined, trustedSignerFingerprints: readonly string[] | undefined) => boolean;
+/**
  * Grades one record. `ctx.author` supplies the commit author when the record
  * carries none of its own.
  *
@@ -215,6 +227,8 @@ export declare const gradeAll: (records: AuthoredRecord[], ctx: GradeContext) =>
  * `directive`.
  */
 export declare const authorsOf: (cwd: string, shas: readonly string[]) => Map<string, string>;
+/** Maps each commit to Git's exact `%GF` signing-key fingerprint. */
+export declare const signerFingerprintsOf: (cwd: string, shas: readonly string[]) => Map<string, string>;
 /**
  * Maps each annotated commit to **every** identity that has written the note
  * attached to it — the people who actually wrote the record text.
@@ -242,6 +256,8 @@ export interface NoteAuthor {
     readonly author: string;
     /** `%G?` from the note-writing commit; only `G` is verifier-trusted. */
     readonly signatureStatus: string;
+    /** `%GF` from the note-writing commit. */
+    readonly signerFingerprint: string;
 }
 export declare const noteAuthorsOf: (cwd: string) => Map<string, NoteAuthor[]>;
 /**
@@ -272,5 +288,6 @@ export declare const gradeDeclarations: (record: Record, declarations: {
     commitAuthors: ReadonlyMap<string, string>;
     /** `%G?` read with the batched trailer pass, keyed by commit sha. */
     commitSignatures: ReadonlyMap<string, string>;
+    commitSignerFingerprints: ReadonlyMap<string, string>;
     noteAuthors: ReadonlyMap<string, readonly NoteAuthor[]>;
 }, ctx: GradeContext) => Grade;

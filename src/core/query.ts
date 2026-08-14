@@ -69,6 +69,7 @@ import {
   gradeRecord,
   noteAuthorsOf,
   restrictGrade,
+  signerFingerprintsOf,
   type Grade,
 } from './grade.js';
 import { NOTES_REF, notesAvailability, type NotesAvailability } from './notes.js';
@@ -185,6 +186,8 @@ export interface QueryOptions {
   trustedAuthors?: readonly string[];
   /** Opt-in: an otherwise eligible directive must have Git's verified `G` status. */
   requireSignedDirective?: boolean;
+  /** Git `%GF` signing-key fingerprints authorized by repository policy. */
+  trustedSignerFingerprints?: readonly string[];
   cwd?: string;
 }
 
@@ -788,12 +791,15 @@ const gradeMerged = (
   at: Date,
   trustedAuthors: readonly string[] | undefined,
   requireSignedDirective: boolean,
+  trustedSignerFingerprints: readonly string[] | undefined,
 ): void => {
   if (merged.length === 0) return;
   const authors = authorsOf(
     cwd,
     merged.flatMap((record) => record.shas),
   );
+  const signerFingerprints =
+    requireSignedDirective ? signerFingerprintsOf(cwd, merged.flatMap((record) => record.shas)) : new Map();
   // Walked only when something actually came from the mirror, so a repository
   // with no notes pays nothing for the check (#409).
   const noteAuthors = merged.some((record) => record.sources.includes('notes'))
@@ -808,12 +814,14 @@ const gradeMerged = (
         sources: record.sources,
         commitAuthors: authors,
         commitSignatures: record.commitSignatures,
+        commitSignerFingerprints: signerFingerprints,
         noteAuthors,
       },
       {
         at,
         ...(trustedAuthors === undefined ? {} : { trustedAuthors }),
         ...(requireSignedDirective ? { requireSignedDirective: true } : {}),
+        ...(trustedSignerFingerprints === undefined ? {} : { trustedSignerFingerprints }),
       },
     );
     record.trust = resolved.trust;
@@ -941,7 +949,14 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       .filter((record) => carriesKey(record, opts.keys))
       .sort(compareRecords);
     // After the filters, so the one `git show` prices only the records that survive.
-    gradeMerged(records, cwd, at, opts.trustedAuthors, opts.requireSignedDirective === true);
+    gradeMerged(
+      records,
+      cwd,
+      at,
+      opts.trustedAuthors,
+      opts.requireSignedDirective === true,
+      opts.trustedSignerFingerprints,
+    );
     for (const record of records) {
       if (record.identityCollision !== true) continue;
       record.trust = 'blocked';
