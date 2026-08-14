@@ -904,9 +904,18 @@ jobs:
           # from a broken fixture. cmd.exe is still the probe's direct child
           # and node is still a grandchild, so the tree is the same one #640 is
           # about; only the protocol path is now unambiguous.
+          # setup-node puts the requested Node in hostedtoolcache and puts that
+          # on PATH; it does not update C:\Program Files\nodejs, which may hold
+          # a different runner-image Node or none at all. Hard-coding that path
+          # made the fixture depend on the image rather than on the job, and
+          # cmd.exe fails silently on a missing interpreter — which is why three
+          # independent attempts produced silence and no child pid.
+          $nodeExe = (Get-Command node).Source
+          Write-Host "--- launcher will run: $nodeExe ---"
+          Write-Host "--- C:\Program Files\nodejs\node.exe present: $(Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'nodejs\node.exe')) ---"
           @"
           @echo off
-          "$env:ProgramFiles\nodejs\node.exe" "$server"
+          "$nodeExe" "$server"
           "@ | Set-Content -LiteralPath $wrapper -NoNewline
           Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
           @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
@@ -948,8 +957,9 @@ jobs:
           }
 
           # Does the protocol survive the cmd.exe hop at all? Drive the wrapper
-          # by hand. An answer here means stdio traverses cmd and the silence
-          # belongs to the probe; silence means the handles are the cause.
+          # by hand. Report what happened and nothing more: silence here does
+          # not distinguish a broken handle from a child that never ran, and a
+          # label that picks one is read by the next person as a finding.
           # mcp-probe.ts asks only for serverInfo.name and a non-empty version,
           # which this mock satisfies, so a rejected shape would surface as
           # foreign-server rather than as a timeout.
@@ -962,9 +972,9 @@ jobs:
           if (-not $self.WaitForExit(5000)) { Stop-Process -Id $self.Id -Force -ErrorAction SilentlyContinue }
           $answer = if (Test-Path -LiteralPath $selfOut) { (Get-Content -LiteralPath $selfOut -Raw) } else { '' }
           if ([string]::IsNullOrWhiteSpace($answer)) {
-            Write-Host '--- wrapper driven by hand: silent => cmd.exe stdio is the cause ---'
+            Write-Host '--- wrapper driven by hand: no output ---'
           } else {
-            Write-Host "--- wrapper driven by hand: answered => stdio traverses cmd; the silence is the probe's ---"
+            Write-Host "--- wrapper driven by hand: answered ---"
             Write-Host $answer.Trim()
           }
           if (Test-Path -LiteralPath $selfErr) { Write-Host "selftest stderr: $("$(Get-Content -LiteralPath $selfErr -Raw)".Trim())" }
