@@ -22287,13 +22287,17 @@ var installHook = (input = {}) => {
     return failure4(`could not install the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
   }
   const after = readHookStatus(cwd);
+  const repointed = before.recordedTarget.bin !== after.recordedTarget.bin;
   const headline = {
     absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
     foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
     outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (unchanged)`
+    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${repointed ? "file unchanged" : "unchanged"})`
   }[before.state];
-  return success2(after, [headline, ...describeChained(after)]);
+  const repoint = repointed ? [
+    `recorded CLI repointed: ${before.recordedTarget.bin === "" ? "(none recorded)" : before.recordedTarget.bin} -> ${after.recordedTarget.bin}`
+  ] : [];
+  return success2(after, [headline, ...repoint, ...describeChained(after)]);
 };
 var CAPTURE_HOOKS = [
   {
