@@ -1313,24 +1313,37 @@ describe('#527 unattended capture initiator', () => {
   }
 
   it.each([
-    ['a dead command', (repo: string) => join(repo, 'missing'), ['command-not-found']],
-    ['a command that is a directory', (repo: string) => repo, ['command-is-directory']],
+    ['a dead command', (repo: string) => join(repo, 'missing'), 'command-not-found'],
+    ['a command that is a directory', (repo: string) => repo, 'command-is-directory'],
     ['a non-executable command', (repo: string) => {
       const command = join(repo, '.test-bin', 'not-executable');
       writeScript(command, '#!/bin/sh\nexit 0\n');
       return command;
-    }, ['command-not-executable']],
+    }, 'command-not-executable'],
+    // Closing stdin and staying alive is not a race with the probe's first
+    // write: the shell reaches `exec 0<&-` before the parent's write lands, so
+    // the write always meets a closed pipe. Measured 10/10 as
+    // `command-closed-input` on linux/amd64. Pinned exactly, because a probe
+    // code that accepts either outcome stops distinguishing the two facts
+    // below.
     ['a command that closes its input and stays alive', (repo: string) => {
       const command = join(repo, '.test-bin', 'closes-input');
       writeScript(command, '#!/bin/sh\nexec 0<&-\nexec sleep 30\n');
       chmodSync(command, 0o755);
       return command;
-    // Scheduling decides whether the parent's initial write observes the
-    // closed pipe or succeeds before the shell closes it. Both are precise
-    // unhealthy outcomes; neither may be mistaken for a live MCP server.
-    }, ['command-closed-input', 'initialize-timed-out']],
-  ] as const)('reports %s distinctly as unhealthy', (_label, commandFor, probes) => {
-    const repo = initRepo(`unattended-${probes.join('-')}`);
+    }, 'command-closed-input'],
+    // The other fact, and a different one: the command keeps its input open
+    // and simply never answers. Nothing is closed, so the probe has to wait
+    // out its own budget. Merging this with the case above would lose the
+    // distinction between "it hung up" and "it is listening and silent".
+    ['a command that keeps its input open and never answers', (repo: string) => {
+      const command = join(repo, '.test-bin', 'never-answers');
+      writeScript(command, '#!/bin/sh\nexec sleep 30\n');
+      chmodSync(command, 0o755);
+      return command;
+    }, 'initialize-timed-out'],
+  ] as const)('reports %s distinctly as unhealthy', (_label, commandFor, probe) => {
+    const repo = initRepo(`unattended-${probe}`);
     enableUnattended(repo);
     const command = commandFor(repo);
     registerMcp(repo, command);
@@ -1343,7 +1356,7 @@ describe('#527 unattended capture initiator', () => {
       ordinary_git_commit: 'cannot-initiate',
       initiator: 'registered-command-unhealthy',
       command,
-      probe: probes.length === 1 ? probes[0] : expect.stringMatching(/^(command-closed-input|initialize-timed-out)$/),
+      probe,
     });
   });
 
