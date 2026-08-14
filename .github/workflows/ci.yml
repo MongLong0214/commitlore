@@ -887,7 +887,7 @@ jobs:
           @"
           @echo off
           start "" /b "$env:ProgramFiles\nodejs\node.exe" "$server"
-          timeout /t 30 /nobreak >nul
+          ping -n 31 127.0.0.1 >nul
           "@ | Set-Content -LiteralPath $wrapper -NoNewline
           Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
           @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
