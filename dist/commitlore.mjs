@@ -19434,6 +19434,7 @@ var commandPath = (command) => {
   }
   return nonExecutable ?? failure2("command-not-found", "command does not exist");
 };
+var needsWindowsCommandShell = (command) => process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
 var probeMcp = async (command, args) => {
   const resolved = commandPath(command);
   if (typeof resolved !== "string") return resolved;
@@ -19459,7 +19460,7 @@ var probeMcp = async (command, args) => {
       delete childEnv["COMMITLORE_MCP_PROBE"];
       child = spawn(resolved, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell: needsWindowsCommandShell(resolved),
         env: childEnv,
         detached: process.platform !== "win32"
       });

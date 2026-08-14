@@ -138,6 +138,9 @@ const commandPath = (command: string): string | McpProbeFailure => {
   return nonExecutable ?? failure('command-not-found', 'command does not exist');
 };
 
+const needsWindowsCommandShell = (command: string): boolean =>
+  process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
+
 /** Speak enough MCP to distinguish a launchable command from usable CommitLore. */
 export const probeMcp = async (command: string, args: string[]): Promise<McpProbeResult> => {
   const resolved = commandPath(command);
@@ -165,7 +168,7 @@ export const probeMcp = async (command: string, args: string[]): Promise<McpProb
       delete childEnv['COMMITLORE_MCP_PROBE'];
       child = spawn(resolved, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: false,
+        shell: needsWindowsCommandShell(resolved),
         env: childEnv,
         detached: process.platform !== 'win32',
       });
