@@ -42,7 +42,7 @@
  */
 import { Console } from 'node:console';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { packageVersion as readPackageVersion } from '../core/paths.js';
+import { runtimeIdentity } from '../core/runtime-identity.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
@@ -78,6 +78,7 @@ export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
 export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
 export const VERIFY_CAPTURE_TOOL = 'commitlore_verify_capture';
 export const STAGE_CAPTURE_TOOL = 'commitlore_stage_capture';
+export const RUNTIME_IDENTITY_TOOL = 'commitlore_runtime_identity';
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
  * expansion (`{+path}`) so a client fills it with a real path rather than one
@@ -97,7 +98,7 @@ const warn = (message) => {
  */
 const packageVersion = () => {
     try {
-        return readPackageVersion() ?? FALLBACK_VERSION;
+        return runtimeIdentity().version;
     }
     catch (error) {
         warn(`could not read the package version (${errorMessage(error)})`);
@@ -201,6 +202,12 @@ const asText = (value) => ({
 /** Every tool here reads; none of them touches anything outside the machine. */
 const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const TOOLS = [
+    {
+        name: RUNTIME_IDENTITY_TOOL,
+        description: 'Report the exact CommitLore entrypoint, package root, version and index schema this MCP server executes.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { ...READS_ONLY, title: 'Report CommitLore runtime identity' },
+    },
     {
         name: QUERY_TOOL,
         description: 'Active CommitLore records for a path: the constraints, ruled-out alternatives and ' +
@@ -444,6 +451,7 @@ export const createServer = (opts = {}) => {
             'this; a rejected record is a normal outcome and never blocks the commit.',
     });
     const handlers = {
+        [RUNTIME_IDENTITY_TOOL]: () => asText(runtimeIdentity()),
         [QUERY_TOOL]: (args) => {
             const kind = kindArg(args);
             return asText(contextJson(root, kind, pathArg(root, args)));

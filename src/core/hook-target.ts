@@ -2,7 +2,8 @@ import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { execGit } from './git.js';
-import { PACKAGE_ROOT, findPackageRoot, packageVersion } from './paths.js';
+import { PACKAGE_ROOT } from './paths.js';
+import { runtimeIdentity, type RuntimeIdentity } from './runtime-identity.js';
 
 export interface RecordedHookTarget {
   readonly bin: string;
@@ -107,9 +108,7 @@ export const hasAllowedBinExtension = (path: string): boolean => classifyBinTarg
  */
 const recordedVersion = (binPath: string): string | null => {
   try {
-    const manifest = readFileSync(join(findPackageRoot(dirname(binPath)), 'package.json'), 'utf8');
-    const parsed = JSON.parse(manifest) as { version?: unknown };
-    return typeof parsed.version === 'string' && parsed.version !== '' ? parsed.version : null;
+    return runtimeIdentity(binPath).version;
   } catch {
     // No manifest above it, unreadable, or not JSON. All three mean the same
     // thing to the caller: this pin's version is unknown.
@@ -133,7 +132,7 @@ const recordedVersion = (binPath: string): string | null => {
  * green here costs a repository every fix shipped since the pin was written.
  */
 const versionProblems = (binPath: string): string[] => {
-  const running = packageVersion();
+  const running = runtimeIdentity().version;
   const pinned = recordedVersion(binPath);
 
   if (pinned === null) {
@@ -147,6 +146,13 @@ const versionProblems = (binPath: string): string[] => {
     `commitlore.bin is version ${pinned}, but this CLI is ${running} — the hook validates ` +
       `every commit with ${pinned}, so anything fixed since then does not apply here`,
   ];
+};
+
+/** The same identity the pinned hook will execute, if its file is readable. */
+export const recordedHookIdentity = (target: RecordedHookTarget, cwd: string): RuntimeIdentity | null => {
+  if (target.bin === '') return null;
+  const path = resolve(cwd, target.bin);
+  try { return isFile(path) ? runtimeIdentity(path) : null; } catch { return null; }
 };
 
 export const readRecordedHookTarget = (cwd: string): RecordedHookTarget => {

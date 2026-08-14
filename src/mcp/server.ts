@@ -45,7 +45,7 @@ import { Console } from 'node:console';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
-import { packageVersion as readPackageVersion } from '../core/paths.js';
+import { formatRuntimeIdentity, runtimeIdentity } from '../core/runtime-identity.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -107,6 +107,7 @@ export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
 export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
 export const VERIFY_CAPTURE_TOOL = 'commitlore_verify_capture';
 export const STAGE_CAPTURE_TOOL = 'commitlore_stage_capture';
+export const RUNTIME_IDENTITY_TOOL = 'commitlore_runtime_identity';
 
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
@@ -137,7 +138,7 @@ const warn = (message: string): void => {
  */
 const packageVersion = (): string => {
   try {
-    return readPackageVersion() ?? FALLBACK_VERSION;
+    return runtimeIdentity().version;
   } catch (error) {
     warn(`could not read the package version (${errorMessage(error)})`);
     return FALLBACK_VERSION;
@@ -248,6 +249,12 @@ const asText = (value: unknown): CallToolResult => ({
 const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 
 const TOOLS: readonly Tool[] = [
+  {
+    name: RUNTIME_IDENTITY_TOOL,
+    description: 'Report the exact CommitLore entrypoint, package root, version and index schema this MCP server executes.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { ...READS_ONLY, title: 'Report CommitLore runtime identity' },
+  },
   {
     name: QUERY_TOOL,
     description:
@@ -519,6 +526,7 @@ export const createServer = (opts: McpServerOptions = {}): Server => {
   );
 
   const handlers: Record<string, (args: ToolArgs) => CallToolResult> = {
+    [RUNTIME_IDENTITY_TOOL]: () => asText(runtimeIdentity()),
     [QUERY_TOOL]: (args) => {
       const kind = kindArg(args);
       return asText(contextJson(root, kind, pathArg(root, args)));

@@ -22,7 +22,7 @@ afterEach(() => {
 
 interface Run {
   status: number | null;
-  summary: { schema: string; ok: boolean; hosts: Array<{ host: string; outcome: string; healthy: boolean }> };
+  summary: { schema: string; runtimeIdentity: { version: string; entrypoint: string; packageRoot: string; indexSchemaVersion: number }; ok: boolean; hosts: Array<{ host: string; outcome: string; healthy: boolean }> };
 }
 
 const wrapper = (root: string, name = 'commitlore'): string => {
@@ -111,6 +111,7 @@ describe('installer-hosts accepts only live CommitLore registrations', () => {
     cursorConfig(home, { command: ours, args: ['mcp'] });
     const result = run(home, ours);
     expect(result.status).toBe(0);
+    expect(result.summary.runtimeIdentity).toMatchObject({ version: '0.8.2', indexSchemaVersion: 4 });
     expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'cursor', outcome: 'owned', healthy: true }));
   });
 

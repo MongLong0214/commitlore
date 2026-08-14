@@ -23,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
-import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { describeRecordedHookTarget, recordedHookIdentity, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT } from '../core/paths.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_MODE, HOOK_NAME, commitMsgStub, } from '../hooks/commit-msg.js';
 import { POST_COMMIT_CHAINED_HOOK_NAME, POST_COMMIT_HOOK_MARKER, POST_COMMIT_HOOK_NAME, } from '../hooks/post-commit.js';
@@ -325,9 +325,10 @@ export const uninstallHook = (input = {}) => {
     return success(readHookStatus(cwd), lines);
 };
 export const hookStatus = (input = {}) => {
+    const cwd = input.cwd ?? process.cwd();
     let status;
     try {
-        status = readHookStatus(input.cwd ?? process.cwd());
+        status = readHookStatus(cwd);
     }
     catch (error) {
         return failure(messageOf(error));
@@ -341,10 +342,14 @@ export const hookStatus = (input = {}) => {
     const targetWarning = status.state === 'installed' && status.recordedTarget.problems.length > 0
         ? ', recorded target warning — run `commitlore hooks install`'
         : '';
+    const identity = recordedHookIdentity(status.recordedTarget, cwd);
     return success(status, [
         `hooks dir: ${status.hooksDir}`,
         `${HOOK_NAME}: ${state}${targetWarning}`,
         ...describeRecordedHookTarget(status.recordedTarget),
+        ...(identity === null
+            ? []
+            : [`hook runtime identity: ${JSON.stringify(identity)}`]),
         ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
         ...describeChained(status),
     ]);

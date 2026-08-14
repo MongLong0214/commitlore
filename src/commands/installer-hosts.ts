@@ -14,6 +14,8 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:chil
 
 import type { Command } from 'commander';
 
+import { runtimeIdentity, type RuntimeIdentity } from '../core/runtime-identity.js';
+
 export const INSTALLER_HOSTS_SCHEMA = 'commitlore_installer_hosts.v1';
 
 type JsonFormat = 'json-mcpServers' | 'json-mcp';
@@ -29,6 +31,8 @@ export interface HostResult {
 
 export interface HostSummary {
   schema: typeof INSTALLER_HOSTS_SCHEMA;
+  /** Identity of the installer process that performed this live probe. */
+  runtimeIdentity: RuntimeIdentity;
   ok: boolean;
   hosts: HostResult[];
   notDetected: string[];
@@ -299,7 +303,7 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
       : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: 'Hermes setup failed' }));
   } else notDetected.push('hermes');
   const hosts = await Promise.all(requested);
-  return { schema: INSTALLER_HOSTS_SCHEMA, ok: hosts.every((host) => host.healthy), hosts, notDetected };
+  return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
 
 interface CommandOptions { wrapper: string; dataRoot: string; home: string; json?: boolean; }

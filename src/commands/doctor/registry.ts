@@ -18,6 +18,7 @@ import { checkHistoryDepth } from './checks/history-history-depth.js';
 import { checkSquashConservation } from './checks/history-squash-conservation.js';
 import { checkIndex } from './checks/index-index-health.js';
 import { checkRuntime } from './checks/runtime-cli-runtime.js';
+import { checkRuntimeIdentity } from './checks/runtime-runtime-identity.js';
 import { checkInstallationIntegrity } from './checks/runtime-installation-integrity.js';
 import { checkGit } from './checks/runtime-git-trailers.js';
 import { checkPush } from './checks/transport-notes-push.js';
@@ -72,6 +73,7 @@ const selectedHookRuntimeOf = (ctx: DoctorContext): DoctorCheck | undefined =>
  */
 export const CHECK_REGISTRY: readonly CheckDefinition[] = [
   { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
+  { id: 'runtime-identity', title: 'runtime identity', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntimeIdentity(ctx) },
   { id: 'installation-integrity', title: 'installation integrity', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkInstallationIntegrity(ctx) },
   { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
   { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },

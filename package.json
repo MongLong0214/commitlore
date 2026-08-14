@@ -4,6 +4,9 @@
   "description": "Git-native, lifecycle-aware decision memory for coding agents",
   "license": "MIT",
   "private": true,
+  "commitlore": {
+    "indexSchemaVersion": 4
+  },
   "type": "module",
   "files": [
     "dist",

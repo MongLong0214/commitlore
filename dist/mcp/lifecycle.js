@@ -36,7 +36,7 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
-import { packageVersion } from '../core/paths.js';
+import { formatRuntimeIdentity, runtimeIdentity } from '../core/runtime-identity.js';
 /** Kept small: this is a breadcrumb trail, not telemetry. */
 const MAX_BYTES = 64 * 1024;
 export const LIFECYCLE_FILE = 'mcp-lifecycle.log';
@@ -103,8 +103,7 @@ const errorMessage = (error) => {
  * ordinary client hangup it represents.
  */
 export const recordServerStart = (cwd = process.cwd(), at = new Date(), output = process.stdout) => {
-    const entry = process.argv[1] ?? 'unknown';
-    write(cwd, `started ${stamp(at)} pid ${String(process.pid)} ${packageVersion()} ${entry}`);
+    write(cwd, `started ${stamp(at)} pid ${String(process.pid)} identity ${formatRuntimeIdentity(runtimeIdentity())}`);
     // The lower number is only a fallback. A crash after stdin closes is still a
     // crash, and a signal received while the client is closing is still a signal.
     let reason;
@@ -157,6 +156,31 @@ export const recordServerStart = (cwd = process.cwd(), at = new Date(), output =
         });
     }
     return { crash };
+};
+/** The identity an MCP process actually recorded when it started, if it is a current-format entry. */
+export const lifecycleIdentity = (entry) => {
+    if (entry.kind !== 'started' || !entry.detail.startsWith('identity '))
+        return null;
+    try {
+        const value = JSON.parse(entry.detail.slice('identity '.length));
+        return typeof value.version === 'string' && typeof value.entrypoint === 'string' &&
+            typeof value.packageRoot === 'string' && typeof value.indexSchemaVersion === 'number'
+            ? { version: value.version, entrypoint: value.entrypoint, packageRoot: value.packageRoot, indexSchemaVersion: value.indexSchemaVersion }
+            : null;
+    }
+    catch {
+        return null;
+    }
+};
+/** Last live-MCP identity is the process identity, not the registration's name. */
+export const latestLifecycleIdentity = (cwd = process.cwd()) => {
+    const started = readLifecycle(cwd).filter((entry) => entry.kind === 'started');
+    for (const entry of started.reverse()) {
+        const identity = lifecycleIdentity(entry);
+        if (identity !== null)
+            return identity;
+    }
+    return null;
 };
 /** Parses the log. Unreadable or absent reads as empty — it is a breadcrumb trail. */
 export const readLifecycle = (cwd = process.cwd()) => {

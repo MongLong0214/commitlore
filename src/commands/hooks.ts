@@ -41,6 +41,7 @@ import {
   type RecordedHookTarget,
   classifyBinTarget,
   describeRecordedHookTarget,
+  recordedHookIdentity,
   readRecordedHookTarget,
 } from '../core/hook-target.js';
 import { PACKAGE_ROOT } from '../core/paths.js';
@@ -415,9 +416,10 @@ export const uninstallHook = (input: HookInput = {}): HookResult => {
 };
 
 export const hookStatus = (input: HookInput = {}): HookResult => {
+  const cwd = input.cwd ?? process.cwd();
   let status: HookStatus;
   try {
-    status = readHookStatus(input.cwd ?? process.cwd());
+    status = readHookStatus(cwd);
   } catch (error) {
     return failure(messageOf(error));
   }
@@ -432,11 +434,15 @@ export const hookStatus = (input: HookInput = {}): HookResult => {
     status.state === 'installed' && status.recordedTarget.problems.length > 0
       ? ', recorded target warning — run `commitlore hooks install`'
       : '';
+  const identity = recordedHookIdentity(status.recordedTarget, cwd);
 
   return success(status, [
     `hooks dir: ${status.hooksDir}`,
     `${HOOK_NAME}: ${state}${targetWarning}`,
     ...describeRecordedHookTarget(status.recordedTarget),
+    ...(identity === null
+      ? []
+      : [`hook runtime identity: ${JSON.stringify(identity)}`]),
     ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
     ...describeChained(status),
   ]);

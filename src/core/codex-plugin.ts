@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { AGENT_CONFIGS, isCodexPluginConfig, type CodexPluginConfig } from './agent-configs.js';
+import { formatRuntimeIdentity, runtimeIdentity } from './runtime-identity.js';
 
 export interface CodexCommandResult {
   readonly status: number | null;
@@ -346,6 +347,7 @@ export const installCodexPlugin = (options: CodexPluginOptions = {}): CodexPlugi
     );
   }
 
-  report.push('start a new Codex session to load the CommitLore skill and MCP tools');
+  report.push(`installer runtime identity: ${formatRuntimeIdentity(runtimeIdentity())}`);
+  report.push('start a new Codex session to load the CommitLore skill and MCP tools; the live MCP runtime identity is available from commitlore_runtime_identity');
   return { exitCode: 0, report };
 };
