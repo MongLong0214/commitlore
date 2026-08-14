@@ -347,6 +347,39 @@ describe('hooks install', () => {
     expect(spawnSync('test', ['-x', hookPath], { shell: false }).status).toBe(0);
   });
 
+  // #629: the hook file reads its target from config, so an upgrade leaves it
+  // byte-identical and the old headline said "(unchanged)" — about the file —
+  // while `commitlore.bin` moved to a different install underneath it. That is
+  // the one line the user reads after being told by `hooks status` to run this,
+  // and it said the repair had not happened.
+  it('says the recorded CLI moved when a reinstall repoints it', () => {
+    const repo = makeRepo();
+    expect(runCli(repo, ['hooks', 'install']).status).toBe(0);
+
+    const stale = join(repo, 'stale-cli.mjs');
+    writeFileSync(stale, '// an older install\n');
+    gitOrThrow(repo, ['config', '--local', 'commitlore.bin', stale]);
+
+    const result = runCli(repo, ['hooks', 'install']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout, 'the file really is unchanged, and saying so is fine').toContain('file unchanged');
+    expect(result.stdout, 'but the repair the user was told to make is the headline').toContain('recorded CLI repointed');
+    expect(result.stdout).toContain(stale);
+    expect(gitOrThrow(repo, ['config', '--local', '--get', 'commitlore.bin']).trim()).not.toBe(stale);
+  });
+
+  it('leaves the recorded CLI unmentioned when nothing moved', () => {
+    const repo = makeRepo();
+    expect(runCli(repo, ['hooks', 'install']).status).toBe(0);
+
+    const result = runCli(repo, ['hooks', 'install']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('(unchanged)');
+    expect(result.stdout, 'a no-op must not read as a repair').not.toContain('recorded CLI repointed');
+  });
+
   it('is idempotent — a second install leaves byte-identical content', () => {
     const repo = makeRepo();
     expect(runCli(repo, ['hooks', 'install']).status).toBe(0);
