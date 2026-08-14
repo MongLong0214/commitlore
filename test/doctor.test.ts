@@ -548,10 +548,10 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     expect(check?.status).not.toBe('ok');
     expect(check?.detail).toContain('version');
     expect(check?.fix).toContain('hooks install');
-    // 16 since installation-integrity joined the registry. The count is
-    // asserted so a check cannot be dropped without someone noticing; when it
-    // moves, it should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(16);
+    // 17 since runtime-identity joined the registry. The count is asserted so
+    // a check cannot be dropped without someone noticing; when it moves, it
+    // should move because a check was deliberately added or removed.
+    expect(report.checks).toHaveLength(17);
   });
 });
 
@@ -999,6 +999,7 @@ describe('doctor: report', () => {
 
     expect(report.checks.map((entry) => entry.id)).toEqual([
       'cli-runtime',
+      'runtime-identity',
       'installation-integrity',
       'notes-refspec',
       'notes-push',
@@ -1050,7 +1051,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(16);
+    expect(parsed.checks).toHaveLength(17);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

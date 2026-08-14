@@ -48,14 +48,19 @@ export const runtimeAssetProblems = (identity) => CAPTURE_ASSETS
     .map((asset) => join(identity.packageRoot, asset))
     .filter((path) => !existsSync(path));
 const printed = (identity) => `v${identity.version}; entry ${identity.entrypoint}; root ${identity.packageRoot}; schema v${identity.indexSchemaVersion}`;
-/** One diagnosis string for every surface identity doctor collected. */
+/**
+ * One diagnosis string for every surface identity doctor collected.
+ *
+ * An entrypoint identifies the route into an installation and stays in the
+ * report, but it is not the installation boundary: the bundle and compiled
+ * CLI are both legitimate entrypoints under one package root.
+ */
 export const diagnoseRuntimeIdentities = (identities) => {
     const cli = identities.cli;
     if (cli === undefined)
         return { ok: false, detail: 'CLI runtime identity is unavailable', fix: 'run commitlore doctor from the installed CLI' };
     const mismatches = Object.entries(identities)
         .filter(([surface, identity]) => surface !== 'cli' && identity !== undefined && (identity.version !== cli.version ||
-        identity.entrypoint !== cli.entrypoint ||
         identity.packageRoot !== cli.packageRoot ||
         identity.indexSchemaVersion !== cli.indexSchemaVersion));
     if (mismatches.length === 0)

@@ -24,6 +24,7 @@ const install = (version: string, schema: number, assets = true): string => {
   scratch.push(root);
   mkdirSync(join(root, 'dist'), { recursive: true });
   writeFileSync(join(root, 'dist', 'commitlore.mjs'), '');
+  writeFileSync(join(root, 'dist', 'cli.js'), '');
   writeFileSync(
     join(root, 'package.json'),
     JSON.stringify({ name: 'commitlore', version, commitlore: { indexSchemaVersion: schema } }),
@@ -36,6 +37,31 @@ const install = (version: string, schema: number, assets = true): string => {
 };
 
 describe('F-001 runtime identity convergence', () => {
+  it('converges two entrypoints from one installation', async () => {
+    const identity = await import('../src/core/runtime-identity.js');
+    const root = install('0.8.2', 4);
+    const report = identity.diagnoseRuntimeIdentities({
+      cli: identity.runtimeIdentity(join(root, 'dist', 'commitlore.mjs')),
+      hook: identity.runtimeIdentity(join(root, 'dist', 'cli.js')),
+    });
+
+    expect(report.ok).toBe(true);
+  });
+
+  it('reports matching releases from different package roots', async () => {
+    const identity = await import('../src/core/runtime-identity.js');
+    const cli = install('0.8.2', 4);
+    const hook = install('0.8.2', 4);
+    const report = identity.diagnoseRuntimeIdentities({
+      cli: identity.runtimeIdentity(join(cli, 'dist', 'commitlore.mjs')),
+      hook: identity.runtimeIdentity(join(hook, 'dist', 'commitlore.mjs')),
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.detail).toContain(cli);
+    expect(report.detail).toContain(hook);
+  });
+
   it('reports a hook pin whose version and package root differ from the PATH CLI', async () => {
     const identity = await import('../src/core/runtime-identity.js');
     const cli = install('0.8.2', 4);

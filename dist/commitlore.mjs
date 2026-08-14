@@ -18269,7 +18269,7 @@ var printed = (identity) => `v${identity.version}; entry ${identity.entrypoint};
 var diagnoseRuntimeIdentities = (identities) => {
   const cli = identities.cli;
   if (cli === void 0) return { ok: false, detail: "CLI runtime identity is unavailable", fix: "run commitlore doctor from the installed CLI" };
-  const mismatches = Object.entries(identities).filter(([surface, identity]) => surface !== "cli" && identity !== void 0 && (identity.version !== cli.version || identity.entrypoint !== cli.entrypoint || identity.packageRoot !== cli.packageRoot || identity.indexSchemaVersion !== cli.indexSchemaVersion));
+  const mismatches = Object.entries(identities).filter(([surface, identity]) => surface !== "cli" && identity !== void 0 && (identity.version !== cli.version || identity.packageRoot !== cli.packageRoot || identity.indexSchemaVersion !== cli.indexSchemaVersion));
   if (mismatches.length === 0) return { ok: true, detail: `all observed runtimes match CLI: ${printed(cli)}`, fix: "" };
   const fixes = {
     hook: "commitlore hooks install",

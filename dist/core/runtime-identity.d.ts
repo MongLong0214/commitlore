@@ -23,7 +23,13 @@ export interface IdentityDiagnosis {
     readonly detail: string;
     readonly fix: string;
 }
-/** One diagnosis string for every surface identity doctor collected. */
+/**
+ * One diagnosis string for every surface identity doctor collected.
+ *
+ * An entrypoint identifies the route into an installation and stays in the
+ * report, but it is not the installation boundary: the bundle and compiled
+ * CLI are both legitimate entrypoints under one package root.
+ */
 export declare const diagnoseRuntimeIdentities: (identities: Partial<Record<"cli" | "hook" | "mcp" | "plugin", RuntimeIdentity>>) => IdentityDiagnosis;
 /** Schema skew is never a steady-state scan fallback: the cache can be rebuilt. */
 export declare const convergeIndexSchema: ({ writer, reader }: {
