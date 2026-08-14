@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "48aee91f2f950bdb73059616db115954a701f8b4aeb16e8b458a9a173f94d219"
+    "sha256": "afa98028ec4993fbc08c1c82786217af028a1b04b38ba78b60b29c689dbebabe"
   },
   "artifact": {
-    "sha256": "84dde6ac0bd7ca65f1fd81695f5175a9c5c1cfa39970204a77cead002f427741",
+    "sha256": "9a6217b0f57f566d1eeff74e3238204e4c037b6f210e7dae68eb8c38ce07bcd9",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -574,7 +574,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "9f54cb95fd257bba72f8dbe5a715502075e612f6e3419e6cd6e4c84f997c27cc"
+        "sha256": "74e5e530404eb139511dadc7eb80cc4e0ab1f08ae543debb337a3dd0dcebddb3"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -798,11 +798,11 @@
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "51adc61c497181ccfc31a548d41893fe987a01ec46afc8cc430318182bcbdc62"
+        "sha256": "dfa1ff5d6b28ffe324dca751c79c754c15a8103a4227e1dae9b69e064c19618c"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "c4fcd4972838c1bdd22d02479b0a00ae5e284b6095372302134c0e8d4aabe18c"
+        "sha256": "2d69b63cf5f308d8661b4107400eec954a879d52d01d20bf553cdbced3a74574"
       },
       {
         "path": "dist/core/inject.d.ts",
@@ -974,15 +974,15 @@
       },
       {
         "path": "dist/core/trusted-authors.d.ts",
-        "sha256": "77c318876143bec7329468b0f6e6f2cae7617d08669647fefabb0873018eada3"
+        "sha256": "7e70c75f3d28a9088cc2fc20e27fe1e2602c5ad9b74fa988b152222649977bcc"
       },
       {
         "path": "dist/core/trusted-authors.js",
-        "sha256": "4a3a45b466d94358aa3da660d1fdc4b63fcae0556d1f7f1f09a2b24e875c1f99"
+        "sha256": "a3eba07927f5ff993226faf078511dc566d1065694e221175065aa4f040c8f23"
       },
       {
         "path": "dist/core/trusted-authors.js.map",
-        "sha256": "255ac345bd8785a41162d4f8b6298c7a1d85ada12e51bda5e5e50a9a13bbc1c7"
+        "sha256": "996ed9c037870d99f922843589a8f32217e05ae15f5bba9bd14dac474651eb9a"
       },
       {
         "path": "dist/core/types.d.ts",

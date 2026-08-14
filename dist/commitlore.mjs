@@ -11477,7 +11477,7 @@ var notesAvailability = (opts = {}) => {
 };
 
 // src/core/backfill.ts
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { spawnSync as spawnSync3 } from "node:child_process";
 import { readFileSync as readFileSync2 } from "node:fs";
 
 // src/core/schema.ts
@@ -12376,6 +12376,73 @@ var buildRepairFeedback = (rejected) => {
 import { existsSync as existsSync3, mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname as dirname2, resolve as resolve2 } from "node:path";
+
+// src/core/trusted-authors.ts
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { createHash } from "node:crypto";
+var TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
+var REQUIRE_SIGNED_DIRECTIVE_KEY = "commitlore.requireSignedDirective";
+var TRUSTED_SIGNER_KEY = "commitlore.trustedSigner";
+var configuredTrustedAuthors = (cwd) => {
+  const result = execGit(["config", "--local", "--get-all", TRUSTED_AUTHOR_KEY], { cwd });
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
+};
+var configuredTrustedSignerFingerprints = (cwd) => {
+  const result = execGit(["config", "--local", "--get-all", TRUSTED_SIGNER_KEY], { cwd });
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
+};
+var configuredDirectiveTrustSetting = (cwd, git2 = execGit) => {
+  const raw = git2(["config", "--local", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], { cwd });
+  if (raw.code !== 0 || raw.stdout.trim() === "") return "author-string";
+  const parsed = git2(["config", "--local", "--bool", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], {
+    cwd
+  });
+  if (parsed.code !== 0) return "malformed";
+  return parsed.stdout.trim() === "true" ? "signature-required" : "author-string";
+};
+var configuredSignedDirectivesRequired = (cwd, git2 = execGit) => configuredDirectiveTrustSetting(cwd, git2) !== "author-string";
+var signatureVerifierGeneration = (cwd, git2 = execGit) => {
+  if (!configuredSignedDirectivesRequired(cwd, git2)) return null;
+  const configured = git2(["config", "--get", "gpg.program"], { cwd });
+  const program3 = configured.code === 0 && configured.stdout.trim() !== "" ? configured.stdout.trim() : "gpg";
+  const listing = spawnSync2(program3, ["--batch", "--with-colons", "--list-keys"], {
+    encoding: "utf8",
+    windowsHide: true
+  });
+  const material = listing.error === void 0 && listing.status === 0 ? listing.stdout : `unavailable:${String(listing.status ?? listing.error?.message ?? "spawn-failed")}`;
+  return createHash("sha256").update(`${process.env["GNUPGHOME"] ?? ""}\0${program3}\0${material}`).digest("hex").slice(0, 16);
+};
+var seedTrustedAuthor = (cwd) => {
+  const existing = configuredTrustedAuthors(cwd);
+  if (existing.length > 0) {
+    return {
+      recorded: false,
+      author: existing[0] ?? null,
+      reason: `already configures ${String(existing.length)} directive author string(s) \u2014 left unchanged`
+    };
+  }
+  const email2 = execGit(["config", "--get", "user.email"], { cwd }).stdout.trim();
+  if (email2 === "") {
+    return {
+      recorded: false,
+      author: null,
+      reason: "no git user.email on this machine, so records stay [claim] until an author is set"
+    };
+  }
+  const written = execGit(["config", "--local", "--add", TRUSTED_AUTHOR_KEY, email2], { cwd });
+  if (written.code !== 0) {
+    return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
+  }
+  return {
+    recorded: true,
+    author: email2,
+    reason: `records matching your configured author string can now render [directive]`
+  };
+};
+
+// src/core/index-db.ts
 var cachedCtor = null;
 var loadDatabaseCtor = () => {
   if (cachedCtor !== null) return cachedCtor;
@@ -12737,6 +12804,7 @@ var writeMeta = (db, key, value) => {
   );
 };
 var UNREAD_COMMITS_META = "unread_commits";
+var SIGNATURE_VERIFIER_META = "signature_verifier_generation";
 var persistUnread = (db, unread) => {
   writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
 };
@@ -12786,13 +12854,19 @@ var syncFts = (db, requested, writable) => {
   }
   return true;
 };
-var healthProblem = (db) => {
+var healthProblem = (db, verifierGeneration) => {
   try {
     if (!tableExists(db, "meta")) return "index has no meta table";
     const version2 = readMeta(db, "schema_version");
     if (version2 === null) return "index has no schema version";
     if (version2 !== String(SCHEMA_VERSION)) {
       return `index was built by schema v${version2}, this build expects v${SCHEMA_VERSION}`;
+    }
+    if (verifierGeneration !== null) {
+      const recorded = readMeta(db, SIGNATURE_VERIFIER_META);
+      if (recorded !== verifierGeneration) {
+        return `index cached signature verdicts under verifier ${recorded ?? "unrecorded"}, this reader is ${verifierGeneration}`;
+      }
     }
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
@@ -12978,6 +13052,7 @@ var rebuildIndex = (handle, opts = {}) => {
     stats.pathsIndexed += noteCounts.paths;
     writeMeta(handle.db, "last_indexed_sha", head);
     writeMeta(handle.db, "notes_ref_sha", notesRef);
+    writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
     persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
@@ -13013,7 +13088,7 @@ var updateIndex = (handle, opts = {}) => {
     handle.discardedReason = null;
     return rebuildOrRefuse(discarded);
   }
-  const problem = healthProblem(handle.db);
+  const problem = healthProblem(handle.db, signatureVerifierGeneration(handle.cwd));
   if (problem !== null) {
     if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
@@ -13267,7 +13342,7 @@ var resolveCommit = (cwd, sha) => {
   return resolved === "" ? null : resolved;
 };
 var GH_MAX_BUFFER = 8 * 1024 * 1024;
-var runGh = (args, cwd) => spawnSync2("gh", args, {
+var runGh = (args, cwd) => spawnSync3("gh", args, {
   shell: false,
   encoding: "utf8",
   cwd: cwd ?? process.cwd(),
@@ -13836,7 +13911,7 @@ var register = (program3) => {
 };
 
 // src/core/capture-policy.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync } from "node:fs";
 import { join as join2 } from "node:path";
 var CAPTURE_MODES = ["auto", "suggest", "off"];
@@ -13857,7 +13932,7 @@ var POLICY_KEYS = [
   "require_verified_evidence"
 ];
 var POLICY_FILE_NAME = ".commitlore-policy.json";
-var sha256 = (input) => createHash("sha256").update(input).digest("hex");
+var sha256 = (input) => createHash2("sha256").update(input).digest("hex");
 var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
   JSON.stringify({
     mode: policy.mode,
@@ -14190,7 +14265,7 @@ var register2 = (program3) => {
 import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
 
 // src/core/capture-prepare.ts
-import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
+import { createHash as createHash3, randomBytes as randomBytes2 } from "node:crypto";
 
 // src/core/capture-outcome.ts
 var CAPTURE_KIND = "commitloreCaptureKind";
@@ -16340,7 +16415,7 @@ var prepareValues = (opts) => {
     );
   }
   const diff = snapshot?.staged_diff ?? execGitOrThrow(["diff", "--cached"], { cwd });
-  const stagedDiffHash = createHash2("sha256").update(diff).digest("hex");
+  const stagedDiffHash = createHash3("sha256").update(diff).digest("hex");
   const stagedTreeOid = snapshot?.staged_tree_oid ?? execGitOrThrow(["write-tree"], { cwd }).trim();
   if (!isFullObjectId(stagedTreeOid)) {
     throw markCaptureError(
@@ -16349,7 +16424,7 @@ var prepareValues = (opts) => {
     );
   }
   const sourceHashes = {
-    transcript: createHash2("sha256").update(transcript).digest("hex"),
+    transcript: createHash3("sha256").update(transcript).digest("hex"),
     diff: stagedDiffHash
   };
   const policy = resolvePolicy(cwd);
@@ -16442,9 +16517,9 @@ var prepareCaptureContextReadOnly = (opts) => {
 };
 
 // src/core/capture-verify.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 var PROVENANCE_KEY3 = "Provenance";
-var sha2562 = (input) => createHash3("sha256").update(input).digest("hex");
+var sha2562 = (input) => createHash4("sha256").update(input).digest("hex");
 var recordIdOf = (record2) => record2.trailers.find((t) => t.key === "Record-Id")?.value;
 var recordIdSeed = (record2) => record2.trailers.filter((trailer) => trailer.key !== "Record-Id").map((trailer) => JSON.stringify([trailer.key, trailer.value])).sort().join("\n");
 var MINTED_ID_CHARS = 12;
@@ -16725,7 +16800,7 @@ var storeVerificationResult = (nonce, cwd, result) => {
 };
 
 // src/core/capture-stage.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 var stageCaptureRecord = (opts) => {
   const { nonce, cwd, expiryMinutes } = opts;
   const record2 = readPending(nonce, { cwd });
@@ -16752,7 +16827,7 @@ var stageCaptureRecord = (opts) => {
     );
   }
   const currentDiff = execGitOrThrow(["diff", "--cached"], { cwd });
-  const currentDiffHash = createHash4("sha256").update(currentDiff).digest("hex");
+  const currentDiffHash = createHash5("sha256").update(currentDiff).digest("hex");
   if (currentDiffHash !== record2.staged_diff_hash) {
     throw markCaptureError(
       new Error("Staging rejected: staged diff changed since prepare"),
@@ -17256,58 +17331,6 @@ var runCaptureShadow = (opts) => {
       approximation: SHADOW_APPROXIMATION,
       read_only: SHADOW_READ_ONLY_GUARANTEE
     }
-  };
-};
-
-// src/core/trusted-authors.ts
-var TRUSTED_AUTHOR_KEY = "commitlore.trustedAuthor";
-var REQUIRE_SIGNED_DIRECTIVE_KEY = "commitlore.requireSignedDirective";
-var TRUSTED_SIGNER_KEY = "commitlore.trustedSigner";
-var configuredTrustedAuthors = (cwd) => {
-  const result = execGit(["config", "--local", "--get-all", TRUSTED_AUTHOR_KEY], { cwd });
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
-};
-var configuredTrustedSignerFingerprints = (cwd) => {
-  const result = execGit(["config", "--local", "--get-all", TRUSTED_SIGNER_KEY], { cwd });
-  if (result.code !== 0) return [];
-  return result.stdout.split("\n").map((line2) => line2.trim()).filter((line2) => line2 !== "");
-};
-var configuredDirectiveTrustSetting = (cwd, git2 = execGit) => {
-  const raw = git2(["config", "--local", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], { cwd });
-  if (raw.code !== 0 || raw.stdout.trim() === "") return "author-string";
-  const parsed = git2(["config", "--local", "--bool", "--get", REQUIRE_SIGNED_DIRECTIVE_KEY], {
-    cwd
-  });
-  if (parsed.code !== 0) return "malformed";
-  return parsed.stdout.trim() === "true" ? "signature-required" : "author-string";
-};
-var configuredSignedDirectivesRequired = (cwd, git2 = execGit) => configuredDirectiveTrustSetting(cwd, git2) !== "author-string";
-var seedTrustedAuthor = (cwd) => {
-  const existing = configuredTrustedAuthors(cwd);
-  if (existing.length > 0) {
-    return {
-      recorded: false,
-      author: existing[0] ?? null,
-      reason: `already configures ${String(existing.length)} directive author string(s) \u2014 left unchanged`
-    };
-  }
-  const email2 = execGit(["config", "--get", "user.email"], { cwd }).stdout.trim();
-  if (email2 === "") {
-    return {
-      recorded: false,
-      author: null,
-      reason: "no git user.email on this machine, so records stay [claim] until an author is set"
-    };
-  }
-  const written = execGit(["config", "--local", "--add", TRUSTED_AUTHOR_KEY, email2], { cwd });
-  if (written.code !== 0) {
-    return { recorded: false, author: null, reason: `could not write ${TRUSTED_AUTHOR_KEY}` };
-  }
-  return {
-    recorded: true,
-    author: email2,
-    reason: `records matching your configured author string can now render [directive]`
   };
 };
 
@@ -18046,7 +18069,7 @@ var claudeHookStatus = (input) => {
 };
 
 // src/commands/doctor/model.ts
-import { spawnSync as spawnSync3 } from "node:child_process";
+import { spawnSync as spawnSync4 } from "node:child_process";
 var PROBE_MESSAGE = "commitlore doctor probe\n\nLimit: probe\nBlast: local\n";
 var gitOptions2 = (opts) => opts.cwd === void 0 ? {} : { cwd: opts.cwd };
 var boundedExcerpt = (output) => {
@@ -18105,7 +18128,7 @@ var defaultDoctorContext = (opts = {}) => ({
   now: process.hrtime.bigint,
   memo: /* @__PURE__ */ new Map(),
   git: execGit,
-  spawn: spawnSync3,
+  spawn: spawnSync4,
   env: process.env,
   openIndex
 });
@@ -21367,7 +21390,7 @@ import {
 import { join as join11, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
-import { createHash as createHash5, randomBytes as randomBytes5 } from "node:crypto";
+import { createHash as createHash6, randomBytes as randomBytes5 } from "node:crypto";
 import { chmodSync, existsSync as existsSync14, mkdirSync as mkdirSync5, readFileSync as readFileSync14, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 
@@ -21507,7 +21530,7 @@ var runPostCommitFinaliser = (cwd) => {
     if (pending.staged_tree_oid !== committedTree) continue;
     if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
     const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
-    const expectedHash = createHash5("sha256").update(canonicalBlock).digest("hex");
+    const expectedHash = createHash6("sha256").update(canonicalBlock).digest("hex");
     if (pending.applied_record_hash !== expectedHash) continue;
     try {
       consumePending(pending.nonce, headSha2, { cwd });
@@ -21696,7 +21719,7 @@ var register7 = (program3) => {
 };
 
 // src/hooks/prepare-commit-msg.ts
-import { createHash as createHash6, randomBytes as randomBytes7 } from "node:crypto";
+import { createHash as createHash7, randomBytes as randomBytes7 } from "node:crypto";
 import { chmodSync as chmodSync3, existsSync as existsSync16, mkdirSync as mkdirSync7, readFileSync as readFileSync16, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
 import { resolve as resolve14 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
@@ -21868,7 +21891,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const currentHead = headResult.stdout.trim();
   const diffResult = execGit(["diff", "--cached"], { cwd });
   if (diffResult.code !== 0) return;
-  const currentDiffHash = createHash6("sha256").update(diffResult.stdout).digest("hex");
+  const currentDiffHash = createHash7("sha256").update(diffResult.stdout).digest("hex");
   const currentPolicyHash = resolvePolicy(cwd).identityHash;
   const now = Date.now();
   let currentMessage;
@@ -21902,7 +21925,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   if (!trailerBlock) return;
   const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-  const recordHash = createHash6("sha256").update(trailerBlock).digest("hex");
+  const recordHash = createHash7("sha256").update(trailerBlock).digest("hex");
   try {
     markApplied(pending.nonce, recordHash, { cwd });
   } catch {
@@ -23204,7 +23227,7 @@ var register14 = (program3) => {
 };
 
 // src/commands/hermes.ts
-import { spawnSync as spawnSync4 } from "node:child_process";
+import { spawnSync as spawnSync5 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync20, mkdirSync as mkdirSync10, readFileSync as readFileSync22, renameSync as renameSync9, statSync as statSync8, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
 import { basename as basename3, dirname as dirname9, join as join14, resolve as resolve19 } from "node:path";
@@ -23425,7 +23448,7 @@ var removeHermesConfig = (contents, options) => {
 
 // src/commands/hermes.ts
 var commandExists = (command) => {
-  const result = spawnSync4(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
+  const result = spawnSync5(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
   return result.error === void 0;
 };
 var backupPathFor = (configPath) => {
@@ -23451,7 +23474,7 @@ var runVerification = (report, verified) => {
     report.push("unverified: Hermes is not on PATH, so start a fresh session to load the configured profile");
     return;
   }
-  const skills = spawnSync4("hermes", ["skills", "list", "--source", "all"], {
+  const skills = spawnSync5("hermes", ["skills", "list", "--source", "all"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -23463,7 +23486,7 @@ var runVerification = (report, verified) => {
   } else {
     report.push("unverified: Hermes did not list every CommitLore skill; start a fresh session and run `hermes skills list --source all`");
   }
-  const mcp = spawnSync4("hermes", ["mcp", "test", "commitlore"], {
+  const mcp = spawnSync5("hermes", ["mcp", "test", "commitlore"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -23657,7 +23680,7 @@ import { readFileSync as readFileSync23, realpathSync as realpathSync4 } from "n
 import { basename as basename4, dirname as dirname10, isAbsolute as isAbsolute2, join as join15, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
 var NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 var resolveAblation = (flags) => flags === void 0 ? NO_ABLATION : {
   noScope: flags.noScope === true,
@@ -23877,7 +23900,7 @@ var cacheKeyOf = (parts) => {
     // onto one key rather than two.
     ...parts.ablation.length === 0 ? [] : [parts.ablation]
   ]);
-  return createHash7("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
+  return createHash8("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
 };
 var resolveBudget = (budget) => {
   if (budget === void 0) return DEFAULT_BUDGET_TOKENS;
@@ -24222,7 +24245,7 @@ var register17 = (program3) => {
 import { accessSync, constants, existsSync as existsSync21, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync9, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync24 } from "node:fs";
 import { delimiter, dirname as dirname11, join as join16 } from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawn, spawnSync as spawnSync5 } from "node:child_process";
+import { spawn, spawnSync as spawnSync6 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
 var isObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var ownEntry = (format, entry, wrapper) => {
@@ -24431,7 +24454,7 @@ var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter).some((di
   }
 });
 var commandResult = (command, args) => {
-  const result = spawnSync5(command, args, { encoding: "utf8", shell: false });
+  const result = spawnSync6(command, args, { encoding: "utf8", shell: false });
   return { ok: result.status === 0 && result.error === void 0, stdout: result.stdout ?? "" };
 };
 var cliHost = async (host, wrapper) => {
@@ -24471,7 +24494,7 @@ var inspectAndApplyHosts = async (options) => {
     else notDetected.push(host);
   }
   if (hasCommand("hermes") || existsSync21(join16(home, ".hermes"))) {
-    const result = spawnSync5(options.wrapper, ["hermes", "install", "--config", join16(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
+    const result = spawnSync6(options.wrapper, ["hermes", "install", "--config", join16(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
     requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
   } else notDetected.push("hermes");
   const hosts = await Promise.all(requested);
@@ -33533,7 +33556,7 @@ var register20 = (program3) => {
 };
 
 // src/core/before-change.ts
-import { createHash as createHash8 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 var deriveVerificationGaps = (cwd) => {
   const gaps = [];
   const history = historyAvailability(cwd);
@@ -33568,12 +33591,12 @@ var resolveHead2 = (cwd) => {
 };
 var buildCacheKey = (head, path2, proposal, at) => {
   const lifecycleInstant = at.toISOString();
-  const pathHash = createHash8("sha256").update(path2).digest("hex").slice(0, 16);
+  const pathHash = createHash9("sha256").update(path2).digest("hex").slice(0, 16);
   if (proposal === void 0) {
     return `ctx:${head}:${lifecycleInstant}:${pathHash}`;
   }
   const normalised = proposal.trim().replace(/\s+/g, " ");
-  const proposalHash = createHash8("sha256").update(normalised).digest("hex").slice(0, 16);
+  const proposalHash = createHash9("sha256").update(normalised).digest("hex").slice(0, 16);
   return `full:${head}:${lifecycleInstant}:${pathHash}:${proposalHash}`;
 };
 var beforeChange = (opts) => {
@@ -34228,7 +34251,7 @@ var register21 = (program3) => {
 };
 
 // src/core/codex-plugin.ts
-import { spawnSync as spawnSync6 } from "node:child_process";
+import { spawnSync as spawnSync7 } from "node:child_process";
 import { existsSync as existsSync22, mkdirSync as mkdirSync12, readFileSync as readFileSync25, rmSync as rmSync5, writeFileSync as writeFileSync18 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join17 } from "node:path";
@@ -34313,7 +34336,7 @@ var codexSaid = (result) => {
   return [`codex said: ${said}`];
 };
 var runCodexCommand = (args) => {
-  const result = spawnSync6("codex", args, { encoding: "utf8", timeout: 3e4 });
+  const result = spawnSync7("codex", args, { encoding: "utf8", timeout: 3e4 });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -35231,7 +35254,7 @@ var register25 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync7 } from "node:child_process";
+import { spawnSync as spawnSync8 } from "node:child_process";
 import { existsSync as existsSync23, readFileSync as readFileSync28, rmSync as rmSync6, writeFileSync as writeFileSync20 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join18 } from "node:path";
@@ -35262,7 +35285,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync7(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync8(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -35376,7 +35399,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync7(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync8(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
