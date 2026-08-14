@@ -826,8 +826,6 @@ jobs:
       # findings described above.
       - name: A bare installed MCP command is healthy through PATHEXT (#640)
         shell: pwsh
-        # Keep going long enough to record the separate child-tree defect too.
-        continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
           $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
@@ -869,6 +867,7 @@ jobs:
           $pidFile = Join-Path $repo 'child.pid'
           $server = Join-Path $repo 'child-server.cjs'
           $wrapper = Join-Path $repo 'launcher.cmd'
+          $cmd = Join-Path $env:SystemRoot 'System32\cmd.exe'
           @'
           const { writeFileSync } = require('node:fs');
           writeFileSync(process.env.MCP_PROBE_CHILD_PID, String(process.pid));
@@ -892,7 +891,7 @@ jobs:
           timeout /t 30 /nobreak >nul
           "@ | Set-Content -LiteralPath $wrapper -NoNewline
           Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
-          @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
+          @{ mcpServers = @{ commitlore = @{ command = $cmd; args = @('/d', '/s', '/c', $wrapper) } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
           $env:MCP_PROBE_CHILD_PID = $pidFile
           $stdout = Join-Path $repo 'doctor.json'
           $stderr = Join-Path $repo 'doctor.err'

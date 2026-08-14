@@ -73,7 +73,9 @@ const commandPath = (command) => {
         ? (process.env['PATH'] ?? '').split(delimiter).filter(Boolean).map((directory) => join(directory, command))
         : [command];
     const hasExtension = command.lastIndexOf('.') > command.lastIndexOf('/');
-    const extensions = [];
+    const extensions = process.platform === 'win32' && bare && !hasExtension
+        ? (process.env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+        : [];
     const candidates = pathCandidates.flatMap((candidate) => [
         candidate,
         ...extensions.map((extension) => candidate + extension),
