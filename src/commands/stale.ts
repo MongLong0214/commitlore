@@ -12,7 +12,7 @@
 import type { Command } from 'commander';
 
 import { identityCarriesInjection, scanInjection, scanTrailer } from '../core/grade.js';
-import { execGit } from '../core/git.js';
+import { execGit, canonicalCommittedAt } from '../core/git.js';
 import {
   listRecordShas,
   notesAvailability,
@@ -99,7 +99,7 @@ const parseChunk = (chunk: string): CollectedRecord | null => {
 
   return {
     sha: chunk.slice(0, firstSep),
-    committedAt: chunk.slice(firstSep + 1, secondSep),
+    committedAt: canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep)),
     trailers,
     source: 'commit',
   };

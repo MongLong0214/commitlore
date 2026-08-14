@@ -53,7 +53,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { execGit, execGitOrThrow, historyAvailability } from './git.js';
+import { canonicalCommittedAt, execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseRecordBlocks } from './trailers.js';
 import { signatureVerifierGeneration } from './trusted-authors.js';
 import { canonicalConventionalTrailerKey, isConventionalTrailerKey, isCommitLoreKey, } from './types.js';
@@ -458,7 +458,7 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
             batchRecords.push({
                 sha,
                 block: 0,
-                committedAt,
+                committedAt: canonicalCommittedAt(committedAt),
                 committedTs: Number.parseInt(rawTs, 10),
                 signatureStatus: signatureStatus?.trim() ?? '',
                 source: 'commit',
@@ -593,7 +593,7 @@ const readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
                 batchRecords.push({
                     sha,
                     block,
-                    committedAt,
+                    committedAt: canonicalCommittedAt(committedAt),
                     committedTs: Number.parseInt(rawTs, 10),
                     signatureStatus: signatureStatus?.trim() ?? '',
                     source: 'notes',

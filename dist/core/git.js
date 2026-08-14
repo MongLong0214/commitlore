@@ -129,4 +129,18 @@ export const hasShallowHistory = (cwd) => {
     const shallow = execGit(['rev-parse', '--git-path', 'shallow'], { cwd });
     return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
+/**
+ * Git's `%cI` for a UTC commit, spelled one way (#650).
+ *
+ * `%cI` is strict ISO 8601, and git changed how it renders a zero offset:
+ * 2.39 emits `+00:00`, 2.50 emits `Z`. The same commit therefore reads
+ * differently depending on the machine, and `committedAt` is a documented
+ * field of the `--json` output — a consumer comparing strings, matching a
+ * pattern, or feeding a strict parser gets different answers for one
+ * repository.
+ *
+ * Only the UTC spelling is touched. A real offset carries information about
+ * where the commit was made and is left exactly as git wrote it.
+ */
+export const canonicalCommittedAt = (value) => value.endsWith('+00:00') ? `${value.slice(0, -6)}Z` : value;
 //# sourceMappingURL=git.js.map

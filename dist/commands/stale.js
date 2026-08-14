@@ -9,7 +9,7 @@
  * as the default for `--at`.
  */
 import { identityCarriesInjection, scanInjection, scanTrailer } from '../core/grade.js';
-import { execGit } from '../core/git.js';
+import { execGit, canonicalCommittedAt } from '../core/git.js';
 import { listRecordShas, notesAvailability, readRecord, } from '../core/notes.js';
 import { findDanglingRefs, findIdCollisions, foldLifecycle, isStale, } from '../core/stale.js';
 import { parseCommitMessage } from '../core/trailers.js';
@@ -58,7 +58,7 @@ const parseChunk = (chunk) => {
     const trailers = CANDIDATE_LINE_RE.test(message) ? parseCommitMessage(message) : [];
     return {
         sha: chunk.slice(0, firstSep),
-        committedAt: chunk.slice(firstSep + 1, secondSep),
+        committedAt: canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep)),
         trailers,
         source: 'commit',
     };

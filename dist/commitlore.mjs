@@ -11271,6 +11271,7 @@ var hasShallowHistory = (cwd) => {
   const shallow = execGit(["rev-parse", "--git-path", "shallow"], { cwd });
   return shallow.code === 0 && existsSync(resolve(cwd, shallow.stdout.trim()));
 };
+var canonicalCommittedAt = (value) => value.endsWith("+00:00") ? `${value.slice(0, -6)}Z` : value;
 
 // src/core/trailers.ts
 var RECORD_ID_KEY = "Record-Id";
@@ -12665,7 +12666,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
       batchRecords.push({
         sha,
         block: 0,
-        committedAt,
+        committedAt: canonicalCommittedAt(committedAt),
         committedTs: Number.parseInt(rawTs, 10),
         signatureStatus: signatureStatus?.trim() ?? "",
         source: "commit",
@@ -12733,7 +12734,7 @@ ${noteText}`);
         batchRecords.push({
           sha,
           block,
-          committedAt,
+          committedAt: canonicalCommittedAt(committedAt),
           committedTs: Number.parseInt(rawTs, 10),
           signatureStatus: signatureStatus?.trim() ?? "",
           source: "notes",
@@ -33553,7 +33554,7 @@ var parseChunk = (chunk) => {
   const trailers = CANDIDATE_LINE_RE2.test(message) ? parseCommitMessage(message) : [];
   return {
     sha: chunk.slice(0, firstSep),
-    committedAt: chunk.slice(firstSep + 1, secondSep),
+    committedAt: canonicalCommittedAt(chunk.slice(firstSep + 1, secondSep)),
     trailers,
     source: "commit"
   };
