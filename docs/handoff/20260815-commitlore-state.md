@@ -93,11 +93,18 @@ repository, all three conditions hold — `src=[commit]`, the sha resolves to
 HEAD, no operation in progress. So the decision logic is right and the fault is
 before or after it.
 
-**Next step.** `git rev-parse --git-path` returns a **relative** path
-(`.git/commitlore-amend`). The hook resolves it against its cwd and `validate`
-resolves it against the cwd it was handed. If those differ, the same string
-names two files — the marker is not missing, it is being looked for elsewhere.
-Print both and compare before changing anything.
+**Narrowed since.** The read side is not the fault. `consumeAmendMarker(cwd)` is
+called with the same `cwd` that `recordsFor` receives in the same scope, so
+`validate` resolves the relative path against the repository it was handed.
+
+**Next step.** That leaves the write side: whether `recordAmendIntent` runs at
+all, and with what `process.cwd()`. The installed stub calls
+`commitlore prepare-commit-msg "$@"`, so the arguments do arrive — measured. What
+is not measured is the cwd of that CLI process. Print it beside the path
+`git rev-parse --git-path commitlore-amend` resolves to, from inside the hook,
+and compare against what `validate` computes. Do that before changing code:
+the decision logic is already measured correct against a real amend, so the
+fault is on either side of it, not in it.
 
 **Why A was withdrawn** (do not re-propose it): not counting HEAD at all
 reverses what #430 built. Its two assertions in
