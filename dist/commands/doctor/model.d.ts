@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { type ExecGitOptions, type GitResult } from '../../core/git.js';
 import { openIndex } from '../../core/index-db.js';
+import { type LiveMcpRuntimeScan } from '../../core/mcp-probe.js';
 /**
  * Doctor's model and construction seam.
  *
@@ -165,6 +166,8 @@ export interface DoctorContext {
     readonly env: NodeJS.ProcessEnv;
     /** Derived-index opener. */
     readonly openIndex: DoctorOpenIndex;
+    /** Live MCP process-table observation; injectable because `ps` is platform-specific. */
+    readonly liveMcpRuntimes: () => LiveMcpRuntimeScan;
 }
 /**
  * The shipping process effects. Tests pass a complete synthetic context to

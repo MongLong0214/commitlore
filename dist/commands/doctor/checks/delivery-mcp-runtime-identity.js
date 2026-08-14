@@ -1,0 +1,56 @@
+/** The live-process identity check for MCP servers (#F-001). */
+import { check } from '../model.js';
+const identityOf = (runtime) => `${runtime.entrypointRealpath} (root ${runtime.packageRoot})`;
+const missingAssets = (runtime) => [
+    ...(runtime.bundlePresent ? [] : ['dist/commitlore.mjs']),
+    ...(runtime.specPresent ? [] : ['spec/SPEC.md']),
+];
+/**
+ * A registration records an intended launch; only the process list identifies
+ * which already-running server owns a client's current session. Never compare
+ * versions here: a copied or stale install can legitimately report the same.
+ */
+export const checkMcpRuntimeIdentity = (ctx) => {
+    const id = 'mcp-runtime-identity';
+    const title = 'live MCP runtime identity';
+    const category = 'delivery';
+    const scan = ctx.liveMcpRuntimes();
+    if (!scan.available) {
+        return check(id, category, title, 'warn', `could not enumerate live CommitLore MCP runtimes: ${scan.detail}`, null, false, undefined, { evidence: { discovery: 'unavailable', detail: scan.detail } });
+    }
+    const unusable = scan.runtimes.filter((runtime) => missingAssets(runtime).length > 0);
+    if (unusable.length > 0) {
+        const detail = unusable
+            .map((runtime) => `${runtime.packageRoot} is missing ${missingAssets(runtime).join(' and ')}`)
+            .join('; ');
+        return check(id, category, title, 'fail', `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`, null, false, undefined, {
+            evidence: {
+                discovery: scan.detail,
+                runtime_count: String(scan.runtimes.length),
+                unusable_roots: unusable.map((runtime) => runtime.packageRoot).join(', '),
+            },
+        });
+    }
+    const identities = [...new Map(scan.runtimes.map((runtime) => [identityOf(runtime), runtime])).values()];
+    if (identities.length > 1) {
+        return check(id, category, title, 'warn', `${identities.length} distinct live CommitLore runtimes are answering MCP — runtime mismatch: ` +
+            identities.map(identityOf).join('; '), null, false, undefined, {
+            evidence: {
+                discovery: scan.detail,
+                runtime_count: String(scan.runtimes.length),
+                distinct_identities: String(identities.length),
+                package_roots: identities.map((runtime) => runtime.packageRoot).join(', '),
+            },
+        });
+    }
+    return check(id, category, title, 'ok', identities.length === 0
+        ? 'no live CommitLore MCP runtime was found'
+        : `one live CommitLore MCP runtime is answering from ${identityOf(identities[0])}`, null, false, undefined, {
+        evidence: {
+            discovery: scan.detail,
+            runtime_count: String(scan.runtimes.length),
+            distinct_identities: String(identities.length),
+        },
+    });
+};
+//# sourceMappingURL=delivery-mcp-runtime-identity.js.map

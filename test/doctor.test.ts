@@ -1225,6 +1225,19 @@ describe('#527 unattended capture initiator', () => {
     );
   };
 
+  const mcpWrapper = (repo: string, name: string): string => {
+    const path = join(repo, '.test-bin', name);
+    writeScript(path, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'))} "$@"\n`);
+    chmodSync(path, 0o755);
+    return path;
+  };
+
+  const registerMcp = (repo: string, command: string, args: string[] = ['mcp']): string => {
+    const path = join(repo, '.mcp.json');
+    writeFileSync(path, `${JSON.stringify({ mcpServers: { commitlore: { command, args } } }, null, 2)}\n`);
+    return path;
+  };
+
   it('warns while nothing in the repository can start a capture', () => {
     const repo = initRepo('unattended-no-initiator');
     enableUnattended(repo);
@@ -1233,23 +1246,22 @@ describe('#527 unattended capture initiator', () => {
 
     expect(check?.status).toBe('warn');
     expect(check?.detail).toContain('an ordinary git commit cannot start it');
+    expect(check?.evidence?.['initiator']).toBe('agent-host-required');
   });
 
-  // The warning has to be clearable, or it fires forever on exactly the
-  // repositories that are configured correctly and teaches operators to
-  // ignore the surface that carries the real ones.
-  it('clears once the repository registers the capture server, and says it checked only registration', () => {
+  it('clears only after a registered command answers as CommitLore MCP', () => {
     const repo = initRepo('unattended-registered');
     enableUnattended(repo);
-    writeFileSync(
-      join(repo, '.mcp.json'),
-      `${JSON.stringify({ mcpServers: { commitlore: { command: 'commitlore', args: ['mcp'] } } }, null, 2)}\n`,
-    );
+    const command = mcpWrapper(repo, 'commitlore');
+    registerMcp(repo, command);
 
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
 
     expect(check?.status).toBe('ok');
-    expect(check?.evidence?.['initiator']).toBe('mcp-server-registered');
+    expect(check?.evidence).toMatchObject({
+      initiator: 'mcp-server-verified',
+      verified: 'initialize-serverInfo-and-tools',
+    });
   });
 
   it('does not accept a malformed registration as an initiator', () => {
@@ -1287,38 +1299,100 @@ describe('#527 unattended capture initiator', () => {
     });
   }
 
-  it('reports a command that is not ours as preserved, not as verified', () => {
-    // Preserving an operator's entry is right; calling it a working capture
-    // server is not. `{"command": "false"}` read as `ok` — a registration that
-    // launches nothing, reported as readiness.
-    const repo = initRepo('unattended-entry-false');
+  it.each([
+    ['a dead command', (repo: string) => join(repo, 'missing'), 'command-not-found'],
+    ['a command that is a directory', (repo: string) => repo, 'command-is-directory'],
+    ['a non-executable command', (repo: string) => {
+      const command = join(repo, '.test-bin', 'not-executable');
+      writeScript(command, '#!/bin/sh\nexit 0\n');
+      return command;
+    }, 'command-not-executable'],
+    ['a command that closes its input and stays alive', (repo: string) => {
+      const command = join(repo, '.test-bin', 'closes-input');
+      writeScript(command, '#!/bin/sh\nexec 0<&-\nexec sleep 30\n');
+      chmodSync(command, 0o755);
+      return command;
+    // This is deterministic: it remains alive but never supplies an MCP
+    // response, so doctor must report an unverifiable command rather than
+    // treating its registered string as a successful server.
+    }, 'initialize-timed-out'],
+  ] as const)('reports %s distinctly as unhealthy', (_label, commandFor, probe) => {
+    const repo = initRepo(`unattended-${probe}`);
     enableUnattended(repo);
-    writeFileSync(join(repo, '.mcp.json'), '{ "mcpServers": { "commitlore": { "command": "false" } } }');
+    registerMcp(repo, commandFor(repo));
 
     const row = runDoctor({ cwd: repo }).checks.find((c) => c.id === 'unattended-initiator');
 
     expect(row?.status).toBe('warn');
-    expect(row?.detail).toContain('unverified');
-    expect(row?.evidence?.['initiator']).toBe('registered-command-unverified');
+    expect(row?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe });
   });
 
-  it('preserves an entry pointing somewhere other than our own command', () => {
-    // Not every launchable entry is the one `init` writes. A wrapper or an
-    // absolute path is a deliberate choice: it is left alone. What changed is
-    // that the report no longer calls it verified — this tool cannot say what
-    // somebody else's command starts.
-    const repo = initRepo('unattended-entry-wrapper');
+  it('reports a foreign MCP server as unhealthy', () => {
+    const repo = initRepo('unattended-foreign-mcp');
     enableUnattended(repo);
-    writeFileSync(
-      join(repo, '.mcp.json'),
-      '{ "mcpServers": { "commitlore": { "command": "/opt/bin/commitlore-wrapper", "args": ["mcp"] } } }',
-    );
+    const command = join(repo, '.test-bin', 'foreign-mcp');
+    writeScript(command, `#!/usr/bin/env node
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  const lines = buffer.split('\\n');
+  buffer = lines.pop() ?? '';
+  for (const line of lines) {
+    const message = JSON.parse(line);
+    if (message.id === 1) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'foreign', version: '1.0.0' } } }) + '\\n');
+  }
+});
+setInterval(() => {}, 1_000);
+`);
+    chmodSync(command, 0o755);
+    registerMcp(repo, command, []);
 
     const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
 
     expect(check?.status).toBe('warn');
-    expect(check?.detail).toContain('unverified');
-    // Preserved: nothing rewrote the operator's file.
-    expect(readFileSync(join(repo, '.mcp.json'), 'utf8')).toContain('/opt/bin/commitlore-wrapper');
+    expect(check?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe: 'foreign-server' });
+  });
+
+  it('rejects a server that identifies as CommitLore but lacks required tools', () => {
+    const repo = initRepo('unattended-missing-tools');
+    enableUnattended(repo);
+    const command = join(repo, '.test-bin', 'missing-tools');
+    writeScript(command, `#!/usr/bin/env node
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  const lines = buffer.split('\\n');
+  buffer = lines.pop() ?? '';
+  for (const line of lines) {
+    const message = JSON.parse(line);
+    if (message.id === 1) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'commitlore', version: '1.0.0' } } }) + '\\n');
+    if (message.id === 2) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { tools: [] } }) + '\\n');
+  }
+});
+setInterval(() => {}, 1_000);
+`);
+    chmodSync(command, 0o755);
+    registerMcp(repo, command, []);
+
+    const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe: 'missing-tools' });
+  });
+
+  it('preserves and accepts a healthy custom wrapper', () => {
+    const repo = initRepo('unattended-entry-wrapper');
+    enableUnattended(repo);
+    const command = mcpWrapper(repo, 'operator-wrapper');
+    const config = registerMcp(repo, command);
+    const before = readFileSync(config, 'utf8');
+
+    const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.evidence).toMatchObject({ initiator: 'mcp-server-verified', registration: 'custom-preserved' });
+    expect(readFileSync(config, 'utf8')).toBe(before);
   });
 });
