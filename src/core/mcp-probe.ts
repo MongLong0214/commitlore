@@ -197,7 +197,7 @@ export const discoverLiveMcpRuntimes = (): LiveMcpRuntimeScan => {
   if (process.platform === 'win32') {
     return { available: false, runtimes: [], detail: 'process enumeration is unavailable on win32' };
   }
-  const result = spawnSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' });
+  const result = spawnSync('ps', ['-axo', 'pid=,ppid=,args='], { encoding: 'utf8' });
   if (result.error !== undefined || result.status !== 0) {
     return {
       available: false,
@@ -205,17 +205,46 @@ export const discoverLiveMcpRuntimes = (): LiveMcpRuntimeScan => {
       detail: result.error?.message ?? `ps exited with status ${String(result.status)}`,
     };
   }
-  const runtimes: LiveMcpRuntime[] = [];
+
+  // doctor spawns an MCP probe of its own while it runs, and that child matches
+  // the pattern below. Enumerating it reports this process's own work as
+  // another session's — and because a probe's lifetime overlaps whatever asked
+  // for it, two consecutive runs saw each other and stopped agreeing.
+  //
+  // Ancestry rather than a marker: `ps` shows arguments, not the environment, so
+  // a variable set on the child is invisible here. The server is a grandchild
+  // (probe sidecar, then the server itself), so the whole chain is walked.
+  const parents = new Map<number, number>();
+  const candidates: Array<{ pid: number; entrypoint: string }> = [];
   for (const line of result.stdout.split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(line);
-    if (match === null) continue;
-    const pid = Number(match[1]);
-    const entrypoint = match[2];
-    if (entrypoint !== undefined && Number.isSafeInteger(pid)) {
-      runtimes.push(runtimeFromEntrypoint(pid, entrypoint));
-    }
+    const row = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+    if (row === null) continue;
+    const pid = Number(row[1]);
+    const ppid = Number(row[2]);
+    if (!Number.isSafeInteger(pid) || !Number.isSafeInteger(ppid)) continue;
+    parents.set(pid, ppid);
+    const match = /^.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(row[3] ?? '');
+    const entrypoint = match?.[1];
+    if (entrypoint !== undefined) candidates.push({ pid, entrypoint });
   }
-  return { available: true, runtimes, detail: 'ps -axo pid=,args=' };
+
+  const descendsFromUs = (pid: number): boolean => {
+    const seen = new Set<number>();
+    let current = pid;
+    // `seen` guards a cycle: a ps snapshot is not atomic, and a reparented
+    // process can appear to point back into the chain.
+    while (current > 1 && !seen.has(current)) {
+      if (current === process.pid) return true;
+      seen.add(current);
+      current = parents.get(current) ?? 0;
+    }
+    return false;
+  };
+
+  const runtimes = candidates
+    .filter((candidate) => !descendsFromUs(candidate.pid))
+    .map((candidate) => runtimeFromEntrypoint(candidate.pid, candidate.entrypoint));
+  return { available: true, runtimes, detail: 'ps -axo pid=,ppid=,args=' };
 };
 
 const commandPath = (command: string): string | McpProbeFailure => {
