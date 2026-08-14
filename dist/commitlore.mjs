@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve23.call(this, root, ref);
+      let _sch = resolve22.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve23(root, ref) {
+    function resolve22(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3642,7 +3642,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve23(baseURI, relativeURI, options) {
+    function resolve22(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
       const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
@@ -3926,7 +3926,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve23,
+      resolve: resolve22,
       resolveComponent,
       equal,
       serialize,
@@ -17784,7 +17784,7 @@ var register3 = (program3) => {
 
 // src/commands/demo.ts
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync as rmSync5, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
+import { mkdtempSync, rmSync as rmSync4, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname as dirname9, join as join14, resolve as resolve17 } from "node:path";
 
@@ -18091,12 +18091,12 @@ var initializeTimeoutMs = () => {
   const raw = Number(process.env["COMMITLORE_MCP_PROBE_TIMEOUT_MS"]);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INITIALIZE_TIMEOUT_MS;
 };
-var wait = (milliseconds) => new Promise((resolve23) => setTimeout(resolve23, milliseconds));
+var wait = (milliseconds) => new Promise((resolve22) => setTimeout(resolve22, milliseconds));
 var stopProbeChild = async (child) => {
   if (child.exitCode !== null || child.signalCode !== null) return "not-needed";
   let exitedResolve;
-  const exited = new Promise((resolve23) => {
-    exitedResolve = resolve23;
+  const exited = new Promise((resolve22) => {
+    exitedResolve = resolve22;
   });
   child.once("exit", () => exitedResolve?.());
   if (process.platform === "win32") {
@@ -18216,7 +18216,7 @@ var needsWindowsCommandShell = (command) => process.platform === "win32" && /\.(
 var probeMcp = async (command, args) => {
   const resolved = commandPath(command);
   if (typeof resolved !== "string") return resolved;
-  return new Promise((resolve23) => {
+  return new Promise((resolve22) => {
     let settled = false;
     let child;
     let timer;
@@ -18227,10 +18227,10 @@ var probeMcp = async (command, args) => {
       void (async () => {
         const cleanup = child === void 0 ? "not-needed" : await stopProbeChild(child);
         if (cleanup === "could-not-reclaim") {
-          resolve23(failure2("probe-unavailable", "MCP verification completed but could not reclaim its child process tree", cleanup));
+          resolve22(failure2("probe-unavailable", "MCP verification completed but could not reclaim its child process tree", cleanup));
           return;
         }
-        resolve23({ ...problem, cleanup });
+        resolve22({ ...problem, cleanup });
       })();
     };
     try {
@@ -22101,7 +22101,7 @@ var register7 = (program3) => {
 
 // src/hooks/prepare-commit-msg.ts
 import { createHash as createHash7, randomBytes as randomBytes7 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync17, readdirSync as readdirSync4, renameSync as renameSync6, rmSync as rmSync3, writeFileSync as writeFileSync10 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync17, readdirSync as readdirSync4, renameSync as renameSync6, writeFileSync as writeFileSync10 } from "node:fs";
 import { resolve as resolve14 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
 var PREPARE_COMMIT_MSG_HOOK_NAME = "prepare-commit-msg";
@@ -22312,39 +22312,8 @@ var applyCaptureRecord = (messageFile, cwd) => {
   } catch {
   }
 };
-var amendMarkerPath = (cwd) => {
-  const result = execGit(["rev-parse", "--git-path", "commitlore-amend"], { cwd });
-  return result.code === 0 ? resolve14(cwd, result.stdout.trim()) : null;
-};
-var IN_PROGRESS_MARKERS = [
-  "rebase-merge",
-  "rebase-apply",
-  "MERGE_HEAD",
-  "CHERRY_PICK_HEAD",
-  "REVERT_HEAD",
-  "BISECT_LOG",
-  "sequencer"
-];
-var recordAmendIntent = (cwd, source, sha) => {
-  const marker = amendMarkerPath(cwd);
-  if (marker === null) return;
-  const operationInProgress = IN_PROGRESS_MARKERS.some((name) => {
-    const path2 = execGit(["rev-parse", "--git-path", name], { cwd });
-    return path2.code === 0 && existsSync17(resolve14(cwd, path2.stdout.trim()));
-  });
-  const head = execGit(["rev-parse", "HEAD"], { cwd });
-  const resolvedSha = sha === void 0 ? "" : execGit(["rev-parse", sha], { cwd }).stdout.trim();
-  const isAmend = source === "commit" && !operationInProgress && head.code === 0 && resolvedSha !== "" && resolvedSha === head.stdout.trim();
-  try {
-    if (isAmend) writeFileSync10(marker, `${head.stdout.trim()}
-`, "utf8");
-    else rmSync3(marker, { force: true });
-  } catch {
-  }
-};
 var register8 = (program3) => {
-  program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile, source, sha) => {
-    recordAmendIntent(process.cwd(), source, sha);
+  program3.command("prepare-commit-msg").argument("<message-file>").argument("[source]").argument("[sha]").description("internal hook command: append records from a local squash draft").action((messageFile) => {
     preserveSquashRecords(messageFile);
     try {
       applyCaptureRecord(messageFile, process.cwd());
@@ -22603,7 +22572,7 @@ var register9 = (program3) => {
 };
 
 // src/core/agents-guidance.ts
-import { existsSync as existsSync19, readFileSync as readFileSync19, renameSync as renameSync8, rmSync as rmSync4, statSync as statSync8, writeFileSync as writeFileSync12 } from "node:fs";
+import { existsSync as existsSync19, readFileSync as readFileSync19, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync8, writeFileSync as writeFileSync12 } from "node:fs";
 import { basename as basename2, dirname as dirname8, join as join13, resolve as resolve16 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
@@ -22632,7 +22601,7 @@ var replaceFile = (path2, contents) => {
     renameSync8(temporary, path2);
   } catch (error2) {
     try {
-      if (existsSync19(temporary)) rmSync4(temporary, { force: true });
+      if (existsSync19(temporary)) rmSync3(temporary, { force: true });
     } catch {
     }
     throw error2;
@@ -23154,7 +23123,7 @@ var runDemo = async (opts = {}) => {
   const cleanup = () => {
     if (tmpDir !== void 0) {
       try {
-        rmSync5(tmpDir, { recursive: true, force: true });
+        rmSync4(tmpDir, { recursive: true, force: true });
       } catch {
       }
       tmpDir = void 0;
@@ -32178,7 +32147,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve23) => setTimeout(resolve23, pollInterval));
+        await new Promise((resolve22) => setTimeout(resolve22, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -32195,7 +32164,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve23, reject2) => {
+    return new Promise((resolve22, reject2) => {
       const earlyReject = (error2) => {
         reject2(error2);
       };
@@ -32273,7 +32242,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject2(parseResult.error);
           } else {
-            resolve23(parseResult.data);
+            resolve22(parseResult.data);
           }
         } catch (error2) {
           reject2(error2);
@@ -32534,12 +32503,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve23, reject2) => {
+    return new Promise((resolve22, reject2) => {
       if (signal.aborted) {
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve23, interval);
+      const timeoutId = setTimeout(resolve22, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -33409,12 +33378,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve23) => {
+    return new Promise((resolve22) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve23();
+        resolve22();
       } else {
-        this._stdout.once("drain", resolve23);
+        this._stdout.once("drain", resolve22);
       }
     });
   }
@@ -34599,7 +34568,7 @@ var register21 = (program3) => {
 
 // src/core/codex-plugin.ts
 import { spawnSync as spawnSync8 } from "node:child_process";
-import { existsSync as existsSync23, mkdirSync as mkdirSync12, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync18 } from "node:fs";
+import { existsSync as existsSync23, mkdirSync as mkdirSync12, readFileSync as readFileSync26, rmSync as rmSync5, writeFileSync as writeFileSync18 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join18 } from "node:path";
 
@@ -34747,7 +34716,7 @@ var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) =
   }
 };
 var removeCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) => {
-  rmSync6(codexPluginMarkerPath(plugin, dataHome), { force: true });
+  rmSync5(codexPluginMarkerPath(plugin, dataHome), { force: true });
 };
 var writeCodexPluginMarker = (plugin, dataHome) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
@@ -35074,8 +35043,7 @@ var register24 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync28, rmSync as rmSync7 } from "node:fs";
-import { resolve as resolve22 } from "node:path";
+import { readFileSync as readFileSync28 } from "node:fs";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
   messageFile: "--message-file",
@@ -35354,18 +35322,6 @@ var recordsFor = (source, cwd, input = {}) => {
     return { ...collectRecords({ cwd, allHistory: true, revision: "HEAD" }), unreadCommits: 0 };
   }
 };
-var consumeAmendMarker = (cwd) => {
-  const located = execGit(["rev-parse", "--git-path", "commitlore-amend"], { cwd });
-  if (located.code !== 0) return null;
-  const path2 = resolve22(cwd, located.stdout.trim());
-  try {
-    const recorded = readFileSync28(path2, "utf8").trim();
-    rmSync7(path2, { force: true });
-    return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
-  } catch {
-    return null;
-  }
-};
 var reachableShas = (revision, cwd) => {
   const result = execGit(["rev-list", revision], { cwd });
   if (result.code !== 0) {
@@ -35426,9 +35382,7 @@ var checkReferences = (input, sources, cwd) => {
       const repositoryRecords = scan2.records.filter(
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
-      const amendedSha = source.sha === void 0 ? consumeAmendMarker(cwd) : null;
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
-      const priorForCollisions = amendedSha === null ? prior : prior.filter((record2) => record2.sha !== amendedSha);
       const ownBlocks = blocks.map((trailers) => ({
         trailers,
         source: "commit",
@@ -35443,7 +35397,7 @@ var checkReferences = (input, sources, cwd) => {
         const siblings = ownBlocks.filter((_, other) => other !== index);
         const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...priorForCollisions, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
           (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
         );
         violations.push(
@@ -35617,7 +35571,7 @@ var register25 = (program3) => {
 
 // src/commands/uninstall.ts
 import { spawnSync as spawnSync9 } from "node:child_process";
-import { existsSync as existsSync24, readFileSync as readFileSync29, rmSync as rmSync8, writeFileSync as writeFileSync20 } from "node:fs";
+import { existsSync as existsSync24, readFileSync as readFileSync29, rmSync as rmSync6, writeFileSync as writeFileSync20 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join19 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
@@ -35683,7 +35637,7 @@ var runUninstall = async (options = {}) => {
       contents = "";
     }
     if (contents.includes(WRAPPER_MARKER)) {
-      if (!dryRun) rmSync8(wrapper, { force: true });
+      if (!dryRun) rmSync6(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
     } else if (!failures.includes(wrapper)) {
@@ -35737,7 +35691,7 @@ var runUninstall = async (options = {}) => {
       kept.push(dataRoot);
       report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
     } else {
-      if (!dryRun) rmSync8(dataRoot, { recursive: true, force: true });
+      if (!dryRun) rmSync6(dataRoot, { recursive: true, force: true });
       removed.push(dataRoot);
       report.push(`${say}: ${dataRoot}`);
     }
@@ -35857,7 +35811,7 @@ var internalMcpProbe = async (command, rawArgs) => {
   } catch {
   }
   const result = command === void 0 || args === void 0 ? { kind: "failure", reason: "probe-unavailable", detail: "could not read MCP verification arguments" } : await probeMcp(command, args);
-  await new Promise((resolve23) => process.stdout.write(JSON.stringify(result), () => resolve23()));
+  await new Promise((resolve22) => process.stdout.write(JSON.stringify(result), () => resolve22()));
 };
 var internalArguments = process.argv.slice(2);
 if (internalArguments[0] === "internal" && internalArguments[1] === "mcp-probe") {

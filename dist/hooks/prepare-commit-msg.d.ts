@@ -29,5 +29,4 @@ export declare const installPrepareCommitMsgHook: (cwd?: string) => PrepareCommi
  * commit, and abandoning would break the unchanged-index retry.
  */
 export declare const compareCaptureCandidates: (left: Pick<PendingRecord, "created_at" | "nonce">, right: Pick<PendingRecord, "created_at" | "nonce">) => number;
-export declare const recordAmendIntent: (cwd: string, source?: string, sha?: string) => void;
 export declare const register: (program: Command) => void;

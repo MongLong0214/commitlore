@@ -18,8 +18,7 @@
  * Shape checks run for every input. Reference checks additionally run when the
  * input mode identifies a repository.
  */
-import { readFileSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { collectRecords } from './stale.js';
 import { execGit, hasShallowHistory } from '../core/git.js';
 import { closeIndex, ensureIndex, indexUnread, queryTrailers } from '../core/index-db.js';
@@ -492,30 +491,6 @@ const recordsFor = (source, cwd, input = {}) => {
         return { ...collectRecords({ cwd, allHistory: true, revision: 'HEAD' }), unreadCommits: 0 };
     }
 };
-/**
- * The commit this message replaces, if `prepare-commit-msg` said so (#638).
- *
- * Consumed rather than merely read: the marker describes one commit attempt.
- * `git commit --no-verify` runs the hook that writes it and skips the hook that
- * reads it, so it can outlive its attempt — but every commit path runs
- * `prepare-commit-msg` before that commit's `commit-msg`, so the next attempt
- * overwrites or clears it before anyone reads a stale one. Removing it here
- * closes the window anyway, and costs nothing.
- */
-const consumeAmendMarker = (cwd) => {
-    const located = execGit(['rev-parse', '--git-path', 'commitlore-amend'], { cwd });
-    if (located.code !== 0)
-        return null;
-    const path = resolve(cwd, located.stdout.trim());
-    try {
-        const recorded = readFileSync(path, 'utf8').trim();
-        rmSync(path, { force: true });
-        return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
-    }
-    catch {
-        return null;
-    }
-};
 const reachableShas = (revision, cwd) => {
     const result = execGit(['rev-list', revision], { cwd });
     if (result.code !== 0) {
@@ -597,20 +572,7 @@ const checkReferences = (input, sources, cwd) => {
             }
             const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
             const repositoryRecords = scan.records.filter((record) => record.sha !== undefined && reachable.has(record.sha));
-            // #638: `prepare-commit-msg` is the only hook git tells whether this is an
-            // amend, so it leaves a marker naming the commit being replaced. That
-            // commit will not remain in history, and counting it refuses the amend
-            // that repairs a malformed trailer — the one edit that changes a payload.
-            // Absent or unreadable marker means not an amend, which is the safe
-            // direction: mistaking an ordinary commit for one would drop HEAD from
-            // the duplicate check and let a real identity collision through.
-            const amendedSha = source.sha === undefined ? consumeAmendMarker(cwd) : null;
             const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
-            // Only `duplicate-id` ignores it. `Follows:` and `Supersedes:` still
-            // resolve against that commit — removing it from the prior stream
-            // outright turned every reference to a record declared there into a
-            // dangling one, which two existing tests caught.
-            const priorForCollisions = amendedSha === null ? prior : prior.filter((record) => record.sha !== amendedSha);
             // This message's own blocks, exactly once each — not `repositoryRecords`,
             // which already carries the single last-paragraph record `collectRecords`
             // derives for `source.sha`. Two blocks sharing a `Record-Id` inside one
@@ -639,7 +601,7 @@ const checkReferences = (input, sources, cwd) => {
                 const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
                 const collisions = recordId === undefined
                     ? []
-                    : findIdCollisions([...priorForCollisions, ...ownRecords])
+                    : findIdCollisions([...prior, ...ownRecords])
                         .filter((violation) => violation.value === recordId)
                         // When tip-scoped records are available (--range mode), filter
                         // out collisions that have been resolved by a Supersedes:

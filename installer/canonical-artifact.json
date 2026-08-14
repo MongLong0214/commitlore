@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "6a37011bfe02725517814811b69a3d302531dc3f918c2930a7e03167f370d74c"
+    "sha256": "ea6520e9a6d9aed1fe51b26717165a0f898e6e6a64b9b785575d32cd8b2912bd"
   },
   "artifact": {
-    "sha256": "eeae2bcc377d06332c23ffa8e8b5990f10101dd7c157b8f319861274a7fe16c3",
+    "sha256": "b52a10c62e8435604ce8854b560c5f4c5d74bba6144f661d327c3ef747d8c1fa",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -578,15 +578,15 @@
       },
       {
         "path": "dist/commands/validate.js",
-        "sha256": "b77fe309fa9e0c04a970446319be823505c094f3832941f4475950bed8504d7f"
+        "sha256": "c9410bc1acabbff7d826f6763147b7b7b18a00026314df12e2fbab52b96ccdd4"
       },
       {
         "path": "dist/commands/validate.js.map",
-        "sha256": "b543a98032bc7e8953b3ab842231e9be03cf0e917d9f4699e719f2bd90a9b965"
+        "sha256": "1af675ea2370213a471562d52c58af2db4824e115ea2183ecd7b84856f1d0abb"
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "95c193714600e7b37d121ba814146da6e8f6511f11128ceda7a14a09c8b36fd8"
+        "sha256": "b680ca42ba0cf9e5c6e0827e219c9f5f40952bb74059ce2c471bd1a6cf2d9b7e"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1094,15 +1094,15 @@
       },
       {
         "path": "dist/hooks/prepare-commit-msg.d.ts",
-        "sha256": "ec99131d8b4bf6ce8111bbddabb37a2e7b2223e486874de4337aed80e7f997f4"
+        "sha256": "3f9dbab96ac718e4adcd379d5ab6d27f79146e832150c6698b9601f155314176"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.js",
-        "sha256": "ff900764de78048d7a1886d09e19e2fceb26ccbea06bf23c1caaeacc169b9174"
+        "sha256": "3cd0423fb4aad83ab2700f17db70eac092ae18779d37a712ed953827a57befc7"
       },
       {
         "path": "dist/hooks/prepare-commit-msg.js.map",
-        "sha256": "0d2e941a0e7073d8b919eb153b63822db4a9a4973396765d9a679dd51e8c348a"
+        "sha256": "81c4fb52e1ee3d77dcba444e2d54ab86028cc19cdc796f209a64fd603c0f0833"
       },
       {
         "path": "dist/hooks/secret-rules.d.ts",
