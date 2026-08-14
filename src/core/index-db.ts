@@ -58,6 +58,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { execGit, execGitOrThrow, historyAvailability } from './git.js';
 import { parseRecordBlocks } from './trailers.js';
+import { signatureVerifierGeneration } from './trusted-authors.js';
 import {
   canonicalConventionalTrailerKey,
   isConventionalTrailerKey,
@@ -973,6 +974,9 @@ const writeMeta = (db: IndexDatabase, key: string, value: string | null): void =
 /** How many commits a budgeted rebuild left unread. 0 means the index is whole. */
 const UNREAD_COMMITS_META = 'unread_commits';
 
+/** Which keyring produced the cached `%G?` values, when signature mode is on (#653). */
+const SIGNATURE_VERIFIER_META = 'signature_verifier_generation';
+
 const persistUnread = (db: IndexDatabase, unread: number): void => {
   writeMeta(db, UNREAD_COMMITS_META, unread > 0 ? String(unread) : null);
 };
@@ -1074,13 +1078,24 @@ const syncFts = (db: IndexDatabase, requested: boolean, writable: boolean): bool
  * reason — the index is derived, so there is no such thing as an unrecoverable
  * one (ADR-0003).
  */
-const healthProblem = (db: IndexDatabase): string | null => {
+const healthProblem = (db: IndexDatabase, verifierGeneration: string | null): string | null => {
   try {
     if (!tableExists(db, 'meta')) return 'index has no meta table';
     const version = readMeta(db, 'schema_version');
     if (version === null) return 'index has no schema version';
     if (version !== String(SCHEMA_VERSION)) {
       return `index was built by schema v${version}, this build expects v${SCHEMA_VERSION}`;
+    }
+    // #653: `signature_status` is cached from `%G?`, which is the verifying
+    // process's verdict rather than anything the repository holds. Outside
+    // signature mode nothing reads it, so nothing is checked; inside it, a
+    // verdict recorded under different keys is not an answer about the keys
+    // this reader has, and a rebuild is what the index is for (ADR-0003).
+    if (verifierGeneration !== null) {
+      const recorded = readMeta(db, SIGNATURE_VERIFIER_META);
+      if (recorded !== verifierGeneration) {
+        return `index cached signature verdicts under verifier ${recorded ?? 'unrecorded'}, this reader is ${verifierGeneration}`;
+      }
     }
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
@@ -1376,6 +1391,7 @@ export const rebuildIndex = (
     // `unread_commits` is what stops that from reading as a complete index.
     writeMeta(handle.db, 'last_indexed_sha', head);
     writeMeta(handle.db, 'notes_ref_sha', notesRef);
+    writeMeta(handle.db, SIGNATURE_VERIFIER_META, signatureVerifierGeneration(handle.cwd));
     persistUnread(handle.db, unread);
   });
   applyExclusions(stats, excluded);
@@ -1434,7 +1450,7 @@ export const updateIndex = (
     return rebuildOrRefuse(discarded);
   }
 
-  const problem = healthProblem(handle.db);
+  const problem = healthProblem(handle.db, signatureVerifierGeneration(handle.cwd));
   if (problem !== null) {
     if (!allowRebuild) throw new Error(problem);
     resetIndexFile(handle);
@@ -1541,7 +1557,7 @@ export const openCurrentIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
   const handle = openIndex(opts);
   try {
     if (handle.discardedReason !== null) throw new Error(handle.discardedReason);
-    const problem = healthProblem(handle.db);
+    const problem = healthProblem(handle.db, signatureVerifierGeneration(handle.cwd));
     if (problem !== null) throw new Error(problem);
 
     const head = revParse(handle.cwd, 'HEAD');
