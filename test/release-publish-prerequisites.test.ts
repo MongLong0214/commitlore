@@ -380,16 +380,17 @@ describe('publication has no path around a failed prerequisite', () => {
     return workflow.jobs.publish;
   };
 
-  it('needs all four release prerequisites', () => {
+  it('needs all five release prerequisites', () => {
     expect(publish().needs).toEqual([
       'version-consistency',
       'install-gate',
       'release-target',
       'exact-head-ci',
+      'canonical-artifact',
     ]);
   });
 
-  it('has no if condition that bypasses any of the four prerequisite failures', () => {
+  it('has no if condition that bypasses any of the five prerequisite failures', () => {
     const job = publish();
     // An omitted need is itself a bypass: GitHub cannot withhold publication
     // for a job it was never asked to wait for. Assert the complete dependency
@@ -399,6 +400,7 @@ describe('publication has no path around a failed prerequisite', () => {
       'install-gate',
       'release-target',
       'exact-head-ci',
+      'canonical-artifact',
     ]);
     expect(job.if).toBeUndefined();
   });
