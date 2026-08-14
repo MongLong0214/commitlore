@@ -300,14 +300,27 @@ export const installHook = (input: HookInput = {}): HookResult => {
   }
 
   const after = readHookStatus(cwd);
+  // `unchanged` is true of the hook *file*, which reads its target from config
+  // and is byte-identical across upgrades. It was not true of the thing the
+  // user was told to fix: `hooks status` names a stale `commitlore.bin`, this
+  // command repoints it, and reporting only the file said the repair had not
+  // happened (#629). The recorded target decides which CLI validates every
+  // commit here, so a change to it is the headline rather than a footnote.
+  const repointed = before.recordedTarget.bin !== after.recordedTarget.bin;
   const headline = {
     absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
     foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
     outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (unchanged)`,
+    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${repointed ? 'file unchanged' : 'unchanged'})`,
   }[before.state];
 
-  return success(after, [headline, ...describeChained(after)]);
+  const repoint = repointed
+    ? [
+        `recorded CLI repointed: ${before.recordedTarget.bin === '' ? '(none recorded)' : before.recordedTarget.bin} -> ${after.recordedTarget.bin}`,
+      ]
+    : [];
+
+  return success(after, [headline, ...repoint, ...describeChained(after)]);
 };
 
 interface CaptureHook {
