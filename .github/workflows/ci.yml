@@ -871,7 +871,13 @@ jobs:
           const { writeFileSync } = require('node:fs');
           writeFileSync(process.env.MCP_PROBE_CHILD_PID, String(process.pid));
           let buffer = '';
+          const started = Date.now();
           process.stdin.setEncoding('utf8');
+          // Whether the probe's bytes ever arrive is the question the log could
+          // not answer. Record the first chunk and when it came.
+          process.stdin.once('data', () => {
+            writeFileSync(process.env.MCP_PROBE_CHILD_PID + '.sawinput', String(Date.now() - started));
+          });
           process.stdin.on('data', (chunk) => {
             buffer += chunk;
             const lines = buffer.split('\n');
@@ -917,6 +923,16 @@ jobs:
           if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw | Write-Host } else { Write-Host '(no stderr file)' }
           Write-Host "--- pid file present: $(Test-Path -LiteralPath $pidFile) ---"
           if (Test-Path -LiteralPath $pidFile) { Write-Host "pid: $((Get-Content -LiteralPath $pidFile -Raw).Trim())" }
+          # The question the previous round could not answer: did the probe's
+          # bytes reach the child at all? mcp-probe.ts waits a fixed 200ms
+          # before its first protocol write, so "arrived late" and "never
+          # arrived" are different failures and only one of them is a race.
+          $sawInput = "$pidFile.sawinput"
+          if (Test-Path -LiteralPath $sawInput) {
+            Write-Host "--- child saw stdin after $((Get-Content -LiteralPath $sawInput -Raw).Trim())ms => the write arrived; the missing half is the response ---"
+          } else {
+            Write-Host '--- child never saw stdin => the probe write did not reach it ---'
+          }
 
           # Does the protocol survive the cmd.exe hop at all? Drive the wrapper
           # by hand. An answer here means stdio traverses cmd and the silence
