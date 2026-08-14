@@ -6,9 +6,9 @@
  * completes initialize with a name and version, then reports whether the
  * advertised tools form the read-delivery or capture-initiation surface.
  */
-import { accessSync, constants, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { installedPath } from './paths.js';
 const failure = (reason, detail, cleanup) => ({ kind: 'failure', reason, detail, ...(cleanup === undefined ? {} : { cleanup }) });
 export const MCP_READ_TOOLS = ['commitlore_query', 'commitlore_before_change'];
@@ -92,6 +92,64 @@ const stopProbeChild = async (child) => {
         await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
     }
     return child.exitCode === null && child.signalCode === null ? 'could-not-reclaim' : 'reclaimed';
+};
+const packageVersionAt = (root) => {
+    try {
+        const parsed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+        return typeof parsed.version === 'string' && parsed.version !== '' ? parsed.version : null;
+    }
+    catch {
+        return null;
+    }
+};
+const runtimeFromEntrypoint = (pid, entrypoint) => {
+    let entrypointRealpath = entrypoint;
+    try {
+        entrypointRealpath = realpathSync(entrypoint);
+    }
+    catch {
+        // A deleted install can keep serving from its already-open program image.
+        // Retain the observed pathname so doctor can still name the stale root.
+    }
+    const packageRoot = dirname(dirname(entrypointRealpath));
+    return {
+        pid,
+        entrypointRealpath,
+        packageRoot,
+        reportedVersion: packageVersionAt(packageRoot),
+        bundlePresent: existsSync(join(packageRoot, 'dist', 'commitlore.mjs')),
+        specPresent: existsSync(join(packageRoot, 'spec', 'SPEC.md')),
+    };
+};
+/**
+ * Enumerate processes, not registrations: the former is the server that is
+ * actually answering a session. The DoctorContext supplies this as an
+ * injectable seam so platform-specific `ps` output never enters a fixture.
+ */
+export const discoverLiveMcpRuntimes = () => {
+    if (process.platform === 'win32') {
+        return { available: false, runtimes: [], detail: 'process enumeration is unavailable on win32' };
+    }
+    const result = spawnSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' });
+    if (result.error !== undefined || result.status !== 0) {
+        return {
+            available: false,
+            runtimes: [],
+            detail: result.error?.message ?? `ps exited with status ${String(result.status)}`,
+        };
+    }
+    const runtimes = [];
+    for (const line of result.stdout.split(/\r?\n/)) {
+        const match = /^\s*(\d+)\s+.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(line);
+        if (match === null)
+            continue;
+        const pid = Number(match[1]);
+        const entrypoint = match[2];
+        if (entrypoint !== undefined && Number.isSafeInteger(pid)) {
+            runtimes.push(runtimeFromEntrypoint(pid, entrypoint));
+        }
+    }
+    return { available: true, runtimes, detail: 'ps -axo pid=,args=' };
 };
 const commandPath = (command) => {
     const bare = !isAbsolute(command) && !command.includes('/');

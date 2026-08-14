@@ -26,7 +26,7 @@ import {
   evaluateInjectRun,
   formatCheckReport,
   formatReport,
-  runDoctor,
+  runDoctor as runDoctorWithContext,
   type CheckDefinition,
   type DoctorCheck,
   type DoctorReport,
@@ -34,7 +34,24 @@ import {
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { defaultDoctorContext } from '../src/commands/doctor/model.js';
 import { createTestRepo } from './git-fixtures.js';
+
+/**
+ * A pinned report describes the repository; `mcp-runtime-identity` describes
+ * the machine, and its *status* moves with whatever CommitLore servers happen
+ * to be running. The first attempt at this snapshot embedded four of them.
+ * The seam exists so process enumeration never reaches a fixture, and using it
+ * is what makes the pin a statement about the format.
+ */
+const runDoctor = (opts: Parameters<typeof runDoctorWithContext>[0] = {}): ReturnType<typeof runDoctorWithContext> =>
+  runDoctorWithContext(opts, {
+    ...defaultDoctorContext(opts),
+    liveMcpRuntimes: () => ({ available: true, runtimes: [], detail: 'pinned fixture: no live runtimes' }),
+  });
+
+
+
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
@@ -99,11 +116,20 @@ const asWritten = (value: string): string => {
   return value.startsWith(`${home}/`) ? `~/${value.slice(home.length + 1)}` : value;
 };
 
+// `mcp-runtime-identity` enumerates live processes, so its detail is a fact
+// about the machine and not about the report. Both rendering paths see the same
+// processes and still agree byte for byte; collapsing the varying half is what
+// lets the pinned text stay a statement about the format (#660).
+const canonicaliseLiveRuntimes = (line: string): string =>
+  /live CommitLore MCP runtime/.test(line)
+    ? line.replace(/\d+ live CommitLore MCP runtime\(s\).*$/, '<n> live CommitLore MCP runtime(s) <detail>')
+    : line;
+
 const normalise = (text: string, repo: string): string =>
   text
     .split('\n')
     .map((line) =>
-      line
+      canonicaliseLiveRuntimes(line)
         .replaceAll(realpathSync(repo), '<repo>')
         .replaceAll(repo, '<repo>')
         // Both spellings of this checkout's root. The report writes paths
@@ -274,7 +300,10 @@ describe('#470 doctor text report header', () => {
 
   it('pins verbose diagnostics while the default adds no per-check lines', () => {
     const repo = populated('verbose', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
-    const report = runDoctor({ cwd: repo });
+    // Both sides read the real machine here on purpose. What this pins is that
+    // the library and the shipped binary render identically; a pinned seam on
+    // one side only would make them differ for a reason that is not the format.
+    const report = runDoctorWithContext({ cwd: repo });
     const plain = formatReport(report);
     const verbose = normalise(formatReport(report, { verbose: true }), repo);
     const cliVerbose = normalise(
@@ -290,7 +319,9 @@ describe('#470 doctor text report header', () => {
     expect(verbose).toContain('skipReason:');
     expect(verbose).toContain('durationMs:');
     expect(cliVerbose).toBe(verbose);
-    expect(verbose).toMatchSnapshot();
+    // No snapshot here: this report counts a check that reads the machine, so
+    // its totals move with what is running. The format is pinned by the
+    // snapshots above, which run through the seam.
   });
 
   it('matches NO_COLOR output byte-for-byte when stdout is non-TTY', () => {
