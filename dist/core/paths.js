@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 /**
@@ -86,6 +86,24 @@ export const packageVersion = () => {
     return cachedVersion;
 };
 const unreadable = (asset) => `cannot read ${asset}`;
+const CAPTURE_ASSETS = [
+    ['package.json'],
+    ['spec', 'SPEC.md'],
+    ['spec', 'schema', 'record.schema.json'],
+];
+/**
+ * The request-time half of capture preflight. Metadata is enough to discover
+ * a runtime whose installation disappeared after startup; the full preflight
+ * below remains responsible for validating contents and producing a repair.
+ */
+export const captureAssetsPresent = () => CAPTURE_ASSETS.every((segments) => {
+    try {
+        return statSync(installedPath(...segments)).isFile();
+    }
+    catch {
+        return false;
+    }
+});
 /**
  * Check that capture's shipped inputs are present and parseable before a
  * delivery surface advertises a mutating capture tool.  The actual readers

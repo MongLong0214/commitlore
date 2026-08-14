@@ -34,6 +34,12 @@ export interface CaptureAssetPreflight {
     readonly problems: readonly string[];
 }
 /**
+ * The request-time half of capture preflight. Metadata is enough to discover
+ * a runtime whose installation disappeared after startup; the full preflight
+ * below remains responsible for validating contents and producing a repair.
+ */
+export declare const captureAssetsPresent: () => boolean;
+/**
  * Check that capture's shipped inputs are present and parseable before a
  * delivery surface advertises a mutating capture tool.  The actual readers
  * still use `readInstalledFile`; this is their startup readiness check, not a

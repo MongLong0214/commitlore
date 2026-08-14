@@ -11484,7 +11484,7 @@ import { readFileSync as readFileSync2 } from "node:fs";
 var import__ = __toESM(require__(), 1);
 
 // src/core/paths.ts
-import { existsSync as existsSync2, readFileSync } from "node:fs";
+import { existsSync as existsSync2, readFileSync, statSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
 var findPackageRoot = (startDir) => {
@@ -11527,6 +11527,18 @@ var packageVersion = () => {
   return cachedVersion;
 };
 var unreadable = (asset) => `cannot read ${asset}`;
+var CAPTURE_ASSETS = [
+  ["package.json"],
+  ["spec", "SPEC.md"],
+  ["spec", "schema", "record.schema.json"]
+];
+var captureAssetsPresent = () => CAPTURE_ASSETS.every((segments) => {
+  try {
+    return statSync(installedPath(...segments)).isFile();
+  } catch {
+    return false;
+  }
+});
 var preflightCaptureAssets = () => {
   const problems = [];
   let manifestRaw;
@@ -17730,7 +17742,7 @@ import { resolve as resolve5 } from "node:path";
 
 // src/hooks/claude-settings.ts
 import { randomBytes as randomBytes3 } from "node:crypto";
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
 var CLAUDE_HOOK_EVENT = "PreToolUse";
 var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
@@ -17854,7 +17866,7 @@ var writeAtomic = (settingsPath, settings) => {
   mkdirSync3(dirname3(settingsPath), { recursive: true });
   let mode;
   try {
-    mode = statSync(settingsPath).mode & 511;
+    mode = statSync2(settingsPath).mode & 511;
   } catch {
     mode = void 0;
   }
@@ -18273,19 +18285,19 @@ import { existsSync as existsSync7, readFileSync as readFileSync9 } from "node:f
 import { resolve as resolve7 } from "node:path";
 
 // src/core/hook-target.ts
-import { lstatSync, readFileSync as readFileSync8, realpathSync, statSync as statSync2 } from "node:fs";
+import { lstatSync, readFileSync as readFileSync8, realpathSync, statSync as statSync3 } from "node:fs";
 import { dirname as dirname4, isAbsolute, join as join4, relative, resolve as resolve6, sep } from "node:path";
 var configValue = (cwd, key) => execGit(["config", "--local", "--get", key], { cwd }).stdout.trim();
 var isFile = (path2) => {
   try {
-    return statSync2(path2).isFile();
+    return statSync3(path2).isFile();
   } catch {
     return false;
   }
 };
 var isExecutableFile = (path2) => {
   try {
-    const stat = statSync2(path2);
+    const stat = statSync3(path2);
     return stat.isFile() && (stat.mode & 73) !== 0;
   } catch {
     return false;
@@ -19115,7 +19127,7 @@ import {
   lstatSync as lstatSync2,
   readFileSync as readFileSync10,
   renameSync as renameSync3,
-  statSync as statSync3,
+  statSync as statSync4,
   unlinkSync as unlinkSync4,
   writeFileSync as writeFileSync6
 } from "node:fs";
@@ -19296,7 +19308,7 @@ var insertObjectMember = (source, objectStart, objectEnd, key, value) => {
 var writeAtomic2 = (path2, contents) => {
   let mode;
   try {
-    mode = statSync3(path2).mode & 511;
+    mode = statSync4(path2).mode & 511;
   } catch {
     mode = void 0;
   }
@@ -19659,7 +19671,7 @@ var checkDirectiveTrustMode = (ctx) => {
 };
 
 // src/mcp/lifecycle.ts
-import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync11, statSync as statSync4, writeFileSync as writeFileSync7, writeSync } from "node:fs";
+import { appendFileSync, mkdirSync as mkdirSync4, readFileSync as readFileSync11, statSync as statSync5, writeFileSync as writeFileSync7, writeSync } from "node:fs";
 import { dirname as dirname5, join as join7, resolve as resolve9 } from "node:path";
 var MAX_BYTES = 64 * 1024;
 var LIFECYCLE_FILE = "mcp-lifecycle.log";
@@ -19671,7 +19683,7 @@ var lifecyclePath = (cwd = process.cwd()) => {
 };
 var trim = (path2) => {
   try {
-    if (statSync4(path2).size <= MAX_BYTES) return;
+    if (statSync5(path2).size <= MAX_BYTES) return;
     const lines = readFileSync11(path2, "utf8").split("\n");
     writeFileSync7(path2, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}`);
   } catch {
@@ -21133,7 +21145,7 @@ import {
   readFileSync as readFileSync16,
   realpathSync as realpathSync2,
   renameSync as renameSync7,
-  statSync as statSync5,
+  statSync as statSync6,
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
@@ -21717,7 +21729,7 @@ var resolveHooksDir = (cwd) => {
 };
 var isExecutable = (path2) => {
   try {
-    return (statSync5(path2).mode & 73) !== 0;
+    return (statSync6(path2).mode & 73) !== 0;
   } catch {
     return false;
   }
@@ -21757,7 +21769,7 @@ var resolveEntryForRecord = (entry, cwd) => {
   if (entry === void 0 || entry === "") return null;
   const existingFile = (candidate) => {
     try {
-      return statSync5(candidate).isFile() ? candidate : null;
+      return statSync6(candidate).isFile() ? candidate : null;
     } catch {
       return null;
     }
@@ -21934,7 +21946,7 @@ var register9 = (program3) => {
 };
 
 // src/core/agents-guidance.ts
-import { existsSync as existsSync16, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync6, writeFileSync as writeFileSync12 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync17, renameSync as renameSync8, rmSync as rmSync3, statSync as statSync7, writeFileSync as writeFileSync12 } from "node:fs";
 import { basename as basename2, dirname as dirname6, join as join10, resolve as resolve15 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
@@ -21956,7 +21968,7 @@ var readCommitloreAgentsSection = () => {
 };
 var markerCount = (contents, marker) => contents.split(marker).length - 1;
 var replaceFile = (path2, contents) => {
-  const mode = statSync6(path2).mode & 511;
+  const mode = statSync7(path2).mode & 511;
   const temporary = `${path2}.commitlore-incoming-${process.pid}`;
   try {
     writeFileSync12(temporary, contents, { mode });
@@ -22973,7 +22985,7 @@ var register14 = (program3) => {
 
 // src/commands/hermes.ts
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { copyFileSync, existsSync as existsSync18, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync7, writeFileSync as writeFileSync16 } from "node:fs";
+import { copyFileSync, existsSync as existsSync18, mkdirSync as mkdirSync10, readFileSync as readFileSync21, renameSync as renameSync9, statSync as statSync8, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
 import { basename as basename3, dirname as dirname8, join as join12, resolve as resolve18 } from "node:path";
 
@@ -23288,7 +23300,7 @@ var runHermesInstall = (options = {}) => {
         copyFileSync(configPath, backup);
         report.push(`backed up: ${configPath} -> ${backup}`);
       }
-      const mode = existsSync18(configPath) ? statSync7(configPath).mode : void 0;
+      const mode = existsSync18(configPath) ? statSync8(configPath).mode : void 0;
       atomicallyWrite(configPath, edit.contents, mode);
       report.push(`configured: ${edit.added.join(" and ")} in ${configPath}`);
     } catch (error2) {
@@ -23977,7 +23989,7 @@ var register17 = (program3) => {
 };
 
 // src/commands/installer-hosts.ts
-import { accessSync, constants, existsSync as existsSync19, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync8, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync23 } from "node:fs";
+import { accessSync, constants, existsSync as existsSync19, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync9, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync23 } from "node:fs";
 import { delimiter, dirname as dirname10, join as join14 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync as spawnSync5 } from "node:child_process";
@@ -24021,7 +24033,7 @@ var atomicJsonWrite = (path2, value) => {
 };
 var executable = (command) => {
   try {
-    if (statSync8(command).isDirectory()) return "command is a directory";
+    if (statSync9(command).isDirectory()) return "command is a directory";
     accessSync(command, constants.X_OK);
     return null;
   } catch {
@@ -24183,7 +24195,7 @@ args = ["mcp"]
 var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter).some((directory) => {
   const path2 = join14(directory, command);
   try {
-    return !statSync8(path2).isDirectory();
+    return !statSync9(path2).isDirectory();
   } catch {
     return false;
   }
@@ -33482,6 +33494,7 @@ var packageVersion2 = () => {
 };
 var runtimeLocation = () => `runtime entrypoint ${process.argv[1] ?? "unknown"}; package root ${PACKAGE_ROOT}`;
 var captureUnavailableMessage = (preflight) => `capture is unavailable: this MCP server is degraded read-only because ${preflight.problems.join("; ")}. Current ${runtimeLocation()}. Reinstall CommitLore, then restart this MCP server.`;
+var isCaptureTool = (name) => [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(name);
 var resolveRepoPath = (root, raw) => {
   if (raw === "" || raw === ".") return "";
   if (raw.includes("\0")) throw new Error("path contains a NUL byte");
@@ -33866,14 +33879,15 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       return asText({ staged: true, nonce: result });
     }
   };
-  const advertisedTools = captureReady ? TOOLS : TOOLS.filter((tool) => ![PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(tool.name));
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...advertisedTools] }));
+  server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: captureAssetsPresent() ? [...TOOLS] : TOOLS.filter((tool) => !isCaptureTool(tool.name))
+  }));
   server.setRequestHandler(CallToolRequestSchema, (request) => {
     try {
       const handler = handlers[request.params.name];
       if (handler === void 0) throw new Error(`unknown tool: ${request.params.name}`);
-      if (!captureReady && [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(request.params.name)) {
-        throw new Error(captureDiagnostic);
+      if (isCaptureTool(request.params.name) && !captureAssetsPresent()) {
+        throw new Error(captureUnavailableMessage(preflightCaptureAssets()));
       }
       const tool = TOOLS.find((candidate) => candidate.name === request.params.name);
       if (tool === void 0) throw new Error(`unknown tool: ${request.params.name}`);

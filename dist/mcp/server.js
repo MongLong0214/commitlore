@@ -42,7 +42,7 @@
  */
 import { Console } from 'node:console';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { PACKAGE_ROOT, packageVersion as readPackageVersion, preflightCaptureAssets, } from '../core/paths.js';
+import { PACKAGE_ROOT, captureAssetsPresent, packageVersion as readPackageVersion, preflightCaptureAssets, } from '../core/paths.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
@@ -114,6 +114,7 @@ const packageVersion = () => {
 const runtimeLocation = () => `runtime entrypoint ${process.argv[1] ?? 'unknown'}; package root ${PACKAGE_ROOT}`;
 const captureUnavailableMessage = (preflight) => `capture is unavailable: this MCP server is degraded read-only because ${preflight.problems.join('; ')}. ` +
     `Current ${runtimeLocation()}. Reinstall CommitLore, then restart this MCP server.`;
+const isCaptureTool = (name) => [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(name);
 // ---------------------------------------------------------------------------
 // Paths — the repository is the boundary
 // ---------------------------------------------------------------------------
@@ -612,17 +613,20 @@ export const createServer = (opts = {}) => {
             return asText({ staged: true, nonce: result });
         },
     };
-    const advertisedTools = captureReady
-        ? TOOLS
-        : TOOLS.filter((tool) => ![PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(tool.name));
-    server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...advertisedTools] }));
+    // A process can outlive the installed package it started from. Check only
+    // required-file metadata here: parsing the manifest, SPEC and schema on
+    // every request would make `tools/list` unnecessarily expensive. The full
+    // preflight is retained for startup and for an actionable failed probe.
+    server.setRequestHandler(ListToolsRequestSchema, () => ({
+        tools: captureAssetsPresent() ? [...TOOLS] : TOOLS.filter((tool) => !isCaptureTool(tool.name)),
+    }));
     server.setRequestHandler(CallToolRequestSchema, (request) => {
         try {
             const handler = handlers[request.params.name];
             if (handler === undefined)
                 throw new Error(`unknown tool: ${request.params.name}`);
-            if (!captureReady && [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_CAPTURE_TOOL].includes(request.params.name)) {
-                throw new Error(captureDiagnostic);
+            if (isCaptureTool(request.params.name) && !captureAssetsPresent()) {
+                throw new Error(captureUnavailableMessage(preflightCaptureAssets()));
             }
             const tool = TOOLS.find((candidate) => candidate.name === request.params.name);
             if (tool === undefined)
