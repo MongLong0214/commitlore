@@ -222,6 +222,19 @@ Violation classes:
 
 A validation failure MUST exit non-zero. Implementations MUST NOT silently repair input.
 
+When validating a message for a commit that does not exist yet — what a
+`commit-msg` hook does — an implementation MUST NOT count the declaration on
+`HEAD` toward `duplicate-id`. `git commit --amend` writes such a message, and
+the commit it replaces will not remain in history; but the hook cannot observe
+whether it is amending, because Git exposes no signal that distinguishes it.
+Counting `HEAD` therefore refuses the amend that repairs a malformed record —
+the only edit that changes the payload — while offering no way to tell that
+case from a genuine collision.
+
+The cost is stated rather than hidden: re-declaring `HEAD`'s `Record-Id` with a
+different payload on the next commit is accepted. Every other ancestor still
+collides, and re-declaring an identical payload was already permitted (§3.2).
+
 ---
 
 ## 7. Trust grading

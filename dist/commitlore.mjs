@@ -35231,7 +35231,9 @@ var checkReferences = (input, sources, cwd) => {
       const repositoryRecords = scan2.records.filter(
         (record2) => record2.sha !== void 0 && reachable.has(record2.sha)
       );
+      const headSha2 = source.sha === void 0 ? execGit(["rev-parse", "HEAD"], { cwd }).stdout.trim() : "";
       const prior = repositoryRecords.filter((record2) => record2.sha !== source.sha);
+      const priorForCollisions = headSha2 === "" ? prior : prior.filter((record2) => record2.sha !== headSha2);
       const ownBlocks = blocks.map((trailers) => ({
         trailers,
         source: "commit",
@@ -35246,7 +35248,7 @@ var checkReferences = (input, sources, cwd) => {
         const siblings = ownBlocks.filter((_, other) => other !== index);
         const dangling = findDanglingRefs([...prior, ...siblings, ...ownNotes], [candidate]);
         const recordId = trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-        const collisions = recordId === void 0 ? [] : findIdCollisions([...prior, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
+        const collisions = recordId === void 0 ? [] : findIdCollisions([...priorForCollisions, ...ownRecords]).filter((violation) => violation.value === recordId).filter(
           (violation) => tipAllRecords === void 0 || !isSuccessionDeclared(violation.value, tipAllRecords)
         );
         violations.push(

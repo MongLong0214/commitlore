@@ -572,7 +572,27 @@ const checkReferences = (input, sources, cwd) => {
             }
             const reachable = reachableShas(source.sha ?? 'HEAD', cwd);
             const repositoryRecords = scan.records.filter((record) => record.sha !== undefined && reachable.has(record.sha));
+            // #638: a message with no sha of its own is being written for a commit
+            // that does not exist yet, and `git commit --amend` is one of those. The
+            // rule that should apply is "ignore a declaration that will not remain
+            // in history" — during an amend HEAD is exactly that — but a commit-msg
+            // hook cannot observe whether it is amending. Git offers no signal: no
+            // environment variable, the same COMMIT_EDITMSG either way, and
+            // comparing against HEAD's message fails the moment the author edits it,
+            // which is this case.
+            //
+            // So the declaration on HEAD is not counted. That gives up one thing:
+            // re-declaring HEAD's id with a different payload on the very next
+            // commit now passes. The payload rule in `core/stale.ts` already forgives
+            // the identical-payload half of that, so the loss is narrow, and it is a
+            // check missing something rather than a check being wrong.
+            const headSha = source.sha === undefined ? execGit(['rev-parse', 'HEAD'], { cwd }).stdout.trim() : '';
             const prior = repositoryRecords.filter((record) => record.sha !== source.sha);
+            // Only `duplicate-id` ignores HEAD. `Follows:` and `Supersedes:` still
+            // resolve against it — a record naming an id declared on HEAD is not
+            // dangling, and removing HEAD from `prior` outright turned every such
+            // reference into one.
+            const priorForCollisions = headSha === '' ? prior : prior.filter((record) => record.sha !== headSha);
             // This message's own blocks, exactly once each — not `repositoryRecords`,
             // which already carries the single last-paragraph record `collectRecords`
             // derives for `source.sha`. Two blocks sharing a `Record-Id` inside one
@@ -601,7 +621,7 @@ const checkReferences = (input, sources, cwd) => {
                 const recordId = trailers.find((trailer) => trailer.key === 'Record-Id')?.value;
                 const collisions = recordId === undefined
                     ? []
-                    : findIdCollisions([...prior, ...ownRecords])
+                    : findIdCollisions([...priorForCollisions, ...ownRecords])
                         .filter((violation) => violation.value === recordId)
                         // When tip-scoped records are available (--range mode), filter
                         // out collisions that have been resolved by a Supersedes:
