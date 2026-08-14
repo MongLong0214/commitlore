@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
 import { execGit, type ExecGitOptions, type GitResult } from '../../core/git.js';
+import { discoverLiveMcpRuntimes, type LiveMcpRuntimeScan } from '../../core/mcp-probe.js';
 import { openIndex } from '../../core/index-db.js';
 
 /**
@@ -295,6 +296,16 @@ export interface DoctorContext {
   readonly git: DoctorGit;
   /** General child-process runner for executable and hook probes. */
   readonly spawn: DoctorSpawn;
+  /**
+   * Live MCP servers, by process rather than by registration (#660).
+   *
+   * A registration records an intended launch. Only the process list says
+   * which server is answering now — including one whose install has been
+   * deleted out from under it, which no configuration-derived check can see.
+   * A seam because `ps` is not universal and its output must never reach a
+   * fixture.
+   */
+  readonly liveMcpRuntimes: () => LiveMcpRuntimeScan;
   /** Environment seen by hook probes and configuration checks. */
   readonly env: NodeJS.ProcessEnv;
   /** Derived-index opener. */
@@ -311,6 +322,7 @@ export const defaultDoctorContext = (opts: DoctorOptions = {}): DoctorContext =>
   memo: new Map(),
   git: execGit,
   spawn: spawnSync,
+  liveMcpRuntimes: discoverLiveMcpRuntimes,
   env: process.env,
   openIndex,
 });
