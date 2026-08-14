@@ -22,3 +22,21 @@ export declare const installedPath: (...segments: readonly string[]) => string;
 export declare const isMissingInstalledFile: (error: unknown) => boolean;
 export declare const readInstalledFile: (...segments: readonly string[]) => string;
 export declare const packageVersion: () => string;
+/**
+ * The three installation assets a capture session reads before it can make a
+ * useful promise: its own manifest, the vocabulary contract, and the record
+ * schema.  Keep this beside `readInstalledFile` so every runtime resolves the
+ * same package root rather than teaching the MCP server a second layout.
+ */
+export interface CaptureAssetPreflight {
+    readonly ready: boolean;
+    /** Relative asset names only — never leak a deleted installation's old path. */
+    readonly problems: readonly string[];
+}
+/**
+ * Check that capture's shipped inputs are present and parseable before a
+ * delivery surface advertises a mutating capture tool.  The actual readers
+ * still use `readInstalledFile`; this is their startup readiness check, not a
+ * second resolution mechanism or a cache of their contents.
+ */
+export declare const preflightCaptureAssets: () => CaptureAssetPreflight;
