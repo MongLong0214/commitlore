@@ -1,26 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
-  <title id="title">CommitLore — Your agents inherit the code. Make them inherit the judgment.</title>
-  <desc id="desc">A fresh coding agent receives the active decision for a path, carrying a ruled-out alternative and its reason, while a superseded record is withheld because a later decision reversed it.</desc>
-  <rect width="1200" height="400" rx="24" fill="#f7f5f0"/>
-  <path d="M48 48H1152M48 334H1152" stroke="#d8d3c8"/>
-  <g transform="translate(64 76)">
-    <text fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600" letter-spacing="2">GIT-NATIVE DECISION LAYER</text>
-    <text y="66" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">Your agents</text>
-    <text y="122" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">inherit the code.</text>
-    <text y="178" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">Make them inherit</text>
-    <text y="234" fill="#181714" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-2">the judgment.</text>
-    <text y="282" fill="#3e3b35" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22">Only the decisions still in force reach the next edit.</text>
-  </g>
-  <g transform="translate(712 76)">
-    <rect width="424" height="246" rx="14" fill="#fffdf9" stroke="#bdb6aa"/>
-    <text x="28" y="40" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600">A FRESH AGENT RECEIVES</text>
-    <path d="M28 58H396" stroke="#ded9d0"/>
-    <text x="28" y="96" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700"><tspan fill="#3f6b4f">[active]</tspan><tspan fill="#6d675e" x="150">r-demo02</tspan></text>
-    <text x="28" y="128" fill="#181714" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">Ruled-out: Redis cluster</text>
-    <text x="28" y="154" fill="#3e3b35" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">| cost disproportionate</text>
-    <path d="M28 180H396" stroke="#ede9e2"/>
-    <text x="28" y="212" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700"><tspan fill="#9a8f80">[superseded]</tspan><tspan fill="#9a8f80" x="212">r-demo01</tspan></text>
-    <text x="28" y="238" fill="#9a8f80" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19">withheld — reversed later</text>
-  </g>
-  <text x="712" y="356" fill="#6d675e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">commit trailer → lifecycle → hook context</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title" aria-describedby="desc">
+  <title id="title">CommitLore delivers current decisions for a file to the next agent</title>
+  <desc id="desc">Active Limit and Ruled-out records for src/pricing.ts are delivered to the next agent; an earlier superseded Limit is not delivered as current guidance.</desc>
+  <rect width="1200" height="340" fill="#F4EFE6"/>
+  <rect x="0" y="0" width="6" height="220" fill="#3E6A4C"/>
+  <text x="48" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" fill="#4A453E">src/pricing.ts</text>
+  <rect x="48" y="54" width="142" height="38" fill="#3E6A4C"/>
+  <text x="68" y="80" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="1.6" fill="#F4EFE6">ACTIVE</text>
+  <text x="48" y="124" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" fill="#1A1814"><tspan fill="#4A453E">Limit — </tspan><tspan font-weight="600">calculatePrice owns final checkout pricing only</tspan></text>
+  <text x="48" y="160" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#1A1814"><tspan fill="#4A453E">Ruled-out — </tspan><tspan font-weight="600">Reuse checkout pricing for admin quotes — eligibility and rounding differ</tspan></text>
+  <text x="48" y="198" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22"><tspan fill="#4A453E">delivered to the </tspan><tspan fill="#3E6A4C" font-weight="700">next agent</tspan></text>
+  <line x1="48" y1="220" x2="1152" y2="220" stroke="#D9D3C8" stroke-width="1.5"/>
+  <rect x="0" y="220" width="6" height="120" fill="#D9D3C8"/>
+  <text x="48" y="256" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="1.5" fill="#4A453E">SUPERSEDED</text>
+  <text x="48" y="290" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#4A453E">Earlier Limit — calculatePrice also served admin quotes</text>
+  <text x="48" y="322" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" fill="#4A453E">not delivered as current guidance</text>
 </svg>

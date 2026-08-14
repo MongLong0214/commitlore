@@ -200,12 +200,18 @@ separate layers:
 | Gemini CLI, Cursor, Windsurf, opencode | **Yes — the MCP server is wired by `install.sh`.** | **Procedure, not automatic.** The server states the prepare → verify → stage procedure in its `instructions` on every connection. The host may or may not act on it. |
 | Any other `AGENTS.md`-convention host | **Procedure, not automatic.** `commitlore init --agents-md` writes it into the repository. | **Procedure, not automatic.** Same file, same caveat. |
 
-“Yes” means the layer is installed, not that every commit gains a record.
-Most commits should carry none. The first three rows install a skill that
-drives capture; the fourth receives the same procedure over MCP, which is what
-a host that loads no skills has to work from — verified with the plugin
-disabled, and it captured. Whether a given host surfaces those instructions to
-its model is the host's choice, and nothing here detects it. A host still has to start capture, and the candidate must pass
+“Yes” in the Capture column means the workflow is installed and available — the
+prepare → verify → stage path exists for that host. It does not mean every
+eligible commit reaches a terminal assessment on its own. **That stronger
+property, deterministic autocapture, is not certified on any host yet**, so
+treat capture as available rather than guaranteed. Most commits should carry no
+record in any case.
+
+The first three rows install a skill that drives capture; the fourth receives
+the same procedure over MCP, which is what a host that loads no skills has to
+work from — verified with the plugin disabled, and it captured. Whether a given
+host surfaces those instructions to its model is the host's choice, and nothing
+here detects it. A host still has to start capture, and the candidate must pass
 verification before the commit hook attaches it. The commit-msg hook validates
 a record when present; it never invents one.
 
@@ -270,12 +276,12 @@ rather than in a review comment after.
 
 **Whether it acts on that is now measured.** Across 1,160 registered runs, an
 agent handed the repository's active records re-proposed a ruled-out approach in
-**2.8%** of them (16/580). Without them: **18.8%** (109/579).
+**2.7%** of them (16/585). Without them: **18.8%** (110/584).
 
 | arm | re-proposed a ruled-out approach |
 |---|---:|
-| the agent alone | **18.8%** (109/579) |
-| **with CommitLore** | **2.8%** (16/580) |
+| the agent alone | **18.8%** (110/584) |
+| **with CommitLore** | **2.7%** (16/585) |
 
 **The threshold was registered before the run**, and the preregistration
 predicted a *smaller* effect than it got — that prediction, with its stated
@@ -513,7 +519,7 @@ CommitLore-Version: 2.0.0
 | `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
 | `Expires:` | Date or condition that ends a limit |
 | `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
+| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
 | `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
 
 Read a path's history with `commitlore context <path>`. Smaller examples, and how to read records with plain Git instead, are in [docs/protocol.md](docs/protocol.md); the normative definitions are in [SPEC §3](spec/SPEC.md).
@@ -521,7 +527,7 @@ Read a path's history with `commitlore context <path>`. Smaller examples, and ho
 ## What the repository proves
 
 - Decision history survives rebase, remote transfer, and path renames in the tested Git workflows. Squash-merge discards the trailer block, as any ordinary trailer would be: `commitlore squash-preserve` or its GitHub Action carries the records across, and the tested workflows cover that route.
-- Every route uses the same trust grading, so untrusted text is information rather than an instruction.
+- Routes share one grading core, so untrusted text is information rather than an instruction — but a record has been observed grading differently through the CLI and through MCP when more than one CommitLore runtime was installed ([#631](https://github.com/MongLong0214/commitlore/issues/631), [#635](https://github.com/MongLong0214/commitlore/issues/635)).
 - Injection-like text in free-form trailers is withheld from model-readable routes.
 - A readable repository with no records is distinct from incomplete history or an unfetched notes mirror.
 
