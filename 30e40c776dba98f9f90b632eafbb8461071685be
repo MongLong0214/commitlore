@@ -1,0 +1,3 @@
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports ceec6ceb; schema and hooks suites against the rebuilt bundle
+Record-Id: r-canon647m
+Provenance: inherited ead74d710cd2a8efaba0145f90d6b595b02ed3fe
