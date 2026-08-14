@@ -248,6 +248,17 @@ export interface QueryResult {
    * and not a log line: `scanTrailers` used to take `null` from `git rev-parse`
    * and return `[]`, so a broken git produced "no constraints" with exit 0.
    */
+  /**
+   * Whether this answer read everything it was asked about (#631).
+   *
+   * `history` and `notes` describe the sources, and both stay healthy when a
+   * consumer route stops at `CONSUMER_SCAN_BUDGET_MS` — the sources are fine,
+   * the index is short. A client checking only those reads a truncated answer
+   * as a whole one, which is how the CLI and MCP were seen answering the same
+   * question with nine records and with two.
+   */
+  coverage: 'complete' | 'partial';
+
   history: HistoryAvailability;
   shallow: boolean;
   /**
@@ -1012,6 +1023,7 @@ export const runQuery = (opts: QueryOptions = {}): QueryResult => {
       shallow,
       notes,
       unreadCommits: unread,
+      coverage: unread > 0 ? 'partial' : 'complete',
       diagnostics,
     };
   } finally {
