@@ -907,10 +907,39 @@ jobs:
             Stop-Process -Id $process.Id -Force
             throw 'doctor did not return within 20 seconds'
           }
-          Get-Content -LiteralPath $stderr | Write-Host
           $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
           $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
           $probe | ConvertTo-Json -Depth 8 | Write-Host
+
+          # Diagnostics, printed on every run so a failure carries its own cause.
+          # A step that only reports "timed out" teaches nothing the second time.
+          Write-Host '--- doctor stderr ---'
+          if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw | Write-Host } else { Write-Host '(no stderr file)' }
+          Write-Host "--- pid file present: $(Test-Path -LiteralPath $pidFile) ---"
+          if (Test-Path -LiteralPath $pidFile) { Write-Host "pid: $((Get-Content -LiteralPath $pidFile -Raw).Trim())" }
+
+          # Does the protocol survive the cmd.exe hop at all? Drive the wrapper
+          # by hand. An answer here means stdio traverses cmd and the silence
+          # belongs to the probe; silence means the handles are the cause.
+          # mcp-probe.ts asks only for serverInfo.name and a non-empty version,
+          # which this mock satisfies, so a rejected shape would surface as
+          # foreign-server rather than as a timeout.
+          $selfIn = Join-Path $repo 'selftest.in'
+          $selfOut = Join-Path $repo 'selftest.out'
+          $selfErr = Join-Path $repo 'selftest.err'
+          Set-Content -LiteralPath $selfIn -NoNewline ('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' + "`n")
+          $env:MCP_PROBE_CHILD_PID = Join-Path $repo 'selftest.pid'
+          $self = Start-Process -FilePath $wrapper -RedirectStandardInput $selfIn -RedirectStandardOutput $selfOut -RedirectStandardError $selfErr -PassThru -WindowStyle Hidden
+          if (-not $self.WaitForExit(5000)) { Stop-Process -Id $self.Id -Force -ErrorAction SilentlyContinue }
+          $answer = if (Test-Path -LiteralPath $selfOut) { (Get-Content -LiteralPath $selfOut -Raw) } else { '' }
+          if ([string]::IsNullOrWhiteSpace($answer)) {
+            Write-Host '--- wrapper driven by hand: silent => cmd.exe stdio is the cause ---'
+          } else {
+            Write-Host "--- wrapper driven by hand: answered => stdio traverses cmd; the silence is the probe's ---"
+            Write-Host $answer.Trim()
+          }
+          if (Test-Path -LiteralPath $selfErr) { Write-Host "selftest stderr: $((Get-Content -LiteralPath $selfErr -Raw).Trim())" }
+          $env:MCP_PROBE_CHILD_PID = $pidFile
           # Reclamation is not conditional on the probe's verdict: `finish()` in
           # mcp-probe.ts runs stopProbeChild on every exit, and the timeout path
           # is the one that matters most — an unhealthy server is exactly when a
