@@ -158,15 +158,29 @@ export const probeMcp = async (command, args) => {
         // the stream error handled: EPIPE is an unhealthy registration, not an
         // inspector crash (the deterministic close-stdin case covers this race).
         child.stdin.on('error', () => finish(failure('command-closed-input', 'command closed its input before MCP verification')));
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'commitlore-probe', version: '1' } } })}\n`);
+        // Let a launcher complete its own descriptor setup before the first
+        // protocol write. This preserves the probe's distinct closed-input result
+        // when the wrapper is the full CLI bundle rather than the former sidecar.
+        setTimeout(() => {
+            child?.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'commitlore-probe', version: '1' } } })}\n`);
+        }, 200);
     });
 };
 /**
- * Doctor's report API is synchronous. Run this same async probe in its own
- * Node process rather than maintaining a second, subtly different protocol.
+ * Doctor's report API is synchronous. Run this same async probe through the
+ * installation's declared runtime bundle rather than maintaining a second,
+ * subtly different protocol entry point.
  */
 export const probeMcpSync = (command, args) => {
-    const result = spawnSync(process.execPath, [installedPath('dist', 'core', 'mcp-probe.js'), command, JSON.stringify(args)], {
+    const result = spawnSync(process.execPath, [
+        installedPath('dist', 'commitlore.mjs'),
+        'internal',
+        'mcp-probe',
+        '--command',
+        command,
+        '--args-json',
+        JSON.stringify(args),
+    ], {
         encoding: 'utf8',
         // The helper owns the five-second protocol timeout and needs a little
         // room to reap a stubborn server. This outer bound is only a safety net
@@ -194,26 +208,4 @@ export const probeMcpSync = (command, args) => {
     }
     return failure('probe-unavailable', `could not read MCP verification result (status ${String(result.status)})`);
 };
-const probeEntrypoint = installedPath('dist', 'core', 'mcp-probe.js');
-if (process.env['COMMITLORE_MCP_PROBE'] === '1' && process.argv[1] === probeEntrypoint) {
-    const [command, rawArgs] = process.argv.slice(2);
-    let args;
-    try {
-        const parsed = JSON.parse(rawArgs ?? 'null');
-        if (Array.isArray(parsed) && parsed.every((value) => typeof value === 'string'))
-            args = parsed;
-    }
-    catch {
-        // The result below is a protocol response, not an uncaught helper error.
-    }
-    void (async () => {
-        const result = command === undefined || args === undefined
-            ? failure('probe-unavailable', 'could not read MCP verification arguments')
-            : await probeMcp(command, args);
-        // `spawnSync` waits for this helper, not for its stdout alone. Exit after
-        // flushing the verdict so a server's residual handles cannot turn a
-        // successful answer into the wrapper's timeout error.
-        process.stdout.write(JSON.stringify(result), () => process.exit(0));
-    })();
-}
 //# sourceMappingURL=mcp-probe.js.map

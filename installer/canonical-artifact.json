@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "5bc5c15c1535f22bc48a248cd24aa14811f14a3a52cea7d2fc1b7e6bf64ebdee"
+    "sha256": "e2f22c9909d39615902d2cc07e96d4684a04387831438e00208e39640a6d7f0f"
   },
   "artifact": {
-    "sha256": "37fce45bf95a474bc15f2543e83ec85623901ab3e4a2baa48085d534212d1e89",
+    "sha256": "11df2dc8aeda5ebeca70e8d43fea364e7552d7efcc8d1d335322f2b5c7e2d291",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -26,11 +26,11 @@
       },
       {
         "path": "dist/cli.js",
-        "sha256": "266d24073f002fc723c72f732aeeb86186f547cb01984c790e5b3079bb267c02"
+        "sha256": "311ee9663c766c0c9de052bec33002c3fc699bc9bfe8fb377dc6cab5c43cf61e"
       },
       {
         "path": "dist/cli.js.map",
-        "sha256": "2bc304be1d6b7bd673a53f6915f017a996c7329925262a363ecb4e49f5d6c09b"
+        "sha256": "d7897efd911b5106f978efa1a9d34dc988800282c8cbfa540db9eabe99dddb50"
       },
       {
         "path": "dist/commands/auto.d.ts",
@@ -562,7 +562,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "e35e7f11e8f5f0540f927bfec980c2a17ab3481a5d9b63180f89979d67ce4e23"
+        "sha256": "cdcc9136cf42ff06035af60dfad690c33184ea7a034523e720dc709a85ea2225"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -806,15 +806,15 @@
       },
       {
         "path": "dist/core/mcp-probe.d.ts",
-        "sha256": "9cdf9f07af00e2e350f8dfe171ec8069c4334e4a907e950884c4c0ba4dce9120"
+        "sha256": "de83fda29e09f736fb9c85347e0a0b325caea073943402dbd5a734674d7238e0"
       },
       {
         "path": "dist/core/mcp-probe.js",
-        "sha256": "ec183c664f2473f10a3013925ed57bbe307ab2062d6f3bead3af706e5e58e84d"
+        "sha256": "a36a4b9be5c6fc05e3ac32d793b0e6dc84a0fa28652497f94f943f07014f41ab"
       },
       {
         "path": "dist/core/mcp-probe.js.map",
-        "sha256": "ed62a1b68191fd3df993ad60204d6382f20830dbf959be11d80c10ecc42d85f1"
+        "sha256": "c769e8ab1e0135e88a9a720fcd1777e9d574b693a933f99b318ae71c61a3f634"
       },
       {
         "path": "dist/core/mcp-registration.d.ts",

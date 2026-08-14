@@ -886,6 +886,21 @@ describe('doctor: cli runtime', () => {
   });
 });
 
+describe('doctor: MCP probe runtime asset', () => {
+  it('spawns its child through the runtime asset declared by the canonical artifact', () => {
+    const artifact = JSON.parse(
+      readFileSync(join(PACKAGE_ROOT, 'installer', 'canonical-artifact.json'), 'utf8'),
+    ) as { runtimeAssets: string[] };
+    const [runtimeAsset] = artifact.runtimeAssets;
+    const source = readFileSync(join(PACKAGE_ROOT, 'src', 'core', 'mcp-probe.ts'), 'utf8');
+    const installedAsset = `installedPath(${runtimeAsset.split('/').map((part) => `'${part}'`).join(', ')})`;
+    const escapedAsset = installedAsset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    expect(artifact.runtimeAssets).toHaveLength(1);
+    expect(source).toMatch(new RegExp(`spawnSync\\(process\\.execPath,\\s*\\[\\s*${escapedAsset}`));
+  });
+});
+
 /**
  * doctor is the command that answers "does this installation work", yet a
  * tree missing `spec/` — the same tree `validate` already refuses with exit 3

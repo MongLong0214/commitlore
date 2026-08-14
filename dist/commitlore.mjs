@@ -19487,12 +19487,22 @@ var probeMcp = async (command, args) => {
       }
     });
     child.stdin.on("error", () => finish(failure2("command-closed-input", "command closed its input before MCP verification")));
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "commitlore-probe", version: "1" } } })}
+    setTimeout(() => {
+      child?.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "commitlore-probe", version: "1" } } })}
 `);
+    }, 200);
   });
 };
 var probeMcpSync = (command, args) => {
-  const result = spawnSync4(process.execPath, [installedPath("dist", "core", "mcp-probe.js"), command, JSON.stringify(args)], {
+  const result = spawnSync4(process.execPath, [
+    installedPath("dist", "commitlore.mjs"),
+    "internal",
+    "mcp-probe",
+    "--command",
+    command,
+    "--args-json",
+    JSON.stringify(args)
+  ], {
     encoding: "utf8",
     // The helper owns the five-second protocol timeout and needs a little
     // room to reap a stubborn server. This outer bound is only a safety net
@@ -19512,20 +19522,6 @@ var probeMcpSync = (command, args) => {
   }
   return failure2("probe-unavailable", `could not read MCP verification result (status ${String(result.status)})`);
 };
-var probeEntrypoint = installedPath("dist", "core", "mcp-probe.js");
-if (process.env["COMMITLORE_MCP_PROBE"] === "1" && process.argv[1] === probeEntrypoint) {
-  const [command, rawArgs] = process.argv.slice(2);
-  let args;
-  try {
-    const parsed = JSON.parse(rawArgs ?? "null");
-    if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) args = parsed;
-  } catch {
-  }
-  void (async () => {
-    const result = command === void 0 || args === void 0 ? failure2("probe-unavailable", "could not read MCP verification arguments") : await probeMcp(command, args);
-    process.stdout.write(JSON.stringify(result), () => process.exit(0));
-  })();
-}
 
 // src/commands/doctor/checks/capture-unattended-initiator.ts
 var checkUnattendedCaptureInitiator = (ctx) => {
@@ -35269,6 +35265,26 @@ var registerUninstall = (program3) => {
 // src/cli.ts
 var pkg = { version: packageVersion() };
 var STDIN_FD2 = 0;
+var internalMcpProbe = async (command, rawArgs) => {
+  let args;
+  try {
+    const parsed = JSON.parse(rawArgs ?? "null");
+    if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) args = parsed;
+  } catch {
+  }
+  const result = command === void 0 || args === void 0 ? { kind: "failure", reason: "probe-unavailable", detail: "could not read MCP verification arguments" } : await probeMcp(command, args);
+  await new Promise((resolve21) => process.stdout.write(JSON.stringify(result), () => resolve21()));
+};
+var internalArguments = process.argv.slice(2);
+if (internalArguments[0] === "internal" && internalArguments[1] === "mcp-probe") {
+  const commandIndex = internalArguments.indexOf("--command");
+  const argsIndex = internalArguments.indexOf("--args-json");
+  await internalMcpProbe(
+    commandIndex === -1 ? void 0 : internalArguments[commandIndex + 1],
+    argsIndex === -1 ? void 0 : internalArguments[argsIndex + 1]
+  );
+  process.exit(0);
+}
 var readMessage = (messageFile) => {
   if (messageFile !== void 0) return readFileSync28(messageFile, "utf8");
   if (process.stdin.isTTY) {
@@ -35328,6 +35344,9 @@ program2.command("parse").description("Parse a commit message into its CommitLor
   "\nA message carrying more than one record block (SPEC \xA72.4) prints every block, labeled own (the message's own last paragraph) or earlier (a block the grammar recovered), and flags any Record-Id declared by more than one block. A single-block message is unaffected.\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read."
 ).action((options) => {
   runParse(options);
+});
+program2.command("internal", { hidden: true }).command("mcp-probe", { hidden: true }).requiredOption("--command <command>", "MCP command to verify").requiredOption("--args-json <json>", "JSON array of MCP command arguments").action(async (options) => {
+  await internalMcpProbe(options.command, options.argsJson);
 });
 register24(program2);
 register7(program2);

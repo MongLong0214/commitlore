@@ -24,7 +24,8 @@ export declare const isMcpProbeFailure: (result: McpProbeResult) => result is Mc
 /** Speak enough MCP to distinguish a launchable command from usable CommitLore. */
 export declare const probeMcp: (command: string, args: string[]) => Promise<McpProbeResult>;
 /**
- * Doctor's report API is synchronous. Run this same async probe in its own
- * Node process rather than maintaining a second, subtly different protocol.
+ * Doctor's report API is synchronous. Run this same async probe through the
+ * installation's declared runtime bundle rather than maintaining a second,
+ * subtly different protocol entry point.
  */
 export declare const probeMcpSync: (command: string, args: string[]) => McpProbeResult;

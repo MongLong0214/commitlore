@@ -16,7 +16,7 @@ import { register as registerAuto } from './commands/auto.js';
 import { register as registerCapture } from './commands/capture.js';
 import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
-import { formatRuntimeIdentity, runtimeIdentity } from './core/runtime-identity.js';
+import { probeMcp } from './core/mcp-probe.js';
 import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerGuard } from './commands/guard.js';
@@ -42,6 +42,28 @@ import { register as registerPrePush } from './hooks/pre-push.js';
 import { labelRecordBlocks, serializeTrailers } from './core/trailers.js';
 const pkg = { version: packageVersion() };
 const STDIN_FD = 0;
+const internalMcpProbe = async (command, rawArgs) => {
+    let args;
+    try {
+        const parsed = JSON.parse(rawArgs ?? 'null');
+        if (Array.isArray(parsed) && parsed.every((value) => typeof value === 'string'))
+            args = parsed;
+    }
+    catch {
+        // The result below is a probe response, not an uncaught helper error.
+    }
+    const result = command === undefined || args === undefined
+        ? { kind: 'failure', reason: 'probe-unavailable', detail: 'could not read MCP verification arguments' }
+        : await probeMcp(command, args);
+    await new Promise((resolve) => process.stdout.write(JSON.stringify(result), () => resolve()));
+};
+const internalArguments = process.argv.slice(2);
+if (internalArguments[0] === 'internal' && internalArguments[1] === 'mcp-probe') {
+    const commandIndex = internalArguments.indexOf('--command');
+    const argsIndex = internalArguments.indexOf('--args-json');
+    await internalMcpProbe(commandIndex === -1 ? undefined : internalArguments[commandIndex + 1], argsIndex === -1 ? undefined : internalArguments[argsIndex + 1]);
+    process.exit(0);
+}
 const readMessage = (messageFile) => {
     if (messageFile !== undefined)
         return readFileSync(messageFile, 'utf8');
@@ -99,18 +121,6 @@ program
     .name('commitlore')
     .description('Git commit trailers as institutional memory for AI coding agents')
     .version(pkg.version ?? '0.0.0');
-// Machine-readable on purpose: hooks, installers and MCP hosts need the
-// entrypoint and root too; a version string was the ambiguity F-001 found.
-program
-    .command('runtime-identity')
-    .description('print the exact CommitLore runtime this command executes')
-    .option('--json', 'emit the runtime identity as JSON')
-    .action((options) => {
-    const identity = runtimeIdentity();
-    process.stdout.write(options.json === true
-        ? `${formatRuntimeIdentity(identity)}\n`
-        : `version ${identity.version}\nentrypoint ${identity.entrypoint}\npackage root ${identity.packageRoot}\nindex schema v${identity.indexSchemaVersion}\n`);
-});
 program
     .command('parse')
     .description('Parse a commit message into its CommitLore trailers (SPEC §2)')
@@ -122,6 +132,19 @@ program
     '\nExit codes: 0 parsed (including a message with no trailers), 2 the message could not be read.')
     .action((options) => {
     runParse(options);
+});
+/**
+ * An implementation-only bridge for synchronous doctor checks. Both command
+ * levels are hidden so the bundle keeps one public command surface while the
+ * probe can still run the same bundled code in a child process.
+ */
+program
+    .command('internal', { hidden: true })
+    .command('mcp-probe', { hidden: true })
+    .requiredOption('--command <command>', 'MCP command to verify')
+    .requiredOption('--args-json <json>', 'JSON array of MCP command arguments')
+    .action(async (options) => {
+    await internalMcpProbe(options.command, options.argsJson);
 });
 registerSync(program);
 registerPrePush(program);
