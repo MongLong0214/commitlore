@@ -1,0 +1,11 @@
+Ruled-out: filename equality | two shipped entrypoints of one install are one runtime
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; npx vitest run test/init.test.ts; npx vitest run test/doctor.test.ts; npx vitest run test/runtime-identity.test.ts test/hooks.test.ts test/index-db.test.ts; npx vitest run test/doctor.test.ts test/init.test.ts; docker linux/amd64 npm ci, build, artifact:manifest; npm ci; npm run artifact:verify
+Record-Id: r-oneinstall001
+Provenance: inherited 49b9d853a17c8a64d2f9b07db2e3512388732af6
+
+Verified: docker linux/amd64 build and artifact:manifest; artifact:verify reports e9d85e41; 280 files in dist; 101 cases across doctor, init and runtime-identity
+Record-Id: r-canonf001b
+Provenance: inherited 9e9ee738e63e8aa76f915856cd7ed926faeb972b
