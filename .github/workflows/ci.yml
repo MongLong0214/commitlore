@@ -884,10 +884,18 @@ jobs:
           });
           setInterval(() => {}, 1_000);
           '@ | Set-Content -LiteralPath $server -NoNewline
+          # The wrapper runs node in the foreground and inherits the probe's
+          # pipes, so "the server answered" does not depend on the child-tree
+          # handling this step exists to test. `start /b` detached the child,
+          # which left the precondition resting on whether Windows happens to
+          # pass console handles through `start` — and a precondition that
+          # depends on the behaviour under test cannot tell a broken product
+          # from a broken fixture. cmd.exe is still the probe's direct child
+          # and node is still a grandchild, so the tree is the same one #640 is
+          # about; only the protocol path is now unambiguous.
           @"
           @echo off
-          start "" /b "$env:ProgramFiles\nodejs\node.exe" "$server"
-          ping -n 31 127.0.0.1 >nul
+          "$env:ProgramFiles\nodejs\node.exe" "$server"
           "@ | Set-Content -LiteralPath $wrapper -NoNewline
           Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
           @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
