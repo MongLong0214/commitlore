@@ -13,6 +13,7 @@ import { checkInjectRuntime } from './checks/delivery-inject-runtime.js';
 import { checkInjectVersion } from './checks/delivery-inject-version.js';
 import { checkDirectiveTrustMode } from './checks/delivery-directive-trust-mode.js';
 import { checkMcpLifecycle } from './checks/delivery-mcp-lifecycle.js';
+import { checkMcpRuntimeIdentity } from './checks/delivery-mcp-runtime-identity.js';
 import { checkHistoryDepth } from './checks/history-history-depth.js';
 import { checkSquashConservation } from './checks/history-squash-conservation.js';
 import { checkIndex } from './checks/index-index-health.js';
@@ -60,6 +61,7 @@ export const CHECK_REGISTRY = [
     { id: 'inject-version', title: 'PreToolUse hook version', category: 'delivery', dependencies: ['inject-runtime'], optional: false, run: (ctx, dependencies) => checkInjectVersion(ctx, dependencies) },
     { id: 'directive-trust-mode', title: 'directive trust mode', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkDirectiveTrustMode(ctx) },
     { id: 'mcp-lifecycle', title: 'MCP server sessions', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
+    { id: 'mcp-runtime-identity', title: 'live MCP runtime identity', category: 'delivery', dependencies: [], optional: false, run: (ctx) => checkMcpRuntimeIdentity(ctx) },
     { id: 'unattended-initiator', title: 'unattended capture initiator', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
     { id: 'pending-backlog', title: 'pending captures', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
     { id: 'git-trailers', title: 'git interpret-trailers', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },

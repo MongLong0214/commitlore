@@ -7,9 +7,9 @@
  * advertised tools form the read-delivery or capture-initiation surface.
  */
 
-import { accessSync, constants, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 
 import { installedPath } from './paths.js';
 
@@ -136,6 +136,86 @@ const stopProbeChild = async (child: ChildProcessWithoutNullStreams): Promise<Mc
     await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
   }
   return child.exitCode === null && child.signalCode === null ? 'could-not-reclaim' : 'reclaimed';
+};
+
+/**
+ * The filesystem identity of one process currently answering an MCP session.
+ * `reportedVersion` is intentionally observation only: two different roots
+ * may carry exactly the same package version.
+ */
+export interface LiveMcpRuntime {
+  readonly pid: number;
+  readonly entrypointRealpath: string;
+  readonly packageRoot: string;
+  readonly reportedVersion: string | null;
+  readonly bundlePresent: boolean;
+  readonly specPresent: boolean;
+}
+
+/** Process enumeration is an effect seam because `ps` is not universal. */
+export interface LiveMcpRuntimeScan {
+  readonly available: boolean;
+  readonly runtimes: readonly LiveMcpRuntime[];
+  readonly detail: string;
+}
+
+
+const packageVersionAt = (root: string): string | null => {
+  try {
+    const parsed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: unknown };
+    return typeof parsed.version === 'string' && parsed.version !== '' ? parsed.version : null;
+  } catch {
+    return null;
+  }
+};
+
+const runtimeFromEntrypoint = (pid: number, entrypoint: string): LiveMcpRuntime => {
+  let entrypointRealpath = entrypoint;
+  try {
+    entrypointRealpath = realpathSync(entrypoint);
+  } catch {
+    // A deleted install can keep serving from its already-open program image.
+    // Retain the observed pathname so doctor can still name the stale root.
+  }
+  const packageRoot = dirname(dirname(entrypointRealpath));
+  return {
+    pid,
+    entrypointRealpath,
+    packageRoot,
+    reportedVersion: packageVersionAt(packageRoot),
+    bundlePresent: existsSync(join(packageRoot, 'dist', 'commitlore.mjs')),
+    specPresent: existsSync(join(packageRoot, 'spec', 'SPEC.md')),
+  };
+};
+
+/**
+ * Enumerate processes, not registrations: the former is the server that is
+ * actually answering a session. The DoctorContext supplies this as an
+ * injectable seam so platform-specific `ps` output never enters a fixture.
+ */
+export const discoverLiveMcpRuntimes = (): LiveMcpRuntimeScan => {
+  if (process.platform === 'win32') {
+    return { available: false, runtimes: [], detail: 'process enumeration is unavailable on win32' };
+  }
+  const result = spawnSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' });
+  if (result.error !== undefined || result.status !== 0) {
+    return {
+      available: false,
+      runtimes: [],
+      detail: result.error?.message ?? `ps exited with status ${String(result.status)}`,
+    };
+  }
+  const runtimes: LiveMcpRuntime[] = [];
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const match = /^\s*(\d+)\s+.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(line);
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    const entrypoint = match[2];
+    if (entrypoint !== undefined && Number.isSafeInteger(pid)) {
+      runtimes.push(runtimeFromEntrypoint(pid, entrypoint));
+    }
+  }
+  return { available: true, runtimes, detail: 'ps -axo pid=,args=' };
 };
 
 const commandPath = (command: string): string | McpProbeFailure => {
