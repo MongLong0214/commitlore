@@ -911,7 +911,16 @@ jobs:
           $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
           $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
           $probe | ConvertTo-Json -Depth 8 | Write-Host
-          if ($probe.status -ne 'ok') { throw 'the wrapper MCP server was not healthy before cleanup' }
+          # Reclamation is not conditional on the probe's verdict: `finish()` in
+          # mcp-probe.ts runs stopProbeChild on every exit, and the timeout path
+          # is the one that matters most — an unhealthy server is exactly when a
+          # child tree gets stranded. Gating on `status -eq 'ok'` made the
+          # precondition depend on the protocol surviving a cmd.exe hop, where
+          # cmd and the child both hold the same stdin and whichever reads first
+          # wins; that raced, and a raced precondition cannot tell a broken
+          # product from a broken fixture. The pid file is the honest
+          # precondition: it proves the child really ran, and says nothing about
+          # what this step asserts.
           if (-not (Test-Path -LiteralPath $pidFile)) { throw 'the wrapper never started its child server' }
           $childPid = [int](Get-Content -LiteralPath $pidFile -Raw)
           Start-Sleep -Milliseconds 250
