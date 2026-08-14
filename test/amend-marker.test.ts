@@ -116,6 +116,31 @@ describe('#638 what prepare-commit-msg is told, per commit operation', () => {
     expect(revert, 'revert reaches the hook as an ordinary message').toBe('src=message op=');
   });
 
+  /**
+   * The boundary of what this fix can reach, and it is git's, not ours.
+   *
+   * `--amend -m` and `--amend -F` supply the message on the command line, so
+   * git reports the *message's* origin rather than the commit's: the arguments
+   * are byte-identical to an ordinary commit. No marker can be written for
+   * them, and the amend stays refused.
+   *
+   * This is pinned rather than merely noted because it cost a session: the
+   * implementation was measured against a `-m` fixture, read as broken, and
+   * debugged for hours before the fixture itself was questioned.
+   */
+  it('cannot tell an amend that supplies its message on the command line', () => {
+    const repo = repoRecordingHookArguments('amend-m');
+    commitFile(repo, 'a.txt', 'first');
+    git(repo, ['commit', '--quiet', '--amend', '-m', 'reworded']);
+    writeFileSync(join(repo, 'msg.txt'), 'from a file\n', 'utf8');
+    git(repo, ['commit', '--quiet', '--amend', '--allow-empty', '-F', 'msg.txt']);
+
+    const [ordinary, amendMessage, amendFile] = recorded(repo);
+    expect(amendMessage, 'indistinguishable from an ordinary commit').toBe(ordinary);
+    expect(amendFile, 'and so is -F').toBe(ordinary);
+    expect(ordinary, 'which is the source git reports for both').toBe('src=message op=');
+  });
+
   it('gives a merge its own source', () => {
     const repo = repoRecordingHookArguments('merge');
     commitFile(repo, 'a.txt', 'first');
