@@ -11,6 +11,42 @@ import { spawn, spawnSync } from 'node:child_process';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { installedPath } from './paths.js';
 const failure = (kind, detail) => ({ kind, detail });
+const CLEANUP_GRACE_MS = 250;
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+/**
+ * The synchronous wrapper cannot return until its helper exits, so a completed
+ * protocol exchange must also stop the server that supplied it. On POSIX the
+ * server receives its own process group: killing that group also handles a
+ * launcher which did not replace itself with the actual server process.
+ */
+const stopProbeChild = async (child) => {
+    if (child.exitCode !== null || child.signalCode !== null)
+        return;
+    let exitedResolve;
+    const exited = new Promise((resolve) => {
+        exitedResolve = resolve;
+    });
+    child.once('exit', () => exitedResolve?.());
+    const signal = (value) => {
+        if (process.platform !== 'win32' && child.pid !== undefined) {
+            try {
+                process.kill(-child.pid, value);
+                return;
+            }
+            catch {
+                // A very short-lived child can leave its process group before this
+                // signal. Its direct process handle is still the portable fallback.
+            }
+        }
+        child.kill(value);
+    };
+    signal('SIGTERM');
+    await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
+    if (child.exitCode === null && child.signalCode === null) {
+        signal('SIGKILL');
+        await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
+    }
+};
 const commandPath = (command) => {
     const candidates = isAbsolute(command) || command.includes('/')
         ? [command]
@@ -39,17 +75,28 @@ export const probeMcp = async (command, args) => {
     return new Promise((resolve) => {
         let settled = false;
         let child;
+        let timer;
         const finish = (problem) => {
             if (settled)
                 return;
             settled = true;
-            child?.kill();
-            resolve(problem);
+            if (timer !== undefined)
+                clearTimeout(timer);
+            void (async () => {
+                if (child !== undefined)
+                    await stopProbeChild(child);
+                resolve(problem);
+            })();
         };
         try {
             const childEnv = { ...process.env };
             delete childEnv['COMMITLORE_MCP_PROBE'];
-            child = spawn(resolved, args, { stdio: ['pipe', 'pipe', 'pipe'], shell: false, env: childEnv });
+            child = spawn(resolved, args, {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                shell: false,
+                env: childEnv,
+                detached: process.platform !== 'win32',
+            });
         }
         catch (error) {
             finish(failure('command-could-not-start', `could not start command: ${error instanceof Error ? error.message : String(error)}`));
@@ -57,7 +104,7 @@ export const probeMcp = async (command, args) => {
         }
         let buffer = '';
         let initialized = false;
-        const timer = setTimeout(() => finish(failure('initialize-timed-out', 'MCP initialize timed out')), 5_000);
+        timer = setTimeout(() => finish(failure('initialize-timed-out', 'MCP initialize timed out')), 5_000);
         child.once('error', (error) => finish(failure('command-could-not-start', `could not start command: ${error.message}`)));
         child.once('exit', (code) => {
             if (!settled)
@@ -79,7 +126,6 @@ export const probeMcp = async (command, args) => {
                 if (!initialized && message.id === 1) {
                     const info = message.result?.serverInfo;
                     if (info?.name !== 'commitlore' || typeof info.version !== 'string' || info.version === '') {
-                        clearTimeout(timer);
                         finish(failure('foreign-server', 'MCP initialize did not identify CommitLore with a version'));
                         return;
                     }
@@ -88,7 +134,6 @@ export const probeMcp = async (command, args) => {
                 }
                 else if (initialized && message.id === 2) {
                     const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
-                    clearTimeout(timer);
                     finish(tools.has('commitlore_query') && tools.has('commitlore_before_change')
                         ? null
                         : failure('missing-tools', 'MCP server lacks CommitLore minimum tools'));
@@ -110,7 +155,10 @@ export const probeMcp = async (command, args) => {
 export const probeMcpSync = (command, args) => {
     const result = spawnSync(process.execPath, [installedPath('dist', 'core', 'mcp-probe.js'), command, JSON.stringify(args)], {
         encoding: 'utf8',
-        timeout: 6_000,
+        // The helper owns the five-second protocol timeout and needs a little
+        // room to reap a stubborn server. This outer bound is only a safety net
+        // for a broken helper, not the server-response timeout we report.
+        timeout: 7_000,
         env: { ...process.env, COMMITLORE_MCP_PROBE: '1' },
     });
     if (result.error !== undefined) {
@@ -143,7 +191,10 @@ if (process.env['COMMITLORE_MCP_PROBE'] === '1' && process.argv[1] === probeEntr
         const result = command === undefined || args === undefined
             ? failure('probe-unavailable', 'could not read MCP verification arguments')
             : await probeMcp(command, args);
-        process.stdout.write(JSON.stringify(result));
+        // `spawnSync` waits for this helper, not for its stdout alone. Exit after
+        // flushing the verdict so a server's residual handles cannot turn a
+        // successful answer into the wrapper's timeout error.
+        process.stdout.write(JSON.stringify(result), () => process.exit(0));
     })();
 }
 //# sourceMappingURL=mcp-probe.js.map

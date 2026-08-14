@@ -1391,6 +1391,35 @@ setInterval(() => {}, 1_000);
     expect(check?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe: 'missing-tools' });
   });
 
+  it('accepts a healthy server that remains alive after verification', () => {
+    const repo = initRepo('unattended-stubborn-healthy-mcp');
+    enableUnattended(repo);
+    const command = join(repo, '.test-bin', 'stubborn-healthy-mcp');
+    writeScript(command, `#!/usr/bin/env node
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  const lines = buffer.split('\\n');
+  buffer = lines.pop() ?? '';
+  for (const line of lines) {
+    const message = JSON.parse(line);
+    if (message.id === 1) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'commitlore', version: '1.0.0' } } }) + '\\n');
+    if (message.id === 2) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'commitlore_query' }, { name: 'commitlore_before_change' }] } }) + '\\n');
+  }
+});
+process.on('SIGTERM', () => {});
+setInterval(() => {}, 1_000);
+`);
+    chmodSync(command, 0o755);
+    registerMcp(repo, command, []);
+
+    const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
+
+    expect(check?.status).toBe('ok');
+    expect(check?.evidence).toMatchObject({ initiator: 'mcp-server-verified' });
+  });
+
   it('preserves and accepts a healthy custom wrapper', () => {
     const repo = initRepo('unattended-entry-wrapper');
     enableUnattended(repo);
