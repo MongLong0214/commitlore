@@ -870,6 +870,11 @@ jobs:
           @'
           const { writeFileSync } = require('node:fs');
           writeFileSync(process.env.MCP_PROBE_CHILD_PID, String(process.pid));
+          // Wall clock at child start. Against the moment doctor was invoked
+          // this says whether the cold start fits inside the probe's five
+          // second window or lands after it; "slow" and "unreachable" produce
+          // the same silence otherwise.
+          writeFileSync(process.env.MCP_PROBE_CHILD_PID + '.startedat', String(Date.now()));
           let buffer = '';
           const started = Date.now();
           process.stdin.setEncoding('utf8');
@@ -906,6 +911,7 @@ jobs:
           Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
           @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
           $env:MCP_PROBE_CHILD_PID = $pidFile
+          $doctorStartedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
           $stdout = Join-Path $repo 'doctor.json'
           $stderr = Join-Path $repo 'doctor.err'
           $process = Start-Process -FilePath $shim -ArgumentList @('doctor', '--json') -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
@@ -927,6 +933,13 @@ jobs:
           # bytes reach the child at all? mcp-probe.ts waits a fixed 200ms
           # before its first protocol write, so "arrived late" and "never
           # arrived" are different failures and only one of them is a race.
+          $startedAt = "$pidFile.startedat"
+          if (Test-Path -LiteralPath $startedAt) {
+            $delta = [int64]("$(Get-Content -LiteralPath $startedAt -Raw)".Trim()) - $doctorStartedAt
+            Write-Host "--- child process started ${delta}ms after doctor was invoked (probe window is 5000ms) ---"
+          } else {
+            Write-Host '--- child never recorded a start time ---'
+          }
           $sawInput = "$pidFile.sawinput"
           if (Test-Path -LiteralPath $sawInput) {
             Write-Host "--- child saw stdin after $("$(Get-Content -LiteralPath $sawInput -Raw)".Trim())ms => the write arrived; the missing half is the response ---"
