@@ -826,6 +826,8 @@ jobs:
       # findings described above.
       - name: A bare installed MCP command is healthy through PATHEXT (#640)
         shell: pwsh
+        # Keep going long enough to record the separate child-tree defect too.
+        continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
           $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
