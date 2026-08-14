@@ -134,6 +134,25 @@ const canonicaliseLiveRuntimes = (line: string): string =>
 const canonicaliseTotals = (line: string): string =>
   line.replace(/^\d+ ok, \d+ warnings?, \d+ failed, \d+ skipped/, '<totals>');
 
+/**
+ * Every check except the one that reads the process table (#661).
+ *
+ * The two comparisons below exist to pin that the library and the shipped
+ * binary render one report identically, and that NO_COLOR changes nothing but
+ * colour. `mcp-runtime-identity` enumerates live processes, so its status moves
+ * with whatever else is running — under a parallel suite it can flip between
+ * runs, which shifts the numbered warning list and every number after it.
+ * Canonicalising those lines only hides it until the next check reads the
+ * machine; leaving the check out of a format comparison is the thing that is
+ * actually true about what these tests measure.
+ *
+ * Derived from the registry rather than listed, so adding a check does not
+ * silently drop out of these comparisons.
+ */
+const FORMAT_CHECK_IDS: readonly string[] = CHECK_REGISTRY.map((definition) => definition.id).filter(
+  (id) => id !== 'mcp-runtime-identity',
+);
+
 const normalise = (text: string, repo: string): string =>
   text
     .split('\n')
@@ -312,11 +331,11 @@ describe('#470 doctor text report header', () => {
     // Both sides read the real machine here on purpose. What this pins is that
     // the library and the shipped binary render identically; a pinned seam on
     // one side only would make them differ for a reason that is not the format.
-    const report = runDoctorWithContext({ cwd: repo });
+    const report = runDoctorWithContext({ cwd: repo, only: FORMAT_CHECK_IDS });
     const plain = formatReport(report);
     const verbose = normalise(formatReport(report, { verbose: true }), repo);
     const cliVerbose = normalise(
-      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--verbose'], {
+      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--verbose', '--only', FORMAT_CHECK_IDS.join(',')], {
         cwd: repo,
         encoding: 'utf8',
       }),
@@ -338,11 +357,11 @@ describe('#470 doctor text report header', () => {
     const env = { ...process.env };
     delete env.NO_COLOR;
     const run = (childEnv: NodeJS.ProcessEnv): string =>
-      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor'], {
-        cwd: repo,
-        encoding: 'utf8',
-        env: childEnv,
-      });
+      execFileSync(
+        process.execPath,
+        [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--only', FORMAT_CHECK_IDS.join(',')],
+        { cwd: repo, encoding: 'utf8', env: childEnv },
+      );
 
     const plain = run(env);
     // Wall-clock durations are intentionally measured on each command run;
