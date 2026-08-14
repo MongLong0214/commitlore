@@ -11,13 +11,16 @@ export interface McpProbeFailure {
     kind: 'failure';
     reason: McpProbeFailureKind;
     detail: string;
+    cleanup?: McpProbeCleanup;
 }
 export interface McpProbeSuccess {
     /** The server identifies as CommitLore; kind records its advertised tool set. */
     kind: 'read-delivery' | 'capture-initiator';
     detail: string;
+    cleanup: McpProbeCleanup;
 }
 export type McpProbeResult = McpProbeFailure | McpProbeSuccess;
+export type McpProbeCleanup = 'not-needed' | 'reclaimed' | 'could-not-reclaim';
 export declare const MCP_READ_TOOLS: readonly ["commitlore_query", "commitlore_before_change"];
 export declare const MCP_CAPTURE_TOOLS: readonly ["commitlore_prepare_capture", "commitlore_verify_capture", "commitlore_stage_capture"];
 export declare const isMcpProbeFailure: (result: McpProbeResult) => result is McpProbeFailure;

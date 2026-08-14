@@ -29,17 +29,24 @@ export interface McpProbeFailure {
   kind: 'failure';
   reason: McpProbeFailureKind;
   detail: string;
+  cleanup?: McpProbeCleanup;
 }
 
 export interface McpProbeSuccess {
   /** The server identifies as CommitLore; kind records its advertised tool set. */
   kind: 'read-delivery' | 'capture-initiator';
   detail: string;
+  cleanup: McpProbeCleanup;
 }
 
 export type McpProbeResult = McpProbeFailure | McpProbeSuccess;
+export type McpProbeCleanup = 'not-needed' | 'reclaimed' | 'could-not-reclaim';
 
-const failure = (reason: McpProbeFailureKind, detail: string): McpProbeFailure => ({ kind: 'failure', reason, detail });
+const failure = (
+  reason: McpProbeFailureKind,
+  detail: string,
+  cleanup?: McpProbeCleanup,
+): McpProbeFailure => ({ kind: 'failure', reason, detail, ...(cleanup === undefined ? {} : { cleanup }) });
 
 export const MCP_READ_TOOLS = ['commitlore_query', 'commitlore_before_change'] as const;
 export const MCP_CAPTURE_TOOLS = [
@@ -61,8 +68,8 @@ const wait = (milliseconds: number): Promise<void> =>
  * server receives its own process group: killing that group also handles a
  * launcher which did not replace itself with the actual server process.
  */
-const stopProbeChild = async (child: ChildProcessWithoutNullStreams): Promise<void> => {
-  if (child.exitCode !== null || child.signalCode !== null) return;
+const stopProbeChild = async (child: ChildProcessWithoutNullStreams): Promise<McpProbeCleanup> => {
+  if (child.exitCode !== null || child.signalCode !== null) return 'not-needed';
 
   let exitedResolve: (() => void) | undefined;
   const exited = new Promise<void>((resolve) => {
@@ -70,8 +77,19 @@ const stopProbeChild = async (child: ChildProcessWithoutNullStreams): Promise<vo
   });
   child.once('exit', () => exitedResolve?.());
 
+  if (process.platform === 'win32') {
+    if (child.pid === undefined) return 'could-not-reclaim';
+    const result = spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    if (result.error !== undefined || result.status !== 0) return 'could-not-reclaim';
+    await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
+    return 'reclaimed';
+  }
+
   const signal = (value: NodeJS.Signals): void => {
-    if (process.platform !== 'win32' && child.pid !== undefined) {
+    if (child.pid !== undefined) {
       try {
         process.kill(-child.pid, value);
         return;
@@ -89,12 +107,20 @@ const stopProbeChild = async (child: ChildProcessWithoutNullStreams): Promise<vo
     signal('SIGKILL');
     await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
   }
+  return child.exitCode === null && child.signalCode === null ? 'could-not-reclaim' : 'reclaimed';
 };
 
 const commandPath = (command: string): string | McpProbeFailure => {
-  const candidates = isAbsolute(command) || command.includes('/')
-    ? [command]
-    : (process.env['PATH'] ?? '').split(delimiter).filter(Boolean).map((directory) => join(directory, command));
+  const bare = !isAbsolute(command) && !command.includes('/');
+  const pathCandidates = bare
+    ? (process.env['PATH'] ?? '').split(delimiter).filter(Boolean).map((directory) => join(directory, command))
+    : [command];
+  const hasExtension = command.lastIndexOf('.') > command.lastIndexOf('/');
+  const extensions: string[] = [];
+  const candidates = pathCandidates.flatMap((candidate) => [
+    candidate,
+    ...extensions.map((extension) => candidate + extension),
+  ]);
   let nonExecutable: McpProbeFailure | undefined;
   for (const candidate of candidates) {
     try {
@@ -124,8 +150,12 @@ export const probeMcp = async (command: string, args: string[]): Promise<McpProb
       settled = true;
       if (timer !== undefined) clearTimeout(timer);
       void (async () => {
-        if (child !== undefined) await stopProbeChild(child);
-        resolve(problem);
+        const cleanup = child === undefined ? 'not-needed' : await stopProbeChild(child);
+        if (cleanup === 'could-not-reclaim') {
+          resolve(failure('probe-unavailable', 'MCP verification completed but could not reclaim its child process tree', cleanup));
+          return;
+        }
+        resolve({ ...problem, cleanup });
       })();
     };
     try {
@@ -170,9 +200,9 @@ export const probeMcp = async (command: string, args: string[]): Promise<McpProb
           if (!MCP_READ_TOOLS.every((tool) => tools.has(tool))) {
             finish(failure('missing-tools', 'MCP server lacks CommitLore read-delivery tools'));
           } else if (MCP_CAPTURE_TOOLS.every((tool) => tools.has(tool))) {
-            finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools' });
+            finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools', cleanup: 'not-needed' });
           } else {
-            finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set' });
+            finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set', cleanup: 'not-needed' });
           }
           return;
         }

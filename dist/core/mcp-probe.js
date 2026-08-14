@@ -10,7 +10,7 @@ import { accessSync, constants, statSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { installedPath } from './paths.js';
-const failure = (reason, detail) => ({ kind: 'failure', reason, detail });
+const failure = (reason, detail, cleanup) => ({ kind: 'failure', reason, detail, ...(cleanup === undefined ? {} : { cleanup }) });
 export const MCP_READ_TOOLS = ['commitlore_query', 'commitlore_before_change'];
 export const MCP_CAPTURE_TOOLS = [
     'commitlore_prepare_capture',
@@ -28,14 +28,26 @@ const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mill
  */
 const stopProbeChild = async (child) => {
     if (child.exitCode !== null || child.signalCode !== null)
-        return;
+        return 'not-needed';
     let exitedResolve;
     const exited = new Promise((resolve) => {
         exitedResolve = resolve;
     });
     child.once('exit', () => exitedResolve?.());
+    if (process.platform === 'win32') {
+        if (child.pid === undefined)
+            return 'could-not-reclaim';
+        const result = spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+            stdio: 'ignore',
+            windowsHide: true,
+        });
+        if (result.error !== undefined || result.status !== 0)
+            return 'could-not-reclaim';
+        await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
+        return 'reclaimed';
+    }
     const signal = (value) => {
-        if (process.platform !== 'win32' && child.pid !== undefined) {
+        if (child.pid !== undefined) {
             try {
                 process.kill(-child.pid, value);
                 return;
@@ -53,11 +65,19 @@ const stopProbeChild = async (child) => {
         signal('SIGKILL');
         await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
     }
+    return child.exitCode === null && child.signalCode === null ? 'could-not-reclaim' : 'reclaimed';
 };
 const commandPath = (command) => {
-    const candidates = isAbsolute(command) || command.includes('/')
-        ? [command]
-        : (process.env['PATH'] ?? '').split(delimiter).filter(Boolean).map((directory) => join(directory, command));
+    const bare = !isAbsolute(command) && !command.includes('/');
+    const pathCandidates = bare
+        ? (process.env['PATH'] ?? '').split(delimiter).filter(Boolean).map((directory) => join(directory, command))
+        : [command];
+    const hasExtension = command.lastIndexOf('.') > command.lastIndexOf('/');
+    const extensions = [];
+    const candidates = pathCandidates.flatMap((candidate) => [
+        candidate,
+        ...extensions.map((extension) => candidate + extension),
+    ]);
     let nonExecutable;
     for (const candidate of candidates) {
         try {
@@ -90,9 +110,12 @@ export const probeMcp = async (command, args) => {
             if (timer !== undefined)
                 clearTimeout(timer);
             void (async () => {
-                if (child !== undefined)
-                    await stopProbeChild(child);
-                resolve(problem);
+                const cleanup = child === undefined ? 'not-needed' : await stopProbeChild(child);
+                if (cleanup === 'could-not-reclaim') {
+                    resolve(failure('probe-unavailable', 'MCP verification completed but could not reclaim its child process tree', cleanup));
+                    return;
+                }
+                resolve({ ...problem, cleanup });
             })();
         };
         try {
@@ -145,10 +168,10 @@ export const probeMcp = async (command, args) => {
                         finish(failure('missing-tools', 'MCP server lacks CommitLore read-delivery tools'));
                     }
                     else if (MCP_CAPTURE_TOOLS.every((tool) => tools.has(tool))) {
-                        finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools' });
+                        finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools', cleanup: 'not-needed' });
                     }
                     else {
-                        finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set' });
+                        finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set', cleanup: 'not-needed' });
                     }
                     return;
                 }
