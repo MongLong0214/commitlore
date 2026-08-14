@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "5b3a24d088aa1ab4885ccf157d36fa2c1c183ef5391304a110291e2db476fa6c"
+    "sha256": "1d566fe0e9be949854c99c869e1b031bfc3600be73da302e56d3bf24f2cbb109"
   },
   "artifact": {
-    "sha256": "cb1dc4bd225339c0f5e38f37e59756dbe47c6fea4f846966dbed4fea7f048ac6",
+    "sha256": "304853489e95721703bb0df24fce34d3623a21fd55b70898c71c8bf8426fad59",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -586,7 +586,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "1d5615f39cc188e4e3d34c629a48f4b6938433bedb62a0fa1aa765a638be25b2"
+        "sha256": "f1ee42ab977768cec1de05d69ac8b3718d7aefc309199158a4f90bc924ca56bb"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -834,11 +834,11 @@
       },
       {
         "path": "dist/core/mcp-probe.js",
-        "sha256": "d5c017ae694e9390f700e640459d9dc930fdba053f6325f160081e1af217d588"
+        "sha256": "f4192dc4b77afb293fc576e6b9f108915475748d999d60acc835e9dff69c35ae"
       },
       {
         "path": "dist/core/mcp-probe.js.map",
-        "sha256": "e7ae8cfa06692e6ffefce67eea61b2188b1e90d33bf8ef6ee5ae0703d758da03"
+        "sha256": "ff0915be48b42ddffb02807b0383c61fd7ccd8bc5815a035f3637d444141e28b"
       },
       {
         "path": "dist/core/mcp-registration.d.ts",

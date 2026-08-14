@@ -18156,7 +18156,7 @@ var discoverLiveMcpRuntimes = () => {
   if (process.platform === "win32") {
     return { available: false, runtimes: [], detail: "process enumeration is unavailable on win32" };
   }
-  const result = spawnSync4("ps", ["-axo", "pid=,args="], { encoding: "utf8" });
+  const result = spawnSync4("ps", ["-axo", "pid=,ppid=,args="], { encoding: "utf8" });
   if (result.error !== void 0 || result.status !== 0) {
     return {
       available: false,
@@ -18164,17 +18164,31 @@ var discoverLiveMcpRuntimes = () => {
       detail: result.error?.message ?? `ps exited with status ${String(result.status)}`
     };
   }
-  const runtimes = [];
+  const parents = /* @__PURE__ */ new Map();
+  const candidates = [];
   for (const line2 of result.stdout.split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(line2);
-    if (match === null) continue;
-    const pid = Number(match[1]);
-    const entrypoint = match[2];
-    if (entrypoint !== void 0 && Number.isSafeInteger(pid)) {
-      runtimes.push(runtimeFromEntrypoint(pid, entrypoint));
-    }
+    const row = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line2);
+    if (row === null) continue;
+    const pid = Number(row[1]);
+    const ppid = Number(row[2]);
+    if (!Number.isSafeInteger(pid) || !Number.isSafeInteger(ppid)) continue;
+    parents.set(pid, ppid);
+    const match = /^.*?(\/\S*\/dist\/commitlore\.mjs)\s+mcp(?:\s|$)/.exec(row[3] ?? "");
+    const entrypoint = match?.[1];
+    if (entrypoint !== void 0) candidates.push({ pid, entrypoint });
   }
-  return { available: true, runtimes, detail: "ps -axo pid=,args=" };
+  const descendsFromUs = (pid) => {
+    const seen = /* @__PURE__ */ new Set();
+    let current = pid;
+    while (current > 1 && !seen.has(current)) {
+      if (current === process.pid) return true;
+      seen.add(current);
+      current = parents.get(current) ?? 0;
+    }
+    return false;
+  };
+  const runtimes = candidates.filter((candidate) => !descendsFromUs(candidate.pid)).map((candidate) => runtimeFromEntrypoint(candidate.pid, candidate.entrypoint));
+  return { available: true, runtimes, detail: "ps -axo pid=,ppid=,args=" };
 };
 var commandPath = (command) => {
   const bare = !isAbsolute(command) && !command.includes("/");
