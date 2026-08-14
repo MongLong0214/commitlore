@@ -76,6 +76,39 @@ const FORMAT_WANT: Readonly<Record<string, string>> = {
 const UNKNOWN_KEY_WANT = 'a key from SPEC §3 or X-<Name>';
 
 /**
+ * The same violation, told to someone who did not write a trailer (#647).
+ *
+ * `Live: the delete now reaches State A.` at the end of a body is parsed as a
+ * trailer because git parses it that way, and SPEC §2.1 B3 makes git the
+ * authority on that boundary — so the parse is not the defect, and
+ * second-guessing it here would be one. What was wrong is that `want a key
+ * from SPEC §3 or X-<Name>` reads as *you used the wrong key*, which sends the
+ * author to invent `X-Live:` rather than to see that their sentence became
+ * metadata.
+ *
+ * The distinction is drawn on the value, and only for keys that are already
+ * unknown: a defined key never reaches here, and a mistyped one
+ * (`Recod-Id: r-abc123`) rarely carries a space. Guessing wrong costs a longer
+ * message and nothing else, because both readings are offered either way.
+ */
+const PROSE_KEY_WANT =
+  'a key from SPEC §3 or X-<Name> — or, if this line is a sentence rather than metadata, ' +
+  'reword it: git reads the last paragraph as trailers, so prose beginning "Word:" becomes one. ' +
+  'Moving the record block below it works too.';
+
+/**
+ * Prose ends like a sentence; a trailer value does not.
+ *
+ * A multi-word value alone is too loose — `Constraint: must ship by friday per
+ * the compliance deadline` is a key someone meant as a key, and
+ * spec/fixtures/invalid/03-unknown-key.txt exists to pin exactly that reading.
+ * Terminal punctuation is what separates it from `Live: the delete now reaches
+ * State A, 9 markers to 8.`, which was written as a sentence and became a
+ * trailer on the way past git.
+ */
+const looksLikeProse = (value: string): boolean => /\s/.test(value.trim()) && /[.!?]$/.test(value.trim());
+
+/**
  * `Ruled-out:` fails its grammar two ways and the repair differs, so the
  * `want` is chosen from the value rather than looked up by key alone. Telling
  * an author to write `alternative | reason` when the value already holds a
@@ -158,7 +191,7 @@ const violationFor = (trailer: Trailer, field: string): Violation | null => {
       value: trailer.value,
       rule: 'unknown-key',
       got: trailer.key,
-      want: UNKNOWN_KEY_WANT,
+      want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : UNKNOWN_KEY_WANT,
     };
   }
 

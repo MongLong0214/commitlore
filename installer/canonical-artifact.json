@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "624c215198216fa5d58edc46eda6e5116952b75570e828e460b0ebf6dfa23616"
+    "sha256": "faafe03efb1498037b127eec6a906420435ae4f0937e913a0ae3a02b58144264"
   },
   "artifact": {
-    "sha256": "7245fe3246842262a4ad32b311676d45716e02d2d6fda11fda5ed8732c6c2e9d",
+    "sha256": "ceec6ceba0d7623bbe3ca5772d5ebf2063ebc8752f93506bec48bdff9adfc3d5",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -574,7 +574,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "39298c5cec56e29a5e43ecb790db919a62c79cff814234b5ae7bc441aaa287c2"
+        "sha256": "ebdc56d5bd57bb343df1f9b62a66fb692cd69eb05e2ed1f10df354aefba01de0"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -918,11 +918,11 @@
       },
       {
         "path": "dist/core/schema.js",
-        "sha256": "a014866f74981a423623995dc0dd07c44273a8d65a8f5de21581de6fe1d47842"
+        "sha256": "aa1371c5291b6446c0eea189bd103bfac8bc1cc31fbdc40440f489089974a2bd"
       },
       {
         "path": "dist/core/schema.js.map",
-        "sha256": "fdff9d0f3fbb11ef60731e03ea16b6c71726a0109616634122c5817b51904cfd"
+        "sha256": "c2c8cacdb3134f32651e0efc91d736a603707e050ab6abd4694c251d2482c39e"
       },
       {
         "path": "dist/core/secret-guard.d.ts",
