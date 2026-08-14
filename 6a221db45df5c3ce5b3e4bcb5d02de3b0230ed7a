@@ -1,0 +1,12 @@
+Ruled-out: canonicalise the totals line as well | it would hide a real change in the check set behind a token, which is the thing that snapshot exists to catch
+Ruled-out: leave the check out of the default registry to keep the report stable | a check nobody runs reports nothing, and the stale runtimes it names are on real machines rather than in fixtures
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: 115 cases across doctor and doctor-snapshot; the regenerated snapshot reads 13 ok, 3 warnings with no live runtimes named, so it no longer varies with the machine that wrote it
+Record-Id: r-pinnedreport660
+Provenance: inherited 3b839c70018da5033c11e03899136fe4c5884a83
+
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports bcb0399d; 169 cases across doctor, doctor-snapshot and schema against the rebuilt bundle
+Record-Id: r-canonlive660
+Provenance: inherited 77d1a5121d9260cad046b4cb1131fcad6e887945
