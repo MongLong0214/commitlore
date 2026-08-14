@@ -176,6 +176,34 @@ describe('validateRecord', () => {
       expect(violations[0]?.key).toBe('Provenance');
     });
 
+    // #647: git parses a trailing `Word: sentence.` as a trailer, and SPEC
+    // §2.1 B3 makes that git's call — so the parse stays and only the advice
+    // changes. Telling the author "want a key from SPEC §3 or X-<Name>" sent
+    // them to invent `X-Live:` instead of seeing that their sentence had
+    // become metadata.
+    it('offers the prose reading when an unknown key carries a sentence', () => {
+      const violations = validateRecord([
+        { key: 'Live', value: 'the delete now reaches State A, 9 markers to 8.' },
+      ]);
+
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+      expect(violations[0]?.want, 'the author is told their line reads as prose').toContain('sentence rather than metadata');
+      expect(violations[0]?.want, 'and why git took it for a trailer').toContain('last paragraph');
+      expect(violations[0]?.want, 'without losing the original answer').toContain('a key from SPEC §3');
+    });
+
+    // The other half, and the reason the value decides rather than the key: a
+    // key someone meant as a key gets the short answer. spec/fixtures/invalid/
+    // 03-unknown-key.txt pins this same reading through the conformance suite.
+    it('keeps the plain answer for a key that was meant as a key', () => {
+      const violations = validateRecord([
+        { key: 'Constraint', value: 'must ship by friday per the compliance deadline' },
+      ]);
+
+      expect(violations.map((v) => v.rule)).toEqual(['unknown-key']);
+      expect(violations[0]?.want).toBe('a key from SPEC §3 or X-<Name>');
+    });
+
     it('never calls a key from SPEC §3 unknown', () => {
       const violations = validateRecord(twoProvenance);
       expect(violations.filter((v) => v.rule === 'unknown-key')).toEqual([]);
