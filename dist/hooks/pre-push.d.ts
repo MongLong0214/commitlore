@@ -44,6 +44,19 @@ export interface PrePushHookResult {
  */
 export declare const prePushStub: () => string;
 export declare const installPrePushHook: (cwd?: string) => PrePushHookResult;
-/** One fail-open line per unsuccessful remote. Successful sync stays quiet. */
+/**
+ * One fail-open line per unsuccessful remote. Successful sync stays quiet.
+ *
+ * The line has to answer what the operator will actually ask, which is not
+ * "what went wrong" but "where are my records now, and do I have to do
+ * something" (#632). It also has to answer it differently for the two
+ * outcomes, because their answers are opposite: a failed push is transient and
+ * the next push retries it — `syncNotes` keeps no state and recompares the
+ * refs every time — while a divergence is two mirrors neither of which
+ * fast-forwards, and retrying that forever changes nothing.
+ *
+ * Saying only "branch push continues" reported the half the operator could
+ * already see and left the half they were asking about unstated.
+ */
 export declare const describeSync: (results: readonly SyncResult[]) => string[];
 export declare const register: (program: Command) => void;
