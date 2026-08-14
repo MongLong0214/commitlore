@@ -922,14 +922,14 @@ jobs:
           Write-Host '--- doctor stderr ---'
           if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw | Write-Host } else { Write-Host '(no stderr file)' }
           Write-Host "--- pid file present: $(Test-Path -LiteralPath $pidFile) ---"
-          if (Test-Path -LiteralPath $pidFile) { Write-Host "pid: $((Get-Content -LiteralPath $pidFile -Raw).Trim())" }
+          if (Test-Path -LiteralPath $pidFile) { Write-Host "pid: $("$(Get-Content -LiteralPath $pidFile -Raw)".Trim())" }
           # The question the previous round could not answer: did the probe's
           # bytes reach the child at all? mcp-probe.ts waits a fixed 200ms
           # before its first protocol write, so "arrived late" and "never
           # arrived" are different failures and only one of them is a race.
           $sawInput = "$pidFile.sawinput"
           if (Test-Path -LiteralPath $sawInput) {
-            Write-Host "--- child saw stdin after $((Get-Content -LiteralPath $sawInput -Raw).Trim())ms => the write arrived; the missing half is the response ---"
+            Write-Host "--- child saw stdin after $("$(Get-Content -LiteralPath $sawInput -Raw)".Trim())ms => the write arrived; the missing half is the response ---"
           } else {
             Write-Host '--- child never saw stdin => the probe write did not reach it ---'
           }
@@ -954,7 +954,7 @@ jobs:
             Write-Host "--- wrapper driven by hand: answered => stdio traverses cmd; the silence is the probe's ---"
             Write-Host $answer.Trim()
           }
-          if (Test-Path -LiteralPath $selfErr) { Write-Host "selftest stderr: $((Get-Content -LiteralPath $selfErr -Raw).Trim())" }
+          if (Test-Path -LiteralPath $selfErr) { Write-Host "selftest stderr: $("$(Get-Content -LiteralPath $selfErr -Raw)".Trim())" }
           $env:MCP_PROBE_CHILD_PID = $pidFile
           # Reclamation is not conditional on the probe's verdict: `finish()` in
           # mcp-probe.ts runs stopProbeChild on every exit, and the timeout path
