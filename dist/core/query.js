@@ -692,6 +692,7 @@ export const runQuery = (opts = {}) => {
             shallow,
             notes,
             unreadCommits: unread,
+            coverage: unread > 0 ? 'partial' : 'complete',
             diagnostics,
         };
     }
