@@ -42,7 +42,8 @@
  */
 import { Console } from 'node:console';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { PACKAGE_ROOT, captureAssetsPresent, packageVersion as readPackageVersion, preflightCaptureAssets, } from '../core/paths.js';
+import { PACKAGE_ROOT, captureAssetsPresent, preflightCaptureAssets, } from '../core/paths.js';
+import { runtimeIdentity } from '../core/runtime-identity.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListResourceTemplatesRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
@@ -78,6 +79,7 @@ export const BEFORE_CHANGE_TOOL = 'commitlore_before_change';
 export const PREPARE_CAPTURE_TOOL = 'commitlore_prepare_capture';
 export const VERIFY_CAPTURE_TOOL = 'commitlore_verify_capture';
 export const STAGE_CAPTURE_TOOL = 'commitlore_stage_capture';
+export const RUNTIME_IDENTITY_TOOL = 'commitlore_runtime_identity';
 /**
  * `commitlore://context/<path>`. The template form uses RFC 6570 reserved
  * expansion (`{+path}`) so a client fills it with a real path rather than one
@@ -97,7 +99,7 @@ const warn = (message) => {
  */
 const packageVersion = () => {
     try {
-        return readPackageVersion() ?? FALLBACK_VERSION;
+        return runtimeIdentity().version;
     }
     catch {
         // The asset preflight below carries the actionable, runtime-specific
@@ -108,8 +110,10 @@ const packageVersion = () => {
 };
 /**
  * F-002 deliberately does not create another runtime-identity abstraction:
- * F-001 owns that convergence work.  Until it lands, the executable and its
- * resolved package root are the concrete identity an operator can act on.
+ * F-001 owns that convergence work, and now that it has landed the version
+ * above comes from it. What stays here is only what an operator can act on at
+ * the shell — the executable that is answering and the package root it
+ * resolved — which is a location, not a second identity.
  */
 const runtimeLocation = () => `runtime entrypoint ${process.argv[1] ?? 'unknown'}; package root ${PACKAGE_ROOT}`;
 const captureUnavailableMessage = (preflight) => `capture is unavailable: this MCP server is degraded read-only because ${preflight.problems.join('; ')}. ` +
@@ -214,6 +218,12 @@ const asText = (value) => ({
 /** Every tool here reads; none of them touches anything outside the machine. */
 const READS_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const TOOLS = [
+    {
+        name: RUNTIME_IDENTITY_TOOL,
+        description: 'Report the exact CommitLore entrypoint, package root, version and index schema this MCP server executes.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { ...READS_ONLY, title: 'Report CommitLore runtime identity' },
+    },
     {
         name: QUERY_TOOL,
         description: 'Active CommitLore records for a path: the constraints, ruled-out alternatives and ' +
@@ -469,6 +479,7 @@ export const createServer = (opts = {}) => {
                 `CommitLore serves the decision record kept in this repository's git trailers. ${captureDiagnostic}`,
     });
     const handlers = {
+        [RUNTIME_IDENTITY_TOOL]: () => asText(runtimeIdentity()),
         [QUERY_TOOL]: (args) => {
             const kind = kindArg(args);
             return asText(contextJson(root, kind, pathArg(root, args)));
