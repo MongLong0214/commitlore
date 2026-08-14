@@ -19556,6 +19556,11 @@ var MCP_CAPTURE_TOOLS = [
 ];
 var isMcpProbeFailure = (result) => result.kind === "failure";
 var CLEANUP_GRACE_MS = 250;
+var DEFAULT_INITIALIZE_TIMEOUT_MS = 15e3;
+var initializeTimeoutMs = () => {
+  const raw = Number(process.env["COMMITLORE_MCP_PROBE_TIMEOUT_MS"]);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INITIALIZE_TIMEOUT_MS;
+};
 var wait = (milliseconds) => new Promise((resolve22) => setTimeout(resolve22, milliseconds));
 var stopProbeChild = async (child) => {
   if (child.exitCode !== null || child.signalCode !== null) return "not-needed";
@@ -19651,7 +19656,11 @@ var probeMcp = async (command, args) => {
     }
     let buffer = "";
     let initialized = false;
-    timer = setTimeout(() => finish(failure2("initialize-timed-out", "MCP initialize timed out")), 5e3);
+    const timeoutMs = initializeTimeoutMs();
+    timer = setTimeout(
+      () => finish(failure2("initialize-timed-out", `MCP initialize timed out after ${timeoutMs}ms`)),
+      timeoutMs
+    );
     child.once("error", (error2) => finish(failure2("command-could-not-start", `could not start command: ${error2.message}`)));
     child.once("exit", (code) => {
       if (!settled) finish(failure2("command-exited", `command exited before MCP verification (status ${String(code)})`));
@@ -19708,10 +19717,13 @@ var probeMcpSync = (command, args) => {
     JSON.stringify(args)
   ], {
     encoding: "utf8",
-    // The helper owns the five-second protocol timeout and needs a little
-    // room to reap a stubborn server. This outer bound is only a safety net
-    // for a broken helper, not the server-response timeout we report.
-    timeout: 7e3,
+    // The helper owns the protocol timeout and needs room beyond it to reap a
+    // stubborn server. This outer bound is only a safety net for a broken
+    // helper, not the server-response timeout we report — so it is derived
+    // from that budget rather than written next to it, because a constant that
+    // silently fell below it would kill the helper before it could answer and
+    // report the death as the server's fault.
+    timeout: initializeTimeoutMs() + 2e3,
     env: { ...process.env, COMMITLORE_MCP_PROBE: "1" }
   });
   if (result.error !== void 0) {
@@ -19778,20 +19790,21 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     const ours = registrationIsOurs(cwd);
     const probe = probeMcpSync(launch.command, launch.args);
     if (isMcpProbeFailure(probe)) {
+      const unverified = probe.reason === "initialize-timed-out";
       return check(
         id,
         category,
         title,
         "warn",
-        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`,
-        `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`,
+        unverified ? `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, and it did not answer in time to be verified: ${probe.detail}. This does not say the registration is broken \u2014 a cold start on a loaded machine can outlast the probe.` : `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`,
+        unverified ? `rerun commitlore doctor when the machine is quieter; if it keeps timing out, start ${JSON.stringify(command)} by hand and check that it answers an MCP initialize` : `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`,
         false,
         void 0,
         {
           evidence: {
             policy: "unattended",
             ordinary_git_commit: "cannot-initiate",
-            initiator: "registered-command-unhealthy",
+            initiator: unverified ? "registered-command-unverified" : "registered-command-unhealthy",
             command: command ?? "",
             probe: probe.reason
           }

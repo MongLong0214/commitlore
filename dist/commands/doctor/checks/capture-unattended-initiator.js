@@ -63,11 +63,23 @@ export const checkUnattendedCaptureInitiator = (ctx) => {
         const ours = registrationIsOurs(cwd);
         const probe = probeMcpSync(launch.command, launch.args);
         if (isMcpProbeFailure(probe)) {
-            return check(id, category, title, 'warn', `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`, `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`, false, undefined, {
+            // A timeout is an observation about this attempt, not a verdict about
+            // the registration (#640). Measured on a Windows runner: a *passing*
+            // probe consumed 4478ms of its 5000ms budget, because the chain is
+            // doctor -> sidecar node -> cmd.exe -> the server's own node, three
+            // process starts before a byte is exchanged. On a slower machine the
+            // same healthy registration reports the same silence — and saying "it is
+            // unhealthy, repair it" sends an operator to fix something that works.
+            const unverified = probe.reason === 'initialize-timed-out';
+            return check(id, category, title, 'warn', unverified
+                ? `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, and it did not answer in time to be verified: ${probe.detail}. This does not say the registration is broken — a cold start on a loaded machine can outlast the probe.`
+                : `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`, unverified
+                ? `rerun commitlore doctor when the machine is quieter; if it keeps timing out, start ${JSON.stringify(command)} by hand and check that it answers an MCP initialize`
+                : `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`, false, undefined, {
                 evidence: {
                     policy: 'unattended',
                     ordinary_git_commit: 'cannot-initiate',
-                    initiator: 'registered-command-unhealthy',
+                    initiator: unverified ? 'registered-command-unverified' : 'registered-command-unhealthy',
                     command: command ?? '',
                     probe: probe.reason,
                 },

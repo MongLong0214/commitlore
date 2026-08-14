@@ -1365,27 +1365,50 @@ describe('#527 unattended capture initiator', () => {
       chmodSync(command, 0o755);
       return command;
     }, 'initialize-timed-out'],
-  ] as const)('reports %s distinctly as unhealthy', (label, commandFor, probe) => {
+  ] as const)('reports %s distinctly', (label, commandFor, probe) => {
     const repo = initRepo(`unattended-${label.replace(/\W+/g, '-')}`);
     enableUnattended(repo);
     const command = commandFor(repo);
     registerMcp(repo, command);
 
-    const row = runDoctor({ cwd: repo }).checks.find((c) => c.id === 'unattended-initiator');
+    const previousBudget = process.env['COMMITLORE_MCP_PROBE_TIMEOUT_MS'];
+    // These fixtures never answer on purpose, so without a shortened budget
+    // each waits out the real one. What is under test is the mapping below,
+    // not how long the product is willing to wait. Four seconds rather than
+    // something smaller: at 1500ms the cleanup raced the child's own start and
+    // the probe reported probe-unavailable, which is a different outcome and
+    // would have made this assert the wrong thing.
+    process.env['COMMITLORE_MCP_PROBE_TIMEOUT_MS'] = '4000';
+    let row;
+    try {
+      row = runDoctor({ cwd: repo }).checks.find((c) => c.id === 'unattended-initiator');
+    } finally {
+      if (previousBudget === undefined) delete process.env['COMMITLORE_MCP_PROBE_TIMEOUT_MS'];
+      else process.env['COMMITLORE_MCP_PROBE_TIMEOUT_MS'] = previousBudget;
+    }
 
     expect(row?.status).toBe('warn');
-    expect(row?.evidence).toMatchObject({
-      policy: 'unattended',
-      ordinary_git_commit: 'cannot-initiate',
-      initiator: 'registered-command-unhealthy',
-      command,
-    });
     // A null expectation means the code is scheduler-dependent for this
     // fixture; the case above says why. It must still be one of the probe's
     // own outcomes rather than absent.
     const observed = (row?.evidence as { probe?: unknown }).probe;
     if (probe === null) expect(typeof observed).toBe('string');
     else expect(observed).toBe(probe);
+
+    // #640: a timeout says the probe could not determine anything; a closed
+    // input says the command hung up. Only the second is a statement about the
+    // registration, so only the second calls it unhealthy. Deriving the
+    // expectation from the observed code pins the mapping itself rather than
+    // one side of it, and keeps the scheduler-dependent case honest.
+    expect(row?.evidence).toMatchObject({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator:
+        observed === 'initialize-timed-out'
+          ? 'registered-command-unverified'
+          : 'registered-command-unhealthy',
+      command,
+    });
   });
 
   it('reports a foreign MCP server as unhealthy', () => {

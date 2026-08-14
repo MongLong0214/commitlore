@@ -19,6 +19,32 @@ export const MCP_CAPTURE_TOOLS = [
 ];
 export const isMcpProbeFailure = (result) => result.kind === 'failure';
 const CLEANUP_GRACE_MS = 250;
+/**
+ * How long a registered server gets to answer `initialize` (#640).
+ *
+ * The old value was five seconds and it was too tight to be a verdict. On a
+ * Windows runner a *passing* probe consumed 4478ms of it, because the chain is
+ * doctor -> this sidecar's node -> cmd.exe -> the server's own node: three
+ * process starts before a byte moves. The same registration on a slower
+ * machine reported `initialize-timed-out`, and doctor called it unhealthy.
+ *
+ * Fifteen seconds is not a guess at how slow a machine can be; it is a budget
+ * chosen so the measured worst *passing* case has room to be three times
+ * slower before a working registration is called broken. A genuinely dead
+ * command still fails long before it, through `command-exited` or
+ * `command-could-not-start`, which do not wait for this at all.
+ */
+const DEFAULT_INITIALIZE_TIMEOUT_MS = 15_000;
+/**
+ * Tests that assert the timeout path would otherwise wait the full budget
+ * twice, and a fixture that never answers is exactly what they need. The
+ * sidecar inherits the environment, so an override reaches the probe wherever
+ * it actually runs.
+ */
+const initializeTimeoutMs = () => {
+    const raw = Number(process.env['COMMITLORE_MCP_PROBE_TIMEOUT_MS']);
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INITIALIZE_TIMEOUT_MS;
+};
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 /**
  * The synchronous wrapper cannot return until its helper exits, so a completed
@@ -137,7 +163,8 @@ export const probeMcp = async (command, args) => {
         }
         let buffer = '';
         let initialized = false;
-        timer = setTimeout(() => finish(failure('initialize-timed-out', 'MCP initialize timed out')), 5_000);
+        const timeoutMs = initializeTimeoutMs();
+        timer = setTimeout(() => finish(failure('initialize-timed-out', `MCP initialize timed out after ${timeoutMs}ms`)), timeoutMs);
         child.once('error', (error) => finish(failure('command-could-not-start', `could not start command: ${error.message}`)));
         child.once('exit', (code) => {
             if (!settled)
@@ -208,10 +235,13 @@ export const probeMcpSync = (command, args) => {
         JSON.stringify(args),
     ], {
         encoding: 'utf8',
-        // The helper owns the five-second protocol timeout and needs a little
-        // room to reap a stubborn server. This outer bound is only a safety net
-        // for a broken helper, not the server-response timeout we report.
-        timeout: 7_000,
+        // The helper owns the protocol timeout and needs room beyond it to reap a
+        // stubborn server. This outer bound is only a safety net for a broken
+        // helper, not the server-response timeout we report — so it is derived
+        // from that budget rather than written next to it, because a constant that
+        // silently fell below it would kill the helper before it could answer and
+        // report the death as the server's fault.
+        timeout: initializeTimeoutMs() + 2_000,
         env: { ...process.env, COMMITLORE_MCP_PROBE: '1' },
     });
     if (result.error !== undefined) {

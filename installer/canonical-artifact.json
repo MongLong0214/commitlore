@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "0370784f14861bd577780505fd13598f1eab69d29fc3562d5ce3eb2c681bd872"
+    "sha256": "3c151c7f6e60f7d1918b317870105a3c5c97bb4665fb2ea8ec8e7cc1b0d87d4f"
   },
   "artifact": {
-    "sha256": "831e055abefb266327552f54a8be13c23e4e0a971590c2f83ab14ebd1a7103d2",
+    "sha256": "4ad19c82fe503fc99dc5c2c1c008b777d5f5e4da53bca9668faffa2fcbb36ca3",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -134,11 +134,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js",
-        "sha256": "1af2be0cd84c8c849c071b182134c8e72c62a0c9162d74fa01b8fd1733a500c5"
+        "sha256": "e9e8c5783b5f4f499a4b2a788e81773c2e6ab574cc088e9dd5003599b42605f5"
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js.map",
-        "sha256": "82dcef9cfa04df5466282bce85614b0cfdf0aed9986edf94119ff09cdb33c97e"
+        "sha256": "4d1334fd9e2f35f4924668578b3c60ee0f3c1cf53885091f86ae176ba8f0dd6a"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-directive-trust-mode.d.ts",
@@ -574,7 +574,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "3410494ad5a5c390c40e8084d5f5463ea862ff1a0411d138bae66f6fadd487ee"
+        "sha256": "a46fbba63ea532ffa4964922f1f2ddc7ca53a9ddd9cfa913aeb98466eb125693"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -822,11 +822,11 @@
       },
       {
         "path": "dist/core/mcp-probe.js",
-        "sha256": "a93f283b238ecc6e4691a65f291ba4cfab40e62874010f33b3adace9619d0490"
+        "sha256": "ca3e1e7e0b267b963a442b565c3709e2915445b80931b57b79c3f19553608e08"
       },
       {
         "path": "dist/core/mcp-probe.js.map",
-        "sha256": "bf77bbb6abe48a6101c36c4b20d25873d6065afc3d35f3baf3ba827a40fe3b72"
+        "sha256": "37db93a21e516a85f75ca5f66006e97d8160b0c94a2f4c8b7699768eccb662dd"
       },
       {
         "path": "dist/core/mcp-registration.d.ts",
