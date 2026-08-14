@@ -11601,6 +11601,8 @@ var FORMAT_WANT = {
   "CommitLore-Version": "semver"
 };
 var UNKNOWN_KEY_WANT = "a key from SPEC \xA73 or X-<Name>";
+var PROSE_KEY_WANT = 'a key from SPEC \xA73 or X-<Name> \u2014 or, if this line is a sentence rather than metadata, reword it: git reads the last paragraph as trailers, so prose beginning "Word:" becomes one. Moving the record block below it works too.';
+var looksLikeProse = (value) => /\s/.test(value.trim()) && /[.!?]$/.test(value.trim());
 var RULED_OUT_CODE_SPAN_WANT = 'alternative | reason \u2014 the alternative opens a code span that closes after the separator, so the first "|" sits inside quoted text; there is no escape, so rephrase the alternative to hold no "|"';
 var formatWantFor = (trailer) => {
   const want = FORMAT_WANT[trailer.key];
@@ -11633,7 +11635,7 @@ var violationFor = (trailer, field) => {
       value: trailer.value,
       rule: "unknown-key",
       got: trailer.key,
-      want: UNKNOWN_KEY_WANT
+      want: looksLikeProse(trailer.value) ? PROSE_KEY_WANT : UNKNOWN_KEY_WANT
     };
   }
   const enumWant = ENUM_WANT[trailer.key];
