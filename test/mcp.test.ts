@@ -529,6 +529,7 @@ describe('handshake and declarations', () => {
       'commitlore_guard',
       'commitlore_prepare_capture',
       'commitlore_query',
+      'commitlore_runtime_identity',
       'commitlore_stage_capture',
       'commitlore_stale',
       'commitlore_verify_capture',
@@ -850,6 +851,18 @@ describe('commitlore_guard', () => {
       notes: 'absent',
       incomplete: false,
     });
+  });
+
+  it('reports the MCP process runtime identity, not just its version', async () => {
+    const response = await stub.request('tools/call', {
+      name: 'commitlore_runtime_identity',
+      arguments: {},
+    });
+    const content = response.result?.['content'] as Array<{ text?: unknown }> | undefined;
+    const identity = JSON.parse(String(content?.[0]?.text ?? '')) as Record<string, unknown>;
+    expect(identity).toMatchObject({ version: '0.8.2', indexSchemaVersion: 4 });
+    expect(typeof identity['entrypoint']).toBe('string');
+    expect(typeof identity['packageRoot']).toBe('string');
   });
 
   it('still enforces its own contract', async () => {

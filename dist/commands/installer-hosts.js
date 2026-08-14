@@ -10,6 +10,7 @@ import { accessSync, constants, existsSync, mkdirSync, renameSync, statSync, unl
 import { delimiter, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { runtimeIdentity } from '../core/runtime-identity.js';
 export const INSTALLER_HOSTS_SCHEMA = 'commitlore_installer_hosts.v1';
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const ownEntry = (format, entry, wrapper) => {
@@ -320,7 +321,7 @@ export const inspectAndApplyHosts = async (options) => {
     else
         notDetected.push('hermes');
     const hosts = await Promise.all(requested);
-    return { schema: INSTALLER_HOSTS_SCHEMA, ok: hosts.every((host) => host.healthy), hosts, notDetected };
+    return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
 export const register = (program) => {
     program.command('installer-hosts')
