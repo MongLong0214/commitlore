@@ -9,6 +9,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -130,6 +131,35 @@ const sha1Repo = (label: string): string => {
 const stageChange = (cwd: string, path: string, body: string): void => {
   writeFileSync(join(cwd, path), body);
   git(cwd, ['add', '--', path]);
+};
+
+/**
+ * Two *commits* have to share the short name for an ambiguity test to mean
+ * anything, and both halves of that sentence were learned the hard way.
+ *
+ * Git's minimum abbreviation is four hex, so a three-hex name is refused for
+ * being short whether or not anything collides — an assertion fed by one
+ * proves nothing about ambiguity. And for a `^{commit}` query git
+ * disambiguates by type, so a colliding blob is passed over in silence and the
+ * name still resolves.
+ *
+ * Forging the second commit is certain where committing until two ids happen
+ * to collide is not, and it costs one search in process rather than hundreds
+ * of spawns: only the winning body is ever written.
+ */
+const forgeCommitSharingPrefix = (cwd: string, prefix: string, tree: string): string => {
+  const stamp = 'Forged <forged@test.invalid> 1770000000 +0000';
+  for (let attempt = 0; attempt < 10_000_000; attempt += 1) {
+    const body = `tree ${tree}\nauthor ${stamp}\ncommitter ${stamp}\n\nforged ${attempt}\n`;
+    const digest = createHash('sha1')
+      .update(`commit ${Buffer.byteLength(body)}\0`)
+      .update(body)
+      .digest('hex');
+    if (!digest.startsWith(prefix)) continue;
+    expect(git(cwd, ['hash-object', '-w', '-t', 'commit', '--stdin'], body).trim()).toBe(digest);
+    return digest;
+  }
+  throw new Error(`no commit body shares the prefix ${prefix} within the search bound`);
 };
 
 const TRANSCRIPT = 'The team decided to use SQLite instead of PostgreSQL for local storage.';
@@ -272,21 +302,15 @@ describe('resolveRevision turns user input into one full id, or refuses (R0-03)'
 
   it('refuses an ambiguous prefix rather than picking one', () => {
     const cwd = sha1Repo('resolve');
-    // Commit until two commits share a 3-hex prefix, then ask git with it.
-    // 4096 buckets against ~120 commits makes a collision likely but not
-    // certain, so the search is bounded and the assertion is skipped rather
-    // than faked when this run does not produce one.
-    const seen = new Map<string, string>();
-    let ambiguous: string | null = null;
-    for (let i = 0; i < 120 && ambiguous === null; i += 1) {
-      stageChange(cwd, `c${i}.txt`, `body ${i}\n`);
-      git(cwd, ['commit', '--quiet', '--no-verify', '-m', `c${i}`]);
-      const sha = git(cwd, ['rev-parse', 'HEAD']).trim();
-      const prefix = sha.slice(0, 3);
-      if (seen.has(prefix)) ambiguous = prefix;
-      else seen.set(prefix, sha);
-    }
-    if (ambiguous === null) return;
+    stageChange(cwd, 'first.txt', 'first\n');
+    git(cwd, ['commit', '--quiet', '--no-verify', '-m', 'first']);
+    const head = git(cwd, ['rev-parse', 'HEAD']).trim();
+    // Four hex, not three: git refuses a three-hex name for its length alone.
+    const ambiguous = head.slice(0, 4);
+
+    const collided = forgeCommitSharingPrefix(cwd, ambiguous, git(cwd, ['rev-parse', 'HEAD^{tree}']).trim());
+    expect(collided).not.toBe(head);
+    expect(git(cwd, ['cat-file', '-t', collided]).trim()).toBe('commit');
 
     // Guard the guard: git itself must consider this prefix ambiguous, or the
     // refusal below would prove nothing.
