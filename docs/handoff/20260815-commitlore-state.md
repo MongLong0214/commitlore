@@ -11,7 +11,9 @@ its ordering, and what waits on the owner. This file holds the in-flight work.
 ## #662 — `committedAt` spelling (closes #650)
 
 Branch `fix-650-committedat`, head `9fa1922`. Rebased onto green main and still
-failing, so this is no longer an inherited failure.
+failing — which read at the time as a defect of its own. It is not; see below.
+Green main was not evidence of innocence, because main happened to take a path
+that did not touch what was left of #661.
 
 ```
 check (22.23.2)   FAILURE
@@ -52,8 +54,9 @@ purpose is that two renderings agree.
 
 ## #638 — amend refused as a duplicate
 
-Branch `fix-638-amend-marker`, worktree `/tmp/wt-638c`, **not pushed**. The
-implementation and its regressions are there; the amend path does not yet pass.
+Branch `fix-638-amend-marker`, pushed unfinished so a temporary worktree cannot
+take it. The implementation and its regressions are there; the amend path does
+not yet pass, and the commit message says so.
 
 **Settled design.** `prepare-commit-msg` records whether this commit replaces
 HEAD; `commit-msg` reads and consumes it, and only then does `duplicate-id`
