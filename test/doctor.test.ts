@@ -1258,7 +1258,7 @@ describe('#527 unattended capture initiator', () => {
     expect(check?.evidence?.['initiator']).toBe('agent-host-required');
   });
 
-  it('clears only after a registered command answers as CommitLore MCP', () => {
+  it('clears only after a registered command advertises the full capture tool set', () => {
     const repo = initRepo('unattended-registered');
     enableUnattended(repo);
     const command = mcpWrapper(repo, 'commitlore');
@@ -1267,9 +1267,13 @@ describe('#527 unattended capture initiator', () => {
     const check = runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'unattended-initiator');
 
     expect(check?.status).toBe('ok');
-    expect(check?.evidence).toMatchObject({
-      initiator: 'mcp-server-verified',
-      verified: 'initialize-serverInfo-and-tools',
+    expect(check?.evidence).toEqual({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator: 'capture-tools-advertised',
+      registration: 'custom-preserved',
+      verified: 'identity-and-read-and-capture-tools',
+      asset_readiness: 'not-verified',
     });
   });
 
@@ -1309,31 +1313,38 @@ describe('#527 unattended capture initiator', () => {
   }
 
   it.each([
-    ['a dead command', (repo: string) => join(repo, 'missing'), 'command-not-found'],
-    ['a command that is a directory', (repo: string) => repo, 'command-is-directory'],
+    ['a dead command', (repo: string) => join(repo, 'missing'), ['command-not-found']],
+    ['a command that is a directory', (repo: string) => repo, ['command-is-directory']],
     ['a non-executable command', (repo: string) => {
       const command = join(repo, '.test-bin', 'not-executable');
       writeScript(command, '#!/bin/sh\nexit 0\n');
       return command;
-    }, 'command-not-executable'],
+    }, ['command-not-executable']],
     ['a command that closes its input and stays alive', (repo: string) => {
       const command = join(repo, '.test-bin', 'closes-input');
       writeScript(command, '#!/bin/sh\nexec 0<&-\nexec sleep 30\n');
       chmodSync(command, 0o755);
       return command;
-    // This is deterministic: it remains alive but never supplies an MCP
-    // response, so doctor must report an unverifiable command rather than
-    // treating its registered string as a successful server.
-    }, 'initialize-timed-out'],
-  ] as const)('reports %s distinctly as unhealthy', (_label, commandFor, probe) => {
-    const repo = initRepo(`unattended-${probe}`);
+    // Scheduling decides whether the parent's initial write observes the
+    // closed pipe or succeeds before the shell closes it. Both are precise
+    // unhealthy outcomes; neither may be mistaken for a live MCP server.
+    }, ['command-closed-input', 'initialize-timed-out']],
+  ] as const)('reports %s distinctly as unhealthy', (_label, commandFor, probes) => {
+    const repo = initRepo(`unattended-${probes.join('-')}`);
     enableUnattended(repo);
-    registerMcp(repo, commandFor(repo));
+    const command = commandFor(repo);
+    registerMcp(repo, command);
 
     const row = runDoctor({ cwd: repo }).checks.find((c) => c.id === 'unattended-initiator');
 
     expect(row?.status).toBe('warn');
-    expect(row?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe });
+    expect(row?.evidence).toEqual({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator: 'registered-command-unhealthy',
+      command,
+      probe: probes.length === 1 ? probes[0] : expect.stringMatching(/^(command-closed-input|initialize-timed-out)$/),
+    });
   });
 
   it('reports a foreign MCP server as unhealthy', () => {
@@ -1391,7 +1402,7 @@ setInterval(() => {}, 1_000);
     expect(check?.evidence).toMatchObject({ initiator: 'registered-command-unhealthy', probe: 'missing-tools' });
   });
 
-  it('accepts a healthy server that remains alive after verification', () => {
+  it('reports a healthy read-delivery server distinctly when capture tools are absent', () => {
     const repo = initRepo('unattended-stubborn-healthy-mcp');
     enableUnattended(repo);
     const command = join(repo, '.test-bin', 'stubborn-healthy-mcp');
@@ -1416,8 +1427,16 @@ setInterval(() => {}, 1_000);
 
     const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
 
-    expect(check?.status).toBe('ok');
-    expect(check?.evidence).toMatchObject({ initiator: 'mcp-server-verified' });
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toContain('live CommitLore read-delivery server');
+    expect(check?.evidence).toEqual({
+      policy: 'unattended',
+      ordinary_git_commit: 'cannot-initiate',
+      initiator: 'read-delivery-only',
+      registration: 'custom-preserved',
+      verified: 'identity-and-read-tools',
+      capture_tools: 'not-complete',
+    });
   });
 
   it('preserves and accepts a healthy custom wrapper', () => {
@@ -1430,7 +1449,7 @@ setInterval(() => {}, 1_000);
     const check = runDoctor({ cwd: repo }).checks.find((row) => row.id === 'unattended-initiator');
 
     expect(check?.status).toBe('ok');
-    expect(check?.evidence).toMatchObject({ initiator: 'mcp-server-verified', registration: 'custom-preserved' });
+    expect(check?.evidence).toMatchObject({ initiator: 'capture-tools-advertised', registration: 'custom-preserved' });
     expect(readFileSync(config, 'utf8')).toBe(before);
   });
 });

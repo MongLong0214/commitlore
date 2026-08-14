@@ -14,7 +14,7 @@ import {
   registersCommitloreMcpServer,
   registrationIsOurs,
 } from '../../../core/mcp-registration.js';
-import { probeMcpSync } from '../../../core/mcp-probe.js';
+import { isMcpProbeFailure, probeMcpSync } from '../../../core/mcp-probe.js';
 import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
 /**
@@ -92,14 +92,14 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
   if (launch !== null && registersCommitloreMcpServer(cwd)) {
     const command = registeredMcpCommand(cwd);
     const ours = registrationIsOurs(cwd);
-    const problem = probeMcpSync(launch.command, launch.args);
-    if (problem !== null) {
+    const probe = probeMcpSync(launch.command, launch.args);
+    if (isMcpProbeFailure(probe)) {
       return check(
         id,
         category,
         title,
         'warn',
-        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${problem.detail}`,
+        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`,
         `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`,
         false,
         undefined,
@@ -109,7 +109,29 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
             ordinary_git_commit: 'cannot-initiate',
             initiator: 'registered-command-unhealthy',
             command: command ?? '',
-            probe: problem.kind,
+            probe: probe.reason,
+          },
+        },
+      );
+    }
+    if (probe.kind === 'read-delivery') {
+      return check(
+        id,
+        category,
+        title,
+        'warn',
+        `${MCP_REGISTRATION_FILE} registers a live CommitLore read-delivery server${ours ? '' : ' through a custom wrapper'}, but it does not advertise all three capture tools, so it is not an unattended capture initiator`,
+        'register a CommitLore MCP server that advertises commitlore_prepare_capture, commitlore_verify_capture, and commitlore_stage_capture',
+        false,
+        undefined,
+        {
+          evidence: {
+            policy: 'unattended',
+            ordinary_git_commit: 'cannot-initiate',
+            initiator: 'read-delivery-only',
+            registration: ours ? 'installer-owned' : 'custom-preserved',
+            verified: 'identity-and-read-tools',
+            capture_tools: 'not-complete',
           },
         },
       );
@@ -119,8 +141,8 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
       category,
       title,
       'ok',
-      `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? '' : ' through a custom wrapper'}, so a host loading it can start unattended capture; ` +
-        'an ordinary git commit outside that host still cannot',
+      `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? '' : ' through a custom wrapper'} that advertises the required read and capture tools; ` +
+        'this verifies identity and tool set, not asset readiness — required assets such as SPEC.md can still be missing and make prepare fail; an ordinary git commit outside that host still cannot initiate capture',
       null,
       false,
       undefined,
@@ -128,9 +150,10 @@ export const checkUnattendedCaptureInitiator = (ctx: DoctorContext): DoctorCheck
         evidence: {
           policy: 'unattended',
           ordinary_git_commit: 'cannot-initiate',
-          initiator: 'mcp-server-verified',
+          initiator: 'capture-tools-advertised',
           registration: ours ? 'installer-owned' : 'custom-preserved',
-          verified: 'initialize-serverInfo-and-tools',
+          verified: 'identity-and-read-and-capture-tools',
+          asset_readiness: 'not-verified',
         },
       },
     );

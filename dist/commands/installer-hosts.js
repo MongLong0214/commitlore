@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync,
 import { delimiter, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { probeMcp } from '../core/mcp-probe.js';
+import { isMcpProbeFailure, probeMcp } from '../core/mcp-probe.js';
 export const INSTALLER_HOSTS_SCHEMA = 'commitlore_installer_hosts.v1';
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const ownEntry = (format, entry, wrapper) => {
@@ -85,7 +85,7 @@ const jsonHost = async (host, path, format, wrapper) => {
         if (launch === null)
             return { host, requested: true, outcome: 'failed', healthy: false, detail: 'commitlore registration has no runnable command and args' };
         const problem = await probeMcp(launch.command, launch.args);
-        if (problem !== null)
+        if (isMcpProbeFailure(problem))
             return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host, requested: true, outcome: ownEntry(format, entry, wrapper) ? 'owned' : 'custom-preserved', healthy: true, detail: ownEntry(format, entry, wrapper) ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
@@ -97,7 +97,7 @@ const jsonHost = async (host, path, format, wrapper) => {
         return { host, requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${error instanceof Error ? error.message : String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: existed ? 'registration added and live-verified' : 'registration created and live-verified' }
         : { host, requested: true, outcome: 'failed', healthy: false, detail: `registration was written but is unhealthy: ${problem.detail}` };
 };
@@ -135,7 +135,7 @@ const tomlHost = async (path, wrapper) => {
     }
     if (existing !== null) {
         const problem = await probeMcp(existing.command, existing.args);
-        if (problem !== null)
+        if (isMcpProbeFailure(problem))
             return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host: 'codex', requested: true, outcome: existing.command === wrapper ? 'owned' : 'custom-preserved', healthy: true, detail: existing.command === wrapper ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
@@ -162,7 +162,7 @@ const tomlHost = async (path, wrapper) => {
         return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host: 'codex', requested: true, outcome: 'installed', healthy: true, detail: 'Codex config fallback added and live-verified' }
         : { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
@@ -189,7 +189,7 @@ const cliHost = async (host, wrapper) => {
             return { host, requested: true, outcome: 'failed', healthy: false, detail: 'codex CLI returned an unverifiable registration' };
         }
         const problem = await probeMcp(command, args);
-        if (problem !== null)
+        if (isMcpProbeFailure(problem))
             return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host, requested: true, outcome: command === wrapper && args.length === 1 && args[0] === 'mcp' ? 'owned' : 'custom-preserved', healthy: true, detail: command === wrapper && args.length === 1 && args[0] === 'mcp' ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
@@ -199,7 +199,7 @@ const cliHost = async (host, wrapper) => {
     if (!added.ok)
         return { host, requested: true, outcome: 'failed', healthy: false, detail: 'codex mcp add failed' };
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Codex registration added and live-verified' }
         : { host, requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };

@@ -19366,7 +19366,14 @@ var registerCommitloreMcpServer = (cwd) => {
 import { accessSync, constants, statSync as statSync4 } from "node:fs";
 import { spawn, spawnSync as spawnSync4 } from "node:child_process";
 import { delimiter, isAbsolute as isAbsolute2, join as join7 } from "node:path";
-var failure2 = (kind, detail) => ({ kind, detail });
+var failure2 = (reason, detail) => ({ kind: "failure", reason, detail });
+var MCP_READ_TOOLS = ["commitlore_query", "commitlore_before_change"];
+var MCP_CAPTURE_TOOLS = [
+  "commitlore_prepare_capture",
+  "commitlore_verify_capture",
+  "commitlore_stage_capture"
+];
+var isMcpProbeFailure = (result) => result.kind === "failure";
 var CLEANUP_GRACE_MS = 250;
 var wait = (milliseconds) => new Promise((resolve21) => setTimeout(resolve21, milliseconds));
 var stopProbeChild = async (child) => {
@@ -19468,9 +19475,13 @@ var probeMcp = async (command, args) => {
 `);
         } else if (initialized && message.id === 2) {
           const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
-          finish(
-            tools.has("commitlore_query") && tools.has("commitlore_before_change") ? null : failure2("missing-tools", "MCP server lacks CommitLore minimum tools")
-          );
+          if (!MCP_READ_TOOLS.every((tool) => tools.has(tool))) {
+            finish(failure2("missing-tools", "MCP server lacks CommitLore read-delivery tools"));
+          } else if (MCP_CAPTURE_TOOLS.every((tool) => tools.has(tool))) {
+            finish({ kind: "capture-initiator", detail: "MCP server advertises CommitLore read and capture tools" });
+          } else {
+            finish({ kind: "read-delivery", detail: "MCP server advertises CommitLore read tools but not the complete capture tool set" });
+          }
           return;
         }
       }
@@ -19494,7 +19505,7 @@ var probeMcpSync = (command, args) => {
   }
   try {
     const parsed = JSON.parse(result.stdout);
-    if (parsed === null || typeof parsed === "object" && parsed !== null && typeof parsed.kind === "string" && typeof parsed.detail === "string") {
+    if (typeof parsed === "object" && parsed !== null && typeof parsed.kind === "string" && typeof parsed.detail === "string" && (parsed.kind === "read-delivery" || parsed.kind === "capture-initiator" || parsed.kind === "failure" && typeof parsed.reason === "string")) {
       return parsed;
     }
   } catch {
@@ -19565,14 +19576,14 @@ var checkUnattendedCaptureInitiator = (ctx) => {
   if (launch !== null && registersCommitloreMcpServer(cwd)) {
     const command = registeredMcpCommand(cwd);
     const ours = registrationIsOurs(cwd);
-    const problem = probeMcpSync(launch.command, launch.args);
-    if (problem !== null) {
+    const probe = probeMcpSync(launch.command, launch.args);
+    if (isMcpProbeFailure(probe)) {
       return check(
         id,
         category,
         title,
         "warn",
-        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${problem.detail}`,
+        `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`,
         `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`,
         false,
         void 0,
@@ -19582,7 +19593,29 @@ var checkUnattendedCaptureInitiator = (ctx) => {
             ordinary_git_commit: "cannot-initiate",
             initiator: "registered-command-unhealthy",
             command: command ?? "",
-            probe: problem.kind
+            probe: probe.reason
+          }
+        }
+      );
+    }
+    if (probe.kind === "read-delivery") {
+      return check(
+        id,
+        category,
+        title,
+        "warn",
+        `${MCP_REGISTRATION_FILE} registers a live CommitLore read-delivery server${ours ? "" : " through a custom wrapper"}, but it does not advertise all three capture tools, so it is not an unattended capture initiator`,
+        "register a CommitLore MCP server that advertises commitlore_prepare_capture, commitlore_verify_capture, and commitlore_stage_capture",
+        false,
+        void 0,
+        {
+          evidence: {
+            policy: "unattended",
+            ordinary_git_commit: "cannot-initiate",
+            initiator: "read-delivery-only",
+            registration: ours ? "installer-owned" : "custom-preserved",
+            verified: "identity-and-read-tools",
+            capture_tools: "not-complete"
           }
         }
       );
@@ -19592,7 +19625,7 @@ var checkUnattendedCaptureInitiator = (ctx) => {
       category,
       title,
       "ok",
-      `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? "" : " through a custom wrapper"}, so a host loading it can start unattended capture; an ordinary git commit outside that host still cannot`,
+      `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? "" : " through a custom wrapper"} that advertises the required read and capture tools; this verifies identity and tool set, not asset readiness \u2014 required assets such as SPEC.md can still be missing and make prepare fail; an ordinary git commit outside that host still cannot initiate capture`,
       null,
       false,
       void 0,
@@ -19600,9 +19633,10 @@ var checkUnattendedCaptureInitiator = (ctx) => {
         evidence: {
           policy: "unattended",
           ordinary_git_commit: "cannot-initiate",
-          initiator: "mcp-server-verified",
+          initiator: "capture-tools-advertised",
           registration: ours ? "installer-owned" : "custom-preserved",
-          verified: "initialize-serverInfo-and-tools"
+          verified: "identity-and-read-and-capture-tools",
+          asset_readiness: "not-verified"
         }
       }
     );
@@ -24163,7 +24197,7 @@ var jsonHost = async (host, path2, format, wrapper) => {
     const launch = commandOf(format, entry);
     if (launch === null) return { host, requested: true, outcome: "failed", healthy: false, detail: "commitlore registration has no runnable command and args" };
     const problem2 = await probeMcp(launch.command, launch.args);
-    if (problem2 !== null) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
+    if (isMcpProbeFailure(problem2)) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
     return { host, requested: true, outcome: ownEntry(format, entry, wrapper) ? "owned" : "custom-preserved", healthy: true, detail: ownEntry(format, entry, wrapper) ? "healthy installer-owned registration" : "healthy custom registration preserved" };
   }
   config3[key] = { ...group, commitlore: entryFor(format, wrapper) };
@@ -24173,7 +24207,7 @@ var jsonHost = async (host, path2, format, wrapper) => {
     return { host, requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${error2 instanceof Error ? error2.message : String(error2)}` };
   }
   const problem = await probeMcp(wrapper, ["mcp"]);
-  return problem === null ? { host, requested: true, outcome: "installed", healthy: true, detail: existed ? "registration added and live-verified" : "registration created and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `registration was written but is unhealthy: ${problem.detail}` };
+  return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: existed ? "registration added and live-verified" : "registration created and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `registration was written but is unhealthy: ${problem.detail}` };
 };
 var tomlRegistration = (source) => {
   const table = /^\s*\[mcp_servers\.commitlore\]\s*$/m.exec(source);
@@ -24203,7 +24237,7 @@ var tomlHost = async (path2, wrapper) => {
   }
   if (existing !== null) {
     const problem2 = await probeMcp(existing.command, existing.args);
-    if (problem2 !== null) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
+    if (isMcpProbeFailure(problem2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
     return { host: "codex", requested: true, outcome: existing.command === wrapper ? "owned" : "custom-preserved", healthy: true, detail: existing.command === wrapper ? "healthy installer-owned registration" : "healthy custom registration preserved" };
   }
   const escaped = JSON.stringify(wrapper);
@@ -24229,7 +24263,7 @@ args = ["mcp"]
     return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${String(error2)}` };
   }
   const problem = await probeMcp(wrapper, ["mcp"]);
-  return problem === null ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
+  return !isMcpProbeFailure(problem) ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter2).some((directory) => {
   const path2 = join15(directory, command);
@@ -24252,13 +24286,13 @@ var cliHost = async (host, wrapper) => {
       return { host, requested: true, outcome: "failed", healthy: false, detail: "codex CLI returned an unverifiable registration" };
     }
     const problem2 = await probeMcp(command, args);
-    if (problem2 !== null) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
+    if (isMcpProbeFailure(problem2)) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
     return { host, requested: true, outcome: command === wrapper && args.length === 1 && args[0] === "mcp" ? "owned" : "custom-preserved", healthy: true, detail: command === wrapper && args.length === 1 && args[0] === "mcp" ? "healthy installer-owned registration" : "healthy custom registration preserved" };
   }
   const added = commandResult("codex", ["mcp", "add", "commitlore", "--", wrapper, "mcp"]);
   if (!added.ok) return { host, requested: true, outcome: "failed", healthy: false, detail: "codex mcp add failed" };
   const problem = await probeMcp(wrapper, ["mcp"]);
-  return problem === null ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
+  return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 var inspectAndApplyHosts = async (options) => {
   const requested = [];

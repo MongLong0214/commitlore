@@ -3,8 +3,8 @@
  *
  * A registration proves only that a host has a command to try.  This probe
  * establishes the stronger fact that the command answers as CommitLore: it
- * completes initialize with a name and version, then exposes the minimum
- * capture tool surface.
+ * completes initialize with a name and version, then reports whether the
+ * advertised tools form the read-delivery or capture-initiation surface.
  */
 
 import { accessSync, constants, statSync } from 'node:fs';
@@ -26,13 +26,29 @@ export type McpProbeFailureKind =
   | 'probe-unavailable';
 
 export interface McpProbeFailure {
-  kind: McpProbeFailureKind;
+  kind: 'failure';
+  reason: McpProbeFailureKind;
   detail: string;
 }
 
-export type McpProbeResult = McpProbeFailure | null;
+export interface McpProbeSuccess {
+  /** The server identifies as CommitLore; kind records its advertised tool set. */
+  kind: 'read-delivery' | 'capture-initiator';
+  detail: string;
+}
 
-const failure = (kind: McpProbeFailureKind, detail: string): McpProbeFailure => ({ kind, detail });
+export type McpProbeResult = McpProbeFailure | McpProbeSuccess;
+
+const failure = (reason: McpProbeFailureKind, detail: string): McpProbeFailure => ({ kind: 'failure', reason, detail });
+
+export const MCP_READ_TOOLS = ['commitlore_query', 'commitlore_before_change'] as const;
+export const MCP_CAPTURE_TOOLS = [
+  'commitlore_prepare_capture',
+  'commitlore_verify_capture',
+  'commitlore_stage_capture',
+] as const;
+
+export const isMcpProbeFailure = (result: McpProbeResult): result is McpProbeFailure => result.kind === 'failure';
 
 const CLEANUP_GRACE_MS = 250;
 
@@ -151,11 +167,13 @@ export const probeMcp = async (command: string, args: string[]): Promise<McpProb
           child?.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
         } else if (initialized && message.id === 2) {
           const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
-          finish(
-            tools.has('commitlore_query') && tools.has('commitlore_before_change')
-              ? null
-              : failure('missing-tools', 'MCP server lacks CommitLore minimum tools'),
-          );
+          if (!MCP_READ_TOOLS.every((tool) => tools.has(tool))) {
+            finish(failure('missing-tools', 'MCP server lacks CommitLore read-delivery tools'));
+          } else if (MCP_CAPTURE_TOOLS.every((tool) => tools.has(tool))) {
+            finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools' });
+          } else {
+            finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set' });
+          }
           return;
         }
       }
@@ -186,7 +204,17 @@ export const probeMcpSync = (command: string, args: string[]): McpProbeResult =>
   }
   try {
     const parsed = JSON.parse(result.stdout) as McpProbeResult;
-    if (parsed === null || (typeof parsed === 'object' && parsed !== null && typeof parsed.kind === 'string' && typeof parsed.detail === 'string')) {
+    if (
+      typeof parsed === 'object'
+      && parsed !== null
+      && typeof parsed.kind === 'string'
+      && typeof parsed.detail === 'string'
+      && (
+        parsed.kind === 'read-delivery'
+        || parsed.kind === 'capture-initiator'
+        || (parsed.kind === 'failure' && typeof (parsed as Partial<McpProbeFailure>).reason === 'string')
+      )
+    ) {
       return parsed;
     }
   } catch {

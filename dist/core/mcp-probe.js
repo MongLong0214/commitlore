@@ -3,14 +3,21 @@
  *
  * A registration proves only that a host has a command to try.  This probe
  * establishes the stronger fact that the command answers as CommitLore: it
- * completes initialize with a name and version, then exposes the minimum
- * capture tool surface.
+ * completes initialize with a name and version, then reports whether the
+ * advertised tools form the read-delivery or capture-initiation surface.
  */
 import { accessSync, constants, statSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { installedPath } from './paths.js';
-const failure = (kind, detail) => ({ kind, detail });
+const failure = (reason, detail) => ({ kind: 'failure', reason, detail });
+export const MCP_READ_TOOLS = ['commitlore_query', 'commitlore_before_change'];
+export const MCP_CAPTURE_TOOLS = [
+    'commitlore_prepare_capture',
+    'commitlore_verify_capture',
+    'commitlore_stage_capture',
+];
+export const isMcpProbeFailure = (result) => result.kind === 'failure';
 const CLEANUP_GRACE_MS = 250;
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 /**
@@ -134,9 +141,15 @@ export const probeMcp = async (command, args) => {
                 }
                 else if (initialized && message.id === 2) {
                     const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
-                    finish(tools.has('commitlore_query') && tools.has('commitlore_before_change')
-                        ? null
-                        : failure('missing-tools', 'MCP server lacks CommitLore minimum tools'));
+                    if (!MCP_READ_TOOLS.every((tool) => tools.has(tool))) {
+                        finish(failure('missing-tools', 'MCP server lacks CommitLore read-delivery tools'));
+                    }
+                    else if (MCP_CAPTURE_TOOLS.every((tool) => tools.has(tool))) {
+                        finish({ kind: 'capture-initiator', detail: 'MCP server advertises CommitLore read and capture tools' });
+                    }
+                    else {
+                        finish({ kind: 'read-delivery', detail: 'MCP server advertises CommitLore read tools but not the complete capture tool set' });
+                    }
                     return;
                 }
             }
@@ -166,7 +179,13 @@ export const probeMcpSync = (command, args) => {
     }
     try {
         const parsed = JSON.parse(result.stdout);
-        if (parsed === null || (typeof parsed === 'object' && parsed !== null && typeof parsed.kind === 'string' && typeof parsed.detail === 'string')) {
+        if (typeof parsed === 'object'
+            && parsed !== null
+            && typeof parsed.kind === 'string'
+            && typeof parsed.detail === 'string'
+            && (parsed.kind === 'read-delivery'
+                || parsed.kind === 'capture-initiator'
+                || (parsed.kind === 'failure' && typeof parsed.reason === 'string'))) {
             return parsed;
         }
     }

@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "a9d638a8a78190d9ba4f8d7e11e6974b4dc684e3c8ce062f37af7f47ef9c63ef"
+    "sha256": "5bc5c15c1535f22bc48a248cd24aa14811f14a3a52cea7d2fc1b7e6bf64ebdee"
   },
   "artifact": {
-    "sha256": "51ef146a66654eebb471c62c2d246b2b2ae58a89ab3735c569b589a667a87714",
+    "sha256": "37fce45bf95a474bc15f2543e83ec85623901ab3e4a2baa48085d534212d1e89",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -134,11 +134,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js",
-        "sha256": "6043df270034a058cc55978d7ba067092ba1b22f90cd4907f2d3d957ef694c85"
+        "sha256": "1af2be0cd84c8c849c071b182134c8e72c62a0c9162d74fa01b8fd1733a500c5"
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.js.map",
-        "sha256": "87e534f8d62d9dd27495dc7e677b7881e2226531568c2b5e8ae94c3c65b17278"
+        "sha256": "82dcef9cfa04df5466282bce85614b0cfdf0aed9986edf94119ff09cdb33c97e"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-directive-trust-mode.d.ts",
@@ -446,11 +446,11 @@
       },
       {
         "path": "dist/commands/installer-hosts.js",
-        "sha256": "9faab48c3542f0ed4e2f55547dc56b5a2fbbe831ee8ea5dc3594b1a26cd6fe8e"
+        "sha256": "03a2baab214e9550422a8e94a9811d6ed7751c526b3d19a2eb1aef5320be2868"
       },
       {
         "path": "dist/commands/installer-hosts.js.map",
-        "sha256": "36ed082a6898584db5dfeeb88789e4f2c08619073e2129a5d903bd8c230c4efe"
+        "sha256": "2df42b5eb3200129113759d8d1c45cda1c0719409f355a0d89c59bcf111e7671"
       },
       {
         "path": "dist/commands/mcp.d.ts",
@@ -562,7 +562,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "74247a7ee517aca872eba9324ea084721d71f263dfdc57c91c8ca404013718c3"
+        "sha256": "e35e7f11e8f5f0540f927bfec980c2a17ab3481a5d9b63180f89979d67ce4e23"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -806,15 +806,15 @@
       },
       {
         "path": "dist/core/mcp-probe.d.ts",
-        "sha256": "aefa4094a9f920fc9759ed8a2e10f94d21b22a18d94bd6a7910fde2833378358"
+        "sha256": "9cdf9f07af00e2e350f8dfe171ec8069c4334e4a907e950884c4c0ba4dce9120"
       },
       {
         "path": "dist/core/mcp-probe.js",
-        "sha256": "7eeb1224ed4dfeeed5df08669a3152219e0f31fabc2ec9790dfd122e9673bb57"
+        "sha256": "ec183c664f2473f10a3013925ed57bbe307ab2062d6f3bead3af706e5e58e84d"
       },
       {
         "path": "dist/core/mcp-probe.js.map",
-        "sha256": "1ffcfd762763d81b467d0613a5a352ca844928aac84576f04b9c5473d9ff4e77"
+        "sha256": "ed62a1b68191fd3df993ad60204d6382f20830dbf959be11d80c10ecc42d85f1"
       },
       {
         "path": "dist/core/mcp-registration.d.ts",
