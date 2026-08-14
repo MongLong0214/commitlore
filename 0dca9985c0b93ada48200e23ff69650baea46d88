@@ -1,0 +1,21 @@
+Limit: MCP capture advertisement requires package manifest, SPEC, and schema to be available in the active runtime
+Ruled-out: code-only tool advertisement | a stale runtime can expose capture after its SPEC is gone
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; npx vitest run test/mcp-preflight.test.ts; npx vitest run test/mcp.test.ts test/mcp-capture.test.ts test/doctor.test.ts; docker linux/amd64 MCP suites (106 tests); docker linux/amd64 npm ci && npm run build && npm run artifact:manifest; npm run artifact:verify; find dist -type f | wc -l = 274
+Record-Id: r-preflight002
+Provenance: inherited 74ee1fa2924cc1ab287f0bc71972f47c681fd629
+CommitLore-Version: 2.0.0
+
+Verified: docker linux/amd64 build and artifact:manifest; artifact:verify reports fe3613c6; 274 files in dist
+Record-Id: r-canonf002b
+Provenance: inherited 779e70070c2d42ad3f0a35f07d570559042ad2ce
+
+Ruled-out: keep the local packageVersion reader | it is a second answer to a question F-001 now owns, which is the divergence this pair of findings exists to remove
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: tsc --noEmit; 115 cases across mcp-preflight, mcp, mcp-capture and runtime-identity; live tools/list before and after deleting spec/ reports [3, 0]; docker linux/amd64 build and artifact:manifest; artifact:verify 33a26f61; 280 files in dist
+Record-Id: r-f002onf001
+Provenance: inherited b51c6b407c10b99feb9a0de6947dfba51ddb6c49
