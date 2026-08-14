@@ -24,6 +24,31 @@ export type McpProbeCleanup = 'not-needed' | 'reclaimed' | 'could-not-reclaim';
 export declare const MCP_READ_TOOLS: readonly ["commitlore_query", "commitlore_before_change"];
 export declare const MCP_CAPTURE_TOOLS: readonly ["commitlore_prepare_capture", "commitlore_verify_capture", "commitlore_stage_capture"];
 export declare const isMcpProbeFailure: (result: McpProbeResult) => result is McpProbeFailure;
+/**
+ * The filesystem identity of one process currently answering an MCP session.
+ * `reportedVersion` is intentionally observation only: two different roots
+ * may carry exactly the same package version.
+ */
+export interface LiveMcpRuntime {
+    readonly pid: number;
+    readonly entrypointRealpath: string;
+    readonly packageRoot: string;
+    readonly reportedVersion: string | null;
+    readonly bundlePresent: boolean;
+    readonly specPresent: boolean;
+}
+/** Process enumeration is an effect seam because `ps` is not universal. */
+export interface LiveMcpRuntimeScan {
+    readonly available: boolean;
+    readonly runtimes: readonly LiveMcpRuntime[];
+    readonly detail: string;
+}
+/**
+ * Enumerate processes, not registrations: the former is the server that is
+ * actually answering a session. The DoctorContext supplies this as an
+ * injectable seam so platform-specific `ps` output never enters a fixture.
+ */
+export declare const discoverLiveMcpRuntimes: () => LiveMcpRuntimeScan;
 /** Speak enough MCP to distinguish a launchable command from usable CommitLore. */
 export declare const probeMcp: (command: string, args: string[]) => Promise<McpProbeResult>;
 /**

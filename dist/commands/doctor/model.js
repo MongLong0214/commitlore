@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { execGit } from '../../core/git.js';
+import { discoverLiveMcpRuntimes } from '../../core/mcp-probe.js';
 import { openIndex } from '../../core/index-db.js';
 /** Probe message for the git capability check — one trailer of each shape. */
 export const PROBE_MESSAGE = 'commitlore doctor probe\n\nLimit: probe\nBlast: local\n';
@@ -76,6 +77,7 @@ export const defaultDoctorContext = (opts = {}) => ({
     memo: new Map(),
     git: execGit,
     spawn: spawnSync,
+    liveMcpRuntimes: discoverLiveMcpRuntimes,
     env: process.env,
     openIndex,
 });
