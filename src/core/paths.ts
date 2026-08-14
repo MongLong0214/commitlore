@@ -1,5 +1,5 @@
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -96,4 +96,90 @@ export const packageVersion = (): string => {
   const parsed = JSON.parse(raw) as { version?: unknown };
   cachedVersion = typeof parsed.version === 'string' ? parsed.version : '0.0.0-unknown';
   return cachedVersion;
+};
+
+/**
+ * The three installation assets a capture session reads before it can make a
+ * useful promise: its own manifest, the vocabulary contract, and the record
+ * schema.  Keep this beside `readInstalledFile` so every runtime resolves the
+ * same package root rather than teaching the MCP server a second layout.
+ */
+export interface CaptureAssetPreflight {
+  readonly ready: boolean;
+  /** Relative asset names only — never leak a deleted installation's old path. */
+  readonly problems: readonly string[];
+}
+
+const unreadable = (asset: string): string => `cannot read ${asset}`;
+
+const CAPTURE_ASSETS: readonly (readonly string[])[] = [
+  ['package.json'],
+  ['spec', 'SPEC.md'],
+  ['spec', 'schema', 'record.schema.json'],
+];
+
+/**
+ * The request-time half of capture preflight. Metadata is enough to discover
+ * a runtime whose installation disappeared after startup; the full preflight
+ * below remains responsible for validating contents and producing a repair.
+ */
+export const captureAssetsPresent = (): boolean =>
+  CAPTURE_ASSETS.every((segments) => {
+    try {
+      return statSync(installedPath(...segments)).isFile();
+    } catch {
+      return false;
+    }
+  });
+
+/**
+ * Check that capture's shipped inputs are present and parseable before a
+ * delivery surface advertises a mutating capture tool.  The actual readers
+ * still use `readInstalledFile`; this is their startup readiness check, not a
+ * second resolution mechanism or a cache of their contents.
+ */
+export const preflightCaptureAssets = (): CaptureAssetPreflight => {
+  const problems: string[] = [];
+
+  let manifestRaw: string | undefined;
+  try {
+    manifestRaw = readInstalledFile('package.json');
+  } catch {
+    problems.push(unreadable('package.json'));
+  }
+  if (manifestRaw !== undefined) {
+    try {
+      const manifest = JSON.parse(manifestRaw) as { name?: unknown; version?: unknown };
+      if (typeof manifest.name !== 'string' || manifest.name === '') {
+        problems.push('package.json has no package name');
+      }
+      if (typeof manifest.version !== 'string' || manifest.version === '') {
+        problems.push('package.json has no package version');
+      }
+    } catch {
+      problems.push('package.json is not valid JSON');
+    }
+  }
+
+  try {
+    readInstalledFile('spec', 'SPEC.md');
+  } catch {
+    problems.push(unreadable('spec/SPEC.md'));
+  }
+
+  let schemaRaw: string | undefined;
+  try {
+    schemaRaw = readInstalledFile('spec', 'schema', 'record.schema.json');
+  } catch {
+    problems.push(unreadable('spec/schema/record.schema.json'));
+  }
+  if (schemaRaw !== undefined) {
+    try {
+      JSON.parse(schemaRaw);
+    } catch {
+      problems.push('spec/schema/record.schema.json is not valid JSON');
+    }
+  }
+
+  return { ready: problems.length === 0, problems };
 };
