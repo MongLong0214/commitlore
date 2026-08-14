@@ -1,0 +1,200 @@
+Ruled-out: a separate MCP protocol probe | reuse the #595 implementation to prevent drift
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; npx vitest run test/doctor.test.ts test/installer-hosts.test.ts; npx vitest run test/doctor.test.ts -t 'unattended capture initiator'; npx vitest run test/installer-hosts.test.ts; docker linux/amd64 npm ci && npm run build; find dist -type f | wc -l
+Record-Id: r-mcpid572
+Provenance: inherited 31066bfbd2303bf2b3678df7d00e123e31ce3a1b
+
+Ruled-out: retaining the fixed one-line stub | it is not an MCP server and the new probe correctly rejects it
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit
+Verified: npx vitest run test/init.test.ts
+Verified: npx vitest run test/doctor.test.ts test/installer-hosts.test.ts
+Verified: npx vitest run test/init.test.ts -t 'creates a portable registration|authorises unattended capture'
+Verified: git diff --stat -- src/
+Record-Id: r-stub572
+Provenance: inherited 651a40a34fc349f5b73e7323b538034dc1c4c633
+
+Verified: docker linux/amd64 npm ci, npm run build, npm run artifact:manifest; artifact:verify reports 34e5f551; 277 files in dist; 101 cases across init and doctor
+Record-Id: r-canon572
+Provenance: inherited ecfc3b2f96cb62703aeb16b3a6e27c517198e224
+
+Ruled-out: treating stdout as completion | spawnSync waits for helper exit after stdout
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: container npm ci && npm run build && npm run artifact:manifest; container npm ci && npx vitest run test/init.test.ts test/doctor.test.ts; container npx vitest run test/init.test.ts; container npx vitest run test/doctor.test.ts; local npx tsc --noEmit; local npm run artifact:verify
+Record-Id: r-probesync572
+Provenance: inherited d4b83d9b39fd3b8d5acade58239887c0d9ae1de5
+
+Ruled-out: asset readiness preflight | F-002 and #633/#635 own that separate runtime check
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: container npx vitest run test/doctor.test.ts (78 passed)
+Verified: container npx vitest run test/init.test.ts (24 passed)
+Verified: container npx vitest run test/doctor.test.ts test/init.test.ts (102 passed)
+Verified: container npx vitest run test/init.test.ts test/doctor.test.ts (102 passed)
+Verified: container npx vitest run test/installer-hosts.test.ts (12 passed)
+Verified: container npx tsc --noEmit; macOS npm run artifact:verify; dist file count 277
+Record-Id: r-initiator636
+Provenance: inherited 75ce3ef154a4e2691e2c7936fbfbfc51256dd701
+
+Limit: the close-stdin outcome is measured, not guaranteed by the shell -- a platform whose shell defers the redirect past the parent's first write would produce the timeout code instead, and this case would then need its own seam rather than a looser assertion
+Ruled-out: accepting either code in one case | it makes the regression pass whether or not the probe still separates the two facts, which is the property under test
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: 10/10 runs of the close-stdin fixture through dist/core/mcp-probe.js on linux/amd64 report command closed its input; five initiator cases pass in-container with one exact probe code each, the never-answers fixture taking 6.2s against a 5s budget; tsc clean
+Record-Id: r-probefacts572
+Provenance: inherited 99872e7a4bbddef4374ef3c7055e853aea8ea537
+
+Ruled-out: sidecar MCP helper | it is outside the declared single-file runtime
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; npx vitest run test/doctor.test.ts; npx vitest run test/init.test.ts; npx vitest run test/doctor.test.ts test/init.test.ts; npx vitest run test/installer-hosts.test.ts; Linux node:24-bookworm doctor and init suite; npm run artifact:verify
+Record-Id: r-bundleprobe636
+Provenance: inherited e9769628a9b818fdc71713b210105332bddacac0
+
+Ruled-out: process manager framework | taskkill is a bounded Windows helper
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; npm run artifact:verify; canonical docker build; Windows CI 31763744143 and 31764253576
+Record-Id: r-winprobe640
+Provenance: inherited f4b351acf6bd214848c98a3ffe211e48cd35ae04
+
+Limit: this leaves one outcome unpinned, so a regression that swapped closed-input for timed-out on that fixture would not be caught here -- the four other cases still pin their codes exactly
+Ruled-out: accepting either code in both fixtures | that is what makes the pair meaningless, since neither would then hold its own fact
+Ruled-out: forcing determinism by having the fixture signal readiness before closing stdin | the probe writes immediately on spawn, so there is no point at which a fixture could report ready first without changing the protocol
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: 104 cases across doctor and init pass; the probe invoked directly reports command-closed-input 5/5 on macOS and 10/10 in a linux/amd64 container, while the same fixture under the suite reports initialize-timed-out, which is the contradiction this change records
+Unverified: whether the race resolves differently again on a machine with more or fewer cores -- the assertion no longer depends on it either way
+Record-Id: r-proberace572
+Provenance: inherited 31d4c912b6b38df315ccade945b3e2ab9ae6aec0
+
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports 31b08e7c; 277 files in dist; spec/verify.sh 32 fixtures; check-readme-numbers matches bench/report.ts
+Record-Id: r-canon572reb
+Provenance: inherited 52292b308baa65d387929224bf36c49e6157d270
+
+Limit: windows-latest is the only evidence for this path; nothing here was verified locally
+Ruled-out: weaken or delete the failing step | it is the only coverage of Windows child-tree reclamation in the repository, and no unit test touches taskkill
+Blast: local
+Undo: easy
+Certainty: tentative
+Verified: python yaml parse of the workflow confirms the step and that the wrapper now runs node in the foreground with no start /b and no ping sleep
+Record-Id: r-childtreepre640
+Provenance: inherited 1e61a2fe4a23f31f68fee4cdca3e5953226ecb62
+
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports 831e055a; 283 files in dist; tsc --noEmit clean; spec/verify.sh 32 fixtures; check-readme-numbers matches bench/report.ts
+Record-Id: r-canon572reb2
+Provenance: inherited d7695139ec65881e367609a6aae3f25db16a2802
+
+Verified: shasum -a 256 of the workflow matches the new pin; 63 cases across release-publish-prerequisites and release-tag-binding pass, having failed on 20 assertions before; artifact:verify unchanged because scripts/ is not a canonical source input
+Record-Id: r-repin572ci
+Provenance: inherited bf9f0c9df18b44caad5beed1df05962d344a8079
+
+Limit: windows-latest is the only evidence for this path, and one green run does not settle a race — this needs to hold across runs before #640 can be called closed
+Ruled-out: keep gating on probe status and retry the step | the gate races on cmd.exe stdin ownership, so retries would convert a real signal into a slower coin flip
+Ruled-out: mark the path unsupported | reclamation is implemented and unconditional in the source; what was missing was a test that could reach it
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse confirms the health gate is gone and both the pid-file precondition and the survival assertion remain; workflow re-pinned to 7631b30d; 63 cases across release-publish-prerequisites and release-tag-binding pass
+Record-Id: r-reclaimnogate640
+Provenance: inherited 6f70b8511c42d51c0acc9b849c17d734c2caa27a
+
+Limit: the diagnosis is printed, not asserted — the next failure explains itself but the step still cannot say which outcome is acceptable
+Ruled-out: guess between the two suspects and change the fixture again | the previous change was a reasonable guess that did not hold, and a second guess costs another Windows round trip with no more information than the first
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse confirms the four diagnostic outputs and that both assertions remain; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding pass
+Record-Id: r-childtreediag640
+Provenance: inherited 7a7ddc62cfbb4e05c9bd8648516dde41830c7c9a
+
+Limit: this records the arrival, not the response; if bytes arrive and nothing comes back, the next question is the probe's reader
+Ruled-out: drive the wrapper through a pipe instead of a file as the discriminator | PowerShell closes the pipe after writing, so it would test EOF rather than the held-open pipe the probe uses
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-sawinput640
+Provenance: inherited e6ff1dceb76271df4f140ec18d8b29b76845b1e6
+
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-diagnull640
+Provenance: inherited 4aac88238b476524c53ba8662f8e0b0f9e64111c
+
+Limit: this reproduces the spawn, not the whole probe; a silent result narrows the cause without naming the fix
+Ruled-out: instrument mcp-probe.ts itself | product code should not carry diagnostics for one platform's fixture, and the mechanism is reproducible without touching it
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse confirms the driver is present; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-nodedrive640
+Provenance: inherited b917a4292e8be9b8afe8e46b602697f07f2dd930
+
+Limit: this measures the launcher's own child; it does not measure when cmd.exe started, so a stall before node is attributed to the same interval
+Ruled-out: read the node-spawn driver's silence as proof the spawn loses bytes | it shares the same five-second window, so slowness would make it silent too and I would have read a timing result as a delivery result
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-coldstart640
+Provenance: inherited 5777066bb0d2148a8237366895d5c679006661cf
+
+Limit: fifteen seconds is calibrated against one Windows runner's measurement; a machine slower than three times that will still be told it could not be verified, which is at least now true
+Ruled-out: widen the window and keep the wording | the message would still tell an operator to repair something that works, just less often
+Ruled-out: retry the probe | a retry pays another full budget to answer a question the first attempt already answered — the server was not reached in time — and doubles doctor's worst case
+Ruled-out: keep the sidecar's outer bound as a constant | it was 7000ms against a 5000ms budget, so raising one without the other would kill the helper before it could answer and report that death as the server's fault
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: RED was install-ps1 failing on the same commit that passed; 197 cases across doctor, mcp, init, cli and installer-hosts; the two probe-outcome cases now derive their expected verdict from the observed code, so the mapping itself is pinned; docker linux/amd64 build and artifact:manifest; artifact:verify 4ad19c82; 283 files in dist
+Record-Id: r-slownotbroken640
+Provenance: inherited 47264ce3c7f4bd2ff2603d7f8135c214457a174f
+
+Limit: the earlier commit raising the probe budget to 15s stands on its own measurement — a healthy probe used 4478ms of 5000ms — but its message claimed that budget explained this flakiness, and it did not
+Ruled-out: keep the hard-coded path and widen the timeout | no budget reaches an interpreter that is not on disk, and three attempts had already shown that
+Ruled-out: treat this as the product defect | a registration naming an interpreter that does not exist should be reported unhealthy, and the probe running the registered command verbatim is the behaviour to keep
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse confirms the hard-coded path is gone and the launcher resolves node from PATH; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-launchernode640
+Provenance: inherited 38f4b7defb4e952dbd9575955773a8ebe9ba0089
+
+Limit: the deadline explanation is two independent diagnoses and a margin measurement, not a reproduction — the confirming evidence is the next run's own output
+Ruled-out: revert to the hard-coded path | it works on this image and testing against the Node the job installed is still the more honest fixture; the correction here is to the reason, not to the code
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: the passing run 94727853053 carried the same launcher and reported pid file present; the fix already on this branch is the 15s budget, the derived sidecar bound and the unverified mapping, all of which predate this correction
+Record-Id: r-launcherwhy640
+Provenance: inherited aa23603389e4a79616f058a37b427eb64d7df517
+
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports ac7b0c5d; 283 files in dist; tsc --noEmit clean; spec/verify.sh 32 fixtures
+Record-Id: r-canon572m3
+Provenance: inherited e1cc1d6cf08a8df582c5f1fdee9901be0dbd4b72
+
+Ruled-out: keep the drivers for the next investigation | they are cheap to write again from the pull request comment, and a permanent cost for a question already answered is the wrong trade
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: python yaml parse confirms the pid and cold-start lines and the survival assertion remain and the two drivers are gone; workflow re-pinned; 63 cases across release-publish-prerequisites and release-tag-binding
+Record-Id: r-trimdiag640
+Provenance: inherited f5269dfe307c86a51b6a1858fce88913b6b04b95
+
+Verified: docker linux/amd64 npm ci + build + artifact:manifest; artifact:verify reports 90b51c85; 283 files in dist; tsc --noEmit clean; doctor and pre-push-hook suites against the rebuilt bundle
+Record-Id: r-canon572m4
+Provenance: inherited 5779255b5e30943218b582bf5232366c3be91a1d
