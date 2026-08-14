@@ -17,6 +17,7 @@ import { register as registerCapture } from './commands/capture.js';
 import { register as registerDemo } from './commands/demo.js';
 import { packageVersion } from './core/paths.js';
 import { probeMcp } from './core/mcp-probe.js';
+import { formatRuntimeIdentity, runtimeIdentity } from './core/runtime-identity.js';
 import { register as registerDoctor } from './commands/doctor.js';
 import { register as registerHarvest } from './commands/harvest.js';
 import { register as registerGuard } from './commands/guard.js';
@@ -121,6 +122,18 @@ program
     .name('commitlore')
     .description('Git commit trailers as institutional memory for AI coding agents')
     .version(pkg.version ?? '0.0.0');
+// Machine-readable on purpose: hooks, installers and MCP hosts need the
+// entrypoint and root too; a version string was the ambiguity F-001 found.
+program
+    .command('runtime-identity')
+    .description('print the exact CommitLore runtime this command executes')
+    .option('--json', 'emit the runtime identity as JSON')
+    .action((options) => {
+    const identity = runtimeIdentity();
+    process.stdout.write(options.json === true
+        ? `${formatRuntimeIdentity(identity)}\n`
+        : `version ${identity.version}\nentrypoint ${identity.entrypoint}\npackage root ${identity.packageRoot}\nindex schema v${identity.indexSchemaVersion}\n`);
+});
 program
     .command('parse')
     .description('Parse a commit message into its CommitLore trailers (SPEC §2)')
