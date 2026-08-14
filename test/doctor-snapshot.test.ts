@@ -121,15 +121,24 @@ const asWritten = (value: string): string => {
 // processes and still agree byte for byte; collapsing the varying half is what
 // lets the pinned text stay a statement about the format (#660).
 const canonicaliseLiveRuntimes = (line: string): string =>
-  /live CommitLore MCP runtime/.test(line)
-    ? line.replace(/\d+ live CommitLore MCP runtime\(s\).*$/, '<n> live CommitLore MCP runtime(s) <detail>')
+  /live (?:CommitLore )?MCP runtime/i.test(line)
+    ? line.replace(/(live MCP runtime identity —|live CommitLore MCP runtime\(s\)).*$/i, '$1 <machine state>')
     : line;
+
+/**
+ * The totals count `mcp-runtime-identity`, whose status is a fact about the
+ * machine: doctor spawns an MCP probe of its own, so two runs cannot agree
+ * about the process table even when nothing else differs. Collapsing the counts
+ * keeps these comparisons about the format they exist to pin (#661).
+ */
+const canonicaliseTotals = (line: string): string =>
+  line.replace(/^\d+ ok, \d+ warnings?, \d+ failed, \d+ skipped/, '<totals>');
 
 const normalise = (text: string, repo: string): string =>
   text
     .split('\n')
     .map((line) =>
-      canonicaliseLiveRuntimes(line)
+      canonicaliseTotals(canonicaliseLiveRuntimes(line))
         .replaceAll(realpathSync(repo), '<repo>')
         .replaceAll(repo, '<repo>')
         // Both spellings of this checkout's root. The report writes paths
