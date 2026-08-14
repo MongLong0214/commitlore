@@ -19384,7 +19384,12 @@ var stopProbeChild = async (child) => {
   });
   child.once("exit", () => exitedResolve?.());
   if (process.platform === "win32") {
-    child.kill("SIGTERM");
+    if (child.pid === void 0) return "could-not-reclaim";
+    const result = spawnSync4("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    if (result.error !== void 0 || result.status !== 0) return "could-not-reclaim";
     await Promise.race([exited, wait(CLEANUP_GRACE_MS)]);
     return "reclaimed";
   }
