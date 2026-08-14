@@ -51,20 +51,28 @@ jobs:
       - name: Typecheck bench
         run: npx tsc -p bench/tsconfig.json --noEmit
 
-      - name: Build
-        run: npm run build
-
       # dist/ is committed because that is what makes this repository
-      # installable as a plugin with no registry (ADR-0011). A committed build
-      # that drifts from src/ ships stale code to every user, and the drift is
-      # invisible -- nothing fails, the wrong thing just runs. The build is
-      # deterministic, so rebuilding and diffing is a complete check.
-      - name: Committed dist/ matches src/
+      # installable as a plugin with no registry (ADR-0011). esbuild's native
+      # binary makes an ordinary local build platform-dependent, so the Linux
+      # amd64 Node 24 Bookworm container is the one builder that can update it.
+      # Build twice and compare every dist byte: matching git only once would
+      # not notice a builder that changes its output between invocations.
+      - name: Canonical dist is reproducible and matches its manifest
         run: |
-          git diff --exit-code -- dist/ || {
-            echo "::error::dist/ is stale. Run 'npm run build' and commit the result."
+          set -euo pipefail
+          first="$(mktemp)"
+          second="$(mktemp)"
+          npm run build:canonical
+          npm run artifact:verify
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$first"
+          npm run build:canonical
+          npm run artifact:verify
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$second"
+          cmp "$first" "$second" || {
+            echo "::error::canonical builder produced different dist bytes"
             exit 1
           }
+          git diff --exit-code -- dist/ installer/canonical-artifact.json
 
       - name: Unit and dogfooding tests
         run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-report.json
@@ -234,8 +242,12 @@ jobs:
         run: |
           set -euo pipefail
           ship="$(mktemp -d)"
-          cp -R dist spec package.json "$ship/"
+          mkdir -p "$ship/dist"
+          cp dist/commitlore.mjs "$ship/dist/"
+          cp -R spec "$ship/"
+          cp package.json "$ship/"
           test ! -e "$ship/node_modules"
+          test "$(find "$ship/dist" -type f | wc -l | tr -d ' ')" = 1
           ( cd "$ship" && node dist/commitlore.mjs --version )
 
   # git's own behavior is the substrate this protocol delegates to, so a git

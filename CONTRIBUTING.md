@@ -18,6 +18,12 @@ A PR that says "should fix it" gets sent back. A PR that says "reproduced the fa
 2. Pick an [open issue](https://github.com/MongLong0214/commitlore/issues). Ticket specs live in [`docs/tickets/`](docs/tickets/) with module paths, signatures, and acceptance criteria — enough to implement from.
 3. Comment on the issue before starting anything large, so two people don't build the same thing.
 
+## Committed artifact
+
+The installable bundle has one canonical Linux builder. See
+[`docs/CANONICAL-BUILD.md`](docs/CANONICAL-BUILD.md) before rebuilding `dist/`;
+`npm run build` on another platform can produce different bytes.
+
 ## Commit messages: we dogfood the protocol
 
 This repo uses CommitLore trailers in its own history. Try it:

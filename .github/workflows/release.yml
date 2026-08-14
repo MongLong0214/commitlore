@@ -102,6 +102,31 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-exact-head-ci.mjs "$GITHUB_REPOSITORY_OWNER" "${GITHUB_REPOSITORY#*/}" "${{ needs.release-target.outputs.commit }}"
 
+  # The release is a tagged source checkout, not a separately uploaded binary
+  # (ADR-0026). This job nevertheless records the exact bundle checksum beside
+  # the exact source commit it rebuilt, so the release cannot claim an artifact
+  # made from a different checkout or builder.
+  canonical-artifact:
+    needs: release-target
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+      artifact_sha256: ${{ steps.provenance.outputs.artifact_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-target.outputs.commit }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:canonical
+      - id: provenance
+        env:
+          RELEASE_COMMIT: ${{ needs.release-target.outputs.commit }}
+        run: npm run artifact:verify
+
   # RELEASE-GATE §4 used to be a human checklist run after `gh release create`.
   # That made a failed row a correction to something already published: the
   # release existed, but its documented installation did not work. This job
@@ -259,8 +284,8 @@ jobs:
     # A skipped or failed prerequisite skips this job by GitHub's default needs
     # semantics. Keep it free of `if:`: a condition such as `always()` would
     # turn a failed qualification into a path that can still publish.
-    needs: [version-consistency, install-gate, release-target, exact-head-ci]
-    # The only job that may create a release, and it cannot start until all four
+    needs: [version-consistency, install-gate, release-target, exact-head-ci, canonical-artifact]
+    # The only job that may create a release, and it cannot start until all five
     # gates have passed. Scoping the grant here is what makes that ordering a
     # constraint rather than a convention.
     permissions:
@@ -268,6 +293,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_COMMIT: ${{ needs.release-target.outputs.commit }}
+      CANONICAL_SOURCE_SHA: ${{ needs.canonical-artifact.outputs.source_sha }}
+      CANONICAL_ARTIFACT_SHA256: ${{ needs.canonical-artifact.outputs.artifact_sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -283,6 +310,14 @@ jobs:
       # when it was taken.
       - name: The live tag still resolves to the qualified commit
         run: node scripts/check-tag-binding.mjs "$GITHUB_REF_NAME" "$RELEASE_COMMIT"
+
+      - name: The canonical artifact is bound to the qualified source
+        run: |
+          set -euo pipefail
+          test "$CANONICAL_SOURCE_SHA" = "$RELEASE_COMMIT"
+          test -n "$CANONICAL_ARTIFACT_SHA256"
+          printf 'canonical source: %s\ncanonical bundle SHA-256: %s\n' \
+            "$CANONICAL_SOURCE_SHA" "$CANONICAL_ARTIFACT_SHA256"
 
       # `--verify-tag` refuses when the tag does not exist, so publication can
       # never create the reference it was meant to verify.
@@ -308,4 +343,5 @@ jobs:
             --verify-tag \
             --target "$RELEASE_COMMIT" \
             --title "$GITHUB_REF_NAME" \
+            --notes "Canonical source: $CANONICAL_SOURCE_SHA; Canonical dist/commitlore.mjs SHA-256: $CANONICAL_ARTIFACT_SHA256" \
             --generate-notes
