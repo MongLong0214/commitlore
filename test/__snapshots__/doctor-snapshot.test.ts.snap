@@ -25,7 +25,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target is missing 1`] = `
 "Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-13 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+<totals> (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
@@ -43,7 +43,7 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
-ok      live MCP runtime identity — no live CommitLore MCP runtime was found
+ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
@@ -54,7 +54,7 @@ skipped squash conservation — no local branch looks like the source of a squas
 
 exports[`#462 doctor text report, pinned > renders a stable report on a repository whose hook target resolves 1`] = `
 "Next action [notes-refspec]: origin does not fetch refs<path> so records pushed by others stay invisible here — git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
-13 ok, 3 warnings, 0 failed, 2 skipped (<ms>)
+<totals> (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
 3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
@@ -72,7 +72,7 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
-ok      live MCP runtime identity — no live CommitLore MCP runtime was found
+ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
@@ -97,7 +97,7 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
-ok      live MCP runtime identity — no live CommitLore MCP runtime was found
+ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
@@ -118,7 +118,7 @@ warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.jso
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
-ok      live MCP runtime identity — no live CommitLore MCP runtime was found
+ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
