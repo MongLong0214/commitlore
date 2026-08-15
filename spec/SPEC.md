@@ -1,6 +1,10 @@
 # CommitLore Protocol Specification
 
-**Version 2.0** · Status: Draft · Canonical source for all implementations
+**Version 2.0** · Status: **Stable** · Canonical source for all implementations
+
+Stable means the vocabulary and grammar below do not change incompatibly within
+2.x. See `docs/COMPATIBILITY.md` for what may still change and how anything is
+retired.
 
 This document defines the CommitLore protocol: how decision context is inscribed into git commits as trailers, what each field means, and which route consumes it. An implementation that passes `spec/fixtures/` and `spec/contract-cases/` is a conforming CommitLore implementation, regardless of language.
 
