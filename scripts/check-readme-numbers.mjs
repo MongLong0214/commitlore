@@ -202,14 +202,16 @@ const main = () => {
   for (const { relative, markdown } of readmes) {
     const mismatches = findVerdictMismatches(markdown);
     if (mismatches.length > 0) {
-      // stdout, not stderr: this is a notice, not a failure, and
-      // test/readme-numbers.test.ts asserts stderr is empty precisely so that
-      // "the checker said something" keeps meaning "something is wrong".
-      process.stdout.write(
+      // stderr and a non-zero exit: drift between the README and the
+      // preregistered verdict is a failure now, not a note. It was a note only
+      // while the README still disagreed; correcting it is what let this become
+      // a gate.
+      process.stderr.write(
         `${relative}: ${mismatches.join(', ')} not in bench/VERDICT-M5.md's registered table ` +
           `(${verdictArms().map(({ arm, reproposed, total }) => `${arm} ${reproposed}/${total}`).join(', ')}). ` +
-          `One of the two documents is stale; see #590. Not failing the build yet.\n`,
+          `One of the two documents is stale; see #590.\n`,
       );
+      return 1;
     }
   }
 
