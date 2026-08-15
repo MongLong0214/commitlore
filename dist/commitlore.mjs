@@ -24893,6 +24893,15 @@ var cliHost = async (host, wrapper) => {
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
+var claudePluginHost = () => {
+  const host = "claude-code";
+  const run = (args) => spawnSync7("claude", args, { stdio: "ignore", shell: false, timeout: 6e4 }).status;
+  if (run(["plugin", "marketplace", "add", "MongLong0214/commitlore"]) === null) {
+    return { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin marketplace add could not run" };
+  }
+  run(["plugin", "marketplace", "update", "commitlore"]);
+  return run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]) === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin install failed \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore" };
+};
 var inspectAndApplyHosts = async (options) => {
   const requested = [];
   const notDetected = [];
@@ -24916,6 +24925,9 @@ var inspectAndApplyHosts = async (options) => {
     const result = spawnSync7(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
     requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
   } else notDetected.push("hermes");
+  if (hasCommand("claude")) {
+    requested.push(Promise.resolve(claudePluginHost()));
+  } else notDetected.push("claude-code");
   const hosts = await Promise.all(requested);
   return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
