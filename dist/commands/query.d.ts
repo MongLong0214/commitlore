@@ -44,6 +44,11 @@ export interface JsonRecord {
 }
 export interface JsonOutput {
     command: string;
+    /** Which build answered — version and the bundle it ran from (#631). */
+    runtime: {
+        version: string;
+        entrypoint: string;
+    };
     at: string;
     paths: string[];
     aliases: string[];
