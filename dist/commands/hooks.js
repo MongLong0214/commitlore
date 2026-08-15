@@ -21,6 +21,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { describeRecordedHookTarget, recordedHookIdentity, readRecordedHookTarget, } from '../core/hook-target.js';
@@ -157,10 +158,43 @@ export const resolveEntryForRecord = (entry, cwd) => {
     }
     return null;
 };
+/**
+ * A launcher that points at this same code without naming a version (#693).
+ *
+ * `process.argv[1]` is the bundle actually running, which under a normal
+ * install is `<data-root>/v<version>/dist/commitlore.mjs`. Recording that pins
+ * the hook to one release: every upgrade leaves the repository validating
+ * commits with the previous build while the CLI reports the new one.
+ *
+ * The wrapper is an absolute path too, so it keeps the property the versioned
+ * path was chosen for — independence from PATH and from whatever
+ * `node_modules/.bin/commitlore` a parent directory holds. It simply does not
+ * name a version, which is why `.mcp.json` was the one configuration that
+ * survived today's upgrades untouched.
+ *
+ * Only used when it demonstrably launches this build. A wrapper belonging to
+ * some other installation is worse than a versioned path, so an unreadable or
+ * unrelated one falls back rather than guessing.
+ */
+const stableLauncherFor = (bundle) => {
+    const wrapper = resolve(homedir(), '.local', 'bin', 'commitlore');
+    if (!existsSync(wrapper))
+        return null;
+    try {
+        // The wrapper is a small shell script that execs the bundle by absolute
+        // path; naming it is what makes this the same install rather than a
+        // coincidence of file names.
+        return readFileSync(wrapper, 'utf8').includes(bundle) ? wrapper : null;
+    }
+    catch {
+        return null;
+    }
+};
 const recordBinPath = (cwd) => {
-    const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-    if (resolvedEntry === null)
+    const running = resolveEntryForRecord(process.argv[1], cwd);
+    if (running === null)
         return;
+    const resolvedEntry = stableLauncherFor(running) ?? running;
     execGit(['config', '--local', 'commitlore.bin', resolvedEntry], { cwd });
     // The interpreter as well: the branch that reads these back runs in a hook
     // whose PATH may not carry node, which is the whole reason it exists. For a

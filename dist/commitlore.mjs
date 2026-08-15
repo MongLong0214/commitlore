@@ -21788,6 +21788,7 @@ import {
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
+import { homedir } from "node:os";
 import { join as join12, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
@@ -22452,9 +22453,19 @@ var resolveEntryForRecord = (entry, cwd) => {
   }
   return null;
 };
+var stableLauncherFor = (bundle) => {
+  const wrapper = resolve15(homedir(), ".local", "bin", "commitlore");
+  if (!existsSync18(wrapper)) return null;
+  try {
+    return readFileSync18(wrapper, "utf8").includes(bundle) ? wrapper : null;
+  } catch {
+    return null;
+  }
+};
 var recordBinPath = (cwd) => {
-  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-  if (resolvedEntry === null) return;
+  const running = resolveEntryForRecord(process.argv[1], cwd);
+  if (running === null) return;
+  const resolvedEntry = stableLauncherFor(running) ?? running;
   execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
   try {
@@ -23665,7 +23676,7 @@ var register14 = (program3) => {
 // src/commands/hermes.ts
 import { spawnSync as spawnSync6 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync21, mkdirSync as mkdirSync10, readFileSync as readFileSync23, renameSync as renameSync9, statSync as statSync9, writeFileSync as writeFileSync16 } from "node:fs";
-import { homedir } from "node:os";
+import { homedir as homedir2 } from "node:os";
 import { basename as basename3, dirname as dirname10, join as join15, resolve as resolve19 } from "node:path";
 
 // src/core/hermes-config.ts
@@ -23986,7 +23997,7 @@ var runVerification = (report, verified) => {
   }
 };
 var runHermesInstall = (options = {}) => {
-  const home = options.home ?? homedir();
+  const home = options.home ?? homedir2();
   const hermesHome = process.env["HERMES_HOME"];
   const configPath = options.configPath ?? (hermesHome === void 0 ? join15(home, ".hermes", "config.yaml") : join15(hermesHome, "config.yaml"));
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join15(home, ".local", "share");
@@ -34702,7 +34713,7 @@ var register21 = (program3) => {
 // src/core/codex-plugin.ts
 import { spawnSync as spawnSync8 } from "node:child_process";
 import { existsSync as existsSync23, mkdirSync as mkdirSync12, readFileSync as readFileSync26, rmSync as rmSync6, writeFileSync as writeFileSync18 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
+import { homedir as homedir3 } from "node:os";
 import { join as join18 } from "node:path";
 
 // src/core/agent-configs.ts
@@ -34778,7 +34789,7 @@ var isCommitloreEntry = (format, entry, wrapperPath) => {
 
 // src/core/codex-plugin.ts
 var MARKER_VERSION = 1;
-var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join18(homedir2(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join18(homedir2(), ".local", "share");
+var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join18(homedir3(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join18(homedir3(), ".local", "share");
 var codexSaid = (result) => {
   const said = (result.stderr.trim() || result.stdout.trim()).split("\n")[0]?.trim() ?? "";
   if (said === "") return [];
@@ -35720,7 +35731,7 @@ var register25 = (program3) => {
 // src/commands/uninstall.ts
 import { spawnSync as spawnSync9 } from "node:child_process";
 import { existsSync as existsSync24, readFileSync as readFileSync29, rmSync as rmSync8, writeFileSync as writeFileSync20 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
+import { homedir as homedir4 } from "node:os";
 import { join as join19 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
 var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -35764,7 +35775,7 @@ var listCodexMcp = (command) => {
 };
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
-  const home = options.home ?? homedir3();
+  const home = options.home ?? homedir4();
   const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join19(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join19(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
