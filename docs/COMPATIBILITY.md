@@ -10,6 +10,38 @@ There is no compiled artifact anywhere in the product ([ADR-0026](adr/ADR-0026-n
 and neither install script contains a platform, architecture or libc check —
 there is no platform-specific artifact to choose between.
 
+## The protocol contract (2.0 Stable)
+
+`spec/SPEC.md` is Stable as of v1.0.0. What that promises, and what it does not:
+
+**Will not change incompatibly within 2.x**
+
+- The trailer grammar (SPEC §2) and where git decides a trailer block begins and
+  ends. CommitLore does not overrule git on that boundary and will not start.
+- The meaning of every key in SPEC §3, and `Record-Id`'s format.
+- The `X-<Name>` extension slot. An organization's own keys are preserved
+  verbatim, and no future version will start interpreting them.
+- The three trust grades and what each asserts. Their *strength* depends on the
+  configured mode — see `SECURITY.md` — but the words do not change meaning.
+- A record written today validates under any 2.x reader.
+
+**May change**
+
+- New optional keys in §3. A reader that does not know a key ignores it, which
+  is what makes this compatible.
+- Diagnostics, exit-code detail, and output formatting outside the JSON
+  contract. The JSON answer's shape is pinned by tests; prose is not.
+- The index schema. It is a derived cache (ADR-0003) and rebuilds; a reader that
+  meets an index it does not understand rebuilds rather than guessing.
+
+**How anything is retired**
+
+Nothing in §3 is removed in 2.x. If a key must go, it is deprecated in a minor
+release — still accepted, still validating, documented as deprecated with what
+replaces it — and removed no earlier than 3.0. A record already committed is
+history and remains readable regardless: the repository is the record, and a
+reader that cannot read old commits has broken the product's one promise.
+
 ## Install paths
 
 | Path | Command | Who it is for |
