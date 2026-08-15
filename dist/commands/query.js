@@ -16,6 +16,7 @@
  * nothing is not an error), and a query that exits non-zero on an empty answer
  * would make every agent treat "nothing to know here" as a failure.
  */
+import { runtimeIdentity } from '../core/runtime-identity.js';
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
@@ -178,8 +179,23 @@ const toJsonRecord = (record) => ({
 });
 export const toJson = (command, result) => {
     const presented = withholdBlocked(result);
+    const runtime = runtimeIdentity();
     return {
         command,
+        /**
+         * Which build answered (#631).
+         *
+         * A grade is only as identifiable as the runtime that produced it, and four
+         * generations of this product were found installed at once — two of them
+         * from a plugin cache `install.sh` never touches (#660). Without this a
+         * client that sees the CLI and MCP disagree has to ask twice and trust the
+         * same process answered both times.
+         *
+         * It is set here rather than on either route, because this function is what
+         * both of them serialize through; adding it to one would create exactly the
+         * divergence it exists to expose.
+         */
+        runtime: { version: runtime.version, entrypoint: runtime.entrypoint },
         at: presented.at.toISOString(),
         paths: presented.paths,
         aliases: presented.aliases,

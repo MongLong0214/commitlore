@@ -125,6 +125,60 @@ const relativePath = (file) => {
   return inside !== '' && !inside.startsWith('..') ? inside : file;
 };
 
+/**
+ * The M5 verdict is the strongest provenance any figure in this repository has:
+ * `bench/m5-analysis.ts` run once over the shards `bench/PREREGISTRATION-M5.md`
+ * names, frozen before the run. The generated block is checked byte-for-byte,
+ * but these figures live in prose outside it, so the README and the verdict
+ * could disagree about the same preregistered experiment indefinitely — and do
+ * (issue #590).
+ *
+ * Reported rather than enforced for now: the README is corrected in one pass
+ * once the figures it depends on stop moving, and a check that fails the build
+ * before then blocks every unrelated change. `--enforce-verdict` flips it, and
+ * that flag is how this becomes a gate rather than a note.
+ */
+const VERDICT_M5 = path.join(REPO_ROOT, 'bench', 'VERDICT-M5.md');
+
+/** `| \`commitlore-on\` | 16 / 580 | **2.8%** | …` -> {arm, reproposed, total, rate}. */
+const verdictArms = () => {
+  if (!fs.existsSync(VERDICT_M5)) return [];
+  const rows = [];
+  for (const line of fs.readFileSync(VERDICT_M5, 'utf8').split('\n')) {
+    const match = /^\|\s*`(commitlore-(?:on|off))`\s*\|\s*(\d+)\s*\/\s*(\d+)\s*\|\s*\*\*([\d.]+)%\*\*/.exec(line);
+    if (match !== null) {
+      const [, arm = '', reproposed = '', total = '', rate = ''] = match;
+      rows.push({ arm, reproposed, total, rate });
+    }
+  }
+  return rows;
+};
+
+/**
+ * Every `(n/m)` the README prints must be a row of that table. A fraction that
+ * is not is either a figure the verdict never produced or one it has since
+ * revised; both are the disagreement this checks for, and neither is decided
+ * here — the message names both documents so a reader can see which moved.
+ */
+const findVerdictMismatches = (markdown) => {
+  const arms = verdictArms();
+  if (arms.length === 0) return [];
+  const known = new Set(arms.map(({ reproposed, total }) => `${reproposed}/${total}`));
+  const seen = new Set();
+  const mismatches = [];
+  for (const match of markdown.matchAll(/\((\d+)\/(\d+)\)/g)) {
+    const fraction = `${match[1]}/${match[2]}`;
+    // Arm sizes are in the hundreds. A small fraction in this prose is an
+    // ordinary count — "2 of 2 routes" — and matching it would drown the real
+    // signal in noise the first time anyone writes one.
+    if (Number(match[2]) < 100) continue;
+    if (known.has(fraction) || seen.has(fraction)) continue;
+    seen.add(fraction);
+    mismatches.push(fraction);
+  }
+  return mismatches;
+};
+
 const findStrays = (markdown) =>
   STRAY_STATISTIC_PATTERNS.filter(({ pattern }) => pattern.test(markdown));
 
@@ -143,6 +197,20 @@ const main = () => {
       return 1;
     }
     readmes.push({ file, markdown: fs.readFileSync(file, 'utf8'), relative: relativePath(file) });
+  }
+
+  for (const { relative, markdown } of readmes) {
+    const mismatches = findVerdictMismatches(markdown);
+    if (mismatches.length > 0) {
+      // stdout, not stderr: this is a notice, not a failure, and
+      // test/readme-numbers.test.ts asserts stderr is empty precisely so that
+      // "the checker said something" keeps meaning "something is wrong".
+      process.stdout.write(
+        `${relative}: ${mismatches.join(', ')} not in bench/VERDICT-M5.md's registered table ` +
+          `(${verdictArms().map(({ arm, reproposed, total }) => `${arm} ${reproposed}/${total}`).join(', ')}). ` +
+          `One of the two documents is stale; see #590. Not failing the build yet.\n`,
+      );
+    }
   }
 
   if (!generation.provenanceRecorded) {

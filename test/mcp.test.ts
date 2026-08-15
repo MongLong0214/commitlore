@@ -733,6 +733,10 @@ describe('commitlore_query', () => {
       'notes',
       'paths',
       'records',
+      // #631: which build answered. Listed here because this assertion is what
+      // catches a field leaving both surfaces at once — the same reason it must
+      // catch one arriving.
+      'runtime',
       'scanned',
       'unreadCommits',
     ]);
