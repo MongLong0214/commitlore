@@ -62,6 +62,11 @@ describe('#527 auto status', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('policy permits host-driven capture');
+    // The headline must not read as a running system (#550): the policy being
+    // permissive is a setting, and a reader who stops at the first line must
+    // not come away believing capture happens by itself.
+    expect(result.stdout).toContain('nothing initiates it on its own');
+    expect(result.stdout.split('\n')[0]).not.toMatch(/capture: on\b/);
     expect(result.stdout).toContain('ordinary git commits only apply a staged transaction');
     expect(result.stdout).toContain('commitlore_prepare_capture');
   });
