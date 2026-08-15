@@ -165,6 +165,44 @@ describe('dogfooding: this repository obeys its own protocol', () => {
     expect(missing, `\n${missing.join('\n')}\n`).toEqual([]);
   });
 
+  /**
+   * #652: this repository publishes its history, so an agent session identifier
+   * in a commit message is published too. Two are already there —
+   * `fc1009b` and `97c6b45`, both merged before anything checked — and `main`
+   * forbids force pushes, so they are permanent. Rewriting public history does
+   * not un-publish anything; it only breaks every clone that has it.
+   *
+   * So the baseline is those two, by sha, and the check is that the list does
+   * not grow. A baseline that named the trailer *key* would have been defeated
+   * on its first attempt: `Claude-Session:` was refused by SPEC section 3 and
+   * came back as `X-Claude-Session:`, which the extension slot accepts. The
+   * protocol is right to accept it — `X-<Name>` is an organization's own space
+   * — which is why this is a repository policy and not a schema rule.
+   *
+   * Matching is on the value's shape rather than the key's name, so the next
+   * tool's identifier is caught without anyone maintaining a list of vendors.
+   */
+  it('no new commit publishes an agent session identifier', () => {
+    // Permanent, and not being rewritten. Recorded by sha so a later commit
+    // reusing the same shape is not silently forgiven along with them.
+    const PUBLISHED = new Set([
+      'fc1009bdc7406cbd25766af6a276b5ffc92e0369',
+      '97c6b455705605980b89b66cd4626c1dc4a20da6',
+      '8a49ddc9f76b4fc65c03fc874a8478ce3ca2f860',
+    ]);
+    const SESSION_VALUE = /(?:\bclaude\.ai\/code\/session[_/]|\bsession[_-][0-9a-z]{16,})/i;
+
+    const offenders = history
+      .filter((entry) => !PUBLISHED.has(entry.sha))
+      .filter((entry) => entry.trailers.some((t) => SESSION_VALUE.test(t.value)))
+      .map((entry) => `${entry.sha.slice(0, 7)} ${entry.subject}`);
+
+    expect(
+      offenders,
+      `\n${offenders.join('\n')}\n\nremove the session identifier from the message; this repository is public\n`,
+    ).toEqual([]);
+  });
+
   it('Record-Ids are unique across the history', () => {
     const collisions = findIdCollisions(
       withRecords.map((entry) => ({ ...entry, source: 'commit' as const })),
