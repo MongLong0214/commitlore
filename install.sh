@@ -802,10 +802,24 @@ EOF
 # Claude Code -- https://code.claude.com/docs/en/discover-plugins#install-plugins
 has_claude_code() { command -v claude >/dev/null 2>&1; }
 wire_claude_code() {
+  # An already-installed plugin is the upgrade case, not a reason to stop
+  # (#660). Returning here meant a release reached the CLI wrapper and never
+  # the plugin cache: `claude plugin list` says commitlore is installed, and
+  # the copy it names stays at whatever version installed it. Four generations
+  # accumulated that way, and v1.0.0 joined them without displacing one.
+  #
+  # `marketplace update` is the step that was missing. Adding a marketplace
+  # that is already present is a no-op, so the old path could never see a new
+  # version even when it did run.
   installed_plugins="$(claude plugin list 2>/dev/null || true)"
   case "$installed_plugins" in
     *commitlore*)
-      record_skipped "claude-code" "the commitlore plugin is already installed -- left unchanged"
+      if claude plugin marketplace update commitlore >/dev/null 2>&1 &&
+        claude plugin install commitlore@commitlore --scope user >/dev/null 2>&1; then
+        record_wired "claude-code: refreshed the commitlore plugin to this version (restart running sessions to load it)"
+      else
+        record_skipped "claude-code" "the commitlore plugin is installed but could not be refreshed -- run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore"
+      fi
       return
       ;;
   esac
