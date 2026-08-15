@@ -276,12 +276,12 @@ rather than in a review comment after.
 
 **Whether it acts on that is now measured.** Across 1,160 registered runs, an
 agent handed the repository's active records re-proposed a ruled-out approach in
-**2.7%** of them (16/585). Without them: **18.8%** (110/584).
+**2.8%** of them (16/580). Without them: **18.8%** (109/579).
 
 | arm | re-proposed a ruled-out approach |
 |---|---:|
-| the agent alone | **18.8%** (110/584) |
-| **with CommitLore** | **2.7%** (16/585) |
+| the agent alone | **18.8%** (109/579) |
+| **with CommitLore** | **2.8%** (16/580) |
 
 **The threshold was registered before the run**, and the preregistration
 predicted a *smaller* effect than it got — that prediction, with its stated

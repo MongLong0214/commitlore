@@ -726,6 +726,7 @@ describe('commitlore_query', () => {
       'at',
       'command',
       'counts',
+      'coverage',
       'diagnostics',
       'follow',
       'fromIndex',

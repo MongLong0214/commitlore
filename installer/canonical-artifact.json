@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "adec825de9abfadf1da96b59ef058ded068ad0fe03fd580f5f003f5baa9b106c"
+    "sha256": "7fccba17a6a6ab128756546212fe3d4e12a8eaf56a21ce7bb00ea493d3fad75a"
   },
   "artifact": {
-    "sha256": "195e11fb799c5e8ce47700ac1807cc4b83e128d8fe50166926cd785f026bb73f",
+    "sha256": "3daada0177696d1e51bb33ff537c9d730253617f5b73ffa568d348bff6a8de32",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -514,15 +514,15 @@
       },
       {
         "path": "dist/commands/query.d.ts",
-        "sha256": "4960e0f19b68b4711801b268f828ec6298e02a2273375058b859e87a5b6ad9de"
+        "sha256": "42b01331b146195a6bb18189a74c5786560b9991b57bb126fb913affc10bbb73"
       },
       {
         "path": "dist/commands/query.js",
-        "sha256": "af6a30dedd10a673177f031cdbfcec23326225cc4701b242ef199c6c34b21828"
+        "sha256": "4dfa9d1e09698873b413761ab2a7da28a01ebb28c4ac04773d1425429202f257"
       },
       {
         "path": "dist/commands/query.js.map",
-        "sha256": "274eb8ed4ebcc3335020945cd8641280c777b3325ec6ea88e36333a9c5c44226"
+        "sha256": "80e276081f7d2a66d1cbc077417faad5bf2e8374c0a5a26e724de4d1e795aa43"
       },
       {
         "path": "dist/commands/squash-preserve.d.ts",
@@ -586,7 +586,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "5d3d2fc4871485a1604ad20f0cdd8d0a52173d372e551447abd238f1a1e7c00b"
+        "sha256": "9bad7d49d94611561b6d5f1c4da72164f3f604492dacb557f33b76b300c33536"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -914,15 +914,15 @@
       },
       {
         "path": "dist/core/runtime-identity.d.ts",
-        "sha256": "0f69891688dc23dc9652a57ac477ed0d6dfe25a74927b09a797cd4422c448beb"
+        "sha256": "9be94e1e657daaed30b4c22812d6be9e5623f5753f6918d04f6965ad17235f12"
       },
       {
         "path": "dist/core/runtime-identity.js",
-        "sha256": "158f4ea918594c0f95a91977bd3614ec9956706021fea1f00aa0e3ce1ebb0b59"
+        "sha256": "6ede22eb74f6442862711f539a32092cab3c3a940ac8df79f6a17a275830fcc6"
       },
       {
         "path": "dist/core/runtime-identity.js.map",
-        "sha256": "61ac12c45dbbb578c08b38fb591fad85092c3431e5a6f23933b5ddd5582b3e99"
+        "sha256": "26cf1f2a5debf051ca2adc8e4875a6ac0718cfbc18eec02c5026dc7f82f482bf"
       },
       {
         "path": "dist/core/schema.d.ts",

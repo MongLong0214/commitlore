@@ -17,6 +17,7 @@ export interface RuntimeIdentity {
  * running installation, even when tests launched Node from somewhere else.
  */
 export declare const runtimeIdentity: (entrypoint?: string) => RuntimeIdentity;
+export declare const buildId: (entrypoint?: string) => string;
 export declare const runtimeAssetProblems: (identity: RuntimeIdentity) => string[];
 export interface IdentityDiagnosis {
     readonly ok: boolean;

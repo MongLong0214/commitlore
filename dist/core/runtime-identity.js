@@ -5,6 +5,7 @@
  * checkout and MCP hosts retain a process.  This one value is deliberately
  * built from the entry file's own package, never from the caller's cwd.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { SCHEMA_VERSION } from './index-db.js';
@@ -41,6 +42,36 @@ export const runtimeIdentity = (entrypoint) => {
         packageRoot: physicalPath(root),
         indexSchemaVersion: typeof schema === 'number' && Number.isInteger(schema) ? schema : SCHEMA_VERSION,
     };
+};
+/**
+ * A privacy-safe identifier for the build that is answering.
+ *
+ * #660 found four installations at once, three of them reporting `0.8.0`, so a
+ * version cannot separate generations. The path can, but a path is local
+ * filesystem detail and does not belong in an answer a client stores or
+ * forwards — so the bundle's own digest stands in for it: same discriminating
+ * power, nothing about where it lives.
+ *
+ * Memoized because it is read on every answer and the file does not change
+ * while the process runs.
+ */
+let cachedBuildId = null;
+export const buildId = (entrypoint) => {
+    if (entrypoint === undefined && cachedBuildId !== null)
+        return cachedBuildId;
+    const target = physicalPath(entrypoint ?? installedPath('dist', 'commitlore.mjs'));
+    let id;
+    try {
+        id = createHash('sha256').update(readFileSync(target)).digest('hex').slice(0, 12);
+    }
+    catch {
+        // A bundle that cannot be read is still an answer; it just cannot be
+        // attributed. Saying so beats inventing an identifier.
+        id = 'unknown';
+    }
+    if (entrypoint === undefined)
+        cachedBuildId = id;
+    return id;
 };
 /** Assets read by the capture path rather than supplied by a host. */
 const CAPTURE_ASSETS = ['spec/schema/record.schema.json'];
