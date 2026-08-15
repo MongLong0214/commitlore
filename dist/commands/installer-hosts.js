@@ -204,6 +204,24 @@ const cliHost = async (host, wrapper) => {
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Codex registration added and live-verified' }
         : { host, requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
+/**
+ * Refresh the marketplace, then install. Reported healthy only when both
+ * succeed — a plugin that is present at an old version is the case this exists
+ * to fix, so "already installed" is not success.
+ */
+const claudePluginHost = () => {
+    const host = 'claude-code';
+    const run = (args) => spawnSync('claude', args, { stdio: 'ignore', shell: false, timeout: 60_000 }).status;
+    if (run(['plugin', 'marketplace', 'add', 'MongLong0214/commitlore']) === null) {
+        return { host, requested: true, outcome: 'failed', healthy: false, detail: 'claude plugin marketplace add could not run' };
+    }
+    // Already-added is not an error, and update is what makes a new version
+    // visible. Both are attempted; only the install decides the verdict.
+    run(['plugin', 'marketplace', 'update', 'commitlore']);
+    return run(['plugin', 'install', 'commitlore@commitlore', '--scope', 'user']) === 0
+        ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)' }
+        : { host, requested: true, outcome: 'failed', healthy: false, detail: 'claude plugin install failed — run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore' };
+};
 export const inspectAndApplyHosts = async (options) => {
     const requested = [];
     const notDetected = [];
@@ -238,6 +256,24 @@ export const inspectAndApplyHosts = async (options) => {
     }
     else
         notDetected.push('hermes');
+    /**
+     * Claude Code, which was in neither list until now (#689).
+     *
+     * `install.sh` defines `has_claude_code` and `wire_claude_code` and calls
+     * neither; this enumeration had no branch for it. So the plugin cache went
+     * untouched by every release and nothing said so — `notDetected: []` read as
+     * "every host was detected", which is how a missing host stays missing.
+     *
+     * It is a marketplace plugin rather than an MCP registration, so it needs the
+     * marketplace refreshed before installing: adding one that is already present
+     * is a no-op, and without the refresh a reinstall reinstates the same version
+     * (#660).
+     */
+    if (hasCommand('claude')) {
+        requested.push(Promise.resolve(claudePluginHost()));
+    }
+    else
+        notDetected.push('claude-code');
     const hosts = await Promise.all(requested);
     return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
