@@ -195,6 +195,28 @@ cannot catch.
   explicit check-run set rather than inferred from a local test run or a branch
   badge. A local suite passed at every one of the three commits where CI was red.
 
+## 6b. Someone reads `main` after the merge (#665)
+
+A merge that satisfies section 5 can still break `main`, and did: a PR whose own
+checks were green merged, `main` went red, and nothing noticed for two hours.
+Nobody was at fault — the checks measured the PR's head, and the merge produced a
+commit that had never been tested.
+
+So the merge is not the last step:
+
+- After every merge to `main`, read the check runs **at the resulting `main` head
+  SHA**, not at the PR's head and not at "the latest run on main". Those are three
+  different commits and only the first one is the thing users get.
+- A red `main` stops the next merge. Fixing forward is fine; merging on top of a
+  red `main` is how one failure hides another, which is what turned two hours into
+  a second incident.
+- `0` failing is not the same as `0` checks. A head with no check runs attached
+  has not been measured, and "no failures" reads identically in both cases.
+
+This is a human or agent step on purpose. Automatic notification is not in this
+product's scope, and adding a watcher here would be a feature to maintain in place
+of a habit to keep.
+
 ## 7. The suite proves something
 
 - `npx vitest run` green, and the run reports `Test Files N passed` — a bare test
@@ -211,6 +233,11 @@ question this project publishes rather than hides. Correctness of the tool is no
 contingent on the effect being large; a tool that answers honestly is shippable
 whether or not the answer turns out to matter.
 
-**Zero open issues.** The six that remain are features on the four defensible
-axes, each argued for from a measurement or a reproduced defect (ADR-0013). A
-backlog is a sign of a scope, not of incompleteness.
+**Zero open issues.** A backlog is a sign of a scope, not of incompleteness. What
+this gate requires is that every remaining issue has a disposition — fixed,
+duplicate, or deliberately out of scope with the reason recorded — rather than
+that the list is empty.
+
+**An automatic alarm on a red `main`.** Section 6b is a step someone takes, not a
+watcher this project runs. The incident it comes from was a missing habit, and a
+watcher would be a second thing to keep working.

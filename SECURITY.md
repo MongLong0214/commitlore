@@ -30,10 +30,25 @@ serves. The parts where that matters:
   instructions aimed at that agent is a vulnerability. So is any path that
   restores withheld content — a field that escapes redaction, a command that
   prints the raw trailer.
-- **Trust grading that overstates.** `[directive]` means a trusted author of the
-  repository recorded it. Anything that lets an untrusted commit be served at
-  that grade — a forged signature check, a spoofed author, an unverified
-  provenance value promoted to `authored` — is a vulnerability.
+- **Trust grading that overstates.** What `[directive]` promises depends on
+  which mode the repository configured, and the two are not the same claim:
+
+  | mode | `[directive]` means | an attacker who can commit |
+  |---|---|---|
+  | author string (default) | the commit's author matched this repository's allowlist | **can produce one** — an author string is not a credential |
+  | `commitlore.requireSignedDirective=true` | git verified a signature whose fingerprint is on this repository's allowlist | cannot, without the key |
+
+  In the default mode, `[directive]` says *someone claiming to be a trusted
+  author wrote this*, and anyone able to write a commit can set the author
+  string. That is not a defect — it is what an unsigned repository can know —
+  but it is a weaker statement than the signed mode's, and treating the two as
+  one claim is how a reader over-trusts the default.
+
+  A vulnerability is a grade that exceeds its own mode: a forged signature check
+  or an allowlist bypass under signed mode, an unverified `Provenance:` promoted
+  to `authored`, or any path that serves `[directive]` where the configured mode
+  did not authorize it. Author spoofing under the default mode is not one — see
+  *What is not*.
 - **Capture writing what it was not given.** `verify_capture` exists so that a
   record is checked against the diff it claims to describe. A route that stages
   a record without that check, or that accepts evidence the transaction never
@@ -54,5 +69,12 @@ serves. The parts where that matters:
   it is the label for exactly this.
 - The SQLite index being stale, corrupt, or deleted. It is a derived cache
   (ADR-0003); git is the source of truth and the index rebuilds.
+- **Author spoofing under the default trust mode.** An author string is not a
+  credential and CommitLore does not present it as one. A repository that needs
+  `[directive]` to survive a hostile committer sets
+  `commitlore.requireSignedDirective=true` and a `commitlore.trustedSigner`
+  fingerprint allowlist; without that, the grade means what the table above says
+  it means. Reports that the default mode can be spoofed describe the documented
+  behaviour of the default mode.
 - Anything requiring an attacker who can already write to the repository or run
   as your user. At that point they can commit directly.
