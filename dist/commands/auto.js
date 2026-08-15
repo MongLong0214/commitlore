@@ -85,7 +85,14 @@ const printStatus = (result, json) => {
         process.stdout.write('  unattended start: disabled by policy\n');
     }
     else {
-        process.stdout.write(`unattended capture: ${result.unattended === true ? 'on — policy permits host-driven capture' : 'off'}\n`);
+        process.stdout.write(
+        // Not "on" (#550, #527). A bare `on` is true of the policy and read as
+        // true of the system, in the position where a reader stops. The lines
+        // below already say nothing initiates capture on its own; a headline that
+        // contradicts them is the one people believe.
+        `unattended capture: ${result.unattended === true
+            ? 'policy permits host-driven capture — nothing initiates it on its own'
+            : 'off'}\n`);
         process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")\n`);
         if (result.unattended) {
             process.stdout.write('  unattended start: an agent host must initiate capture; init installs no initiator\n');
