@@ -97,6 +97,49 @@ What still holds: execution correctness is unaffected. A registration that works
 is verified normally, and one that is genuinely broken is still reported as
 unverified — a user is never told a broken registration is healthy.
 
+## After upgrading, run `doctor` (#693)
+
+An upgrade updates the CLI. It does not reach two things:
+
+- **Hooks already installed in a repository.** `commitlore hooks install` records
+  the exact bundle it ran from, which pins that repository to one release. The
+  installer cannot fix this for you — it has no way to know which repositories
+  have hooks.
+- **Sessions already running.** A host loads its runtime once and keeps it.
+
+So after installing a new version:
+
+```sh
+commitlore doctor
+```
+
+Two warnings are the ones to expect and act on:
+
+```
+runtime identity — hook identity differs from CLI: hook v<old>; CLI v<new>
+  fix: commitlore hooks install          # run it in that repository
+
+live MCP runtime identity — N live CommitLore MCP runtime(s) are unusable
+  restart those sessions                 # a host keeps the runtime it loaded
+```
+
+Neither is a defect in the release. Both are state a release cannot reach, and
+`doctor` naming them is the product doing what it can — which is to say what it
+knows rather than to guess that everything is current.
+
+### Why the hook records a version
+
+It is deliberate. The recorded path makes the hook independent of `PATH` and of
+whatever `node_modules/.bin/commitlore` sits above the repository, and the
+interpreter is recorded beside it because a hook runs where `PATH` may carry no
+`node` at all. A launcher that resolves through `PATH` would undo both — which
+was measured, not assumed: recording the `bin` wrapper made hooks fail under the
+restricted `PATH` a hook actually runs in.
+
+Making the recorded path version-free without losing those properties needs a
+stable directory the installer maintains, and that is tracked in #693 rather than
+improvised.
+
 ## Prerequisites
 
 Two columns, because **required** and **checked** are not the same claim. Only
