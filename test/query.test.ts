@@ -1695,6 +1695,7 @@ describe('--json', () => {
           "ruledOut": 0,
           "warnings": 0,
         },
+        "coverage": "complete",
         "diagnostics": [],
         "follow": true,
         "fromIndex": true,
@@ -1808,6 +1809,7 @@ describe('--json', () => {
       // snapshot refresh — this is a documented schema a client reads, so a new
       // field is a contract change and belongs in the pinned shape.
       runtime: { version: expect.any(String), build_id: expect.any(String) },
+      coverage: expect.any(String),
       at: '2026-01-20T00:00:00.000Z',
       paths: [],
       aliases: [],

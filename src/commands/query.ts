@@ -251,6 +251,8 @@ export interface JsonOutput {
   command: string;
   /** Which build answered — version and the bundle it ran from (#631). */
   runtime: { version: string; build_id: string };
+  /** Whether this answer read everything it was asked about (#631, #669). */
+  coverage: 'complete' | 'partial';
   at: string;
   paths: string[];
   aliases: string[];
@@ -331,6 +333,9 @@ export const toJson = (command: string, result: QueryResult): JsonOutput => {
      * divergence it exists to expose.
      */
     runtime: { version: runtime.version, build_id: buildId() },
+    // #669 put this on the query result; it never reached the answer a client
+    // reads, which is the only place it does any work.
+    coverage: presented.coverage,
     at: presented.at.toISOString(),
     paths: presented.paths,
     aliases: presented.aliases,

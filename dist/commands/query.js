@@ -16,7 +16,7 @@
  * nothing is not an error), and a query that exits non-zero on an empty answer
  * would make every agent treat "nothing to know here" as a failure.
  */
-import { runtimeIdentity } from '../core/runtime-identity.js';
+import { buildId, runtimeIdentity } from '../core/runtime-identity.js';
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
 import { CONSUMER_SCAN_BUDGET_MS, LIMIT_KEY, RULED_OUT_KEY, WARN_KEY, runQuery, valuesOf, } from '../core/query.js';
 import { validateRecord } from '../core/schema.js';
@@ -195,7 +195,10 @@ export const toJson = (command, result) => {
          * both of them serialize through; adding it to one would create exactly the
          * divergence it exists to expose.
          */
-        runtime: { version: runtime.version, entrypoint: runtime.entrypoint },
+        runtime: { version: runtime.version, build_id: buildId() },
+        // #669 put this on the query result; it never reached the answer a client
+        // reads, which is the only place it does any work.
+        coverage: presented.coverage,
         at: presented.at.toISOString(),
         paths: presented.paths,
         aliases: presented.aliases,

@@ -18640,6 +18640,7 @@ import { lstatSync, realpathSync as realpathSync3, statSync as statSync4 } from 
 import { isAbsolute as isAbsolute2, relative, resolve as resolve7, sep } from "node:path";
 
 // src/core/runtime-identity.ts
+import { createHash as createHash6 } from "node:crypto";
 import { existsSync as existsSync8, readFileSync as readFileSync9, realpathSync as realpathSync2 } from "node:fs";
 import { dirname as dirname5, join as join5, resolve as resolve6 } from "node:path";
 var physicalPath = (path2) => {
@@ -18667,6 +18668,19 @@ var runtimeIdentity = (entrypoint) => {
     packageRoot: physicalPath(root),
     indexSchemaVersion: typeof schema === "number" && Number.isInteger(schema) ? schema : SCHEMA_VERSION
   };
+};
+var cachedBuildId = null;
+var buildId = (entrypoint) => {
+  if (entrypoint === void 0 && cachedBuildId !== null) return cachedBuildId;
+  const target = physicalPath(entrypoint ?? installedPath("dist", "commitlore.mjs"));
+  let id;
+  try {
+    id = createHash6("sha256").update(readFileSync9(target)).digest("hex").slice(0, 12);
+  } catch {
+    id = "unknown";
+  }
+  if (entrypoint === void 0) cachedBuildId = id;
+  return id;
 };
 var CAPTURE_ASSETS2 = ["spec/schema/record.schema.json"];
 var runtimeAssetProblems = (identity) => CAPTURE_ASSETS2.map((asset) => join5(identity.packageRoot, asset)).filter((path2) => !existsSync8(path2));
@@ -21773,7 +21787,7 @@ import {
 import { join as join12, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
-import { createHash as createHash6, randomBytes as randomBytes5 } from "node:crypto";
+import { createHash as createHash7, randomBytes as randomBytes5 } from "node:crypto";
 import { chmodSync, existsSync as existsSync15, mkdirSync as mkdirSync5, readFileSync as readFileSync15, readdirSync as readdirSync3, renameSync as renameSync4, writeFileSync as writeFileSync8 } from "node:fs";
 import { resolve as resolve12 } from "node:path";
 
@@ -21913,7 +21927,7 @@ var runPostCommitFinaliser = (cwd) => {
     if (pending.staged_tree_oid !== committedTree) continue;
     if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
     const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
-    const expectedHash = createHash6("sha256").update(canonicalBlock).digest("hex");
+    const expectedHash = createHash7("sha256").update(canonicalBlock).digest("hex");
     if (pending.applied_record_hash !== expectedHash) continue;
     try {
       consumePending(pending.nonce, headSha2, { cwd });
@@ -22102,7 +22116,7 @@ var register7 = (program3) => {
 };
 
 // src/hooks/prepare-commit-msg.ts
-import { createHash as createHash7, randomBytes as randomBytes7 } from "node:crypto";
+import { createHash as createHash8, randomBytes as randomBytes7 } from "node:crypto";
 import { chmodSync as chmodSync3, existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync17, readdirSync as readdirSync4, renameSync as renameSync6, rmSync as rmSync3, writeFileSync as writeFileSync10 } from "node:fs";
 import { resolve as resolve14 } from "node:path";
 var PREPARE_COMMIT_MSG_HOOK_MARKER = "# commitlore:prepare-commit-msg:v1";
@@ -22274,7 +22288,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const currentHead = headResult.stdout.trim();
   const diffResult = execGit(["diff", "--cached"], { cwd });
   if (diffResult.code !== 0) return;
-  const currentDiffHash = createHash7("sha256").update(diffResult.stdout).digest("hex");
+  const currentDiffHash = createHash8("sha256").update(diffResult.stdout).digest("hex");
   const currentPolicyHash = resolvePolicy(cwd).identityHash;
   const now = Date.now();
   let currentMessage;
@@ -22308,7 +22322,7 @@ var applyCaptureRecord = (messageFile, cwd) => {
   if (!trailerBlock) return;
   const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
-  const recordHash = createHash7("sha256").update(trailerBlock).digest("hex");
+  const recordHash = createHash8("sha256").update(trailerBlock).digest("hex");
   try {
     markApplied(pending.nonce, recordHash, { cwd });
   } catch {
@@ -24098,7 +24112,7 @@ import { readFileSync as readFileSync24, realpathSync as realpathSync5 } from "n
 import { basename as basename4, dirname as dirname11, isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
-import { createHash as createHash8 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 var NO_ABLATION = { noScope: false, noGrade: false, noLifecycle: false };
 var resolveAblation = (flags) => flags === void 0 ? NO_ABLATION : {
   noScope: flags.noScope === true,
@@ -24318,7 +24332,7 @@ var cacheKeyOf = (parts) => {
     // onto one key rather than two.
     ...parts.ablation.length === 0 ? [] : [parts.ablation]
   ]);
-  return createHash8("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
+  return createHash9("sha256").update(canonical2).digest("hex").slice(0, CACHE_KEY_CHARS);
 };
 var resolveBudget = (budget) => {
   if (budget === void 0) return DEFAULT_BUDGET_TOKENS;
@@ -33576,7 +33590,10 @@ var toJson2 = (command, result) => {
      * both of them serialize through; adding it to one would create exactly the
      * divergence it exists to expose.
      */
-    runtime: { version: runtime.version, entrypoint: runtime.entrypoint },
+    runtime: { version: runtime.version, build_id: buildId() },
+    // #669 put this on the query result; it never reached the answer a client
+    // reads, which is the only place it does any work.
+    coverage: presented.coverage,
     at: presented.at.toISOString(),
     paths: presented.paths,
     aliases: presented.aliases,
@@ -33920,7 +33937,7 @@ var register20 = (program3) => {
 };
 
 // src/core/before-change.ts
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash10 } from "node:crypto";
 var deriveVerificationGaps = (cwd) => {
   const gaps = [];
   const history = historyAvailability(cwd);
@@ -33955,12 +33972,12 @@ var resolveHead2 = (cwd) => {
 };
 var buildCacheKey = (head, path2, proposal, at) => {
   const lifecycleInstant = at.toISOString();
-  const pathHash = createHash9("sha256").update(path2).digest("hex").slice(0, 16);
+  const pathHash = createHash10("sha256").update(path2).digest("hex").slice(0, 16);
   if (proposal === void 0) {
     return `ctx:${head}:${lifecycleInstant}:${pathHash}`;
   }
   const normalised = proposal.trim().replace(/\s+/g, " ");
-  const proposalHash = createHash9("sha256").update(normalised).digest("hex").slice(0, 16);
+  const proposalHash = createHash10("sha256").update(normalised).digest("hex").slice(0, 16);
   return `full:${head}:${lifecycleInstant}:${pathHash}:${proposalHash}`;
 };
 var beforeChange = (opts) => {
