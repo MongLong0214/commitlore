@@ -83,13 +83,13 @@ Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や
 **その他のコーディングエージェント** — CLI をインストールします:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh | sh -s v1.0.0
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh -s v1.0.1
 ```
 
 **Windows** — PowerShell で同じインストールを行います:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.ps1))) v1.0.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.ps1))) v1.0.1
 ```
 
 **Hermes** — CLI をインストールした後、host integration を設定します:
@@ -129,11 +129,11 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh
-sh install.sh v1.0.0
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh
+sh install.sh v1.0.1
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v1.0.0 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.0.1 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh | sh -s v1.0.0
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh -s v1.0.1
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -806,7 +806,7 @@ wire_claude_code() {
   # (#660). Returning here meant a release reached the CLI wrapper and never
   # the plugin cache: `claude plugin list` says commitlore is installed, and
   # the copy it names stays at whatever version installed it. Four generations
-  # accumulated that way, and v1.0.0 joined them without displacing one.
+  # accumulated that way, and v1.0.1 joined them without displacing one.
   #
   # `marketplace update` is the step that was missing. Adding a marketplace
   # that is already present is a no-op, so the old path could never see a new
