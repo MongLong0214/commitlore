@@ -40,6 +40,31 @@ Reachability is not support. A script that runs on a host says nothing about
 whether the properties the product depends on hold there, and the two are kept
 apart on purpose.
 
+### A diagnosis this product cannot make (#657)
+
+`doctor` probes a registered MCP command by starting it and waiting for the
+protocol. On Windows, a `.cmd` launcher naming an interpreter that is not on disk
+produces no signal at all: `cmd.exe` exits silently, nothing ever speaks, and the
+probe waits out its budget and reports `initialize-timed-out`.
+
+Measured on `windows-latest` with three independent drivers, so this is the
+host's behaviour rather than a defect in the probe.
+
+The consequence is that **two different faults share one report**: a registration
+that is slow, and a registration whose interpreter does not exist. `doctor` says
+*could not verify this time* for both, which is honest about what it observed and
+silent about which of the two it was.
+
+This is accepted rather than fixed. Distinguishing them would mean inspecting the
+launcher's contents and resolving the interpreter it names — reimplementing part
+of the host's own command resolution, in a place where being subtly wrong would
+produce a confident diagnosis that is false. A timeout that names both
+possibilities is the weaker claim and the true one.
+
+What still holds: execution correctness is unaffected. A registration that works
+is verified normally, and one that is genuinely broken is still reported as
+unverified — a user is never told a broken registration is healthy.
+
 ## Prerequisites
 
 Two columns, because **required** and **checked** are not the same claim. Only
