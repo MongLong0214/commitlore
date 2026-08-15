@@ -23991,7 +23991,8 @@ var runHermesInstall = (options = {}) => {
   const configPath = options.configPath ?? (hermesHome === void 0 ? join15(home, ".hermes", "config.yaml") : join15(hermesHome, "config.yaml"));
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join15(home, ".local", "share");
   const dataRoot = options.dataRoot ?? join15(dataHome, "commitlore");
-  const skillsDir = options.skillsDir ?? installedPath("hermes", "skills");
+  const versionedSkills = join15(dataRoot, `v${runtimeIdentity().version}`, "hermes", "skills");
+  const skillsDir = options.skillsDir ?? (existsSync21(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
   const detected = options.detected ?? (existsSync21(dirname10(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
