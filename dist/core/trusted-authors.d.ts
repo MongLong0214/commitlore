@@ -74,6 +74,21 @@ export declare const configuredDirectiveTrustSetting: (cwd: string, git?: typeof
  * parse is the strong one.
  */
 export declare const configuredSignedDirectivesRequired: (cwd: string, git?: typeof execGit) => boolean;
+/**
+ * An identifier for the keys this machine can verify with, or `null` outside
+ * signature mode (#653).
+ *
+ * Git's `%G?` is not a property of the repository. It is the verdict of
+ * whichever process ran `git log`, and it depends on the keys that process
+ * could reach — so anything that caches it is caching an answer about a
+ * particular keyring. Binding the cache to this identifier lets a reader tell
+ * whether the stored verdict is still about the keyring it has now, which is
+ * the difference between a cache and a stale claim about authority.
+ *
+ * Only signature mode pays for it: the setting is opt-in, and this is the one
+ * place where a `%G?` can decide whether a record directs an agent.
+ */
+export declare const signatureVerifierGeneration: (cwd: string, git?: typeof execGit) => string | null;
 export interface TrustSeedResult {
     readonly recorded: boolean;
     readonly author: string | null;

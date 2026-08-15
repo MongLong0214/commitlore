@@ -181,7 +181,8 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
     const lines = commitloreLines(result.stderr);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('notes mirror (origin) failed');
-    expect(lines[0]).toContain('branch push continues');
+    expect(lines[0], 'the operator is told the branch went out').toContain('The branch was pushed');
+    expect(lines[0], 'and what became of the records, and whether to act').toContain('retries this automatically');
   }, 60_000);
 
   it('bounds a hanging notes transport without holding the branch push', async () => {
@@ -205,7 +206,8 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
     expect(result.elapsedMs).toBeLessThan(PRE_PUSH_NOTES_SYNC_TIMEOUT_MS * 3);
     const lines = commitloreLines(result.stderr);
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('branch push continues');
+    expect(lines[0], 'the operator is told the branch went out').toContain('The branch was pushed');
+    expect(lines[0], 'and what became of the records, and whether to act').toContain('retries this automatically');
   }, 60_000);
 
   it('disables terminal credential prompts and still lets the branch push through', async () => {
@@ -232,7 +234,8 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
       const lines = commitloreLines(result.stderr);
       expect(lines).toHaveLength(1);
       expect(lines[0]).toContain('terminal prompts disabled');
-      expect(lines[0]).toContain('branch push continues');
+      expect(lines[0], 'the operator is told the branch went out').toContain('The branch was pushed');
+    expect(lines[0], 'and what became of the records, and whether to act').toContain('retries this automatically');
     } finally {
       await new Promise<void>((resolveClose, rejectClose) => server.close((error) => error ? rejectClose(error) : resolveClose()));
     }

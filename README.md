@@ -276,12 +276,12 @@ rather than in a review comment after.
 
 **Whether it acts on that is now measured.** Across 1,160 registered runs, an
 agent handed the repository's active records re-proposed a ruled-out approach in
-**2.7%** of them (16/585). Without them: **18.8%** (110/584).
+**2.8%** of them (16/580). Without them: **18.8%** (109/579).
 
 | arm | re-proposed a ruled-out approach |
 |---|---:|
-| the agent alone | **18.8%** (110/584) |
-| **with CommitLore** | **2.7%** (16/585) |
+| the agent alone | **18.8%** (109/579) |
+| **with CommitLore** | **2.8%** (16/580) |
 
 **The threshold was registered before the run**, and the preregistration
 predicted a *smaller* effect than it got — that prediction, with its stated
@@ -527,7 +527,7 @@ Read a path's history with `commitlore context <path>`. Smaller examples, and ho
 ## What the repository proves
 
 - Decision history survives rebase, remote transfer, and path renames in the tested Git workflows. Squash-merge discards the trailer block, as any ordinary trailer would be: `commitlore squash-preserve` or its GitHub Action carries the records across, and the tested workflows cover that route.
-- Routes share one grading core, so untrusted text is information rather than an instruction — but a record has been observed grading differently through the CLI and through MCP when more than one CommitLore runtime was installed ([#631](https://github.com/MongLong0214/commitlore/issues/631), [#635](https://github.com/MongLong0214/commitlore/issues/635)).
+- Routes share one grading core, so untrusted text is information rather than an instruction — but the index caches a signature status, and a signature status is not a property of the repository. The same record can therefore grade `directive` on one route and `claim` on another from a single installation, if the index was built where the signing keys were not reachable. Comparing a route against `--no-index` tells you whether you are reading a stale verdict ([#653](https://github.com/MongLong0214/commitlore/issues/653), [#631](https://github.com/MongLong0214/commitlore/issues/631), [#635](https://github.com/MongLong0214/commitlore/issues/635)).
 - Injection-like text in free-form trailers is withheld from model-readable routes.
 - A readable repository with no records is distinct from incomplete history or an unfetched notes mirror.
 

@@ -6,10 +6,12 @@
  * and return its exit status.  Keeping the test, write, and outcome in one
  * process is what makes an installer success claim useful on both platforms.
  */
-import { accessSync, constants, existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
 import { delimiter, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { isMcpProbeFailure, probeMcp } from '../core/mcp-probe.js';
+import { runtimeIdentity } from '../core/runtime-identity.js';
 export const INSTALLER_HOSTS_SCHEMA = 'commitlore_installer_hosts.v1';
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const ownEntry = (format, entry, wrapper) => {
@@ -56,89 +58,6 @@ const atomicJsonWrite = (path, value) => {
         catch { /* renamed or never created */ }
     }
 };
-const executable = (command) => {
-    try {
-        if (statSync(command).isDirectory())
-            return 'command is a directory';
-        accessSync(command, constants.X_OK);
-        return null;
-    }
-    catch {
-        return 'command does not exist or is not executable';
-    }
-};
-/** Speak enough MCP to distinguish an executable from a usable CommitLore server. */
-export const probeMcp = async (command, args) => {
-    const unusable = executable(command);
-    if (unusable !== null)
-        return unusable;
-    return new Promise((resolve) => {
-        let settled = false;
-        const finish = (problem) => {
-            if (settled)
-                return;
-            settled = true;
-            child?.kill();
-            resolve(problem);
-        };
-        let child;
-        try {
-            child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], shell: false });
-        }
-        catch (error) {
-            finish(`could not start command: ${error instanceof Error ? error.message : String(error)}`);
-            return;
-        }
-        let buffer = '';
-        let initialized = false;
-        const timer = setTimeout(() => finish('MCP initialize timed out'), 5_000);
-        child.once('error', (error) => finish(`could not start command: ${error.message}`));
-        child.once('exit', (code) => {
-            if (!settled)
-                finish(`command exited before MCP verification (status ${String(code)})`);
-        });
-        child.stdout.setEncoding('utf8');
-        child.stdout.on('data', (chunk) => {
-            buffer += chunk;
-            const lines = buffer.split('\n');
-            buffer = lines.pop() ?? '';
-            for (const line of lines) {
-                let message;
-                try {
-                    message = JSON.parse(line);
-                }
-                catch {
-                    continue;
-                }
-                if (!initialized && message.id === 1) {
-                    const info = message.result?.serverInfo;
-                    if (info?.name !== 'commitlore' || typeof info.version !== 'string' || info.version === '') {
-                        clearTimeout(timer);
-                        finish('MCP initialize did not identify CommitLore with a version');
-                        return;
-                    }
-                    initialized = true;
-                    child?.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
-                }
-                else if (initialized && message.id === 2) {
-                    const tools = new Set((message.result?.tools ?? []).map((tool) => tool.name));
-                    clearTimeout(timer);
-                    finish(tools.has('commitlore_query') && tools.has('commitlore_before_change') ? null : 'MCP server lacks CommitLore minimum tools');
-                    return;
-                }
-            }
-        });
-        // A command that is not an MCP server usually proves it by exiting at once,
-        // and then this write lands on a closed pipe. Node delivers EPIPE as an
-        // `error` event on the stream, and an unhandled one takes the whole
-        // inspector down with it: the installer then exits non-zero having said
-        // nothing about any host — a worse answer than the `unhealthy` it was one
-        // step away from giving. Whether the write or the child's exit wins is a
-        // race, which is why this survived locally and died under CI load.
-        child.stdin.on('error', () => finish('command closed its input before MCP verification'));
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'commitlore-installer', version: '1' } } })}\n`);
-    });
-};
 const jsonHost = async (host, path, format, wrapper) => {
     let config;
     let existed = true;
@@ -167,8 +86,8 @@ const jsonHost = async (host, path, format, wrapper) => {
         if (launch === null)
             return { host, requested: true, outcome: 'failed', healthy: false, detail: 'commitlore registration has no runnable command and args' };
         const problem = await probeMcp(launch.command, launch.args);
-        if (problem !== null)
-            return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem}` };
+        if (isMcpProbeFailure(problem))
+            return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host, requested: true, outcome: ownEntry(format, entry, wrapper) ? 'owned' : 'custom-preserved', healthy: true, detail: ownEntry(format, entry, wrapper) ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
     config[key] = { ...group, commitlore: entryFor(format, wrapper) };
@@ -179,9 +98,9 @@ const jsonHost = async (host, path, format, wrapper) => {
         return { host, requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${error instanceof Error ? error.message : String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: existed ? 'registration added and live-verified' : 'registration created and live-verified' }
-        : { host, requested: true, outcome: 'failed', healthy: false, detail: `registration was written but is unhealthy: ${problem}` };
+        : { host, requested: true, outcome: 'failed', healthy: false, detail: `registration was written but is unhealthy: ${problem.detail}` };
 };
 const tomlRegistration = (source) => {
     const table = /^\s*\[mcp_servers\.commitlore\]\s*$/m.exec(source);
@@ -217,8 +136,8 @@ const tomlHost = async (path, wrapper) => {
     }
     if (existing !== null) {
         const problem = await probeMcp(existing.command, existing.args);
-        if (problem !== null)
-            return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem}` };
+        if (isMcpProbeFailure(problem))
+            return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host: 'codex', requested: true, outcome: existing.command === wrapper ? 'owned' : 'custom-preserved', healthy: true, detail: existing.command === wrapper ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
     const escaped = JSON.stringify(wrapper);
@@ -244,9 +163,9 @@ const tomlHost = async (path, wrapper) => {
         return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host: 'codex', requested: true, outcome: 'installed', healthy: true, detail: 'Codex config fallback added and live-verified' }
-        : { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem}` };
+        : { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 const hasCommand = (command) => (process.env.PATH ?? '').split(delimiter).some((directory) => {
     const path = join(directory, command);
@@ -271,8 +190,8 @@ const cliHost = async (host, wrapper) => {
             return { host, requested: true, outcome: 'failed', healthy: false, detail: 'codex CLI returned an unverifiable registration' };
         }
         const problem = await probeMcp(command, args);
-        if (problem !== null)
-            return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem}` };
+        if (isMcpProbeFailure(problem))
+            return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
         return { host, requested: true, outcome: command === wrapper && args.length === 1 && args[0] === 'mcp' ? 'owned' : 'custom-preserved', healthy: true, detail: command === wrapper && args.length === 1 && args[0] === 'mcp' ? 'healthy installer-owned registration' : 'healthy custom registration preserved' };
     }
     // A non-zero `get` with no registration is the Codex CLI's ordinary absence
@@ -281,9 +200,9 @@ const cliHost = async (host, wrapper) => {
     if (!added.ok)
         return { host, requested: true, outcome: 'failed', healthy: false, detail: 'codex mcp add failed' };
     const problem = await probeMcp(wrapper, ['mcp']);
-    return problem === null
+    return !isMcpProbeFailure(problem)
         ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Codex registration added and live-verified' }
-        : { host, requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem}` };
+        : { host, requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 export const inspectAndApplyHosts = async (options) => {
     const requested = [];
@@ -320,7 +239,7 @@ export const inspectAndApplyHosts = async (options) => {
     else
         notDetected.push('hermes');
     const hosts = await Promise.all(requested);
-    return { schema: INSTALLER_HOSTS_SCHEMA, ok: hosts.every((host) => host.healthy), hosts, notDetected };
+    return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
 export const register = (program) => {
     program.command('installer-hosts')

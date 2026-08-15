@@ -1,7 +1,8 @@
-import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { execGit } from './git.js';
-import { PACKAGE_ROOT, findPackageRoot, packageVersion } from './paths.js';
+import { PACKAGE_ROOT } from './paths.js';
+import { runtimeIdentity } from './runtime-identity.js';
 const configValue = (cwd, key) => execGit(['config', '--local', '--get', key], { cwd }).stdout.trim();
 const isFile = (path) => {
     try {
@@ -78,9 +79,7 @@ export const hasAllowedBinExtension = (path) => classifyBinTarget(path) !== null
  */
 const recordedVersion = (binPath) => {
     try {
-        const manifest = readFileSync(join(findPackageRoot(dirname(binPath)), 'package.json'), 'utf8');
-        const parsed = JSON.parse(manifest);
-        return typeof parsed.version === 'string' && parsed.version !== '' ? parsed.version : null;
+        return runtimeIdentity(binPath).version;
     }
     catch {
         // No manifest above it, unreadable, or not JSON. All three mean the same
@@ -104,7 +103,7 @@ const recordedVersion = (binPath) => {
  * green here costs a repository every fix shipped since the pin was written.
  */
 const versionProblems = (binPath) => {
-    const running = packageVersion();
+    const running = runtimeIdentity().version;
     const pinned = recordedVersion(binPath);
     if (pinned === null) {
         return [
@@ -118,6 +117,18 @@ const versionProblems = (binPath) => {
         `commitlore.bin is version ${pinned}, but this CLI is ${running} — the hook validates ` +
             `every commit with ${pinned}, so anything fixed since then does not apply here`,
     ];
+};
+/** The same identity the pinned hook will execute, if its file is readable. */
+export const recordedHookIdentity = (target, cwd) => {
+    if (target.bin === '')
+        return null;
+    const path = resolve(cwd, target.bin);
+    try {
+        return isFile(path) ? runtimeIdentity(path) : null;
+    }
+    catch {
+        return null;
+    }
 };
 export const readRecordedHookTarget = (cwd) => {
     const bin = configValue(cwd, 'commitlore.bin');

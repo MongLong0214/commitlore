@@ -23,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
-import { describeRecordedHookTarget, readRecordedHookTarget, } from '../core/hook-target.js';
+import { describeRecordedHookTarget, recordedHookIdentity, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT } from '../core/paths.js';
 import { CHAINED_HOOK_NAME, HOOK_MARKER, HOOK_MODE, HOOK_NAME, commitMsgStub, } from '../hooks/commit-msg.js';
 import { POST_COMMIT_CHAINED_HOOK_NAME, POST_COMMIT_HOOK_MARKER, POST_COMMIT_HOOK_NAME, } from '../hooks/post-commit.js';
@@ -221,13 +221,25 @@ export const installHook = (input = {}) => {
         return failure(`could not install the ${HOOK_NAME} hook: ${messageOf(error)}`);
     }
     const after = readHookStatus(cwd);
+    // `unchanged` is true of the hook *file*, which reads its target from config
+    // and is byte-identical across upgrades. It was not true of the thing the
+    // user was told to fix: `hooks status` names a stale `commitlore.bin`, this
+    // command repoints it, and reporting only the file said the repair had not
+    // happened (#629). The recorded target decides which CLI validates every
+    // commit here, so a change to it is the headline rather than a footnote.
+    const repointed = before.recordedTarget.bin !== after.recordedTarget.bin;
     const headline = {
         absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
         foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
         outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-        installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (unchanged)`,
+        installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${repointed ? 'file unchanged' : 'unchanged'})`,
     }[before.state];
-    return success(after, [headline, ...describeChained(after)]);
+    const repoint = repointed
+        ? [
+            `recorded CLI repointed: ${before.recordedTarget.bin === '' ? '(none recorded)' : before.recordedTarget.bin} -> ${after.recordedTarget.bin}`,
+        ]
+        : [];
+    return success(after, [headline, ...repoint, ...describeChained(after)]);
 };
 /**
  * The hooks `init` installs beside the gate.
@@ -325,9 +337,10 @@ export const uninstallHook = (input = {}) => {
     return success(readHookStatus(cwd), lines);
 };
 export const hookStatus = (input = {}) => {
+    const cwd = input.cwd ?? process.cwd();
     let status;
     try {
-        status = readHookStatus(input.cwd ?? process.cwd());
+        status = readHookStatus(cwd);
     }
     catch (error) {
         return failure(messageOf(error));
@@ -341,10 +354,14 @@ export const hookStatus = (input = {}) => {
     const targetWarning = status.state === 'installed' && status.recordedTarget.problems.length > 0
         ? ', recorded target warning — run `commitlore hooks install`'
         : '';
+    const identity = recordedHookIdentity(status.recordedTarget, cwd);
     return success(status, [
         `hooks dir: ${status.hooksDir}`,
         `${HOOK_NAME}: ${state}${targetWarning}`,
         ...describeRecordedHookTarget(status.recordedTarget),
+        ...(identity === null
+            ? []
+            : [`hook runtime identity: ${JSON.stringify(identity)}`]),
         ...status.recordedTarget.problems.map((problem) => `warning: ${problem}`),
         ...describeChained(status),
     ]);

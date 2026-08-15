@@ -44,6 +44,13 @@ export interface JsonRecord {
 }
 export interface JsonOutput {
     command: string;
+    /** Which build answered — version and the bundle it ran from (#631). */
+    runtime: {
+        version: string;
+        build_id: string;
+    };
+    /** Whether this answer read everything it was asked about (#631, #669). */
+    coverage: 'complete' | 'partial';
     at: string;
     paths: string[];
     aliases: string[];

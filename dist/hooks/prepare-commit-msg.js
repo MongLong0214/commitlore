@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { resolvePolicy } from '../core/capture-policy.js';
 import { execGit } from '../core/git.js';
@@ -326,6 +326,69 @@ const applyCaptureRecord = (messageFile, cwd) => {
         // Best-effort: message already written, crash here is recoverable by post-commit
     }
 };
+/**
+ * Where this commit's amend marker lives (#638).
+ *
+ * `--git-path` puts it in the same place COMMIT_EDITMSG lives, which means a
+ * linked worktree gets its own. A single file at the repository root would let
+ * two worktrees committing at once read each other's answer; matching git's own
+ * scope is the right bound, and no stronger one is available to us anyway.
+ */
+const amendMarkerPath = (cwd) => {
+    const result = execGit(['rev-parse', '--git-path', 'commitlore-amend'], { cwd });
+    return result.code === 0 ? resolve(cwd, result.stdout.trim()) : null;
+};
+/**
+ * Record whether this commit replaces HEAD, for the `commit-msg` that follows.
+ *
+ * Only `prepare-commit-msg` can see this: git hands it `commit` as the source
+ * and HEAD as the sha for `git commit --amend`, while `commit-msg` gets nothing
+ * that distinguishes an amend from an ordinary commit.
+ *
+ * The three conditions are all required, and anything unrecognised is **not**
+ * an amend. `rebase -i` reword produces `commit` and `HEAD` identically to an
+ * amend and is told apart only by a rebase being in progress — measured, not
+ * assumed. Enumerating operations to exclude would break the moment git adds
+ * one, so the default has to be the safe direction, and the two mistakes are
+ * not symmetric: calling a non-amend an amend drops HEAD from the duplicate
+ * check and lets a real identity collision through, while the reverse is only
+ * the inconvenience #638 describes.
+ */
+const IN_PROGRESS_MARKERS = [
+    'rebase-merge',
+    'rebase-apply',
+    'MERGE_HEAD',
+    'CHERRY_PICK_HEAD',
+    'REVERT_HEAD',
+    'BISECT_LOG',
+    'sequencer',
+];
+export const recordAmendIntent = (cwd, source, sha) => {
+    const marker = amendMarkerPath(cwd);
+    if (marker === null)
+        return;
+    const operationInProgress = IN_PROGRESS_MARKERS.some((name) => {
+        const path = execGit(['rev-parse', '--git-path', name], { cwd });
+        return path.code === 0 && existsSync(resolve(cwd, path.stdout.trim()));
+    });
+    const head = execGit(['rev-parse', 'HEAD'], { cwd });
+    const resolvedSha = sha === undefined ? '' : execGit(['rev-parse', sha], { cwd }).stdout.trim();
+    const isAmend = source === 'commit' &&
+        !operationInProgress &&
+        head.code === 0 &&
+        resolvedSha !== '' &&
+        resolvedSha === head.stdout.trim();
+    try {
+        if (isAmend)
+            writeFileSync(marker, `${head.stdout.trim()}\n`, 'utf8');
+        else
+            rmSync(marker, { force: true });
+    }
+    catch {
+        // A marker that cannot be written leaves the previous behaviour, which
+        // refuses the amend. That is the safe direction and needs no announcement.
+    }
+};
 export const register = (program) => {
     program
         .command('prepare-commit-msg')
@@ -333,7 +396,8 @@ export const register = (program) => {
         .argument('[source]')
         .argument('[sha]')
         .description('internal hook command: append records from a local squash draft')
-        .action((messageFile) => {
+        .action((messageFile, source, sha) => {
+        recordAmendIntent(process.cwd(), source, sha);
         preserveSquashRecords(messageFile);
         try {
             applyCaptureRecord(messageFile, process.cwd());

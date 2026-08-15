@@ -63,6 +63,13 @@ beforeAll(() => {
   if (build.status !== 0) {
     throw new Error(`tsc build failed (exit ${build.status}):\n${build.stdout}${build.stderr}`);
   }
+
+  writeFileSync(
+    injectCommand,
+    `#!/bin/sh\nexec "${process.execPath}" "${CLI_JS}" "$@"\n`,
+    { mode: 0o755 },
+  );
+  chmodSync(injectCommand, 0o755);
 }, 120_000);
 
 const scratch: string[] = [];
@@ -78,26 +85,24 @@ const tempDir = (label: string): string => {
 
 const injectBin = tempDir('inject-bin');
 const injectCommand = join(injectBin, 'commitlore');
-writeFileSync(
-  injectCommand,
-  '#!/bin/sh\nprintf \'{"hookSpecificOutput":{"additionalContext":"context"}}\\n\'\n',
-  { mode: 0o755 },
-);
-chmodSync(injectCommand, 0o755);
 
-const runInitAsCli = (opts: InitOptions): InitReport => {
+const withCliEnvironment = <T>(run: () => T): T => {
   const originalArgv = process.argv[1];
   const originalPath = process.env['PATH'];
   process.argv[1] = CLI_JS;
   process.env['PATH'] = `${injectBin}:/usr/bin:/bin`;
   try {
-    return runInit(opts);
+    return run();
   } finally {
     process.argv[1] = originalArgv;
     if (originalPath === undefined) delete process.env['PATH'];
     else process.env['PATH'] = originalPath;
   }
 };
+
+const runInitAsCli = (opts: InitOptions): InitReport => withCliEnvironment(() => runInit(opts));
+
+const runDoctorAsCli = (opts: { cwd: string }) => withCliEnvironment(() => runDoctor(opts));
 
 const git = (cwd: string, args: string[]): string => {
   const result = execGit(args, { cwd });
@@ -214,7 +219,7 @@ describe('commitlore init — the happy path', () => {
 
 describe('commitlore init — repository MCP registration', () => {
   const initiatorStatus = (repo: string): string | undefined =>
-    runDoctor({ cwd: repo }).checks.find((check) => check.id === 'unattended-initiator')?.status;
+    runDoctorAsCli({ cwd: repo }).checks.find((check) => check.id === 'unattended-initiator')?.status;
 
   const enableUnattended = (repo: string): void => {
     writeFileSync(

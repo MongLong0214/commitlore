@@ -7,7 +7,7 @@ import type { SpawnSyncReturns } from 'node:child_process';
 
 import { describe, expect, it } from 'vitest';
 
-import { GIT_SPAWN_FAILED, execGit, execGitOrThrow, gitResultFromSpawn } from '../src/core/git.js';
+import { GIT_SPAWN_FAILED, canonicalCommittedAt, execGit, execGitOrThrow, gitResultFromSpawn } from '../src/core/git.js';
 
 const spawnResult = (result: Partial<SpawnSyncReturns<string>>): SpawnSyncReturns<string> =>
   result as SpawnSyncReturns<string>;
@@ -99,5 +99,27 @@ describe('execGitOrThrow', () => {
     expect(failure.code).not.toBe(0);
     expect(failure.stderr).toBeTypeOf('string');
     expect(failure.message).toContain('git no-such-subcommand-here failed');
+  });
+});
+
+/**
+ * #650: `%cI` is a documented field of the --json output, and git changed how
+ * it spells a zero offset — 2.39 writes `+00:00`, 2.50 writes `Z`. Measured on
+ * one commit object: the two gits disagreed about the same repository.
+ */
+describe('canonicalCommittedAt', () => {
+  it('spells a zero offset one way, whichever git produced it', () => {
+    expect(canonicalCommittedAt('2026-02-01T00:00:00+00:00')).toBe('2026-02-01T00:00:00Z');
+    expect(canonicalCommittedAt('2026-02-01T00:00:00Z')).toBe('2026-02-01T00:00:00Z');
+  });
+
+  it('leaves a real offset alone, because it says where the commit was made', () => {
+    expect(canonicalCommittedAt('2026-08-14T17:22:24+09:00')).toBe('2026-08-14T17:22:24+09:00');
+    expect(canonicalCommittedAt('2026-08-14T17:22:24-05:00')).toBe('2026-08-14T17:22:24-05:00');
+  });
+
+  it('does not touch a value that is not a timestamp', () => {
+    expect(canonicalCommittedAt('')).toBe('');
+    expect(canonicalCommittedAt('not a date')).toBe('not a date');
   });
 });

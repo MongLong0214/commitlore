@@ -820,6 +820,159 @@ jobs:
           echo "--- the Windows hook path, reported rather than asserted (T-1124) ---"
           "$shim" doctor || echo "(doctor reported problems -- T-1124 owns the Windows hook path)"
 
+      # `commitlore.cmd` is the installed program. The registration uses the
+      # bare command a host records, so this exercises Windows PATH + PATHEXT
+      # resolution inside the MCP probe without asserting the unrelated doctor
+      # findings described above.
+      - name: A bare installed MCP command is healthy through PATHEXT (#640)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          $bin = Split-Path -Parent $shim
+          $repo = Join-Path $env:RUNNER_TEMP 'commitlore-bare-mcp-probe'
+          Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $repo | Out-Null
+          git -C $repo init -q -b main
+          Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
+          Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline '{ "mcpServers": { "commitlore": { "command": "commitlore", "args": ["mcp"] } } }'
+          $env:Path = "$bin;$env:Path"
+          $stdout = Join-Path $repo 'doctor.json'
+          $stderr = Join-Path $repo 'doctor.err'
+          $process = Start-Process -FilePath $shim -ArgumentList @('doctor', '--json') -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'doctor did not return within 20 seconds'
+          }
+          Get-Content -LiteralPath $stderr | Write-Host
+          $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
+          $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
+          $probe | ConvertTo-Json -Depth 8 | Write-Host
+          if ($probe.status -ne 'ok' -or $probe.evidence.initiator -ne 'capture-tools-advertised') {
+            throw 'the bare installed command was not verified as a healthy capture initiator'
+          }
+
+      # A cmd launcher starts a separate Node MCP server, then waits. The PID
+      # file lets this step distinguish a probe that returned from one that
+      # actually reclaimed the launcher's descendant.
+      - name: An MCP probe reclaims a cmd launcher's child tree (#640)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+          $repo = Join-Path $env:RUNNER_TEMP 'commitlore-mcp-child-tree'
+          Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $repo | Out-Null
+          git -C $repo init -q -b main
+          $pidFile = Join-Path $repo 'child.pid'
+          $server = Join-Path $repo 'child-server.cjs'
+          $wrapper = Join-Path $repo 'launcher.cmd'
+          @'
+          const { writeFileSync } = require('node:fs');
+          writeFileSync(process.env.MCP_PROBE_CHILD_PID, String(process.pid));
+          // Wall clock at child start. Against the moment doctor was invoked
+          // this says whether the cold start fits inside the probe's five
+          // second window or lands after it; "slow" and "unreachable" produce
+          // the same silence otherwise.
+          writeFileSync(process.env.MCP_PROBE_CHILD_PID + '.startedat', String(Date.now()));
+          let buffer = '';
+          const started = Date.now();
+          process.stdin.setEncoding('utf8');
+          // Whether the probe's bytes ever arrive is the question the log could
+          // not answer. Record the first chunk and when it came.
+          process.stdin.once('data', () => {
+            writeFileSync(process.env.MCP_PROBE_CHILD_PID + '.sawinput', String(Date.now() - started));
+          });
+          process.stdin.on('data', (chunk) => {
+            buffer += chunk;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              const message = JSON.parse(line);
+              if (message.id === 1) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'commitlore', version: '1.0.0' } } }) + '\n');
+              if (message.id === 2) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'commitlore_query' }, { name: 'commitlore_before_change' }, { name: 'commitlore_prepare_capture' }, { name: 'commitlore_verify_capture' }, { name: 'commitlore_stage_capture' }] } }) + '\n');
+            }
+          });
+          setInterval(() => {}, 1_000);
+          '@ | Set-Content -LiteralPath $server -NoNewline
+          # The wrapper runs node in the foreground and inherits the probe's
+          # pipes, so "the server answered" does not depend on the child-tree
+          # handling this step exists to test. `start /b` detached the child,
+          # which left the precondition resting on whether Windows happens to
+          # pass console handles through `start` — and a precondition that
+          # depends on the behaviour under test cannot tell a broken product
+          # from a broken fixture. cmd.exe is still the probe's direct child
+          # and node is still a grandchild, so the tree is the same one #640 is
+          # about; only the protocol path is now unambiguous.
+          # setup-node puts the requested Node in hostedtoolcache and puts that
+          # on PATH; it does not update C:\Program Files\nodejs, which may hold
+          # a different runner-image Node or none at all. Hard-coding that path
+          # made the fixture depend on the image rather than on the job, and
+          # cmd.exe fails silently on a missing interpreter — which is why three
+          # independent attempts produced silence and no child pid.
+          $nodeExe = (Get-Command node).Source
+          Write-Host "--- launcher will run: $nodeExe ---"
+          Write-Host "--- C:\Program Files\nodejs\node.exe present: $(Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'nodejs\node.exe')) ---"
+          @"
+          @echo off
+          "$nodeExe" "$server"
+          "@ | Set-Content -LiteralPath $wrapper -NoNewline
+          Set-Content -LiteralPath (Join-Path $repo '.commitlore-policy.json') -NoNewline '{ "mode": "auto", "unattended": true }'
+          @{ mcpServers = @{ commitlore = @{ command = $wrapper; args = @() } } } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $repo '.mcp.json') -NoNewline
+          $env:MCP_PROBE_CHILD_PID = $pidFile
+          $doctorStartedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+          $stdout = Join-Path $repo 'doctor.json'
+          $stderr = Join-Path $repo 'doctor.err'
+          $process = Start-Process -FilePath $shim -ArgumentList @('doctor', '--json') -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $process.WaitForExit(20000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'doctor did not return within 20 seconds'
+          }
+          $report = Get-Content -LiteralPath $stdout -Raw | ConvertFrom-Json
+          $probe = $report.checks | Where-Object { $_.id -eq 'unattended-initiator' }
+          $probe | ConvertTo-Json -Depth 8 | Write-Host
+
+          # Diagnostics, printed on every run so a failure carries its own cause.
+          # A step that only reports "timed out" teaches nothing the second time.
+          Write-Host '--- doctor stderr ---'
+          if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw | Write-Host } else { Write-Host '(no stderr file)' }
+          Write-Host "--- pid file present: $(Test-Path -LiteralPath $pidFile) ---"
+          if (Test-Path -LiteralPath $pidFile) { Write-Host "pid: $("$(Get-Content -LiteralPath $pidFile -Raw)".Trim())" }
+          # The question the previous round could not answer: did the probe's
+          # bytes reach the child at all? mcp-probe.ts waits a fixed 200ms
+          # before its first protocol write, so "arrived late" and "never
+          # arrived" are different failures and only one of them is a race.
+          $startedAt = "$pidFile.startedat"
+          if (Test-Path -LiteralPath $startedAt) {
+            $delta = [int64]("$(Get-Content -LiteralPath $startedAt -Raw)".Trim()) - $doctorStartedAt
+            Write-Host "--- child process started ${delta}ms after doctor was invoked (probe window is 5000ms) ---"
+          } else {
+            Write-Host '--- child never recorded a start time ---'
+          }
+          $sawInput = "$pidFile.sawinput"
+          if (Test-Path -LiteralPath $sawInput) {
+            Write-Host "--- child saw stdin after $("$(Get-Content -LiteralPath $sawInput -Raw)".Trim())ms => the write arrived; the missing half is the response ---"
+          } else {
+            Write-Host '--- child never saw stdin => the probe write did not reach it ---'
+          }
+
+          # Reclamation is not conditional on the probe's verdict: `finish()` in
+          # mcp-probe.ts runs stopProbeChild on every exit, and the timeout path
+          # is the one that matters most — an unhealthy server is exactly when a
+          # child tree gets stranded. Gating on `status -eq 'ok'` made the
+          # precondition depend on the protocol surviving a cmd.exe hop, where
+          # cmd and the child both hold the same stdin and whichever reads first
+          # wins; that raced, and a raced precondition cannot tell a broken
+          # product from a broken fixture. The pid file is the honest
+          # precondition: it proves the child really ran, and says nothing about
+          # what this step asserts.
+          if (-not (Test-Path -LiteralPath $pidFile)) { throw 'the wrapper never started its child server' }
+          $childPid = [int](Get-Content -LiteralPath $pidFile -Raw)
+          Start-Sleep -Milliseconds 250
+          if (Get-Process -Id $childPid -ErrorAction SilentlyContinue) {
+            throw "MCP child process $childPid survived probe cleanup"
+          }
+
       # T-1124 (#283): #71's install-root containment, executed on Windows against
       # a wrapper install. A property verified on one platform is not a property of
       # the product, and macOS is the only place it has ever been executed.

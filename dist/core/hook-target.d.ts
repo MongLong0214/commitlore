@@ -1,3 +1,4 @@
+import { type RuntimeIdentity } from './runtime-identity.js';
 export interface RecordedHookTarget {
     readonly bin: string;
     readonly node: string;
@@ -25,5 +26,7 @@ export declare const classifyBinTarget: (path: string) => BinKind | null;
  * instead of guessing at it independently.
  */
 export declare const hasAllowedBinExtension: (path: string) => boolean;
+/** The same identity the pinned hook will execute, if its file is readable. */
+export declare const recordedHookIdentity: (target: RecordedHookTarget, cwd: string) => RuntimeIdentity | null;
 export declare const readRecordedHookTarget: (cwd: string) => RecordedHookTarget;
 export declare const describeRecordedHookTarget: (target: RecordedHookTarget) => readonly string[];

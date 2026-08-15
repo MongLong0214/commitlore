@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_CONFIGS, isCodexPluginConfig } from './agent-configs.js';
+import { formatRuntimeIdentity, runtimeIdentity } from './runtime-identity.js';
 const MARKER_VERSION = 1;
 const defaultDataHome = () => process.platform === 'win32'
     ? process.env['LOCALAPPDATA'] ?? join(homedir(), 'AppData', 'Local')
@@ -261,7 +262,8 @@ export const installCodexPlugin = (options = {}) => {
     else {
         report.push(`Codex plugin already installed: ${codexPluginSelector(plugin)} — left as it is, and not recorded as ours`);
     }
-    report.push('start a new Codex session to load the CommitLore skill and MCP tools');
+    report.push(`installer runtime identity: ${formatRuntimeIdentity(runtimeIdentity())}`);
+    report.push('start a new Codex session to load the CommitLore skill and MCP tools; the live MCP runtime identity is available from commitlore_runtime_identity');
     return { exitCode: 0, report };
 };
 //# sourceMappingURL=codex-plugin.js.map

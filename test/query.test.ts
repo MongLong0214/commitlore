@@ -1647,10 +1647,19 @@ describe('trust presentation on every consumer route', () => {
 // ---------------------------------------------------------------------------
 
 /** Object names are stable across runs but not across hash algorithms. */
+/**
+ * `runtime.build_id` and `runtime.version` both move — the first every
+ * release (#631). Both are real answers a client needs and neither can be
+ * pinned, so they are normalized here rather than left to make this snapshot
+ * fail on any machine but the one that wrote it.
+ */
+const withStableRuntime = (json: string): string =>
+  json.replace(/"runtime":\{"version":"[^"]*","build_id":"[^"]*"\}/, '"runtime":{"version":"<version>","build_id":"<build_id>"}');
+
 const normalize = (payload: unknown): unknown => {
   const seen = new Map<string, string>();
   return JSON.parse(
-    JSON.stringify(payload).replace(/\b[0-9a-f]{40,64}\b/g, (sha) => {
+    withStableRuntime(JSON.stringify(payload)).replace(/\b[0-9a-f]{40,64}\b/g, (sha) => {
       const known = seen.get(sha);
       if (known !== undefined) return known;
       const label = `<sha-${seen.size + 1}>`;
@@ -1686,6 +1695,7 @@ describe('--json', () => {
           "ruledOut": 0,
           "warnings": 0,
         },
+        "coverage": "complete",
         "diagnostics": [],
         "follow": true,
         "fromIndex": true,
@@ -1764,6 +1774,10 @@ describe('--json', () => {
             "trust": "claim",
           },
         ],
+        "runtime": {
+          "build_id": "<build_id>",
+          "version": "<version>",
+        },
         "scanned": 2,
         "unreadCommits": 0,
       }
@@ -1791,6 +1805,11 @@ describe('--json', () => {
     expect(run.code).toBe(0);
     expect(JSON.parse(run.stdout)).toEqual({
       command: 'warnings',
+      // #631: which build answered. Declared here rather than absorbed by a
+      // snapshot refresh — this is a documented schema a client reads, so a new
+      // field is a contract change and belongs in the pinned shape.
+      runtime: { version: expect.any(String), build_id: expect.any(String) },
+      coverage: expect.any(String),
       at: '2026-01-20T00:00:00.000Z',
       paths: [],
       aliases: [],

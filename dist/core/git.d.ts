@@ -99,3 +99,17 @@ export type HistoryAvailability = 'ready' | 'empty' | 'unavailable';
 export declare const historyAvailability: (cwd: string) => HistoryAvailability;
 export declare const SHALLOW_HISTORY_CAVEAT = "this clone has shallow history, so this answer may be missing records that exist upstream";
 export declare const hasShallowHistory: (cwd: string) => boolean;
+/**
+ * Git's `%cI` for a UTC commit, spelled one way (#650).
+ *
+ * `%cI` is strict ISO 8601, and git changed how it renders a zero offset:
+ * 2.39 emits `+00:00`, 2.50 emits `Z`. The same commit therefore reads
+ * differently depending on the machine, and `committedAt` is a documented
+ * field of the `--json` output — a consumer comparing strings, matching a
+ * pattern, or feeding a strict parser gets different answers for one
+ * repository.
+ *
+ * Only the UTC spelling is touched. A real offset carries information about
+ * where the commit was made and is left exactly as git wrote it.
+ */
+export declare const canonicalCommittedAt: (value: string) => string;

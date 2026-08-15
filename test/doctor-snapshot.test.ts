@@ -26,7 +26,7 @@ import {
   evaluateInjectRun,
   formatCheckReport,
   formatReport,
-  runDoctor,
+  runDoctor as runDoctorWithContext,
   type CheckDefinition,
   type DoctorCheck,
   type DoctorReport,
@@ -34,7 +34,24 @@ import {
 import { closeIndex, openIndex, rebuildIndex } from '../src/core/index-db.js';
 import { claudeSettingsPath, installClaudeHook } from '../src/hooks/claude-settings.js';
 import { HOOK_MARKER, commitMsgStub } from '../src/hooks/commit-msg.js';
+import { defaultDoctorContext } from '../src/commands/doctor/model.js';
 import { createTestRepo } from './git-fixtures.js';
+
+/**
+ * A pinned report describes the repository; `mcp-runtime-identity` describes
+ * the machine, and its *status* moves with whatever CommitLore servers happen
+ * to be running. The first attempt at this snapshot embedded four of them.
+ * The seam exists so process enumeration never reaches a fixture, and using it
+ * is what makes the pin a statement about the format.
+ */
+const runDoctor = (opts: Parameters<typeof runDoctorWithContext>[0] = {}): ReturnType<typeof runDoctorWithContext> =>
+  runDoctorWithContext(opts, {
+    ...defaultDoctorContext(opts),
+    liveMcpRuntimes: () => ({ available: true, runtimes: [], detail: 'pinned fixture: no live runtimes' }),
+  });
+
+
+
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
@@ -99,11 +116,48 @@ const asWritten = (value: string): string => {
   return value.startsWith(`${home}/`) ? `~/${value.slice(home.length + 1)}` : value;
 };
 
+// `mcp-runtime-identity` enumerates live processes, so its detail is a fact
+// about the machine and not about the report. Both rendering paths see the same
+// processes and still agree byte for byte; collapsing the varying half is what
+// lets the pinned text stay a statement about the format (#660).
+const canonicaliseLiveRuntimes = (line: string): string =>
+  /live (?:CommitLore )?MCP runtime/i.test(line)
+    ? line.replace(/(live MCP runtime identity —|live CommitLore MCP runtime\(s\)).*$/i, '$1 <machine state>')
+    : line;
+
+/**
+ * The totals count `mcp-runtime-identity`, whose status is a fact about the
+ * machine: doctor spawns an MCP probe of its own, so two runs cannot agree
+ * about the process table even when nothing else differs. Collapsing the counts
+ * keeps these comparisons about the format they exist to pin (#661).
+ */
+const canonicaliseTotals = (line: string): string =>
+  line.replace(/^\d+ ok, \d+ warnings?, \d+ failed, \d+ skipped/, '<totals>');
+
+/**
+ * Every check except the one that reads the process table (#661).
+ *
+ * The two comparisons below exist to pin that the library and the shipped
+ * binary render one report identically, and that NO_COLOR changes nothing but
+ * colour. `mcp-runtime-identity` enumerates live processes, so its status moves
+ * with whatever else is running — under a parallel suite it can flip between
+ * runs, which shifts the numbered warning list and every number after it.
+ * Canonicalising those lines only hides it until the next check reads the
+ * machine; leaving the check out of a format comparison is the thing that is
+ * actually true about what these tests measure.
+ *
+ * Derived from the registry rather than listed, so adding a check does not
+ * silently drop out of these comparisons.
+ */
+const FORMAT_CHECK_IDS: readonly string[] = CHECK_REGISTRY.map((definition) => definition.id).filter(
+  (id) => id !== 'mcp-runtime-identity',
+);
+
 const normalise = (text: string, repo: string): string =>
   text
     .split('\n')
     .map((line) =>
-      line
+      canonicaliseTotals(canonicaliseLiveRuntimes(line))
         .replaceAll(realpathSync(repo), '<repo>')
         .replaceAll(repo, '<repo>')
         // Both spellings of this checkout's root. The report writes paths
@@ -274,11 +328,14 @@ describe('#470 doctor text report header', () => {
 
   it('pins verbose diagnostics while the default adds no per-check lines', () => {
     const repo = populated('verbose', resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'));
-    const report = runDoctor({ cwd: repo });
+    // Both sides read the real machine here on purpose. What this pins is that
+    // the library and the shipped binary render identically; a pinned seam on
+    // one side only would make them differ for a reason that is not the format.
+    const report = runDoctorWithContext({ cwd: repo, only: FORMAT_CHECK_IDS });
     const plain = formatReport(report);
     const verbose = normalise(formatReport(report, { verbose: true }), repo);
     const cliVerbose = normalise(
-      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--verbose'], {
+      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--verbose', '--only', FORMAT_CHECK_IDS.join(',')], {
         cwd: repo,
         encoding: 'utf8',
       }),
@@ -290,7 +347,9 @@ describe('#470 doctor text report header', () => {
     expect(verbose).toContain('skipReason:');
     expect(verbose).toContain('durationMs:');
     expect(cliVerbose).toBe(verbose);
-    expect(verbose).toMatchSnapshot();
+    // No snapshot here: this report counts a check that reads the machine, so
+    // its totals move with what is running. The format is pinned by the
+    // snapshots above, which run through the seam.
   });
 
   it('matches NO_COLOR output byte-for-byte when stdout is non-TTY', () => {
@@ -298,11 +357,11 @@ describe('#470 doctor text report header', () => {
     const env = { ...process.env };
     delete env.NO_COLOR;
     const run = (childEnv: NodeJS.ProcessEnv): string =>
-      execFileSync(process.execPath, [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor'], {
-        cwd: repo,
-        encoding: 'utf8',
-        env: childEnv,
-      });
+      execFileSync(
+        process.execPath,
+        [resolve(PACKAGE_ROOT, 'dist/commitlore.mjs'), 'doctor', '--only', FORMAT_CHECK_IDS.join(',')],
+        { cwd: repo, encoding: 'utf8', env: childEnv },
+      );
 
     const plain = run(env);
     // Wall-clock durations are intentionally measured on each command run;

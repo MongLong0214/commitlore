@@ -33,6 +33,7 @@
  *   first, so a long-lived checkout cannot accumulate an unbounded log from a
  *   server that starts on every session.
  */
+import { type RuntimeIdentity } from '../core/runtime-identity.js';
 export declare const LIFECYCLE_FILE = "mcp-lifecycle.log";
 /**
  * `.git/commitlore/mcp-lifecycle.log`, or `null` outside a repository.
@@ -75,6 +76,10 @@ export interface LifecycleEntry {
     readonly pid: number;
     readonly detail: string;
 }
+/** The identity an MCP process actually recorded when it started, if it is a current-format entry. */
+export declare const lifecycleIdentity: (entry: LifecycleEntry) => RuntimeIdentity | null;
+/** Last live-MCP identity is the process identity, not the registration's name. */
+export declare const latestLifecycleIdentity: (cwd?: string) => RuntimeIdentity | null;
 /** Parses the log. Unreadable or absent reads as empty — it is a breadcrumb trail. */
 export declare const readLifecycle: (cwd?: string) => LifecycleEntry[];
 /** A completed server process whose final record says why it crashed. */

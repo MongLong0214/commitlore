@@ -83,6 +83,11 @@ describe('commitlore CLI', () => {
     }
   });
 
+  it('keeps the MCP probe bridge out of help', () => {
+    expect(runCli(['--help']).stdout).not.toContain('\n  internal ');
+    expect(runCli(['internal', '--help']).stdout).not.toContain('\n  mcp-probe ');
+  });
+
   it('says that query commands follow renames only for one path', () => {
     const result = runCli(['context', '--help']);
 
