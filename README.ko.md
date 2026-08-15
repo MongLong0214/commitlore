@@ -83,13 +83,13 @@ Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh | sh -s v0.8.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh | sh -s v1.0.0
 ```
 
 **Windows** — PowerShell에서 같은 설치를 한다:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.ps1))) v0.8.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.ps1))) v1.0.0
 ```
 
 **Hermes** — CLI를 설치한 뒤 host integration을 설정한다:
@@ -129,11 +129,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh
-sh install.sh v0.8.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh
+sh install.sh v1.0.0
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v0.8.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.0.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
