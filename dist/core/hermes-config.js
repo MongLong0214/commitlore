@@ -78,31 +78,90 @@ const childEnd = (lines, start, sectionEnd) => {
     }
     return end;
 };
-/**
- * Recognise exactly the small MCP mapping this installer owns.  Similar is not
- * enough: an operator may have added environment, timeout, or transport
- * settings to a server with the same name, and removing or claiming that
- * mapping would be a clobber.  Blank lines and comments after the mapping are
- * intentionally tolerated and left in place by removal.
- */
-const ownMcpBlockEnd = (lines, start, end, wrapperPath) => {
-    const wrappers = typeof wrapperPath === 'string' ? [wrapperPath] : wrapperPath;
-    const expectedCommands = new Set(wrappers.map((path) => `    command: ${yamlString(path)}`));
-    const expected = ['  commitlore:', undefined, '    args:', '      - mcp', '    enabled: true'];
-    if (lines[start]?.text !== expected[0] ||
-        !expectedCommands.has(lines[start + 1]?.text ?? '') ||
-        lines[start + 2]?.text !== expected[2] ||
-        lines[start + 3]?.text !== expected[3] ||
-        lines[start + 4]?.text !== expected[4]) {
+/** `[mcp]`, `["mcp"]`, `[ mcp ]` — one flow sequence, or null if it is not one. */
+const flowSequence = (raw) => {
+    const text = raw.trim();
+    if (!text.startsWith('[') || !text.endsWith(']'))
         return null;
-    }
-    for (const line of lines.slice(start + 5, end)) {
-        const trimmed = line.text.trim();
-        if (trimmed.length > 0 && !trimmed.startsWith('#'))
-            return null;
-    }
-    return start + 5;
+    const inner = text.slice(1, -1).trim();
+    if (inner === '')
+        return [];
+    return inner.split(',').map((item) => scalarValue(item.trim()) ?? item.trim());
 };
+const readMcpEntry = (lines, start, end) => {
+    const entry = { command: null, args: null, end, unreadable: false };
+    for (let index = start + 1; index < end; index += 1) {
+        const text = lines[index]?.text ?? '';
+        if (text.trim() === '' || text.trimStart().startsWith('#'))
+            continue;
+        // A nested key belonging to a sibling server ends this entry.
+        if (!/^ {4}\S/.test(text)) {
+            if (/^ {2}\S/.test(text)) {
+                entry.end = index;
+                break;
+            }
+            if (/^ {6}- /.test(text))
+                continue;
+            entry.unreadable = true;
+            continue;
+        }
+        const pair = /^ {4}([A-Za-z_][\w-]*):\s*(.*)$/.exec(text);
+        if (pair === null) {
+            entry.unreadable = true;
+            continue;
+        }
+        const [, key = '', rest = ''] = pair;
+        if (key === 'command') {
+            entry.command = scalarValue(rest) ?? rest.trim();
+        }
+        else if (key === 'args') {
+            const flow = flowSequence(rest);
+            if (flow !== null) {
+                entry.args = flow;
+            }
+            else if (rest.trim() === '') {
+                const items = [];
+                let cursor = index + 1;
+                for (; cursor < end; cursor += 1) {
+                    const item = /^ {6}-\s+(.+)$/.exec(lines[cursor]?.text ?? '');
+                    if (item === null)
+                        break;
+                    items.push(scalarValue(item[1] ?? '') ?? (item[1] ?? '').trim());
+                }
+                entry.args = items;
+                index = cursor - 1;
+            }
+            else {
+                entry.unreadable = true;
+            }
+        }
+    }
+    return entry;
+};
+/**
+ * Why this entry is not ours, named precisely, or null when it is ours.
+ *
+ * The old message said `mcp_servers.commitlore … does not point at this
+ * CommitLore install` for every kind of mismatch, including ones where
+ * `command` was exactly right. A reader then inspected the command, found it
+ * correct, and had nowhere left to go (#682).
+ */
+const mcpEntryMismatch = (lines, start, end, wrapperPath) => {
+    const wrappers = typeof wrapperPath === 'string' ? [wrapperPath] : wrapperPath;
+    const entry = readMcpEntry(lines, start, end);
+    if (entry.unreadable)
+        return 'mcp_servers.commitlore holds a line this installer cannot read, so it was left unchanged';
+    if (entry.command === null)
+        return 'mcp_servers.commitlore has no command:, so it was left unchanged';
+    if (!wrappers.includes(entry.command)) {
+        return `mcp_servers.commitlore.command is ${JSON.stringify(entry.command)}, not this install (${wrappers.map((w) => JSON.stringify(w)).join(' or ')})`;
+    }
+    if (entry.args !== null && !(entry.args.length === 1 && entry.args[0] === 'mcp')) {
+        return `mcp_servers.commitlore.args is ${JSON.stringify(entry.args)}, not ["mcp"] — left unchanged rather than overwritten`;
+    }
+    return null;
+};
+const ownMcpBlockEnd = (lines, start, end, wrapperPath) => mcpEntryMismatch(lines, start, end, wrapperPath) === null ? readMcpEntry(lines, start, end).end : null;
 const hasOwnMcpEntry = (lines, start, end, wrapperPath) => ownMcpBlockEnd(lines, start, end, wrapperPath) !== null;
 const mcpBlock = (wrapperPath, newline) => [
     '  commitlore:',
@@ -145,7 +204,7 @@ export const addHermesConfig = (contents, options) => {
                 if (hasOwnMcpEntry(lines, start, end, options.wrapperPath))
                     unchanged.push('mcp');
                 else
-                    blocked.push('mcp_servers.commitlore already exists but does not point at this CommitLore install');
+                    blocked.push(mcpEntryMismatch(lines, start, end, options.wrapperPath) ?? 'mcp_servers.commitlore was left unchanged');
             }
             else {
                 next = insertBeforeLine(next, section.end, mcpBlock(options.wrapperPath, newline));
