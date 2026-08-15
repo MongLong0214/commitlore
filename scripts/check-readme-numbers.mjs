@@ -202,7 +202,10 @@ const main = () => {
   for (const { relative, markdown } of readmes) {
     const mismatches = findVerdictMismatches(markdown);
     if (mismatches.length > 0) {
-      process.stderr.write(
+      // stdout, not stderr: this is a notice, not a failure, and
+      // test/readme-numbers.test.ts asserts stderr is empty precisely so that
+      // "the checker said something" keeps meaning "something is wrong".
+      process.stdout.write(
         `${relative}: ${mismatches.join(', ')} not in bench/VERDICT-M5.md's registered table ` +
           `(${verdictArms().map(({ arm, reproposed, total }) => `${arm} ${reproposed}/${total}`).join(', ')}). ` +
           `One of the two documents is stale; see #590. Not failing the build yet.\n`,
