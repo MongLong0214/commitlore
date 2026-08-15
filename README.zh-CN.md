@@ -80,13 +80,13 @@ commitlore plugin install-codex
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh | sh -s v0.8.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh | sh -s v1.0.0
 ```
 
 **Windows** — 在 PowerShell 中执行同样的安装：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.ps1))) v0.8.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.ps1))) v1.0.0
 ```
 
 **Hermes** — 安装 CLI 后，配置它的 host integration：
@@ -126,11 +126,11 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh
-sh install.sh v0.8.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.0/install.sh
+sh install.sh v1.0.0
 
 # 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v0.8.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.0.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 

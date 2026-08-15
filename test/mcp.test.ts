@@ -40,6 +40,7 @@ import { execGitOrThrow } from '../src/core/git.js';
 import { NOTES_REFSPEC, notesAbsenceEvidenceKey } from '../src/core/notes.js';
 import { createTestRepo } from './git-fixtures.js';
 
+
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
 let SERVER_ENTRY = '';
@@ -865,7 +866,19 @@ describe('commitlore_guard', () => {
     });
     const content = response.result?.['content'] as Array<{ text?: unknown }> | undefined;
     const identity = JSON.parse(String(content?.[0]?.text ?? '')) as Record<string, unknown>;
-    expect(identity).toMatchObject({ version: '0.8.2', indexSchemaVersion: 4 });
+    // Not a literal — that turns every release into a failing test (#680) — and
+    // not `toBe(declaredVersion())` either, which reads the same file the code
+    // reads and can only agree with itself.
+    //
+    // The failure this must catch is the identity not finding a manifest at all,
+    // which surfaces as the `0.0.0-unknown` fallback rather than as a mismatch.
+    expect(identity).toMatchObject({ indexSchemaVersion: 4 });
+    expect((identity as { version: string }).version, 'a runtime that found no manifest reports this').not.toBe(
+      '0.0.0-unknown',
+    );
+    expect((identity as { version: string }).version, 'and what it did find is a version').toMatch(
+      /^\d+\.\d+\.\d+/,
+    );
     expect(typeof identity['entrypoint']).toBe('string');
     expect(typeof identity['packageRoot']).toBe('string');
   });
