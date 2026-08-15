@@ -217,6 +217,37 @@ This is a human or agent step on purpose. Automatic notification is not in this
 product's scope, and adding a watcher here would be a feature to maintain in place
 of a habit to keep.
 
+## 6c. The installation is exercised, not just the code (v1.0.0)
+
+Three defects reached v1.0.0 and none was reachable from the test suite:
+
+- `hermes install` could not recognise the config it had written, because the
+  entry was matched as exact text and the config on disk was formatted
+  differently (#682).
+- The skills root was derived from the running bundle rather than `--data-root`,
+  so a config could be bound to a temporary tree (#686). Every existing test
+  supplied that path explicitly, so the derivation was never exercised.
+- The release workflow tried to create a release that already existed and left
+  `main` red on a release that was fine (#681).
+
+What they have in common is that each lives where the product meets a machine
+that already has state on it — a config from a previous version, a checkout that
+is not the installation, a release that exists. A suite starts from nothing every
+time, which is what makes it repeatable and what makes it blind here.
+
+So before a release is called done:
+
+- **Install it over the previous version**, on a machine that has one, and read
+  the exit code. Not a fresh install — an upgrade, which is what users do.
+- **Start a fresh host process** and confirm it lists the tools. A config that
+  parses is not a config that works.
+- **Read the check runs at the release commit** after publishing, section 6b.
+  Publishing is itself a merge into the world.
+
+This is a step someone takes. Automating it would mean maintaining a fleet of
+machines in the state that makes the bug appear, which is more product than the
+product.
+
 ## 7. The suite proves something
 
 - `npx vitest run` green, and the run reports `Test Files N passed` — a bare test
