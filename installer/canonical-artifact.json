@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "f7c505140a6ad02984077343ff945b7a51c9a849cb31e8d0bd31fc09dcf5f2c5"
+    "sha256": "a282f5e66284c772c8f3241a41752d33602cf1f97963ceb2da2c12ebf8d1c220"
   },
   "artifact": {
-    "sha256": "b29745c34baf88859a61980c87b5e6886c572cadf5b269ea7a33a68c8e9084f3",
+    "sha256": "424da7f436fef1ac93edfecb8f0462468188cb8777f84c14a8cdc5dbaf6412f7",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -410,11 +410,11 @@
       },
       {
         "path": "dist/commands/hermes.js",
-        "sha256": "d232cb851da50cd04f7033470ca5515a5d2f9806e80348cba6fa70a19e9d7270"
+        "sha256": "b0ac302118f8321e597385bdfa14aec76e5a7bd3b6cb96df6e91183fd6d9cdb0"
       },
       {
         "path": "dist/commands/hermes.js.map",
-        "sha256": "c5eadf704df7bc9c8f11a79763d9559e378a3b1b81af71243179bc9e5cab7cbb"
+        "sha256": "a4a6f662f94b3e279e5af93621b1d58ed516c1b3e22bdf0af285e9195173b6a3"
       },
       {
         "path": "dist/commands/hooks.d.ts",
@@ -586,7 +586,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "c90277c439beda7658acec01945e277eee0babe3843fdff8a61012cd4a9c2e17"
+        "sha256": "e5be60b859581ab513ea1971618d3366d644a60f61af6235d14714febb7c6fe9"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
