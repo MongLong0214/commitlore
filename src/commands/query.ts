@@ -17,7 +17,7 @@
  * would make every agent treat "nothing to know here" as a failure.
  */
 
-import { runtimeIdentity } from '../core/runtime-identity.js';
+import { buildId, runtimeIdentity } from '../core/runtime-identity.js';
 import type { Command } from 'commander';
 
 import { BLOCKED_RECORD_WITHHELD } from '../core/grade.js';
@@ -250,7 +250,7 @@ export interface JsonRecord {
 export interface JsonOutput {
   command: string;
   /** Which build answered — version and the bundle it ran from (#631). */
-  runtime: { version: string; entrypoint: string };
+  runtime: { version: string; build_id: string };
   at: string;
   paths: string[];
   aliases: string[];
@@ -330,7 +330,7 @@ export const toJson = (command: string, result: QueryResult): JsonOutput => {
      * both of them serialize through; adding it to one would create exactly the
      * divergence it exists to expose.
      */
-    runtime: { version: runtime.version, entrypoint: runtime.entrypoint },
+    runtime: { version: runtime.version, build_id: buildId() },
     at: presented.at.toISOString(),
     paths: presented.paths,
     aliases: presented.aliases,

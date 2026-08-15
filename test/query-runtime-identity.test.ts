@@ -36,7 +36,7 @@ describe('#631 an answer names the runtime that produced it', () => {
     const answer = toJson('limits', runQuery({ cwd: PACKAGE_ROOT, kind: 'limits', scanBudgetMs: 0 }));
 
     expect(answer.runtime.version, 'the version a client compares against').toBe(declaredVersion());
-    expect(answer.runtime.entrypoint, 'and which file answered, since versions repeat').not.toBe('');
+    expect(answer.runtime.build_id, 'and which build answered, since versions repeat').not.toBe('');
   });
 
   // The guarantee is that one function owns the field. Two calls through it must
@@ -53,6 +53,6 @@ describe('#631 an answer names the runtime that produced it', () => {
   it('does not rely on the version alone to identify a build', () => {
     const answer = toJson('limits', runQuery({ cwd: PACKAGE_ROOT, kind: 'limits', scanBudgetMs: 0 }));
 
-    expect(answer.runtime.entrypoint, 'two installations can share a version').toMatch(/commitlore\.mjs$|src|dist/);
+    expect(answer.runtime.build_id, 'two installations can share a version').toMatch(/^[0-9a-f]{12}$|^unknown$/);
   });
 });
