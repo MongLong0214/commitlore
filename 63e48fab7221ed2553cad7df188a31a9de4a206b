@@ -1,0 +1,27 @@
+Limit: identity travels as version and digest, never as a path
+Blast: module
+Undo: easy
+Certainty: firm
+Record-Id: r-g1build
+Provenance: inherited 084ae3177f001078498123162c28221dd3b73f11
+
+Limit: a plan that lives only in a session is lost at the next compaction
+Blast: system
+Undo: easy
+Certainty: firm
+Record-Id: r-gateplan
+Provenance: inherited 8bcc5d8dc8f2a077e040d349758684d7a836c832
+
+Limit: the preregistered verdict is the authority for published M5 figures
+Blast: module
+Undo: easy
+Certainty: firm
+Record-Id: r-590gate
+Provenance: inherited 90c12d021d519ef661e728988f1484700561e574
+
+Limit: parity is only measured across process boundaries
+Blast: module
+Undo: easy
+Certainty: firm
+Record-Id: r-g1e2e1
+Provenance: inherited e18838d0e393b777562b10b3f0f3f9617357d5ae
