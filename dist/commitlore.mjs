@@ -24913,12 +24913,20 @@ var claudePluginHost = () => {
   run(["plugin", "marketplace", "update", "commitlore"]);
   return run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]) === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin install failed \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore" };
 };
+var codexPluginOutcome = (wrapper) => {
+  const result = spawnSync7(wrapper, ["plugin", "install-codex"], { stdio: "ignore", shell: false, timeout: 6e4 });
+  return result.status === 0 ? "plugin installed" : "plugin step failed \u2014 run: commitlore plugin install-codex";
+};
 var inspectAndApplyHosts = async (options) => {
   const requested = [];
   const notDetected = [];
   const home = options.home;
   if (hasCommand("codex")) {
-    requested.push(cliHost("codex", options.wrapper));
+    requested.push(
+      cliHost("codex", options.wrapper).then(
+        (result) => result.healthy ? { ...result, detail: `${result.detail}; ${codexPluginOutcome(options.wrapper)}` } : result
+      )
+    );
   } else if (existsSync22(join17(home, ".codex"))) {
     requested.push(tomlHost(join17(home, ".codex", "config.toml"), options.wrapper));
   } else notDetected.push("codex");
