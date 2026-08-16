@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = join(ROOT, 'dist', 'commitlore.mjs');
 const scratch: string[] = [];
@@ -111,7 +112,19 @@ describe('installer-hosts accepts only live CommitLore registrations', () => {
     cursorConfig(home, { command: ours, args: ['mcp'] });
     const result = run(home, ours);
     expect(result.status).toBe(0);
-    expect(result.summary.runtimeIdentity).toMatchObject({ version: '0.8.2', indexSchemaVersion: 4 });
+    // Not a literal — that turns every release into a failing test (#680) — and
+    // not `toBe(declaredVersion())` either, which reads the same file the code
+    // reads and can only agree with itself.
+    //
+    // The failure this must catch is the identity not finding a manifest at all,
+    // which surfaces as the `0.0.0-unknown` fallback rather than as a mismatch.
+    expect(result.summary.runtimeIdentity).toMatchObject({ indexSchemaVersion: 4 });
+    expect((result.summary.runtimeIdentity as { version: string }).version, 'a runtime that found no manifest reports this').not.toBe(
+      '0.0.0-unknown',
+    );
+    expect((result.summary.runtimeIdentity as { version: string }).version, 'and what it did find is a version').toMatch(
+      /^\d+\.\d+\.\d+/,
+    );
     expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'cursor', outcome: 'owned', healthy: true }));
   });
 

@@ -14174,7 +14174,11 @@ var printStatus = (result, json) => {
     process.stdout.write("  unattended start: disabled by policy\n");
   } else {
     process.stdout.write(
-      `unattended capture: ${result.unattended === true ? "on \u2014 policy permits host-driven capture" : "off"}
+      // Not "on" (#550, #527). A bare `on` is true of the policy and read as
+      // true of the system, in the position where a reader stops. The lines
+      // below already say nothing initiates capture on its own; a headline that
+      // contradicts them is the one people believe.
+      `unattended capture: ${result.unattended === true ? "policy permits host-driven capture \u2014 nothing initiates it on its own" : "off"}
 `
     );
     process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")
@@ -17788,7 +17792,7 @@ var register3 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync5, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname9, join as join14, resolve as resolve17 } from "node:path";
+import { dirname as dirname10, join as join14, resolve as resolve17 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -21784,7 +21788,7 @@ import {
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
-import { join as join12, resolve as resolve15 } from "node:path";
+import { basename as basename2, dirname as dirname8, join as join12, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash7, randomBytes as randomBytes5 } from "node:crypto";
@@ -22448,9 +22452,20 @@ var resolveEntryForRecord = (entry, cwd) => {
   }
   return null;
 };
+var versionFreeEntryFor = (bundle) => {
+  const versionDir = dirname8(dirname8(bundle));
+  if (!/^v\d/.test(basename2(versionDir))) return null;
+  const candidate = join12(dirname8(versionDir), "current", "dist", "commitlore.mjs");
+  try {
+    return realpathSync4(candidate) === realpathSync4(bundle) ? candidate : null;
+  } catch {
+    return null;
+  }
+};
 var recordBinPath = (cwd) => {
-  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-  if (resolvedEntry === null) return;
+  const running = resolveEntryForRecord(process.argv[1], cwd);
+  if (running === null) return;
+  const resolvedEntry = versionFreeEntryFor(running) ?? running;
   execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
   try {
@@ -22620,15 +22635,15 @@ var register9 = (program3) => {
 
 // src/core/agents-guidance.ts
 import { existsSync as existsSync19, readFileSync as readFileSync19, renameSync as renameSync8, rmSync as rmSync4, statSync as statSync8, writeFileSync as writeFileSync12 } from "node:fs";
-import { basename as basename2, dirname as dirname8, join as join13, resolve as resolve16 } from "node:path";
+import { basename as basename3, dirname as dirname9, join as join13, resolve as resolve16 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
 var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
-  const here = dirname8(source);
-  return basename2(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
+  const here = dirname9(source);
+  return basename3(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
   const contents = readFileSync19(shippedAgentsPath(), "utf8");
@@ -23189,12 +23204,12 @@ var runDemo = async (opts = {}) => {
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
-    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname9(tmpDir));
+    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname10(tmpDir));
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
     const targetFullPath = join14(tmpDir, targetPath);
-    mkdirSync9(dirname9(targetFullPath), { recursive: true });
+    mkdirSync9(dirname10(targetFullPath), { recursive: true });
     writeFileSync13(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
@@ -23662,7 +23677,7 @@ var register14 = (program3) => {
 import { spawnSync as spawnSync6 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync21, mkdirSync as mkdirSync10, readFileSync as readFileSync23, renameSync as renameSync9, statSync as statSync9, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename3, dirname as dirname10, join as join15, resolve as resolve19 } from "node:path";
+import { basename as basename4, dirname as dirname11, join as join15, resolve as resolve19 } from "node:path";
 
 // src/core/hermes-config.ts
 import { relative as relative2, resolve as resolve18, sep as sep3 } from "node:path";
@@ -23728,19 +23743,70 @@ var childEnd = (lines, start, sectionEnd) => {
   }
   return end;
 };
-var ownMcpBlockEnd = (lines, start, end, wrapperPath) => {
-  const wrappers = typeof wrapperPath === "string" ? [wrapperPath] : wrapperPath;
-  const expectedCommands = new Set(wrappers.map((path2) => `    command: ${yamlString(path2)}`));
-  const expected = ["  commitlore:", void 0, "    args:", "      - mcp", "    enabled: true"];
-  if (lines[start]?.text !== expected[0] || !expectedCommands.has(lines[start + 1]?.text ?? "") || lines[start + 2]?.text !== expected[2] || lines[start + 3]?.text !== expected[3] || lines[start + 4]?.text !== expected[4]) {
-    return null;
-  }
-  for (const line2 of lines.slice(start + 5, end)) {
-    const trimmed = line2.text.trim();
-    if (trimmed.length > 0 && !trimmed.startsWith("#")) return null;
-  }
-  return start + 5;
+var flowSequence = (raw) => {
+  const text = raw.trim();
+  if (!text.startsWith("[") || !text.endsWith("]")) return null;
+  const inner = text.slice(1, -1).trim();
+  if (inner === "") return [];
+  return inner.split(",").map((item) => scalarValue(item.trim()) ?? item.trim());
 };
+var readMcpEntry = (lines, start, end) => {
+  const entry = { command: null, args: null, end, unreadable: false };
+  for (let index = start + 1; index < end; index += 1) {
+    const text = lines[index]?.text ?? "";
+    if (text.trim() === "" || text.trimStart().startsWith("#")) continue;
+    if (!/^ {4}\S/.test(text)) {
+      if (/^ {2}\S/.test(text)) {
+        entry.end = index;
+        break;
+      }
+      if (/^ {6}- /.test(text)) continue;
+      entry.unreadable = true;
+      continue;
+    }
+    const pair = /^ {4}([A-Za-z_][\w-]*):\s*(.*)$/.exec(text);
+    if (pair === null) {
+      entry.unreadable = true;
+      continue;
+    }
+    const [, key = "", rest = ""] = pair;
+    if (key === "command") {
+      entry.command = scalarValue(rest) ?? rest.trim();
+    } else if (key === "args") {
+      const flow = flowSequence(rest);
+      if (flow !== null) {
+        entry.args = flow;
+      } else if (rest.trim() === "") {
+        const items = [];
+        let cursor = index + 1;
+        for (; cursor < end; cursor += 1) {
+          const item = /^ {6}-\s+(.+)$/.exec(lines[cursor]?.text ?? "");
+          if (item === null) break;
+          items.push(scalarValue(item[1] ?? "") ?? (item[1] ?? "").trim());
+        }
+        entry.args = items;
+        index = cursor - 1;
+      } else {
+        entry.unreadable = true;
+      }
+    }
+  }
+  return entry;
+};
+var mcpEntryMismatch = (lines, start, end, wrapperPath) => {
+  const wrappers = typeof wrapperPath === "string" ? [wrapperPath] : wrapperPath;
+  const entry = readMcpEntry(lines, start, end);
+  if (entry.unreadable) return "mcp_servers.commitlore holds a line this installer cannot read, so it was left unchanged";
+  if (entry.command === null) return "mcp_servers.commitlore has no command:, so it was left unchanged";
+  if (!wrappers.includes(entry.command)) {
+    return `mcp_servers.commitlore.command is ${JSON.stringify(entry.command)}, not this install (${wrappers.map((w) => JSON.stringify(w)).join(" or ")})`;
+  }
+  if (entry.args !== null && !(entry.args.length === 1 && entry.args[0] === "mcp")) {
+    return `mcp_servers.commitlore.args is ${JSON.stringify(entry.args)}, not ["mcp"] \u2014 left unchanged rather than overwritten`;
+  }
+  return null;
+};
+var ownMcpBlockEnd = (lines, start, end, wrapperPath) => mcpEntryMismatch(lines, start, end, wrapperPath) === null ? readMcpEntry(lines, start, end).end : null;
 var hasOwnMcpEntry = (lines, start, end, wrapperPath) => ownMcpBlockEnd(lines, start, end, wrapperPath) !== null;
 var mcpBlock = (wrapperPath, newline) => [
   "  commitlore:",
@@ -23778,7 +23844,7 @@ var addHermesConfig = (contents, options) => {
       if (start !== null) {
         const end = childEnd(lines, start, section2.end);
         if (hasOwnMcpEntry(lines, start, end, options.wrapperPath)) unchanged.push("mcp");
-        else blocked2.push("mcp_servers.commitlore already exists but does not point at this CommitLore install");
+        else blocked2.push(mcpEntryMismatch(lines, start, end, options.wrapperPath) ?? "mcp_servers.commitlore was left unchanged");
       } else {
         next = insertBeforeLine(next, section2.end, mcpBlock(options.wrapperPath, newline));
         added.push("mcp");
@@ -23892,7 +23958,7 @@ var backupPathFor = (configPath) => {
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
-  const temporary = join15(dirname10(path2), `.${basename3(path2)}.commitlore-${process.pid}.tmp`);
+  const temporary = join15(dirname11(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
   try {
     if (mode === void 0) writeFileSync16(temporary, contents, "utf8");
     else writeFileSync16(temporary, contents, { encoding: "utf8", mode });
@@ -23936,8 +24002,9 @@ var runHermesInstall = (options = {}) => {
   const configPath = options.configPath ?? (hermesHome === void 0 ? join15(home, ".hermes", "config.yaml") : join15(hermesHome, "config.yaml"));
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join15(home, ".local", "share");
   const dataRoot = options.dataRoot ?? join15(dataHome, "commitlore");
-  const skillsDir = options.skillsDir ?? installedPath("hermes", "skills");
-  const detected = options.detected ?? (existsSync21(dirname10(configPath)) || commandExists("hermes"));
+  const versionedSkills = join15(dataRoot, `v${runtimeIdentity().version}`, "hermes", "skills");
+  const skillsDir = options.skillsDir ?? (existsSync21(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
+  const detected = options.detected ?? (existsSync21(dirname11(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
   if (!detected) {
@@ -23969,7 +24036,7 @@ var runHermesInstall = (options = {}) => {
   }
   if (edit.added.length > 0) {
     try {
-      mkdirSync10(dirname10(configPath), { recursive: true });
+      mkdirSync10(dirname11(configPath), { recursive: true });
       if (existsSync21(configPath)) {
         const backup = backupPathFor(configPath);
         copyFileSync(configPath, backup);
@@ -24109,7 +24176,7 @@ var register16 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync24, realpathSync as realpathSync5 } from "node:fs";
-import { basename as basename4, dirname as dirname11, isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
+import { basename as basename5, dirname as dirname12, isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash9 } from "node:crypto";
@@ -24513,9 +24580,9 @@ var canonical = (target) => {
       const real = realpathSync5(current);
       return tail.length === 0 ? real : join16(real, ...tail);
     } catch {
-      const parent = dirname11(current);
+      const parent = dirname12(current);
       if (parent === current) return absolute;
-      tail.unshift(basename4(current));
+      tail.unshift(basename5(current));
       current = parent;
     }
   }
@@ -24675,7 +24742,7 @@ var register17 = (program3) => {
 
 // src/commands/installer-hosts.ts
 import { existsSync as existsSync22, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync25 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname12, join as join17 } from "node:path";
+import { delimiter as delimiter2, dirname as dirname13, join as join17 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync7 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
@@ -24699,8 +24766,8 @@ var commandOf = (format, entry) => {
 };
 var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", command: [wrapper, "mcp"], enabled: true } : { command: wrapper, args: ["mcp"] };
 var atomicJsonWrite = (path2, value) => {
-  mkdirSync11(dirname12(path2), { recursive: true });
-  const temporary = join17(dirname12(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+  mkdirSync11(dirname13(path2), { recursive: true });
+  const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
   try {
     writeFileSync17(temporary, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", mode: 384 });
@@ -24789,8 +24856,8 @@ command = ${escaped}
 args = ["mcp"]
 `;
   try {
-    mkdirSync11(dirname12(path2), { recursive: true });
-    const temporary = join17(dirname12(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+    mkdirSync11(dirname13(path2), { recursive: true });
+    const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
     try {
       writeFileSync17(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
@@ -24837,12 +24904,29 @@ var cliHost = async (host, wrapper) => {
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
+var claudePluginHost = () => {
+  const host = "claude-code";
+  const run = (args) => spawnSync7("claude", args, { stdio: "ignore", shell: false, timeout: 6e4 }).status;
+  if (run(["plugin", "marketplace", "add", "MongLong0214/commitlore"]) === null) {
+    return { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin marketplace add could not run" };
+  }
+  run(["plugin", "marketplace", "update", "commitlore"]);
+  return run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]) === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin install failed \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore" };
+};
+var codexPluginOutcome = (wrapper) => {
+  const result = spawnSync7(wrapper, ["plugin", "install-codex"], { stdio: "ignore", shell: false, timeout: 6e4 });
+  return result.status === 0 ? "plugin installed" : "plugin step failed \u2014 run: commitlore plugin install-codex";
+};
 var inspectAndApplyHosts = async (options) => {
   const requested = [];
   const notDetected = [];
   const home = options.home;
   if (hasCommand("codex")) {
-    requested.push(cliHost("codex", options.wrapper));
+    requested.push(
+      cliHost("codex", options.wrapper).then(
+        (result) => result.healthy ? { ...result, detail: `${result.detail}; ${codexPluginOutcome(options.wrapper)}` } : result
+      )
+    );
   } else if (existsSync22(join17(home, ".codex"))) {
     requested.push(tomlHost(join17(home, ".codex", "config.toml"), options.wrapper));
   } else notDetected.push("codex");
@@ -24860,6 +24944,9 @@ var inspectAndApplyHosts = async (options) => {
     const result = spawnSync7(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
     requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
   } else notDetected.push("hermes");
+  if (hasCommand("claude")) {
+    requested.push(Promise.resolve(claudePluginHost()));
+  } else notDetected.push("claude-code");
   const hosts = await Promise.all(requested);
   return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };

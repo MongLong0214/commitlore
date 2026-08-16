@@ -14,6 +14,7 @@ import type { Command } from 'commander';
 
 import { addHermesConfig } from '../core/hermes-config.js';
 import { installedPath } from '../core/paths.js';
+import { runtimeIdentity } from '../core/runtime-identity.js';
 
 export interface HermesInstallOptions {
   readonly configPath?: string;
@@ -104,7 +105,23 @@ export const runHermesInstall = (options: HermesInstallOptions = {}): HermesInst
   const configPath = options.configPath ?? (hermesHome === undefined ? join(home, '.hermes', 'config.yaml') : join(hermesHome, 'config.yaml'));
   const dataHome = options.dataHome ?? process.env['XDG_DATA_HOME'] ?? join(home, '.local', 'share');
   const dataRoot = options.dataRoot ?? join(dataHome, 'commitlore');
-  const skillsDir = options.skillsDir ?? installedPath('hermes', 'skills');
+  /**
+   * Where the skills the config will point at actually live (#686).
+   *
+   * `installedPath` resolves against the running bundle, which is right when
+   * that bundle is the installed one and wrong the moment it is not. Running a
+   * checkout's `dist/` with `--data-root` pointed at the real installation wrote
+   * the checkout's path into a permanent config: delete the tree and the skills
+   * vanish while `mcp_servers` stays valid, which is the half-configured state
+   * #684 was about, re-entered through a different door.
+   *
+   * So when the data root holds this version's own skills, that is the answer.
+   * The running bundle's location is the fallback for the case it was always
+   * correct for — an installation invoking itself.
+   */
+  const versionedSkills = join(dataRoot, `v${runtimeIdentity().version}`, 'hermes', 'skills');
+  const skillsDir =
+    options.skillsDir ?? (existsSync(versionedSkills) ? versionedSkills : installedPath('hermes', 'skills'));
   const detected = options.detected ?? (existsSync(dirname(configPath)) || commandExists('hermes'));
   const report: string[] = [];
   const verified: string[] = [];

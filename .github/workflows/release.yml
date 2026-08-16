@@ -339,6 +339,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # A release for this tag may already exist — a maintainer can cut one
+          # by hand seconds before the tag push wakes this workflow, which is
+          # what happened for v1.0.0 (#681). Creating a second one is refused by
+          # GitHub with a 422, and the job dies red on a release that is
+          # perfectly fine.
+          #
+          # Existence alone is not permission to skip. A release that exists
+          # pointing at a *different commit* is a real problem — a tag moved, or
+          # cut from the wrong branch — and swallowing that is worse than the
+          # 422, which at least made noise. So: same target, skip; different
+          # target, fail and say so.
+          if existing=$(gh release view "$GITHUB_REF_NAME" --json targetCommitish,tagName --jq '.targetCommitish' 2>/dev/null); then
+            resolved=$(git rev-parse "$GITHUB_REF_NAME^{commit}")
+            if [ "$resolved" = "$RELEASE_COMMIT" ]; then
+              echo "release $GITHUB_REF_NAME already exists at the verified commit ($RELEASE_COMMIT) — nothing to publish"
+              echo "  its recorded target: $existing"
+              exit 0
+            fi
+            echo "release $GITHUB_REF_NAME already exists, but the tag resolves elsewhere" >&2
+            echo "  tag resolves to: $resolved" >&2
+            echo "  this run verified: $RELEASE_COMMIT" >&2
+            echo "  refusing to publish over it — the existing release is about a different commit" >&2
+            exit 1
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag \
             --target "$RELEASE_COMMIT" \

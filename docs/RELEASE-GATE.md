@@ -195,6 +195,59 @@ cannot catch.
   explicit check-run set rather than inferred from a local test run or a branch
   badge. A local suite passed at every one of the three commits where CI was red.
 
+## 6b. Someone reads `main` after the merge (#665)
+
+A merge that satisfies section 5 can still break `main`, and did: a PR whose own
+checks were green merged, `main` went red, and nothing noticed for two hours.
+Nobody was at fault — the checks measured the PR's head, and the merge produced a
+commit that had never been tested.
+
+So the merge is not the last step:
+
+- After every merge to `main`, read the check runs **at the resulting `main` head
+  SHA**, not at the PR's head and not at "the latest run on main". Those are three
+  different commits and only the first one is the thing users get.
+- A red `main` stops the next merge. Fixing forward is fine; merging on top of a
+  red `main` is how one failure hides another, which is what turned two hours into
+  a second incident.
+- `0` failing is not the same as `0` checks. A head with no check runs attached
+  has not been measured, and "no failures" reads identically in both cases.
+
+This is a human or agent step on purpose. Automatic notification is not in this
+product's scope, and adding a watcher here would be a feature to maintain in place
+of a habit to keep.
+
+## 6c. The installation is exercised, not just the code (v1.0.0)
+
+Three defects reached v1.0.0 and none was reachable from the test suite:
+
+- `hermes install` could not recognise the config it had written, because the
+  entry was matched as exact text and the config on disk was formatted
+  differently (#682).
+- The skills root was derived from the running bundle rather than `--data-root`,
+  so a config could be bound to a temporary tree (#686). Every existing test
+  supplied that path explicitly, so the derivation was never exercised.
+- The release workflow tried to create a release that already existed and left
+  `main` red on a release that was fine (#681).
+
+What they have in common is that each lives where the product meets a machine
+that already has state on it — a config from a previous version, a checkout that
+is not the installation, a release that exists. A suite starts from nothing every
+time, which is what makes it repeatable and what makes it blind here.
+
+So before a release is called done:
+
+- **Install it over the previous version**, on a machine that has one, and read
+  the exit code. Not a fresh install — an upgrade, which is what users do.
+- **Start a fresh host process** and confirm it lists the tools. A config that
+  parses is not a config that works.
+- **Read the check runs at the release commit** after publishing, section 6b.
+  Publishing is itself a merge into the world.
+
+This is a step someone takes. Automating it would mean maintaining a fleet of
+machines in the state that makes the bug appear, which is more product than the
+product.
+
 ## 7. The suite proves something
 
 - `npx vitest run` green, and the run reports `Test Files N passed` — a bare test
@@ -211,6 +264,11 @@ question this project publishes rather than hides. Correctness of the tool is no
 contingent on the effect being large; a tool that answers honestly is shippable
 whether or not the answer turns out to matter.
 
-**Zero open issues.** The six that remain are features on the four defensible
-axes, each argued for from a measurement or a reproduced defect (ADR-0013). A
-backlog is a sign of a scope, not of incompleteness.
+**Zero open issues.** A backlog is a sign of a scope, not of incompleteness. What
+this gate requires is that every remaining issue has a disposition — fixed,
+duplicate, or deliberately out of scope with the reason recorded — rather than
+that the list is empty.
+
+**An automatic alarm on a red `main`.** Section 6b is a step someone takes, not a
+watcher this project runs. The incident it comes from was a missing habit, and a
+watcher would be a second thing to keep working.

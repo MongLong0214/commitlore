@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "7fccba17a6a6ab128756546212fe3d4e12a8eaf56a21ce7bb00ea493d3fad75a"
+    "sha256": "364e3a605e5bb03ee036ab86cadbc9e6200c7d7e11c089c3d6d9e6e502ca20b5"
   },
   "artifact": {
-    "sha256": "3daada0177696d1e51bb33ff537c9d730253617f5b73ffa568d348bff6a8de32",
+    "sha256": "2e853534b045f2a421ab6e87c65e840ce5fa7fbf09ad84af655acbeff9f2f8a0",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -38,11 +38,11 @@
       },
       {
         "path": "dist/commands/auto.js",
-        "sha256": "9f3f05b3b4dce1b855c6ee3f836a456548c1ab364c63e51cd74e5482e01631d1"
+        "sha256": "4929a621bd4a2bfcfcf75b54ad37f40d42f76fdcf8c2edcccd75ac74cd0074f0"
       },
       {
         "path": "dist/commands/auto.js.map",
-        "sha256": "d9df6ac69c67a052222be56fa04833df0a768d56012f4618149bfe52955dd9fa"
+        "sha256": "761b99a019411113e591dcf36e04ddefbd6f62eece48e3ea6a347d73cfbb66dc"
       },
       {
         "path": "dist/commands/backfill.d.ts",
@@ -410,11 +410,11 @@
       },
       {
         "path": "dist/commands/hermes.js",
-        "sha256": "d232cb851da50cd04f7033470ca5515a5d2f9806e80348cba6fa70a19e9d7270"
+        "sha256": "b0ac302118f8321e597385bdfa14aec76e5a7bd3b6cb96df6e91183fd6d9cdb0"
       },
       {
         "path": "dist/commands/hermes.js.map",
-        "sha256": "c5eadf704df7bc9c8f11a79763d9559e378a3b1b81af71243179bc9e5cab7cbb"
+        "sha256": "a4a6f662f94b3e279e5af93621b1d58ed516c1b3e22bdf0af285e9195173b6a3"
       },
       {
         "path": "dist/commands/hooks.d.ts",
@@ -422,11 +422,11 @@
       },
       {
         "path": "dist/commands/hooks.js",
-        "sha256": "f6c02cae9c88838b3ee7eb99670593e4b99c6dc416908141712708f009482f32"
+        "sha256": "33d6ebc8e69684983b258b3253423eef7085a49ce44e7579116bed4f7644c5e2"
       },
       {
         "path": "dist/commands/hooks.js.map",
-        "sha256": "fd48593e755a6c4efd0350219595cb62de56366d0aefc4ad91c0c7ecd2f22513"
+        "sha256": "21f2746932ed945e5260d4d688b5da6ee6d591ee95a5472fd17d3098681c8958"
       },
       {
         "path": "dist/commands/index-cmd.d.ts",
@@ -470,11 +470,11 @@
       },
       {
         "path": "dist/commands/installer-hosts.js",
-        "sha256": "86ff3416516d96127b0eec884d8b0213fdd27f2bde38a688c8533d55eafa69bc"
+        "sha256": "d3c1f45c65979b97b91459b6d26ad5050d4ce5a7fd09088a24a139d9e7b75cae"
       },
       {
         "path": "dist/commands/installer-hosts.js.map",
-        "sha256": "a04d4cde2809f2171bcd7613b30311d9070488529b85957eb9398d1d3c24bede"
+        "sha256": "152ccd3a597ea139249897719054eb110788f82025490b89ca8cbd947ae49c63"
       },
       {
         "path": "dist/commands/mcp.d.ts",
@@ -586,7 +586,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "9bad7d49d94611561b6d5f1c4da72164f3f604492dacb557f33b76b300c33536"
+        "sha256": "8691137a115d0e25304b5e6db6319f8c89ff2336caecedea8d784cbdad34f19d"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -786,11 +786,11 @@
       },
       {
         "path": "dist/core/hermes-config.js",
-        "sha256": "6f72f89002eac23a0263856ce7d8ac8cecbfdb9109058b6229a3aa7198674024"
+        "sha256": "7b279ac6e61ada4d35a9d7c39ad17ea18e030b67ba4e8d6f229abc92fc211aef"
       },
       {
         "path": "dist/core/hermes-config.js.map",
-        "sha256": "aa6f1e703c3f347977b84cab16fd707045bf496a3530aac71b5c8b948ea9917d"
+        "sha256": "18bf66c7b6ebf4f7c09552bdfa25efd3ac51248421e805b5a2e76b02389e54db"
       },
       {
         "path": "dist/core/hook-target.d.ts",

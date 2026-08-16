@@ -10,6 +10,38 @@ There is no compiled artifact anywhere in the product ([ADR-0026](adr/ADR-0026-n
 and neither install script contains a platform, architecture or libc check —
 there is no platform-specific artifact to choose between.
 
+## The protocol contract (2.0 Stable)
+
+`spec/SPEC.md` is Stable as of v1.0.0. What that promises, and what it does not:
+
+**Will not change incompatibly within 2.x**
+
+- The trailer grammar (SPEC §2) and where git decides a trailer block begins and
+  ends. CommitLore does not overrule git on that boundary and will not start.
+- The meaning of every key in SPEC §3, and `Record-Id`'s format.
+- The `X-<Name>` extension slot. An organization's own keys are preserved
+  verbatim, and no future version will start interpreting them.
+- The three trust grades and what each asserts. Their *strength* depends on the
+  configured mode — see `SECURITY.md` — but the words do not change meaning.
+- A record written today validates under any 2.x reader.
+
+**May change**
+
+- New optional keys in §3. A reader that does not know a key ignores it, which
+  is what makes this compatible.
+- Diagnostics, exit-code detail, and output formatting outside the JSON
+  contract. The JSON answer's shape is pinned by tests; prose is not.
+- The index schema. It is a derived cache (ADR-0003) and rebuilds; a reader that
+  meets an index it does not understand rebuilds rather than guessing.
+
+**How anything is retired**
+
+Nothing in §3 is removed in 2.x. If a key must go, it is deprecated in a minor
+release — still accepted, still validating, documented as deprecated with what
+replaces it — and removed no earlier than 3.0. A record already committed is
+history and remains readable regardless: the repository is the record, and a
+reader that cannot read old commits has broken the product's one promise.
+
 ## Install paths
 
 | Path | Command | Who it is for |
@@ -39,6 +71,74 @@ there is no platform-specific artifact to choose between.
 Reachability is not support. A script that runs on a host says nothing about
 whether the properties the product depends on hold there, and the two are kept
 apart on purpose.
+
+### A diagnosis this product cannot make (#657)
+
+`doctor` probes a registered MCP command by starting it and waiting for the
+protocol. On Windows, a `.cmd` launcher naming an interpreter that is not on disk
+produces no signal at all: `cmd.exe` exits silently, nothing ever speaks, and the
+probe waits out its budget and reports `initialize-timed-out`.
+
+Measured on `windows-latest` with three independent drivers, so this is the
+host's behaviour rather than a defect in the probe.
+
+The consequence is that **two different faults share one report**: a registration
+that is slow, and a registration whose interpreter does not exist. `doctor` says
+*could not verify this time* for both, which is honest about what it observed and
+silent about which of the two it was.
+
+This is accepted rather than fixed. Distinguishing them would mean inspecting the
+launcher's contents and resolving the interpreter it names — reimplementing part
+of the host's own command resolution, in a place where being subtly wrong would
+produce a confident diagnosis that is false. A timeout that names both
+possibilities is the weaker claim and the true one.
+
+What still holds: execution correctness is unaffected. A registration that works
+is verified normally, and one that is genuinely broken is still reported as
+unverified — a user is never told a broken registration is healthy.
+
+## After upgrading, run `doctor` (#693)
+
+An upgrade updates the CLI. It does not reach two things:
+
+- **Hooks already installed in a repository.** `commitlore hooks install` records
+  the exact bundle it ran from, which pins that repository to one release. The
+  installer cannot fix this for you — it has no way to know which repositories
+  have hooks.
+- **Sessions already running.** A host loads its runtime once and keeps it.
+
+So after installing a new version:
+
+```sh
+commitlore doctor
+```
+
+Two warnings are the ones to expect and act on:
+
+```
+runtime identity — hook identity differs from CLI: hook v<old>; CLI v<new>
+  fix: commitlore hooks install          # run it in that repository
+
+live MCP runtime identity — N live CommitLore MCP runtime(s) are unusable
+  restart those sessions                 # a host keeps the runtime it loaded
+```
+
+Neither is a defect in the release. Both are state a release cannot reach, and
+`doctor` naming them is the product doing what it can — which is to say what it
+knows rather than to guess that everything is current.
+
+### Why the hook records a version
+
+It is deliberate. The recorded path makes the hook independent of `PATH` and of
+whatever `node_modules/.bin/commitlore` sits above the repository, and the
+interpreter is recorded beside it because a hook runs where `PATH` may carry no
+`node` at all. A launcher that resolves through `PATH` would undo both — which
+was measured, not assumed: recording the `bin` wrapper made hooks fail under the
+restricted `PATH` a hook actually runs in.
+
+Making the recorded path version-free without losing those properties needs a
+stable directory the installer maintains, and that is tracked in #693 rather than
+improvised.
 
 ## Prerequisites
 

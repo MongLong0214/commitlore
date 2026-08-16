@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v0.8.2/install.sh | sh -s v0.8.2
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh -s v1.0.1
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -626,6 +626,34 @@ if ! mv "$dest_tmp" "$dest"; then
 fi
 dest_tmp=""
 
+# A version-free path to the bundle, maintained beside the versioned checkouts
+# (#693).
+#
+# `commitlore hooks install` records an absolute path to the bundle so a hook is
+# independent of PATH and of any node_modules/.bin/commitlore above the
+# repository. Recording the versioned checkout pins that repository to one
+# release: three repositories on the first machine to upgrade were still
+# validating commits with 0.8.2 and 0.8.0, and this repository was one of them.
+#
+# The wrapper cannot stand in for it -- that was tried and fails, because a hook
+# runs where PATH may carry no node and a shell script cannot be launched with
+# the recorded interpreter. A symlink to the checkout keeps both properties: an
+# absolute path to a .mjs, and one that does not name a release.
+#
+# Symlink, then rename: an existing `current` cannot be replaced in place while
+# something is reading through it.
+current_link="$data_root/current"
+current_tmp="$current_link.commitlore-install.$$"
+if ln -sfn "$candidate" "$current_tmp" 2>/dev/null && mv -f "$current_tmp" "$current_link" 2>/dev/null; then
+  log "current -> $(basename "$candidate")"
+else
+  rm -f "$current_tmp" 2>/dev/null || true
+  # Not fatal. A host without symlinks still has a working install; hooks there
+  # keep recording the versioned path and `commitlore hooks install` after an
+  # upgrade remains the repair, which `doctor` already names.
+  log "note: could not maintain $current_link -- hooks will record a versioned path"
+fi
+
 log "installed to $dest"
 printf '%s\n' "$verified_version"
 
@@ -802,10 +830,24 @@ EOF
 # Claude Code -- https://code.claude.com/docs/en/discover-plugins#install-plugins
 has_claude_code() { command -v claude >/dev/null 2>&1; }
 wire_claude_code() {
+  # An already-installed plugin is the upgrade case, not a reason to stop
+  # (#660). Returning here meant a release reached the CLI wrapper and never
+  # the plugin cache: `claude plugin list` says commitlore is installed, and
+  # the copy it names stays at whatever version installed it. Four generations
+  # accumulated that way, and v1.0.1 joined them without displacing one.
+  #
+  # `marketplace update` is the step that was missing. Adding a marketplace
+  # that is already present is a no-op, so the old path could never see a new
+  # version even when it did run.
   installed_plugins="$(claude plugin list 2>/dev/null || true)"
   case "$installed_plugins" in
     *commitlore*)
-      record_skipped "claude-code" "the commitlore plugin is already installed -- left unchanged"
+      if claude plugin marketplace update commitlore >/dev/null 2>&1 &&
+        claude plugin install commitlore@commitlore --scope user >/dev/null 2>&1; then
+        record_wired "claude-code: refreshed the commitlore plugin to this version (restart running sessions to load it)"
+      else
+        record_skipped "claude-code" "the commitlore plugin is installed but could not be refreshed -- run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore"
+      fi
       return
       ;;
   esac
