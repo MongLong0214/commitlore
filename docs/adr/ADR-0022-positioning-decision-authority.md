@@ -30,6 +30,27 @@ The positioning that follows from this evidence is: **an agent must not
 revive a decision the repository already reversed.** CommitLore is the
 authority on which decisions are still in force — the decision authority.
 
+## What this positioning does not claim
+
+Added after a v1.0.2 documentation pass mistook it for one.
+
+*An agent must not revive a decision the repository already reversed* is a
+statement about what an agent **should** do — the problem this product exists to
+address. It is not a claim that CommitLore prevents it.
+
+The distinction matters because the same pass correctly removed a claim that
+looked identical: `spec/SPEC.md` said `commitlore guard` **blocks** re-proposal.
+That is a claim about the tool's capability, and at recall 22.0% it is false —
+guard flags, and an empty result guarantees nothing (ADR-0020).
+
+```
+"an agent must not revive …"   a norm the product serves      ← positioning, true
+"guard blocks re-proposal"     a capability the tool has      ← enforcement, false
+```
+
+Both sentences contain an absolute. Only one of them is about what the software
+does, and only that one was an overclaim.
+
 ## Decision
 
 The public positioning moves from "Git-native decision memory for AI-assisted

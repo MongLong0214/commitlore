@@ -16,8 +16,9 @@ are waiting on a security report — no details.
 
 ## Supported versions
 
-The latest published release only. CommitLore is pre-1.0 and fixes ship
-forward; there are no backport branches.
+The latest published release only. Fixes ship forward and there are no backport
+branches — the protocol is 2.0 Stable, so a record written under any 1.x reader
+stays readable, but the *tool* is only supported at its newest release.
 
 ## What is worth reporting
 

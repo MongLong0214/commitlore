@@ -127,18 +127,26 @@ Neither is a defect in the release. Both are state a release cannot reach, and
 `doctor` naming them is the product doing what it can — which is to say what it
 knows rather than to guess that everything is current.
 
-### Why the hook records a version
+### What the hook records, and why it is a path
 
-It is deliberate. The recorded path makes the hook independent of `PATH` and of
-whatever `node_modules/.bin/commitlore` sits above the repository, and the
-interpreter is recorded beside it because a hook runs where `PATH` may carry no
-`node` at all. A launcher that resolves through `PATH` would undo both — which
-was measured, not assumed: recording the `bin` wrapper made hooks fail under the
-restricted `PATH` a hook actually runs in.
+The hook resolves through an absolute path recorded in `commitlore.bin`, so it
+is independent of `PATH` and of whatever `node_modules/.bin/commitlore` sits
+above the repository. The interpreter is recorded beside it, because a hook runs
+where `PATH` may carry no `node` at all.
 
-Making the recorded path version-free without losing those properties needs a
-stable directory the installer maintains, and that is tracked in #693 rather than
-improvised.
+Since v1.0.2 that path is version-free: `install.sh` maintains
+`<data-root>/current` beside the versioned checkouts, and a hook installed after
+that records it. New installs follow upgrades on their own.
+
+**Hooks installed before it do not.** They still name the release they were
+installed from, and the installer cannot fix them — it has no way to know which
+repositories have hooks. `doctor` reports the mismatch and names
+`commitlore hooks install` as the repair.
+
+The `bin` wrapper cannot serve as that path, and this was measured rather than
+reasoned: recording it made hooks fail under the restricted `PATH` a hook
+actually runs in, because a wrapper is a shell script and cannot be launched
+with a recorded interpreter. A `.mjs` under `current` keeps both properties.
 
 ## Prerequisites
 
