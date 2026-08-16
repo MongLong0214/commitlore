@@ -89,13 +89,13 @@ Prerequisites for either path: Node.js 22.23.2+ and Git. The script checks both 
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh | sh -s v1.0.1
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.2/install.sh | sh -s v1.0.2
 ```
 
 **Windows** — the same install, in PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.ps1))) v1.0.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.2/install.ps1))) v1.0.2
 ```
 
 **Hermes** — after installing the CLI, configure its host integration:
@@ -121,6 +121,26 @@ commitlore init
 commitlore context .
 ```
 
+### Upgrading
+
+Re-run the install command. It updates the CLI and the agent registrations, and
+it cannot reach two things:
+
+- **Hooks already installed in a repository.** One installed before v1.0.2
+  records the release it came from, so it keeps validating commits with that
+  build. The installer has no way to know which repositories have hooks.
+- **Sessions already running.** A host loads its runtime once and keeps it.
+
+So after upgrading:
+
+```bash
+commitlore doctor          # names any hook still pinned, and any stale session
+commitlore hooks install   # in each repository doctor names
+```
+
+Neither is a defect in the release; both are state a release cannot reach.
+Hooks installed from v1.0.2 onward follow upgrades on their own.
+
 After that:
 
 - Commit normally. Most commits carry no record.
@@ -137,11 +157,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.1/install.sh
-sh install.sh v1.0.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.0.2/install.sh
+sh install.sh v1.0.2
 
 # Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.0.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.0.2 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
