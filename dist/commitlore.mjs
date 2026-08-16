@@ -19534,12 +19534,13 @@ var checkPendingBacklog = (ctx) => {
   const lost = stranded.filter((transaction) => transaction.phase === "staged");
   const oldest = stranded.map((transaction) => transaction.created_at).sort()[0];
   const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
+  const explanation = lost.length > 0 ? "A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)" : "None reached staging, so no record was dropped \u2014 the commit each was prepared for either never happened or happened without it";
   return check(
     id,
     category,
     title,
     "warn",
-    `${detail}; oldest from ${oldest ?? "an unknown time"}. A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)`,
+    `${detail}; oldest from ${oldest ?? "an unknown time"}. ${explanation}`,
     "commitlore pending ls",
     false,
     void 0,
