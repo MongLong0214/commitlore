@@ -121,6 +121,26 @@ commitlore init
 commitlore context .
 ```
 
+### Upgrading
+
+Re-run the install command. It updates the CLI and the agent registrations, and
+it cannot reach two things:
+
+- **Hooks already installed in a repository.** One installed before v1.0.2
+  records the release it came from, so it keeps validating commits with that
+  build. The installer has no way to know which repositories have hooks.
+- **Sessions already running.** A host loads its runtime once and keeps it.
+
+So after upgrading:
+
+```bash
+commitlore doctor          # names any hook still pinned, and any stale session
+commitlore hooks install   # in each repository doctor names
+```
+
+Neither is a defect in the release; both are state a release cannot reach.
+Hooks installed from v1.0.2 onward follow upgrades on their own.
+
 After that:
 
 - Commit normally. Most commits carry no record.
