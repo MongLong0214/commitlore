@@ -183,6 +183,13 @@ describe('#458 doctor: pending captures', () => {
     expect(result.status).toBe('warn');
     expect(result.detail).toMatch(/can no longer apply/);
     expect(result.detail).not.toMatch(/expired before reaching a commit/);
+    // The sentence that claims the loss is the trailing explanation, not the
+    // count — this case asserted the absence of the first branch's wording and
+    // let the stronger claim through, which is the whole of #710. The consumed
+    // case below already uses this string as the loss claim.
+    expect(result.detail, 'nothing staged means nothing was dropped').not.toMatch(
+      /never written to the history/,
+    );
   });
 
   it('does not call a consumed capture lost — HEAD moved because it landed (#584)', () => {

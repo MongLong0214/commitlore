@@ -144,14 +144,25 @@ export const checkPendingBacklog = (ctx: DoctorContext): DoctorCheck => {
           : '')
       : `${String(stranded.length)} capture(s) can no longer apply — their base commit is no longer HEAD`;
 
+  // The explanation belongs to the staged case and used to be appended to both.
+  // A draft that never staged holds no record, so telling its owner a decision
+  // was never written names a loss that did not happen — and `pending ls`, the
+  // fix offered alongside it, then shows `RECORDS 0` and nothing to recover
+  // (#710). The count was already right; only the sentence explaining it was
+  // borrowed from the branch above.
+  const explanation =
+    lost.length > 0
+      ? 'A staged record binds to the tree it was prepared for and is skipped once that tree moves, ' +
+        'so these decisions were never written to the history (#458)'
+      : 'None reached staging, so no record was dropped — the commit each was prepared for ' +
+        'either never happened or happened without it';
+
   return check(
     id,
     category,
     title,
     'warn',
-    `${detail}; oldest from ${oldest ?? 'an unknown time'}. ` +
-      'A staged record binds to the tree it was prepared for and is skipped once that tree moves, ' +
-    'so these decisions were never written to the history (#458)',
+    `${detail}; oldest from ${oldest ?? 'an unknown time'}. ${explanation}`,
     'commitlore pending ls',
     false,
     undefined,
