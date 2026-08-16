@@ -24915,7 +24915,16 @@ var claudePluginHost = () => {
 };
 var codexPluginOutcome = (wrapper) => {
   const result = spawnSync7(wrapper, ["plugin", "install-codex"], { stdio: "ignore", shell: false, timeout: 6e4 });
-  return result.status === 0 ? "plugin installed" : "plugin step failed \u2014 run: commitlore plugin install-codex";
+  return result.status === 0 ? { ok: true, detail: "plugin installed" } : { ok: false, detail: "plugin step failed \u2014 run: commitlore plugin install-codex" };
+};
+var codexResultWithPlugin = (mcp, plugin) => {
+  if (!mcp.healthy) return mcp;
+  return {
+    ...mcp,
+    healthy: plugin.ok,
+    outcome: plugin.ok ? mcp.outcome : "failed",
+    detail: `${mcp.detail}; ${plugin.detail}`
+  };
 };
 var inspectAndApplyHosts = async (options) => {
   const requested = [];
@@ -24924,7 +24933,7 @@ var inspectAndApplyHosts = async (options) => {
   if (hasCommand("codex")) {
     requested.push(
       cliHost("codex", options.wrapper).then(
-        (result) => result.healthy ? { ...result, detail: `${result.detail}; ${codexPluginOutcome(options.wrapper)}` } : result
+        (result) => result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result
       )
     );
   } else if (existsSync22(join17(home, ".codex"))) {
