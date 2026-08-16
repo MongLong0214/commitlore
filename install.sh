@@ -626,6 +626,34 @@ if ! mv "$dest_tmp" "$dest"; then
 fi
 dest_tmp=""
 
+# A version-free path to the bundle, maintained beside the versioned checkouts
+# (#693).
+#
+# `commitlore hooks install` records an absolute path to the bundle so a hook is
+# independent of PATH and of any node_modules/.bin/commitlore above the
+# repository. Recording the versioned checkout pins that repository to one
+# release: three repositories on the first machine to upgrade were still
+# validating commits with 0.8.2 and 0.8.0, and this repository was one of them.
+#
+# The wrapper cannot stand in for it -- that was tried and fails, because a hook
+# runs where PATH may carry no node and a shell script cannot be launched with
+# the recorded interpreter. A symlink to the checkout keeps both properties: an
+# absolute path to a .mjs, and one that does not name a release.
+#
+# Symlink, then rename: an existing `current` cannot be replaced in place while
+# something is reading through it.
+current_link="$data_root/current"
+current_tmp="$current_link.commitlore-install.$$"
+if ln -sfn "$candidate" "$current_tmp" 2>/dev/null && mv -f "$current_tmp" "$current_link" 2>/dev/null; then
+  log "current -> $(basename "$candidate")"
+else
+  rm -f "$current_tmp" 2>/dev/null || true
+  # Not fatal. A host without symlinks still has a working install; hooks there
+  # keep recording the versioned path and `commitlore hooks install` after an
+  # upgrade remains the repair, which `doctor` already names.
+  log "note: could not maintain $current_link -- hooks will record a versioned path"
+fi
+
 log "installed to $dest"
 printf '%s\n' "$verified_version"
 

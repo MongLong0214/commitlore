@@ -17792,7 +17792,7 @@ var register3 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync5, writeFileSync as writeFileSync13, mkdirSync as mkdirSync9 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname as dirname9, join as join14, resolve as resolve17 } from "node:path";
+import { dirname as dirname10, join as join14, resolve as resolve17 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -21788,7 +21788,7 @@ import {
   unlinkSync as unlinkSync5,
   writeFileSync as writeFileSync11
 } from "node:fs";
-import { join as join12, resolve as resolve15 } from "node:path";
+import { basename as basename2, dirname as dirname8, join as join12, resolve as resolve15 } from "node:path";
 
 // src/hooks/post-commit.ts
 import { createHash as createHash7, randomBytes as randomBytes5 } from "node:crypto";
@@ -22452,9 +22452,20 @@ var resolveEntryForRecord = (entry, cwd) => {
   }
   return null;
 };
+var versionFreeEntryFor = (bundle) => {
+  const versionDir = dirname8(dirname8(bundle));
+  if (!/^v\d/.test(basename2(versionDir))) return null;
+  const candidate = join12(dirname8(versionDir), "current", "dist", "commitlore.mjs");
+  try {
+    return realpathSync4(candidate) === realpathSync4(bundle) ? candidate : null;
+  } catch {
+    return null;
+  }
+};
 var recordBinPath = (cwd) => {
-  const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-  if (resolvedEntry === null) return;
+  const running = resolveEntryForRecord(process.argv[1], cwd);
+  if (running === null) return;
+  const resolvedEntry = versionFreeEntryFor(running) ?? running;
   execGit(["config", "--local", "commitlore.bin", resolvedEntry], { cwd });
   execGit(["config", "--local", "commitlore.node", process.execPath], { cwd });
   try {
@@ -22624,15 +22635,15 @@ var register9 = (program3) => {
 
 // src/core/agents-guidance.ts
 import { existsSync as existsSync19, readFileSync as readFileSync19, renameSync as renameSync8, rmSync as rmSync4, statSync as statSync8, writeFileSync as writeFileSync12 } from "node:fs";
-import { basename as basename2, dirname as dirname8, join as join13, resolve as resolve16 } from "node:path";
+import { basename as basename3, dirname as dirname9, join as join13, resolve as resolve16 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
 var messageOf6 = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var shippedAgentsPath = () => {
   const source = fileURLToPath2(import.meta.url);
-  const here = dirname8(source);
-  return basename2(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
+  const here = dirname9(source);
+  return basename3(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
   const contents = readFileSync19(shippedAgentsPath(), "utf8");
@@ -23193,12 +23204,12 @@ var runDemo = async (opts = {}) => {
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
       throw new Error("demo: temporary directory overlaps with user repository \u2014 aborting");
     }
-    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname9(tmpDir));
+    git(["init", "--quiet", "--template=", "--initial-branch=main", tmpDir], dirname10(tmpDir));
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
     const targetFullPath = join14(tmpDir, targetPath);
-    mkdirSync9(dirname9(targetFullPath), { recursive: true });
+    mkdirSync9(dirname10(targetFullPath), { recursive: true });
     writeFileSync13(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
     git(["commit", "-m", predecessorCommitMessage], tmpDir);
@@ -23666,7 +23677,7 @@ var register14 = (program3) => {
 import { spawnSync as spawnSync6 } from "node:child_process";
 import { copyFileSync, existsSync as existsSync21, mkdirSync as mkdirSync10, readFileSync as readFileSync23, renameSync as renameSync9, statSync as statSync9, writeFileSync as writeFileSync16 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename3, dirname as dirname10, join as join15, resolve as resolve19 } from "node:path";
+import { basename as basename4, dirname as dirname11, join as join15, resolve as resolve19 } from "node:path";
 
 // src/core/hermes-config.ts
 import { relative as relative2, resolve as resolve18, sep as sep3 } from "node:path";
@@ -23947,7 +23958,7 @@ var backupPathFor = (configPath) => {
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
-  const temporary = join15(dirname10(path2), `.${basename3(path2)}.commitlore-${process.pid}.tmp`);
+  const temporary = join15(dirname11(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
   try {
     if (mode === void 0) writeFileSync16(temporary, contents, "utf8");
     else writeFileSync16(temporary, contents, { encoding: "utf8", mode });
@@ -23993,7 +24004,7 @@ var runHermesInstall = (options = {}) => {
   const dataRoot = options.dataRoot ?? join15(dataHome, "commitlore");
   const versionedSkills = join15(dataRoot, `v${runtimeIdentity().version}`, "hermes", "skills");
   const skillsDir = options.skillsDir ?? (existsSync21(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
-  const detected = options.detected ?? (existsSync21(dirname10(configPath)) || commandExists("hermes"));
+  const detected = options.detected ?? (existsSync21(dirname11(configPath)) || commandExists("hermes"));
   const report = [];
   const verified = [];
   if (!detected) {
@@ -24025,7 +24036,7 @@ var runHermesInstall = (options = {}) => {
   }
   if (edit.added.length > 0) {
     try {
-      mkdirSync10(dirname10(configPath), { recursive: true });
+      mkdirSync10(dirname11(configPath), { recursive: true });
       if (existsSync21(configPath)) {
         const backup = backupPathFor(configPath);
         copyFileSync(configPath, backup);
@@ -24165,7 +24176,7 @@ var register16 = (program3) => {
 
 // src/commands/inject.ts
 import { readFileSync as readFileSync24, realpathSync as realpathSync5 } from "node:fs";
-import { basename as basename4, dirname as dirname11, isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
+import { basename as basename5, dirname as dirname12, isAbsolute as isAbsolute3, join as join16, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash9 } from "node:crypto";
@@ -24569,9 +24580,9 @@ var canonical = (target) => {
       const real = realpathSync5(current);
       return tail.length === 0 ? real : join16(real, ...tail);
     } catch {
-      const parent = dirname11(current);
+      const parent = dirname12(current);
       if (parent === current) return absolute;
-      tail.unshift(basename4(current));
+      tail.unshift(basename5(current));
       current = parent;
     }
   }
@@ -24731,7 +24742,7 @@ var register17 = (program3) => {
 
 // src/commands/installer-hosts.ts
 import { existsSync as existsSync22, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync25 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname12, join as join17 } from "node:path";
+import { delimiter as delimiter2, dirname as dirname13, join as join17 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync7 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
@@ -24755,8 +24766,8 @@ var commandOf = (format, entry) => {
 };
 var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", command: [wrapper, "mcp"], enabled: true } : { command: wrapper, args: ["mcp"] };
 var atomicJsonWrite = (path2, value) => {
-  mkdirSync11(dirname12(path2), { recursive: true });
-  const temporary = join17(dirname12(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+  mkdirSync11(dirname13(path2), { recursive: true });
+  const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
   try {
     writeFileSync17(temporary, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", mode: 384 });
@@ -24845,8 +24856,8 @@ command = ${escaped}
 args = ["mcp"]
 `;
   try {
-    mkdirSync11(dirname12(path2), { recursive: true });
-    const temporary = join17(dirname12(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+    mkdirSync11(dirname13(path2), { recursive: true });
+    const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
     try {
       writeFileSync17(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
