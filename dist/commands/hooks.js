@@ -21,7 +21,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { execGit } from '../core/git.js';
 import { describeRecordedHookTarget, recordedHookIdentity, readRecordedHookTarget, } from '../core/hook-target.js';
 import { PACKAGE_ROOT } from '../core/paths.js';
@@ -157,10 +157,46 @@ export const resolveEntryForRecord = (entry, cwd) => {
     }
     return null;
 };
+/**
+ * The same bundle reached through a path that does not name a release (#693).
+ *
+ * `process.argv[1]` under a normal install is
+ * `<data-root>/v<version>/dist/commitlore.mjs`, and recording it pins the
+ * repository to that release: an upgrade leaves the hook validating commits
+ * with the old build while the CLI reports the new one. Three repositories on
+ * the first machine to upgrade were doing exactly that, this one among them,
+ * throughout two releases.
+ *
+ * `install.sh` maintains `<data-root>/current` beside the versioned checkouts.
+ * It is still an absolute path to a `.mjs`, so the recorded interpreter can
+ * launch it and the hook stays independent of PATH — the properties the
+ * versioned path was chosen for. The `bin` wrapper cannot serve here: it is a
+ * shell script, and a hook runs where PATH may carry no node at all.
+ *
+ * Only accepted when it resolves to the bundle that is running. A `current`
+ * pointing elsewhere belongs to another install, and sending a hook to code
+ * this one never verified is worse than pinning a version.
+ */
+const versionFreeEntryFor = (bundle) => {
+    // Derived from the layout, not from a directory name: <root>/v<x>/dist/<file>.
+    // Matching on the literal "commitlore" would have made this depend on what the
+    // data root happens to be called.
+    const versionDir = dirname(dirname(bundle));
+    if (!/^v\d/.test(basename(versionDir)))
+        return null;
+    const candidate = join(dirname(versionDir), 'current', 'dist', 'commitlore.mjs');
+    try {
+        return realpathSync(candidate) === realpathSync(bundle) ? candidate : null;
+    }
+    catch {
+        return null;
+    }
+};
 const recordBinPath = (cwd) => {
-    const resolvedEntry = resolveEntryForRecord(process.argv[1], cwd);
-    if (resolvedEntry === null)
+    const running = resolveEntryForRecord(process.argv[1], cwd);
+    if (running === null)
         return;
+    const resolvedEntry = versionFreeEntryFor(running) ?? running;
     execGit(['config', '--local', 'commitlore.bin', resolvedEntry], { cwd });
     // The interpreter as well: the branch that reads these back runs in a hook
     // whose PATH may not carry node, which is the whole reason it exists. For a
