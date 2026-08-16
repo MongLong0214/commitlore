@@ -16,7 +16,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,9 +84,13 @@ describe('#693 what the hook pins itself to', () => {
   // A `current` belonging to another installation would send the hook to code
   // this one never verified — worse than pinning a version.
   it('keeps the versioned path when current points at a different install', () => {
+    // A *working* other installation, not a broken link. If the file simply
+    // did not exist, realpathSync would throw and the fallback would happen for
+    // that reason — the identity comparison would never run, and this case
+    // would pass while proving nothing. It did, until this fixture was fixed.
     const elsewhere = mkdtempSync(join(tmpdir(), 'cl-vfree-other-'));
     scratch.push(elsewhere);
-    mkdirSync(join(elsewhere, 'dist'), { recursive: true });
+    cpSync(join(REPO_ROOT, 'dist'), join(elsewhere, 'dist'), { recursive: true });
     const { bundle } = installation(elsewhere);
 
     expect(recordedPin(repo(), bundle), 'an unrelated current is not trusted').toBe(bundle);
