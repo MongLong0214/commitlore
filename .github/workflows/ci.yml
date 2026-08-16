@@ -574,6 +574,36 @@ jobs:
           "$code" | Set-Content -LiteralPath "$home_/exit.txt"
           "$home_" | Set-Content -LiteralPath "$env:GITHUB_ENV" -Append -Value "CL_HOME=$home_"
 
+      - name: MEASUREMENT ONLY — how many behaviour mutations does this job catch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $muts = @(
+            @{ n='exit 1 -> exit 0';        f={ (Get-Content install.ps1 -Raw) -replace 'exit 1','exit 0' } },
+            @{ n='LASTEXITCODE -> $true';   f={ (Get-Content install.ps1 -Raw) -replace '\$LASTEXITCODE -eq 0','$true' } },
+            @{ n='Test-Path typo x3';       f={ $t=(Get-Content install.ps1 -Raw); ([regex]'Test-Path').Replace($t,'Test-PathX',3) } },
+            @{ n='ExecutionPolicy widened'; f={ (Get-Content install.ps1 -Raw) -replace 'Bypass','Unrestricted' } },
+            @{ n='Directory -> File';       f={ (Get-Content install.ps1 -Raw) -replace "-ItemType Directory -Force","-ItemType File -Force" } }
+          )
+          $orig = Get-Content install.ps1 -Raw
+          $caught = 0
+          foreach ($m in $muts) {
+            Set-Content -LiteralPath install.ps1 -Value (& $m.f) -NoNewline
+            $h = Join-Path ([System.IO.Path]::GetTempPath()) "m-$(Get-Random)"
+            $l = Join-Path $h 'AppData/Local'
+            New-Item -ItemType Directory -Force -Path $l | Out-Null
+            $env:USERPROFILE = $h; $env:LOCALAPPDATA = $l
+            $out = (& ./install.ps1 2>&1 | Out-String)
+            $bad = $false
+            if ($out -notmatch 'commitlore-install:') { $bad = $true }
+            foreach ($p in (Get-ChildItem -Path $l -Recurse -ErrorAction SilentlyContinue)) {
+              if ($p.Name -eq 'commitlore' -and -not $p.PSIsContainer) { $bad = $true }
+            }
+            if ($bad) { $caught++; "CAUGHT  $($m.n)" | Out-Host } else { "MISSED  $($m.n)" | Out-Host }
+            Set-Content -LiteralPath install.ps1 -Value $orig -NoNewline
+          }
+          "=== RESULT $caught / $($muts.Count)" | Out-Host
+
       - name: It reports what it did, rather than exiting quietly
         shell: pwsh
         run: |
