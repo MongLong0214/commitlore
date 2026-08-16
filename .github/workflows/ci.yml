@@ -538,6 +538,67 @@ jobs:
   # The hosts are named literally. `shell:` accepts no expression -- a
   # `${{ matrix.shell }}` there makes the workflow unloadable, which is how this
   # job was first written and how it first failed (actions/runner#444).
+  # install.ps1's unit coverage reads the file as text, so a change that leaves
+  # every asserted string in place while inverting behaviour goes unnoticed:
+  # measured at 0 of 5 such mutations caught, against 4 of 4 for install.sh,
+  # whose tests run the script and read what it produced (#691).
+  #
+  # The reason given for that asymmetry was that a Linux runner cannot execute
+  # PowerShell. It can — this workflow already uses `shell: pwsh` in four
+  # places. Nobody had run install.ps1 under it outside Windows.
+  #
+  # What this job can and cannot see is worth stating: the script's Windows
+  # environment variables are injected, so its path logic runs, but the .cmd
+  # shim it writes is only meaningful to cmd.exe. Whether that shim *executes*
+  # stays a windows-latest question, and install-ps1 below remains the job that
+  # answers it. This one answers the cheaper half, on every push.
+  install-ps1-behaviour:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run install.ps1 under PowerShell Core with a synthetic Windows home
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $home_ = Join-Path ([System.IO.Path]::GetTempPath()) "cl-home-$(Get-Random)"
+          $local = Join-Path $home_ 'AppData/Local'
+          New-Item -ItemType Directory -Force -Path $local | Out-Null
+          $env:USERPROFILE = $home_
+          $env:LOCALAPPDATA = $local
+
+          # A failure here is the point: the assertions below say which part.
+          & ./install.ps1 2>&1 | Tee-Object -Variable output | Out-Host
+          $code = $LASTEXITCODE
+          "$output" | Set-Content -LiteralPath "$home_/output.txt"
+          "exit=$code" | Out-Host
+          "$code" | Set-Content -LiteralPath "$home_/exit.txt"
+          "$home_" | Set-Content -LiteralPath "$env:GITHUB_ENV" -Append -Value "CL_HOME=$home_"
+
+      - name: It reports what it did, rather than exiting quietly
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Get-Content -Raw -LiteralPath "$env:CL_HOME/output.txt"
+          # Catches `exit 1` -> `exit 0` and a neutralised $LASTEXITCODE check:
+          # both make the script claim success while having done nothing.
+          if ($out -notmatch 'commitlore-install:') { throw 'the installer produced no diagnostics at all' }
+          if ($out -match 'installed to' -and $out -notmatch 'commitlore') {
+            throw 'it claimed an install without naming what it installed'
+          }
+
+      - name: A directory it creates is a directory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $local = Join-Path $env:CL_HOME 'AppData/Local'
+          # Catches New-Item -ItemType Directory -> File: the path exists either
+          # way, and only the type separates them.
+          foreach ($p in (Get-ChildItem -Path $local -Recurse -ErrorAction SilentlyContinue)) {
+            if ($p.Name -eq 'commitlore' -and -not $p.PSIsContainer) {
+              throw "commitlore data root was created as a file, not a directory: $($p.FullName)"
+            }
+          }
+
   install-ps1:
     runs-on: windows-latest
     # A hook that hangs rather than refusing is one of the outcomes this job now
