@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: a coding agent must not revive a decision the repository already reversed.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: hand a coding agent the decisions this repository already made, before it edits.">
 </p>
 
 <p align="center">

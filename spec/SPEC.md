@@ -169,7 +169,7 @@ No key exists without a consumer. If a proposed key has no route, it does not en
 | Key | Route | Behavior the route produces |
 |---|---|---|
 | `Limit:` | path-scoped injection · `commitlore limits` | Surfaced before an agent edits the path it constrains |
-| `Ruled-out:` | **`commitlore guard`** | Blocks re-proposal: a proposal matching a ruled-out alternative is flagged before execution |
+| `Ruled-out:` | **`commitlore guard`** | Flags a proposal that matches a ruled-out alternative, before execution. Advisory: precision 44.8%, recall 22.0% (ADR-0020) — an empty result is not a guarantee that nothing was re-proposed |
 | `Warn:` | graded injection | Delivered as an instruction when trusted, demoted to a claim when not (§7) |
 | `Blast:` | approval gate | `system` routes the change to human review |
 | `Undo:` | approval gate | `permanent` routes the change to human review |
