@@ -169,6 +169,13 @@ case "$1:$2" in
   mcp:get) printf 'commitlore\\n  enabled: true\\n  command: %s\\n' ${pointsAt} ;;
   mcp:remove) exit 0 ;;
   mcp:add) exit 0 ;;
+  # Codex is two requested integrations, and this fixture used to know only
+  # one. Everything else exited 1, so once a failed plugin step stopped being
+  # swallowed the installer correctly reported failure and these tests -- which
+  # are about the MCP path -- failed for a reason they do not measure.
+  plugin:marketplace) exit 0 ;;
+  plugin:list) printf '[]\\n' ;;
+  plugin:add) exit 0 ;;
   *) exit 1 ;;
 esac
 `,
@@ -185,6 +192,13 @@ case "$1:$2" in
   mcp:get) exit 1 ;;
   mcp:remove) exit 0 ;;
   mcp:add) exit 0 ;;
+  # Codex is two requested integrations, and this fixture used to know only
+  # one. Everything else exited 1, so once a failed plugin step stopped being
+  # swallowed the installer correctly reported failure and these tests -- which
+  # are about the MCP path -- failed for a reason they do not measure.
+  plugin:marketplace) exit 0 ;;
+  plugin:list) printf '[]\\n' ;;
+  plugin:add) exit 0 ;;
   *) exit 1 ;;
 esac
 `,

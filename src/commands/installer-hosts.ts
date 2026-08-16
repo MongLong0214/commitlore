@@ -243,9 +243,41 @@ const claudePluginHost = (): HostResult => {
  * can be healthy while the plugin is not, and saying so is the difference
  * between a host that works and one that was asked to.
  */
-const codexPluginOutcome = (wrapper: string): string => {
+/** One requested step's outcome, kept apart from the sentence describing it. */
+export interface StepOutcome {
+  ok: boolean;
+  detail: string;
+}
+
+const codexPluginOutcome = (wrapper: string): StepOutcome => {
   const result = spawnSync(wrapper, ['plugin', 'install-codex'], { stdio: 'ignore', shell: false, timeout: 60_000 });
-  return result.status === 0 ? 'plugin installed' : 'plugin step failed — run: commitlore plugin install-codex';
+  return result.status === 0
+    ? { ok: true, detail: 'plugin installed' }
+    : { ok: false, detail: 'plugin step failed — run: commitlore plugin install-codex' };
+};
+
+/**
+ * Codex is two requested integrations, and the host is healthy only if both
+ * are.
+ *
+ * The first version of this appended the plugin outcome to `detail` and left
+ * `healthy` alone, so a run could say "plugin step failed" and report
+ * `healthy: true` — and `ok` is computed from the field, not the sentence, so
+ * the installer exited 0 on a failed integration.
+ *
+ * Exported for the regression: the composition is the thing that was wrong, and
+ * a test that had to spawn a real `codex` to reach it would not have been
+ * written.
+ */
+export const codexResultWithPlugin = (mcp: HostResult, plugin: StepOutcome): HostResult => {
+  // An unhealthy registration stays unhealthy whatever the plugin did.
+  if (!mcp.healthy) return mcp;
+  return {
+    ...mcp,
+    healthy: plugin.ok,
+    outcome: plugin.ok ? mcp.outcome : 'failed',
+    detail: `${mcp.detail}; ${plugin.detail}`,
+  };
 };
 
 export const inspectAndApplyHosts = async (options: Options): Promise<HostSummary> => {
@@ -255,7 +287,7 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
   if (hasCommand('codex')) {
     requested.push(
       cliHost('codex', options.wrapper).then((result) =>
-        result.healthy ? { ...result, detail: `${result.detail}; ${codexPluginOutcome(options.wrapper)}` } : result,
+        result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result,
       ),
     );
   } else if (existsSync(join(home, '.codex'))) {
