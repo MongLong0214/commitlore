@@ -30,6 +30,43 @@ interface Options {
     dataRoot: string;
     home: string;
 }
+/**
+ * The Codex plugin layer, which the MCP registration does not cover (#697).
+ *
+ * `install.ps1` ran `plugin install-codex`; `install.sh` carried the same step
+ * behind a function nothing called, so Windows installed the plugin and macOS
+ * and Linux did not. The shell's dead copy was what made them look alike, and a
+ * test asserting the string was present in both files passed on presence rather
+ * than reachability.
+ *
+ * Putting it here rather than back in either shell is what makes the two agree
+ * by construction: both installers delegate host wiring to this command, which
+ * is why the shell block was dead in the first place. The Claude plugin is
+ * handled the same way, for the same reason.
+ *
+ * Reported beside the MCP result rather than folded into it — the registration
+ * can be healthy while the plugin is not, and saying so is the difference
+ * between a host that works and one that was asked to.
+ */
+/** One requested step's outcome, kept apart from the sentence describing it. */
+export interface StepOutcome {
+    ok: boolean;
+    detail: string;
+}
+/**
+ * Codex is two requested integrations, and the host is healthy only if both
+ * are.
+ *
+ * The first version of this appended the plugin outcome to `detail` and left
+ * `healthy` alone, so a run could say "plugin step failed" and report
+ * `healthy: true` — and `ok` is computed from the field, not the sentence, so
+ * the installer exited 0 on a failed integration.
+ *
+ * Exported for the regression: the composition is the thing that was wrong, and
+ * a test that had to spawn a real `codex` to reach it would not have been
+ * written.
+ */
+export declare const codexResultWithPlugin: (mcp: HostResult, plugin: StepOutcome) => HostResult;
 export declare const inspectAndApplyHosts: (options: Options) => Promise<HostSummary>;
 export declare const register: (program: Command) => void;
 export {};
