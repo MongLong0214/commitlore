@@ -7,7 +7,7 @@
  * process is what makes an installer success claim useful on both platforms.
  */
 
-import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -204,12 +204,14 @@ const pathEntriesFor = (command: string): string[] => {
 const executableExtensions = (command: string): string[] => {
   if (!isWindowsPath() || extname(command) !== '') return [''];
   const extensions = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
-  return extensions;
+  return ['', ...extensions];
 };
 
-const isFile = (path: string): boolean => {
+const isExecutableFile = (path: string): boolean => {
   try {
-    return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
+    if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return false;
+    accessSync(path, constants.X_OK);
+    return true;
   } catch {
     return false;
   }
@@ -226,7 +228,7 @@ export const resolveCommand = (command: string): ResolvedCommand | null => {
   for (const path of pathEntriesFor(command)) {
     for (const extension of executableExtensions(command)) {
       const candidate = `${path}${extension}`;
-      if (isFile(candidate)) {
+      if (isExecutableFile(candidate)) {
         return { path: candidate, usesCommandInterpreter: isWindowsPath() && /\.(?:cmd|bat)$/i.test(candidate) };
       }
     }
@@ -239,35 +241,94 @@ const hasCommand = (command: string): boolean => resolveCommand(command) !== nul
 const commandInterpreter = (): string => {
   const root = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
   const candidate = join(root, 'System32', 'cmd.exe');
-  return isAbsolute(candidate) && isFile(candidate) ? candidate : 'C:\\Windows\\System32\\cmd.exe';
+  return isAbsolute(candidate) && isExecutableFile(candidate) ? candidate : 'C:\\Windows\\System32\\cmd.exe';
 };
 
-const cmdArgument = (value: string): string | null =>
-  /["%\0\r\n]/.test(value) ? null : `"${value}"`;
-
-export const commandInterpreterArguments = (path: string, args: string[]): string[] | null => {
-  const tokens = [path, ...args].map(cmdArgument);
-  if (tokens.some((token) => token === null)) return null;
-  return ['/d', '/v:off', '/s', '/c', `"${tokens.join(' ')}"`];
+/**
+ * Prepare one argv value for a quoted batch-file command line. The closing
+ * quote consumes one slash from every trailing pair, so they must be doubled.
+ */
+const cmdEnvironmentValue = (value: string): string | null => {
+  if (/["\0\r\n]/.test(value)) return null;
+  return value.replace(/\\+$/, (slashes) => slashes + slashes);
 };
 
-const spawnResolved = (command: ResolvedCommand, args: string[], options: { encoding?: 'utf8'; stdio?: 'ignore'; timeout?: number }) => {
-  if (!command.usesCommandInterpreter) return spawnSync(command.path, args, { ...options, shell: false });
-  const invocation = commandInterpreterArguments(command.path, args);
-  if (invocation === null) return { status: null, error: new Error('batch command contains an unsafe cmd.exe character'), stdout: '', stderr: '' };
-  return spawnSync(commandInterpreter(), invocation, { ...options, shell: false, windowsVerbatimArguments: true });
+export interface CommandInterpreterInvocation {
+  readonly args: string[];
+  readonly env: NodeJS.ProcessEnv;
+}
+
+export const commandInterpreterInvocation = (path: string, args: string[]): CommandInterpreterInvocation | null => {
+  const values = [path, ...args].map(cmdEnvironmentValue);
+  if (values.some((value) => value === null)) return null;
+  const prefix = `COMMITLORE_CMD_${randomUUID().replaceAll('-', '')}_`;
+  const env = { ...process.env };
+  const tokens = values.map((value, index) => {
+    const key = `${prefix}${index}`;
+    env[key] = value ?? '';
+    return `"%${key}%"`;
+  });
+  // User values never enter the /c program text. cmd.exe expands these
+  // one-use variables once, so a literal `%PATH%` inside a path stays literal;
+  // naive `%%` escaping would still expand the text between the inner pair.
+  return { args: ['/d', '/v:off', '/s', '/c', `"${tokens.join(' ')}"`], env };
 };
 
-const commandResult = (command: string, args: string[]): { ok: boolean; stdout: string } => {
+interface CommandExecution {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly error?: Error;
+}
+
+const spawnResolved = (command: ResolvedCommand, args: string[], timeout?: number): CommandExecution => {
+  const invocation = command.usesCommandInterpreter ? commandInterpreterInvocation(command.path, args) : null;
+  if (command.usesCommandInterpreter && invocation === null) {
+    return { status: null, error: new Error('batch command contains a quote, line break, or NUL byte'), stdout: '', stderr: '' };
+  }
+  const result = command.usesCommandInterpreter
+    ? spawnSync(commandInterpreter(), invocation?.args ?? [], { encoding: 'utf8', env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true })
+    : spawnSync(command.path, args, { encoding: 'utf8', shell: false, timeout });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    ...(result.error === undefined ? {} : { error: result.error }),
+  };
+};
+
+const commandFailureDetail = (result: CommandExecution): string | undefined => {
+  if (result.error !== undefined) return result.error.message;
+  if (result.status === 0) return undefined;
+  return `${result.stderr}\n${result.stdout}`.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+};
+
+const failureMessage = (message: string, detail: string | undefined): string =>
+  detail === undefined ? message : `${message}: ${detail}`;
+
+const commandResult = (command: string, args: string[]): { ok: boolean; stdout: string; detail?: string } => {
   const resolved = resolveCommand(command);
-  if (resolved === null) return { ok: false, stdout: '' };
-  const result = spawnResolved(resolved, args, { encoding: 'utf8' });
-  return { ok: result.status === 0 && result.error === undefined, stdout: result.stdout?.toString() ?? '' };
+  if (resolved === null) return { ok: false, stdout: '', detail: `${command} was not found` };
+  const result = spawnResolved(resolved, args);
+  const detail = commandFailureDetail(result);
+  return {
+    ok: result.status === 0 && result.error === undefined,
+    stdout: result.stdout,
+    ...(detail === undefined ? {} : { detail }),
+  };
 };
 
-const commandStatus = (command: string, args: string[], timeout: number): number | null => {
+interface CommandStatus {
+  readonly status: number | null;
+  readonly detail?: string;
+}
+
+const commandStatus = (command: string, args: string[], timeout: number): CommandStatus => {
   const resolved = resolveCommand(command);
-  return resolved === null ? null : spawnResolved(resolved, args, { stdio: 'ignore', timeout }).status;
+  if (resolved === null) return { status: null, detail: `${command} was not found` };
+  const result = spawnResolved(resolved, args, timeout);
+  const detail = commandFailureDetail(result);
+  return { status: result.status, ...(detail === undefined ? {} : { detail }) };
 };
 
 const cliHost = async (host: string, wrapper: string): Promise<HostResult> => {
@@ -286,7 +347,7 @@ const cliHost = async (host: string, wrapper: string): Promise<HostResult> => {
   // A non-zero `get` with no registration is the Codex CLI's ordinary absence
   // response; the add itself is the operation whose failure must fail install.
   const added = commandResult('codex', ['mcp', 'add', 'commitlore', '--', wrapper, 'mcp']);
-  if (!added.ok) return { host, requested: true, outcome: 'failed', healthy: false, detail: 'codex mcp add failed' };
+  if (!added.ok) return { host, requested: true, outcome: 'failed', healthy: false, detail: failureMessage('codex mcp add failed', added.detail) };
   const problem = await probeMcp(wrapper, ['mcp']);
   return !isMcpProbeFailure(problem)
     ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Codex registration added and live-verified' }
@@ -300,17 +361,19 @@ const cliHost = async (host: string, wrapper: string): Promise<HostResult> => {
  */
 const claudePluginHost = (): HostResult => {
   const host = 'claude-code';
-  const run = (args: string[]): number | null => commandStatus('claude', args, 60_000);
+  const run = (args: string[]): CommandStatus => commandStatus('claude', args, 60_000);
 
-  if (run(['plugin', 'marketplace', 'add', 'MongLong0214/commitlore']) === null) {
-    return { host, requested: true, outcome: 'failed', healthy: false, detail: 'claude plugin marketplace add could not run' };
+  const marketplace = run(['plugin', 'marketplace', 'add', 'MongLong0214/commitlore']);
+  if (marketplace.status === null) {
+    return { host, requested: true, outcome: 'failed', healthy: false, detail: failureMessage('claude plugin marketplace add could not run', marketplace.detail) };
   }
   // Already-added is not an error, and update is what makes a new version
   // visible. Both are attempted; only the install decides the verdict.
   run(['plugin', 'marketplace', 'update', 'commitlore']);
-  return run(['plugin', 'install', 'commitlore@commitlore', '--scope', 'user']) === 0
+  const install = run(['plugin', 'install', 'commitlore@commitlore', '--scope', 'user']);
+  return install.status === 0
     ? { host, requested: true, outcome: 'installed', healthy: true, detail: 'Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)' }
-    : { host, requested: true, outcome: 'failed', healthy: false, detail: 'claude plugin install failed — run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore' };
+    : { host, requested: true, outcome: 'failed', healthy: false, detail: `${failureMessage('claude plugin install failed', install.detail)} — run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore` };
 };
 
 /**
@@ -338,9 +401,10 @@ export interface StepOutcome {
 }
 
 const codexPluginOutcome = (wrapper: string): StepOutcome => {
-  return commandStatus(wrapper, ['plugin', 'install-codex'], 60_000) === 0
+  const result = commandStatus(wrapper, ['plugin', 'install-codex'], 60_000);
+  return result.status === 0
     ? { ok: true, detail: 'plugin installed' }
-    : { ok: false, detail: 'plugin step failed — run: commitlore plugin install-codex' };
+    : { ok: false, detail: `${failureMessage('plugin step failed', result.detail)} — run: commitlore plugin install-codex` };
 };
 
 /**
@@ -392,10 +456,10 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
   // Hermes is intentionally still delegated to its existing transactional
   // helper. This command judges its exit and reports it in the same schema.
   if (hasCommand('hermes') || existsSync(join(home, '.hermes'))) {
-    const status = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
-    requested.push(Promise.resolve(status === 0
+    const result = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
+    requested.push(Promise.resolve(result.status === 0
       ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
-      : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: 'Hermes setup failed' }));
+      : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: failureMessage('Hermes setup failed', result.detail) }));
   } else notDetected.push('hermes');
   /**
    * Claude Code, which was in neither list until now (#689).

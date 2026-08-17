@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { commandInterpreterArguments, resolveCommand } from '../src/commands/installer-hosts.js';
+import { commandInterpreterInvocation, resolveCommand } from '../src/commands/installer-hosts.js';
 
 const scratch: string[] = [];
 
@@ -48,8 +48,8 @@ describe('#716 Windows command resolution', () => {
     const bin = join(root, 'bin');
     const shim = join(bin, 'codex.CMD');
     mkdirSync(bin);
-    writeFileSync(join(bin, 'codex'), 'not a Windows command shim');
     writeFileSync(shim, '@echo off\r\n');
+    if (process.platform !== 'win32') chmodSync(shim, 0o755);
 
     // When
     const resolved = withWindowsPath(bin, '.COM;.EXE;.BAT;.CMD', () => resolveCommand('codex'));
@@ -58,11 +58,41 @@ describe('#716 Windows command resolution', () => {
     expect(resolved).toEqual({ path: shim, usesCommandInterpreter: true });
   });
 
+  it.runIf(process.platform !== 'win32')('skips a non-executable command shadow earlier on PATH', () => {
+    // Given
+    const root = temporary();
+    const shadowBin = join(root, 'shadow');
+    const executableBin = join(root, 'executable');
+    const shadow = join(shadowBin, 'claude');
+    const executable = join(executableBin, 'claude');
+    mkdirSync(shadowBin);
+    mkdirSync(executableBin);
+    writeFileSync(shadow, '#!/bin/sh\nexit 1\n');
+    writeFileSync(executable, '#!/bin/sh\nexit 0\n');
+    chmodSync(shadow, 0o644);
+    chmodSync(executable, 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${shadowBin}${delimiter}${executableBin}`;
+
+    // When
+    const resolved = (() => {
+      try {
+        return resolveCommand('claude');
+      } finally {
+        restoreEnvironment('PATH', previousPath);
+      }
+    })();
+
+    // Then
+    expect(resolved).toEqual({ path: executable, usesCommandInterpreter: false });
+  });
+
   it('uses the same resolver for a concrete batch wrapper path', () => {
     // Given
     const root = temporary();
     const shim = join(root, 'commitlore.cmd');
     writeFileSync(shim, '@echo off\r\n');
+    if (process.platform !== 'win32') chmodSync(shim, 0o755);
 
     // When
     const resolved = withWindowsPath('', '.CMD', () => resolveCommand(shim));
@@ -89,20 +119,34 @@ describe('#716 Windows command resolution', () => {
     writeFileSync(capture, `require('node:fs').writeFileSync(${JSON.stringify(output)}, JSON.stringify(process.argv.slice(2)))`);
     writeFileSync(shim, `@echo off\r\n"${process.execPath}" "${capture}" %*\r\n`);
 
-    const invocation = commandInterpreterArguments(shim, ['A&B', 'with spaces']);
+    const expected = [
+      'A&B',
+      'A|B',
+      'A^B',
+      '!PATH!',
+      'with spaces',
+      `${join(root, 'data root')}\\`,
+      '100% Ready',
+      '%PATH%',
+    ];
+    const invocation = commandInterpreterInvocation(shim, expected);
     expect(invocation).not.toBeNull();
-    const result = spawnSync(process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe', invocation ?? [], {
+    const result = spawnSync(process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe', invocation?.args ?? [], {
       encoding: 'utf8',
+      env: invocation?.env,
       shell: false,
       windowsVerbatimArguments: true,
     });
 
     expect(result.status, result.stderr).toBe(0);
     expect(existsSync(output)).toBe(true);
-    expect(JSON.parse(readFileSync(output, 'utf8'))).toEqual(['A&B', 'with spaces']);
+    expect(JSON.parse(readFileSync(output, 'utf8'))).toEqual(expected);
   });
 
-  it('rejects values that cmd.exe would expand before the batch shim starts', () => {
-    expect(commandInterpreterArguments('C:\\safe\\wrapper.cmd', ['%PATH%'])).toBeNull();
+  it('rejects values that can terminate or split the cmd.exe command line', () => {
+    expect(commandInterpreterInvocation('C:\\safe\\wrapper.cmd', ['bad"quote'])).toBeNull();
+    expect(commandInterpreterInvocation('C:\\safe\\wrapper.cmd', ['line\rbreak'])).toBeNull();
+    expect(commandInterpreterInvocation('C:\\safe\\wrapper.cmd', ['line\nbreak'])).toBeNull();
+    expect(commandInterpreterInvocation('C:\\safe\\wrapper.cmd', ['nul\0byte'])).toBeNull();
   });
 });
