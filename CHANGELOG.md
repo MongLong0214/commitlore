@@ -27,12 +27,12 @@ invoked through an explicit `cmd.exe` argument vector with `shell: false`
 preserved: the wrapper path and user config paths reach these calls, and a
 shell would make quoting an attack surface.
 
-Observed on Windows 10.0.19045.0 with agents installed: Codex and Gemini CLI
-wire, verify through a live MCP `Initialize`, and appear in their configs on
-disk. **`ok` is still false on that machine and the hosts that failed are still
-reported failed** — Hermes fails for a cause that is not this one and is not
-yet named (#716), and a `.cursor/mcp.json` that is zero bytes on the tester's
-machine is a user file, not a defect here.
+Observed on Windows 10.0.19045.0 with agents installed: Codex, Gemini CLI and
+Hermes all wire, verify through a live MCP `Initialize`, and appear in their
+configs on disk. **`ok` is still false on that machine, and it should be** — a
+`.cursor/mcp.json` that is zero bytes there is a user file, not a defect here,
+and `claude-code` is `notDetected` because its executable is absent while its
+config is present, an asymmetry that is still open (#716).
 
 Two quieter repairs came out of reviewing that work. A trailing backslash in a
 path — every Windows directory can carry one — was passed into the `cmd.exe`
@@ -49,10 +49,12 @@ not the answer is recorded in the code beside it.
 
 A failed host also says why. The Hermes step ran with `stdio: 'ignore'`, so
 whatever it printed about its own failure was thrown away and the report was a
-bare `Hermes setup failed` — which is why that cause is still unnamed after a
-real Windows run. The reason now reaches the summary, so the next run on a
-machine with Hermes installed prints it rather than requiring another round
-trip. That is the whole of what is needed to name it (#716).
+bare `Hermes setup failed`. The reason now reaches the summary — which mattered
+while Hermes was failing, and stopped mattering for that host when the
+trailing-backslash repair turned out to be its cause. `--data-root` ends with a
+backslash on Windows, so that was the argument being swallowed. The next
+failure of any host still arrives with its reason attached rather than
+requiring another trip to the machine.
 
 ## 1.1.0
 
