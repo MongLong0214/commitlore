@@ -443,17 +443,30 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
   // and often put nothing there -- so the config directory is sufficient
   // evidence that the host exists, and each of those rows accepts either.
   //
-  // Claude Code is wired by **running its own CLI**: the plugin is a
-  // marketplace entry, and there is no file to write that installs one. With no
-  // `claude` on PATH there is no operation to perform, so a config-directory
-  // fallback would detect the host and then have nothing to do. Codex sits
-  // between the two and says so explicitly: its CLI when present, its TOML
-  // config when not.
+  // Claude Code is wired by **running its own CLI**: the plugin is a marketplace
+  // entry (ADR-0026) and there is no file to write that installs one, so with no
+  // `claude` on PATH there is no operation to perform.
   //
-  // So `.claude.json` next to a `notDetected: claude-code` is the rule working,
-  // not an oversight -- a leftover config from an uninstalled host is exactly
-  // what an executable check is for. Changing any row means changing what that
-  // row's wiring does first.
+  // Hermes is the row that makes the rule unambiguous, because its detection
+  // and its wiring name different programs. Detection accepts `hermes` on PATH
+  // *or* `~/.hermes`; the wiring then runs **our own wrapper**, not the Hermes
+  // binary. So the question a row asks is never "is this host's executable
+  // present" -- it is "can this wiring proceed", and the two coincide only where
+  // the wiring happens to shell out to the host itself.
+  //
+  // Codex says both halves out loud: its CLI when present, its TOML config when
+  // not, because either one lets its wiring proceed.
+  //
+  // So `.claude.json` beside a `notDetected: claude-code` is the rule working.
+  // Note what a symmetric fallback would actually do: it would call
+  // `claudePluginHost`, `resolveCommand('claude')` would return null, the first
+  // `commandStatus` would come back `status: null`, and the host would be
+  // reported `failed` with `ok: false`. A leftover config from an uninstalled
+  // host would fail an install that otherwise succeeded -- a false *failure*,
+  // which is a sharper reason to refuse the fallback than the false success I
+  // first wrote here (#728).
+  //
+  // Changing any row means changing what that row's wiring does first.
   if (hasCommand('codex')) {
     requested.push(
       cliHost('codex', options.wrapper).then((result) =>
