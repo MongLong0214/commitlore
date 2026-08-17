@@ -644,7 +644,30 @@ dest_tmp=""
 # something is reading through it.
 current_link="$data_root/current"
 current_tmp="$current_link.commitlore-install.$$"
-if ln -sfn "$candidate" "$current_tmp" 2>/dev/null && mv -f "$current_tmp" "$current_link" 2>/dev/null; then
+current_now=""
+if ln -sfn "$candidate" "$current_tmp" 2>/dev/null; then
+  # `mv -f` alone is wrong here, and wrong in the way that reports success
+  # (#735). When `current` already exists as a symlink to a directory, BSD mv
+  # follows it and moves the source *into* it -- returning 0 while `current`
+  # never changes. An upgrade then printed "current -> v1.1.1" and left every
+  # hook on the machine running the previous build. A first install creates
+  # the link and is unaffected, which is why it went unseen.
+  #
+  # `-h` is BSD's "do not follow a symlink destination"; GNU mv has no `-h` but
+  # never follows, and states it as `-T`. Try each, then unlink and rename --
+  # which is not atomic, but a reader that resolves during the gap fails
+  # visibly rather than silently using the old build.
+  mv -h "$current_tmp" "$current_link" 2>/dev/null \
+    || mv -T "$current_tmp" "$current_link" 2>/dev/null \
+    || { rm -f "$current_link" 2>/dev/null && mv -f "$current_tmp" "$current_link" 2>/dev/null; } \
+    || true
+  # Report what the link says, not what the command returned. Every mechanism
+  # above can return 0 without moving it, and this line is the only thing an
+  # operator reads before trusting the upgrade.
+  current_now="$(readlink "$current_link" 2>/dev/null || printf '%s' '')"
+fi
+if [ "$current_now" = "$candidate" ]; then
+  rm -f "$current_tmp" 2>/dev/null || true
   log "current -> $(basename "$candidate")"
 else
   rm -f "$current_tmp" 2>/dev/null || true
