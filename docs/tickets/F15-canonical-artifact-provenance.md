@@ -5,16 +5,20 @@
 > Issue: [#719](https://github.com/MongLong0214/commitlore/issues/719)
 > Baseline head: `ad6fee3` (1.1.2).
 
-**T-1501 is a decision, not an implementation, and nothing after it may start until it
-lands.** The credentials are in place; the reason this is unscheduled is that a commit the
-App pushes has not been checked, and no ticket here pretends otherwise.
+**T-1501 is closed by [ADR-0036](../adr/ADR-0036-a-bot-merge-goes-through-a-pull-request.md).**
+The App does not push to `main`; it opens a pull request. `main`'s protection requires
+`lint`, which runs only on `pull_request`, so no push can satisfy protection on its merits
+and every push-shaped option needs a bypass. Going through a pull request needs none.
+
+T-1502 onward remain **unscheduled**: the decision answers how a bot merge is verified, not
+whether to build one, and #719's reopening conditions are unchanged.
 
 **Ordering is strict.** T-1501 → T-1502 → T-1503 → T-1504. Each removes something the next
 depends on not existing.
 
 ---
 
-## T-1501 Decide how a bot-pushed commit is verified (S) — decision only
+## T-1501 Decide how a bot-pushed commit is verified (S) — **done**, ADR-0036
 
 **Owns**
 
@@ -45,18 +49,23 @@ limitation recorded against `preserve` in #723, adopted voluntarily.
    pull request for it, which passes normally. Preserves every property. Costs a second
    merge per change and needs a rule for what happens when that second pull request fails.
 
-**Acceptance**
+**Acceptance** — met by ADR-0036. It names the chosen shape (pull request, no bypass),
+what it costs (one extra pull request and CI cycle per change), and the three rejected
+shapes with their reasons. The staging-ref option is rejected by the same `lint` finding
+that looked like it solved the problem, which is recorded because that is the shape a
+reader reaches for first.
 
-- An ADR that names the chosen shape, the property it gives up if any, and the two
-  rejected shapes with their costs.
-- If the answer is that none is acceptable, that is a valid outcome: the ADR says so and
-  #719 stays open with the reason sharpened. **Do not ship a design to close a ticket.**
+Two assumptions are named there as unmeasured, and **T-1502 verifies them before anything
+else**: that protection evaluates required contexts on the pushed commit, and that an
+App-opened pull request triggers the same checks. The second is the dangerous one — a
+workflow that does not fire would leave the rebuild pull request green with nothing having
+run, which is #722's empty runner in a new place.
 
 **Not in scope** — any workflow file, any permission change.
 
 ---
 
-## T-1502 Rebuild-and-push, behind whatever T-1501 chose (M)
+## T-1502 The rebuild arrives as a pull request (M)
 
 **Owns**
 
@@ -64,8 +73,18 @@ limitation recorded against `preserve` in #723, adopted voluntarily.
 - `scripts/check-exact-head-ci.mjs` — `EXPECTED_CI_WORKFLOW_SHA256` if `ci.yml` moves
 - `test/canonical-merge-workflow.test.ts` (new)
 
-**Depends on** — T-1501 merged. Branch protection updated by the repository owner, which
-is not a step any agent performs.
+**Depends on** — ADR-0036. **No branch protection change is required, and none should be
+requested** — that is the point of the decision.
+
+**Verify first, before writing the workflow.** ADR-0036 names two assumptions it did not
+measure, and the second can make everything downstream vacuous:
+
+- protection evaluates required contexts on the pushed commit (this only affects why the
+  staging-ref option was rejected, not the chosen shape);
+- **a pull request opened by the App triggers all eleven contexts.** If `on: pull_request`
+  does not fire for App-opened pull requests, the rebuild pull request is green with
+  nothing having run — #722's empty runner in a new place. Open one throwaway pull request
+  from the App and read the check list before building on it.
 
 **Owns the assertions**, in the shape `test/preserve-workflow-safety.test.ts` established:
 the workflow's safety properties are read from the file with comment lines stripped, so a
