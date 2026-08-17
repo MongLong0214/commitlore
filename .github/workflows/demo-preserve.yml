@@ -9,8 +9,26 @@ name: Demo — squash inheritance
 # Separate from ci.yml and demo-lint.yml on purpose: this job is the only one
 # in the repository that needs `contents: write`, and neither of those must
 # inherit it.
+#
+# `pull_request_target`, not `pull_request`, and the difference is the whole
+# point: a pull request from a fork gets a read-only token on the
+# `pull_request` event, so this job built the note correctly and then failed to
+# publish it. #720's four records were lost that way and had to be recovered by
+# hand. `contents: write` above cannot grant what the event does not carry.
+#
+# The known danger of `pull_request_target` is that it runs with a writable
+# token against a fork's content. This job does not touch that content as code
+# and never has: the checkout below is the **base** branch, `npm ci` and the
+# build run on the base tree, and the fork's commits arrive only as
+# `refs/commitlore/pr-head`, read for their trailer blocks. Data, not scripts.
+#
+# So the two rules that keep this safe, for whoever edits it next: never check
+# out the pull request's head here, and never execute anything reachable from
+# `refs/commitlore/pr-head` -- no script, no config, no `npm` lifecycle from
+# that tree. Either one turns this into the vulnerability the event is famous
+# for.
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
 
 permissions:
