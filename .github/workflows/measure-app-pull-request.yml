@@ -34,6 +34,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          # Without this the checkout leaves an `http.<url>.extraheader` holding
+          # the Actions token, and that header beats credentials in a push URL.
+          # The first run of this workflow pushed as `github-actions[bot]` while
+          # carrying a perfectly good App token, and failed with `Permission ...
+          # denied to github-actions[bot]` -- measuring the wiring instead of the
+          # question. The App must be the actor here or the measurement is void.
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -72,6 +79,12 @@ jobs:
           git commit --quiet -m "$(printf 'Measure whether an App-opened pull request runs the checks\n\nT-1502 (#719). ADR-0036 assumes it does and nobody has measured it. Opened and closed by the same workflow run; the branch and this file go with it.\n\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-measureapppr\nProvenance: authored\nVerified: this commit exists to be looked at, not to be kept\nCommitLore-Version: 2.0.0')"
 
           git push --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+
+          # The push above is the first thing that can silently use the wrong
+          # identity, so confirm the branch arrived as the App before opening
+          # anything on top of it.
+          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$(git rev-parse HEAD)" --jq '.committer.login // "unknown"')"
+          echo "--- branch pushed; commit committer on the server: $pusher"
 
           number="$(gh pr create --base main --head "$branch" \
             --title 'Measurement: does an App-opened pull request run the checks? (#719)' \
