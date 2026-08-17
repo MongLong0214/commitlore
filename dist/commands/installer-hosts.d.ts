@@ -31,6 +31,23 @@ interface Options {
     home: string;
 }
 /**
+ * The name of the temporary sibling an atomic write goes through.
+ *
+ * A name, never a path. This used to be `path.split('/').pop()`, which returns
+ * the *whole string* when there is no `/` in it — so on Windows the temporary
+ * became `…\\.gemini\\.C:\\Users\\u\\.gemini\\settings.json.commitlore-….tmp`.
+ * A drive letter cannot appear inside a filename, so every host that reached
+ * its write failed with ENOENT and nothing was wired: what a real Windows run
+ * of v1.0.2 showed (#716, observed in #714).
+ *
+ * Both separators are stripped here rather than deferring to `basename`.
+ * `basename` is correct on Windows and not provable off it, and CI has no
+ * Windows agent — the `install-ps1` job detects no hosts, so it never reaches
+ * this line. A defect that appears only on Windows has to be one a POSIX
+ * runner can fail on, or nothing in this repository can hold it.
+ */
+export declare const atomicTemporaryName: (target: string, unique: string) => string;
+/**
  * The Codex plugin layer, which the MCP registration does not cover (#697).
  *
  * `install.ps1` ran `plugin install-codex`; `install.sh` carried the same step
