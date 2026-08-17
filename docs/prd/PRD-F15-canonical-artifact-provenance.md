@@ -97,8 +97,10 @@ is rejected deliberately rather than rediscovered.
 
 ## How a bot merge is verified — answered (ADR-0036)
 
-`main`'s protection requires **eleven** contexts, and the eleventh is `lint`, which
-`demo-lint.yml` runs only on `pull_request` because a push event has no `base_ref`. So a
+`main`'s protection requires **eleven** contexts, and the eleventh is `lint`, which a push
+to `main` cannot produce for two independent reasons: `demo-lint.yml`'s push trigger is
+scoped to `dev`, so the workflow does not run at all, and the `lint` job is additionally
+gated on `github.event_name == 'pull_request'` because a push event has no `base_ref`. So a
 direct push produces no `lint` context, ever, and **no push to `main` can satisfy
 protection on its merits** — the App's or anyone's. Every push-shaped option needs a
 bypass, and a bypass is not "the check passed"; it is "the check did not have to".

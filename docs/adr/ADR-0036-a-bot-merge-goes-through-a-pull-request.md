@@ -22,15 +22,25 @@ about a different tree, and shipping the naive form moves the gate from *blockin
 ## The finding that decides it
 
 `main`'s branch protection requires **eleven** status contexts. Ten are the release gate's
-`REQUIRED_CHECKS`. The eleventh is `lint`, and `demo-lint.yml` says why it cannot appear
-anywhere else:
+`REQUIRED_CHECKS`. The eleventh is `lint`, and a push to `main` cannot produce it for two
+independent reasons in the same file:
 
 ```yaml
-lint:
-  # The action's own range derivation works for PRs. On push events there is
-  # no base_ref, so this job only runs for pull requests.
-  if: github.event_name == 'pull_request'
+on:
+  pull_request:
+  push:
+    branches: [dev]        # a push to main does not start this workflow at all
+
+jobs:
+  lint:
+    # The action's own range derivation works for PRs. On push events there is
+    # no base_ref, so this job only runs for pull requests.
+    if: github.event_name == 'pull_request'
 ```
+
+Either one is sufficient. Both are there because the job needs a base to compare against
+and a push does not carry one — the trigger scope and the condition are the same fact
+stated twice, not a belt-and-braces accident.
 
 A direct push produces no `lint` context, ever. Protection evaluates required contexts on
 the commit being pushed, so **no push to `main` can satisfy protection on its merits** —
@@ -80,9 +90,10 @@ preference. If the cost of the extra cycle ever makes this necessary, it should 
 its own ADR that says plainly which property is being traded.
 
 **Staging ref, then fast-forward `main`.** Appealing because the staging commit could carry
-its own green checks, so the push looks like it stands on its merits. It does not: `lint`
-never runs on a branch push either, so the staging commit is missing the same context and
-the fast-forward needs the same bypass. The finding above kills this one specifically, and
+its own green checks, so the push looks like it stands on its merits. It does not, and more
+plainly than for `main`: the push trigger is scoped to `dev`, so a push to a staging branch
+starts no lint workflow at all. The staging commit is missing the same context and the
+fast-forward needs the same bypass. The finding above kills this one specifically, and
 it is recorded because it is the option that looks safest before the `lint` detail is
 noticed.
 
