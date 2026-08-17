@@ -31,6 +31,8 @@ import {
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 const sh = (): string => readFileSync(join(REPO_ROOT, 'install.sh'), 'utf8');
 const ps1 = (): string => readFileSync(join(REPO_ROOT, 'install.ps1'), 'utf8');
+const enumeration = (): string =>
+  readFileSync(join(REPO_ROOT, 'src', 'commands', 'installer-hosts.ts'), 'utf8');
 
 describe('T-1123 the config table names every agent both installers wire', () => {
   it('covers every agent the installers wire, and nothing else', () => {
@@ -55,26 +57,25 @@ describe('T-1123 the config table names every agent both installers wire', () =>
     }
   });
 
-  it.each(AGENT_CONFIGS.filter(isMcpAgentConfig))('$agent: install.sh writes the path this table names', (config) => {
-    // The shell installer spells paths with `$HOME/` and forward slashes.
-    const posix = `$HOME/${config.homeRelativePath.join('/')}`;
-    expect(sh(), `install.sh does not write ${posix}`).toContain(posix);
+  // Both installers used to spell these paths themselves, and this table was
+  // checked against both. #691 deleted that code -- it was unreachable in
+  // install.ps1 and uncalled in install.sh -- so the one place a config path is
+  // now written is the enumeration, and that is what this table has to agree
+  // with. Checking the installers again would assert against files that no
+  // longer decide anything.
+  it.each(AGENT_CONFIGS.filter(isMcpAgentConfig))('$agent: the enumeration writes the path this table names', (config) => {
+    const spelled = `join(home, ${config.homeRelativePath.map((segment) => `'${segment}'`).join(', ')})`;
+    expect(enumeration(), `installer-hosts.ts does not write ${spelled}`).toContain(spelled);
   });
 
-  it.each(AGENT_CONFIGS.filter(isMcpAgentConfig))('$agent: install.ps1 writes the same path', (config) => {
-    // PowerShell spells it as a Join-Path argument with backslashes.
-    const win = config.homeRelativePath.join('\\');
-    expect(ps1(), `install.ps1 does not write ${win}`).toContain(win);
-  });
-
-  it('knows about every config path the shell installer writes', () => {
-    const written = [...sh().matchAll(/\$HOME\/((?:\.|config\/)[\w./-]*\.(?:toml|json|yaml))/g)].map(
-      (m) => m[1],
+  it('knows about every config path the enumeration writes', () => {
+    const written = [...enumeration().matchAll(/join\(home, ((?:'[\w.-]+', )*'[\w.-]+\.(?:toml|json|yaml)')\)/g)].map(
+      (m) => (m[1] ?? '').split(', ').map((quoted) => quoted.slice(1, -1)).join('/'),
     );
-    expect(written.length, 'no config paths found in install.sh — the pattern went stale').toBeGreaterThan(0);
+    expect(written.length, 'no config paths found in installer-hosts.ts — the pattern went stale').toBeGreaterThan(0);
     const known = new Set(AGENT_CONFIGS.filter(isMcpAgentConfig).map((c) => c.homeRelativePath.join('/')));
     for (const path of new Set(written)) {
-      expect(known.has(path), `install.sh writes ${path}, which this table does not know`).toBe(true);
+      expect(known.has(path), `installer-hosts.ts writes ${path}, which this table does not know`).toBe(true);
     }
   });
 
@@ -88,8 +89,7 @@ describe('T-1123 the config table names every agent both installers wire', () =>
       marketplaceSource: 'MongLong0214/commitlore',
       dataRelativePath: ['commitlore', 'codex-plugin.json'],
     });
-    expect(sh()).toContain('plugin install-codex');
-    expect(ps1()).toContain('plugin install-codex');
+    expect(enumeration()).toContain('plugin install-codex');
   });
 });
 
@@ -149,12 +149,12 @@ describe('T-1123 an entry is recognised by its shape, not by its name', () => {
     ).toBe(false);
   });
 
-  it('dispatches Hermes through the shared host command in both installers', () => {
+  it('dispatches Hermes through the shared host command', () => {
     // The YAML updater has to preserve comments and unrelated operator policy,
     // so it lives in the CLI rather than growing two subtly different parsers.
-    // This is still bidirectional: deleting either dispatch leaves the table
-    // describing a config its corresponding installer never writes.
-    expect(sh()).toContain('hermes install --config "$config_path" --command "$dest" --data-root "$data_root" --verify');
-    expect(ps1()).toContain('hermes install --config $hermesConfig --command $dest --data-root $dataRoot --verify');
+    // Both installers used to spell this invocation themselves; #691 deleted
+    // those copies, and the one that runs is the enumeration's.
+    expect(enumeration()).toContain("'hermes', 'install', '--config'");
+    expect(enumeration()).toContain("'--verify'");
   });
 });

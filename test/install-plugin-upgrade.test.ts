@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { inspectAndApplyHosts } from '../src/commands/installer-hosts.js';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
 
@@ -48,44 +50,35 @@ const fakeClaude = (listOutput: string): { bin: string; log: string } => {
   return { bin, log };
 };
 
-/** Source `install.sh` far enough to call one wiring function, nothing else. */
-const runWireClaudeCode = (binDir: string): void => {
-  const work = mkdtempSync(join(tmpdir(), 'cl-wire-'));
-  scratch.push(work);
-  const shim = join(work, 'run.sh');
-  writeFileSync(
-    shim,
-    [
-      '#!/bin/sh',
-      'set -e',
-      `work=${JSON.stringify(work)}`,
-      'REPO=MongLong0214/commitlore',
-      `: >"$work/wired.log"; : >"$work/skipped.log"`,
-      'wired_log="$work/wired.log"; skipped_log="$work/skipped.log"',
-      'record_wired() { printf "%s\\n" "$1" >>"$wired_log"; }',
-      'record_skipped() { printf "%s: %s\\n" "$1" "$2" >>"$skipped_log"; }',
-      // Only the function under test, lifted out so sourcing the installer
-      // cannot run anything that touches this machine.
-      `eval "$(awk '/^wire_claude_code\\(\\) \\{/,/^\\}/' ${JSON.stringify(join(REPO_ROOT, 'install.sh'))})"`,
-      'wire_claude_code',
-      '',
-    ].join('\n'),
-    'utf8',
-  );
-  chmodSync(shim, 0o755);
-  execFileSync('/bin/sh', [shim], {
-    env: { ...process.env, PATH: `${binDir}:${process.env['PATH'] ?? ''}` },
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  scratch.push(work);
+/**
+ * Runs the enumeration with only the fake `claude` on PATH.
+ *
+ * Until #691 this test sourced `wire_claude_code` out of `install.sh` with awk.
+ * That function was dead — nothing called it — so the test was measuring a copy
+ * of the logic rather than the copy that runs. `installer-hosts` is what both
+ * installers delegate to, and it is what a release actually executes.
+ */
+const runClaudeCodeWiring = async (binDir: string): Promise<void> => {
+  const home = mkdtempSync(join(tmpdir(), 'cl-plugin-home-'));
+  scratch.push(home);
+  const previousPath = process.env['PATH'];
+  process.env['PATH'] = binDir;
+  try {
+    await inspectAndApplyHosts({
+      wrapper: join(home, 'bin', 'commitlore'),
+      dataRoot: home,
+      home,
+    });
+  } finally {
+    process.env['PATH'] = previousPath;
+  }
 };
 
 describe('#660 installing over an existing Claude plugin', () => {
-  it('updates the marketplace and reinstalls instead of returning', () => {
+  it('updates the marketplace and reinstalls instead of returning', async () => {
     const { bin, log } = fakeClaude('commitlore@commitlore  v0.8.0');
 
-    runWireClaudeCode(bin);
+    await runClaudeCodeWiring(bin);
     const calls = readFileSync(log, 'utf8');
 
     expect(calls, 'the marketplace must be refreshed or the new version is invisible').toContain(
@@ -96,10 +89,10 @@ describe('#660 installing over an existing Claude plugin', () => {
 
   // The old path stopped at `plugin list`. Pinning the call count keeps a future
   // early return from passing because the strings are still in the file.
-  it('does more than ask whether it is installed', () => {
+  it('does more than ask whether it is installed', async () => {
     const { bin, log } = fakeClaude('commitlore@commitlore  v0.8.0');
 
-    runWireClaudeCode(bin);
+    await runClaudeCodeWiring(bin);
     const calls = readFileSync(log, 'utf8').trim().split('\n').filter(Boolean);
 
     expect(calls.length, `only ran: ${calls.join(' | ')}`).toBeGreaterThan(1);

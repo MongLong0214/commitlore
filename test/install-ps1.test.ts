@@ -230,12 +230,6 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     const text = body();
     expect(text).toContain('reusing the existing checkout at $checkout (runtime manifest and requested tag verified)');
     expect(text).toContain('upgrading the existing commitlore shim at');
-    expect(text).toContain('already mentions commitlore -- left unchanged');
-    // Parity with install.sh: a mention whose command is gone is named, not
-    // counted as healthy. Asserted here because PowerShell cannot run in this
-    // environment and only the windows-latest job exercises the behaviour.
-    expect(text).toContain('which does not exist -- left unchanged');
-    expect(text).toContain('Test-Path -LiteralPath $existingCmd');
   });
 
   it('names an explicit manual repair for an unusable existing checkout', () => {
@@ -297,54 +291,11 @@ describe('T-1121 install.ps1 exists and matches install.sh clause for clause', (
     expect(text).not.toMatch(/git clone[^\n]*2>&1/);
   });
 
-  it('uses Codex MCP commands when the CLI exists and names the config fallback', () => {
-    const text = body();
-    expect(text).toContain('& codex mcp get commitlore');
-    expect(text).toContain('& codex mcp add commitlore -- $dest mcp');
-    expect(text).toContain('config-file fallback; codex CLI is unavailable');
-  });
-
-  /**
-   * The check above was satisfied by `codex mcp list --json` and a name match,
-   * which is what install.sh was fixed for months earlier: a registration named
-   * `commitlore` pointing at a wrapper some earlier install left behind was
-   * reported healthy and never repaired. The Windows twin kept the defect
-   * because the only Windows coverage was that the strings `list` and `add`
-   * appeared somewhere in the file.
-   *
-   * These assert the decision, not the vocabulary — the four outcomes
-   * install.sh distinguishes must each exist here, and be reached by asking
-   * what the entry points at.
-   */
-  it('decides codex ownership by target, the same four ways install.sh does', () => {
-    const text = body();
-
-    // Points at this install: left alone.
-    expect(text).toContain("command: $dest");
-    expect(text).toContain('commitlore already points at this install -- left unchanged');
-    // Points somewhere we never wrote: left alone, and said so.
-    expect(text).toContain(
-      'an mcp server named commitlore points somewhere this install did not write -- left untouched',
-    );
-    // Ours but stale: removed, then re-added.
-    expect(text).toContain('& codex mcp remove commitlore');
-    // The name alone must no longer be the test.
-    expect(text).not.toContain('checked with codex mcp list');
-  });
-
-  it('says the same four things install.sh says about a codex registration', () => {
-    // Parity asserted against the other script rather than restated, so the two
-    // cannot drift apart the way they already did once.
-    const ps1 = body();
-    const sh = readFileSync(join(REPO_ROOT, 'install.sh'), 'utf8');
-
-    for (const sentence of [
-      'commitlore already points at this install -- left unchanged',
-      'an mcp server named commitlore points somewhere this install did not write -- left untouched',
-      'codex mcp add could not register commitlore -- config file was left untouched',
-    ]) {
-      expect(sh, `install.sh no longer says: ${sentence}`).toContain(sentence);
-      expect(ps1, `install.ps1 does not say: ${sentence}`).toContain(sentence);
-    }
-  });
+  // The Codex, JSON-host and Hermes wiring that used to be asserted here was
+  // deleted from both installers in #691: it sat after an unconditional `exit`
+  // in install.ps1 and was never called in install.sh, while `installer-hosts`
+  // had been doing the work for both. Parity is now about the half they still
+  // implement themselves -- prerequisites, the pinned checkout, the shim, the
+  // refusal paths -- and host wiring is asserted against the enumeration in
+  // test/installer-host-coverage.test.ts, which runs it rather than reading it.
 });

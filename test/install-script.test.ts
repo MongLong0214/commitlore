@@ -398,38 +398,10 @@ describe('Codex registration is judged by where it points, not by its name', () 
   });
 });
 
-describe('Hermes host setup in the shell installer', () => {
-  it('backs up and extends the active profile without touching approval policy', () => {
-    const home = tempDir('hermes');
-    const config = join(home, '.hermes', 'config.yaml');
-    const operatorConfig = [
-      'approvals:',
-      '  deny:',
-      '    - "*git push*--force*"',
-      'command_allowlist:',
-      '  - shell command via -c/-lc flag',
-      '',
-    ].join('\n');
-    mkdirSync(dirname(config), { recursive: true });
-    writeFileSync(config, operatorConfig);
-
-    const r = runInstaller({ home, hermes: true });
-
-    expect(r.status).toBe(0);
-    const after = readFileSync(config, 'utf8');
-    expect(after).toContain(operatorConfig);
-    expect(after).toContain(`command: ${JSON.stringify(r.wrapper)}`);
-    expect(after).toContain(JSON.stringify(realpathSync(join(r.dataDir, TAG, 'hermes', 'skills'))));
-    expect(readFileSync(`${config}.commitlore-backup`, 'utf8')).toBe(operatorConfig);
-    expect(`${r.stdout}${r.stderr}`).toContain('Hermes setup verified');
-
-    const beforeSecond = readFileSync(config, 'utf8');
-    const second = runInstaller({ home, hermes: true });
-    expect(second.status).toBe(0);
-    expect(readFileSync(config, 'utf8')).toBe(beforeSecond);
-    expect(`${second.stdout}${second.stderr}`).toContain('Hermes setup verified');
-  });
-});
+// The shell installer's own Hermes wiring was deleted in #691 -- nothing
+// called it, and `commitlore hermes install` owns the YAML edit for both
+// platforms. Its behaviour is asserted directly in test/hermes-upgrade.test.ts
+// and test/hermes-skills-root.test.ts, against the command that performs it.
 
 describe('T-1120 upgrade and verification', () => {
   it('replaces a running wrapper by rename and exits 0', () => {
