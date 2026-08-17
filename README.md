@@ -98,6 +98,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/inst
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
 ```
 
+Host wiring on Windows requires **v1.1.1 or later**. Before it, detection could not see a `.cmd` shim and the installer could not run one, so a Windows install placed the CLI and wired nothing — reported as `ok: false`, never as success. Verified on a real machine at 1.1.1 for Codex, Gemini CLI and Hermes.
+
 **Hermes** — after installing the CLI, configure its host integration:
 
 ```bash
@@ -217,7 +219,7 @@ separate layers:
 | Claude Code | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Codex | **Yes — automatic through the plugin.** | **Yes — through the plugin.** |
 | Hermes | **Yes — `commitlore hermes install`.** | **Yes — `commitlore hermes install`.** |
-| Gemini CLI, Cursor, Windsurf, opencode | **Yes — the MCP server is wired by `install.sh`.** | **Procedure, not automatic.** The server states the prepare → verify → stage procedure in its `instructions` on every connection. The host may or may not act on it. |
+| Gemini CLI, Cursor, Windsurf, opencode | **Yes — both installers wire the MCP server**, through one shared step rather than each on its own. | **Procedure, not automatic.** The server states the prepare → verify → stage procedure in its `instructions` on every connection. The host may or may not act on it. |
 | Any other `AGENTS.md`-convention host | **Procedure, not automatic.** `commitlore init --agents-md` writes it into the repository. | **Procedure, not automatic.** Same file, same caveat. |
 
 “Yes” in the Capture column means the workflow is installed and available — the

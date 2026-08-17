@@ -92,6 +92,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/inst
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
 ```
 
+Windows での host 配線には **v1.1.1 以降**が必要です。それ以前は検出が `.cmd` shim を見つけられず、インストーラーもそれを実行できなかったため、Windows へのインストールは CLI を置くだけで何も配線しませんでした — 成功としてではなく `ok: false` として報告されます。1.1.1 で Codex、Gemini CLI、Hermes について実機で確認しました。
+
 **Hermes** — CLI をインストールした後、host integration を設定します:
 
 ```bash
@@ -176,7 +178,7 @@ delivery はコンテキストを渡すものであり、編集を止めるも�
 | Claude Code | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Codex | **はい — plugin により自動です。** | **はい — plugin により可能です。** |
 | Hermes | **はい — `commitlore hermes install`.** | **はい — `commitlore hermes install`.** |
-| Gemini CLI, Cursor, Windsurf, opencode | **はい — `install.sh` が MCP server を配線します。** | **procedure であり自動ではありません。** server が接続ごとに prepare → verify → stage の手順を伝えます。host が従う場合も従わない場合もあります。 |
+| Gemini CLI, Cursor, Windsurf, opencode | **はい — 両方のインストーラーが MCP server を配線します。** それぞれ独自にではなく、共有された一つの手順を通ります。 | **procedure であり自動ではありません。** server が接続ごとに prepare → verify → stage の手順を伝えます。host が従う場合も従わない場合もあります。 |
 | その他の `AGENTS.md` convention host | **procedure であり自動ではありません。** `commitlore init --agents-md` が repository に書きます。 | **procedure であり自動ではありません。** 同じファイル、同じ但し書きです。 |
 
 「はい」は layer がインストールされるという意味であり、すべての commit に record が
