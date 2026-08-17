@@ -603,6 +603,94 @@ jobs:
           & $shim --help > $null
           if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
 
+      # #722. Every other assertion about host wiring on this runner is vacuous:
+      # a GitHub runner has no coding agents, so detection short-circuits and the
+      # summary is `"hosts":[]` on every run. An assertion reading that list
+      # passes whether the wiring code works, is broken, or has been deleted --
+      # which is why #714 had to exist as a standing record and why both Windows
+      # defects in #716 were found by a person on a real machine instead.
+      #
+      # A planted `cursor.cmd` removes the vacancy. Detection looks for the
+      # command on PATH; nothing here executes Cursor, because Cursor plays no
+      # part in wiring -- what gets written is its config and what gets probed
+      # is CommitLore's own wrapper. So the fixture is a file, and the branch it
+      # unlocks is the real one.
+      #
+      # Two cases, and the second is what makes the first mean anything. A
+      # fixture that can only succeed proves the installer reports what the
+      # fixture told it, which is the empty runner again with more steps.
+      - name: A planted host is wired, and a broken one is reported failed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+
+          $fixtureBin = Join-Path $env:RUNNER_TEMP 'commitlore-host-fixture'
+          New-Item -ItemType Directory -Force -Path $fixtureBin | Out-Null
+          # Extensionless on purpose as well: PATHEXT is what #716's second cause
+          # could not consult, so the fixture is only findable if it is honoured.
+          Set-Content -LiteralPath (Join-Path $fixtureBin 'cursor.cmd') -Value "@echo off`r`nexit /b 0`r`n"
+          $env:PATH = "$fixtureBin;$env:PATH"
+
+          # The exit code is part of what is being tested: `install.ps1` returns
+          # this command's status, so a host that failed has to make it non-zero
+          # or an install reports success over a repository with nothing wired.
+          # It is also why this step ends with an explicit `exit 0` -- GitHub's
+          # pwsh shell exits with the last native command's code, and the second
+          # case deliberately produces a failing one.
+          function Enumerate([string] $stateHome) {
+            New-Item -ItemType Directory -Force -Path $stateHome | Out-Null
+            $raw = (& $shim installer-hosts --wrapper $shim --data-root (Join-Path $stateHome 'data') --home $stateHome --json) -join "`n"
+            $code = $LASTEXITCODE
+            Write-Host $raw
+            return [pscustomobject]@{ summary = ($raw | ConvertFrom-Json); code = $code }
+          }
+
+          # 1. A detected host with no config yet: written, then live-verified
+          #    through a real MCP initialize against the wrapper.
+          $okRun = Enumerate (Join-Path $env:RUNNER_TEMP 'cl-host-ok')
+          $ok = $okRun.summary
+          if ($okRun.code -ne 0) { throw "a wired host exited $($okRun.code), want 0" }
+          $cursor = $ok.hosts | Where-Object { $_.host -eq 'cursor' }
+          if (-not $cursor) { throw 'cursor was not detected — the planted shim did not reach detection' }
+          # A `MCP initialize timed out` here is #729's symptom on a runner, not a
+          # loose assertion. Do not weaken this to make it pass -- an outcome that
+          # accepts a failed probe is the vacancy this whole step exists to remove.
+          if ($cursor.outcome -ne 'installed') { throw "cursor outcome $($cursor.outcome), want installed: $($cursor.detail)" }
+          if (-not $cursor.healthy) { throw "cursor is not healthy: $($cursor.detail)" }
+          if ($ok.notDetected -contains 'cursor') { throw 'cursor is in both hosts and notDetected' }
+          $written = Join-Path (Join-Path $env:RUNNER_TEMP 'cl-host-ok') '.cursor\mcp.json'
+          if (-not (Test-Path -LiteralPath $written)) { throw "no config at $written" }
+          if (-not ((Get-Content -LiteralPath $written -Raw | ConvertFrom-Json).mcpServers.commitlore)) {
+            throw 'the config carries no commitlore registration'
+          }
+
+          # 2. The same host, with a config it cannot use. This must fail, and
+          #    the summary must say so rather than rounding up.
+          $badHome = Join-Path $env:RUNNER_TEMP 'cl-host-bad'
+          New-Item -ItemType Directory -Force -Path (Join-Path $badHome '.cursor') | Out-Null
+          # -NoNewline so the byte comparison below is against what was written,
+          # not against Set-Content's trailing newline.
+          Set-Content -LiteralPath (Join-Path $badHome '.cursor\mcp.json') -Value '{ not json' -NoNewline
+          $badRun = Enumerate $badHome
+          $bad = $badRun.summary
+          if ($badRun.code -eq 0) { throw 'a failed host exited 0 — install.ps1 would report success over nothing wired' }
+          $cursorBad = $bad.hosts | Where-Object { $_.host -eq 'cursor' }
+          if (-not $cursorBad) { throw 'cursor was not detected in the failing case' }
+          if ($cursorBad.outcome -ne 'failed') { throw "a broken config reported $($cursorBad.outcome), want failed" }
+          if ($cursorBad.healthy) { throw 'a broken config was reported healthy' }
+          if ($bad.ok) { throw 'ok stayed true while a requested host failed' }
+          # #716: the reason has to name the file it was about.
+          if ($cursorBad.detail -notmatch 'mcp\.json') { throw "the failure does not name its file: $($cursorBad.detail)" }
+          if ((Get-Content -LiteralPath (Join-Path $badHome '.cursor\mcp.json') -Raw) -ne '{ not json') {
+            throw 'a config that could not be used was modified anyway'
+          }
+
+          Write-Host 'planted host: wired when usable, failed when not, config untouched on failure'
+          # Every assertion above throws under $ErrorActionPreference = 'Stop',
+          # so reaching this line means they all held.
+          exit 0
+
       # The documented piped form, under PowerShell 7. `iex` gives a piped script
       # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
       # why that variable exists. This step is also the only check that a leading
