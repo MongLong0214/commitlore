@@ -8,7 +8,7 @@
  */
 
 import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, extname, isAbsolute, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
@@ -189,15 +189,85 @@ const tomlHost = async (path: string, wrapper: string): Promise<HostResult> => {
     : { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 
-const hasCommand = (command: string): boolean =>
-  (process.env.PATH ?? '').split(delimiter).some((directory) => {
-    const path = join(directory, command);
-    try { return !statSync(path).isDirectory(); } catch { return false; }
-  });
+export interface ResolvedCommand {
+  readonly path: string;
+  readonly usesCommandInterpreter: boolean;
+}
+
+const isWindowsPath = (): boolean => process.platform === 'win32';
+
+const pathEntriesFor = (command: string): string[] => {
+  if (isAbsolute(command) || command.includes('/') || command.includes('\\')) return [command];
+  return (process.env.PATH ?? '').split(isWindowsPath() ? ';' : delimiter).map((directory) => join(directory, command));
+};
+
+const executableExtensions = (command: string): string[] => {
+  if (!isWindowsPath() || extname(command) !== '') return [''];
+  const extensions = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  return extensions;
+};
+
+const isFile = (path: string): boolean => {
+  try {
+    return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Select a concrete executable once so host detection and execution agree.
+ *
+ * Batch files need cmd.exe, but never `shell: true`: that would turn wrapper
+ * and user-configured paths into an unchecked shell command line. The caller
+ * invokes cmd.exe directly with an explicitly quoted argument vector instead.
+ */
+export const resolveCommand = (command: string): ResolvedCommand | null => {
+  for (const path of pathEntriesFor(command)) {
+    for (const extension of executableExtensions(command)) {
+      const candidate = `${path}${extension}`;
+      if (isFile(candidate)) {
+        return { path: candidate, usesCommandInterpreter: isWindowsPath() && /\.(?:cmd|bat)$/i.test(candidate) };
+      }
+    }
+  }
+  return null;
+};
+
+const hasCommand = (command: string): boolean => resolveCommand(command) !== null;
+
+const commandInterpreter = (): string => {
+  const root = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
+  const candidate = join(root, 'System32', 'cmd.exe');
+  return isAbsolute(candidate) && isFile(candidate) ? candidate : 'C:\\Windows\\System32\\cmd.exe';
+};
+
+const cmdArgument = (value: string): string | null =>
+  /["%\0\r\n]/.test(value) ? null : `"${value}"`;
+
+export const commandInterpreterArguments = (path: string, args: string[]): string[] | null => {
+  const tokens = [path, ...args].map(cmdArgument);
+  if (tokens.some((token) => token === null)) return null;
+  return ['/d', '/v:off', '/s', '/c', `"${tokens.join(' ')}"`];
+};
+
+const spawnResolved = (command: ResolvedCommand, args: string[], options: { encoding?: 'utf8'; stdio?: 'ignore'; timeout?: number }) => {
+  if (!command.usesCommandInterpreter) return spawnSync(command.path, args, { ...options, shell: false });
+  const invocation = commandInterpreterArguments(command.path, args);
+  if (invocation === null) return { status: null, error: new Error('batch command contains an unsafe cmd.exe character'), stdout: '', stderr: '' };
+  return spawnSync(commandInterpreter(), invocation, { ...options, shell: false, windowsVerbatimArguments: true });
+};
 
 const commandResult = (command: string, args: string[]): { ok: boolean; stdout: string } => {
-  const result = spawnSync(command, args, { encoding: 'utf8', shell: false });
-  return { ok: result.status === 0 && result.error === undefined, stdout: result.stdout ?? '' };
+  const resolved = resolveCommand(command);
+  if (resolved === null) return { ok: false, stdout: '' };
+  const result = spawnResolved(resolved, args, { encoding: 'utf8' });
+  return { ok: result.status === 0 && result.error === undefined, stdout: result.stdout?.toString() ?? '' };
+};
+
+const commandStatus = (command: string, args: string[], timeout: number): number | null => {
+  const resolved = resolveCommand(command);
+  return resolved === null ? null : spawnResolved(resolved, args, { stdio: 'ignore', timeout }).status;
 };
 
 const cliHost = async (host: string, wrapper: string): Promise<HostResult> => {
@@ -230,8 +300,7 @@ const cliHost = async (host: string, wrapper: string): Promise<HostResult> => {
  */
 const claudePluginHost = (): HostResult => {
   const host = 'claude-code';
-  const run = (args: string[]): number | null =>
-    spawnSync('claude', args, { stdio: 'ignore', shell: false, timeout: 60_000 }).status;
+  const run = (args: string[]): number | null => commandStatus('claude', args, 60_000);
 
   if (run(['plugin', 'marketplace', 'add', 'MongLong0214/commitlore']) === null) {
     return { host, requested: true, outcome: 'failed', healthy: false, detail: 'claude plugin marketplace add could not run' };
@@ -269,8 +338,7 @@ export interface StepOutcome {
 }
 
 const codexPluginOutcome = (wrapper: string): StepOutcome => {
-  const result = spawnSync(wrapper, ['plugin', 'install-codex'], { stdio: 'ignore', shell: false, timeout: 60_000 });
-  return result.status === 0
+  return commandStatus(wrapper, ['plugin', 'install-codex'], 60_000) === 0
     ? { ok: true, detail: 'plugin installed' }
     : { ok: false, detail: 'plugin step failed — run: commitlore plugin install-codex' };
 };
@@ -324,8 +392,8 @@ export const inspectAndApplyHosts = async (options: Options): Promise<HostSummar
   // Hermes is intentionally still delegated to its existing transactional
   // helper. This command judges its exit and reports it in the same schema.
   if (hasCommand('hermes') || existsSync(join(home, '.hermes'))) {
-    const result = spawnSync(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], { stdio: 'ignore', shell: false, timeout: 30_000 });
-    requested.push(Promise.resolve(result.status === 0
+    const status = commandStatus(options.wrapper, ['hermes', 'install', '--config', join(home, '.hermes', 'config.yaml'), '--command', options.wrapper, '--data-root', options.dataRoot, '--verify'], 30_000);
+    requested.push(Promise.resolve(status === 0
       ? { host: 'hermes', requested: true, outcome: 'installed', healthy: true, detail: 'Hermes setup verified' }
       : { host: 'hermes', requested: true, outcome: 'failed', healthy: false, detail: 'Hermes setup failed' }));
   } else notDetected.push('hermes');
