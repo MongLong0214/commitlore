@@ -79,13 +79,37 @@ export declare const POLICY_DEFAULTS: CapturePolicy;
 /** The only keys a policy file may set. An unknown key is rejected, not merged. */
 export declare const POLICY_KEYS: readonly ["mode", "unattended", "max_records_per_commit", "require_verified_evidence"];
 /**
- * One location, deliberately. PRD-F13 requirement 11 allows either a stated
- * precedence between a repository-local and a user-global file, or a single
- * location. A single location is chosen: an ambiguous precedence is worse than a
- * missing feature, and the user story this file answers ("one record per commit
- * generally, two on this repository") is repository-scoped anyway.
+ * The policy a repository commits, and the overlay one machine keeps.
+ *
+ * PRD-F13 requirement 11 allows either a single location or a stated
+ * precedence. This was a single location until #709 — an ambiguous precedence
+ * is worse than a missing feature — and is now the second option, stated:
+ *
+ *     .commitlore-policy.local.json   per key, wins
+ *     .commitlore-policy.json         repository default
+ *     POLICY_DEFAULTS                 built in
+ *
+ * What changed the answer is that refusing the overlay never prevented a
+ * contributor from differing. It converted the difference into a permanently
+ * modified tracked file — the report in #709 is a release script refusing to
+ * tag a worktree dirtied exactly that way. Every tool that keeps a shared
+ * config in the tree gives the operator a layer that wins for the same reason:
+ * the committed file says what the project wants, and the operator's machine is
+ * not the project's to command.
+ *
+ * Per key, not per file: an overlay that sets only `unattended` leaves `mode`
+ * and `max_records_per_commit` as the repository set them, so it says "this
+ * machine differs about that" and nothing more.
  */
 export declare const POLICY_FILE_NAME = ".commitlore-policy.json";
+/**
+ * The overlay. Untracked by convention — nothing here writes a `.gitignore`
+ * entry for it, because a tool that hides a file on a repository's behalf has
+ * decided for the repository what it may not see.
+ */
+export declare const POLICY_LOCAL_FILE_NAME = ".commitlore-policy.local.json";
+/** A key a policy file may set. */
+export type PolicyKey = (typeof POLICY_KEYS)[number];
 /**
  * The identity of a policy that came from the defaults.
  *
@@ -111,14 +135,56 @@ export declare const computePolicyIdentityHash: (policy?: CapturePolicy) => stri
  * true.
  */
 export declare const computePolicyFileIdentityHash: (contents: string) => string;
+/**
+ * The identity of a policy two files decided between them (#709).
+ *
+ * Neither file's bytes describe what ran, so the digest is taken over the
+ * effective policy in canonical form. A pending transaction stamps this hash;
+ * without it a record prepared under an overlay would carry provenance naming
+ * a policy that did not produce it — a record misreporting the conditions of
+ * its own capture, which is worse than the gap #709 closes.
+ *
+ * `unattended` is an input here, unlike `computePolicyIdentityHash` above. The
+ * exclusion there rests on a file's identity being its own bytes, so every
+ * identity the setting can change is hashed already. An overlay breaks that
+ * premise: it can turn the setting on from a file whose bytes are not the
+ * digest input, so the value has to travel in the digest itself.
+ *
+ * Computed only when an overlay is present, which is what keeps the digest of
+ * every repository without one byte-identical to what it was before this
+ * existed. Adding an overlay does change the digest — including an empty one
+ * over a file whose bytes are not canonical — and that is correct: a capture in
+ * flight across the change is rejected with "policy identity changed since
+ * prepare", because it was.
+ */
+export declare const computeEffectivePolicyIdentityHash: (policy: CapturePolicy) => string;
 export interface PolicyResolution {
     /** False when a policy file exists but could not be used. */
     ok: boolean;
+    /** The policy that applies: the committed file with the overlay laid over it. */
     policy: CapturePolicy;
     identityHash: string;
-    source: 'defaults' | 'repository';
-    /** Absolute path of the file that was read, or null when none was. */
+    /**
+     * Which layer had the last word. `local` whenever the overlay was read, even
+     * when it changed nothing — its presence is what explains the identity hash.
+     */
+    source: 'defaults' | 'repository' | 'local';
+    /** Absolute path of the committed file that was read, or null when none was. */
     path: string | null;
+    /** Absolute path of the overlay that was read, or null when none was. */
+    localPath: string | null;
+    /**
+     * What applied before the overlay — the committed file's policy, or the
+     * defaults when there is no committed file. Equal to `policy` when no overlay
+     * was read, so a caller can compare the two without asking which case it is.
+     */
+    beneath: CapturePolicy;
+    /**
+     * Keys where the overlay disagrees with what is beneath it, in `POLICY_KEYS`
+     * order. Empty when there is no overlay or it restates what it overlays —
+     * this is the disagreement `doctor` reports, not merely what the overlay set.
+     */
+    overridden: readonly PolicyKey[];
     /**
      * A named, actionable reason when `ok` is false. Never null in that case: a
      * silent fallback to the defaults would make the identity hash describe a
@@ -126,6 +192,16 @@ export interface PolicyResolution {
      */
     error: string | null;
 }
+/**
+ * The file to name in a message about the policy that applied.
+ *
+ * The committed file unless the overlay decided the value — which keeps every
+ * message a repository without an overlay produces byte-identical to what it
+ * was, and names a file the reader can actually open when there is one. With no
+ * file at all it still names the committed one, because that is where a reader
+ * who wants to change the answer should write.
+ */
+export declare const policySourceLabel: (resolution: PolicyResolution) => string;
 /**
  * Resolve the policy for `cwd`.
  *
@@ -141,10 +217,17 @@ export declare const resolvePolicy: (cwd: string) => PolicyResolution;
  * a status report can say where the setting is kept even before it is set.
  */
 export declare const capturePolicyPath: (cwd: string) => string | null;
+/**
+ * Absolute path of this machine's overlay, or null outside a repository. As
+ * above, the file may or may not exist; this is where it would live.
+ */
+export declare const capturePolicyLocalPath: (cwd: string) => string | null;
 export interface PolicyWriteSuccess {
     ok: true;
-    /** Absolute path of the policy file. */
+    /** Absolute path of the policy file that was written, or would have been. */
     path: string;
+    /** Which file that is: the committed policy, or this machine's overlay. */
+    scope: 'repository' | 'local';
     /** False when the requested state was already in effect and nothing was written. */
     changed: boolean;
     /** The policy that applies after the call. */
@@ -156,26 +239,22 @@ export interface PolicyWriteFailure {
     ok: false;
     /** Absolute path of the policy file, or null outside a repository. */
     path: string | null;
+    /** Which file that is; `repository` outside a repository, where neither exists. */
+    scope: 'repository' | 'local';
     /** A named, actionable reason — the same words `resolvePolicy` would use. */
     error: string;
 }
 export type PolicyWriteResult = PolicyWriteSuccess | PolicyWriteFailure;
 /**
- * Turn unattended capture on or off by writing the policy file
- * `resolvePolicy` reads (#511 added the setting; this is the only writer).
+ * Turn unattended capture on or off, in whichever file this machine keeps its
+ * answer in.
  *
- * Never throws. Coherence is enforced here rather than trusted to the caller:
- * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
- * the mode cannot honour is a configuration error the resolver rejects
- * (ADR-0030, #511) — this function cannot produce a file it would reject.
- * Disabling preserves whatever mode the repository chose.
- *
- * An existing file is merged, never replaced: every other key the repository
- * set survives. A file the resolver rejects is refused rather than rewritten,
- * because rewriting it would destroy whatever the user meant to put there
- * before they can see it named. When no file exists, disabling writes nothing
- * — the defaults already apply, and creating a file would move the repository
- * from the default digest to a file digest while nothing about capture
- * changed, which #511 pins against.
+ * The overlay when it already exists, or when `local` asks for it; the
+ * committed file otherwise. Existence is the signal because creating the
+ * overlay is a decision — an operator who has one is saying they differ from
+ * the repository, and a `commitlore auto off` that silently created one would
+ * make the tracked file stop being the answer without anyone choosing that.
  */
-export declare const setUnattendedCapture: (cwd: string, enabled: boolean) => PolicyWriteResult;
+export declare const setUnattendedCapture: (cwd: string, enabled: boolean, opts?: {
+    local?: boolean;
+}) => PolicyWriteResult;

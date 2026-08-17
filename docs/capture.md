@@ -51,6 +51,38 @@ sets both coherently rather than producing a file the resolver rejects.
 The file is committed with the repository: turning it on applies to everyone
 who clones it.
 
+### Differing on one machine
+
+Because that file is committed, a contributor who needs a different answer used
+to have one route — edit it — and their worktree stayed modified forever, which
+is enough to stop a release script that refuses a dirty tree. So a second file
+may sit beside it:
+
+```
+.commitlore-policy.local.json     per key, wins
+.commitlore-policy.json           repository default
+built-in defaults
+```
+
+`commitlore auto on --local` and `auto off --local` write it, and once it
+exists it is the file `commitlore auto` writes — the tracked file is left as
+the repository wrote it. Keep it out of version control; nothing adds a
+`.gitignore` entry for you.
+
+Precedence is per key. An overlay setting only `unattended` leaves `mode` and
+`max_records_per_commit` as the repository set them, so a later change to the
+committed file still applies. It may set a value in either direction: the
+consent that matters is expressed at commit time by a person on their own
+machine, and what keeps an unattended record from directing is the `drafted`
+stamp and the claim cap in grading, not this switch.
+
+Two things make the precedence answerable rather than ambiguous. The policy
+identity hash is computed over the *effective* policy whenever an overlay is
+present, so a record prepared under one is stamped with the policy that
+actually produced it — a repository with no overlay keeps exactly the digest it
+had. And `commitlore doctor` reports the disagreement, naming both files, both
+values and the one in force.
+
 Because the setting lives with the capture policy, the policy identity covers
 it: a file edited between stage and commit is detected like any other policy
 change (ADR-0021 §7). It is off unless a repository sets it; shipping the

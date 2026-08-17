@@ -2235,10 +2235,10 @@ var require_resolve = __commonJS({
       }
       return count2;
     }
-    function getFullPath(resolver, id = "", normalize2) {
+    function getFullPath(resolver, id2 = "", normalize2) {
       if (normalize2 !== false)
-        id = normalizeId(id);
-      const p = resolver.parse(id);
+        id2 = normalizeId(id2);
+      const p = resolver.parse(id2);
       return _getFullPath(resolver, p);
     }
     exports.getFullPath = getFullPath;
@@ -2248,13 +2248,13 @@ var require_resolve = __commonJS({
     }
     exports._getFullPath = _getFullPath;
     var TRAILING_SLASH_HASH = /#\/?$/;
-    function normalizeId(id) {
-      return id ? id.replace(TRAILING_SLASH_HASH, "") : "";
+    function normalizeId(id2) {
+      return id2 ? id2.replace(TRAILING_SLASH_HASH, "") : "";
     }
     exports.normalizeId = normalizeId;
-    function resolveUrl(resolver, baseId, id) {
-      id = normalizeId(id);
-      return resolver.resolve(baseId, id);
+    function resolveUrl(resolver, baseId, id2) {
+      id2 = normalizeId(id2);
+      return resolver.resolve(baseId, id2);
     }
     exports.resolveUrl = resolveUrl;
     var ANCHOR = /^[a-z_][-a-z0-9._]*$/i;
@@ -3024,8 +3024,8 @@ var require_compile = __commonJS({
       if (Object.keys(root.schema).length > 0 && refPath === baseId) {
         return getJsonPointer.call(this, p, root);
       }
-      const id = (0, resolve_1.normalizeId)(refPath);
-      const schOrRef = this.refs[id] || this.schemas[id];
+      const id2 = (0, resolve_1.normalizeId)(refPath);
+      const schOrRef = this.refs[id2] || this.schemas[id2];
       if (typeof schOrRef == "string") {
         const sch = resolveSchema.call(this, root, schOrRef);
         if (typeof (sch === null || sch === void 0 ? void 0 : sch.schema) !== "object")
@@ -3036,7 +3036,7 @@ var require_compile = __commonJS({
         return;
       if (!schOrRef.validate)
         compileSchema.call(this, schOrRef);
-      if (id === (0, resolve_1.normalizeId)(ref)) {
+      if (id2 === (0, resolve_1.normalizeId)(ref)) {
         const { schema } = schOrRef;
         const { schemaId } = this.opts;
         const schId = schema[schemaId];
@@ -4179,15 +4179,15 @@ var require_core = __commonJS({
             this.addSchema(sch, void 0, _meta, _validateSchema);
           return this;
         }
-        let id;
+        let id2;
         if (typeof schema === "object") {
           const { schemaId } = this.opts;
-          id = schema[schemaId];
-          if (id !== void 0 && typeof id != "string") {
+          id2 = schema[schemaId];
+          if (id2 !== void 0 && typeof id2 != "string") {
             throw new Error(`schema ${schemaId} must be string`);
           }
         }
-        key = (0, resolve_1.normalizeId)(key || id);
+        key = (0, resolve_1.normalizeId)(key || id2);
         this._checkUnique(key);
         this.schemas[key] = this._addSchema(schema, _meta, key, _validateSchema, true);
         return this;
@@ -4266,11 +4266,11 @@ var require_core = __commonJS({
           case "object": {
             const cacheKey = schemaKeyRef;
             this._cache.delete(cacheKey);
-            let id = schemaKeyRef[this.opts.schemaId];
-            if (id) {
-              id = (0, resolve_1.normalizeId)(id);
-              delete this.schemas[id];
-              delete this.refs[id];
+            let id2 = schemaKeyRef[this.opts.schemaId];
+            if (id2) {
+              id2 = (0, resolve_1.normalizeId)(id2);
+              delete this.schemas[id2];
+              delete this.refs[id2];
             }
             return this;
           }
@@ -4377,10 +4377,10 @@ var require_core = __commonJS({
         }
       }
       _addSchema(schema, meta2, baseId, validateSchema = this.opts.validateSchema, addSchema = this.opts.addUsedSchema) {
-        let id;
+        let id2;
         const { schemaId } = this.opts;
         if (typeof schema == "object") {
-          id = schema[schemaId];
+          id2 = schema[schemaId];
         } else {
           if (this.opts.jtd)
             throw new Error("schema must be object");
@@ -4390,7 +4390,7 @@ var require_core = __commonJS({
         let sch = this._cache.get(schema);
         if (sch !== void 0)
           return sch;
-        baseId = (0, resolve_1.normalizeId)(id || baseId);
+        baseId = (0, resolve_1.normalizeId)(id2 || baseId);
         const localRefs = resolve_1.getSchemaRefs.call(this, schema, baseId);
         sch = new compile_1.SchemaEnv({ schema, schemaId, meta: meta2, baseId, localRefs });
         this._cache.set(sch.schema, sch);
@@ -4403,9 +4403,9 @@ var require_core = __commonJS({
           this.validateSchema(schema, true);
         return sch;
       }
-      _checkUnique(id) {
-        if (this.schemas[id] || this.refs[id]) {
-          throw new Error(`schema with key or id "${id}" already exists`);
+      _checkUnique(id2) {
+        if (this.schemas[id2] || this.refs[id2]) {
+          throw new Error(`schema with key or id "${id2}" already exists`);
         }
       }
       _compileSchemaEnv(sch) {
@@ -11357,16 +11357,16 @@ var labelRecordBlocks = (message) => {
   );
   const seen = /* @__PURE__ */ new Set();
   const duplicated = /* @__PURE__ */ new Set();
-  for (const id of ids) {
-    if (id === void 0) continue;
-    if (seen.has(id)) duplicated.add(id);
-    seen.add(id);
+  for (const id2 of ids) {
+    if (id2 === void 0) continue;
+    if (seen.has(id2)) duplicated.add(id2);
+    seen.add(id2);
   }
   return blocks.map((trailers, index) => {
-    const id = ids[index];
+    const id2 = ids[index];
     return {
       own: index === blocks.length - 1,
-      identityCollision: id !== void 0 && duplicated.has(id),
+      identityCollision: id2 !== void 0 && duplicated.has(id2),
       trailers
     };
   });
@@ -13368,10 +13368,10 @@ var readPullRequests = (cwd, sha) => {
     if (typeof entry !== "object" || entry === null) return [];
     const row = entry;
     const number3 = typeof row["number"] === "number" ? row["number"] : 0;
-    const title = typeof row["title"] === "string" ? row["title"] : "";
+    const title2 = typeof row["title"] === "string" ? row["title"] : "";
     const body = typeof row["body"] === "string" ? row["body"] : "";
     if (body.trim() === "") return [];
-    return [{ number: number3, title, body }];
+    return [{ number: number3, title: title2, body }];
   });
 };
 var pullRequestSource = (options) => {
@@ -13935,6 +13935,19 @@ var POLICY_KEYS = [
   "require_verified_evidence"
 ];
 var POLICY_FILE_NAME = ".commitlore-policy.json";
+var POLICY_LOCAL_FILE_NAME = ".commitlore-policy.local.json";
+var serializePolicyFile = (policy) => {
+  const ordered = {};
+  for (const key of POLICY_KEYS) ordered[key] = policy[key];
+  return `${JSON.stringify(ordered, null, 2)}
+`;
+};
+var serializePolicyOverlay = (set) => {
+  const ordered = {};
+  for (const key of POLICY_KEYS) if (key in set) ordered[key] = set[key];
+  return `${JSON.stringify(ordered, null, 2)}
+`;
+};
 var sha256 = (input) => createHash2("sha256").update(input).digest("hex");
 var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
   JSON.stringify({
@@ -13944,12 +13957,16 @@ var computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(
   })
 );
 var computePolicyFileIdentityHash = (contents) => sha256(contents);
-var defaultsResolution = (error2, path2) => ({
+var computeEffectivePolicyIdentityHash = (policy) => sha256(serializePolicyFile(policy));
+var defaultsResolution = (error2, path2, localPath = null) => ({
   ok: error2 === null,
   policy: POLICY_DEFAULTS,
   identityHash: computePolicyIdentityHash(POLICY_DEFAULTS),
   source: "defaults",
   path: path2,
+  localPath,
+  beneath: POLICY_DEFAULTS,
+  overridden: [],
   error: error2
 });
 var repoRoot = (cwd) => {
@@ -13958,9 +13975,9 @@ var repoRoot = (cwd) => {
   const root = res.stdout.trim();
   return root.length > 0 ? root : null;
 };
-var validate = (raw) => {
+var parseKeys = (raw, name) => {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { error: `${POLICY_FILE_NAME} must contain a JSON object` };
+    return { error: `${name} must contain a JSON object` };
   }
   const obj = raw;
   const unknown2 = Object.keys(obj).filter(
@@ -13968,83 +13985,128 @@ var validate = (raw) => {
   );
   if (unknown2.length > 0) {
     return {
-      error: `${POLICY_FILE_NAME} sets ${unknown2.length === 1 ? "an unknown key" : "unknown keys"}: ${unknown2.join(", ")}. Allowed keys are ${POLICY_KEYS.join(", ")}.`
+      error: `${name} sets ${unknown2.length === 1 ? "an unknown key" : "unknown keys"}: ${unknown2.join(", ")}. Allowed keys are ${POLICY_KEYS.join(", ")}.`
     };
   }
-  const policy = { ...POLICY_DEFAULTS };
+  const set = {};
   if ("mode" in obj) {
     if (typeof obj.mode !== "string" || !CAPTURE_MODES.includes(obj.mode)) {
       return {
-        error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(", ")} (got ${JSON.stringify(obj.mode)})`
+        error: `${name}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(", ")} (got ${JSON.stringify(obj.mode)})`
       };
     }
-    policy.mode = obj.mode;
+    set.mode = obj.mode;
   }
   if ("max_records_per_commit" in obj) {
     const v = obj.max_records_per_commit;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 32) {
       return {
-        error: `${POLICY_FILE_NAME}: max_records_per_commit must be an integer between 1 and 32 (got ${JSON.stringify(v)})`
+        error: `${name}: max_records_per_commit must be an integer between 1 and 32 (got ${JSON.stringify(v)})`
       };
     }
-    policy.max_records_per_commit = v;
+    set.max_records_per_commit = v;
   }
   if ("unattended" in obj) {
     const v = obj.unattended;
     if (typeof v !== "boolean") {
       return {
-        error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`
+        error: `${name}: unattended must be a boolean (got ${JSON.stringify(v)})`
       };
     }
-    policy.unattended = v;
-  }
-  if (policy.unattended && policy.mode !== "auto") {
-    return {
-      error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`
-    };
+    set.unattended = v;
   }
   if ("require_verified_evidence" in obj) {
     const v = obj.require_verified_evidence;
     if (typeof v !== "boolean") {
       return {
-        error: `${POLICY_FILE_NAME}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`
+        error: `${name}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`
       };
     }
-    policy.require_verified_evidence = v;
+    set.require_verified_evidence = v;
   }
-  return { policy };
+  return { set };
 };
-var resolvePolicy = (cwd) => {
-  const root = repoRoot(cwd);
-  if (root === null) return defaultsResolution(null, null);
-  const path2 = join2(root, POLICY_FILE_NAME);
-  if (!existsSync4(path2)) return defaultsResolution(null, null);
+var coherent = (policy, originOf) => {
+  if (!policy.unattended || policy.mode === "auto") return null;
+  const consent = originOf("unattended");
+  const mode = originOf("mode");
+  return consent === mode ? `${consent}: "unattended": true requires mode "auto" (mode is "${policy.mode}")` : `"unattended": true in ${consent} requires mode "auto", but mode is "${policy.mode}" from ${mode}`;
+};
+var validate = (raw) => {
+  const parsed = parseKeys(raw, POLICY_FILE_NAME);
+  if ("error" in parsed) return { error: parsed.error };
+  const policy = { ...POLICY_DEFAULTS, ...parsed.set };
+  const error2 = coherent(policy, () => POLICY_FILE_NAME);
+  return error2 === null ? { policy } : { error: error2 };
+};
+var readLayer = (path2, name) => {
   let contents;
   try {
     contents = readFileSync3(path2, "utf8");
   } catch (err) {
-    return defaultsResolution(
-      `${POLICY_FILE_NAME} could not be read: ${err.message}`,
-      path2
-    );
+    return { error: `${name} could not be read: ${err.message}` };
   }
   let parsed;
   try {
     parsed = JSON.parse(contents);
   } catch (err) {
-    return defaultsResolution(
-      `${POLICY_FILE_NAME} is not valid JSON: ${err.message}`,
-      path2
-    );
+    return { error: `${name} is not valid JSON: ${err.message}` };
   }
-  const checked = validate(parsed);
-  if ("error" in checked) return defaultsResolution(checked.error, path2);
+  const checked = parseKeys(parsed, name);
+  return "error" in checked ? checked : { set: checked.set, contents };
+};
+var policySourceLabel = (resolution) => resolution.source === "local" ? `${POLICY_LOCAL_FILE_NAME} over ${resolution.path === null ? "the defaults" : POLICY_FILE_NAME}` : POLICY_FILE_NAME;
+var resolvePolicy = (cwd) => {
+  const root = repoRoot(cwd);
+  if (root === null) return defaultsResolution(null, null);
+  const path2 = join2(root, POLICY_FILE_NAME);
+  const localPath = join2(root, POLICY_LOCAL_FILE_NAME);
+  const committedExists = existsSync4(path2);
+  const localExists = existsSync4(localPath);
+  if (!committedExists && !localExists) return defaultsResolution(null, null);
+  let beneath = POLICY_DEFAULTS;
+  let committedBytes = null;
+  if (committedExists) {
+    const layer = readLayer(path2, POLICY_FILE_NAME);
+    if ("error" in layer) return defaultsResolution(layer.error, path2);
+    const merged = { ...POLICY_DEFAULTS, ...layer.set };
+    const incoherent2 = coherent(merged, () => POLICY_FILE_NAME);
+    if (incoherent2 !== null) return defaultsResolution(incoherent2, path2);
+    beneath = merged;
+    committedBytes = layer.contents;
+  }
+  if (!localExists) {
+    return {
+      ok: true,
+      policy: beneath,
+      identityHash: committedBytes === null ? computePolicyIdentityHash(beneath) : computePolicyFileIdentityHash(committedBytes),
+      source: "repository",
+      path: path2,
+      localPath: null,
+      beneath,
+      overridden: [],
+      error: null
+    };
+  }
+  const overlay = readLayer(localPath, POLICY_LOCAL_FILE_NAME);
+  if ("error" in overlay) {
+    return defaultsResolution(overlay.error, committedExists ? path2 : null, localPath);
+  }
+  const policy = { ...beneath, ...overlay.set };
+  const origin = (key) => key in overlay.set ? POLICY_LOCAL_FILE_NAME : committedExists ? POLICY_FILE_NAME : "the built-in defaults";
+  const incoherent = coherent(policy, origin);
+  if (incoherent !== null) {
+    return defaultsResolution(incoherent, committedExists ? path2 : null, localPath);
+  }
   return {
     ok: true,
-    policy: checked.policy,
-    identityHash: computePolicyFileIdentityHash(contents),
-    source: "repository",
-    path: path2,
+    policy,
+    identityHash: computeEffectivePolicyIdentityHash(policy),
+    source: "local",
+    path: committedExists ? path2 : null,
+    localPath,
+    beneath,
+    overridden: POLICY_KEYS.filter((key) => policy[key] !== beneath[key]),
     error: null
   };
 };
@@ -14052,60 +14114,103 @@ var capturePolicyPath = (cwd) => {
   const root = repoRoot(cwd);
   return root === null ? null : join2(root, POLICY_FILE_NAME);
 };
-var serializePolicyFile = (policy) => {
-  const ordered = {};
-  for (const key of POLICY_KEYS) ordered[key] = policy[key];
-  return `${JSON.stringify(ordered, null, 2)}
-`;
+var capturePolicyLocalPath = (cwd) => {
+  const root = repoRoot(cwd);
+  return root === null ? null : join2(root, POLICY_LOCAL_FILE_NAME);
 };
-var setUnattendedCapture = (cwd, enabled) => {
+var setInCommittedFile = (cwd, enabled) => {
   const path2 = capturePolicyPath(cwd);
   if (path2 === null) {
-    return { ok: false, path: null, error: "no git repository found here \u2014 run this inside a repository" };
+    return { ok: false, path: null, scope: "repository", error: "no git repository found here \u2014 run this inside a repository" };
   }
   if (existsSync4(path2)) {
     let current;
     try {
       current = readFileSync3(path2, "utf8");
     } catch (err) {
-      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be read: ${err.message}` };
+      return { ok: false, path: path2, scope: "repository", error: `${POLICY_FILE_NAME} could not be read: ${err.message}` };
     }
     let parsed;
     try {
       parsed = JSON.parse(current);
     } catch (err) {
-      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} is not valid JSON: ${err.message}` };
+      return { ok: false, path: path2, scope: "repository", error: `${POLICY_FILE_NAME} is not valid JSON: ${err.message}` };
     }
     const checked = validate(parsed);
     if ("error" in checked) {
       return {
         ok: false,
         path: path2,
+        scope: "repository",
         error: `${checked.error} Fix or remove the file and re-run; it has been left untouched.`
       };
     }
     const previous = checked.policy;
     const policy2 = enabled ? { ...previous, mode: "auto", unattended: true } : { ...previous, unattended: false };
     if (previous.mode === policy2.mode && previous.unattended === policy2.unattended) {
-      return { ok: true, path: path2, changed: false, policy: policy2, previous };
+      return { ok: true, path: path2, scope: "repository", changed: false, policy: policy2, previous };
     }
     try {
       writeFileSync(path2, serializePolicyFile(policy2));
     } catch (err) {
-      return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+      return { ok: false, path: path2, scope: "repository", error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
     }
-    return { ok: true, path: path2, changed: true, policy: policy2, previous };
+    return { ok: true, path: path2, scope: "repository", changed: true, policy: policy2, previous };
   }
   if (!enabled) {
-    return { ok: true, path: path2, changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
+    return { ok: true, path: path2, scope: "repository", changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
   }
   const policy = { ...POLICY_DEFAULTS, mode: "auto", unattended: true };
   try {
     writeFileSync(path2, serializePolicyFile(policy));
   } catch (err) {
-    return { ok: false, path: path2, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+    return { ok: false, path: path2, scope: "repository", error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
   }
-  return { ok: true, path: path2, changed: true, policy, previous: POLICY_DEFAULTS };
+  return { ok: true, path: path2, scope: "repository", changed: true, policy, previous: POLICY_DEFAULTS };
+};
+var setInOverlay = (cwd, localPath, enabled) => {
+  const resolution = resolvePolicy(cwd);
+  if (!resolution.ok) {
+    return {
+      ok: false,
+      path: localPath,
+      scope: "local",
+      error: `${resolution.error ?? "the policy is rejected"} Fix or remove the file and re-run; it has been left untouched.`
+    };
+  }
+  let held = {};
+  if (existsSync4(localPath)) {
+    const layer = readLayer(localPath, POLICY_LOCAL_FILE_NAME);
+    if ("error" in layer) {
+      return { ok: false, path: localPath, scope: "local", error: layer.error };
+    }
+    held = layer.set;
+  }
+  const set = enabled ? { ...held, mode: "auto", unattended: true } : { ...held, unattended: false };
+  const previous = resolution.policy;
+  const policy = { ...resolution.beneath, ...set };
+  if (previous.mode === policy.mode && previous.unattended === policy.unattended) {
+    return { ok: true, path: localPath, scope: "local", changed: false, policy, previous };
+  }
+  try {
+    writeFileSync(localPath, serializePolicyOverlay(set));
+  } catch (err) {
+    return {
+      ok: false,
+      path: localPath,
+      scope: "local",
+      error: `${POLICY_LOCAL_FILE_NAME} could not be written: ${err.message}`
+    };
+  }
+  return { ok: true, path: localPath, scope: "local", changed: true, policy, previous };
+};
+var setUnattendedCapture = (cwd, enabled, opts = {}) => {
+  const root = repoRoot(cwd);
+  if (root === null) {
+    return { ok: false, path: null, scope: "repository", error: "no git repository found here \u2014 run this inside a repository" };
+  }
+  const localPath = join2(root, POLICY_LOCAL_FILE_NAME);
+  return opts.local === true || existsSync4(localPath) ? setInOverlay(cwd, localPath, enabled) : setInCommittedFile(cwd, enabled);
 };
 
 // src/commands/auto.ts
@@ -14113,13 +14218,16 @@ var runAutoStatus = (cwd) => {
   const path2 = capturePolicyPath(cwd);
   if (path2 === null) return { outsideRepository: true };
   const resolution = resolvePolicy(cwd);
-  if (resolution.path !== null && !resolution.ok) {
+  if (!resolution.ok) {
     return {
       ok: false,
       unattended: null,
       mode: null,
-      source: "repository",
+      // Which file was rejected, so the reader opens the right one.
+      source: resolution.localPath !== null ? "local" : "repository",
       path: path2,
+      localPath: resolution.localPath,
+      overridden: [],
       error: resolution.error,
       unattendedStart: "unknown"
     };
@@ -14128,22 +14236,25 @@ var runAutoStatus = (cwd) => {
     ok: true,
     unattended: resolution.policy.unattended,
     mode: resolution.policy.mode,
-    source: resolution.path !== null ? "repository" : "defaults",
+    source: resolution.source,
     path: path2,
+    localPath: resolution.localPath,
+    overridden: resolution.overridden,
     error: null,
     unattendedStart: resolution.policy.unattended ? "agent-host-required" : "disabled"
   };
 };
-var runAutoSet = (cwd, enabled) => {
-  const result = setUnattendedCapture(cwd, enabled);
+var runAutoSet = (cwd, enabled, opts = {}) => {
+  const result = setUnattendedCapture(cwd, enabled, opts);
   if (!result.ok) {
     if (result.path === null) return { outsideRepository: true };
-    return { ok: false, changed: false, path: result.path, mode: null, previousMode: null, error: result.error };
+    return { ok: false, changed: false, path: result.path, scope: result.scope, mode: null, previousMode: null, error: result.error };
   }
   return {
     ok: true,
     changed: result.changed,
     path: result.path,
+    scope: result.scope,
     mode: result.policy.mode,
     previousMode: result.previous.mode,
     error: null
@@ -14159,8 +14270,10 @@ var printStatus = (result, json) => {
     process.stdout.write(`${JSON.stringify(result, null, 2)}
 `);
   } else if (!result.ok) {
-    process.stdout.write(`unattended capture: unknown \u2014 ${POLICY_FILE_NAME} exists but is rejected
-`);
+    process.stdout.write(
+      `unattended capture: unknown \u2014 ${result.source === "local" ? POLICY_LOCAL_FILE_NAME : POLICY_FILE_NAME} exists but is rejected
+`
+    );
     process.stdout.write(`  ${result.error}
 `);
     process.stdout.write("  fix or remove the file and re-run; until then capture runs on the defaults\n");
@@ -14183,6 +14296,14 @@ var printStatus = (result, json) => {
     );
     process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")
 `);
+    if (result.localPath !== null) {
+      process.stdout.write(`  local overlay: ${result.localPath} \u2014 wins per key, untracked by convention
+`);
+      process.stdout.write(
+        result.overridden.length === 0 ? "  the overlay changes nothing the repository already says\n" : `  overridden here: ${result.overridden.join(", ")} \u2014 run commitlore doctor for the values
+`
+      );
+    }
     if (result.unattended) {
       process.stdout.write("  unattended start: an agent host must initiate capture; init installs no initiator\n");
       process.stdout.write(
@@ -14234,7 +14355,10 @@ var printSet = (result, enabled, json) => {
     );
   }
   if (enabled) {
-    process.stdout.write("  the file is committed with the repository \u2014 it applies to everyone who clones it\n");
+    process.stdout.write(
+      result.scope === "local" ? `  ${POLICY_LOCAL_FILE_NAME} is this machine's own \u2014 it applies to nobody else, and ${POLICY_FILE_NAME} is untouched
+` : "  the file is committed with the repository \u2014 it applies to everyone who clones it\n"
+    );
     process.stdout.write(
       "  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n"
     );
@@ -14243,7 +14367,7 @@ var printSet = (result, enabled, json) => {
 var register2 = (program3) => {
   const auto = program3.command("auto").description(`read and write the unattended-capture setting (${POLICY_FILE_NAME})`).option("--json", "emit structured JSON output (bare `auto` reports status)").addHelpText(
     "after",
-    "\nUnattended capture authorises an agent host to prepare, verify and stage a record with nobody in the loop (ADR-0030, #511). It does not make ordinary `git commit` start capture: the host must invoke `commitlore_prepare_capture` with its session transcript first. The setting lives in " + POLICY_FILE_NAME + ' at the repository root \u2014 the same file `resolvePolicy` reads; this command is the only writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode only and a file the resolver would reject is never produced. The file is committed with the repository: turning it on applies to everyone who clones it.\n\nExit codes (SPEC \xA710): `status` \u2014 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` \u2014 0 written, or already in that state and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed).'
+    "\nUnattended capture authorises an agent host to prepare, verify and stage a record with nobody in the loop (ADR-0030, #511). It does not make ordinary `git commit` start capture: the host must invoke `commitlore_prepare_capture` with its session transcript first. The setting lives in " + POLICY_FILE_NAME + ' at the repository root \u2014 the same file `resolvePolicy` reads. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode only and a file the resolver would reject is never produced. That file is committed with the repository: turning it on applies to everyone who clones it. To differ on one machine without modifying it, `on --local` / `off --local` write ' + POLICY_LOCAL_FILE_NAME + ", which wins per key and is untracked by convention (#709); once it exists it is the file this command writes.\n\nExit codes (SPEC \xA710): `status` \u2014 0 the state was reported (on or off), 1 a policy file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` \u2014 0 written, or already in that state and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed)."
   ).action((options) => {
     printStatus(runAutoStatus(process.cwd()), options.json === true);
   });
@@ -14253,17 +14377,20 @@ var register2 = (program3) => {
   ).action((options) => {
     printStatus(runAutoStatus(process.cwd()), options.json === true);
   });
-  auto.command("on").description('enable unattended capture (writes mode "auto" and unattended true)').option("--json", "emit structured JSON output").addHelpText(
+  auto.command("on").description('enable unattended capture (writes mode "auto" and unattended true)').option("--json", "emit structured JSON output").option("--local", `write ${POLICY_LOCAL_FILE_NAME} instead of the committed file`).addHelpText(
     "after",
-    "\nExit codes (SPEC \xA710): 0 written, or already on and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed)."
+    `
+--local writes ${POLICY_LOCAL_FILE_NAME}, which wins per key over the committed file and is untracked by convention \u2014 use it to differ from the repository without leaving a modified tracked file behind (#709). Once that file exists it is written by default, so --local is only needed to create it.
+
+Exit codes (SPEC \xA710): 0 written, or already on and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed).`
   ).action((options) => {
-    printSet(runAutoSet(process.cwd(), true), true, options.json === true);
+    printSet(runAutoSet(process.cwd(), true, { local: options.local === true }), true, options.json === true);
   });
-  auto.command("off").description("disable unattended capture (keeps the mode the repository chose)").option("--json", "emit structured JSON output").addHelpText(
+  auto.command("off").description("disable unattended capture (keeps the mode the repository chose)").option("--json", "emit structured JSON output").option("--local", `write ${POLICY_LOCAL_FILE_NAME} instead of the committed file`).addHelpText(
     "after",
     "\nExit codes (SPEC \xA710): 0 written, or already off and unchanged, 2 could not run (no repository, a rejected policy file that will not be overwritten, or the write failed)."
   ).action((options) => {
-    printSet(runAutoSet(process.cwd(), false), false, options.json === true);
+    printSet(runAutoSet(process.cwd(), false, { local: options.local === true }), false, options.json === true);
   });
   for (const subcommand of auto.commands) subcommand.exitOverride();
 };
@@ -16439,7 +16566,7 @@ var prepareValues = (opts) => {
   if (policy.policy.mode === "off") {
     throw markCaptureError(
       new Error(
-        `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") \u2014 nothing was prepared`
+        `capture is off for this repository (${policySourceLabel(policy)}: mode "off") \u2014 nothing was prepared`
       ),
       "rejected"
     );
@@ -16447,7 +16574,7 @@ var prepareValues = (opts) => {
   if (opts.unattended === true && !(policy.policy.mode === "auto" && policy.policy.unattended)) {
     throw markCaptureError(
       new Error(
-        `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
+        `unattended capture is off for this repository (${policySourceLabel(policy)}: "unattended": true with mode "auto" opts in) \u2014 nothing was prepared`
       ),
       "rejected"
     );
@@ -16553,8 +16680,8 @@ var classifyResult = (accepted, rejected) => {
 };
 var rejectDanglingRefs = (accepted, rejected, historyIds, cwd) => {
   if (hasShallowHistory(cwd)) return [...accepted];
-  const historical = [...historyIds].map((id) => ({
-    trailers: [{ key: "Record-Id", value: id }]
+  const historical = [...historyIds].map((id2) => ({
+    trailers: [{ key: "Record-Id", value: id2 }]
   }));
   let remaining = [...accepted];
   let dropped = true;
@@ -16722,12 +16849,12 @@ var runVerifyCaptureRecords = (opts) => {
     const { activeCanonicalTuples } = history;
     const verifyResult = verifyDraft(draft, { transcript, diff });
     for (const verified of verifyResult.accepted) {
-      const id = recordIdOf(verified.record);
-      if (id && reservedRecordIds.has(id)) {
+      const id2 = recordIdOf(verified.record);
+      if (id2 && reservedRecordIds.has(id2)) {
         rejected.push({
           record: verified.record,
           reason: "duplicate-record-id",
-          detail: `Record-Id "${id}" already exists in repository history`
+          detail: `Record-Id "${id2}" already exists in repository history`
         });
         continue;
       }
@@ -16741,7 +16868,7 @@ var runVerifyCaptureRecords = (opts) => {
         continue;
       }
       accepted.push(verified);
-      if (id) reservedRecordIds.add(id);
+      if (id2) reservedRecordIds.add(id2);
     }
     const surviving = rejectDanglingRefs(accepted, rejected, history.recordIds, cwd);
     accepted.length = 0;
@@ -16757,9 +16884,9 @@ var runVerifyCaptureRecords = (opts) => {
     }
     for (const verified of accepted) {
       if (recordIdOf(verified.record) !== void 0) continue;
-      const id = mintRecordId(verified.record, reservedRecordIds);
-      verified.record.trailers = [...verified.record.trailers, { key: "Record-Id", value: id }];
-      reservedRecordIds.add(id);
+      const id2 = mintRecordId(verified.record, reservedRecordIds);
+      verified.record.trailers = [...verified.record.trailers, { key: "Record-Id", value: id2 }];
+      reservedRecordIds.add(id2);
     }
     for (const rejectedRec of verifyResult.rejected) {
       rejected.push({
@@ -17087,12 +17214,12 @@ var readHistoricalRecords = (cwd) => {
 var verificationHistory = (records) => {
   const recordIds = /* @__PURE__ */ new Set();
   const stream = records.map((record2, index) => {
-    const id = record2.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-    if (id !== void 0) recordIds.add(id);
+    const id2 = record2.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id2 !== void 0) recordIds.add(id2);
     return {
       sha: record2.sha,
       committedAt: record2.committedAt,
-      trailers: id === void 0 ? [{ key: "Record-Id", value: `${SYNTHETIC_HISTORY_ID}${record2.sha}:${index}` }, ...record2.trailers] : record2.trailers
+      trailers: id2 === void 0 ? [{ key: "Record-Id", value: `${SYNTHETIC_HISTORY_ID}${record2.sha}:${index}` }, ...record2.trailers] : record2.trailers
     };
   });
   const activeCanonicalTuples = /* @__PURE__ */ new Set();
@@ -18365,20 +18492,20 @@ var normaliseEvidence = (evidence) => Object.fromEntries(
 );
 var evidenceKey = (value) => value.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase() || "remote";
 var severityOf = (status) => status === "fail" ? "error" : status === "warn" ? "warning" : "info";
-function check(id, category, title, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) {
+function check(id2, category2, title2, status, detail, fix = null, fixed = false, needsAttention = status === "warn" || status === "fail", extra = {}) {
   const evidence = extra.evidence ?? {};
   if (Object.keys(evidence).length === 0) {
-    throw new Error(`doctor check ${id} has no evidence`);
+    throw new Error(`doctor check ${id2} has no evidence`);
   }
   return {
-    id,
-    title,
+    id: id2,
+    title: title2,
     status,
     needsAttention,
     detail,
     fix,
     fixed,
-    category,
+    category: category2,
     severity: severityOf(status),
     evidence: normaliseEvidence(evidence),
     optional: extra.optional ?? false,
@@ -18404,14 +18531,14 @@ var defaultDoctorContext = (opts = {}) => ({
 
 // src/commands/doctor/checks/delivery-inject-runtime.ts
 var evaluateInjectRun = (run, ctx) => {
-  const { id, category, title, executable, path: path2, fix, unavailableFix } = ctx;
+  const { id: id2, category: category2, title: title2, executable, path: path2, fix, unavailableFix } = ctx;
   const executionEvidence = { executable, path: path2 };
   if (run.status === null || run.status === void 0) {
     if (run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "fail",
         `configured PreToolUse hook executable ${JSON.stringify(executable)} is not resolvable from PATH`,
         unavailableFix,
@@ -18427,9 +18554,9 @@ var evaluateInjectRun = (run, ctx) => {
       );
     }
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `could not run the PreToolUse hook: ${run.error?.message ?? "no diagnosis"}`,
       fix,
@@ -18448,9 +18575,9 @@ var evaluateInjectRun = (run, ctx) => {
   if (run.status !== 0) {
     const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `the PreToolUse hook exits ${String(run.status)}: ${said || "no diagnosis"}`,
       fix,
@@ -18468,9 +18595,9 @@ var evaluateInjectRun = (run, ctx) => {
   if (`${run.stdout ?? ""}`.trim() === "") {
     const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `the PreToolUse hook returned no context for a known-good payload${said === "" ? "" : `: ${said}`}`,
       fix,
@@ -18487,9 +18614,9 @@ var evaluateInjectRun = (run, ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     `the PreToolUse hook returned context for ${path2}`,
     null,
@@ -18506,9 +18633,9 @@ var evaluateInjectRun = (run, ctx) => {
 };
 var checkInjectRuntime = (ctx) => {
   const { opts, spawn: spawn2, env } = ctx;
-  const title = "PreToolUse hook runtime";
-  const id = "inject-runtime";
-  const category = "delivery";
+  const title2 = "PreToolUse hook runtime";
+  const id2 = "inject-runtime";
+  const category2 = "delivery";
   const fix = "reinstall the commitlore executable that the configured hook runs, then rerun: commitlore doctor";
   const unavailableFix = "install the configured hook executable where the hook can resolve it (or add its install directory to PATH), then rerun: commitlore doctor";
   const cwd = opts.cwd ?? process.cwd();
@@ -18517,9 +18644,9 @@ var checkInjectRuntime = (ctx) => {
     const command2 = settings.commands[0];
     if (settings.state === "outdated" && command2 !== void 0) {
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "skipped",
         `not checked: configured command ${JSON.stringify(command2)} is not recognised; running it might have side effects`,
         null,
@@ -18540,9 +18667,9 @@ var checkInjectRuntime = (ctx) => {
     }
     const detail = settings.state === "absent" ? `not installed in ${settings.settingsPath}` : `${settings.state} in ${settings.settingsPath}${settings.problem === void 0 ? "" : `: ${settings.problem}`}`;
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       detail,
       "commitlore inject install-claude-hook",
@@ -18563,9 +18690,9 @@ var checkInjectRuntime = (ctx) => {
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       "not checked: the configured command is not recognised",
       null,
@@ -18587,9 +18714,9 @@ var checkInjectRuntime = (ctx) => {
   const path2 = runQuery({ cwd, noIndex: true }).records.flatMap((record2) => record2.paths).find((candidate) => candidate !== "" && candidate !== ".");
   if (path2 === void 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       "no recorded path is available for a runtime probe",
       null,
@@ -18628,7 +18755,7 @@ var checkInjectRuntime = (ctx) => {
       HOME: env["HOME"] ?? ""
     }
   });
-  const result = evaluateInjectRun(run, { id, category, title, executable, path: path2, fix, unavailableFix });
+  const result = evaluateInjectRun(run, { id: id2, category: category2, title: title2, executable, path: path2, fix, unavailableFix });
   if (result.status === "fail" && run.status === null && run.error !== void 0 && "code" in run.error && run.error.code === "ENOENT") {
     return { ...result, needsAttention: false };
   }
@@ -18677,14 +18804,14 @@ var cachedBuildId = null;
 var buildId = (entrypoint) => {
   if (entrypoint === void 0 && cachedBuildId !== null) return cachedBuildId;
   const target = physicalPath(entrypoint ?? installedPath("dist", "commitlore.mjs"));
-  let id;
+  let id2;
   try {
-    id = createHash6("sha256").update(readFileSync9(target)).digest("hex").slice(0, 12);
+    id2 = createHash6("sha256").update(readFileSync9(target)).digest("hex").slice(0, 12);
   } catch {
-    id = "unknown";
+    id2 = "unknown";
   }
-  if (entrypoint === void 0) cachedBuildId = id;
-  return id;
+  if (entrypoint === void 0) cachedBuildId = id2;
+  return id2;
 };
 var CAPTURE_ASSETS2 = ["spec/schema/record.schema.json"];
 var runtimeAssetProblems = (identity) => CAPTURE_ASSETS2.map((asset) => join5(identity.packageRoot, asset)).filter((path2) => !existsSync8(path2));
@@ -18966,16 +19093,16 @@ var captureHookStub = () => stubText(UNRESOLVED_CAPTURE);
 // src/commands/doctor/checks/capture-commit-msg-hook.ts
 var checkHook = (ctx, runtime) => {
   const { opts, git: git2, env } = ctx;
-  const title = "commit-msg hook";
-  const id = "commit-msg-hook";
-  const category = "capture";
+  const title2 = "commit-msg hook";
+  const id2 = "commit-msg-hook";
+  const category2 = "capture";
   const install = "commitlore hooks install";
   const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       "not inside a git repository",
       install,
@@ -18999,9 +19126,9 @@ var checkHook = (ctx, runtime) => {
   ].join("; ");
   if (!existsSync9(path2)) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `no commit-msg hook at ${path2}; ${targetDetail}`,
       install,
@@ -19013,9 +19140,9 @@ var checkHook = (ctx, runtime) => {
   const contents = readFileSync11(path2, "utf8");
   if (!contents.includes(HOOK_MARKER)) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `a commit-msg hook exists at ${path2} but does not invoke commitlore; ${targetDetail}`,
       install,
@@ -19026,9 +19153,9 @@ var checkHook = (ctx, runtime) => {
   }
   if (contents !== commitMsgStub()) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `installed at ${path2}, but the stub is out of date \u2014 it predates a change to how the hook finds the CLI; ${targetDetail}`,
       install,
@@ -19049,9 +19176,9 @@ var checkHook = (ctx, runtime) => {
       return blocked(
         runtime,
         check(
-          id,
-          category,
-          title,
+          id2,
+          category2,
+          title2,
           "skipped",
           inherited,
           install,
@@ -19067,9 +19194,9 @@ var checkHook = (ctx, runtime) => {
     return blocked(
       runtime,
       check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         runtime.status,
         inherited,
         install,
@@ -19080,9 +19207,9 @@ var checkHook = (ctx, runtime) => {
     );
   }
   return problems.length === 0 ? check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     `installed at ${path2}; ${targetDetail}`,
     null,
@@ -19090,9 +19217,9 @@ var checkHook = (ctx, runtime) => {
     void 0,
     { evidence: hookEvidence }
   ) : check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "warn",
     `installed at ${path2}; ${targetDetail}; ${problems.join("; ")}`,
     install,
@@ -19108,17 +19235,17 @@ import { tmpdir as tmpdirPath } from "node:os";
 import { join as join7, resolve as resolve9 } from "node:path";
 var checkHookRuntime = (ctx) => {
   const { opts, git: git2, spawn: spawn2, env } = ctx;
-  const title = "hook runtime";
-  const id = "hook-runtime";
-  const category = "capture";
+  const title2 = "hook runtime";
+  const id2 = "hook-runtime";
+  const category2 = "capture";
   const fix = "commitlore hooks install";
   const cwd = opts.cwd ?? process.cwd();
   const located = git2(["rev-parse", "--git-path", "hooks/commit-msg"], gitOptions2(opts));
   if (located.code !== 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       "not inside a git repository",
       fix,
@@ -19136,9 +19263,9 @@ var checkHookRuntime = (ctx) => {
   const hook = resolve9(cwd, located.stdout.trim());
   if (!existsSync10(hook)) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       "no hook installed \u2014 nothing to run",
       null,
@@ -19160,9 +19287,9 @@ var checkHookRuntime = (ctx) => {
     });
     if (run.error !== void 0) {
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "fail",
         `could not run the hook: ${run.error.message}`,
         fix,
@@ -19191,9 +19318,9 @@ var checkHookRuntime = (ctx) => {
         detail = `the hook exited ${String(run.status)} under the restricted PATH \u2014 cause unclear: ${said || "no output"}`;
       }
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "fail",
         detail,
         fix,
@@ -19209,9 +19336,9 @@ var checkHookRuntime = (ctx) => {
       );
     }
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       "the hook runs and validates without node on PATH",
       null,
@@ -19221,9 +19348,9 @@ var checkHookRuntime = (ctx) => {
     );
   } catch (error2) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `could not probe the hook: ${error2 instanceof Error ? error2.message : String(error2)}`,
       fix,
@@ -19448,18 +19575,18 @@ var register4 = (program3) => {
 
 // src/commands/doctor/checks/capture-pending-backlog.ts
 var checkPendingBacklog = (ctx) => {
-  const title = "pending captures";
-  const id = "pending-backlog";
-  const category = "capture";
+  const title2 = "pending captures";
+  const id2 = "pending-backlog";
+  const category2 = "capture";
   const cwd = ctx.opts.cwd ?? process.cwd();
   let listing;
   try {
     listing = runPendingList({ cwd });
   } catch {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       "no pending directory \u2014 nothing has been captured here yet",
       null,
@@ -19470,9 +19597,9 @@ var checkPendingBacklog = (ctx) => {
   }
   if (listing.state === "unreadable") {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `pending state could not be read (${listing.error ?? "unknown"}); no conclusion can be drawn about waiting captures`,
       "restore read access to .git/commitlore/pending, then run commitlore pending ls",
@@ -19491,9 +19618,9 @@ var checkPendingBacklog = (ctx) => {
   }
   if (listing.unreadable.length > 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${listing.unreadable.length} pending file(s) cannot be read as a transaction`,
       "commitlore pending ls",
@@ -19513,9 +19640,9 @@ var checkPendingBacklog = (ctx) => {
   if (stranded.length === 0) {
     const held = listing.transactions.filter((transaction) => transaction.phase !== "consumed").length;
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       held === 0 ? "no captures are waiting" : `${String(held)} capture(s) waiting, all still able to apply`,
       null,
@@ -19536,9 +19663,9 @@ var checkPendingBacklog = (ctx) => {
   const detail = lost.length > 0 ? `${String(lost.length)} staged capture(s) expired before reaching a commit and were dropped` + (stranded.length > lost.length ? `, alongside ${String(stranded.length - lost.length)} earlier draft(s) that never staged` : "") : `${String(stranded.length)} capture(s) can no longer apply \u2014 their base commit is no longer HEAD`;
   const explanation = lost.length > 0 ? "A staged record binds to the tree it was prepared for and is skipped once that tree moves, so these decisions were never written to the history (#458)" : "None reached staging, so no record was dropped \u2014 the commit each was prepared for either never happened or happened without it";
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "warn",
     `${detail}; oldest from ${oldest ?? "an unknown time"}. ${explanation}`,
     "commitlore pending ls",
@@ -19551,6 +19678,102 @@ var checkPendingBacklog = (ctx) => {
         oldest: oldest ?? "unknown"
       }
     }
+  );
+};
+
+// src/commands/doctor/checks/capture-policy-overlay.ts
+var id = "policy-overlay";
+var title = "capture policy overlay";
+var category = "capture";
+var checkPolicyOverlay = (ctx) => {
+  const cwd = ctx.opts.cwd ?? process.cwd();
+  const resolution = resolvePolicy(cwd);
+  if (!resolution.ok) {
+    const rejected = resolution.localPath !== null ? POLICY_LOCAL_FILE_NAME : POLICY_FILE_NAME;
+    return check(
+      id,
+      category,
+      title,
+      "warn",
+      `${rejected} is rejected, so neither file's values are in force \u2014 capture is running on the built-in defaults`,
+      "commitlore auto status",
+      false,
+      void 0,
+      {
+        evidence: {
+          state: "rejected",
+          rejected,
+          policy_error: resolution.error ?? "unknown",
+          in_force: "built-in defaults"
+        }
+      }
+    );
+  }
+  if (resolution.localPath === null) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      resolution.path === null ? `no policy file and no ${POLICY_LOCAL_FILE_NAME} \u2014 the built-in defaults apply and nothing overrides them` : `${POLICY_FILE_NAME} applies as written; no ${POLICY_LOCAL_FILE_NAME} overrides it`,
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          state: "no-overlay",
+          policy_file: resolution.path ?? "absent",
+          overlay: "absent",
+          source: resolution.source
+        }
+      }
+    );
+  }
+  const beneathName = resolution.path === null ? "the built-in defaults" : POLICY_FILE_NAME;
+  if (resolution.overridden.length === 0) {
+    return check(
+      id,
+      category,
+      title,
+      "ok",
+      `${POLICY_LOCAL_FILE_NAME} is present and agrees with ${beneathName} on every key \u2014 it changes nothing`,
+      null,
+      false,
+      void 0,
+      {
+        evidence: {
+          state: "overlay-agrees",
+          policy_file: resolution.path ?? "absent",
+          overlay: resolution.localPath,
+          overridden: "none"
+        }
+      }
+    );
+  }
+  const differences = resolution.overridden.map(
+    (key) => `${key}: ${JSON.stringify(resolution.beneath[key])} in ${beneathName}, ${JSON.stringify(resolution.policy[key])} here \u2014 ${JSON.stringify(resolution.policy[key])} applies`
+  );
+  const evidence = {
+    state: "overlay-overrides",
+    policy_file: resolution.path ?? "absent",
+    overlay: resolution.localPath,
+    overridden: resolution.overridden.join(",")
+  };
+  for (const key of POLICY_KEYS) {
+    if (!resolution.overridden.includes(key)) continue;
+    evidence[`${key}_repository`] = JSON.stringify(resolution.beneath[key]);
+    evidence[`${key}_effective`] = JSON.stringify(resolution.policy[key]);
+  }
+  return check(
+    id,
+    category,
+    title,
+    "ok",
+    `${resolution.localPath} overrides ${beneathName} \u2014 ${differences.join("; ")}`,
+    null,
+    false,
+    void 0,
+    { evidence }
   );
 };
 
@@ -19852,16 +20075,16 @@ var registerCommitloreMcpServer = (cwd) => {
 
 // src/commands/doctor/checks/capture-unattended-initiator.ts
 var checkUnattendedCaptureInitiator = (ctx) => {
-  const id = "unattended-initiator";
-  const title = "unattended capture initiator";
-  const category = "capture";
+  const id2 = "unattended-initiator";
+  const title2 = "unattended capture initiator";
+  const category2 = "capture";
   const cwd = ctx.opts.cwd ?? process.cwd();
   const resolution = resolvePolicy(cwd);
   if (!resolution.ok) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${POLICY_FILE_NAME} is rejected, so doctor cannot determine whether an agent host may start unattended capture`,
       "commitlore auto status",
@@ -19878,9 +20101,9 @@ var checkUnattendedCaptureInitiator = (ctx) => {
   }
   if (!resolution.policy.unattended) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       "unattended capture is off; no host initiator is required",
       null,
@@ -19903,9 +20126,9 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     if (isMcpProbeFailure(probe)) {
       const unverified = probe.reason === "initialize-timed-out";
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "warn",
         unverified ? `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, and it did not answer in time to be verified: ${probe.detail}. This does not say the registration is broken \u2014 a cold start on a loaded machine can outlast the probe.` : `${MCP_REGISTRATION_FILE} registers ${JSON.stringify(command)} under commitlore, but it is unhealthy: ${probe.detail}`,
         unverified ? `rerun commitlore doctor when the machine is quieter; if it keeps timing out, start ${JSON.stringify(command)} by hand and check that it answers an MCP initialize` : `repair ${JSON.stringify(command)} so it answers as a CommitLore MCP server, or remove the entry and run commitlore init`,
@@ -19924,9 +20147,9 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     }
     if (probe.kind === "read-delivery") {
       return check(
-        id,
-        category,
-        title,
+        id2,
+        category2,
+        title2,
         "warn",
         `${MCP_REGISTRATION_FILE} registers a live CommitLore read-delivery server${ours ? "" : " through a custom wrapper"}, but it does not advertise all three capture tools, so it is not an unattended capture initiator`,
         "register a CommitLore MCP server that advertises commitlore_prepare_capture, commitlore_verify_capture, and commitlore_stage_capture",
@@ -19945,9 +20168,9 @@ var checkUnattendedCaptureInitiator = (ctx) => {
       );
     }
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       `${MCP_REGISTRATION_FILE} registers a live CommitLore MCP server${ours ? "" : " through a custom wrapper"} that advertises the required read and capture tools; this verifies identity and tool set, not asset readiness \u2014 required assets such as SPEC.md can still be missing and make prepare fail; an ordinary git commit outside that host still cannot initiate capture`,
       null,
@@ -19966,9 +20189,9 @@ var checkUnattendedCaptureInitiator = (ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "warn",
     "unattended capture is authorised, but an ordinary git commit cannot start it: the installed hooks only apply or finalise an already staged transaction",
     "configure an agent host to call commitlore_prepare_capture with its session transcript before git commit",
@@ -19988,17 +20211,17 @@ var checkUnattendedCaptureInitiator = (ctx) => {
 var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
 var checkInjectVersion = (ctx, dependencies) => {
   const { opts, spawn: spawn2, env } = ctx;
-  const title = "PreToolUse hook version";
-  const id = "inject-version";
-  const category = "delivery";
+  const title2 = "PreToolUse hook version";
+  const id2 = "inject-version";
+  const category2 = "delivery";
   const cwd = opts.cwd ?? process.cwd();
   const mine = packageVersion();
   const settings = readClaudeHookStatus(claudeSettingsPath(cwd));
   if (settings.state !== "installed") {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       `no installed hook to compare against ${mine}`,
       null,
@@ -20013,9 +20236,9 @@ var checkInjectVersion = (ctx, dependencies) => {
   const command = settings.commands[0];
   if (command !== CLAUDE_HOOK_COMMAND) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       "not checked: the configured command is not recognised",
       null,
@@ -20053,9 +20276,9 @@ var checkInjectVersion = (ctx, dependencies) => {
   };
   if (run.status !== 0 || typeof run.stdout !== "string") {
     const skipped = check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       `${executable} did not report a version`,
       null,
@@ -20069,9 +20292,9 @@ var checkInjectVersion = (ctx, dependencies) => {
   const theirs = run.stdout.trim();
   if (!SEMVER_ISH.test(theirs)) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       `${executable} answered --version with something that is not a version`,
       null,
@@ -20082,9 +20305,9 @@ var checkInjectVersion = (ctx, dependencies) => {
   }
   if (theirs === mine) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       `the hook runs ${theirs}, the same build as this CLI`,
       null,
@@ -20094,9 +20317,9 @@ var checkInjectVersion = (ctx, dependencies) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "warn",
     `the agent's hook runs ${theirs} but this CLI is ${mine} \u2014 every edit is graded by ${theirs}'s rules, not this one's`,
     "update the installation the hook resolves to (for the plugin: /plugin marketplace update commitlore), then rerun: commitlore doctor",
@@ -20288,17 +20511,17 @@ var unfinishedRuns = (cwd = process.cwd()) => {
 
 // src/commands/doctor/checks/delivery-mcp-lifecycle.ts
 var checkMcpLifecycle = (ctx) => {
-  const title = "MCP server sessions";
-  const id = "mcp-lifecycle";
-  const category = "delivery";
+  const title2 = "MCP server sessions";
+  const id2 = "mcp-lifecycle";
+  const category2 = "delivery";
   const cwd = ctx.opts.cwd ?? process.cwd();
   const crashed = crashedRuns(cwd);
   const unfinished = unfinishedRuns(cwd);
   if (crashed.length === 0 && unfinished.length === 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "ok",
       "every recorded MCP session ended cleanly, or is still running",
       null,
@@ -20312,9 +20535,9 @@ var checkMcpLifecycle = (ctx) => {
     const cause = last2?.detail.slice("crashed: ".length) || "unknown error";
     const unfinishedDetail = unfinished.length === 0 ? "" : ` ${unfinished.length} more session(s) started but never recorded an exit.`;
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${crashed.length} MCP server session(s) crashed \u2014 most recently pid ${String(last2?.pid ?? 0)} at ${last2?.at ?? "unknown"}: ${cause}.${unfinishedDetail}`,
       "restart the client session; if this repeats, capture it with a client started under --debug",
@@ -20333,9 +20556,9 @@ var checkMcpLifecycle = (ctx) => {
   }
   const last = unfinished[unfinished.length - 1];
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "warn",
     `${unfinished.length} MCP server session(s) started here and never recorded an exit \u2014 most recently pid ${String(last?.pid ?? 0)} at ${last?.at ?? "unknown"}. A killed server loses its tool registration in the client, which reports the same as a tool that never existed (#424)`,
     "restart the client session; if this repeats, capture it with a client started under --debug",
@@ -20358,15 +20581,15 @@ var missingAssets = (runtime) => [
   ...runtime.specPresent ? [] : ["spec/SPEC.md"]
 ];
 var checkMcpRuntimeIdentity = (ctx) => {
-  const id = "mcp-runtime-identity";
-  const title = "live MCP runtime identity";
-  const category = "delivery";
+  const id2 = "mcp-runtime-identity";
+  const title2 = "live MCP runtime identity";
+  const category2 = "delivery";
   const scan2 = ctx.liveMcpRuntimes();
   if (!scan2.available) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `could not enumerate live CommitLore MCP runtimes: ${scan2.detail}`,
       null,
@@ -20379,9 +20602,9 @@ var checkMcpRuntimeIdentity = (ctx) => {
   if (unusable.length > 0) {
     const detail = unusable.map((runtime) => `${runtime.packageRoot} is missing ${missingAssets(runtime).join(" and ")}`).join("; ");
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`,
       null,
@@ -20399,9 +20622,9 @@ var checkMcpRuntimeIdentity = (ctx) => {
   const identities = [...new Map(scan2.runtimes.map((runtime) => [identityOf2(runtime), runtime])).values()];
   if (identities.length > 1) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${identities.length} distinct live CommitLore runtimes are answering MCP \u2014 runtime mismatch: ` + identities.map(identityOf2).join("; "),
       null,
@@ -20418,9 +20641,9 @@ var checkMcpRuntimeIdentity = (ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     identities.length === 0 ? "no live CommitLore MCP runtime was found" : `one live CommitLore MCP runtime is answering from ${identityOf2(identities[0])}`,
     null,
@@ -20754,16 +20977,16 @@ var scanEvidence = (scan2, evidence) => scan2.branchesSeen > MAX_SQUASH_CANDIDAT
 } : evidence;
 var checkSquashConservation = (ctx) => {
   const { opts, git: git2 } = ctx;
-  const title = "squash conservation";
-  const id = "squash-conservation";
-  const category = "history";
+  const title2 = "squash conservation";
+  const id2 = "squash-conservation";
+  const category2 = "history";
   const cwd = opts.cwd ?? process.cwd();
   const head = git2(["rev-parse", "--verify", "--quiet", "HEAD"], gitOptions2(opts));
   if (head.code !== 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       "no HEAD yet \u2014 nothing to compare against",
       null,
@@ -20779,9 +21002,9 @@ var checkSquashConservation = (ctx) => {
   const { candidates } = scan2;
   if (candidates.length === 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       `no local branch looks like the source of a squash \u2014 nothing to check${scanLimitDetail(scan2)}`,
       null,
@@ -20824,9 +21047,9 @@ var checkSquashConservation = (ctx) => {
   }
   if (checked === 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "skipped",
       `${candidates.length} branch(es) looked like a squash source, but recorded nothing checkable${scanLimitDetail(scan2)}`,
       null,
@@ -20847,9 +21070,9 @@ var checkSquashConservation = (ctx) => {
     const named = lost.slice(0, 5).map((entry) => `${entry.recordId} (${entry.branch})`).join(", ");
     const more = lost.length > 5 ? `, and ${lost.length - 5} more` : "";
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "warn",
       `${lost.length} record(s) declared on a branch not reachable from HEAD do not appear in HEAD's history: ${named}${more}${scanLimitDetail(scan2)}`,
       "commitlore squash-preserve <base>..<branch> --target <the commit that squashed it>, then commit or attach the result",
@@ -20867,9 +21090,9 @@ var checkSquashConservation = (ctx) => {
   }
   const detail = uncheckable > 0 ? `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD (${uncheckable} branch(es) recorded nothing with an id and could not be checked this way)${scanLimitDetail(scan2)}` : `${checked} squash-shaped branch(es) checked, every declared Record-Id is reachable from HEAD${scanLimitDetail(scan2)}`;
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     detail,
     null,
@@ -20978,16 +21201,16 @@ var checkIndex = (ctx) => {
 // src/commands/doctor/checks/runtime-cli-runtime.ts
 import { existsSync as existsSync12 } from "node:fs";
 var checkRuntime = (ctx) => {
-  const title = "cli runtime";
-  const id = "cli-runtime";
-  const category = "runtime";
+  const title2 = "cli runtime";
+  const id2 = "cli-runtime";
+  const category2 = "runtime";
   const candidates = ["dist/commitlore.mjs", "dist/cli.js"].map((rel) => installedPath(rel));
   const entry = candidates.find((path2) => existsSync12(path2));
   if (entry === void 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `no built CLI at ${candidates.join(" or ")} \u2014 this checkout has not been built`,
       "npm install && npm run build",
@@ -21009,9 +21232,9 @@ var checkRuntime = (ctx) => {
   });
   if (run.error !== void 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `could not run ${entry}: ${run.error.message}`,
       null,
@@ -21030,9 +21253,9 @@ var checkRuntime = (ctx) => {
   if (run.status !== 0) {
     const detail = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? `exit ${String(run.status)}`;
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `${entry} exits ${String(run.status)}: ${detail}`,
       "npm install",
@@ -21048,9 +21271,9 @@ var checkRuntime = (ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     `${entry} runs (${run.stdout.trim()})`,
     null,
@@ -21131,9 +21354,9 @@ var SHIPPED_ASSETS = [
 ];
 var relativeOf = (segments) => segments.join("/");
 var checkInstallationIntegrity = (_ctx) => {
-  const title = "installation integrity";
-  const id = "installation-integrity";
-  const category = "runtime";
+  const title2 = "installation integrity";
+  const id2 = "installation-integrity";
+  const category2 = "runtime";
   const present2 = [];
   const missing = [];
   for (const segments of SHIPPED_ASSETS) {
@@ -21149,9 +21372,9 @@ var checkInstallationIntegrity = (_ctx) => {
   const [first] = missing;
   if (first !== void 0) {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       first.detail,
       null,
@@ -21166,9 +21389,9 @@ var checkInstallationIntegrity = (_ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     `${String(present2.length)} shipped files are present and readable`,
     null,
@@ -21184,9 +21407,9 @@ var checkInstallationIntegrity = (_ctx) => {
 
 // src/commands/doctor/checks/runtime-git-trailers.ts
 var checkGit = (ctx) => {
-  const title = "git interpret-trailers";
-  const id = "git-trailers";
-  const category = "runtime";
+  const title2 = "git interpret-trailers";
+  const id2 = "git-trailers";
+  const category2 = "runtime";
   const version2 = ctx.git(["--version"], gitOptions2(ctx.opts)).stdout.trim();
   const upgrade = "install a git that supports interpret-trailers --parse (git >= 2.9)";
   let trailers;
@@ -21195,9 +21418,9 @@ var checkGit = (ctx) => {
   } catch (error2) {
     const reason = error2 instanceof Error ? error2.message : String(error2);
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `${version2 || "git"} could not parse a probe: ${reason}`,
       upgrade,
@@ -21209,9 +21432,9 @@ var checkGit = (ctx) => {
   const parsed = trailers.map((trailer) => `${trailer.key}: ${trailer.value}`).join(", ");
   if (parsed !== "Limit: probe, Blast: local") {
     return check(
-      id,
-      category,
-      title,
+      id2,
+      category2,
+      title2,
       "fail",
       `${version2} parsed the probe as [${parsed}]`,
       upgrade,
@@ -21221,9 +21444,9 @@ var checkGit = (ctx) => {
     );
   }
   return check(
-    id,
-    category,
-    title,
+    id2,
+    category2,
+    title2,
     "ok",
     `${version2} parses trailers as the spec expects`,
     null,
@@ -21236,7 +21459,7 @@ var checkGit = (ctx) => {
 // src/commands/doctor/checks/transport-notes-push.ts
 var checkPush = (ctx) => {
   const { opts, git: git2 } = ctx;
-  const title = "notes push";
+  const title2 = "notes push";
   const remotes = listRemotes(opts);
   const remote = remotes[0] ?? "origin";
   const command = `git push ${remote} ${NOTES_REF}`;
@@ -21249,7 +21472,7 @@ var checkPush = (ctx) => {
     return check(
       "notes-push",
       "transport",
-      title,
+      title2,
       "ok",
       `no local mirror yet \u2014 nothing to push (${command}, once there is)`,
       null,
@@ -21263,7 +21486,7 @@ var checkPush = (ctx) => {
     return check(
       "notes-push",
       "transport",
-      title,
+      title2,
       "warn",
       `could not verify (${remote}: ${advertised.stderr.trim().split("\n")[0] ?? "git ls-remote failed"})`,
       command,
@@ -21283,7 +21506,7 @@ var checkPush = (ctx) => {
     return check(
       "notes-push",
       "transport",
-      title,
+      title2,
       "ok",
       `${remote} has the current ${NOTES_REF}`,
       null,
@@ -21295,7 +21518,7 @@ var checkPush = (ctx) => {
   return check(
     "notes-push",
     "transport",
-    title,
+    title2,
     "warn",
     `this clone has local records in ${NOTES_REF}; no command pushes them for you`,
     command,
@@ -21321,14 +21544,14 @@ var recordAbsenceEvidence = (remote, ctx) => {
 };
 var checkRefspec = (ctx) => {
   const { opts, git: git2 } = ctx;
-  const title = "notes fetch refspec";
+  const title2 = "notes fetch refspec";
   const remotes = listRemotes(opts);
   const remoteEvidence = { remotes: remotes.join(", ") || "none" };
   if (remotes.length === 0) {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       "no remote is configured, so records cannot be shared with anyone",
       "add a remote, then rerun: commitlore doctor --fix",
@@ -21370,7 +21593,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       `${forced.join(", ")} fetches ${NOTES_REF} with a forced refspec, so an ordinary git fetch overwrites this clone's mirror \u2014 a record written here and not yet pushed is destroyed silently`,
       forced.map((remote) => `git config --replace-all remote.${remote}.fetch '${NOTES_REFSPEC}' '^\\+refs/notes/'`).join("\n"),
@@ -21383,7 +21606,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       `${missing.join(", ")} does not fetch ${NOTES_REF}, so records pushed by others stay invisible here`,
       missing.map((remote) => `git config --add remote.${remote}.fetch '${NOTES_REFSPEC}'`).join("\n"),
@@ -21398,7 +21621,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       `could not verify (${failed.map(({ remote, result }) => `${remote}: ${result.stderr.trim().split("\n")[0] ?? "git fetch failed"}`).join("; ")})`,
       failed.map(({ remote }) => `git fetch ${remote}`).join("\n"),
@@ -21422,7 +21645,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "ok",
       `git fetch succeeds for ${remotes.join(", ")} and covers ${NOTES_REF}`,
       null,
@@ -21441,7 +21664,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       `could not verify whether ${NOTES_REF} exists upstream (${unavailable.map(({ remote, result }) => `${remote}: ${firstLine2(result.stderr) || "git ls-remote failed"}`).join("; ")})`,
       unavailable.map(({ remote }) => `git fetch ${remote}`).join("\n"),
@@ -21466,7 +21689,7 @@ var checkRefspec = (ctx) => {
     return check(
       "notes-refspec",
       "transport",
-      title,
+      title2,
       "warn",
       `${withNotes.map(({ remote }) => remote).join(", ")} advertises ${NOTES_REF}, but it is not fetched here`,
       withNotes.map(({ remote }) => `git fetch ${remote}`).join("\n"),
@@ -21491,7 +21714,7 @@ var checkRefspec = (ctx) => {
   return check(
     "notes-refspec",
     "transport",
-    title,
+    title2,
     "ok",
     opts.fix === true ? `${remotes.join(", ")} advertises no ${NOTES_REF}; there is nothing to fetch` : `${remotes.join(", ")} advertises no ${NOTES_REF}; run commitlore doctor --fix to record that for queries`,
     opts.fix === true ? null : "commitlore doctor --fix",
@@ -21524,6 +21747,7 @@ var CHECK_REGISTRY = [
   { id: "mcp-lifecycle", title: "MCP server sessions", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpLifecycle(ctx) },
   { id: "mcp-runtime-identity", title: "live MCP runtime identity", category: "delivery", dependencies: [], optional: false, run: (ctx) => checkMcpRuntimeIdentity(ctx) },
   { id: "unattended-initiator", title: "unattended capture initiator", category: "capture", dependencies: [], optional: false, run: (ctx) => checkUnattendedCaptureInitiator(ctx) },
+  { id: "policy-overlay", title: "capture policy overlay", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPolicyOverlay(ctx) },
   { id: "pending-backlog", title: "pending captures", category: "capture", dependencies: [], optional: false, run: (ctx) => checkPendingBacklog(ctx) },
   { id: "git-trailers", title: "git interpret-trailers", category: "runtime", dependencies: [], optional: false, run: (ctx) => checkGit(ctx) },
   { id: "history-depth", title: "history depth", category: "history", dependencies: [], optional: false, run: (ctx) => checkHistoryDepth(ctx) },
@@ -21535,27 +21759,27 @@ var DoctorSelectionError = class extends Error {
 var knownCategories = () => new Set(CHECK_REGISTRY.map((definition) => definition.category));
 var selectChecks = (opts) => {
   const ids = opts.only === void 0 ? void 0 : [...new Set(opts.only)];
-  const category = opts.category;
-  if (ids === void 0 && category === void 0) return { definitions: CHECK_REGISTRY };
+  const category2 = opts.category;
+  if (ids === void 0 && category2 === void 0) return { definitions: CHECK_REGISTRY };
   if (ids !== void 0) {
-    if (ids.length === 0 || ids.some((id) => id === "")) {
+    if (ids.length === 0 || ids.some((id2) => id2 === "")) {
       throw new DoctorSelectionError("--only must name at least one check id");
     }
-    const unknown2 = ids.find((id) => !CHECK_REGISTRY.some((definition) => definition.id === id));
+    const unknown2 = ids.find((id2) => !CHECK_REGISTRY.some((definition) => definition.id === id2));
     if (unknown2 !== void 0) throw new DoctorSelectionError(`unknown doctor check id: ${unknown2}`);
   }
-  if (category !== void 0 && !knownCategories().has(category)) {
-    throw new DoctorSelectionError(`unknown doctor check category: ${category}`);
+  if (category2 !== void 0 && !knownCategories().has(category2)) {
+    throw new DoctorSelectionError(`unknown doctor check category: ${category2}`);
   }
   const definitions = CHECK_REGISTRY.filter(
-    (definition) => (ids === void 0 || ids.includes(definition.id)) && (category === void 0 || definition.category === category)
+    (definition) => (ids === void 0 || ids.includes(definition.id)) && (category2 === void 0 || definition.category === category2)
   );
   if (definitions.length === 0) {
     throw new DoctorSelectionError("--only and --category do not select a common check");
   }
   return {
     definitions,
-    selection: [...ids ?? [], ...category === void 0 ? [] : [category]]
+    selection: [...ids ?? [], ...category2 === void 0 ? [] : [category2]]
   };
 };
 
@@ -21584,8 +21808,8 @@ var formatSummary = (report) => {
 var formatFixPlan = (report) => {
   const checksById = new Map(report.checks.map((check2) => [check2.id, check2]));
   const seenFixes = /* @__PURE__ */ new Set();
-  return report.fixPlan.flatMap((id, index) => {
-    const check2 = checksById.get(id);
+  return report.fixPlan.flatMap((id2, index) => {
+    const check2 = checksById.get(id2);
     if (check2 === void 0) return [];
     const fix = check2.fix;
     const showFix = fix !== null && !seenFixes.has(fix);
@@ -21764,7 +21988,7 @@ var register5 = (program3) => {
   ).action((options) => {
     const doctorOptions = { fix: options.fix === true };
     if (options.only !== void 0) {
-      doctorOptions.only = options.only.split(",").map((id) => id.trim());
+      doctorOptions.only = options.only.split(",").map((id2) => id2.trim());
     }
     if (options.category !== void 0) doctorOptions.category = options.category;
     const report = runDoctor(doctorOptions);
@@ -21891,7 +22115,7 @@ var extractRecordIds = (records) => {
 var allRecordIdsPresent = (commitMessage, records) => {
   const ids = extractRecordIds(records);
   if (ids.length === 0) return false;
-  return ids.every((id) => commitMessage.includes(`Record-Id: ${id}`));
+  return ids.every((id2) => commitMessage.includes(`Record-Id: ${id2}`));
 };
 var isAmendedBase = (baseHead, firstParent, cwd) => {
   if (!isFullObjectId(baseHead)) return false;
@@ -22139,17 +22363,17 @@ var squashCommitIds = (message) => {
   const ids = [];
   const pattern = new RegExp(`^commit (${FULL_OBJECT_ID_PATTERN})$`, "gm");
   for (const match of message.matchAll(pattern)) {
-    const id = match[1];
-    if (id !== void 0) ids.push(id);
+    const id2 = match[1];
+    if (id2 !== void 0) ids.push(id2);
   }
   return ids;
 };
 var recordsFromSquashMessage = (cwd, message) => {
   const blocks = [];
-  for (const id of squashCommitIds(message)) {
-    const result = execGit(["show", "--no-patch", "--format=%B", "--end-of-options", id], { cwd });
+  for (const id2 of squashCommitIds(message)) {
+    const result = execGit(["show", "--no-patch", "--format=%B", "--end-of-options", id2], { cwd });
     if (result.code !== 0) {
-      throw new Error(`could not read squashed commit ${id}: ${result.stderr.trim()}`);
+      throw new Error(`could not read squashed commit ${id2}: ${result.stderr.trim()}`);
     }
     blocks.push(...parseRecordBlocks(result.stdout).filter(isRecordBlock));
   }
@@ -22896,7 +23120,8 @@ var runPolicyStep = (opts) => {
     };
   }
   const resolution = resolvePolicy(cwd);
-  if (resolution.path !== null) {
+  if (resolution.path !== null || resolution.localPath !== null) {
+    const present2 = resolution.localPath === null ? POLICY_FILE_NAME : resolution.path === null ? POLICY_LOCAL_FILE_NAME : `${POLICY_LOCAL_FILE_NAME} over ${POLICY_FILE_NAME}`;
     if (resolution.ok) {
       const { policy } = resolution;
       return {
@@ -22904,7 +23129,7 @@ var runPolicyStep = (opts) => {
         title: "capture policy",
         code: 0,
         lines: [
-          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? "on" : "off"}) \u2014 left unchanged`,
+          `policy already present: ${present2} (mode "${policy.mode}", unattended ${policy.unattended ? "on" : "off"}) \u2014 left unchanged`,
           ...policy.unattended ? [
             "unattended capture is authorised, not initiated \u2014 an agent host must supply the session transcript before commit; ordinary git commits cannot start it"
           ] : []
@@ -22916,7 +23141,7 @@ var runPolicyStep = (opts) => {
       step: "policy",
       title: "capture policy",
       code: 1,
-      lines: [`${POLICY_FILE_NAME} present but rejected \u2014 left unchanged`, resolution.error ?? "unknown error"],
+      lines: [`${present2} present but rejected \u2014 left unchanged`, resolution.error ?? "unknown error"],
       detail: { state: "existing-rejected", path: path2, unattended: null, error: resolution.error }
     };
   }
@@ -23105,7 +23330,9 @@ var resolveUnattendedChoice = async (options) => {
   if (options.unattended === true) return "enable";
   if (options.unattended === false) return "decline";
   const existing = capturePolicyPath(process.cwd());
+  const overlay = capturePolicyLocalPath(process.cwd());
   if (existing !== null && existsSync20(existing)) return "no-answer";
+  if (overlay !== null && existsSync20(overlay)) return "no-answer";
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
       `Unattended capture authorises an agent host to prepare, verify and stage a record without asking.
@@ -23242,11 +23469,11 @@ var runDemo = async (opts = {}) => {
       lines.push("  (no active records found)");
     } else {
       for (const record2 of queryResult.records) {
-        const id = record2.recordId ?? "unknown";
+        const id2 = record2.recordId ?? "unknown";
         const lifecycle = record2.lifecycle;
         const limit = record2.trailers.find((t) => t.key === "Limit")?.value ?? "";
         const ruledOut = record2.trailers.find((t) => t.key === "Ruled-out")?.value ?? "";
-        lines.push(`  Record-Id: ${id} [${lifecycle}]`);
+        lines.push(`  Record-Id: ${id2} [${lifecycle}]`);
         if (limit) lines.push(`    Limit: ${limit}`);
         if (ruledOut) lines.push(`    Ruled-out: ${ruledOut}`);
       }
@@ -27082,42 +27309,42 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     }
     doc.write(`const newResult = {};`);
     for (const key of normalized.keys) {
-      const id = ids[key];
+      const id2 = ids[key];
       const k = esc(key);
       const schema = shape[key];
       const isOptionalIn = schema?._zod?.optin === "optional";
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id} = ${parseStr(key)};`);
+      doc.write(`const ${id2} = ${parseStr(key)};`);
       if (isOptionalIn && isOptionalOut) {
         doc.write(`
-        if (${id}.issues.length) {
+        if (${id2}.issues.length) {
           if (${k} in input) {
-            payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+            payload.issues = payload.issues.concat(${id2}.issues.map(iss => ({
               ...iss,
               path: iss.path ? [${k}, ...iss.path] : [${k}]
             })));
           }
         }
         
-        if (${id}.value === undefined) {
+        if (${id2}.value === undefined) {
           if (${k} in input) {
             newResult[${k}] = undefined;
           }
         } else {
-          newResult[${k}] = ${id}.value;
+          newResult[${k}] = ${id2}.value;
         }
         
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id}_present = ${k} in input;
-        if (${id}.issues.length) {
-          payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+        const ${id2}_present = ${k} in input;
+        if (${id2}.issues.length) {
+          payload.issues = payload.issues.concat(${id2}.issues.map(iss => ({
             ...iss,
             path: iss.path ? [${k}, ...iss.path] : [${k}]
           })));
         }
-        if (!${id}_present && !${id}.issues.length) {
+        if (!${id2}_present && !${id2}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -27126,30 +27353,30 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           });
         }
 
-        if (${id}_present) {
-          if (${id}.value === undefined) {
+        if (${id2}_present) {
+          if (${id2}.value === undefined) {
             newResult[${k}] = undefined;
           } else {
-            newResult[${k}] = ${id}.value;
+            newResult[${k}] = ${id2}.value;
           }
         }
 
       `);
       } else {
         doc.write(`
-        if (${id}.issues.length) {
-          payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+        if (${id2}.issues.length) {
+          payload.issues = payload.issues.concat(${id2}.issues.map(iss => ({
             ...iss,
             path: iss.path ? [${k}, ...iss.path] : [${k}]
           })));
         }
         
-        if (${id}.value === undefined) {
+        if (${id2}.value === undefined) {
           if (${k} in input) {
             newResult[${k}] = undefined;
           }
         } else {
-          newResult[${k}] = ${id}.value;
+          newResult[${k}] = ${id2}.value;
         }
         
       `);
@@ -28631,26 +28858,26 @@ function extractDefs(ctx, schema) {
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
-      const existing = idToSchema.get(id);
+    const id2 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id2) {
+      const existing = idToSchema.get(id2);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id2}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id, entry[0]);
+      idToSchema.set(id2, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
+      const uriGenerator = ctx.external.uri ?? ((id3) => id3);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id;
-      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${id}` };
+      const id2 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id2;
+      return { defId: id2, ref: `${uriGenerator("__shared")}#/${defsSegment}/${id2}` };
     }
     if (entry[1] === root) {
       return { ref: "#" };
@@ -28698,8 +28925,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
+    const id2 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id2) {
       extractToDef(entry);
       continue;
     }
@@ -28795,10 +29022,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
-    if (!id)
+    const id2 = ctx.external.registry.get(schema)?.id;
+    if (!id2)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id);
+    result.$id = ctx.external.uri(id2);
   }
   Object.assign(result, root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -32901,7 +33128,7 @@ var ExperimentalServerTasks = class {
       if (hasPreviousToolUse) {
         const toolUseIds = new Set(previousContent.filter((c) => c.type === "tool_use").map((c) => c.id));
         const toolResultIds = new Set(lastContent.filter((c) => c.type === "tool_result").map((c) => c.toolUseId));
-        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id) => toolResultIds.has(id))) {
+        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id2) => toolResultIds.has(id2))) {
           throw new Error("ids of tool_result blocks and tool_use blocks from previous message do not match");
         }
       }
@@ -33335,7 +33562,7 @@ var Server = class extends Protocol {
       if (hasPreviousToolUse) {
         const toolUseIds = new Set(previousContent.filter((c) => c.type === "tool_use").map((c) => c.id));
         const toolResultIds = new Set(lastContent.filter((c) => c.type === "tool_result").map((c) => c.toolUseId));
-        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id) => toolResultIds.has(id))) {
+        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id2) => toolResultIds.has(id2))) {
           throw new Error("ids of tool_result blocks and tool_use blocks from previous message do not match");
         }
       }
@@ -33960,7 +34187,7 @@ var buildReport2 = (scan2, at) => {
 };
 var shortSha5 = (sha) => sha.length > 8 ? sha.slice(0, 8) : sha;
 var location = (state) => `${state.recordId}  ${shortSha5(state.sha)}  [${state.source}]`;
-var section = (title, lines) => lines.length === 0 ? [] : ["", title, ...lines.map((line2) => `  ${line2}`)];
+var section = (title2, lines) => lines.length === 0 ? [] : ["", title2, ...lines.map((line2) => `  ${line2}`)];
 var formatReport2 = (report) => {
   const superseded = report.records.filter((state) => state.lifecycle === "superseded");
   const expired = report.records.filter((state) => state.lifecycle === "expired");
@@ -35045,7 +35272,7 @@ var recordIdOfBlock = (block) => block.find((trailer) => trailer.key === "Record
 var withoutRecordIds = (plan, excluded) => {
   const ids = new Set(excluded);
   if (ids.size === 0) return { plan, skippedRecordIds: [] };
-  const skippedRecordIds = plan.blocks.map(recordIdOfBlock).filter((id) => id !== void 0 && ids.has(id));
+  const skippedRecordIds = plan.blocks.map(recordIdOfBlock).filter((id2) => id2 !== void 0 && ids.has(id2));
   const kept = (recordId) => recordId === void 0 || !ids.has(recordId);
   return {
     plan: {
@@ -35144,7 +35371,7 @@ var register23 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
     "--exclude-record-id <id>",
     "do not apply a record identity the destination already carries (repeatable)",
-    (id, ids) => [...ids, id],
+    (id2, ids) => [...ids, id2],
     []
   ).addHelpText(
     "after",
@@ -35318,8 +35545,8 @@ var identityCollisionViolations = (source) => {
   if (source.sha !== void 0) return [];
   return labelRecordBlocks(source.message).flatMap((block) => {
     if (!block.identityCollision) return [];
-    const id = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
-    if (id === void 0) return [];
+    const id2 = block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
+    if (id2 === void 0) return [];
     const lines = locateTrailerLines(source.message, block.trailers);
     const index = block.trailers.findIndex((trailer) => trailer.key === "Record-Id");
     const line2 = lines[index];
@@ -35327,9 +35554,9 @@ var identityCollisionViolations = (source) => {
       {
         ...line2 === void 0 ? {} : { line: line2 },
         key: "Record-Id",
-        value: id,
+        value: id2,
         rule: "duplicate-id",
-        got: id,
+        got: id2,
         want: UNIQUE_ID_WANT
       }
     ];
@@ -36025,11 +36252,11 @@ var runParse = (options) => {
   }
   const reported = /* @__PURE__ */ new Set();
   for (const block of blocks) {
-    const id = recordIdOf3(block);
-    if (id === void 0 || !block.identityCollision || reported.has(id)) continue;
-    reported.add(id);
+    const id2 = recordIdOf3(block);
+    if (id2 === void 0 || !block.identityCollision || reported.has(id2)) continue;
+    reported.add(id2);
     process.stderr.write(
-      `commitlore: Record-Id ${id} is declared by more than one record block in this message
+      `commitlore: Record-Id ${id2} is declared by more than one record block in this message
 `
     );
   }

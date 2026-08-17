@@ -2,10 +2,15 @@
  * `commitlore auto` — read and write the unattended-capture setting so nobody
  * opens the JSON (#511 added the switch; this is what makes it usable).
  *
- * The command writes the same policy file `resolvePolicy` reads — there is no
- * second source of truth — and it cannot produce a file the resolver rejects:
- * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
- * the mode cannot honour is a configuration error by design (ADR-0030, #511).
+ * The command writes the same files `resolvePolicy` reads — there is no second
+ * source of truth — and it cannot produce a file the resolver rejects: enabling
+ * sets `mode: "auto"` beside `unattended: true`, because a consent the mode
+ * cannot honour is a configuration error by design (ADR-0030, #511).
+ *
+ * Which file it writes is the overlay when one exists or `--local` asks for it,
+ * and the committed policy otherwise (#709). Existence is the signal because
+ * creating the overlay is a decision: an `auto off` that silently created one
+ * would stop the tracked file being the answer without anyone choosing that.
  *
  * Exit codes follow SPEC §10 and are documented in `--help`: `status` answers
  * with 0 whether the setting is on or off (the answer is not a finding), and
@@ -21,9 +26,11 @@ import type { Command } from 'commander';
 import {
   POLICY_FILE_NAME,
   capturePolicyPath,
+  POLICY_LOCAL_FILE_NAME,
   resolvePolicy,
   setUnattendedCapture,
   type CaptureMode,
+  type PolicyKey,
 } from '../core/capture-policy.js';
 
 // ---------------------------------------------------------------------------
@@ -37,10 +44,21 @@ export interface AutoStatusResult {
   unattended: boolean | null;
   /** The mode in effect, or null when the file is rejected. */
   mode: CaptureMode | null;
-  /** Where the setting lives: defaults (no file) or the repository file. */
-  source: 'defaults' | 'repository';
-  /** Absolute path of the policy file, or null outside a repository. */
+  /**
+   * Which layer had the last word: the built-in defaults (no file), the
+   * committed file, or this machine's overlay (#709).
+   */
+  source: 'defaults' | 'repository' | 'local';
+  /** Absolute path of the committed policy file, or null outside a repository. */
   path: string | null;
+  /** Absolute path of the overlay when one exists; null when none does. */
+  localPath: string | null;
+  /**
+   * Keys where the overlay differs from the committed file. Empty without an
+   * overlay, and empty with one that restates what it overlays — a reader
+   * comparing two files needs the disagreement, not the list of keys set.
+   */
+  overridden: readonly PolicyKey[];
   /** The resolver's named reason when the file is rejected; null otherwise. */
   error: string | null;
   /**
@@ -55,8 +73,10 @@ export interface AutoSetResult {
   ok: boolean;
   /** False when the requested state was already in effect and nothing was written. */
   changed: boolean;
-  /** Absolute path of the policy file, or null outside a repository. */
+  /** Absolute path of the file that was written, or null outside a repository. */
   path: string | null;
+  /** Which file that is: the committed policy, or this machine's overlay (#709). */
+  scope: 'repository' | 'local';
   mode: CaptureMode | null;
   /** The mode before the change — named when `on` had to move it to `auto`. */
   previousMode: CaptureMode | null;
@@ -69,13 +89,16 @@ export const runAutoStatus = (cwd: string): AutoStatusResult | { outsideReposito
   if (path === null) return { outsideRepository: true };
 
   const resolution = resolvePolicy(cwd);
-  if (resolution.path !== null && !resolution.ok) {
+  if (!resolution.ok) {
     return {
       ok: false,
       unattended: null,
       mode: null,
-      source: 'repository',
+      // Which file was rejected, so the reader opens the right one.
+      source: resolution.localPath !== null ? 'local' : 'repository',
       path,
+      localPath: resolution.localPath,
+      overridden: [],
       error: resolution.error,
       unattendedStart: 'unknown',
     };
@@ -84,24 +107,31 @@ export const runAutoStatus = (cwd: string): AutoStatusResult | { outsideReposito
     ok: true,
     unattended: resolution.policy.unattended,
     mode: resolution.policy.mode,
-    source: resolution.path !== null ? 'repository' : 'defaults',
+    source: resolution.source,
     path,
+    localPath: resolution.localPath,
+    overridden: resolution.overridden,
     error: null,
     unattendedStart: resolution.policy.unattended ? 'agent-host-required' : 'disabled',
   };
 };
 
 /** `auto on` / `auto off` — write the setting coherently, or say why not. */
-export const runAutoSet = (cwd: string, enabled: boolean): AutoSetResult | { outsideRepository: true } => {
-  const result = setUnattendedCapture(cwd, enabled);
+export const runAutoSet = (
+  cwd: string,
+  enabled: boolean,
+  opts: { local?: boolean } = {},
+): AutoSetResult | { outsideRepository: true } => {
+  const result = setUnattendedCapture(cwd, enabled, opts);
   if (!result.ok) {
     if (result.path === null) return { outsideRepository: true };
-    return { ok: false, changed: false, path: result.path, mode: null, previousMode: null, error: result.error };
+    return { ok: false, changed: false, path: result.path, scope: result.scope, mode: null, previousMode: null, error: result.error };
   }
   return {
     ok: true,
     changed: result.changed,
     path: result.path,
+    scope: result.scope,
     mode: result.policy.mode,
     previousMode: result.previous.mode,
     error: null,
@@ -121,7 +151,9 @@ const printStatus = (result: AutoStatusResult | { outsideRepository: true }, jso
   if (json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } else if (!result.ok) {
-    process.stdout.write(`unattended capture: unknown — ${POLICY_FILE_NAME} exists but is rejected\n`);
+    process.stdout.write(
+      `unattended capture: unknown — ${result.source === 'local' ? POLICY_LOCAL_FILE_NAME : POLICY_FILE_NAME} exists but is rejected\n`,
+    );
     process.stdout.write(`  ${result.error}\n`);
     process.stdout.write('  fix or remove the file and re-run; until then capture runs on the defaults\n');
     process.stdout.write('  unattended start: unknown — a rejected policy cannot authorise an agent host\n');
@@ -143,6 +175,19 @@ const printStatus = (result: AutoStatusResult | { outsideRepository: true }, jso
       }\n`,
     );
     process.stdout.write(`  policy file: ${result.path} (mode "${result.mode}")\n`);
+    if (result.localPath !== null) {
+      // Two files decided this, so both are named and the override is spelled
+      // out. A precedence nobody can see is the ambiguous case in disguise,
+      // which is what the single-location design was avoiding (#709). Which
+      // value each key holds is `doctor`'s policy-overlay check; here it is
+      // enough to say the overlay exists and what it is deciding.
+      process.stdout.write(`  local overlay: ${result.localPath} — wins per key, untracked by convention\n`);
+      process.stdout.write(
+        result.overridden.length === 0
+          ? '  the overlay changes nothing the repository already says\n'
+          : `  overridden here: ${result.overridden.join(', ')} — run commitlore doctor for the values\n`,
+      );
+    }
     if (result.unattended) {
       process.stdout.write('  unattended start: an agent host must initiate capture; init installs no initiator\n');
       process.stdout.write(
@@ -189,7 +234,11 @@ const printSet = (result: AutoSetResult | { outsideRepository: true }, enabled: 
     );
   }
   if (enabled) {
-    process.stdout.write('  the file is committed with the repository — it applies to everyone who clones it\n');
+    process.stdout.write(
+      result.scope === 'local'
+        ? `  ${POLICY_LOCAL_FILE_NAME} is this machine's own — it applies to nobody else, and ${POLICY_FILE_NAME} is untouched\n`
+        : '  the file is committed with the repository — it applies to everyone who clones it\n',
+    );
     process.stdout.write(
       '  an agent host must still initiate capture with its session transcript; an ordinary git commit cannot start it\n',
     );
@@ -211,10 +260,13 @@ export const register = (program: Command): void => {
         'with nobody in the loop (ADR-0030, #511). It does not make ordinary `git commit` start ' +
         'capture: the host must invoke `commitlore_prepare_capture` with its session transcript first. ' +
         'The setting lives in ' + POLICY_FILE_NAME +
-        ' at the repository root — the same file `resolvePolicy` reads; this command is the only ' +
-        'writer. Enabling sets mode "auto" beside it, because the setting is honoured in auto mode ' +
-        'only and a file the resolver would reject is never produced. The file is committed with ' +
-        'the repository: turning it on applies to everyone who clones it.' +
+        ' at the repository root — the same file `resolvePolicy` reads. Enabling sets mode "auto" ' +
+        'beside it, because the setting is honoured in auto mode only and a file the resolver ' +
+        'would reject is never produced. That file is committed with the repository: turning it ' +
+        'on applies to everyone who clones it. To differ on one machine without modifying it, ' +
+        '`on --local` / `off --local` write ' + POLICY_LOCAL_FILE_NAME +
+        ', which wins per key and is untracked by convention (#709); once it exists it is the ' +
+        'file this command writes.' +
         '\n\nExit codes (SPEC §10): `status` — 0 the state was reported (on or off), 1 a policy ' +
         'file exists but the resolver rejects it, 2 could not run (no repository). `on`/`off` — 0 ' +
         'written, or already in that state and unchanged, 2 could not run (no repository, a ' +
@@ -241,26 +293,32 @@ export const register = (program: Command): void => {
     .command('on')
     .description('enable unattended capture (writes mode "auto" and unattended true)')
     .option('--json', 'emit structured JSON output')
+    .option('--local', `write ${POLICY_LOCAL_FILE_NAME} instead of the committed file`)
     .addHelpText(
       'after',
-      '\nExit codes (SPEC §10): 0 written, or already on and unchanged, 2 could not run (no ' +
+      `\n--local writes ${POLICY_LOCAL_FILE_NAME}, which wins per key over the committed ` +
+        'file and is untracked by convention — use it to differ from the repository without ' +
+        'leaving a modified tracked file behind (#709). Once that file exists it is written ' +
+        'by default, so --local is only needed to create it.' +
+        '\n\nExit codes (SPEC §10): 0 written, or already on and unchanged, 2 could not run (no ' +
         'repository, a rejected policy file that will not be overwritten, or the write failed).',
     )
-    .action((options: { json?: boolean }) => {
-      printSet(runAutoSet(process.cwd(), true), true, options.json === true);
+    .action((options: { json?: boolean; local?: boolean }) => {
+      printSet(runAutoSet(process.cwd(), true, { local: options.local === true }), true, options.json === true);
     });
 
   auto
     .command('off')
     .description('disable unattended capture (keeps the mode the repository chose)')
     .option('--json', 'emit structured JSON output')
+    .option('--local', `write ${POLICY_LOCAL_FILE_NAME} instead of the committed file`)
     .addHelpText(
       'after',
       '\nExit codes (SPEC §10): 0 written, or already off and unchanged, 2 could not run (no ' +
         'repository, a rejected policy file that will not be overwritten, or the write failed).',
     )
-    .action((options: { json?: boolean }) => {
-      printSet(runAutoSet(process.cwd(), false), false, options.json === true);
+    .action((options: { json?: boolean; local?: boolean }) => {
+      printSet(runAutoSet(process.cwd(), false, { local: options.local === true }), false, options.json === true);
     });
 
   // cli.ts applies exitOverride to top-level commands only; without this a bad

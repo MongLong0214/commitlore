@@ -10,7 +10,7 @@ import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
-import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
+import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import { createPending, makePreparedPending, } from './pending.js';
 import { isFullObjectId } from './types.js';
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ const prepareValues = (opts) => {
     };
     const policy = resolvePolicy(cwd);
     if (policy.policy.mode === 'off') {
-        throw markCaptureError(new Error(`capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`), 'rejected');
+        throw markCaptureError(new Error(`capture is off for this repository (${policySourceLabel(policy)}: mode "off") — nothing was prepared`), 'rejected');
     }
     // ADR-0030, #511. Declaring a capture unattended is claiming the repository
     // consented to capture without asking; prepare is the one moment that can
@@ -111,7 +111,7 @@ const prepareValues = (opts) => {
     // repository's opt-in changes nothing about what shadow writes: nothing.
     if (opts.unattended === true &&
         !(policy.policy.mode === 'auto' && policy.policy.unattended)) {
-        throw markCaptureError(new Error(`unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`), 'rejected');
+        throw markCaptureError(new Error(`unattended capture is off for this repository (${policySourceLabel(policy)}: "unattended": true with mode "auto" opts in) — nothing was prepared`), 'rejected');
     }
     const diffPaths = extractPathsFromDiff(diff);
     const advisory = opts.skipGuard === true
