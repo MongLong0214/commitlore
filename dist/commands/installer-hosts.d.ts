@@ -59,7 +59,11 @@ export interface ResolvedCommand {
  * invokes cmd.exe directly with an explicitly quoted argument vector instead.
  */
 export declare const resolveCommand: (command: string) => ResolvedCommand | null;
-export declare const commandInterpreterArguments: (path: string, args: string[]) => string[] | null;
+export interface CommandInterpreterInvocation {
+    readonly args: string[];
+    readonly env: NodeJS.ProcessEnv;
+}
+export declare const commandInterpreterInvocation: (path: string, args: string[]) => CommandInterpreterInvocation | null;
 /**
  * The Codex plugin layer, which the MCP registration does not cover (#697).
  *
