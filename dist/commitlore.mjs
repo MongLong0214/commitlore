@@ -410,11 +410,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants2);
+          this.rhs = optimizeExpr(this.rhs, names, constants3);
         return this;
       }
       get names() {
@@ -431,10 +431,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants2);
+        this.rhs = optimizeExpr(this.rhs, names, constants3);
         return this;
       }
       get names() {
@@ -495,8 +495,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants2) {
-        this.code = optimizeExpr(this.code, names, constants2);
+      optimizeNames(names, constants3) {
+        this.code = optimizeExpr(this.code, names, constants3);
         return this;
       }
       get names() {
@@ -525,12 +525,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants2))
+          if (n.optimizeNames(names, constants3))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -583,12 +583,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        if (!(super.optimizeNames(names, constants2) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants3);
+        if (!(super.optimizeNames(names, constants3) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants2);
+        this.condition = optimizeExpr(this.condition, names, constants3);
         return this;
       }
       get names() {
@@ -611,10 +611,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants3) {
+        if (!super.optimizeNames(names, constants3))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants2);
+        this.iteration = optimizeExpr(this.iteration, names, constants3);
         return this;
       }
       get names() {
@@ -650,10 +650,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants3) {
+        if (!super.optimizeNames(names, constants3))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants2);
+        this.iterable = optimizeExpr(this.iterable, names, constants3);
         return this;
       }
       get names() {
@@ -695,11 +695,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants3) {
         var _a3, _b;
-        super.optimizeNames(names, constants2);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
+        super.optimizeNames(names, constants3);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants3);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants3);
         return this;
       }
       get names() {
@@ -1000,7 +1000,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants2) {
+    function optimizeExpr(expr, names, constants3) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1015,14 +1015,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants2[n.str];
+        const c = constants3[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants3[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -24969,8 +24969,8 @@ var register17 = (program3) => {
 };
 
 // src/commands/installer-hosts.ts
-import { existsSync as existsSync22, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync25 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname13, join as join17 } from "node:path";
+import { accessSync as accessSync2, constants as constants2, existsSync as existsSync22, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync25 } from "node:fs";
+import { delimiter as delimiter2, dirname as dirname13, extname, isAbsolute as isAbsolute4, join as join17 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync7 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
@@ -25104,17 +25104,95 @@ args = ["mcp"]
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
-var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter2).some((directory) => {
-  const path2 = join17(directory, command);
+var isWindowsPath = () => process.platform === "win32";
+var pathEntriesFor = (command) => {
+  if (isAbsolute4(command) || command.includes("/") || command.includes("\\")) return [command];
+  return (process.env.PATH ?? "").split(isWindowsPath() ? ";" : delimiter2).map((directory) => join17(directory, command));
+};
+var executableExtensions = (command) => {
+  if (!isWindowsPath() || extname(command) !== "") return [""];
+  const extensions = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  return ["", ...extensions];
+};
+var isExecutableFile2 = (path2) => {
   try {
-    return !statSync10(path2).isDirectory();
+    if (statSync10(path2, { throwIfNoEntry: false })?.isFile() !== true) return false;
+    accessSync2(path2, constants2.X_OK);
+    return true;
   } catch {
     return false;
   }
-});
+};
+var resolveCommand = (command) => {
+  for (const path2 of pathEntriesFor(command)) {
+    for (const extension of executableExtensions(command)) {
+      const candidate = `${path2}${extension}`;
+      if (isExecutableFile2(candidate)) {
+        return { path: candidate, usesCommandInterpreter: isWindowsPath() && /\.(?:cmd|bat)$/i.test(candidate) };
+      }
+    }
+  }
+  return null;
+};
+var hasCommand = (command) => resolveCommand(command) !== null;
+var commandInterpreter = () => {
+  const root = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+  const candidate = join17(root, "System32", "cmd.exe");
+  return isAbsolute4(candidate) && isExecutableFile2(candidate) ? candidate : "C:\\Windows\\System32\\cmd.exe";
+};
+var cmdEnvironmentValue = (value) => {
+  if (/["\0\r\n]/.test(value)) return null;
+  return value.replace(/\\+$/, (slashes) => slashes + slashes);
+};
+var commandInterpreterInvocation = (path2, args) => {
+  const values = [path2, ...args].map(cmdEnvironmentValue);
+  if (values.some((value) => value === null)) return null;
+  const prefix = `COMMITLORE_CMD_${randomUUID().replaceAll("-", "")}_`;
+  const env = { ...process.env };
+  const tokens = values.map((value, index) => {
+    const key = `${prefix}${index}`;
+    env[key] = value ?? "";
+    return `"%${key}%"`;
+  });
+  return { args: ["/d", "/v:off", "/s", "/c", `"${tokens.join(" ")}"`], env };
+};
+var spawnResolved = (command, args, timeout) => {
+  const invocation = command.usesCommandInterpreter ? commandInterpreterInvocation(command.path, args) : null;
+  if (command.usesCommandInterpreter && invocation === null) {
+    return { status: null, error: new Error("batch command contains a quote, line break, or NUL byte"), stdout: "", stderr: "" };
+  }
+  const result = command.usesCommandInterpreter ? spawnSync7(commandInterpreter(), invocation?.args ?? [], { encoding: "utf8", env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true }) : spawnSync7(command.path, args, { encoding: "utf8", shell: false, timeout });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    ...result.error === void 0 ? {} : { error: result.error }
+  };
+};
+var commandFailureDetail = (result) => {
+  if (result.error !== void 0) return result.error.message;
+  if (result.status === 0) return void 0;
+  return `${result.stderr}
+${result.stdout}`.split(/\r?\n/).map((line2) => line2.trim()).find(Boolean);
+};
+var failureMessage = (message, detail) => detail === void 0 ? message : `${message}: ${detail}`;
 var commandResult = (command, args) => {
-  const result = spawnSync7(command, args, { encoding: "utf8", shell: false });
-  return { ok: result.status === 0 && result.error === void 0, stdout: result.stdout ?? "" };
+  const resolved = resolveCommand(command);
+  if (resolved === null) return { ok: false, stdout: "", detail: `${command} was not found` };
+  const result = spawnResolved(resolved, args);
+  const detail = commandFailureDetail(result);
+  return {
+    ok: result.status === 0 && result.error === void 0,
+    stdout: result.stdout,
+    ...detail === void 0 ? {} : { detail }
+  };
+};
+var commandStatus = (command, args, timeout) => {
+  const resolved = resolveCommand(command);
+  if (resolved === null) return { status: null, detail: `${command} was not found` };
+  const result = spawnResolved(resolved, args, timeout);
+  const detail = commandFailureDetail(result);
+  return { status: result.status, ...detail === void 0 ? {} : { detail } };
 };
 var cliHost = async (host, wrapper) => {
   const existing = commandResult("codex", ["mcp", "get", "commitlore"]);
@@ -25129,22 +25207,24 @@ var cliHost = async (host, wrapper) => {
     return { host, requested: true, outcome: command === wrapper && args.length === 1 && args[0] === "mcp" ? "owned" : "custom-preserved", healthy: true, detail: command === wrapper && args.length === 1 && args[0] === "mcp" ? "healthy installer-owned registration" : "healthy custom registration preserved" };
   }
   const added = commandResult("codex", ["mcp", "add", "commitlore", "--", wrapper, "mcp"]);
-  if (!added.ok) return { host, requested: true, outcome: "failed", healthy: false, detail: "codex mcp add failed" };
+  if (!added.ok) return { host, requested: true, outcome: "failed", healthy: false, detail: failureMessage("codex mcp add failed", added.detail) };
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: "Codex registration added and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
 var claudePluginHost = () => {
   const host = "claude-code";
-  const run = (args) => spawnSync7("claude", args, { stdio: "ignore", shell: false, timeout: 6e4 }).status;
-  if (run(["plugin", "marketplace", "add", "MongLong0214/commitlore"]) === null) {
-    return { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin marketplace add could not run" };
+  const run = (args) => commandStatus("claude", args, 6e4);
+  const marketplace = run(["plugin", "marketplace", "add", "MongLong0214/commitlore"]);
+  if (marketplace.status === null) {
+    return { host, requested: true, outcome: "failed", healthy: false, detail: failureMessage("claude plugin marketplace add could not run", marketplace.detail) };
   }
   run(["plugin", "marketplace", "update", "commitlore"]);
-  return run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]) === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin install failed \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore" };
+  const install = run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]);
+  return install.status === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: `${failureMessage("claude plugin install failed", install.detail)} \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore` };
 };
 var codexPluginOutcome = (wrapper) => {
-  const result = spawnSync7(wrapper, ["plugin", "install-codex"], { stdio: "ignore", shell: false, timeout: 6e4 });
-  return result.status === 0 ? { ok: true, detail: "plugin installed" } : { ok: false, detail: "plugin step failed \u2014 run: commitlore plugin install-codex" };
+  const result = commandStatus(wrapper, ["plugin", "install-codex"], 6e4);
+  return result.status === 0 ? { ok: true, detail: "plugin installed" } : { ok: false, detail: `${failureMessage("plugin step failed", result.detail)} \u2014 run: commitlore plugin install-codex` };
 };
 var codexResultWithPlugin = (mcp, plugin) => {
   if (!mcp.healthy) return mcp;
@@ -25179,8 +25259,8 @@ var inspectAndApplyHosts = async (options) => {
     else notDetected.push(host);
   }
   if (hasCommand("hermes") || existsSync22(join17(home, ".hermes"))) {
-    const result = spawnSync7(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
-    requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
+    const result = commandStatus(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], 3e4);
+    requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: failureMessage("Hermes setup failed", result.detail) }));
   } else notDetected.push("hermes");
   if (hasCommand("claude")) {
     requested.push(Promise.resolve(claudePluginHost()));
@@ -25199,7 +25279,7 @@ var register18 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve21, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute5, relative as relative4, resolve as resolve21, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -34462,7 +34542,7 @@ var isCaptureTool = (name) => [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_
 var resolveRepoPath = (root, raw) => {
   if (raw === "" || raw === ".") return "";
   if (raw.includes("\0")) throw new Error("path contains a NUL byte");
-  if (isAbsolute4(raw)) {
+  if (isAbsolute5(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
   const resolved = resolve21(root, raw);

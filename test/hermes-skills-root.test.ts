@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { load } from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { runHermesInstall } from '../src/commands/hermes.js';
@@ -48,6 +49,22 @@ const hermesProfile = (): string => {
   return join(home, '.hermes', 'config.yaml');
 };
 
+const externalSkills = (configPath: string): readonly string[] => {
+  const parsed = load(readFileSync(configPath, 'utf8'));
+  if (typeof parsed !== 'object' || parsed === null || !('skills' in parsed)) {
+    throw new Error('Hermes config has no skills object');
+  }
+  const skills = parsed.skills;
+  if (typeof skills !== 'object' || skills === null || !('external_dirs' in skills)) {
+    throw new Error('Hermes config has no external_dirs');
+  }
+  const directories = skills.external_dirs;
+  if (!Array.isArray(directories) || !directories.every((value) => typeof value === 'string')) {
+    throw new Error('Hermes external_dirs is not a string array');
+  }
+  return directories;
+};
+
 describe('#686 where hermes install points the skills directory', () => {
   it('writes the versioned directory under --data-root, not the running bundle', () => {
     const { dataRoot, skills } = installedDataRoot();
@@ -62,10 +79,10 @@ describe('#686 where hermes install points the skills directory', () => {
 
     expect(result.exitCode, result.report.join(' | ')).toBe(0);
 
-    const written = readFileSync(configPath, 'utf8');
-    expect(written, 'the data root this install was told about').toContain(skills);
+    const writtenSkills = externalSkills(configPath);
+    expect(writtenSkills, 'the data root this install was told about').toContain(skills);
     // The specific failure: a path under the checkout that produced the bundle.
-    expect(written, 'never a path derived from where the bundle happens to sit').not.toContain(
+    expect(writtenSkills, 'never a path derived from where the bundle happens to sit').not.toContain(
       join(process.cwd(), 'hermes', 'skills'),
     );
   });
@@ -87,6 +104,6 @@ describe('#686 where hermes install points the skills directory', () => {
     });
 
     expect(result.exitCode, result.report.join(' | ')).toBe(0);
-    expect(readFileSync(configPath, 'utf8'), 'an explicit --skills-dir still wins').toContain(skills);
+    expect(externalSkills(configPath), 'an explicit --skills-dir still wins').toContain(skills);
   });
 });

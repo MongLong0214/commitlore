@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,19 +27,30 @@ interface Run {
 }
 
 const wrapper = (root: string, name = 'commitlore'): string => {
-  const path = join(root, 'bin', name);
+  const isWindows = process.platform === 'win32';
+  const path = join(root, 'bin', `${name}${isWindows ? '.cmd' : ''}`);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(ENTRY)} "$@"\n`);
-  chmodSync(path, 0o755);
+  writeFileSync(path, isWindows
+    ? `@echo off\r\n"${process.execPath}" "${ENTRY}" %*\r\n`
+    : `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(ENTRY)} "$@"\n`);
+  if (!isWindows) chmodSync(path, 0o755);
   return path;
 };
+
+const withoutPath = (): NodeJS.ProcessEnv => Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'),
+);
+
+const isolatedPath = (): string => process.platform === 'win32'
+  ? [join(process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows', 'System32'), dirname(process.execPath)].join(delimiter)
+  : '/usr/bin:/bin';
 
 const run = (home: string, ownWrapper: string, env: Record<string, string> = {}): Run => {
   const result = spawnSync(process.execPath, [ENTRY, 'installer-hosts', '--wrapper', ownWrapper, '--data-root', join(home, 'data'), '--home', home, '--json'], {
     encoding: 'utf8',
     // Isolate host detection from the developer machine. Individual tests add
     // the host CLI they intend to exercise.
-    env: { ...process.env, PATH: '/usr/bin:/bin', ...env },
+    env: { ...withoutPath(), PATH: isolatedPath(), ...env },
   });
   return { status: result.status, summary: JSON.parse(result.stdout) as Run['summary'] };
 };
@@ -88,9 +99,9 @@ describe('installer-hosts accepts only live CommitLore registrations', () => {
     const bin = join(root, 'host-bin');
     mkdirSync(bin);
     const codex = join(bin, 'codex');
-    writeFileSync(codex, '#!/bin/sh\nexit 1\n');
-    chmodSync(codex, 0o755);
-    expect(run(home, ours, { PATH: `${bin}:/usr/bin:/bin` }).status).toBe(1);
+    writeFileSync(codex, process.platform === 'win32' ? 'not executable\r\n' : '#!/bin/sh\nexit 1\n');
+    if (process.platform !== 'win32') chmodSync(codex, 0o755);
+    expect(run(home, ours, { PATH: `${bin}${delimiter}${isolatedPath()}` }).status).toBe(1);
   });
 
   it('leaves the original file intact when interrupted before atomic rename', () => {
@@ -179,12 +190,12 @@ describe('a registration that exits immediately is unhealthy, not a crash', () =
     return spawnSync(
       process.execPath,
       [ENTRY, 'installer-hosts', '--wrapper', join(home, 'wrapper'), '--data-root', home, '--home', home, '--json'],
-      { encoding: 'utf8', env: { ...process.env, HOME: home } },
+      { encoding: 'utf8', env: { ...withoutPath(), PATH: isolatedPath(), HOME: home } },
     );
   };
 
   it('reports a command that exits at once rather than dying on EPIPE', () => {
-    const run = probeAgainst('/bin/sh', ['mcp']);
+    const run = probeAgainst(process.execPath, ['-e', 'process.exit(1)']);
 
     // The inspector must survive and answer. A crash shows up as an empty
     // stdout with a stack on stderr, which is exactly what CI saw.
@@ -200,7 +211,7 @@ describe('a registration that exits immediately is unhealthy, not a crash', () =
   });
 
   it('does the same for a command that exits successfully but says nothing', () => {
-    const run = probeAgainst('/bin/true', []);
+    const run = probeAgainst(process.execPath, ['-e', '']);
     expect(run.stderr).not.toContain('EPIPE');
     expect(run.stdout.trim(), `stderr: ${run.stderr}`).not.toBe('');
     const summary = JSON.parse(run.stdout) as { hosts?: { host: string; healthy?: boolean }[] };
@@ -216,19 +227,16 @@ describe('a registration that exits immediately is unhealthy, not a crash', () =
    */
   it('survives a command that closes its input and keeps running', () => {
     const home = temporary();
-    const script = join(home, 'closes-stdin');
-    writeFileSync(script, '#!/bin/sh\nexec 0<&-\nsleep 2\n');
-    chmodSync(script, 0o755);
     mkdirSync(join(home, '.cursor'), { recursive: true });
     writeFileSync(
       join(home, '.cursor', 'mcp.json'),
-      JSON.stringify({ mcpServers: { commitlore: { command: script, args: [] } } }),
+      JSON.stringify({ mcpServers: { commitlore: { command: process.execPath, args: ['-e', 'process.stdin.destroy(); setTimeout(() => {}, 2_000);'] } } }),
     );
 
     const run = spawnSync(
       process.execPath,
       [ENTRY, 'installer-hosts', '--wrapper', join(home, 'wrapper'), '--data-root', home, '--home', home, '--json'],
-      { encoding: 'utf8', env: { ...process.env, HOME: home } },
+      { encoding: 'utf8', env: { ...withoutPath(), PATH: isolatedPath(), HOME: home } },
     );
 
     expect(run.stderr).not.toContain('EPIPE');
