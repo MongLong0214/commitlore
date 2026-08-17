@@ -89,19 +89,19 @@ const jsonHost = async (host, path, format, wrapper) => {
             config = {};
         }
         else {
-            return { host, requested: true, outcome: 'failed', healthy: false, detail: `config is not parseable JSON: ${error instanceof Error ? error.message : String(error)}` };
+            return { host, requested: true, outcome: 'failed', healthy: false, detail: `${path} is not parseable JSON: ${error instanceof Error ? error.message : String(error)}` };
         }
     }
     const key = format === 'json-mcp' ? 'mcp' : 'mcpServers';
     if (config[key] !== undefined && !isObject(config[key])) {
-        return { host, requested: true, outcome: 'failed', healthy: false, detail: `${key} is not an object` };
+        return { host, requested: true, outcome: 'failed', healthy: false, detail: `${key} in ${path} is not an object` };
     }
     const group = config[key] ?? {};
     const entry = group.commitlore;
     if (entry !== undefined) {
         const launch = commandOf(format, entry);
         if (launch === null)
-            return { host, requested: true, outcome: 'failed', healthy: false, detail: 'commitlore registration has no runnable command and args' };
+            return { host, requested: true, outcome: 'failed', healthy: false, detail: `the commitlore registration in ${path} has no runnable command and args` };
         const problem = await probeMcp(launch.command, launch.args);
         if (isMcpProbeFailure(problem))
             return { host, requested: true, outcome: 'failed', healthy: false, detail: `existing registration is unhealthy: ${problem.detail}` };
@@ -112,7 +112,7 @@ const jsonHost = async (host, path, format, wrapper) => {
         atomicJsonWrite(path, config);
     }
     catch (error) {
-        return { host, requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${error instanceof Error ? error.message : String(error)}` };
+        return { host, requested: true, outcome: 'failed', healthy: false, detail: `${path} could not be written atomically: ${error instanceof Error ? error.message : String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
     return !isMcpProbeFailure(problem)
@@ -142,14 +142,14 @@ const tomlHost = async (path, wrapper) => {
     }
     catch (error) {
         if (existsSync(path))
-            return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `could not read config: ${String(error)}` };
+            return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `${path} could not be read: ${String(error)}` };
     }
     let existing;
     try {
         existing = tomlRegistration(source);
     }
     catch (error) {
-        return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `config is not parseable TOML: ${String(error)}` };
+        return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `${path} is not parseable TOML: ${String(error)}` };
     }
     if (existing !== null) {
         const problem = await probeMcp(existing.command, existing.args);
@@ -177,7 +177,7 @@ const tomlHost = async (path, wrapper) => {
         }
     }
     catch (error) {
-        return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `atomic config write failed: ${String(error)}` };
+        return { host: 'codex', requested: true, outcome: 'failed', healthy: false, detail: `${path} could not be written atomically: ${String(error)}` };
     }
     const problem = await probeMcp(wrapper, ['mcp']);
     return !isMcpProbeFailure(problem)
