@@ -45,6 +45,19 @@ export const EXPECTED_CI_WORKFLOW_SHA256 = '87f33a8cea5b04369e118f68d64798f46dcf
 // Fixed rather than inferred from returned jobs: absence must fail rather
 // than define itself away. `lint` only runs for pull requests and is therefore
 // deliberately not a member of the push-event release contract.
+//
+// That exclusion is about which contexts exist on a main commit, not about
+// whether `lint` ran. It is one of the eleven required status checks on the
+// `main` branch protection, so it is evaluated on the pull request's head and
+// has to pass before anything reaches main; the squash then produces a new
+// commit that carries no `lint` context for this gate to find. Ten here plus
+// `lint` is the eleven that protection requires.
+//
+// Written down because the shorter version reads as a hole: a reader took it
+// that way on 2026-08-17 and asked whether main could be pushed unlinted. The
+// release gate not requiring `lint` is not the same as main never being
+// linted, and saying only the first invites someone to add `lint` to this
+// list, which would block every release.
 export const REQUIRED_CHECKS = Object.freeze([
   'check (22.23.2)',
   'check (24)',
