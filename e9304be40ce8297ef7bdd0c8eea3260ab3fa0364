@@ -1,0 +1,21 @@
+Limit: this answers how a bot merge is verified, not whether to build one -- T-1502 onward stay unscheduled and #719's reopening conditions are unchanged
+Limit: two assumptions behind the rejection are unmeasured and named in the ADR; the load-bearing one is whether an App-opened pull request triggers the checks at all
+Ruled-out: bypass plus a required push-event check | cheapest, and `main` would hold an unverified tree until the push job finishes -- adopting #723's forced limitation by preference
+Ruled-out: staging ref then fast-forward | `lint` is absent from a branch push too, so it needs the same bypass it appears to avoid
+Ruled-out: push the rebuild to the contributor's own branch | cannot reach a fork, which is the case that actually hurt
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: `demo-lint.yml:25` reads `if: github.event_name == 'pull_request'` with the comment giving the reason; the eleven required contexts were read from the branch protection API earlier this session and `lint` is among them, while `REQUIRED_CHECKS` in scripts/check-exact-head-ci.mjs is ten and excludes it -- the two numbers agreeing is what makes the finding decisive rather than a guess
+Record-Id: r-botpr1501
+Provenance: inherited 21c8e4cdb48b884cc66e9b68c1b989bc388e34d5
+CommitLore-Version: 2.0.0
+
+Limit: the eleven required contexts are still read from a session-earlier API call rather than re-verified here -- the API returned 503 on both attempts today
+Blast: local
+Undo: easy
+Certainty: firm
+Verified: `.github/workflows/demo-lint.yml:11-14` carries `on: pull_request` and `push: branches: [dev]`; `:25` gates `lint` on the pull_request event and `:67` gates `promotion-range-lint` on push, so the two jobs split the two triggers between them
+Record-Id: r-linttwice1501
+Provenance: inherited aec23ef3b0b651deaefe09acdbd05c958803c385
+CommitLore-Version: 2.0.0
