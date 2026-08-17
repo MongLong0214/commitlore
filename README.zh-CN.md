@@ -89,6 +89,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/inst
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
 ```
 
+在 Windows 上配置 host 需要 **v1.1.1 或更高版本**。在此之前，检测看不到 `.cmd` shim，安装器也无法运行它，因此 Windows 安装只放下 CLI 而不配置任何 host —— 报告为 `ok: false`，而不是成功。已在 1.1.1 上于真实机器验证 Codex、Gemini CLI 与 Hermes。
+
 **Hermes** — 安装 CLI 后，配置它的 host integration：
 
 ```bash
@@ -171,7 +173,7 @@ mode 的 `[directive]` 仅表示仓库决定将该字符串视为约束，并不
 | Claude Code | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Codex | **有——通过 plugin 自动完成。** | **有——通过 plugin 提供。** |
 | Hermes | **有——`commitlore hermes install`。** | **有——`commitlore hermes install`。** |
-| Gemini CLI、Cursor、Windsurf、opencode | **是 —— `install.sh` 会配置 MCP server。** | **是 procedure，不自动。** server 在每次连接时说明 prepare → verify → stage 流程。host 可能遵循，也可能不遵循。 |
+| Gemini CLI、Cursor、Windsurf、opencode | **是 —— 两个安装器都会配置 MCP server。** 它们并非各自实现，而是走同一个共享步骤。 | **是 procedure，不自动。** server 在每次连接时说明 prepare → verify → stage 流程。host 可能遵循，也可能不遵循。 |
 | 其他遵循 `AGENTS.md` convention 的 host | **是 procedure，不自动。** `commitlore init --agents-md` 会写入 repository。 | **是 procedure，不自动。** 同一个文件，同样的前提。 |
 
 “有”只表示该 layer 已安装，不表示每次 commit 都会得到 record。绝大多数 commit

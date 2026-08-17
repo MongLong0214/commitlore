@@ -92,6 +92,8 @@ curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/inst
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
 ```
 
+Windows에서 host 배선은 **v1.1.1 이상**이 필요하다. 그 전에는 탐지가 `.cmd` shim을 보지 못하고 설치기가 그것을 실행하지도 못해서, Windows 설치는 CLI만 놓고 아무것도 배선하지 않았다 — 성공이 아니라 `ok: false`로 보고됐다. 1.1.1에서 Codex, Gemini CLI, Hermes에 대해 실기로 확인했다.
+
 **Hermes** — CLI를 설치한 뒤 host integration을 설정한다:
 
 ```bash
@@ -174,7 +176,7 @@ delivery는 맥락을 주며, 편집을 막지 않는다.
 | Claude Code | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Codex | **예 — plugin을 통해 자동으로 된다.** | **예 — plugin을 통해 된다.** |
 | Hermes | **예 — `commitlore hermes install`.** | **예 — `commitlore hermes install`.** |
-| Gemini CLI, Cursor, Windsurf, opencode | **된다 — `install.sh`가 MCP server를 배선한다.** | **procedure이며 자동이 아니다.** server가 연결마다 prepare → verify → stage 절차를 알린다. host가 따를 수도, 따르지 않을 수도 있다. |
+| Gemini CLI, Cursor, Windsurf, opencode | **된다 — 두 설치기 모두 MCP server를 배선한다.** 각자가 아니라 공유된 한 단계를 거친다. | **procedure이며 자동이 아니다.** server가 연결마다 prepare → verify → stage 절차를 알린다. host가 따를 수도, 따르지 않을 수도 있다. |
 | 그 밖의 `AGENTS.md` convention host | **procedure이며 자동이 아니다.** `commitlore init --agents-md`가 저장소에 적는다. | **procedure이며 자동이 아니다.** 같은 파일, 같은 단서. |
 
 “예”는 layer가 설치되었다는 뜻이지 모든 commit에 record가 생긴다는 뜻이 아니다.
