@@ -95,27 +95,30 @@ A weaker variant — rebuild and push on `push` to `main` — keeps `HEAD` consi
 leaves one stale parent in history, which must never be tagged. It is recorded so that it
 is rejected deliberately rather than rediscovered.
 
-## The unsolved question
+## How a bot merge is verified — answered (ADR-0036)
 
-**A commit the App pushes has not been checked.**
+`main`'s protection requires **eleven** contexts, and the eleventh is `lint`, which a push
+to `main` cannot produce for two independent reasons: `demo-lint.yml`'s push trigger is
+scoped to `dev`, so the workflow does not run at all, and the `lint` job is additionally
+gated on `github.event_name == 'pull_request'` because a push event has no `base_ref`. So a
+direct push produces no `lint` context, ever, and **no push to `main` can satisfy
+protection on its merits** — the App's or anyone's. Every push-shaped option needs a
+bypass, and a bypass is not "the check passed"; it is "the check did not have to".
 
-For the App to push to `main` it must be in the branch protection bypass list. The commit
-it pushes is the merge result plus a rebuild — a tree no required check ran against. That
-the pull request was green is a statement about a different tree.
+So the App does not push. **It opens a pull request** carrying the source change plus a
+canonical rebuild, all eleven contexts run on it, and it merges like anything else. No
+bypass is requested, and none should be granted for this purpose.
 
-So the naive implementation moves the gate from *blocking before* to *reporting after*,
-which is the limitation recorded against `preserve` in #723 — adopted voluntarily this
-time. Any design that ships must answer this. Three shapes are worth evaluating and none
-has been:
+Cost: one extra pull request and one extra CI cycle per change — worse than today for a
+change that would not have conflicted, better for one that would. The staging-ref option
+was rejected for the same `lint` reason it initially seemed to solve; ADR-0036 records why,
+because it is the shape that looks safest before that detail is noticed.
 
-1. **Push to a staging ref, let checks run there, fast-forward `main` only on green.**
-   Keeps blocking semantics; costs a second CI cycle, which is the cost being removed.
-2. **Make the rebuild verifiable without re-running checks** — the App pushes, and a
-   required push-event check re-derives the bundle and compares. Still after the fact, but
-   the window is bounded and the failure is loud rather than silent.
-3. **Do not bypass at all**: the App pushes to a branch, opens a pull request containing
-   only the rebuilt artifact, and that pull request passes normally. Preserves every
-   property; adds a second merge per change.
+Two assumptions behind it are unmeasured and named there: that protection evaluates
+required contexts on the pushed commit, and that a pull request opened by an App triggers
+the same checks. The second matters most — a workflow that does not fire for App-opened
+pull requests would leave the rebuild green with nothing having run, which is #722's empty
+runner in a new place.
 
 ## Success
 
