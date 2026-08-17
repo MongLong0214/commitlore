@@ -377,6 +377,25 @@ export const inspectAndApplyHosts = async (options) => {
     const requested = [];
     const notDetected = [];
     const home = options.home;
+    // Detection asks for what the wiring operation needs, which is why the rows
+    // below do not all ask the same question (#728).
+    //
+    // A JSON host is wired by **writing a file**. That works whether or not its
+    // executable is on PATH -- Cursor and Windsurf are installed as applications
+    // and often put nothing there -- so the config directory is sufficient
+    // evidence that the host exists, and each of those rows accepts either.
+    //
+    // Claude Code is wired by **running its own CLI**: the plugin is a
+    // marketplace entry, and there is no file to write that installs one. With no
+    // `claude` on PATH there is no operation to perform, so a config-directory
+    // fallback would detect the host and then have nothing to do. Codex sits
+    // between the two and says so explicitly: its CLI when present, its TOML
+    // config when not.
+    //
+    // So `.claude.json` next to a `notDetected: claude-code` is the rule working,
+    // not an oversight -- a leftover config from an uninstalled host is exactly
+    // what an executable check is for. Changing any row means changing what that
+    // row's wiring does first.
     if (hasCommand('codex')) {
         requested.push(cliHost('codex', options.wrapper).then((result) => result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result));
     }
