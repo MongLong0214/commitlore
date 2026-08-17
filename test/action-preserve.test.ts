@@ -654,12 +654,19 @@ describe('action.yml', () => {
   it('is dogfooded by a workflow that parses and does not touch CI', () => {
     const demoText = readFileSync(DEMO_WORKFLOW, 'utf8');
     const demo = load(demoText) as {
-      on: { pull_request: { types: string[] } };
+      on: { pull_request?: { types: string[] }; pull_request_target?: { types: string[] } };
       permissions: Record<string, string>;
       jobs: Record<string, { if?: string; steps: ActionStep[] }>;
     };
 
-    expect(demo.on.pull_request.types).toEqual(['closed']);
+    // The event moved to `pull_request_target` in #723 because the plain event
+    // hands a fork's workflow a read-only token, so the note was built and then
+    // discarded. What this case is about is unchanged either way: the job fires
+    // on the closed event and nothing else. Which key carries that is asserted
+    // in `test/preserve-workflow-safety.test.ts`, along with the two rules that
+    // keep the stronger event safe.
+    const trigger = demo.on.pull_request_target ?? demo.on.pull_request;
+    expect(trigger?.types).toEqual(['closed']);
     expect(demo.permissions).toEqual({ contents: 'write' });
     expect(Object.keys(demo.jobs)).toHaveLength(1);
 
