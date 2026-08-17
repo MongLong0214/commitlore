@@ -17,7 +17,7 @@
  *     record on this file rejects it.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -935,5 +935,64 @@ describe('T-1120 the README describes the installer that ships beside it (req 29
     const forbidden = Object.entries(b).filter(([, body]) => body.includes('SHA256SUMS'));
 
     expect(forbidden.map(([f]) => f)).toEqual([]);
+  });
+});
+
+/**
+ * #735: the installer printed `current -> vX` and left `current` on the
+ * previous version.
+ *
+ * `mv -f` was replacing the symlink. When `current` already exists and points
+ * at a directory, BSD `mv` follows it and moves the source *into* it, returning
+ * 0 — so the success line printed while every hook on the machine kept running
+ * the old build. `commitlore init` records the interpreter as
+ * `<data-root>/current/dist/commitlore.mjs` precisely so hooks follow upgrades,
+ * and this is what made them stop.
+ *
+ * A first install creates the link and cannot hit it, which is why it survived
+ * from 1.0.2 into 1.1.1. So the case has to install twice.
+ */
+describe('#735 an upgrade actually moves `current`', () => {
+  it('repoints an existing symlink rather than reporting that it did', () => {
+    const home = tempDir('upgrade-home');
+    const dataDir = join(home, '.local', 'share', 'commitlore');
+    const current = join(dataDir, 'current');
+
+    // Stand in for a previous release: `current` already exists and points at
+    // a directory, which is the only state that triggers this.
+    const previous = join(dataDir, 'v0.0.1');
+    mkdirSync(join(previous, 'dist'), { recursive: true });
+    symlinkSync(previous, current);
+
+    const run = runInstaller({ home });
+
+    expect(run.status, run.stderr).toBe(0);
+    const target = readlinkSync(current);
+    expect(
+      target,
+      `current still points at ${target} — the installer reported an upgrade it did not perform`,
+    ).not.toBe(previous);
+    expect(target).toContain(TAG);
+
+    // The claim and the filesystem have to agree. Reporting from the exit code
+    // of a command that can succeed without moving anything is the defect.
+    if (run.stdout.includes('current -> ')) {
+      expect(run.stdout).toContain(`current -> ${TAG}`);
+    }
+  });
+
+  it('leaves no stray temporary link behind', () => {
+    const home = tempDir('upgrade-stray-home');
+    const dataDir = join(home, '.local', 'share', 'commitlore');
+    const previous = join(dataDir, 'v0.0.1');
+    mkdirSync(join(previous, 'dist'), { recursive: true });
+    symlinkSync(previous, join(dataDir, 'current'));
+
+    runInstaller({ home });
+
+    // `mv` moved it into the old directory instead of replacing the link, and
+    // it stayed there — the trace that showed where the rename actually went.
+    const strays = readdirSync(previous).filter((entry) => entry.startsWith('current.commitlore-install.'));
+    expect(strays, `a temporary link was left in ${previous}`).toEqual([]);
   });
 });
