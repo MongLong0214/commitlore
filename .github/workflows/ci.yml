@@ -691,6 +691,86 @@ jobs:
           # so reaching this line means they all held.
           exit 0
 
+      # The planted host above covers the JSON path. The three hosts where real
+      # defects actually landed take different ones, and none of them executes
+      # here: codex reached `codex mcp add failed` (#716 cause 2), and
+      # claude-code came back `notDetected` with its config on disk, which #728
+      # resolved as the rule working rather than a bug.
+      #
+      # That resolution is currently held by a comment. Nothing fails if someone
+      # gives claude-code a config-directory fallback "for symmetry" -- and the
+      # installer would then report `failed` with `ok: false` on any machine
+      # carrying a leftover `.claude.json`, which is the false failure #728
+      # refused. This is where that decision gets enforced.
+      - name: Detection reaches the CLI-driven hosts, and stops where it should
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $shim = Join-Path $env:LOCALAPPDATA 'commitlore\bin\commitlore.cmd'
+
+          function Enumerate([string] $stateHome, [string] $extraBin) {
+            New-Item -ItemType Directory -Force -Path $stateHome | Out-Null
+            $previous = $env:PATH
+            if ($extraBin) { $env:PATH = "$extraBin;$env:PATH" }
+            try {
+              $raw = (& $shim installer-hosts --wrapper $shim --data-root (Join-Path $stateHome 'data') --home $stateHome --json) -join "`n"
+            } finally { $env:PATH = $previous }
+            Write-Host $raw
+            return ($raw | ConvertFrom-Json)
+          }
+
+          function PlantShim([string] $name) {
+            $bin = Join-Path $env:RUNNER_TEMP "cl-bin-$name"
+            New-Item -ItemType Directory -Force -Path $bin | Out-Null
+            # Exits 0 for anything. Enough to prove the branch was reached and
+            # the shim was executed -- not that the real host would agree.
+            Set-Content -LiteralPath (Join-Path $bin "$name.cmd") -Value "@echo off`r`nexit /b 0`r`n"
+            return $bin
+          }
+
+          # 1. #728, the case with nothing else guarding it. A leftover config
+          #    and no executable must stay notDetected. A config-directory
+          #    fallback added here would fail this.
+          $leftover = Join-Path $env:RUNNER_TEMP 'cl-claude-leftover'
+          New-Item -ItemType Directory -Force -Path $leftover | Out-Null
+          Set-Content -LiteralPath (Join-Path $leftover '.claude.json') -Value '{}' -NoNewline
+          New-Item -ItemType Directory -Force -Path (Join-Path $leftover '.claude') | Out-Null
+          $left = Enumerate $leftover ''
+          if ($left.notDetected -notcontains 'claude-code') {
+            throw 'a leftover .claude.json made claude-code detected — #728 says an executable check is what ignores it'
+          }
+          if ($left.hosts | Where-Object { $_.host -eq 'claude-code' }) {
+            throw 'claude-code appears in hosts with no claude executable present'
+          }
+
+          # 2. The other half: with the executable there, PATHEXT must find it
+          #    and the branch must run. #716 cause 2 was that it could not.
+          $withClaude = Enumerate (Join-Path $env:RUNNER_TEMP 'cl-claude-present') (PlantShim 'claude')
+          if ($withClaude.notDetected -contains 'claude-code') {
+            throw 'claude.cmd is on PATH and claude-code was still notDetected — PATHEXT is not being consulted'
+          }
+          if (-not ($withClaude.hosts | Where-Object { $_.host -eq 'claude-code' })) {
+            throw 'claude-code is in neither hosts nor notDetected — it was dropped'
+          }
+
+          # 3. codex takes the CLI path, which is what `codex mcp add failed`
+          #    was. A shim that runs at all is enough to prove it is reached.
+          $withCodex = Enumerate (Join-Path $env:RUNNER_TEMP 'cl-codex-present') (PlantShim 'codex')
+          if ($withCodex.notDetected -contains 'codex') {
+            throw 'codex.cmd is on PATH and codex was still notDetected'
+          }
+          if (-not ($withCodex.hosts | Where-Object { $_.host -eq 'codex' })) {
+            throw 'codex is in neither hosts nor notDetected — it was dropped'
+          }
+
+          # Hermes is deliberately not planted. Its wiring runs our own wrapper
+          # rather than a hermes binary, so a shim proves nothing about it, and
+          # driving the real `commitlore hermes install` here would test Hermes
+          # rather than this enumeration. Its trailing-backslash argument path
+          # is covered by unit cases instead.
+          Write-Host 'claude-code: ignored a leftover config, found a planted shim; codex: reached its CLI path'
+          exit 0
+
       # The documented piped form, under PowerShell 7. `iex` gives a piped script
       # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
       # why that variable exists. This step is also the only check that a leading
