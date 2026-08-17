@@ -72,8 +72,14 @@ jobs:
           printf 'Opened by run %s to answer whether an App-opened pull request runs the checks (#719, T-1502).\nDeleted with its branch by the same run.\n' \
             "$GITHUB_RUN_ID" > .measurements/app-pull-request-probe.md
 
+          # The number is the bot *user* id (317873099), not the App id (4622872).
+          # The first run to get this far reported `committer on the server:
+          # unknown` because the App id was used here: GitHub could not match the
+          # address to an account, so the commit was attributed to nobody. That
+          # would have made a successful measurement ambiguous -- ADR-0036 assumes
+          # the App opens the pull request, and attribution is half of that claim.
           git config user.name  'commitlore-canonical-build[bot]'
-          git config user.email '4622872+commitlore-canonical-build[bot]@users.noreply.github.com'
+          git config user.email '317873099+commitlore-canonical-build[bot]@users.noreply.github.com'
           git checkout -b "$branch"
           git add .measurements/app-pull-request-probe.md
           git commit --quiet -m "$(printf 'Measure whether an App-opened pull request runs the checks\n\nT-1502 (#719). ADR-0036 assumes it does and nobody has measured it. Opened and closed by the same workflow run; the branch and this file go with it.\n\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-measureapppr\nProvenance: authored\nVerified: this commit exists to be looked at, not to be kept\nCommitLore-Version: 2.0.0')"
