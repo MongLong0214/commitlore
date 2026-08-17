@@ -49,13 +49,67 @@ export const POLICY_KEYS = [
     'require_verified_evidence',
 ];
 /**
- * One location, deliberately. PRD-F13 requirement 11 allows either a stated
- * precedence between a repository-local and a user-global file, or a single
- * location. A single location is chosen: an ambiguous precedence is worse than a
- * missing feature, and the user story this file answers ("one record per commit
- * generally, two on this repository") is repository-scoped anyway.
+ * The policy a repository commits, and the overlay one machine keeps.
+ *
+ * PRD-F13 requirement 11 allows either a single location or a stated
+ * precedence. This was a single location until #709 — an ambiguous precedence
+ * is worse than a missing feature — and is now the second option, stated:
+ *
+ *     .commitlore-policy.local.json   per key, wins
+ *     .commitlore-policy.json         repository default
+ *     POLICY_DEFAULTS                 built in
+ *
+ * What changed the answer is that refusing the overlay never prevented a
+ * contributor from differing. It converted the difference into a permanently
+ * modified tracked file — the report in #709 is a release script refusing to
+ * tag a worktree dirtied exactly that way. Every tool that keeps a shared
+ * config in the tree gives the operator a layer that wins for the same reason:
+ * the committed file says what the project wants, and the operator's machine is
+ * not the project's to command.
+ *
+ * Per key, not per file: an overlay that sets only `unattended` leaves `mode`
+ * and `max_records_per_commit` as the repository set them, so it says "this
+ * machine differs about that" and nothing more.
  */
 export const POLICY_FILE_NAME = '.commitlore-policy.json';
+/**
+ * The overlay. Untracked by convention — nothing here writes a `.gitignore`
+ * entry for it, because a tool that hides a file on a repository's behalf has
+ * decided for the repository what it may not see.
+ */
+export const POLICY_LOCAL_FILE_NAME = '.commitlore-policy.local.json';
+// ---------------------------------------------------------------------------
+// Canonical bytes
+// ---------------------------------------------------------------------------
+/**
+ * The canonical bytes for a policy file: `POLICY_KEYS` order, two-space
+ * indent, trailing newline. Every write goes through this, so the writers that
+ * exist — `auto on/off` and `init` — cannot drift apart on shape, and a file
+ * this function produces is never rejected by `validate` below.
+ *
+ * It is also the identity input for an effective policy (see
+ * `computeEffectivePolicyIdentityHash`), which is why it sits above the hashes
+ * rather than beside the writers it serves.
+ */
+const serializePolicyFile = (policy) => {
+    const ordered = {};
+    for (const key of POLICY_KEYS)
+        ordered[key] = policy[key];
+    return `${JSON.stringify(ordered, null, 2)}\n`;
+};
+/**
+ * The canonical bytes for an overlay: the same order and shape, but only the
+ * keys it sets. Writing the whole policy here would pin every key on this
+ * machine, so a later change to the committed file would stop applying — the
+ * opposite of what per-key precedence promises.
+ */
+const serializePolicyOverlay = (set) => {
+    const ordered = {};
+    for (const key of POLICY_KEYS)
+        if (key in set)
+            ordered[key] = set[key];
+    return `${JSON.stringify(ordered, null, 2)}\n`;
+};
 // ---------------------------------------------------------------------------
 // Identity hash
 // ---------------------------------------------------------------------------
@@ -89,12 +143,38 @@ export const computePolicyIdentityHash = (policy = POLICY_DEFAULTS) => sha256(JS
  * true.
  */
 export const computePolicyFileIdentityHash = (contents) => sha256(contents);
-const defaultsResolution = (error, path) => ({
+/**
+ * The identity of a policy two files decided between them (#709).
+ *
+ * Neither file's bytes describe what ran, so the digest is taken over the
+ * effective policy in canonical form. A pending transaction stamps this hash;
+ * without it a record prepared under an overlay would carry provenance naming
+ * a policy that did not produce it — a record misreporting the conditions of
+ * its own capture, which is worse than the gap #709 closes.
+ *
+ * `unattended` is an input here, unlike `computePolicyIdentityHash` above. The
+ * exclusion there rests on a file's identity being its own bytes, so every
+ * identity the setting can change is hashed already. An overlay breaks that
+ * premise: it can turn the setting on from a file whose bytes are not the
+ * digest input, so the value has to travel in the digest itself.
+ *
+ * Computed only when an overlay is present, which is what keeps the digest of
+ * every repository without one byte-identical to what it was before this
+ * existed. Adding an overlay does change the digest — including an empty one
+ * over a file whose bytes are not canonical — and that is correct: a capture in
+ * flight across the change is rejected with "policy identity changed since
+ * prepare", because it was.
+ */
+export const computeEffectivePolicyIdentityHash = (policy) => sha256(serializePolicyFile(policy));
+const defaultsResolution = (error, path, localPath = null) => ({
     ok: error === null,
     policy: POLICY_DEFAULTS,
     identityHash: computePolicyIdentityHash(POLICY_DEFAULTS),
     source: 'defaults',
     path,
+    localPath,
+    beneath: POLICY_DEFAULTS,
+    overridden: [],
     error,
 });
 /** Repository root, or null outside a repository. */
@@ -113,66 +193,123 @@ const repoRoot = (cwd) => {
  * An unknown key is an error rather than an ignored field, because ignoring it
  * would let a user believe a setting applied.
  */
-const validate = (raw) => {
+const parseKeys = (raw, name) => {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return { error: `${POLICY_FILE_NAME} must contain a JSON object` };
+        return { error: `${name} must contain a JSON object` };
     }
     const obj = raw;
     const unknown = Object.keys(obj).filter((k) => !POLICY_KEYS.includes(k));
     if (unknown.length > 0) {
         return {
-            error: `${POLICY_FILE_NAME} sets ${unknown.length === 1 ? 'an unknown key' : 'unknown keys'}: ` +
+            error: `${name} sets ${unknown.length === 1 ? 'an unknown key' : 'unknown keys'}: ` +
                 `${unknown.join(', ')}. Allowed keys are ${POLICY_KEYS.join(', ')}.`,
         };
     }
-    const policy = { ...POLICY_DEFAULTS };
+    const set = {};
     if ('mode' in obj) {
         if (typeof obj.mode !== 'string' || !CAPTURE_MODES.includes(obj.mode)) {
             return {
-                error: `${POLICY_FILE_NAME}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(', ')} (got ${JSON.stringify(obj.mode)})`,
+                error: `${name}: mode must be one of ${CAPTURE_MODES.map((mode) => `"${mode}"`).join(', ')} (got ${JSON.stringify(obj.mode)})`,
             };
         }
-        policy.mode = obj.mode;
+        set.mode = obj.mode;
     }
     if ('max_records_per_commit' in obj) {
         const v = obj.max_records_per_commit;
         if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 32) {
             return {
-                error: `${POLICY_FILE_NAME}: max_records_per_commit must be an integer between 1 and 32 ` +
+                error: `${name}: max_records_per_commit must be an integer between 1 and 32 ` +
                     `(got ${JSON.stringify(v)})`,
             };
         }
-        policy.max_records_per_commit = v;
+        set.max_records_per_commit = v;
     }
     if ('unattended' in obj) {
         const v = obj.unattended;
         if (typeof v !== 'boolean') {
             return {
-                error: `${POLICY_FILE_NAME}: unattended must be a boolean (got ${JSON.stringify(v)})`,
+                error: `${name}: unattended must be a boolean (got ${JSON.stringify(v)})`,
             };
         }
-        policy.unattended = v;
-    }
-    // ADR-0030's guarantee is a property of `auto` mode (#511): a record staged
-    // without asking is stamped `drafted` there and only there. A consent the
-    // mode cannot honour is rejected rather than ignored, so a user never
-    // believes a setting applied.
-    if (policy.unattended && policy.mode !== 'auto') {
-        return {
-            error: `${POLICY_FILE_NAME}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`,
-        };
+        set.unattended = v;
     }
     if ('require_verified_evidence' in obj) {
         const v = obj.require_verified_evidence;
         if (typeof v !== 'boolean') {
             return {
-                error: `${POLICY_FILE_NAME}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`,
+                error: `${name}: require_verified_evidence must be a boolean (got ${JSON.stringify(v)})`,
             };
         }
-        policy.require_verified_evidence = v;
+        set.require_verified_evidence = v;
     }
-    return { policy };
+    return { set };
 };
+/**
+ * ADR-0030's guarantee is a property of `auto` mode (#511): a record staged
+ * without asking is stamped `drafted` there and only there. A consent the mode
+ * cannot honour is rejected rather than ignored, so a user never believes a
+ * setting applied.
+ *
+ * Checked against the policy that applies, which since #709 may be two files'
+ * doing — so the message names where each of the two values came from rather
+ * than blaming whichever file is being read.
+ */
+const coherent = (policy, originOf) => {
+    if (!policy.unattended || policy.mode === 'auto')
+        return null;
+    const consent = originOf('unattended');
+    const mode = originOf('mode');
+    return consent === mode
+        ? `${consent}: "unattended": true requires mode "auto" (mode is "${policy.mode}")`
+        : `"unattended": true in ${consent} requires mode "auto", but mode is "${policy.mode}" from ${mode}`;
+};
+/**
+ * One file's contents, validated as a complete policy. The shape every writer
+ * here produces and the only shape `setUnattendedCapture` merges into.
+ */
+const validate = (raw) => {
+    const parsed = parseKeys(raw, POLICY_FILE_NAME);
+    if ('error' in parsed)
+        return { error: parsed.error };
+    const policy = { ...POLICY_DEFAULTS, ...parsed.set };
+    const error = coherent(policy, () => POLICY_FILE_NAME);
+    return error === null ? { policy } : { error };
+};
+/**
+ * Read one layer: its bytes and the keys it sets, or a named reason it cannot
+ * be used. Both files go through this, so neither can be validated more
+ * leniently than the other — the overlay is untracked, not more trusted.
+ */
+const readLayer = (path, name) => {
+    let contents;
+    try {
+        contents = readFileSync(path, 'utf8');
+    }
+    catch (err) {
+        return { error: `${name} could not be read: ${err.message}` };
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(contents);
+    }
+    catch (err) {
+        return { error: `${name} is not valid JSON: ${err.message}` };
+    }
+    const checked = parseKeys(parsed, name);
+    return 'error' in checked ? checked : { set: checked.set, contents };
+};
+/**
+ * The file to name in a message about the policy that applied.
+ *
+ * The committed file unless the overlay decided the value — which keeps every
+ * message a repository without an overlay produces byte-identical to what it
+ * was, and names a file the reader can actually open when there is one. With no
+ * file at all it still names the committed one, because that is where a reader
+ * who wants to change the answer should write.
+ */
+export const policySourceLabel = (resolution) => resolution.source === 'local'
+    ? `${POLICY_LOCAL_FILE_NAME} over ${resolution.path === null ? 'the defaults' : POLICY_FILE_NAME}`
+    : POLICY_FILE_NAME;
 /**
  * Resolve the policy for `cwd`.
  *
@@ -186,31 +323,66 @@ export const resolvePolicy = (cwd) => {
     if (root === null)
         return defaultsResolution(null, null);
     const path = join(root, POLICY_FILE_NAME);
-    if (!existsSync(path))
+    const localPath = join(root, POLICY_LOCAL_FILE_NAME);
+    const committedExists = existsSync(path);
+    const localExists = existsSync(localPath);
+    if (!committedExists && !localExists)
         return defaultsResolution(null, null);
-    let contents;
-    try {
-        contents = readFileSync(path, 'utf8');
+    // The committed layer. A file that cannot be used stops resolution here
+    // rather than being overlaid: laying an overlay onto a policy nobody could
+    // read produces an effective policy that no file states, and the identity
+    // hash would then describe it as though one did.
+    let beneath = POLICY_DEFAULTS;
+    let committedBytes = null;
+    if (committedExists) {
+        const layer = readLayer(path, POLICY_FILE_NAME);
+        if ('error' in layer)
+            return defaultsResolution(layer.error, path);
+        const merged = { ...POLICY_DEFAULTS, ...layer.set };
+        const incoherent = coherent(merged, () => POLICY_FILE_NAME);
+        if (incoherent !== null)
+            return defaultsResolution(incoherent, path);
+        beneath = merged;
+        committedBytes = layer.contents;
     }
-    catch (err) {
-        return defaultsResolution(`${POLICY_FILE_NAME} could not be read: ${err.message}`, path);
+    if (!localExists) {
+        return {
+            ok: true,
+            policy: beneath,
+            identityHash: committedBytes === null
+                ? computePolicyIdentityHash(beneath)
+                : computePolicyFileIdentityHash(committedBytes),
+            source: 'repository',
+            path,
+            localPath: null,
+            beneath,
+            overridden: [],
+            error: null,
+        };
     }
-    let parsed;
-    try {
-        parsed = JSON.parse(contents);
+    const overlay = readLayer(localPath, POLICY_LOCAL_FILE_NAME);
+    if ('error' in overlay) {
+        return defaultsResolution(overlay.error, committedExists ? path : null, localPath);
     }
-    catch (err) {
-        return defaultsResolution(`${POLICY_FILE_NAME} is not valid JSON: ${err.message}`, path);
+    const policy = { ...beneath, ...overlay.set };
+    const origin = (key) => key in overlay.set
+        ? POLICY_LOCAL_FILE_NAME
+        : committedExists
+            ? POLICY_FILE_NAME
+            : 'the built-in defaults';
+    const incoherent = coherent(policy, origin);
+    if (incoherent !== null) {
+        return defaultsResolution(incoherent, committedExists ? path : null, localPath);
     }
-    const checked = validate(parsed);
-    if ('error' in checked)
-        return defaultsResolution(checked.error, path);
     return {
         ok: true,
-        policy: checked.policy,
-        identityHash: computePolicyFileIdentityHash(contents),
-        source: 'repository',
-        path,
+        policy,
+        identityHash: computeEffectivePolicyIdentityHash(policy),
+        source: 'local',
+        path: committedExists ? path : null,
+        localPath,
+        beneath,
+        overridden: POLICY_KEYS.filter((key) => policy[key] !== beneath[key]),
         error: null,
     };
 };
@@ -227,20 +399,15 @@ export const capturePolicyPath = (cwd) => {
     return root === null ? null : join(root, POLICY_FILE_NAME);
 };
 /**
- * The canonical bytes for a policy file: `POLICY_KEYS` order, two-space
- * indent, trailing newline. Every write goes through this, so the two writers
- * that exist — `auto on/off` and `init` — cannot drift apart on shape, and a
- * file this function produces is never rejected by `validate` above.
+ * Absolute path of this machine's overlay, or null outside a repository. As
+ * above, the file may or may not exist; this is where it would live.
  */
-const serializePolicyFile = (policy) => {
-    const ordered = {};
-    for (const key of POLICY_KEYS)
-        ordered[key] = policy[key];
-    return `${JSON.stringify(ordered, null, 2)}\n`;
+export const capturePolicyLocalPath = (cwd) => {
+    const root = repoRoot(cwd);
+    return root === null ? null : join(root, POLICY_LOCAL_FILE_NAME);
 };
 /**
- * Turn unattended capture on or off by writing the policy file
- * `resolvePolicy` reads (#511 added the setting; this is the only writer).
+ * Turn unattended capture on or off in the committed file (#511).
  *
  * Never throws. Coherence is enforced here rather than trusted to the caller:
  * enabling sets `mode: "auto"` beside `unattended: true`, because a consent
@@ -256,10 +423,10 @@ const serializePolicyFile = (policy) => {
  * from the default digest to a file digest while nothing about capture
  * changed, which #511 pins against.
  */
-export const setUnattendedCapture = (cwd, enabled) => {
+const setInCommittedFile = (cwd, enabled) => {
     const path = capturePolicyPath(cwd);
     if (path === null) {
-        return { ok: false, path: null, error: 'no git repository found here — run this inside a repository' };
+        return { ok: false, path: null, scope: 'repository', error: 'no git repository found here — run this inside a repository' };
     }
     if (existsSync(path)) {
         let current;
@@ -267,20 +434,21 @@ export const setUnattendedCapture = (cwd, enabled) => {
             current = readFileSync(path, 'utf8');
         }
         catch (err) {
-            return { ok: false, path, error: `${POLICY_FILE_NAME} could not be read: ${err.message}` };
+            return { ok: false, path, scope: 'repository', error: `${POLICY_FILE_NAME} could not be read: ${err.message}` };
         }
         let parsed;
         try {
             parsed = JSON.parse(current);
         }
         catch (err) {
-            return { ok: false, path, error: `${POLICY_FILE_NAME} is not valid JSON: ${err.message}` };
+            return { ok: false, path, scope: 'repository', error: `${POLICY_FILE_NAME} is not valid JSON: ${err.message}` };
         }
         const checked = validate(parsed);
         if ('error' in checked) {
             return {
                 ok: false,
                 path,
+                scope: 'repository',
                 error: `${checked.error} Fix or remove the file and re-run; it has been left untouched.`,
             };
         }
@@ -295,26 +463,108 @@ export const setUnattendedCapture = (cwd, enabled) => {
         // a policy change that never happened, the exact false positive the
         // identity design exists to avoid (#511).
         if (previous.mode === policy.mode && previous.unattended === policy.unattended) {
-            return { ok: true, path, changed: false, policy, previous };
+            return { ok: true, path, scope: 'repository', changed: false, policy, previous };
         }
         try {
             writeFileSync(path, serializePolicyFile(policy));
         }
         catch (err) {
-            return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+            return { ok: false, path, scope: 'repository', error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
         }
-        return { ok: true, path, changed: true, policy, previous };
+        return { ok: true, path, scope: 'repository', changed: true, policy, previous };
     }
     if (!enabled) {
-        return { ok: true, path, changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
+        return { ok: true, path, scope: 'repository', changed: false, policy: POLICY_DEFAULTS, previous: POLICY_DEFAULTS };
     }
     const policy = { ...POLICY_DEFAULTS, mode: 'auto', unattended: true };
     try {
         writeFileSync(path, serializePolicyFile(policy));
     }
     catch (err) {
-        return { ok: false, path, error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
+        return { ok: false, path, scope: 'repository', error: `${POLICY_FILE_NAME} could not be written: ${err.message}` };
     }
-    return { ok: true, path, changed: true, policy, previous: POLICY_DEFAULTS };
+    return { ok: true, path, scope: 'repository', changed: true, policy, previous: POLICY_DEFAULTS };
+};
+/**
+ * Turn unattended capture on or off in this machine's overlay (#709).
+ *
+ * The tracked file is never opened for writing here — that is the whole point:
+ * a contributor who differs from the committed policy leaves the worktree
+ * clean, instead of carrying a permanently modified tracked file past every
+ * release script that refuses a dirty tree.
+ *
+ * Only the keys the setting needs are written, merged into whatever the overlay
+ * already held. Enabling writes `mode: "auto"` beside `unattended: true` for
+ * the same reason the committed writer does — a consent the mode cannot honour
+ * is rejected by the resolver, so neither writer may produce a file it would
+ * reject, and pinning `mode` locally is implied by the consent rather than an
+ * extra opinion. Disabling writes only `unattended: false`, leaving the mode
+ * the repository chose to keep applying.
+ *
+ * The comparison before writing is on the effective setting, not on bytes: an
+ * overlay that already means what was asked is left alone, because rewriting it
+ * would move the policy identity while nothing about capture changed.
+ */
+const setInOverlay = (cwd, localPath, enabled) => {
+    const resolution = resolvePolicy(cwd);
+    if (!resolution.ok) {
+        return {
+            ok: false,
+            path: localPath,
+            scope: 'local',
+            error: `${resolution.error ?? 'the policy is rejected'} Fix or remove the file and re-run; it has been left untouched.`,
+        };
+    }
+    let held = {};
+    if (existsSync(localPath)) {
+        const layer = readLayer(localPath, POLICY_LOCAL_FILE_NAME);
+        // Unreachable while `resolution.ok` — the resolver read the same file
+        // through the same function — but a resolver that stops reading it one day
+        // must not turn this into a silent overwrite of whatever is there.
+        if ('error' in layer) {
+            return { ok: false, path: localPath, scope: 'local', error: layer.error };
+        }
+        held = layer.set;
+    }
+    const set = enabled
+        ? { ...held, mode: 'auto', unattended: true }
+        : { ...held, unattended: false };
+    const previous = resolution.policy;
+    const policy = { ...resolution.beneath, ...set };
+    if (previous.mode === policy.mode && previous.unattended === policy.unattended) {
+        return { ok: true, path: localPath, scope: 'local', changed: false, policy, previous };
+    }
+    try {
+        writeFileSync(localPath, serializePolicyOverlay(set));
+    }
+    catch (err) {
+        return {
+            ok: false,
+            path: localPath,
+            scope: 'local',
+            error: `${POLICY_LOCAL_FILE_NAME} could not be written: ${err.message}`,
+        };
+    }
+    return { ok: true, path: localPath, scope: 'local', changed: true, policy, previous };
+};
+/**
+ * Turn unattended capture on or off, in whichever file this machine keeps its
+ * answer in.
+ *
+ * The overlay when it already exists, or when `local` asks for it; the
+ * committed file otherwise. Existence is the signal because creating the
+ * overlay is a decision — an operator who has one is saying they differ from
+ * the repository, and a `commitlore auto off` that silently created one would
+ * make the tracked file stop being the answer without anyone choosing that.
+ */
+export const setUnattendedCapture = (cwd, enabled, opts = {}) => {
+    const root = repoRoot(cwd);
+    if (root === null) {
+        return { ok: false, path: null, scope: 'repository', error: 'no git repository found here — run this inside a repository' };
+    }
+    const localPath = join(root, POLICY_LOCAL_FILE_NAME);
+    return opts.local === true || existsSync(localPath)
+        ? setInOverlay(cwd, localPath, enabled)
+        : setInCommittedFile(cwd, enabled);
 };
 //# sourceMappingURL=capture-policy.js.map

@@ -551,7 +551,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     // 17 since runtime-identity joined the registry. The count is asserted so
     // a check cannot be dropped without someone noticing; when it moves, it
     // should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(18);
+    expect(report.checks).toHaveLength(19);
   });
 });
 
@@ -1026,6 +1026,7 @@ describe('doctor: report', () => {
       'mcp-lifecycle',
       'mcp-runtime-identity',
       'unattended-initiator',
+      'policy-overlay',
       'pending-backlog',
       'git-trailers',
       'history-depth',
@@ -1075,7 +1076,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(18);
+    expect(parsed.checks).toHaveLength(19);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

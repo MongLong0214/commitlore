@@ -43,6 +43,8 @@ import { closeIndex, indexInfo, openIndex, rebuildIndex, type IndexStats } from 
 import { notesAvailability } from '../core/notes.js';
 import {
   POLICY_FILE_NAME,
+  POLICY_LOCAL_FILE_NAME,
+  capturePolicyLocalPath,
   capturePolicyPath,
   resolvePolicy,
   setUnattendedCapture,
@@ -431,7 +433,16 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
   }
 
   const resolution = resolvePolicy(cwd);
-  if (resolution.path !== null) {
+  // Either file counts as a policy already present (#709). An overlay on its
+  // own resolves with `path` null, and treating that as "no policy" would make
+  // init write the committed file over an answer the operator already gave.
+  if (resolution.path !== null || resolution.localPath !== null) {
+    const present =
+      resolution.localPath === null
+        ? POLICY_FILE_NAME
+        : resolution.path === null
+          ? POLICY_LOCAL_FILE_NAME
+          : `${POLICY_LOCAL_FILE_NAME} over ${POLICY_FILE_NAME}`;
     if (resolution.ok) {
       const { policy } = resolution;
       return {
@@ -439,7 +450,7 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
         title: 'capture policy',
         code: 0,
         lines: [
-          `policy already present: ${POLICY_FILE_NAME} (mode "${policy.mode}", unattended ${policy.unattended ? 'on' : 'off'}) — left unchanged`,
+          `policy already present: ${present} (mode "${policy.mode}", unattended ${policy.unattended ? 'on' : 'off'}) — left unchanged`,
           ...(policy.unattended
             ? [
                 'unattended capture is authorised, not initiated — an agent host must supply the session transcript before commit; ordinary git commits cannot start it',
@@ -453,7 +464,7 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
       step: 'policy',
       title: 'capture policy',
       code: 1,
-      lines: [`${POLICY_FILE_NAME} present but rejected — left unchanged`, resolution.error ?? 'unknown error'],
+      lines: [`${present} present but rejected — left unchanged`, resolution.error ?? 'unknown error'],
       detail: { state: 'existing-rejected', path, unattended: null, error: resolution.error },
     };
   }
@@ -741,7 +752,11 @@ const resolveUnattendedChoice = async (options: {
   // so the question is not asked. Asking it would invite a yes that does
   // nothing, which reads as consent being taken rather than given.
   const existing = capturePolicyPath(process.cwd());
+  const overlay = capturePolicyLocalPath(process.cwd());
   if (existing !== null && existsSync(existing)) return 'no-answer';
+  // Same reason for the overlay: a policy is already set here, so the prompt
+  // would invite a yes that changes nothing (#709).
+  if (overlay !== null && existsSync(overlay)) return 'no-answer';
   if (options.json !== true && process.stdin.isTTY === true && process.stdout.isTTY === true) {
     process.stdout.write(
       'Unattended capture authorises an agent host to prepare, verify and stage a record without asking.\n' +

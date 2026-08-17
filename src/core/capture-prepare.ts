@@ -11,7 +11,7 @@ import { markCaptureError } from './capture-outcome.js';
 import { execGitOrThrow } from './git.js';
 import { guard, renderGuardMatch, type GuardResult } from './guard.js';
 import { buildHarvestPrompt } from './harvest.js';
-import { POLICY_FILE_NAME, resolvePolicy } from './capture-policy.js';
+import { policySourceLabel, resolvePolicy } from './capture-policy.js';
 import {
   createPending,
   makePreparedPending,
@@ -209,7 +209,7 @@ const prepareValues = (opts: {
   if (policy.policy.mode === 'off') {
     throw markCaptureError(
       new Error(
-        `capture is off for this repository (${POLICY_FILE_NAME}: mode "off") — nothing was prepared`,
+        `capture is off for this repository (${policySourceLabel(policy)}: mode "off") — nothing was prepared`,
       ),
       'rejected',
     );
@@ -227,7 +227,7 @@ const prepareValues = (opts: {
   ) {
     throw markCaptureError(
       new Error(
-        `unattended capture is off for this repository (${POLICY_FILE_NAME}: "unattended": true with mode "auto" opts in) — nothing was prepared`,
+        `unattended capture is off for this repository (${policySourceLabel(policy)}: "unattended": true with mode "auto" opts in) — nothing was prepared`,
       ),
       'rejected',
     );
