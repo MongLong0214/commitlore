@@ -47,6 +47,19 @@ interface Options {
  * runner can fail on, or nothing in this repository can hold it.
  */
 export declare const atomicTemporaryName: (target: string, unique: string) => string;
+export interface ResolvedCommand {
+    readonly path: string;
+    readonly usesCommandInterpreter: boolean;
+}
+/**
+ * Select a concrete executable once so host detection and execution agree.
+ *
+ * Batch files need cmd.exe, but never `shell: true`: that would turn wrapper
+ * and user-configured paths into an unchecked shell command line. The caller
+ * invokes cmd.exe directly with an explicitly quoted argument vector instead.
+ */
+export declare const resolveCommand: (command: string) => ResolvedCommand | null;
+export declare const commandInterpreterArguments: (path: string, args: string[]) => string[] | null;
 /**
  * The Codex plugin layer, which the MCP registration does not cover (#697).
  *

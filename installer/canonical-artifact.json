@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "d2e165b967f9e730b41147ad3e5c3d73ffd88dfb3384b3f46d78882c963f4180"
+    "sha256": "d86ea1c07878c4e020fc783a38836ecaf48c21d241569d685d7ab832d7ed2f61"
   },
   "artifact": {
-    "sha256": "2dcf0c4aeca193839f284c1b4fa5da57db8e29764ee02a36dad40d6768910101",
+    "sha256": "173d5ca2100676300bb5b94f8c600b482a93313b2e4a4e8ed5a1dd4fb95218c4",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -478,15 +478,15 @@
       },
       {
         "path": "dist/commands/installer-hosts.d.ts",
-        "sha256": "ee3484070313df2044a0d374ff282f4439550c0e6322446b1fb08c847b45d553"
+        "sha256": "230f3b8f765216eded5a9d9bec95d9b7a06296c1df25a0ff6504615a1b96c911"
       },
       {
         "path": "dist/commands/installer-hosts.js",
-        "sha256": "a07e894bec618de4f1ff7c6eee82bae66982a759e4e94d845fbf85aefc6dddc1"
+        "sha256": "2b7aa62d8ddb46ac5e4575a8dafcb805557ce6fc04c86f4f864a9677a6e50e11"
       },
       {
         "path": "dist/commands/installer-hosts.js.map",
-        "sha256": "46efba7329560f6a311d4c7778c81ec3354f3dd981c33cd306a4dca7981c3082"
+        "sha256": "82c1f80182d078ecd73d9b3168e092065c6fa8d356c9ef718c4ee1c1f4fe5c6a"
       },
       {
         "path": "dist/commands/mcp.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "50ad329497c15e9ff8cfd3de9a96470688b41930c21c4f0de83119dc502efcfe"
+        "sha256": "eb9fab42d4f193284ad406f9a5e2aa9f4ce244a442e4fe12a535fce5c2099068"
       },
       {
         "path": "dist/core/agent-configs.d.ts",

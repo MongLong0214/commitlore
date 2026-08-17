@@ -24970,7 +24970,7 @@ var register17 = (program3) => {
 
 // src/commands/installer-hosts.ts
 import { existsSync as existsSync22, mkdirSync as mkdirSync11, renameSync as renameSync10, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync17, readFileSync as readFileSync25 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname13, join as join17 } from "node:path";
+import { delimiter as delimiter2, dirname as dirname13, extname, isAbsolute as isAbsolute4, join as join17 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync as spawnSync7 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
@@ -25104,17 +25104,61 @@ args = ["mcp"]
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
 };
-var hasCommand = (command) => (process.env.PATH ?? "").split(delimiter2).some((directory) => {
-  const path2 = join17(directory, command);
+var isWindowsPath = () => process.platform === "win32";
+var pathEntriesFor = (command) => {
+  if (isAbsolute4(command) || command.includes("/") || command.includes("\\")) return [command];
+  return (process.env.PATH ?? "").split(isWindowsPath() ? ";" : delimiter2).map((directory) => join17(directory, command));
+};
+var executableExtensions = (command) => {
+  if (!isWindowsPath() || extname(command) !== "") return [""];
+  const extensions = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  return extensions;
+};
+var isFile2 = (path2) => {
   try {
-    return !statSync10(path2).isDirectory();
+    return statSync10(path2, { throwIfNoEntry: false })?.isFile() === true;
   } catch {
     return false;
   }
-});
+};
+var resolveCommand = (command) => {
+  for (const path2 of pathEntriesFor(command)) {
+    for (const extension of executableExtensions(command)) {
+      const candidate = `${path2}${extension}`;
+      if (isFile2(candidate)) {
+        return { path: candidate, usesCommandInterpreter: isWindowsPath() && /\.(?:cmd|bat)$/i.test(candidate) };
+      }
+    }
+  }
+  return null;
+};
+var hasCommand = (command) => resolveCommand(command) !== null;
+var commandInterpreter = () => {
+  const root = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+  const candidate = join17(root, "System32", "cmd.exe");
+  return isAbsolute4(candidate) && isFile2(candidate) ? candidate : "C:\\Windows\\System32\\cmd.exe";
+};
+var cmdArgument = (value) => /["%\0\r\n]/.test(value) ? null : `"${value}"`;
+var commandInterpreterArguments = (path2, args) => {
+  const tokens = [path2, ...args].map(cmdArgument);
+  if (tokens.some((token) => token === null)) return null;
+  return ["/d", "/v:off", "/s", "/c", `"${tokens.join(" ")}"`];
+};
+var spawnResolved = (command, args, options) => {
+  if (!command.usesCommandInterpreter) return spawnSync7(command.path, args, { ...options, shell: false });
+  const invocation = commandInterpreterArguments(command.path, args);
+  if (invocation === null) return { status: null, error: new Error("batch command contains an unsafe cmd.exe character"), stdout: "", stderr: "" };
+  return spawnSync7(commandInterpreter(), invocation, { ...options, shell: false, windowsVerbatimArguments: true });
+};
 var commandResult = (command, args) => {
-  const result = spawnSync7(command, args, { encoding: "utf8", shell: false });
-  return { ok: result.status === 0 && result.error === void 0, stdout: result.stdout ?? "" };
+  const resolved = resolveCommand(command);
+  if (resolved === null) return { ok: false, stdout: "" };
+  const result = spawnResolved(resolved, args, { encoding: "utf8" });
+  return { ok: result.status === 0 && result.error === void 0, stdout: result.stdout?.toString() ?? "" };
+};
+var commandStatus = (command, args, timeout) => {
+  const resolved = resolveCommand(command);
+  return resolved === null ? null : spawnResolved(resolved, args, { stdio: "ignore", timeout }).status;
 };
 var cliHost = async (host, wrapper) => {
   const existing = commandResult("codex", ["mcp", "get", "commitlore"]);
@@ -25135,7 +25179,7 @@ var cliHost = async (host, wrapper) => {
 };
 var claudePluginHost = () => {
   const host = "claude-code";
-  const run = (args) => spawnSync7("claude", args, { stdio: "ignore", shell: false, timeout: 6e4 }).status;
+  const run = (args) => commandStatus("claude", args, 6e4);
   if (run(["plugin", "marketplace", "add", "MongLong0214/commitlore"]) === null) {
     return { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin marketplace add could not run" };
   }
@@ -25143,8 +25187,7 @@ var claudePluginHost = () => {
   return run(["plugin", "install", "commitlore@commitlore", "--scope", "user"]) === 0 ? { host, requested: true, outcome: "installed", healthy: true, detail: "Claude Code plugin installed from the refreshed marketplace (restart running sessions to load it)" } : { host, requested: true, outcome: "failed", healthy: false, detail: "claude plugin install failed \u2014 run manually: claude plugin marketplace update commitlore && claude plugin install commitlore@commitlore" };
 };
 var codexPluginOutcome = (wrapper) => {
-  const result = spawnSync7(wrapper, ["plugin", "install-codex"], { stdio: "ignore", shell: false, timeout: 6e4 });
-  return result.status === 0 ? { ok: true, detail: "plugin installed" } : { ok: false, detail: "plugin step failed \u2014 run: commitlore plugin install-codex" };
+  return commandStatus(wrapper, ["plugin", "install-codex"], 6e4) === 0 ? { ok: true, detail: "plugin installed" } : { ok: false, detail: "plugin step failed \u2014 run: commitlore plugin install-codex" };
 };
 var codexResultWithPlugin = (mcp, plugin) => {
   if (!mcp.healthy) return mcp;
@@ -25179,8 +25222,8 @@ var inspectAndApplyHosts = async (options) => {
     else notDetected.push(host);
   }
   if (hasCommand("hermes") || existsSync22(join17(home, ".hermes"))) {
-    const result = spawnSync7(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], { stdio: "ignore", shell: false, timeout: 3e4 });
-    requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
+    const status = commandStatus(options.wrapper, ["hermes", "install", "--config", join17(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], 3e4);
+    requested.push(Promise.resolve(status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: "Hermes setup failed" }));
   } else notDetected.push("hermes");
   if (hasCommand("claude")) {
     requested.push(Promise.resolve(claudePluginHost()));
@@ -25199,7 +25242,7 @@ var register18 = (program3) => {
 
 // src/mcp/server.ts
 import { Console } from "node:console";
-import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve21, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute5, relative as relative4, resolve as resolve21, sep as sep5 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var _a;
@@ -34462,7 +34505,7 @@ var isCaptureTool = (name) => [PREPARE_CAPTURE_TOOL, VERIFY_CAPTURE_TOOL, STAGE_
 var resolveRepoPath = (root, raw) => {
   if (raw === "" || raw === ".") return "";
   if (raw.includes("\0")) throw new Error("path contains a NUL byte");
-  if (isAbsolute4(raw)) {
+  if (isAbsolute5(raw)) {
     throw new Error(`path must be relative to the repository root: ${raw}`);
   }
   const resolved = resolve21(root, raw);
