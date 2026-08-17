@@ -15,6 +15,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "mcp-lifecycle",
   "mcp-runtime-identity",
   "unattended-initiator",
+  "policy-overlay",
   "pending-backlog",
   "git-trailers",
   "history-depth",
@@ -45,6 +46,7 @@ ok      directive trust mode — author-string mode: directives need a configure
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
@@ -74,6 +76,7 @@ ok      directive trust mode — author-string mode: directives need a configure
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
@@ -99,6 +102,7 @@ ok      directive trust mode — author-string mode: directives need a configure
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available
@@ -120,6 +124,7 @@ ok      directive trust mode — author-string mode: directives need a configure
 ok      MCP server sessions — every recorded MCP session ended cleanly, or is still running
 ok      live MCP runtime identity — <machine state>
 ok      unattended capture initiator — unattended capture is off; no host initiator is required
+ok      capture policy overlay — no policy file and no .commitlore-policy.local.json — the built-in defaults apply and nothing overrides them
 ok      pending captures — no captures are waiting
 ok      git interpret-trailers — git version <git>
 ok      history depth — full history is available

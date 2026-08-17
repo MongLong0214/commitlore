@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "03c98c399465fd36631538e8e7375b7bbf6fcc82c9659f011b1fd1d75fb0ad11"
+    "sha256": "888977903822c6d7a1e754588d6e6962b651a57458165c7d66cbaeadb462e5be"
   },
   "artifact": {
-    "sha256": "8613363cdee2183e7a6f693b31450d715f3f316ba32a4ed77272b8af9d9c9c0f",
+    "sha256": "d20d47b227b226b1b352fc5c6f9527d9b1653115d54536196948b79fdbfe3a6f",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -34,15 +34,15 @@
       },
       {
         "path": "dist/commands/auto.d.ts",
-        "sha256": "76d139366408c99c8927eb17890e42e0fd2638366c3f9adfe0c7990495fc8f07"
+        "sha256": "3d8abfa763d68440eece1a23379e2053026746b13bcd150b2c09383a0f7c2a88"
       },
       {
         "path": "dist/commands/auto.js",
-        "sha256": "4929a621bd4a2bfcfcf75b54ad37f40d42f76fdcf8c2edcccd75ac74cd0074f0"
+        "sha256": "4f5739fc1e2af4d927f8871dc36887ad6e8e5fb8b34a00ed7db1f6ad207f3013"
       },
       {
         "path": "dist/commands/auto.js.map",
-        "sha256": "761b99a019411113e591dcf36e04ddefbd6f62eece48e3ea6a347d73cfbb66dc"
+        "sha256": "860b2d3c3a9b9e6b5374790b96e38c72e7762cda1ce62294f60444b709637ea8"
       },
       {
         "path": "dist/commands/backfill.d.ts",
@@ -127,6 +127,18 @@
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.js.map",
         "sha256": "bbc0b9a41f73b0f4a4008b2a7127283ad31f1db20d93b79eff005307b9a7bc42"
+      },
+      {
+        "path": "dist/commands/doctor/checks/capture-policy-overlay.d.ts",
+        "sha256": "4cd0fc7f8a647adb0c83bf74e09cd7c5d85a981301ea53ce31aeee70ce948268"
+      },
+      {
+        "path": "dist/commands/doctor/checks/capture-policy-overlay.js",
+        "sha256": "2048943951180bfd3f4a6a829485491f08eaa58009eea5326b18be7ad230f05a"
+      },
+      {
+        "path": "dist/commands/doctor/checks/capture-policy-overlay.js.map",
+        "sha256": "e29c3be4b71e200640283e059ff231803984668da09cfdbe4e7c15b2d1cc345d"
       },
       {
         "path": "dist/commands/doctor/checks/capture-unattended-initiator.d.ts",
@@ -326,11 +338,11 @@
       },
       {
         "path": "dist/commands/doctor/registry.js",
-        "sha256": "751abb3502bc60af243bbc6fa1c579497426cf7eea67d25b5060e255d5ccef42"
+        "sha256": "6151172eecec9cc300dc21720319645ee2ca3107940a3b7b74bf2cb5969d0949"
       },
       {
         "path": "dist/commands/doctor/registry.js.map",
-        "sha256": "4f377626c0ca7e5e479e765f885aa91432f26041e3f49c07ff5cfe771bbe5cba"
+        "sha256": "d607b80ae44ca1e5c4991cc80fc8784adcff460a4662e7736678d80a8bc898a7"
       },
       {
         "path": "dist/commands/doctor/render.d.ts",
@@ -446,11 +458,11 @@
       },
       {
         "path": "dist/commands/init.js",
-        "sha256": "256f9b194a1b60d8b8cf79056468127e909ea7dccb314d04c11318599be3bf19"
+        "sha256": "f315659975039c04f54504984766ca908b6433ac5e11460f91aed1ba4cbe97b9"
       },
       {
         "path": "dist/commands/init.js.map",
-        "sha256": "7cb48133e98b246e2420a8afed064db958e1aa027237009f57ec3f8e77e733a9"
+        "sha256": "2e69f8deaf6a628e414fc00d6251a26e25ad3702c3ff98bea35b4f40ee399545"
       },
       {
         "path": "dist/commands/inject.d.ts",
@@ -586,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "43c21ca3d263f2b64060285292df1295b06fca5ab9e4a8e2d998a75958f2d014"
+        "sha256": "58a5de0282b68cbd1b3496f30180a6b9257260efb5f796022d8812865660af7c"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -650,15 +662,15 @@
       },
       {
         "path": "dist/core/capture-policy.d.ts",
-        "sha256": "ab0fb47878c34f2e8cc93f1cd4a2dbaa36b5f9678f62c9bceef12b3fda12b6ec"
+        "sha256": "c3a09001eb1a9dc775b7c8871d311776b66f733ffa6fd35b9f271887bbc084c3"
       },
       {
         "path": "dist/core/capture-policy.js",
-        "sha256": "252e28865bb71611c1a97c96399272b7fbdd703ae584fd85bec0603629968a79"
+        "sha256": "6a0481b8bb0d7b06bc2a523f01e9119020d729d5c84d3ab9572898873aa1d546"
       },
       {
         "path": "dist/core/capture-policy.js.map",
-        "sha256": "7ff79215b3dc3b6f08fefff102819c0102f9e6bef7411b691bd7d1ea78b673ed"
+        "sha256": "c353528fd803e8361fca5c9210d2ddb56283dd0383ce2d8c72848839d6175a7e"
       },
       {
         "path": "dist/core/capture-prepare.d.ts",
@@ -666,11 +678,11 @@
       },
       {
         "path": "dist/core/capture-prepare.js",
-        "sha256": "c282ac80ef04b11805169fcfe404f1921548051bcfacfc82e5ec158b8ee9c02f"
+        "sha256": "32b8c3fb0f5dff02f6f66098cfc72b19fa1c9df0ac3219e55877fc3f37e917a0"
       },
       {
         "path": "dist/core/capture-prepare.js.map",
-        "sha256": "de446adb66957571b19d99fe7cb81d1ef83c716802fdef9c7c3d486ca4eed4ef"
+        "sha256": "ecea31bd27f8315286d0e6cf35ce123e42d6e04919bbdd745ce5def510aa700a"
       },
       {
         "path": "dist/core/capture-shadow.d.ts",
