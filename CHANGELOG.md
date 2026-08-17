@@ -1,5 +1,55 @@
 # Changelog
 
+Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
+[GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
+were not written here.
+
+## 1.1.0
+
+A machine can now differ from the committed capture policy without modifying
+it. `.commitlore-policy.local.json` sits beside `.commitlore-policy.json` and
+wins **per key**: an overlay setting only `unattended` leaves `mode` and
+`max_records_per_commit` as the repository set them. `commitlore auto on
+--local` and `auto off --local` write it, and once it exists it is the file
+`commitlore auto` writes — so opting in or out never touches the tracked file
+again. Previously the only route was to edit the committed file, which left the
+worktree permanently modified and stopped any release script that refuses a
+dirty tree (#709, ADR-0035).
+
+The policy identity hash is computed over the *effective* policy whenever an
+overlay is present, so a record prepared under one is stamped with the policy
+that produced it. A repository with no overlay keeps exactly the digest it had:
+no capture in flight is refused by this upgrade.
+
+A new `policy-overlay` doctor check names both files, the value beneath, the
+value in the overlay and the one in force. It reports `ok` when they disagree —
+that is the feature working — and warns only when a file cannot be used, since
+then neither file's values are in force and capture runs on the built-in
+defaults.
+
+`doctor` no longer tells a repository whose captures never reached staging that
+a record was "never written to the history". Nothing was dropped there: the
+commit each draft was prepared for either never happened or happened without it
+(#710).
+
+On Windows the installer built every config's temporary file name out of the
+whole target path — `path.split('/').pop()` returns its argument unchanged when
+there is no `/` in it — so the write was `ENOENT` before it began and no host
+was wired. **This does not mean host wiring works on Windows now.** A real
+Windows run of 1.0.2 found a second cause that this release does not fix:
+`hasCommand` never consults `PATHEXT`, so it cannot see `cursor.cmd` or
+`claude.cmd`, and `spawnSync` with `shell: false` cannot execute a `.cmd` shim.
+The installer reports these honestly — `ok:false`, per-host `outcome:"failed"`,
+no config silently changed — but it cannot yet complete the work on that
+platform (#716; the observation is #714).
+
+The installer's host wiring was cut to the code that runs. `install.sh` and
+`install.ps1` have delegated every detection, config write and MCP probe to one
+shared TypeScript command since 0.9.0, and both files still carried the
+superseded shell and PowerShell implementations below an unconditional exit —
+845 lines that no install has executed, and that three readers in three days
+took for live code (#691).
+
 ## 0.8.2
 
 SHA-256 repositories now distinguish a full object id from a revision a user
