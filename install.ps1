@@ -1,8 +1,8 @@
 <#
     Installs commitlore from source on Windows, for any agent that is not Claude Code.
 
-      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1 | iex
-      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
+      irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1 | iex
+      & ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
 
     Claude Code users do not need this script. The repository is itself a plugin
     marketplace (ADR-0011), so two /plugin commands register the MCP server, the

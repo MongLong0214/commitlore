@@ -4,6 +4,44 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.1.2
+
+Upgrading no longer reports a version it did not install.
+
+`install.sh` printed `current -> v1.1.1` and left `<data-root>/current`
+pointing at the previous release. `commitlore init` records the hook's
+interpreter as `<data-root>/current/dist/commitlore.mjs` precisely so hooks
+follow upgrades, so every repository on that machine kept validating commits
+with the old build while the CLI reported the new one.
+
+The rename was the mechanism. When `current` already exists as a symlink to a
+directory, BSD `mv` follows it and moves the source *into* it, returning 0 — so
+the `&&` held and the success line printed while the temporary link sat inside
+the old release directory. A first install creates the link and cannot reach
+this, which is why it shipped in 1.0.2 and survived two releases.
+
+Two changes, and the second is the one that matters. The rename now says it
+means rename — `-h` on BSD, `-T` on GNU, falling back to unlink-and-rename,
+which is not atomic but fails visibly rather than silently keeping the old
+build. And the success line is printed only after reading the link back,
+because every mechanism above can return zero without moving anything, and that
+line is the only thing an operator reads before trusting the upgrade.
+
+If you upgraded to 1.1.0 or 1.1.1 on macOS, check it:
+
+```
+readlink "$(commitlore --help >/dev/null 2>&1; echo ~/.local/share/commitlore)/current"
+```
+
+`commitlore doctor` reports the same split in its own words, and re-running the
+installer at 1.1.2 repairs it.
+
+Windows CI now exercises the host-detection branches that only a comment was
+holding. A GitHub runner has no coding agents, so those branches never ran
+there; a planted `claude.cmd` and `codex.cmd` make them run, and a leftover
+`.claude.json` with no executable is required to stay `notDetected` — the rule
+1.1.1 documented and nothing enforced.
+
 ## 1.1.1
 
 Host wiring works on Windows. 1.1.0 said plainly that it did not; this is the

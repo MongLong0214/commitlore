@@ -83,13 +83,13 @@ Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.sh | sh -s v1.1.1
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
 ```
 
 **Windows** — PowerShell에서 같은 설치를 한다:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.ps1))) v1.1.1
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
 ```
 
 Windows에서 host 배선은 **v1.1.1 이상**이 필요하다. 그 전에는 탐지가 `.cmd` shim을 보지 못하고 설치기가 그것을 실행하지도 못해서, Windows 설치는 CLI만 놓고 아무것도 배선하지 않았다 — 성공이 아니라 `ok: false`로 보고됐다. 1.1.1에서 Codex, Gemini CLI, Hermes에 대해 실기로 확인했다.
@@ -131,11 +131,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.1/install.sh
-sh install.sh v1.1.1
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh
+sh install.sh v1.1.2
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v1.1.1 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.1.2 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
