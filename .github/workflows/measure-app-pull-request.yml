@@ -89,6 +89,16 @@ jobs:
           set -euo pipefail
           head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" --jq .head.sha)"
 
+          # Who actually opened it, recorded before the answer rather than after.
+          # "No checks ran" has two causes that need different fixes -- the pull
+          # request was opened by GITHUB_TOKEN rather than the App (a wiring
+          # mistake), or it was opened by the App and checks still did not run
+          # (which changes ADR-0036's options). Without the actor those two are
+          # the same observation, and telling them apart later means measuring
+          # again.
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" \
+            --jq '"--- opened by: \(.user.login) (type \(.user.type), id \(.user.id))"'
+
           # Checks do not appear instantly. Six minutes is long enough that
           # "none yet" and "none ever" stop being the same observation, which is
           # the whole point of the measurement.
@@ -116,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${COUNT:-0}" = "0" ]; then
-            echo "::error::an App-opened pull request attached NO check runs — ADR-0036's assumption is false and F15 needs a different shape"
+            echo "::error::no check runs attached — read the 'opened by' line above before concluding anything: a Bot-type App actor means ADR-0036's assumption is false, a plain token actor means the credential wiring is wrong and the question is still unanswered"
             exit 1
           fi
           echo "an App-opened pull request attached $COUNT check run(s); ADR-0036's assumption holds so far"
