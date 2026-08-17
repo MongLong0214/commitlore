@@ -632,16 +632,25 @@ jobs:
           Set-Content -LiteralPath (Join-Path $fixtureBin 'cursor.cmd') -Value "@echo off`r`nexit /b 0`r`n"
           $env:PATH = "$fixtureBin;$env:PATH"
 
+          # The exit code is part of what is being tested: `install.ps1` returns
+          # this command's status, so a host that failed has to make it non-zero
+          # or an install reports success over a repository with nothing wired.
+          # It is also why this step ends with an explicit `exit 0` -- GitHub's
+          # pwsh shell exits with the last native command's code, and the second
+          # case deliberately produces a failing one.
           function Enumerate([string] $stateHome) {
             New-Item -ItemType Directory -Force -Path $stateHome | Out-Null
             $raw = (& $shim installer-hosts --wrapper $shim --data-root (Join-Path $stateHome 'data') --home $stateHome --json) -join "`n"
+            $code = $LASTEXITCODE
             Write-Host $raw
-            return ($raw | ConvertFrom-Json)
+            return [pscustomobject]@{ summary = ($raw | ConvertFrom-Json); code = $code }
           }
 
           # 1. A detected host with no config yet: written, then live-verified
           #    through a real MCP initialize against the wrapper.
-          $ok = Enumerate (Join-Path $env:RUNNER_TEMP 'cl-host-ok')
+          $okRun = Enumerate (Join-Path $env:RUNNER_TEMP 'cl-host-ok')
+          $ok = $okRun.summary
+          if ($okRun.code -ne 0) { throw "a wired host exited $($okRun.code), want 0" }
           $cursor = $ok.hosts | Where-Object { $_.host -eq 'cursor' }
           if (-not $cursor) { throw 'cursor was not detected — the planted shim did not reach detection' }
           # A `MCP initialize timed out` here is #729's symptom on a runner, not a
@@ -663,7 +672,9 @@ jobs:
           # -NoNewline so the byte comparison below is against what was written,
           # not against Set-Content's trailing newline.
           Set-Content -LiteralPath (Join-Path $badHome '.cursor\mcp.json') -Value '{ not json' -NoNewline
-          $bad = Enumerate $badHome
+          $badRun = Enumerate $badHome
+          $bad = $badRun.summary
+          if ($badRun.code -eq 0) { throw 'a failed host exited 0 — install.ps1 would report success over nothing wired' }
           $cursorBad = $bad.hosts | Where-Object { $_.host -eq 'cursor' }
           if (-not $cursorBad) { throw 'cursor was not detected in the failing case' }
           if ($cursorBad.outcome -ne 'failed') { throw "a broken config reported $($cursorBad.outcome), want failed" }
@@ -676,6 +687,9 @@ jobs:
           }
 
           Write-Host 'planted host: wired when usable, failed when not, config untouched on failure'
+          # Every assertion above throws under $ErrorActionPreference = 'Stop',
+          # so reaching this line means they all held.
+          exit 0
 
       # The documented piped form, under PowerShell 7. `iex` gives a piped script
       # no arguments, so the version arrives through COMMITLORE_VERSION -- which is
