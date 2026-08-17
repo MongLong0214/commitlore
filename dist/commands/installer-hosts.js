@@ -38,9 +38,26 @@ const commandOf = (format, entry) => {
 const entryFor = (format, wrapper) => format === 'json-mcp'
     ? { type: 'local', command: [wrapper, 'mcp'], enabled: true }
     : { command: wrapper, args: ['mcp'] };
+/**
+ * The name of the temporary sibling an atomic write goes through.
+ *
+ * A name, never a path. This used to be `path.split('/').pop()`, which returns
+ * the *whole string* when there is no `/` in it — so on Windows the temporary
+ * became `…\\.gemini\\.C:\\Users\\u\\.gemini\\settings.json.commitlore-….tmp`.
+ * A drive letter cannot appear inside a filename, so every host that reached
+ * its write failed with ENOENT and nothing was wired: what a real Windows run
+ * of v1.0.2 showed (#716, observed in #714).
+ *
+ * Both separators are stripped here rather than deferring to `basename`.
+ * `basename` is correct on Windows and not provable off it, and CI has no
+ * Windows agent — the `install-ps1` job detects no hosts, so it never reaches
+ * this line. A defect that appears only on Windows has to be one a POSIX
+ * runner can fail on, or nothing in this repository can hold it.
+ */
+export const atomicTemporaryName = (target, unique) => `.${target.split(/[/\\]/).pop() ?? target}.commitlore-${unique}.tmp`;
 const atomicJsonWrite = (path, value) => {
     mkdirSync(dirname(path), { recursive: true });
-    const temporary = join(dirname(path), `.${String(path.split('/').pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+    const temporary = join(dirname(path), atomicTemporaryName(path, `${process.pid}-${randomUUID()}`));
     try {
         writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
         // Fault injection exists solely to prove the promise callers depend on:
@@ -144,7 +161,7 @@ const tomlHost = async (path, wrapper) => {
     const next = `${source}${source === '' || source.endsWith('\n') ? '' : '\n'}[mcp_servers.commitlore]\ncommand = ${escaped}\nargs = ["mcp"]\n`;
     try {
         mkdirSync(dirname(path), { recursive: true });
-        const temporary = join(dirname(path), `.${String(path.split('/').pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+        const temporary = join(dirname(path), atomicTemporaryName(path, `${process.pid}-${randomUUID()}`));
         try {
             writeFileSync(temporary, next, { encoding: 'utf8', mode: 0o600 });
             if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === '1')

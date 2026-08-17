@@ -24993,9 +24993,10 @@ var commandOf = (format, entry) => {
   return { command: entry.command, args: entry.args };
 };
 var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", command: [wrapper, "mcp"], enabled: true } : { command: wrapper, args: ["mcp"] };
+var atomicTemporaryName = (target, unique) => `.${target.split(/[/\\]/).pop() ?? target}.commitlore-${unique}.tmp`;
 var atomicJsonWrite = (path2, value) => {
   mkdirSync11(dirname13(path2), { recursive: true });
-  const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+  const temporary = join17(dirname13(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
   try {
     writeFileSync17(temporary, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", mode: 384 });
@@ -25085,7 +25086,7 @@ args = ["mcp"]
 `;
   try {
     mkdirSync11(dirname13(path2), { recursive: true });
-    const temporary = join17(dirname13(path2), `.${String(path2.split("/").pop())}.commitlore-${process.pid}-${randomUUID()}.tmp`);
+    const temporary = join17(dirname13(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
     try {
       writeFileSync17(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
