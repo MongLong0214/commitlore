@@ -1,0 +1,37 @@
+Limit: Does not change MCP probing or rebuild generated artifacts.
+Ruled-out: shell: true | wrapper and config paths must not become unchecked shell input.
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit; installer tests 24 passed; real Windows installer readback reported a healthy Codex registration.
+Record-Id: r-winexec716
+Provenance: inherited 538e511e596d2e6f7d95f4c5a641f3e5a6717638
+CommitLore-Version: 2.0.0
+
+Limit: this adds no judgement about the Windows behaviour -- it makes the branch buildable, and the live evidence on the pull request is still the only evidence for that path
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: 26 cases pass across the five installer suites; npx tsc --noEmit clean; the merged source carries atomicTemporaryName, the path-leading failure messages and the PATHEXT resolver together; build:canonical then artifact:verify -> 173d5ca2100676300bb5b94f8c600b482a93313b2e4a4e8ed5a1dd4fb95218c4
+Record-Id: r-canon720
+Provenance: inherited 8662d1fdc74458feecb5b6aeeaad7f76ebc9eba8
+CommitLore-Version: 2.0.0
+
+Limit: Does not change executable-only Claude detection or the pre-existing MCP probe shell path; a new canonical dist rebuild is not included from Windows
+Ruled-out: shell: true | wrapper and user paths would become a shell injection surface
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: npx tsc --noEmit clean; cca98cc merged a trailing data root with --verify; current Windows argv and Hermes E2E passed; 44 installer and Hermes cases passed across the current source bundle and source suites; real enumeration reported Hermes installed healthy and preserved the Cursor failure
+Record-Id: r-winargv716
+Provenance: inherited 6a98a708722eb3e8eb8fde0eedeef580630c1245
+CommitLore-Version: 2.0.0
+
+Limit: this rebuilds, it does not judge -- the Windows behaviour still rests on the live evidence recorded on the pull request, and Hermes and the first-run probe timeout are still open on #716
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: build:canonical then artifact:verify -> 14ff61683da747382e03b026db252dd06d4f20820c3ab6f6a75282837458429d; 27 cases pass across the five installer suites, including the POSIX-only case that places a mode-0644 shadow ahead of a mode-0755 CLI and requires the latter
+Record-Id: r-canon720b
+Provenance: inherited 9a44c887849e6a9e81cf802107ba6da79a9b70ba
+CommitLore-Version: 2.0.0
