@@ -4,6 +4,56 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.1.1
+
+Host wiring works on Windows. 1.1.0 said plainly that it did not; this is the
+release that gets to say otherwise, and only for what was actually observed.
+
+Two defects stood between a Windows install and a wired host, and 1.1.0 fixed
+one of them. The other was in how a command was found and run:
+
+- `hasCommand` joined each `PATH` entry with the bare command name and stopped
+  there, never consulting `PATHEXT`. Windows installs `cursor.cmd`, `codex.cmd`,
+  `claude.cmd` — there is no extensionless file — so detection was false for
+  every host whose executable is a shim, and `claude-code` reported
+  `notDetected` with its config sitting on disk.
+- `spawnSync` ran with `shell: false`, which cannot execute a `.cmd` shim at
+  all. That produced `codex mcp add failed`.
+
+Resolution now finds one concrete executable through `PATHEXT` and both
+detection and execution use it, so the two can no longer disagree about what
+"present" means — which is what the original defect was. A batch shim is
+invoked through an explicit `cmd.exe` argument vector with `shell: false`
+preserved: the wrapper path and user config paths reach these calls, and a
+shell would make quoting an attack surface.
+
+Observed on Windows 10.0.19045.0 with agents installed: Codex and Gemini CLI
+wire, verify through a live MCP `Initialize`, and appear in their configs on
+disk. **`ok` is still false on that machine and the hosts that failed are still
+reported failed** — Hermes fails for a cause that is not this one and is not
+yet named (#716), and a `.cursor/mcp.json` that is zero bytes on the tester's
+machine is a user file, not a defect here.
+
+Two quieter repairs came out of reviewing that work. A trailing backslash in a
+path — every Windows directory can carry one — was passed into the `cmd.exe`
+argument vector unescaped, where the closing quote consumes it and the next
+argument is absorbed. A `--verify` swallowed that way would have let a step
+report `verified` for a verification that never ran, which is the failure this
+project exists to remove. And executable resolution now checks `X_OK`: without
+it a non-executable file of the same name earlier on `PATH` would be selected
+and spawned, breaking macOS and Linux, where this works today.
+
+A literal `%` in a path — legal on Windows, and present for any user whose name
+contains one — is handled rather than refused, and the reason `%%` escaping is
+not the answer is recorded in the code beside it.
+
+A failed host also says why. The Hermes step ran with `stdio: 'ignore'`, so
+whatever it printed about its own failure was thrown away and the report was a
+bare `Hermes setup failed` — which is why that cause is still unnamed after a
+real Windows run. The reason now reaches the summary, so the next run on a
+machine with Hermes installed prints it rather than requiring another round
+trip. That is the whole of what is needed to name it (#716).
+
 ## 1.1.0
 
 A machine can now differ from the committed capture policy without modifying
