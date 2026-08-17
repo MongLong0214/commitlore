@@ -47,6 +47,13 @@ A literal `%` in a path — legal on Windows, and present for any user whose nam
 contains one — is handled rather than refused, and the reason `%%` escaping is
 not the answer is recorded in the code beside it.
 
+A failed host also says why. The Hermes step ran with `stdio: 'ignore'`, so
+whatever it printed about its own failure was thrown away and the report was a
+bare `Hermes setup failed` — which is why that cause is still unnamed after a
+real Windows run. The reason now reaches the summary, so the next run on a
+machine with Hermes installed prints it rather than requiring another round
+trip. That is the whole of what is needed to name it (#716).
+
 ## 1.1.0
 
 A machine can now differ from the committed capture policy without modifying
