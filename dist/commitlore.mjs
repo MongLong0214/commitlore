@@ -25023,18 +25023,18 @@ var jsonHost = async (host, path2, format, wrapper) => {
       existed = false;
       config3 = {};
     } else {
-      return { host, requested: true, outcome: "failed", healthy: false, detail: `config is not parseable JSON: ${error2 instanceof Error ? error2.message : String(error2)}` };
+      return { host, requested: true, outcome: "failed", healthy: false, detail: `${path2} is not parseable JSON: ${error2 instanceof Error ? error2.message : String(error2)}` };
     }
   }
   const key = format === "json-mcp" ? "mcp" : "mcpServers";
   if (config3[key] !== void 0 && !isObject3(config3[key])) {
-    return { host, requested: true, outcome: "failed", healthy: false, detail: `${key} is not an object` };
+    return { host, requested: true, outcome: "failed", healthy: false, detail: `${key} in ${path2} is not an object` };
   }
   const group = config3[key] ?? {};
   const entry = group.commitlore;
   if (entry !== void 0) {
     const launch = commandOf(format, entry);
-    if (launch === null) return { host, requested: true, outcome: "failed", healthy: false, detail: "commitlore registration has no runnable command and args" };
+    if (launch === null) return { host, requested: true, outcome: "failed", healthy: false, detail: `the commitlore registration in ${path2} has no runnable command and args` };
     const problem2 = await probeMcp(launch.command, launch.args);
     if (isMcpProbeFailure(problem2)) return { host, requested: true, outcome: "failed", healthy: false, detail: `existing registration is unhealthy: ${problem2.detail}` };
     return { host, requested: true, outcome: ownEntry(format, entry, wrapper) ? "owned" : "custom-preserved", healthy: true, detail: ownEntry(format, entry, wrapper) ? "healthy installer-owned registration" : "healthy custom registration preserved" };
@@ -25043,7 +25043,7 @@ var jsonHost = async (host, path2, format, wrapper) => {
   try {
     atomicJsonWrite(path2, config3);
   } catch (error2) {
-    return { host, requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${error2 instanceof Error ? error2.message : String(error2)}` };
+    return { host, requested: true, outcome: "failed", healthy: false, detail: `${path2} could not be written atomically: ${error2 instanceof Error ? error2.message : String(error2)}` };
   }
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host, requested: true, outcome: "installed", healthy: true, detail: existed ? "registration added and live-verified" : "registration created and live-verified" } : { host, requested: true, outcome: "failed", healthy: false, detail: `registration was written but is unhealthy: ${problem.detail}` };
@@ -25066,13 +25066,13 @@ var tomlHost = async (path2, wrapper) => {
   try {
     source = readFileSync25(path2, "utf8");
   } catch (error2) {
-    if (existsSync22(path2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `could not read config: ${String(error2)}` };
+    if (existsSync22(path2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `${path2} could not be read: ${String(error2)}` };
   }
   let existing;
   try {
     existing = tomlRegistration(source);
   } catch (error2) {
-    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `config is not parseable TOML: ${String(error2)}` };
+    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `${path2} is not parseable TOML: ${String(error2)}` };
   }
   if (existing !== null) {
     const problem2 = await probeMcp(existing.command, existing.args);
@@ -25099,7 +25099,7 @@ args = ["mcp"]
       }
     }
   } catch (error2) {
-    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `atomic config write failed: ${String(error2)}` };
+    return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `${path2} could not be written atomically: ${String(error2)}` };
   }
   const problem = await probeMcp(wrapper, ["mcp"]);
   return !isMcpProbeFailure(problem) ? { host: "codex", requested: true, outcome: "installed", healthy: true, detail: "Codex config fallback added and live-verified" } : { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `Codex registration was written but is unhealthy: ${problem.detail}` };
