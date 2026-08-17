@@ -1,0 +1,123 @@
+﻿name: Measure — does an App-opened pull request run the checks
+
+# T-1502's first step (#719), and it is a measurement rather than a build.
+#
+# ADR-0036 decided that a bot merge opens a pull request instead of pushing,
+# because `main` requires a `lint` context that no push can produce. That
+# decision rests on one thing nobody has measured: **that a pull request opened
+# by an App triggers the checks at all.** If `on: pull_request` does not fire for
+# one, the rebuild pull request is green with nothing having run — #722's empty
+# runner, reintroduced by the design meant to be careful.
+#
+# So this opens a throwaway pull request as the App, reads what GitHub attaches
+# to it, and closes it. It changes nothing and merges nothing. Run it by hand;
+# there is no trigger that can fire it on its own.
+on:
+  workflow_dispatch:
+
+# Only to read what the run produced. Everything the App does is done with the
+# App's own token, which is what is being measured.
+permissions:
+  contents: read
+
+# One at a time: two runs would race on the same branch name and the second
+# would measure the first's leftovers.
+concurrency:
+  group: measure-app-pull-request
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+
+      - name: Mint an installation token
+        id: token
+        env:
+          COMMITLORE_BOT_APP_ID: ${{ secrets.COMMITLORE_BOT_APP_ID }}
+          COMMITLORE_BOT_KEY: ${{ secrets.COMMITLORE_BOT_KEY }}
+        run: |
+          set -euo pipefail
+          token="$(node scripts/app-installation-token.mjs)"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Open a throwaway pull request as the App
+        id: open
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          set -euo pipefail
+          branch="measure/app-pr-${GITHUB_RUN_ID}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+          # A real change, because a pull request with an empty diff is refused
+          # and would measure nothing. It is deleted with the branch.
+          mkdir -p .measurements
+          printf 'Opened by run %s to answer whether an App-opened pull request runs the checks (#719, T-1502).\nDeleted with its branch by the same run.\n' \
+            "$GITHUB_RUN_ID" > .measurements/app-pull-request-probe.md
+
+          git config user.name  'commitlore-canonical-build[bot]'
+          git config user.email '4622872+commitlore-canonical-build[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
+          git add .measurements/app-pull-request-probe.md
+          git commit --quiet -m "$(printf 'Measure whether an App-opened pull request runs the checks\n\nT-1502 (#719). ADR-0036 assumes it does and nobody has measured it. Opened and closed by the same workflow run; the branch and this file go with it.\n\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-measureapppr\nProvenance: authored\nVerified: this commit exists to be looked at, not to be kept\nCommitLore-Version: 2.0.0')"
+
+          git push --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+
+          number="$(gh pr create --base main --head "$branch" \
+            --title 'Measurement: does an App-opened pull request run the checks? (#719)' \
+            --body 'Opened by the `measure-app-pull-request` workflow to answer T-1502'"'"'s first question. It will be closed by the same run. Nothing here is meant to merge.' \
+            | grep -oE '[0-9]+$')"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "opened pull request #$number on $branch"
+
+      - name: Read what GitHub attached to it
+        id: read
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          NUMBER: ${{ steps.open.outputs.number }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" --jq .head.sha)"
+
+          # Checks do not appear instantly. Six minutes is long enough that
+          # "none yet" and "none ever" stop being the same observation, which is
+          # the whole point of the measurement.
+          for attempt in $(seq 1 24); do
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${head}/check-runs" --jq '.check_runs|length')"
+            [ "$count" != "0" ] && break
+            sleep 15
+          done
+
+          echo "--- check runs attached to $head after the wait: $count"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${head}/check-runs" \
+            --jq '.check_runs[]|"  \(.status)\t\(.conclusion // "-")\t\(.name)"' || true
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Close it and take the branch with it
+        if: always() && steps.open.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          gh pr close "${{ steps.open.outputs.number }}" --delete-branch --comment 'Measured and closed. See the run that opened this.' || true
+
+      - name: Report the answer
+        env:
+          COUNT: ${{ steps.read.outputs.count }}
+        run: |
+          set -euo pipefail
+          if [ "${COUNT:-0}" = "0" ]; then
+            echo "::error::an App-opened pull request attached NO check runs — ADR-0036's assumption is false and F15 needs a different shape"
+            exit 1
+          fi
+          echo "an App-opened pull request attached $COUNT check run(s); ADR-0036's assumption holds so far"
+          echo "Read the list above rather than this number: the eleven required contexts are what matter, not the count." >> "$GITHUB_STEP_SUMMARY"
