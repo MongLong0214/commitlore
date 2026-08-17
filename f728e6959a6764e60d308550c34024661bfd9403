@@ -1,0 +1,10 @@
+Limit: only failures name their file; a successful wire still reports no path
+Limit: this makes the cursor question answerable on the next Windows run -- it does not answer it, and the outcome (failed) was never in doubt
+Ruled-out: add a path field to HostResult | the summary schema is pinned at v1 and detail is already the free-text field a human reads
+Blast: module
+Undo: easy
+Certainty: firm
+Verified: reverting the three message changes fails all 3 new cases; 10 cases pass across the three installer-hosts suites; npx tsc --noEmit clean; build:canonical then artifact:verify -> 310a0d2420e1bf4196581913d0fc1752ea8eee25510741c683d61d67897510e6
+Record-Id: r-namefile716
+Provenance: inherited 0f6cd3f08652611e7d439d5988e0adb81072d88a
+CommitLore-Version: 2.0.0
