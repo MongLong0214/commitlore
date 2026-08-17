@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { resolveCommand } from '../src/commands/installer-hosts.js';
+
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = join(ROOT, 'dist', 'commitlore.mjs');
@@ -26,14 +28,14 @@ interface Run {
   summary: { schema: string; runtimeIdentity: { version: string; entrypoint: string; packageRoot: string; indexSchemaVersion: number }; ok: boolean; hosts: Array<{ host: string; outcome: string; healthy: boolean }> };
 }
 
-const wrapper = (root: string, name = 'commitlore'): string => {
+const wrapper = (root: string, name = 'commitlore', mode = 0o755): string => {
   const isWindows = process.platform === 'win32';
   const path = join(root, 'bin', `${name}${isWindows ? '.cmd' : ''}`);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, isWindows
     ? `@echo off\r\n"${process.execPath}" "${ENTRY}" %*\r\n`
     : `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(ENTRY)} "$@"\n`);
-  if (!isWindows) chmodSync(path, 0o755);
+  if (!isWindows) chmodSync(path, mode);
   return path;
 };
 
@@ -150,6 +152,31 @@ describe('installer-hosts accepts only live CommitLore registrations', () => {
     expect(result.status).toBe(0);
     expect(result.summary.hosts).toContainEqual(expect.objectContaining({ host: 'cursor', outcome: 'custom-preserved', healthy: true }));
     expect(readFileSync(config, 'utf8')).toBe(before);
+  });
+});
+
+describe('#716 executable search fixtures', () => {
+  it.runIf(process.platform !== 'win32')('skips a non-executable command shadow earlier on PATH', () => {
+    // Given
+    const shadowRoot = temporary();
+    const executableRoot = temporary();
+    const shadow = wrapper(shadowRoot, 'claude', 0o644);
+    const executable = wrapper(executableRoot, 'claude', 0o755);
+    const previousPath = process.env['PATH'];
+    process.env['PATH'] = `${dirname(shadow)}${delimiter}${dirname(executable)}`;
+
+    // When
+    const resolved = (() => {
+      try {
+        return resolveCommand('claude');
+      } finally {
+        if (previousPath === undefined) delete process.env['PATH'];
+        else process.env['PATH'] = previousPath;
+      }
+    })();
+
+    // Then
+    expect(resolved).toEqual({ path: executable, usesCommandInterpreter: false });
   });
 });
 

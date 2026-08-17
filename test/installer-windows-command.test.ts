@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -56,35 +56,6 @@ describe('#716 Windows command resolution', () => {
 
     // Then
     expect(resolved).toEqual({ path: shim, usesCommandInterpreter: true });
-  });
-
-  it.runIf(process.platform !== 'win32')('skips a non-executable command shadow earlier on PATH', () => {
-    // Given
-    const root = temporary();
-    const shadowBin = join(root, 'shadow');
-    const executableBin = join(root, 'executable');
-    const shadow = join(shadowBin, 'claude');
-    const executable = join(executableBin, 'claude');
-    mkdirSync(shadowBin);
-    mkdirSync(executableBin);
-    writeFileSync(shadow, '#!/bin/sh\nexit 1\n');
-    writeFileSync(executable, '#!/bin/sh\nexit 0\n');
-    chmodSync(shadow, 0o644);
-    chmodSync(executable, 0o755);
-    const previousPath = process.env['PATH'];
-    process.env['PATH'] = `${shadowBin}${delimiter}${executableBin}`;
-
-    // When
-    const resolved = (() => {
-      try {
-        return resolveCommand('claude');
-      } finally {
-        restoreEnvironment('PATH', previousPath);
-      }
-    })();
-
-    // Then
-    expect(resolved).toEqual({ path: executable, usesCommandInterpreter: false });
   });
 
   it('uses the same resolver for a concrete batch wrapper path', () => {
