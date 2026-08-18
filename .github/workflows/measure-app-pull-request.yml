@@ -72,8 +72,14 @@ jobs:
           printf 'Opened by run %s to answer whether an App-opened pull request runs the checks (#719, T-1502).\nDeleted with its branch by the same run.\n' \
             "$GITHUB_RUN_ID" > .measurements/app-pull-request-probe.md
 
+          # The number is the bot *user* id (317873099), not the App id (4622872).
+          # The first run to get this far reported `committer on the server:
+          # unknown` because the App id was used here: GitHub could not match the
+          # address to an account, so the commit was attributed to nobody. That
+          # would have made a successful measurement ambiguous -- ADR-0036 assumes
+          # the App opens the pull request, and attribution is half of that claim.
           git config user.name  'commitlore-canonical-build[bot]'
-          git config user.email '4622872+commitlore-canonical-build[bot]@users.noreply.github.com'
+          git config user.email '317873099+commitlore-canonical-build[bot]@users.noreply.github.com'
           git checkout -b "$branch"
           git add .measurements/app-pull-request-probe.md
           git commit --quiet -m "$(printf 'Measure whether an App-opened pull request runs the checks\n\nT-1502 (#719). ADR-0036 assumes it does and nobody has measured it. Opened and closed by the same workflow run; the branch and this file go with it.\n\nBlast: local\nUndo: easy\nCertainty: firm\nRecord-Id: r-measureapppr\nProvenance: authored\nVerified: this commit exists to be looked at, not to be kept\nCommitLore-Version: 2.0.0')"
@@ -126,12 +132,30 @@ jobs:
             --jq '.check_runs[]|"  \(.status)\t\(.conclusion // "-")\t\(.name)"' || true
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
+      # Keyed on the branch, not on the pull request number, because the push
+      # happens before `gh pr create` and the two runs that failed at create
+      # left `number` empty -- so a cleanup gated on it was skipped and the
+      # branch survived the run that made it. A measurement that litters on its
+      # failure path is one nobody wants to rerun.
       - name: Close it and take the branch with it
-        if: always() && steps.open.outputs.number != ''
+        if: always() && steps.open.outputs.branch != ''
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
+          NUMBER: ${{ steps.open.outputs.number }}
+          BRANCH: ${{ steps.open.outputs.branch }}
         run: |
-          gh pr close "${{ steps.open.outputs.number }}" --delete-branch --comment 'Measured and closed. See the run that opened this.' || true
+          if [ -n "$NUMBER" ]; then
+            gh pr close "$NUMBER" --delete-branch --comment 'Measured and closed. See the run that opened this.' || true
+          fi
+          # The branch may still be there: `gh pr close` was skipped, or it ran
+          # and left the ref. Deleting an absent ref is not an error worth
+          # failing a cleanup step over, so the reference read confirms it.
+          git push --quiet origin --delete "$BRANCH" 2>/dev/null || true
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
+            echo "::warning::$BRANCH survived cleanup — delete it by hand"
+          else
+            echo "--- $BRANCH is gone"
+          fi
 
       - name: Report the answer
         env:
