@@ -853,7 +853,33 @@ export const buildInjection = (opts: InjectOptions): Injection => {
   const active = ablation.noLifecycle
     ? result.records
     : result.records.filter((record) => record.lifecycle === 'active');
-  if (active.length === 0) return empty;
+  // Silence is the right answer when the history was read whole and holds
+  // nothing for this path. It is the wrong one when the scan stopped early:
+  // then "no records here" and "I did not finish looking" arrive as the same
+  // empty payload, and the consumer cannot tell them apart -- the distinction
+  // this tool exists to keep everywhere else.
+  //
+  // Measured in a freshly materialized worktree: 588 commits unread, a payload
+  // of zero bytes, and the caveat on stderr where the model never sees it. A
+  // benchmark arm read that as a hook that had not fired.
+  const silentOrIncomplete = (): Injection =>
+    result.unreadCommits === 0
+      ? empty
+      : {
+          ...empty,
+          text: render({
+            path,
+            kept: [],
+            withheld: [],
+            cut: 0,
+            cutTier: undefined,
+            totalEntries: 0,
+            unreadCommits: result.unreadCommits,
+            ablation,
+          }),
+        };
+
+  if (active.length === 0) return silentOrIncomplete();
 
   // Authorship is an input to grading and to nothing else, so an arm that does
   // not grade does not need the `git show` batch that resolves it.
@@ -897,7 +923,7 @@ export const buildInjection = (opts: InjectOptions): Injection => {
   );
 
   const { entries, withheld, withheldValues } = project(active, grades);
-  if (entries.length === 0 && withheld.length === 0) return empty;
+  if (entries.length === 0 && withheld.length === 0) return silentOrIncomplete();
 
   const totalEntries = entries.length + withheldValues;
   const budgetChars = budgetTokens * CHARS_PER_TOKEN;
