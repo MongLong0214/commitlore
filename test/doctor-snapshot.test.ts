@@ -56,7 +56,19 @@ const runDoctor = (opts: Parameters<typeof runDoctorWithContext>[0] = {}): Retur
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch: string[] = [];
 
+// `inject-runtime` reports whether the Claude Code plugin covers the
+// repository (#781), and it reads that from `HOME`. Left to the ambient one,
+// these pinned reports say one thing on a developer's machine with the plugin
+// installed and another on CI, which is not a pin. Point it at an empty
+// directory: no plugin, the case a fresh reader is being shown.
+const PINNED_HOME = mkdtempSync(join(realpathSync(tmpdir()), 'cl-snap-home-'));
+const AMBIENT_HOME = process.env['HOME'];
+process.env['HOME'] = PINNED_HOME;
+
 afterAll(() => {
+  if (AMBIENT_HOME === undefined) delete process.env['HOME'];
+  else process.env['HOME'] = AMBIENT_HOME;
+  rmSync(PINNED_HOME, { recursive: true, force: true });
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
 });
 

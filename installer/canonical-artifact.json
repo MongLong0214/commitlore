@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "b9b6e4068c88fc9e412b1febc52b0b0844331c100174ec967805d5a5a22cd3d0"
+    "sha256": "5339bda3a55a9feda424c2a148c9b84f8e867a4ec7db41c2cdb59086bfd04371"
   },
   "artifact": {
-    "sha256": "d3f977e3f975f5ad3afe3ac69a5ad614230a9c6e0ba23a3e07a45b4e1488d51e",
+    "sha256": "8d458ff71dff027a8c1e7876ecf05f023a08678d184098a663bb9a7ee0f89084",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -170,11 +170,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-runtime.js",
-        "sha256": "d686f90b452aa5b92f7a2b19c4ed45d9012e7d71f0415b4a2cd63b2986e44d41"
+        "sha256": "0f58afb5a11ca379fac8713505c5078750961d986dde1c5a7a4ba0dfb66d20b2"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-runtime.js.map",
-        "sha256": "3762bd0bc80bb48b97b6ce71a925c363d9e711ac3bbd9c8d4cfe218ab5083f91"
+        "sha256": "5a9f127544d22e9a431a902acbd96e870d9cd1767395057423d2795d5608a61c"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-inject-version.d.ts",
@@ -458,11 +458,11 @@
       },
       {
         "path": "dist/commands/init.js",
-        "sha256": "f315659975039c04f54504984766ca908b6433ac5e11460f91aed1ba4cbe97b9"
+        "sha256": "a5d96f142c97d15a188ad580a04abf5926220f5756bb17f016319ceac21e6b24"
       },
       {
         "path": "dist/commands/init.js.map",
-        "sha256": "2e69f8deaf6a628e414fc00d6251a26e25ad3702c3ff98bea35b4f40ee399545"
+        "sha256": "c0e6c150967e9a796728fc441fca2f033a26f0e6f29dba5271e4fbcd132737ff"
       },
       {
         "path": "dist/commands/inject.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "f9b3c41241e32cd542f5563b989e91899bfa56e583a786e11c584ae1111022c3"
+        "sha256": "48f915e33aec91edbda4b0cce1cf5a4f112aacb79e96865462741287d5ecad57"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1067,6 +1067,18 @@
       {
         "path": "dist/hooks/capture-fail-open.js.map",
         "sha256": "69aa7ef04342cf42d4529cf1e812961439a476c6efcc5e0f172831ebb1109620"
+      },
+      {
+        "path": "dist/hooks/claude-plugin.d.ts",
+        "sha256": "1e8d25f8e1485f209c9eafb0d1cc9c6e4596d81666984d944a6d520f38e02ef7"
+      },
+      {
+        "path": "dist/hooks/claude-plugin.js",
+        "sha256": "f76788ed0c818d28c9672b8246a03ec8d36b599bff26a78ef617eaa8fc3b27a4"
+      },
+      {
+        "path": "dist/hooks/claude-plugin.js.map",
+        "sha256": "b2f36394a2deff14962e11569a2a4bb5d09015658e8953038dd4e5eb8694cdc7"
       },
       {
         "path": "dist/hooks/claude-settings.d.ts",

@@ -29,7 +29,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 <totals> (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node> (commitlore hooks install)
-3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
+3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user (commitlore inject install-claude-hook)
 ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
@@ -39,7 +39,7 @@ ok      notes push — no local mirror yet — nothing to push (git push origin 
 warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/no-such-binary.mjs; commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
-warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
@@ -59,7 +59,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 <totals> (<ms>)
 1. [warn] notes-refspec — origin does not fetch refs<path> so records pushed by others stay invisible here (git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*')
 2. [warn] commit-msg-hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node> (commitlore hooks install)
-3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json (commitlore inject install-claude-hook)
+3. [warn] inject-runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user (commitlore inject install-claude-hook)
 ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
@@ -69,7 +69,7 @@ ok      notes push — no local mirror yet — nothing to push (git push origin 
 warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
-warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
@@ -95,7 +95,7 @@ ok      notes push — no local mirror yet — nothing to push (git push origin 
 warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <tmp>/cl-snap-<tmpdir>/missing.mjs; commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
-warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.
@@ -117,7 +117,7 @@ ok      notes push — no local mirror yet — nothing to push (git push origin 
 warn    commit-msg hook — a commit-msg hook exists at <repo>/.git/hooks/commit-msg but does not invoke commitlore; commitlore.bin: <root><path> commitlore.node: <node>
         fix: commitlore hooks install
 ok      hook runtime — the hook runs and validates without node on PATH
-warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json
+warn    PreToolUse hook runtime — not installed in <repo>/.claude/settings.json, and the Claude Code plugin is not installed for this user
         fix: commitlore inject install-claude-hook
 skipped PreToolUse hook version — no installed hook to compare against <version>
 ok      directive trust mode — author-string mode: directives need a configured author string, which anyone able to write a commit can forge.

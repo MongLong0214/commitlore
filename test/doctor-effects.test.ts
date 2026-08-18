@@ -4,7 +4,7 @@
  * complete synthetic context; none initialises or writes a Git repository.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -118,8 +118,30 @@ describe('doctor check effects', () => {
     expect(git).toHaveBeenCalledOnce();
   });
 
-  it('runs inject-runtime’s absent-settings branch without a repository', () => {
-    expect(checkInjectRuntime(context()).status).toBe('warn');
+  // The absent-settings branch splits on whether the Claude Code plugin covers
+  // this repository (#781), which it reads from the context's `HOME`. Injected
+  // here rather than set on `process.env`: an earlier draft of this test read
+  // the ambient one, passed on a machine with the plugin installed, and failed
+  // under the empty `HOME` that CI actually has.
+  const homeContext = (home: string): DoctorContext => context({ env: { HOME: home } });
+
+  it('warns on absent settings when no plugin covers the repository', () => {
+    const home = mkdtempSync(join(tmpdir(), 'doctor-effects-nohome-'));
+    expect(checkInjectRuntime(homeContext(home)).status).toBe('warn');
+  });
+
+  it('skips on absent settings when the plugin is installed and enabled', () => {
+    const home = mkdtempSync(join(tmpdir(), 'doctor-effects-plugin-'));
+    mkdirSync(join(home, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({ version: 2, plugins: { 'commitlore@commitlore': [{ scope: 'user' }] } }),
+    );
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'commitlore@commitlore': true } }),
+    );
+    expect(checkInjectRuntime(homeContext(home)).status).toBe('skipped');
   });
 
   it('runs inject-version’s no-hook branch without a repository', () => {

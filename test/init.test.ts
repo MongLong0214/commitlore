@@ -355,6 +355,74 @@ describe('commitlore init --agents-md — repository-owned agent guidance', () =
     );
   });
 
+  // Both branches of #781. `init` used to write the Claude PreToolUse hook
+  // unconditionally, while the plugin registers the same hook, so a user who
+  // followed the README to the plugin and then ran `init` had every matched
+  // tool call answered twice.
+  //
+  // `HOME` is injected because the verdict reads it. Left ambient, these two
+  // assert whatever the developer happens to have installed -- the suite
+  // passed identically under both states before these existed, which is what
+  // no coverage looks like from the outside.
+  const withHome = (home: string, run: () => void): void => {
+    const previous = process.env['HOME'];
+    process.env['HOME'] = home;
+    try {
+      run();
+    } finally {
+      if (previous === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previous;
+    }
+  };
+
+  const pluginHome = (label: string, enabled: boolean): string => {
+    const home = tempDir(label);
+    mkdirSync(join(home, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({ version: 2, plugins: { 'commitlore@commitlore': [{ scope: 'user' }] } }),
+    );
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'commitlore@commitlore': enabled } }),
+    );
+    return home;
+  };
+
+  it('writes the Claude hook when no plugin covers the repository', () => {
+    const repo = initRepo('claude-hook-no-plugin');
+    withHome(tempDir('claude-hook-empty-home'), () => {
+      runInit({ cwd: repo });
+      const settings = JSON.parse(readFileSync(claudeSettingsPath(repo), 'utf8')) as {
+        hooks?: { PreToolUse?: unknown[] };
+      };
+      expect(settings.hooks?.PreToolUse ?? []).toHaveLength(1);
+    });
+  });
+
+  it('leaves the Claude hook to the plugin when the plugin is installed and enabled', () => {
+    const repo = initRepo('claude-hook-plugin');
+    withHome(pluginHome('claude-hook-plugin-home', true), () => {
+      const report = runInit({ cwd: repo });
+      expect(existsSync(claudeSettingsPath(repo))).toBe(false);
+      expect(report.steps.find((step) => step.step === 'claude-hook')?.lines.join('\n')).toContain(
+        'not written',
+      );
+    });
+  });
+
+  // Installed but switched off is not covered, and the hook has to be written.
+  // This is the direction the whole predicate is built around: being wrong
+  // toward a duplicate costs a payload somebody reports, being wrong toward
+  // silence costs delivery nobody notices is missing.
+  it('writes the Claude hook when the plugin is installed but disabled', () => {
+    const repo = initRepo('claude-hook-plugin-off');
+    withHome(pluginHome('claude-hook-plugin-off-home', false), () => {
+      runInit({ cwd: repo });
+      expect(existsSync(claudeSettingsPath(repo))).toBe(true);
+    });
+  });
+
   it('keeps an existing AGENTS.md intact and appends one marked CommitLore section', () => {
     const repo = initRepo('agents-existing');
     const path = join(repo, 'AGENTS.md');
