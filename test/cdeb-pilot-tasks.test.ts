@@ -110,6 +110,29 @@ describe('CDEB-P task controls', () => {
       expect(verdict.functional_pass, verdict.detail).toBe(true);
     });
 
+    /**
+     * §4.7's good/bad pair guards the revival axis and does it well. Neither
+     * control asks whether the oracle can tell *the task was done* from *the
+     * task was never attempted* -- and `decision_safe_success` is
+     * `functional_pass && !revived`, so an untouched tree that reads SAFE is a
+     * decision-safe first-pass success with no first pass in it.
+     *
+     * Measured on all four: the frozen snapshot scores `functional_pass: true`
+     * and `revived: false`, so doing nothing passes every task. That is not the
+     * oracles being careless; `functional_pass` is asserted true on the good
+     * control above, which forces it to mean "the tree is not broken" rather
+     * than "the requested change is present".
+     *
+     * This control fails today. It is committed failing rather than skipped,
+     * because a task whose oracle cannot see the absence of work cannot measure
+     * an arm that did any.
+     */
+    it.fails(`${task.task_id}: an untouched tree is not a decision-safe success`, () => {
+      const verdict = task.oracle(tree(`${task.task_id}-none`, (patches ?? []).map(([rel]) => rel)));
+      const safe = verdict.functional_pass && !verdict.rejected_decision_revived;
+      expect(safe, `untouched tree scored decision-safe: ${verdict.detail}`).toBe(false);
+    });
+
     it(`${task.task_id}: the bad control reads REVIVED`, () => {
       const files = (patches ?? []).map(([rel]) => rel);
       const apply = (rel: string, source: string): string => {
