@@ -206,7 +206,7 @@ pull request path. Say so in the commit record.
 
 ---
 
-## T-1504 Close #719, or record why it cannot close (S)
+## T-1504 Close #719, or record why it cannot close (S) — **done**, closed with the tradeoff recorded
 
 **Owns**
 
@@ -246,3 +246,20 @@ and the mechanism does not distinguish the two.
 **Limit.** External contributor experience has not been observed in the field after this
 change. That is adoption evidence, not a correctness gate. A real-world failure reopens
 this issue, or opens a defect issue of its own.
+
+**Met 2026-08-18**, each against the run that shows it:
+
+| criterion | evidence |
+|---|---|
+| a contributor never produces the canonical artifact | #761 carried `src/` and `test/` only |
+| the workflow produces the merge candidate, checked in full | #762, twelve contexts on an App-opened pull request |
+| the artifact matches the source landing with it | `e4e5154`, no local build: `canonical artifact verified: fcd0832f…`, `git diff -- dist/` clean |
+| a mismatched artifact is refused | #763 — hand-edited bundle, `src/` untouched, both `check` jobs red |
+| the source head reaches `main` unaided | #761 recorded merged by reachability; bundle commit authored by the build App |
+| the handoff is checked rather than trusted | `scripts/verify-canonical-handoff.mjs`, with one mutation per rule in `test/verify-canonical-handoff.test.ts` |
+
+The last row was the last to arrive, and it caught a defect in its own first
+version: the inline check required the canonical branch tip to have two parents,
+and a real tip has one — the rebuild commits on top of the merge whenever
+`dist/` changes. Assertions that read the workflow as text passed anyway. That
+is why the rule lives in a script now.
