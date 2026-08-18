@@ -212,7 +212,7 @@ named in the middle column rather than one it assumed.
 | Capability | Provided by | Value |
 |---|---|---|
 | MCP server | `.mcp.json` | `node ./dist/commitlore.mjs mcp` |
-| pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` |
+| pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Read\|Edit\|Write\|MultiEdit\|NotebookEdit` |
 | skills | `skills/` | `commitlore-commits`, `commitlore-codex`, `commitlore-query`, `commitlore-setup` |
 | plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |
 | marketplace | `.claude-plugin/marketplace.json` | `commitlore`, `source: "./"` |

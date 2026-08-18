@@ -403,6 +403,15 @@ timeout된 task         900s = 1.00 × budget
 이 split은 shipping 표면에서 재현되지 않을 수 있다. 0.6은 screen으로 동결된
 채 남고, split의 재측정 여부는 이 변경이 내리지 않는 별도의 결정이다 (§0의 ⚠).
 
+> **2026-08-19 정정 (#775).** 위 두 곳이 shipping matcher를 `Read|Edit|Write`로
+> 적었다. 그날의 사실이었고 지금은 아니다. 두 설치 경로가 서로 다른 matcher를
+> 쓰고 있었고(CLI `Read|Edit|Write`, 플러그인 `Edit|Write|MultiEdit|NotebookEdit`),
+> #775에서 injector가 실제로 처리하는 다섯 개 `Read|Edit|Write|MultiEdit|NotebookEdit`
+> 로 통일했다. **⚠의 논지는 그대로 선다** — 파일럿 표면은 여전히 shipping보다
+> 가볍다(`Read`가 없다). 바뀐 것은 얼마나 가벼운가지 어느 방향인가가 아니다.
+> 앵커는 재유도하지 않는다: 사전등록된 숫자는 측정된 표면에 묶여 있고,
+> 재측정은 이 정정이 내리지 않는 별도의 결정이다.
+
 **세 번째 줄이 이 게이트가 주장할 수 있는 것을 제한한다.** 같은 task·같은 arm의
 두 반복이 ×4.9까지 벌어졌다. 두 번의 probe는 그 꼬리를 잡지 못한다. 따라서 이
 qualification은 **중앙값 근처를 거르는 screen이며, study에서 timeout이 나오지

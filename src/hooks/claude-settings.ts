@@ -26,11 +26,16 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { PATH_TOOL_MATCHER } from '../core/path-tools.js';
+
 /** The hook event that fires before a tool runs (PRD-F4 requirement 2). */
 export const CLAUDE_HOOK_EVENT = 'PreToolUse';
 
-/** The tools that touch a path, and therefore the tools worth injecting for. */
-export const CLAUDE_HOOK_MATCHER = 'Read|Edit|Write';
+/**
+ * The tools that touch a path, and therefore the tools worth injecting for.
+ * Derived, not restated: `core/path-tools.ts` owns the set (#775).
+ */
+export const CLAUDE_HOOK_MATCHER = PATH_TOOL_MATCHER;
 
 /** How our entry is recognised. A shell comment to the runner, identity to us. */
 export const CLAUDE_HOOK_MARKER = '# commitlore-inject-hook';
