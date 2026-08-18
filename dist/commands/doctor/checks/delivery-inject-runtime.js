@@ -7,6 +7,7 @@
 import { resolve } from 'node:path';
 import { runQuery } from '../../../core/query.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_MARKER, claudeSettingsPath, readClaudeHookStatus } from '../../../hooks/claude-settings.js';
+import { pluginDeliveryProof } from '../../../hooks/claude-plugin.js';
 import { check, streamEvidence } from '../model.js';
 /**
  * Turns a completed (or attempted) probe run into this check's verdict.
@@ -112,9 +113,40 @@ export const checkInjectRuntime = (ctx) => {
                 skipReason: 'command_unrecognized',
             });
         }
-        const detail = settings.state === 'absent'
-            ? `not installed in ${settings.settingsPath}`
-            : `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
+        // An absent settings.json entry is not the same fact as absent delivery.
+        // Claude Code also loads the plugin's own `hooks/hooks.json`, and this
+        // process cannot see it: a Bash-invoked command in a plugin-loaded
+        // session receives sixteen `CLAUDE_*` variables and `CLAUDE_PLUGIN_ROOT`
+        // is not among them (#781). So this asks the same question `init` asks,
+        // through the same predicate -- two answers to one question is how the
+        // double install got written in the first place.
+        //
+        // Warning unconditionally told every plugin-only user to run
+        // `install-claude-hook`, which is exactly how one tool call ends up
+        // answered twice. But staying silent for a CLI-only user is the worse
+        // half: nothing else would ever tell them. So the verdict splits on the
+        // predicate, and the fix survives in both branches -- asserted where
+        // delivery really is missing, conditional where it merely cannot be seen.
+        if (settings.state === 'absent') {
+            // Read `HOME` from the context, not the ambient process: this check's
+            // verdict now depends on it, and a pinned report that changes with the
+            // developer's own plugin install is not pinned. `env` is what every
+            // other environment-sensitive line here already uses.
+            const plugin = pluginDeliveryProof(cwd, env['HOME'] ?? '');
+            const shared = {
+                settings_path: settings.settingsPath,
+                settings_state: settings.state,
+                plugin_will_fire: String(plugin.willFire),
+                executable: 'not_run',
+                exit_code: 'not_run',
+                ...streamEvidence('stderr', ''),
+            };
+            const fix = 'commitlore inject install-claude-hook';
+            return plugin.willFire
+                ? check(id, category, title, 'skipped', `not checked: no hook in ${settings.settingsPath}, and ${plugin.reason}`, fix, false, false, { evidence: shared, skipReason: 'hook_not_installed' })
+                : check(id, category, title, 'warn', `not installed in ${settings.settingsPath}, and ${plugin.reason}`, fix, false, undefined, { evidence: shared });
+        }
+        const detail = `${settings.state} in ${settings.settingsPath}${settings.problem === undefined ? '' : `: ${settings.problem}`}`;
         return check(id, category, title, 'warn', detail, 'commitlore inject install-claude-hook', false, undefined, {
             evidence: {
                 settings_path: settings.settingsPath,

@@ -674,12 +674,58 @@ describe('doctor: PreToolUse hook runtime', () => {
   const runtimeCheck = (repo: string) =>
     runDoctor({ cwd: repo }).checks.find((entry) => entry.id === 'inject-runtime');
 
-  it('reports an unwired repository instead of calling it healthy', () => {
-    const check = runtimeCheck(recordedRepo('doctor-inject-unwired'));
+  // The verdict splits on whether the Claude Code plugin will answer for this
+  // repository, because `.claude/settings.json` is only half the delivery
+  // surface (#781). A CLI-only user must still be warned -- nothing else would
+  // ever tell them -- and a plugin user must not be handed the command that
+  // installs a second hook on the same tool call.
+  //
+  // `HOME` is redirected at an empty directory so the predicate reads no
+  // plugin registry: that is the CLI-only user, and the assertion is that they
+  // keep the warning they had before this change.
+  it('still warns a repository with no plugin and no hook', () => {
+    const emptyHome = tempDir('doctor-inject-nohome');
+    const previousHome = process.env['HOME'];
+    process.env['HOME'] = emptyHome;
+    try {
+      const check = runtimeCheck(recordedRepo('doctor-inject-unwired'));
 
-    expect(check?.status).toBe('warn');
-    expect(check?.detail).toContain('not installed');
-    expect(check?.fix).toContain('install-claude-hook');
+      expect(check?.status).toBe('warn');
+      expect(check?.detail).toContain('not installed');
+      expect(check?.detail).toContain('not installed for this user');
+      expect(check?.fix).toContain('install-claude-hook');
+    } finally {
+      if (previousHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previousHome;
+    }
+  });
+
+  // The other half: a plugin that is installed and switched on already answers
+  // this tool call, so doctor has nothing to probe and must not ask for a
+  // duplicate. Skipped is not ok -- it does not claim the repository is fine.
+  it('does not diagnose delivery it cannot see when the plugin covers the repository', () => {
+    const pluginHome = tempDir('doctor-inject-plugin-home');
+    mkdirSync(join(pluginHome, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(
+      join(pluginHome, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({ version: 2, plugins: { 'commitlore@commitlore': [{ scope: 'user' }] } }),
+    );
+    writeFileSync(
+      join(pluginHome, '.claude', 'settings.json'),
+      JSON.stringify({ enabledPlugins: { 'commitlore@commitlore': true } }),
+    );
+    const previousHome = process.env['HOME'];
+    process.env['HOME'] = pluginHome;
+    try {
+      const check = runtimeCheck(recordedRepo('doctor-inject-plugin'));
+
+      expect(check?.status).toBe('skipped');
+      expect(check?.status).not.toBe('ok');
+      expect(check?.detail).toContain('installed and enabled');
+    } finally {
+      if (previousHome === undefined) delete process.env['HOME'];
+      else process.env['HOME'] = previousHome;
+    }
   });
 
   it('runs the configured binary command without node on PATH', () => {

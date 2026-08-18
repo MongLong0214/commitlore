@@ -50,6 +50,7 @@ import {
   setUnattendedCapture,
 } from '../core/capture-policy.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
+import { pluginDeliveryProof } from '../hooks/claude-plugin.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 import { installPrePushHook, type PrePushHookResult } from '../hooks/pre-push.js';
@@ -271,6 +272,18 @@ const runTrustStep = (opts: InitOptions): InitStep => {
 };
 
 /**
+ * A `ClaudeHookResult` for the case where the hook was deliberately not
+ * written. Code 0: nothing failed, and the report says what happened rather
+ * than staying quiet about a step it skipped.
+ */
+const skippedClaudeHook = (settingsPath: string, reason: string): ClaudeHookResult => ({
+  code: 0,
+  changed: false,
+  stdout: `PreToolUse injection hook not written to ${settingsPath}: ${reason}\n`,
+  stderr: '',
+});
+
+/**
  * The shared AGENTS.md block is the host-neutral capture initiator.  Keep it
  * beside the existing Claude-specific hook in one integration step: init's
  * compact report is a frozen surface, while both are agent wiring that should
@@ -279,7 +292,20 @@ const runTrustStep = (opts: InitOptions): InitStep => {
 const runAgentIntegrationStep = (opts: InitOptions): InitStep => {
   const cwd = opts.cwd ?? process.cwd();
   const settingsPath = claudeSettingsPath(cwd);
-  const result = installClaudeHook({ settingsPath });
+
+  // Two installers, one tool call. The plugin registers this same hook, and
+  // writing a second one means every matched call is answered twice -- two
+  // payloads and two process starts (#781). Neither installer could see the
+  // other, so this asks Claude Code's own state instead.
+  //
+  // It skips only on an affirmative answer. A registry that will not parse, a
+  // plugin nobody enabled, a shape that changed under us: all of those write
+  // the hook, because being wrong toward a duplicate is a cost somebody
+  // notices and being wrong toward silence is one nobody does.
+  const plugin = pluginDeliveryProof(cwd);
+  const result = plugin.willFire
+    ? skippedClaudeHook(settingsPath, plugin.reason)
+    : installClaudeHook({ settingsPath });
 
   // `AGENTS.md` is a convention, not a requirement, and this step writes into a
   // file the repository owns -- 105 lines into an existing one, or a new file
