@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore は次の編集の前に src/pricing.ts の有効な決定を届け、置き換えられた決定は現在の指針として先へ進まない。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore はリポジトリの意思決定の権威を次の編集へ運ぶ: src/pricing.ts の有効な決定は届き、置き換えられた決定は現在の指針として先へ進まない。">
 </p>
 
 <p align="center">

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore는 다음 편집 전에 src/pricing.ts의 활성 결정을 전달하고, 대체된 결정은 현재 지침으로 넘어가지 않는다.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore는 저장소의 결정 권위를 다음 편집으로 나른다: src/pricing.ts의 활성 결정은 전달되고, 대체된 결정은 현재 지침으로 넘어가지 않는다.">
 </p>
 
 <p align="center">

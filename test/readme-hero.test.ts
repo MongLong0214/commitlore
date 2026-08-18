@@ -52,6 +52,17 @@ describe('the README carries one visual', () => {
 });
 
 describe('the hero claims only what the product does', () => {
+  // The alt has two contracts pulling opposite ways, and they collided once.
+  //
+  // `readme-positioning.test.ts` requires decision-authority framing in the
+  // hero (ADR-0022), and the phrasings it accepts include absolute ones —
+  // "must not revive", "되살려서는 안", "不得复活". The alt used to satisfy it
+  // with exactly that, so removing the absolute claim removed the positioning
+  // with it, in all four languages at once.
+  //
+  // The resolution is the non-absolute alternative each language already
+  // allows: "decision authority", "결정 권위", "意思決定の権威", "决策权威".
+  // An alt rewritten without one of those passes here and fails there.
   // The retired recording ended on "the agent cannot revive it", and the hero's
   // own alt text said the agent "must not revive" a reversed decision. Neither
   // is true: CommitLore does not deliver a superseded record as current
