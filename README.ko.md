@@ -398,7 +398,7 @@ lifecycle(`Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참
 
 ## record 프로토콜
 
-record는 평범한 Git commit trailer 묶음이고, 대개는 작은 것으로 충분합니다:
+record는 평범한 Git commit trailer 묶음이고, 대개는 작은 것으로 충분하다:
 
 ```text
 Fix expired-token refresh
@@ -407,7 +407,7 @@ Ruled-out: Extend token TTL to 24h | security policy violation
 Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-어휘 전체를 쓰는 완전한 예제, 모든 trailer key 표, 그리고 CommitLore 없이 순수 Git으로 읽는 방법은 [docs/protocol.md](docs/protocol.md)에 있습니다. 규범적 정의는 [SPEC §3](spec/SPEC.md)입니다.
+어휘 전체를 쓰는 완전한 예제, 모든 trailer key 표, 그리고 CommitLore 없이 순수 Git으로 읽는 방법은 [docs/protocol.md](docs/protocol.md)에 있다. 규범적 정의는 [SPEC §3](spec/SPEC.md)이다.
 
 ## 저장소가 증명하는 것
 
