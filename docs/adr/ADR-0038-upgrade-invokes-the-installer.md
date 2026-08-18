@@ -24,7 +24,17 @@ Revision 1 of this ADR restored it as `commitlore update --apply`. Two things th
 
 **`commitlore upgrade` performs the upgrade** by invoking `install.sh` / `install.ps1`. `--check` is the read-only form. There is no `--apply`.
 
-**`commitlore init` updates first, then does its work.** This is the highest-value point in the feature and the reason #742 exists: `init` writes `commitlore.bin` pointing through `<data-root>/current`, so the repository validates every commit with whatever `current` resolves to — verified on this machine, where `commitlore.bin` is `…/commitlore/current/dist/commitlore.mjs`. A stale install at `init` time is a repository wired to a stale protocol.
+**`commitlore init` checks, says so loudly, and does not upgrade. `commitlore init --upgrade` upgrades first.**
+
+Revision 1 had `init` upgrade unconditionally, on the Homebrew analogy. **The analogy does not reach here, and three independent things say so:**
+
+- **`brew install` refreshes the index; `brew upgrade` replaces packages.** Installing one formula does not change the runtime of anything already installed. Moving `current` does exactly that — every repository already wired on this machine resolves its hook interpreter through it. That is `brew upgrade --all` wearing `brew install`'s name.
+- **`terraform init` — the closest analogue by name — refuses this explicitly.** Its own documentation: *"Re-running init with modules already installed will install the sources for any modules that were added to configuration since the last init, but will not change any already-installed modules. Use `-upgrade` to override this behavior."* A flag is required to touch what is already pinned.
+- **#746, measured on this machine.** An upgrade moves `current` while `commitlore.root` stays on the old version, and the commit-msg hook's containment check compares them — so today an upgrade *invalidates the recorded path in every already-wired repository*. Auto-upgrading from `init` would break repositories the operator never named.
+
+**Announcement is not scoping.** Revision 1 bounded the blast radius with non-CI, TTY, an opt-out and a spoken line — every one of which limits *when* it fires, not *what it hits*. ADR-0037 rejected the silent background update on precisely that distinction, and accepting it here under a different name would be the same mistake with better manners.
+
+What `init` does instead still fixes what #742 actually named. `init` writes `commitlore.bin` through `<data-root>/current` — verified on this machine — so a stale install at `init` time wires a repository to a stale protocol. `init` now **says that in its own output**, names the pinned version, and prints the command. The repository still gets wired; the operator learns, at the moment it matters, that they wired it to something old. Machine-wide movement stays behind a command somebody asked for.
 
 **Every other command: the passive notice only.** **Hooks: silence** — no notice, no check, no update. A commit is not a package-management moment, and replacing the interpreter while the hook runs is a different act from Homebrew refreshing before an install.
 
@@ -66,7 +76,7 @@ Revision 1 of this ADR restored it as `commitlore update --apply`. Two things th
 
 ## Consequences
 
-**`init` can now change what every repository on the machine validates with.** That is a real blast radius for a repository-scoped command, and it is the cost of this decision rather than an oversight. Three things bound it: it happens only when an update exists, only outside CI and off a pipe, and it says what it did. `COMMITLORE_NO_AUTO_UPDATE` declines it. Homebrew makes the same trade at `brew install`.
+**Nothing changes the machine unless somebody typed a command that says so.** `upgrade` and `init --upgrade` are the only two, and both are the operator naming the blast radius. Revision 1 accepted that radius for a bare `init` on an analogy that did not hold; withdrawing it costs a flag and buys back the property that a repository-scoped command has repository-scoped effects.
 
 **A machine that never runs `init` or `upgrade` still goes stale.** The passive notice is what makes that visible; this ADR does not replace it.
 

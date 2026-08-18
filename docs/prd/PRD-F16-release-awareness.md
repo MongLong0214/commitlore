@@ -122,16 +122,20 @@ commitlore upgrade --json     { current, latest, updateAvailable, command, sourc
 
 So the command is **`commitlore upgrade`**. Dropping `--apply` was right for the reason revision 4 gave badly: a verb should not need a flag to perform its verb. `--check` is the read-only form, and it is the one a script uses.
 
-**`commitlore init` updates first, then does its work** — the highest-value point in the feature. `init` writes `commitlore.bin` pointing through `<data-root>/current`, verified on this machine:
+**`commitlore init` says what it pinned. `commitlore init --upgrade` moves it.** `init` writes `commitlore.bin` pointing through `<data-root>/current`, verified on this machine:
 
 ```
 $ git config --local --get commitlore.bin
-/Users/isaac/.local/share/commitlore/current/dist/commitlore.mjs
+<data-root>/current/dist/commitlore.mjs
 ```
 
-So the repository validates every commit with whatever `current` resolves to, and a stale install at `init` time wires a repository to a stale protocol. Updating after that is too late.
+So the repository validates every commit with whatever `current` resolves to, and a stale install at `init` time wires a repository to a stale protocol — #742's opening sentence. `init` therefore reports it where it happens: the pinned version, that a newer one exists, and the command.
 
-**Where the acting tools act is the whole standard.** Homebrew does not auto-update on every `brew` call — it updates on `brew install`, a moment already about package management. The rule is not "auto everywhere"; it is **auto at the moment that is already about installation**, which here is `init` and `upgrade` and nothing else. The opt-out is `COMMITLORE_NO_AUTO_UPDATE`, mirroring `HOMEBREW_NO_AUTO_UPDATE` in name and meaning — the naming convention is itself part of the standard.
+**It reports rather than acts, and the analogy that said otherwise does not reach.** Revisions 4 and 5 had a bare `init` upgrade, on Homebrew. But `brew install` refreshes the *index*; **`brew upgrade`** replaces packages — and moving `current` is the second, because every repository already wired on this machine resolves its interpreter through it. `terraform init`, the closest analogue by name, states it outright: re-running it *"will not change any already-installed modules. Use `-upgrade` to override this behavior."* And #746 makes it concrete today — an upgrade leaves `commitlore.root` on the old version while `current` moves, invalidating the recorded path in every already-wired repository.
+
+**Announcement is not scoping.** The bounds offered for a bare auto-upgrade — non-CI, a TTY, an opt-out, a spoken line — limit *when* it fires, not *what it hits*. ADR-0037 rejected the silent background update on exactly that distinction.
+
+**Where the acting tools act is still the standard, and it is narrower than it looked.** The rule is not "auto everywhere" and not "auto at installation moments" either — it is **the operator names the blast radius**. `upgrade` and `init --upgrade` are the only two commands that move `current`. The opt-out is `COMMITLORE_NO_AUTO_UPDATE`, mirroring `HOMEBREW_NO_AUTO_UPDATE` in name and meaning; the naming convention is itself part of the standard.
 
 **Nobody prompts.** A y/n prompt in a CLI either blocks forever or collects a keystroke nobody typed, in scripts, CI, pipes and hooks alike. Every surveyed tool that acts, acts without asking and provides a switch.
 

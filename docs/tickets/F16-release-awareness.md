@@ -220,12 +220,12 @@ That is a half-upgraded machine where `commitlore --version` reports the new bui
 
 ---
 
-## T-1607 `commitlore init` updates first (S)
+## T-1607 `commitlore init` says what it pinned; `--upgrade` moves it (S)
 
 **Owns**
 
-- `src/commands/init.ts` — one call before the existing work
-- `test/init-update.test.ts` (new)
+- `src/commands/init.ts` — a report, and one flag
+- `test/init-upgrade.test.ts` (new)
 
 **Depends on** — T-1606.
 
@@ -233,16 +233,21 @@ That is a half-upgraded machine where `commitlore --version` reports the new bui
 
 ```
 $ git config --local --get commitlore.bin
-/Users/isaac/.local/share/commitlore/current/dist/commitlore.mjs
+<data-root>/current/dist/commitlore.mjs
 ```
 
-The repository then validates every commit with whatever `current` resolves to. Initialising on a stale install wires a repository to a stale protocol, which is #742's opening sentence — and this is the one command that can prevent it rather than report it.
+The repository then validates every commit with whatever `current` resolves to. Initialising on a stale install wires a repository to a stale protocol, which is #742's opening sentence.
+
+**Why it reports rather than acts.** A bare `init` upgrading was the plan for two revisions, on the Homebrew analogy, and the analogy does not reach: `brew install` refreshes the index, `brew upgrade` replaces packages, and moving `current` is the second. `terraform init` — the closest analogue by name — states that re-running it *"will not change any already-installed modules. Use `-upgrade` to override this behavior."* And #746 makes it concrete right now: an upgrade leaves `commitlore.root` on the old version while `current` moves, so it **invalidates the recorded path in every already-wired repository**. A repository-scoped command must not do that to repositories nobody named.
+
+**Announcement is not scoping.** Non-CI, a TTY, an opt-out and a spoken line bound *when* it fires, not *what it hits*. ADR-0037 rejected the silent background update on that exact distinction.
 
 **Acceptance**
 
-- `init` updates before it writes anything, asserted by ordering: a fixture where the update changes `current` must show the recorded `commitlore.bin` resolving to the new build.
-- It updates **only** when an update exists, outside CI, off a pipe, and with no off-switch set. Four named negative cases.
-- **It says what it did**, in one line, before its own output. A command that silently changes what validates commits on the whole machine is the thing this feature exists to prevent, and doing it quietly here would be that failure wearing the fix's clothes.
-- `COMMITLORE_NO_AUTO_UPDATE` makes `init` report and continue, never act, and **still succeed**.
-- **A failed update does not fail `init`.** The repository still gets wired, with the older build and a stated warning. This is the ticket where "nothing in this feature may make a command fail" is most tempting to break and most important to keep.
-- A test asserts `init` is the only command besides `upgrade` that can act. `status`, `query`, `doctor` and every hook subcommand spawn no installer.
+- `init` on a stale install **wires the repository and says so**: the pinned version, that a newer one exists, and the command. One line, in `init`'s own output rather than a trailing notice — a test asserts no double report with T-1604.
+- **`init` never moves `current`.** A test asserts it spawns no installer, including when an update exists and every other gate is open. This is the ticket's whole point and the assertion most likely to be quietly relaxed later.
+- `init --upgrade` upgrades first, then wires, and the recorded `commitlore.bin` resolves to the new build — asserted by ordering, with a fixture where the upgrade changes `current`.
+- **`init --upgrade` still succeeds when the network is unreachable.** It wires with the older build and says so; an operator who cannot reach the network still needs a working repository. This one is unreachability only — see the split below.
+- **`init --upgrade` fails when the installer fails.** A refusal from the remote and a failed install are not "offline", and T-1606 already allows non-zero for an explicit verb. Three named cases so the code cannot collapse them into one `catch`: unreachable → proceed; refused → proceed, and say which; installer failed → non-zero.
+- `COMMITLORE_NO_AUTO_UPDATE` makes `init --upgrade` report and continue without acting, and **still succeed**.
+- A test asserts `upgrade` and `init --upgrade` are the **only** two commands that can spawn an installer. `init` alone, `status`, `query`, `doctor` and every hook subcommand spawn none.
