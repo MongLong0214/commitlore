@@ -282,7 +282,7 @@ file that provides it. The assertion checks this table, not prose:
 | Capability | Provided by | Value |
 |---|---|---|
 | MCP server | `.mcp.json` | `node ${CLAUDE_PLUGIN_ROOT}/dist/commitlore.mjs mcp` |
-| pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` |
+| pre-edit context hook | `hooks/hooks.json` | `PreToolUse` on `Read\|Edit\|Write\|MultiEdit\|NotebookEdit` |
 | skills | `skills/` | `commitlore-commits`, `commitlore-query`, `commitlore-setup` |
 | plugin identity | `.claude-plugin/plugin.json` | `commitlore` at the `package.json` version |
 | marketplace | `.claude-plugin/marketplace.json` | `commitlore`, `source: "./"` |

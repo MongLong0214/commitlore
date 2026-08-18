@@ -22,7 +22,7 @@
 
 **Implementation outline**
 - `commitlore inject --path <p> [--budget <tok>]` — deterministic projection: fold active records → fixed-template summary (grade routing: directive/claim/held, exclude stale) → when over budget, truncate by priority (Warn > Limit > Ruled-out > other).
-- Claude Code integration: `commitlore hooks install --claude` creates a PreToolUse(Read|Edit|Write) hook entry in settings (extract path → call inject, output as additionalContext).
+- Claude Code integration: `commitlore hooks install --claude` creates a PreToolUse(Read|Edit|Write|MultiEdit|NotebookEdit) hook entry in settings (extract path → call inject, output as additionalContext).
 - **Determinism guarantee**: 0 LLM calls, same input → byte-identical output (cache key = HEAD sha + path).
 
 **Test**: identity (diff 0 across 2 runs) / budget-truncation priority / stale and blocked records excluded / hook installation idempotence.

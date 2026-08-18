@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "599bac20f4cd61326709727ae9ecaea83e93738db25b2fddbaa8e2b970928bb7"
+    "sha256": "b9b6e4068c88fc9e412b1febc52b0b0844331c100174ec967805d5a5a22cd3d0"
   },
   "artifact": {
-    "sha256": "84dcf1e41607204b1fa34817ee8a703f4ef5152d0e487575adcf97e84f0d6423",
+    "sha256": "d3f977e3f975f5ad3afe3ac69a5ad614230a9c6e0ba23a3e07a45b4e1488d51e",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -470,11 +470,11 @@
       },
       {
         "path": "dist/commands/inject.js",
-        "sha256": "71e270cf984dd36b3ccda9920ca4f3d4bbdb08baa8a684c01bed9eb9b382166c"
+        "sha256": "b967d40f9f4e2f5cf18e6efd6585d3c5cdfd6d41b6ff33199ee35f04f9867b6b"
       },
       {
         "path": "dist/commands/inject.js.map",
-        "sha256": "905000194442acfed740a6dbf850e0b8bb2de674ec4546e14f15e4b1b7c5588a"
+        "sha256": "4d0fb510d267a1716d746b2a507fef106e06fa10ca3a6645b425b83b11258847"
       },
       {
         "path": "dist/commands/installer-hosts.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "99289d4bd84109fdf4a8fc822e2a0aa585c0f0504f3de22f9b2e5da02128d45b"
+        "sha256": "f9b3c41241e32cd542f5563b989e91899bfa56e583a786e11c584ae1111022c3"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -877,6 +877,18 @@
         "sha256": "78a6c90d417b85eb8edc8a0722201308fb26864e4b5e62beae8c26b048cab283"
       },
       {
+        "path": "dist/core/path-tools.d.ts",
+        "sha256": "65ed5a97fbef1a3c068f30a5eec981f18dfcaefadb394fcc5b57fede05436641"
+      },
+      {
+        "path": "dist/core/path-tools.js",
+        "sha256": "2a89363dc529f02e1b5df9e550887e5c8abfab05c2b24f8c869145046e1650f5"
+      },
+      {
+        "path": "dist/core/path-tools.js.map",
+        "sha256": "1d4c4dfc154c07a7576271c856431fc3becc1df0fc4089210745bf0dbd2f4037"
+      },
+      {
         "path": "dist/core/paths.d.ts",
         "sha256": "9d43e1f675f5ade4ffb71bd8cea2058eab5671428e3969368566b30427a53d0b"
       },
@@ -1058,15 +1070,15 @@
       },
       {
         "path": "dist/hooks/claude-settings.d.ts",
-        "sha256": "ccd8cf4b36ea1fc6615f670bac63b2f2b72a1f6f576b1728fffb71c1f7860736"
+        "sha256": "358a21892af306efb6165b30c558c7e5132b6f639e9da71691443e518c2ee9d7"
       },
       {
         "path": "dist/hooks/claude-settings.js",
-        "sha256": "4e5a26df7be871354a9f7bd573886c3b62c7f9db2aaa221104f9ec9b91c86a34"
+        "sha256": "7cfbbdf5e21989cf84e1dbeaeac031487e42b42c2f15d533c78a431ae7441352"
       },
       {
         "path": "dist/hooks/claude-settings.js.map",
-        "sha256": "d96a0c3c861bf49dbb4f70c44f6313dcc8d6059dd42b63ac08fc2726a0861839"
+        "sha256": "0f44b5f2957c89389ca1570acf346b976df07dcfe78ea85b39d7be461cda215e"
       },
       {
         "path": "dist/hooks/commit-msg.d.ts",

@@ -46,6 +46,13 @@ The plugin registers, with no further steps:
 
 Prerequisites: **Node.js 22+ and Git**. No executable, no SEA, no platform binary.
 
+> **Note (2026-08-19, #775).** The pre-edit hook row records what was present at
+> `69e5208`. The matcher has since changed to `Read|Edit|Write|MultiEdit|NotebookEdit`,
+> unifying the plugin with the CLI installer, which wrote a different set. The row is
+> left as measured; this decision was about plugin-first distribution, not about which
+> tools the hook matches.
+
+
 **2. Everyone else uses a Node-only install script, as the secondary path.**
 
 - macOS and Linux: `install.sh`

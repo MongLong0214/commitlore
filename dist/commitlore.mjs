@@ -17977,8 +17977,14 @@ import { resolve as resolve5 } from "node:path";
 import { randomBytes as randomBytes3 } from "node:crypto";
 import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as readFileSync7, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname3, join as join3 } from "node:path";
+
+// src/core/path-tools.ts
+var PATH_TOOLS = ["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"];
+var PATH_TOOL_MATCHER = PATH_TOOLS.join("|");
+
+// src/hooks/claude-settings.ts
 var CLAUDE_HOOK_EVENT = "PreToolUse";
-var CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
+var CLAUDE_HOOK_MATCHER = PATH_TOOL_MATCHER;
 var CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 var CLAUDE_HOOK_COMMAND = `commitlore inject --hook-input ${CLAUDE_HOOK_MARKER}`;
 var claudeSettingsPath = (cwd) => join3(cwd, ".claude", "settings.json");
@@ -24885,13 +24891,7 @@ var tokenBudget = (raw) => {
 };
 var collect = (value, previous) => [...previous, value];
 var PATH_KEYS = ["file_path", "notebook_path", "path"];
-var PATH_TOOLS = /* @__PURE__ */ new Set([
-  "Read",
-  "Edit",
-  "Write",
-  "MultiEdit",
-  "NotebookEdit"
-]);
+var PATH_TOOL_SET = new Set(PATH_TOOLS);
 var UNSCOPED_PAYLOAD_PATHS = /* @__PURE__ */ new Set(["", ".", "./"]);
 var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -25000,7 +25000,7 @@ var hookResult = (raw, base) => {
     const payload = parsePayload(raw);
     const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? payload.cwd : base.cwd;
     const path2 = payloadPath(payload, cwd);
-    if (typeof payload.tool_name !== "string" || !PATH_TOOLS.has(payload.tool_name)) {
+    if (typeof payload.tool_name !== "string" || !PATH_TOOL_SET.has(payload.tool_name)) {
       const tool = typeof payload.tool_name === "string" ? JSON.stringify(payload.tool_name) : "missing";
       throw new Error(`unexpected tool ${tool}`);
     }
