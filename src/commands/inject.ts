@@ -25,6 +25,7 @@ import type { Command } from 'commander';
 
 import { execGit } from '../core/git.js';
 import { buildInjection, type InjectOptions, type Injection } from '../core/inject.js';
+import { PATH_TOOLS } from '../core/path-tools.js';
 import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
 import {
   configuredSignedDirectivesRequired,
@@ -104,13 +105,7 @@ interface HookPayload {
 /** Keys a path-taking tool uses, in the order they are consulted. */
 const PATH_KEYS = ['file_path', 'notebook_path', 'path'] as const;
 
-const PATH_TOOLS: ReadonlySet<string> = new Set([
-  'Read',
-  'Edit',
-  'Write',
-  'MultiEdit',
-  'NotebookEdit',
-]);
+const PATH_TOOL_SET: ReadonlySet<string> = new Set<string>(PATH_TOOLS);
 
 /** Payload paths that name the repository itself rather than something in it. */
 const UNSCOPED_PAYLOAD_PATHS: ReadonlySet<string> = new Set(['', '.', './']);
@@ -298,7 +293,7 @@ export const hookResult = (
     const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : base.cwd;
     const path = payloadPath(payload, cwd);
 
-    if (typeof payload.tool_name !== 'string' || !PATH_TOOLS.has(payload.tool_name)) {
+    if (typeof payload.tool_name !== 'string' || !PATH_TOOL_SET.has(payload.tool_name)) {
       const tool = typeof payload.tool_name === 'string' ? JSON.stringify(payload.tool_name) : 'missing';
       throw new Error(`unexpected tool ${tool}`);
     }

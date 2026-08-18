@@ -15,7 +15,7 @@ GCC-style session-memory integration (Backlog), embedding search (Backlog).
 
 ## Requirements
 1. `commitlore mcp`: resource `commitlore://context/<path>` + query tool set (stdio).
-2. Injection hook: Claude Code PreToolUse(Read|Edit|Write) → inject a path-scoped deterministic projection. Budget cap (equivalent to 800 tokens by default) + grade routing (ADR-0005) + exclude stale records.
+2. Injection hook: Claude Code PreToolUse(Read|Edit|Write|MultiEdit|NotebookEdit) → inject a path-scoped deterministic projection. Budget cap (equivalent to 800 tokens by default) + grade routing (ADR-0005) + exclude stale records.
 3. Automatic harvest: Stop/pre-commit hook → generate draft trailers from the transcript (use the user's existing agent session, no separate API cost).
 4. Harvest verifier: each trailer requires a transcript/diff evidence citation; discard it if citation verification fails. After ≤ 2 bounded repairs, commit without a record + log.
 5. `commitlore guard`: warn on a deterministic match between proposal text ↔ path Ruled-out records (keyword+Record-Id).

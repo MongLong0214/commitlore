@@ -21,6 +21,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { execGit } from '../core/git.js';
 import { buildInjection } from '../core/inject.js';
+import { PATH_TOOLS } from '../core/path-tools.js';
 import { CONSUMER_SCAN_BUDGET_MS } from '../core/query.js';
 import { configuredSignedDirectivesRequired, configuredTrustedSignerFingerprints, configuredTrustedAuthors, } from '../core/trusted-authors.js';
 import { CLAUDE_HOOK_COMMAND, CLAUDE_HOOK_EVENT, claudeHookStatus, claudeSettingsPath, installClaudeHook, uninstallClaudeHook, } from '../hooks/claude-settings.js';
@@ -56,13 +57,7 @@ const tokenBudget = (raw) => {
 const collect = (value, previous) => [...previous, value];
 /** Keys a path-taking tool uses, in the order they are consulted. */
 const PATH_KEYS = ['file_path', 'notebook_path', 'path'];
-const PATH_TOOLS = new Set([
-    'Read',
-    'Edit',
-    'Write',
-    'MultiEdit',
-    'NotebookEdit',
-]);
+const PATH_TOOL_SET = new Set(PATH_TOOLS);
 /** Payload paths that name the repository itself rather than something in it. */
 const UNSCOPED_PAYLOAD_PATHS = new Set(['', '.', './']);
 const MAX_PAYLOAD_PATH_LENGTH = 4096;
@@ -222,7 +217,7 @@ export const hookResult = (raw, base) => {
         const payload = parsePayload(raw);
         const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : base.cwd;
         const path = payloadPath(payload, cwd);
-        if (typeof payload.tool_name !== 'string' || !PATH_TOOLS.has(payload.tool_name)) {
+        if (typeof payload.tool_name !== 'string' || !PATH_TOOL_SET.has(payload.tool_name)) {
             const tool = typeof payload.tool_name === 'string' ? JSON.stringify(payload.tool_name) : 'missing';
             throw new Error(`unexpected tool ${tool}`);
         }

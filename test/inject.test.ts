@@ -1099,7 +1099,7 @@ describe('claude settings hook', () => {
     expect(result.code).toBe(0);
     expect(result.changed).toBe(true);
     expect(ours(path)).toHaveLength(1);
-    expect(ours(path)[0]?.matcher).toBe('Read|Edit|Write');
+    expect(ours(path)[0]?.matcher).toBe('Read|Edit|Write|MultiEdit|NotebookEdit');
     expect(ours(path)[0]?.hooks?.[0]?.command).toBe(CLAUDE_HOOK_COMMAND);
   });
 
