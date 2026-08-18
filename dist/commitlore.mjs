@@ -12933,6 +12933,16 @@ var openIndex = (opts = {}) => {
 var closeIndex = (handle) => {
   handle.db.close();
 };
+var schemaMismatch = (db) => {
+  try {
+    if (!tableExists(db, "meta")) return "index has no meta table";
+    const version2 = readMeta(db, "schema_version");
+    if (version2 === null) return "index has no schema version";
+    return version2 === String(SCHEMA_VERSION) ? null : `index was built by schema v${version2}, this build expects v${String(SCHEMA_VERSION)}`;
+  } catch {
+    return "index schema could not be read";
+  }
+};
 var resetIndexFile = (handle) => {
   handle.db.close();
   removeDatabaseFile(handle.path);
@@ -13025,6 +13035,8 @@ var requireWritable = (handle) => {
 };
 var rebuildIndex = (handle, opts = {}) => {
   requireWritable(handle);
+  const stale = schemaMismatch(handle.db);
+  if (stale !== null) resetIndexFile(handle);
   const started = Date.now();
   const head = revParse(handle.cwd, "HEAD");
   const shas = head === null ? [] : revList(handle.cwd, "HEAD");
