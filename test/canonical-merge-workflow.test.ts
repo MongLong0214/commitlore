@@ -37,6 +37,44 @@ const lineOf = (needle: string): number => {
 };
 
 describe('T-1502 canonical-merge.yml safety', () => {
+  it('checks the bundle against a merge it recomputes, rather than trusting it', () => {
+    // The rebuild job executes a contributor's `package.json` and every
+    // lifecycle script `npm ci` pulls in. Anything that runs there can add a
+    // commit touching `src/`, `scripts/` or `.github/` before the bundle is
+    // written, and the publishing job would force-push it under the App's
+    // identity for a reviewer to read as a rebuild.
+    //
+    // So the second job recomputes the merge from `main` and the pull request
+    // ref -- neither writable from the first job -- and allows a difference
+    // only inside `dist/` and the manifest.
+    const publishJob = code().slice(code().indexOf('  publish:'));
+    expect(publishJob).toContain('git merge-tree --write-tree');
+    expect(publishJob).toMatch(/git diff --name-only "\$expected" "\$tip"/);
+    expect(publishJob).toContain("':(exclude)dist'");
+    expect(publishJob).toContain("':(exclude)installer/canonical-artifact.json'");
+    // Both parents pinned: a bundle whose branch is not a merge of exactly
+    // those two commits is a different history wearing the same branch name.
+    expect(publishJob).toMatch(/git rev-list --parents -n1 "\$tip"/);
+  });
+
+  it('refuses a pull request that moved while the rebuild ran, not only a moved main', () => {
+    // A force-push between the first job's fetch and the push would leave the
+    // canonical pull request carrying a head nobody reviewed while #N displays
+    // something else.
+    const publishJob = code().slice(code().indexOf('  publish:'));
+    expect(publishJob).toMatch(/pulls\/\$\{PR\}" --jq \.head\.sha/);
+    expect(publishJob).toContain('while this rebuilt -- rerun it');
+    expect(publishJob).toContain('commits/main');
+  });
+
+  it('reads the pushed ref back by sha instead of trusting the push exit code', () => {
+    // `git push` exiting zero says the push was accepted, not that the branch
+    // is still what this run put there.
+    const publishJob = code().slice(code().indexOf('  publish:'));
+    expect(publishJob).toMatch(/git\/ref\/heads\/\$branch" --jq \.object\.sha/);
+    expect(publishJob).toContain('not the $expected this pushed');
+  });
+
   it('opens the canonical pull request with no closing keyword in its body', () => {
     // T-1502's acceptance is that the source pull request ends up *merged*.
     // A closing keyword produces the opposite: GitHub records a pull request
@@ -158,9 +196,18 @@ describe('T-1502 canonical-merge.yml safety', () => {
     // it stood when the job started, and nothing stops another pull request
     // landing in between. Without this the job would open a pull request whose
     // bundle is of a tree that is no longer anybody's.
+    // Anchored on the publishing job's own step. Both jobs check that main
+    // stood still, so a substring that matches either one asserts nothing about
+    // the order of the second -- and renaming the publishing step is exactly
+    // when this assertion needs to notice.
     const body = code();
-    expect(body).toContain('Refuse if main moved');
-    expect(lineOf('Refuse if main moved')).toBeLessThan(lineOf('app-installation-token.mjs'));
+    expect(body).toContain('Refuse if either side moved while the rebuild ran');
+    expect(lineOf('Refuse if either side moved while the rebuild ran')).toBeLessThan(
+      lineOf('app-installation-token.mjs'),
+    );
+    expect(lineOf('The bundle differs from an honest merge only where a rebuild may')).toBeLessThan(
+      lineOf('app-installation-token.mjs'),
+    );
   });
 
   it('replaces its branch rather than updating it', () => {

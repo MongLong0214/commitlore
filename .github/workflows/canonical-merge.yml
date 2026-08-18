@@ -152,6 +152,11 @@ jobs:
           set -euo pipefail
           git bundle create /tmp/canonical.bundle main.."canonical/pr-${{ inputs.pull_request_number }}"
           echo "${{ steps.merge.outputs.base }}" > /tmp/canonical.base
+          # Recorded so the other job can check both parents and the race. It is
+          # written by this job and therefore untrusted -- job two compares it
+          # against what the API reports for the pull request, and the value only
+          # ever narrows what job two will accept.
+          echo "${{ steps.fetch.outputs.head }}" > /tmp/canonical.head
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -159,6 +164,7 @@ jobs:
           path: |
             /tmp/canonical.bundle
             /tmp/canonical.base
+            /tmp/canonical.head
           retention-days: 1
 
   # A second runner that has never executed anything from the pull request.
@@ -197,15 +203,23 @@ jobs:
         run: |
           set -euo pipefail
           base="$(cat /tmp/canonical/canonical.base)"
+          head="$(cat /tmp/canonical/canonical.head)"
           branch="canonical/pr-${{ inputs.pull_request_number }}"
           git fetch --quiet /tmp/canonical/canonical.bundle "$branch:$branch"
           echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "--- took $branch from the bundle, built on $base"
+          echo "--- took $branch from the bundle, built on $base over $head"
 
-      - name: Refuse if main moved while the rebuild ran
+      # Everything below runs before the credential is minted, and every value
+      # it compares against comes from the API or from `main` -- never from the
+      # bundle. The bundle was produced by a runner that executed a contributor's
+      # `package.json`, so it is an input to be checked rather than a result.
+      - name: Refuse if either side moved while the rebuild ran
+        id: settled
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pull_request_number }}
         run: |
           set -euo pipefail
           now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
@@ -213,7 +227,59 @@ jobs:
             echo "::error::main moved from ${{ steps.take.outputs.base }} to $now while this rebuilt -- rerun after it settles"
             exit 1
           fi
-          echo "--- main is still $now"
+          # A force-push to the pull request between job one's fetch and here
+          # would leave the canonical pull request carrying a head nobody
+          # reviewed, while #N displays something else entirely.
+          head_now="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
+          if [ "$head_now" != "${{ steps.take.outputs.head }}" ]; then
+            echo "::error::#${PR} moved from ${{ steps.take.outputs.head }} to $head_now while this rebuilt -- rerun it"
+            exit 1
+          fi
+          base_ref="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .base.ref)"
+          [ "$base_ref" = 'main' ] || { echo "::error::#${PR} now targets $base_ref"; exit 1; }
+          git fetch --quiet origin "pull/${PR}/head:verify-${PR}"
+          if [ "$(git rev-parse "verify-${PR}")" != "${{ steps.take.outputs.head }}" ]; then
+            echo "::error::the pull request ref does not resolve to the recorded head"
+            exit 1
+          fi
+          echo "--- main is still $now and #${PR} is still $head_now"
+
+      # The bundle is checked against a merge this job computes itself, from
+      # `main` and from the pull request ref -- neither of which the rebuild
+      # could write. A tampered bundle can therefore differ from what a merge
+      # would have produced only inside `dist/` and the manifest, which is the
+      # whole of what a rebuild is entitled to change.
+      #
+      # Without this the comment above `publish` is false: it says the job only
+      # moves bytes it verifies, and until now it verified none of them. A
+      # lifecycle script during `npm ci` could have added a commit touching
+      # `src/`, `scripts/` or `.github/`, and this job would have force-pushed
+      # it under the App's identity for a reviewer to see as a rebuild.
+      - name: The bundle differs from an honest merge only where a rebuild may
+        run: |
+          set -euo pipefail
+          branch="${{ steps.take.outputs.branch }}"
+          base="${{ steps.take.outputs.base }}"
+          head="${{ steps.take.outputs.head }}"
+          tip="$(git rev-parse "$branch")"
+
+          parents="$(git rev-list --parents -n1 "$tip" | cut -d' ' -f2-)"
+          [ "$parents" = "$base $head" ] || {
+            echo "::error::$branch is not a merge of $base and $head -- parents are: $parents"
+            exit 1
+          }
+
+          expected="$(git merge-tree --write-tree "$base" "$head")" || {
+            echo "::error::could not recompute the merge of $base and $head here"
+            exit 1
+          }
+          changed="$(git diff --name-only "$expected" "$tip" -- . ':(exclude)dist' ':(exclude)installer/canonical-artifact.json')"
+          if [ -n "$changed" ]; then
+            echo "::error::the rebuild changed paths it is not entitled to change:"
+            echo "$changed" | sed 's/^/    /'
+            exit 1
+          fi
+          echo "--- $branch matches a merge of $base and $head outside dist/ and the manifest"
 
       - name: Mint an installation token
         id: token
@@ -250,8 +316,21 @@ jobs:
           # so an update would conflict on the one file this exists to produce.
           git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
 
-          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$(git rev-parse HEAD)" --jq '.committer.login // "unknown"')"
-          echo "--- pushed $branch; committer on the server: $pusher"
+          # Read back what the ref resolves to on the server, not whether the
+          # push returned zero. A concurrent run of this same workflow, or any
+          # other writer, can land between the push and the pull request being
+          # opened -- and then the pull request describes one commit while the
+          # branch carries another. `git push` exiting zero says the push was
+          # accepted, not that it is still the tip.
+          expected="$(git rev-parse "$branch")"
+          landed="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$branch" --jq .object.sha)"
+          if [ "$landed" != "$expected" ]; then
+            echo "::error::$branch is $landed on the server, not the $expected this pushed -- something else wrote it"
+            exit 1
+          fi
+
+          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$expected" --jq '.committer.login // "unknown"')"
+          echo "--- pushed $branch at $expected; committer on the server: $pusher"
 
           existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
           if [ -n "$existing" ]; then
