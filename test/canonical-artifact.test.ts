@@ -10,7 +10,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const WRITER = 'scripts/write-canonical-artifact-manifest.mjs';
 const VERIFIER = 'scripts/verify-canonical-artifact.mjs';
-const CANONICAL_COMMAND = 'docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w node:24-bookworm sh -c "npm ci && npm run build"';
+// Imported rather than restated. A copy of the command in the test is a second
+// place for the digest to be right in, and the pin exists because the builder
+// is otherwise allowed to drift -- a test carrying a stale copy would be the
+// same drift wearing a passing badge.
+const { CANONICAL_BUILD_COMMAND: CANONICAL_COMMAND, CANONICAL_BUILD_IMAGE } = await import(
+  '../scripts/canonical-artifact-contract.mjs'
+);
 
 let copy = '';
 
@@ -33,6 +39,18 @@ describe('canonical artifact contract', () => {
     expect(manifest.runtimeAssets).toEqual(['dist/commitlore.mjs']);
     expect(manifest.artifact.files.length).toBeGreaterThanOrEqual(250);
     expect(run(VERIFIER).status).toBe(0);
+  });
+
+  it('pins the builder by digest, and the command uses the pinned image', () => {
+    // `node:24-bookworm` is mutable: the same source built on two dates can
+    // pick up a different base image, Node patch or OS package. Building twice
+    // in one job proves the builder is deterministic now and says nothing about
+    // next month, which is the claim the manifest is for.
+    expect(CANONICAL_BUILD_IMAGE).toMatch(/^node:24-bookworm@sha256:[0-9a-f]{64}$/);
+    expect(CANONICAL_COMMAND).toContain(CANONICAL_BUILD_IMAGE);
+    expect(run(WRITER).status).toBe(0);
+    const manifest = JSON.parse(readFileSync(join(copy, 'installer', 'canonical-artifact.json'), 'utf8'));
+    expect(manifest.builder.image).toBe(CANONICAL_BUILD_IMAGE);
   });
 
   it('rejects a non-canonical byte with the exact canonical build command, then passes after restoration', () => {

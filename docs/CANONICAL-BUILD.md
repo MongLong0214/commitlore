@@ -4,7 +4,7 @@
 canonical bytes are produced only on Linux amd64 with Node 24 Bookworm:
 
 ```sh
-docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w node:24-bookworm \
+docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 \
   sh -c "npm ci && npm run build"
 ```
 
