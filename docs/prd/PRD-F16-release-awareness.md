@@ -1,6 +1,6 @@
 # PRD F16 — Knowing a newer release exists (#742)
 
-- ADR: 0037 (the CLI does not reimplement installing), 0011 (distribution is a git clone)
+- ADR: 0037 (no second installer), 0038 (`update` updates, by invoking the installer), 0011 (distribution is a git clone)
 - Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
 - Status: specified — revision 2, after the references below were read rather than recalled
 
@@ -40,7 +40,9 @@ An operator learns that a newer release exists, without being asked to remember 
 
 ## Non-goals
 
-- **Reimplementing the installer.** ADR-0037. `install.sh` is the single implementation and it verifies its own work (#735). A second one in TypeScript duplicates both, or worse, duplicates only the first half. **Invoking it is not reimplementing it** — `commitlore update --apply` is in scope, and ADR-0038 specifies the two-phase call that keeps the installer the only implementation.
+- **Reimplementing the installer.** ADR-0037. The clone, the manifest and tag verification, the host wiring and the move may not exist twice. **Invoking the installer and checking what it did are neither** — ADR-0038 specifies the call and the link check that keep `install.sh` the only implementation.
+- **Prompting.** Not a non-goal because it is hard; a non-goal because no surveyed tool does it and a CLI cannot: in scripts, CI, pipes and hooks a prompt blocks or reads input nobody typed.
+- **Auto-updating on arbitrary commands.** `status` and `query` are not installation moments. That line is where Homebrew's shape ends and unattended fetch-and-execute begins.
 - Telling anyone anything about the machine. The check is a `git ls-remote`; nothing is sent that it does not carry.
 - Working when the network is gone. It degrades to silence, not to an error.
 - Pinning, channels, or beta streams. One stream: the newest `vMAJOR.MINOR.PATCH` tag.
@@ -109,12 +111,25 @@ Revision 1 gave two pieces one table. That was wrong in both directions, and the
 **`commitlore update`** — the operator typed it, so it is not a notification and does not inherit the notification's rules. **`CI`, TTY, and the hook-subcommand rules do not apply**: a nightly job running `commitlore update --check` has `CI` set and no terminal by construction, and under revision 1's shared table it would have returned a silent "unknown" — defeating the one command whose entire purpose is to be scripted. Only the explicit off-switches (`COMMITLORE_NO_UPDATE_CHECK`, `DO_NOT_TRACK`, the config file) apply, because those express a decision rather than a context.
 
 ```
-commitlore update            current, latest, and the exact install command. Exit 0.
-commitlore update --check    the same answer, no prose. Exit 0.
+commitlore update            performs the upgrade, by invoking the installer. ADR-0038.
+commitlore update --check    read-only: current, latest, and the install command. Exit 0.
 commitlore update --json     { current, latest, updateAvailable, command, source, checkedAt }
-commitlore update --apply    invokes the installer for the target tag, then verifies
-                             the move itself. ADR-0038. Never implied, never on a timer.
 ```
+
+**The verb acts, and it does not need a flag to.** `brew update`, `rustup update` and `npm update` all update; revision 3's `--apply` was this repository inventing a convention, which is the thing the survey above exists to prevent. `--check` is the read-only form, and it is the one a script uses.
+
+**`commitlore init` updates first, then does its work** — the highest-value point in the feature. `init` writes `commitlore.bin` pointing through `<data-root>/current`, verified on this machine:
+
+```
+$ git config --local --get commitlore.bin
+/Users/isaac/.local/share/commitlore/current/dist/commitlore.mjs
+```
+
+So the repository validates every commit with whatever `current` resolves to, and a stale install at `init` time wires a repository to a stale protocol. Updating after that is too late.
+
+**Where the acting tools act is the whole standard.** Homebrew does not auto-update on every `brew` call — it updates on `brew install`, a moment already about package management. The rule is not "auto everywhere"; it is **auto at the moment that is already about installation**, which here is `init` and `update` and nothing else. The opt-out is `COMMITLORE_NO_AUTO_UPDATE`, mirroring `HOMEBREW_NO_AUTO_UPDATE` in name and meaning — the naming convention is itself part of the standard.
+
+**Nobody prompts.** A y/n prompt in a CLI either blocks forever or collects a keystroke nobody typed, in scripts, CI, pipes and hooks alike. Every surveyed tool that acts, acts without asking and provides a switch.
 
 **`doctor` is a diagnostic, and it is the third class.** It was in neither table, and the gap is not cosmetic: `doctor` already reports a hook interpreter on a different version from the CLI — that report is what found #735 — so a newer release existing is the same kind of fact it exists to state. Yet the notice's rules silence every `--json` invocation, which means the one structured contract anybody consumes could not carry it, while the notice could not appear there either. **The staleness would be invisible in the output built for programs to read.**
 

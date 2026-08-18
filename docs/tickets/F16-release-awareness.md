@@ -1,11 +1,11 @@
 # F16 tickets — Knowing a newer release exists (#742)
 
 > PRD: [PRD-F16-release-awareness.md](../prd/PRD-F16-release-awareness.md)
-> ADR: [0037](../adr/ADR-0037-the-cli-does-not-replace-itself.md) (no second installer), [0038](../adr/ADR-0038-update-apply-invokes-the-installer.md) (`--apply` invokes the installer)
+> ADR: [0037](../adr/ADR-0037-the-cli-does-not-replace-itself.md) (no second installer), [0038](../adr/ADR-0038-update-invokes-the-installer.md) (`update` updates, by invoking the installer)
 > Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
-> Baseline head: `5433704`. Revision 3 — see PRD-F16 "What the prior art actually does" for what changed and why.
+> Baseline head: `5433704`. Revision 4 — see PRD-F16 "What the prior art actually does" for what changed and why.
 
-**Ordering is strict.** T-1601 → T-1602 → T-1603 → { T-1604, T-1605 } → T-1606. The comparison lands before anything calls the network, the network lands before anything prints, and nothing changes the machine until everything above it is right.
+**Ordering is strict.** T-1601 → T-1602 → T-1603 → { T-1604, T-1605 } → T-1606 → T-1607. The comparison lands before anything calls the network, the network lands before anything prints, and nothing changes the machine until everything above it is right.
 
 **Nothing in this feature may make a command fail.** Every ticket's acceptance includes a case that breaks its own dependency and requires the command to succeed anyway. A release check that can break `commit` is worse than no release check.
 
@@ -51,13 +51,18 @@
 **Owns the off-switches — the ones that express a decision, not a context:**
 
 ```
-COMMITLORE_NO_UPDATE_CHECK set   off
+COMMITLORE_NO_UPDATE_CHECK set   no check at all
+COMMITLORE_NO_AUTO_UPDATE set    the check still runs and still reports; `init` and `update`
+                                 do not act. Named for HOMEBREW_NO_AUTO_UPDATE, and it means
+                                 the same thing -- the naming convention is part of the standard
 DO_NOT_TRACK set                 off        its stated scope names autoupdates, not just analytics
 NO_UPDATE_NOTIFIER set           off        the de-facto convention; honouring it costs one line
 a config-file switch             off        an org can ship a file to a fleet; it cannot guarantee
                                             an env var in every shell (Terraform's disable_checkpoint)
 cache younger than 24h           no request; the cached answer, with its age
 ```
+
+**The two switches are not the same switch**, and a test asserts it: `COMMITLORE_NO_AUTO_UPDATE` must still let the notice and `update --check` report, because an operator who declines automatic action has not asked to stop being told.
 
 **Context-dependent gates (`CI`, TTY, hook subcommand) are NOT here.** They belong to the notice, and T-1604 owns them. A module that applies them is a module `commitlore update --check` cannot use.
 
@@ -77,7 +82,7 @@ cache younger than 24h           no request; the cached answer, with its age
 
 ---
 
-## T-1603 `commitlore update` (S)
+## T-1603 `commitlore update --check` — the read-only form (S)
 
 **Owns**
 
@@ -91,10 +96,11 @@ cache younger than 24h           no request; the cached answer, with its age
 **Behaviour**
 
 ```
-commitlore update            current, latest, and the exact install command. Exit 0.
-commitlore update --check    the same answer without prose. Exit 0.
+commitlore update --check    current, latest, and the install command. Reports only. Exit 0.
 commitlore update --json     { current, latest, updateAvailable, command, source, checkedAt }
 ```
+
+**The acting form is T-1606's**, and it must not be reachable from here: this ticket ships the read-only half first so that the reporting is trustworthy before anything acts on it. A test asserts `--check` and `--json` spawn no installer.
 
 **Acceptance**
 
@@ -165,32 +171,78 @@ the command itself failed         silent      gh's cmd.go:253; they are already 
 
 ---
 
-## T-1606 `commitlore update --apply` (M)
+## T-1606 `commitlore update` performs the upgrade (M)
 
 **Owns**
 
-- `src/commands/update.ts` — the flag and the two-phase call
+- `src/commands/update.ts` — the four-step call
 - `test/update-apply.test.ts` (new)
 
-**Depends on** — T-1603, and [ADR-0038](../adr/ADR-0038-update-apply-invokes-the-installer.md).
+**Depends on** — T-1603, and [ADR-0038](../adr/ADR-0038-update-invokes-the-installer.md).
 
-**Why last.** It is the only part of F16 that changes the machine, and it is worth nothing until the version it targets is resolved correctly by everything above it.
+**Why last.** It is the first part of F16 that changes the machine, and it is worth nothing until the version it targets is resolved correctly by everything above it.
 
-**The shape is ADR-0038's, and it is not negotiable in the implementation:**
+**The shape is ADR-0038's, and step 2's comparison is the part that is easy to get subtly wrong:**
 
 ```
-1  exec  <data-root>/current/install.sh <target-tag>        may be the old installer; its clone is sound
-2  readlink <data-root>/current                             the CLI's own check, not the exit code
-3  if unmoved: exec <data-root>/v<target-tag>/install.sh     the new tree's installer; reuses the checkout
-4  readlink again; if still unmoved, fail loudly            never report success from an exit code
+1  exec  <data-root>/current/install.sh <target-tag>      may be old; its clone is sound
+2  readlink current, compare to <data-root>/v<target>     NOT "did it change" -- "is it right"
+3  if not the target: exec <data-root>/v<target>/install.sh   the new tree's installer
+4  compare again; if still wrong, non-zero + the canonical one-liner (not the local script)
 ```
+
+**The negative control has to reproduce #735, not its outcome**
+
+A fixture that exits 0 without touching `current` traverses none of `ln -sfn` → `mv -h` → `mv -T` → `rm -f && mv -f` → `readlink`, and does not produce the machine #735 actually made. It catches a CLI that trusts an exit code — worth catching, and *not* the claim being defended.
+
+The real state, from reading `install.sh:603-671`: the wrapper is written and renamed at **`install.sh:625`, before** the `current` move at 648. So a #735 machine has
+
+```
+wrapper on PATH      -> the NEW checkout's dist/commitlore.mjs
+<data-root>/current  -> the OLD checkout, unchanged
+inside the old checkout: a stray `current.commitlore-install.<pid>` symlink
+the installer:       exited 0 and printed success
+```
+
+That is a half-upgraded machine where `commitlore --version` reports the new build while every hook resolving through `current` runs the old one. **The fixture must build that**, and a test asserts each of the three artefacts, so a future fixture that drifts back to a plain outcome stub fails visibly.
 
 **Acceptance**
 
-- **A test simulates the #735 installer** — one that exits 0 without moving `current` — and asserts the command does **not** report success, and that phase three runs. This is the whole reason the design has four steps, and without this case the design is decoration. `verify-the-fix-not-just-the-tests`: restore the defect and watch it be caught.
-- After a successful apply, `current` resolves to the target tag, asserted by reading the link rather than by the command's own report.
-- When both phases leave `current` unmoved, the command **fails with a non-zero exit and names the manual command**. This is the one place in F16 where non-zero is correct: the operator asked for something and it did not happen.
-- **No clone, move, or unpack is implemented here.** A test asserts the only processes spawned are the two installer invocations — ADR-0037's core, enforced where it can fail rather than stated in a comment (#723's precedent).
-- `--apply` is never reached without the flag: a test asserts `update`, `update --check`, `update --json` and the passive notice spawn nothing.
-- It refuses to run when the target is not newer than the current version, unless `--force` is passed, so a typo cannot silently downgrade a machine.
-- The Windows path invokes `install.ps1` and the same four steps, with the link check expressed the way that platform allows.
+- With that fixture as the on-disk installer: the command does **not** report success, step 3 runs, and the upgrade completes. `verify-the-fix-not-just-the-tests` — and here the check is stronger than usual, because a stub that passes for the wrong reason is what this ticket was rewritten to prevent.
+- **A wrong-but-successful move is caught.** A fixture that moves `current` to some *other* installed version exits 0 and changes the link; step 2 must still fail it. Revision 1 said "if it did not move", which this fixture satisfies, and the retry would never have fired.
+- After a successful update, `current` resolves to the target tag, asserted by reading the link rather than by the command's own report.
+- When both steps leave `current` wrong, the command exits non-zero and prints **the canonical install one-liner**, not the local `install.sh` — those are the bytes that just failed twice. The failure text names `doctor`, because a link that is right over a checkout that is wrong is beyond what this command can see.
+- **No clone, move, or unpack is implemented here.** A test asserts the only processes spawned are the installer invocations — ADR-0037's narrowed core, enforced where it can fail rather than stated in a comment (#723's precedent).
+- `update --check` and `update --json` spawn no installer, asserted separately. The read-only form must stay read-only.
+- `COMMITLORE_NO_AUTO_UPDATE` stops the action and **not** the report: `update` says what it would have done and exits 0.
+- It refuses to act when the target is not newer, unless `--force` is passed, so a typo cannot silently downgrade a machine.
+- The Windows path invokes `install.ps1` through the same four steps, with the link check expressed the way that platform allows — and it is the platform CI can run that must fail on a regression here (`guard-a-platform-ci-cannot-run`).
+
+---
+
+## T-1607 `commitlore init` updates first (S)
+
+**Owns**
+
+- `src/commands/init.ts` — one call before the existing work
+- `test/init-update.test.ts` (new)
+
+**Depends on** — T-1606.
+
+**Why this is the point of the feature.** `init` writes `commitlore.bin` through `<data-root>/current`, verified on a real machine:
+
+```
+$ git config --local --get commitlore.bin
+/Users/isaac/.local/share/commitlore/current/dist/commitlore.mjs
+```
+
+The repository then validates every commit with whatever `current` resolves to. Initialising on a stale install wires a repository to a stale protocol, which is #742's opening sentence — and this is the one command that can prevent it rather than report it.
+
+**Acceptance**
+
+- `init` updates before it writes anything, asserted by ordering: a fixture where the update changes `current` must show the recorded `commitlore.bin` resolving to the new build.
+- It updates **only** when an update exists, outside CI, off a pipe, and with no off-switch set. Four named negative cases.
+- **It says what it did**, in one line, before its own output. A command that silently changes what validates commits on the whole machine is the thing this feature exists to prevent, and doing it quietly here would be that failure wearing the fix's clothes.
+- `COMMITLORE_NO_AUTO_UPDATE` makes `init` report and continue, never act, and **still succeed**.
+- **A failed update does not fail `init`.** The repository still gets wired, with the older build and a stated warning. This is the ticket where "nothing in this feature may make a command fail" is most tempting to break and most important to keep.
+- A test asserts `init` is the only command besides `update` that can act. `status`, `query`, `doctor` and every hook subcommand spawn no installer.
