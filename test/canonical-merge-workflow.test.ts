@@ -37,6 +37,30 @@ const lineOf = (needle: string): number => {
 };
 
 describe('T-1502 canonical-merge.yml safety', () => {
+  it('opens the canonical pull request with no closing keyword in its body', () => {
+    // T-1502's acceptance is that the source pull request ends up *merged*.
+    // A closing keyword produces the opposite: GitHub records a pull request
+    // closed by keyword as closed, with `mergedAt` null, and there is no API
+    // to convert that afterwards. Reachability is what closes it as merged,
+    // and reachability needs no keyword.
+    //
+    // Measured on #752 during the 1.1.3 release: one integration pull request
+    // body said "GitHub closes #752, #755, #756 ... as merged". The keyword
+    // bound to #752 alone, so that one was recorded closed while the five with
+    // no keyword were recorded merged -- the sentence describing the outcome
+    // is what denied it. This workflow would have reproduced that every run.
+    const body = code();
+    const printf = /--body "\$\(printf '([\s\S]*?)'\s/.exec(body);
+    expect(printf, 'the gh pr create body is not a printf literal any more').not.toBeNull();
+
+    const rendered = (printf as RegExpExecArray)[1].replace(/\\n/g, '\n').replace(/%s/g, '123');
+    const keyword = /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#\d+/i.exec(rendered);
+    expect(
+      keyword,
+      `the generated body carries a closing keyword (${keyword?.[0]}); it would close the source pull request as closed rather than merged`,
+    ).toBeNull();
+  });
+
   it('mints the App token in a job that never ran contributor code', () => {
     // Step order inside one job is not a boundary. `$GITHUB_ENV` and
     // `$GITHUB_PATH` written during `npm ci` persist into every later step of
