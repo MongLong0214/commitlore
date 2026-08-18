@@ -2,7 +2,16 @@
 
 - ADR: 0037 (no second installer), 0038 (`upgrade` upgrades, by invoking the installer), 0011 (distribution is a git clone)
 - Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
-- Status: specified — revision 5. Every claim below was read at its source; the corrections that changed the design are kept in place rather than deleted.
+- Status: **specified, not scheduled.** Revision 6. The design is settled and every
+  claim below was read at its source; what is missing is a reason to build it now rather
+  than a reason it cannot be built. The conditions that would supply one are at the end of
+  this document, and they are countable by hand.
+
+  This is F15's shape, deliberately. Closing #742 as "specified, not shipped" would leave
+  exactly what [ADR-0027](../adr/ADR-0027-entropy-review-is-not-this-product.md) rejected in
+  its own Rejected section — *"A deferral is a promise with no date."* A specification living
+  on `main` is not a date, an owner, or a reopening condition, and a closed issue is not a
+  claim anybody can check.
 
 ## The problem is not "no upgrade command"
 
@@ -172,3 +181,66 @@ So it is neither: staleness becomes **a finding in `doctor`'s own report**, in p
 - [Terraform CLI configuration — `disable_checkpoint`](https://developer.hashicorp.com/terraform/cli/config/config-file)
 - [DO_NOT_TRACK](https://donottrack.sh/)
 - [GitHub REST API rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)
+
+## What would schedule this
+
+Neither condition is instrumented. Nothing counts stale installs and nothing records an
+operator who lost time to one — no workflow, no script, no field. Saying so here rather
+than building a counter, because a counter nobody reads adds a number and changes nothing.
+What follows makes the conditions **countable by hand**, which is weaker than automatic and
+much stronger than a date nobody set.
+
+### Condition 1 — a release goes unnoticed long enough to matter
+
+**What counts.** An operator, on any machine that is not this one, reporting that they were
+running a release at least two behind and did not know. A report names the version they were
+on, the version current at the time, and how they found out.
+
+**What does not count.** This machine. It runs `doctor` constantly and is the worst possible
+sample. #433 is recorded below as the harm that already happened, not as occurrence 1 of this
+condition — that plugin was pinned by a distribution defect rather than by not knowing.
+
+**Where to look.** Issues and the Buzz channel. Record occurrences as comments on
+[#742](https://github.com/MongLong0214/commitlore/issues/742) naming the versions and the date,
+so the count lives where the condition does.
+
+**Count so far: 0.**
+
+### Condition 2 — a stale install enforces an older protocol on somebody else
+
+**What counts.** A repository validating commits with a build at least one release behind,
+where the operator did not choose that and `doctor` had not been run. `commitlore.bin`
+resolves through `<data-root>/current`, so this is the specific failure the opening section
+describes: a repository quietly enforcing an older protocol.
+
+**What does not count.** A stale `commitlore.root` after an upgrade — that is
+[#749](https://github.com/MongLong0214/commitlore/issues/749) and has its own fix, and reading
+it as this condition would fire this one on a defect F16 does not address.
+
+**Count so far: 0.**
+
+### The harm that already happened, and why it is not a condition
+
+[#433](https://github.com/MongLong0214/commitlore/issues/433) is the strongest evidence
+available and it is deliberately not counted. The installed plugin sat pinned at 0.4.0, three
+releases behind — but it was pinned by a distribution defect, not by an operator who did not
+know. F16 addresses the second and would not have helped with the first.
+
+The same sentence that establishes this also explains why the gap is not closed anywhere else.
+[ADR-0032](../adr/ADR-0032-doctor-diagnostic-model.md), the only ADR that names #433, closes
+the door deliberately:
+
+> doctor's own process opens no socket — no HTTP client, **no update lookup** (… we do not
+> ship the lookup at all), no telemetry, on any flag. […] Version skew is checked against
+> *local* executables (inject-version), and **the #433 class of staleness is a distribution
+> defect whose fix lives in distribution** — `installSource` exists so the report can name
+> which channel to update, not so doctor can go ask the internet.
+
+So `doctor` will not learn that a release exists, by decision rather than by omission, and
+**F16 is the distribution that sentence points at.** That does not make F16 due — this release
+does not need it — but it is why nothing else will quietly cover the gap while it waits, and
+it is why the conditions above have to be written down rather than left to be noticed.
+
+Recorded here so a reader does not have to reconstruct why the obvious evidence is absent from
+the counts, and so that citing #433 later as occurrence 1 is visibly wrong rather than merely
+unsupported — the same passage that supports the design refuses it as an occurrence.

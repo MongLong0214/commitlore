@@ -5,6 +5,11 @@
 > Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
 > Baseline head: `5433704`. Revision 4 — see PRD-F16 "What the prior art actually does" for what changed and why.
 
+**Unscheduled.** The PRD is `specified, not scheduled`, and these tickets inherit that:
+none of them is due, and the two countable conditions that would schedule them are at the
+end of [PRD-F16](../prd/PRD-F16-release-awareness.md). Written now because the design was
+settled now, and a design settled and unwritten is one that gets re-derived differently.
+
 **Ordering is strict.** T-1601 → T-1602 → T-1603 → { T-1604, T-1605 } → T-1606 → T-1607. The comparison lands before anything calls the network, the network lands before anything prints, and nothing changes the machine until everything above it is right.
 
 **Nothing in this feature may make a command fail.** Every ticket's acceptance includes a case that breaks its own dependency and requires the command to succeed anyway. A release check that can break `commit` is worse than no release check.
