@@ -16,10 +16,15 @@ name: Canonical merge
 # bypass, and a bypass is not the check passing. Measured 2026-08-18: an
 # App-opened pull request attaches all eleven (run 32082467906).
 #
-# Run by hand. An automatic trigger on pull-request events would make a fork's
-# first push decide when this repository's App token is in an environment
-# building that fork's code, and #723 is the record of why a workflow must not
-# take direction from a pull request head.
+# Run by hand, and the reason changed. It was security: an automatic trigger
+# would let a fork's push decide when this repository's App token sits in an
+# environment building that fork's code. The job split below removed that --
+# the token is never in the job that runs contributor code -- so what is left
+# is cost. Every dispatch is a Docker `npm ci` plus a canonical build, and a
+# trigger on pull-request events would run one per push from anybody.
+#
+# `without a maintainer` in PRD-F15's success line means without a maintainer
+# *rebuilding*, which is what #720 waited on twice. Nobody rebuilds here.
 on:
   workflow_dispatch:
     inputs:
@@ -254,5 +259,5 @@ jobs:
           else
             gh pr create --base main --head "$branch" \
               --title "Canonical merge of #${PR}" \
-              --body "$(printf 'The commit that will land for #%s: `main` plus that source plus a canonical rebuild, built together so all eleven required contexts run on the tree that merges rather than on one that resembles it.\n\n#%s carries source only, which is what a contributor on a host that cannot run a `linux/amd64` Docker build can produce (#720). Nothing was rebuilt by hand.\n\nOpened by `canonical-merge.yml` for #719. Close #%s when this merges.' "$PR" "$PR" "$PR")"
+              --body "$(printf 'The commit that will land for #%s: `main` plus that source plus a canonical rebuild, built together so all eleven required contexts run on the tree that merges rather than on one that resembles it.\n\n#%s carries source only, which is what a contributor on a host that cannot run a `linux/amd64` Docker build can produce (#720). Nothing was rebuilt by hand.\n\n**Merge this with a merge commit, not a squash.** This branch merged #%s with `--no-ff`, so its head commit is an ancestor here: a merge commit lands that commit on `main` and GitHub closes #%s as merged, which is what T-1502 asks for. A squash lands new bytes instead, and #%s stays open with nothing to point at.\n\nOpened by `canonical-merge.yml` for #719.' "$PR" "$PR" "$PR" "$PR" "$PR")"
           fi

@@ -145,6 +145,19 @@ describe('T-1502 canonical-merge.yml safety', () => {
     expect(code()).toMatch(/git push --quiet --force/);
   });
 
+  it('merges the pull request head in, so a merge commit closes it', () => {
+    // T-1502 asks that "a source-only pull request merges". This job does not
+    // merge it -- it opens a second pull request -- so the wording is satisfied
+    // by what lands rather than by what is clicked: the branch merges the
+    // contributor's head with `--no-ff`, so that commit is an ancestor here.
+    // A merge commit lands it on `main` and GitHub closes their pull request as
+    // merged. A squash lands new bytes and leaves it open with nothing to point
+    // at, which is why the instruction is in the body the bot writes.
+    const body = code();
+    expect(body).toMatch(/git merge --no-ff/);
+    expect(body).toMatch(/merge commit, not a squash/);
+  });
+
   it('requests no permission beyond reading', () => {
     expect(code()).toMatch(/permissions:\s*\n\s*contents:\s*read/);
   });
