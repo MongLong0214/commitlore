@@ -10,8 +10,18 @@ The App does not push to `main`; it opens a pull request. `main`'s protection re
 `lint`, which runs only on `pull_request`, so no push can satisfy protection on its merits
 and every push-shaped option needs a bypass. Going through a pull request needs none.
 
-T-1502 onward remain **unscheduled**: the decision answers how a bot merge is verified, not
-whether to build one, and #719's reopening conditions are unchanged.
+**T-1502 and T-1503 are done, and were built rather than deferred (2026-08-18).** They read
+"unscheduled" here because ADR-0036 answered how a bot merge is verified without deciding to
+build one. A contributor still had to run a `linux/amd64` Docker build to open any pull
+request, which is what #720 waited on a maintainer for twice, so they were scheduled.
+
+T-1502 was observed rather than argued: #761 carried source only, `canonical-merge` rebuilt
+it into #762, and `e4e5154` landed with `artifact:verify` and `git diff -- dist/` both clean
+and the bundle commit authored by the build App. The negative control is #763.
+
+**T-1504 remains unscheduled, and not for want of code.** Its last condition is an
+observation about a person -- a non-Linux contributor completing a source change unaided --
+and nothing in this repository can produce one.
 
 **Ordering is strict.** T-1501 → T-1502 → T-1503 → T-1504. Each removes something the next
 depends on not existing.
@@ -65,7 +75,7 @@ run, which is #722's empty runner in a new place.
 
 ---
 
-## T-1502 The rebuild arrives as a pull request (M)
+## T-1502 The rebuild arrives as a pull request (M) — **done**, observed on #761 → #762 → `e4e5154`
 
 **Owns**
 
@@ -142,7 +152,7 @@ doing it here means a failure in this ticket has no fallback.
 
 ---
 
-## T-1503 Stop requiring pull requests to carry the artifact (S)
+## T-1503 Stop requiring pull requests to carry the artifact (S) — **done**, `532c30f4`
 
 **Owns**
 
