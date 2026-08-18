@@ -22399,8 +22399,9 @@ var installPrePushHook = (cwd = process.cwd()) => {
   }
 };
 var oneLine = (detail) => detail.replace(/\s+/g, " ").trim();
+var saidWhy = (detail) => /\bETIMEDOUT\b/.test(detail) ? `the ${PRE_PUSH_NOTES_SYNC_TIMEOUT_MS / 1e3}s this hook waits for the remote ran out` : oneLine(detail);
 var describeSync = (results) => results.filter((result) => result.outcome === "failed" || result.outcome === "diverged").map(
-  (result) => result.outcome === "diverged" ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
+  (result) => result.outcome === "diverged" ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it \u2014 run "commitlore sync" to merge them.` : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`
 );
 var nonInteractiveGitEnv = () => ({
   ...process.env,
@@ -22421,7 +22422,7 @@ var register7 = (program3) => {
 `);
     } catch (error2) {
       process.stderr.write(
-        `commitlore: notes mirror failed: ${oneLine(error2 instanceof Error ? error2.message : String(error2))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.
+        `commitlore: notes mirror failed: ${saidWhy(error2 instanceof Error ? error2.message : String(error2))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.
 `
       );
     }

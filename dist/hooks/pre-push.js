@@ -87,6 +87,24 @@ export const installPrePushHook = (cwd = process.cwd()) => {
 /** A child-process diagnostic must not turn one hook warning into many lines. */
 const oneLine = (detail) => detail.replace(/\s+/g, ' ').trim();
 /**
+ * The transport budget is ours, so its expiry has to be reported as ours.
+ *
+ * `spawnSync` reports a timeout as `spawnSync git ETIMEDOUT`, and that reached
+ * operators unchanged: it names the call that returned and not the thing that
+ * happened, so it reads as git failing rather than as this hook declining to
+ * wait. Measured while pushing a release tag — the line said `ETIMEDOUT` and
+ * the records were fine, needing only `commitlore sync`, which the rest of the
+ * sentence already said. #746 is the same shape in the commit-msg hook: a
+ * message accurate about the mechanism and wrong about the situation costs
+ * more than a vague one, because it sends somebody looking.
+ *
+ * The budget is interpolated rather than written out, so the sentence cannot
+ * drift from `PRE_PUSH_NOTES_SYNC_TIMEOUT_MS`.
+ */
+const saidWhy = (detail) => /\bETIMEDOUT\b/.test(detail)
+    ? `the ${PRE_PUSH_NOTES_SYNC_TIMEOUT_MS / 1000}s this hook waits for the remote ran out`
+    : oneLine(detail);
+/**
  * One fail-open line per unsuccessful remote. Successful sync stays quiet.
  *
  * The line has to answer what the operator will actually ask, which is not
@@ -104,7 +122,7 @@ export const describeSync = (results) => results
     .filter((result) => result.outcome === 'failed' || result.outcome === 'diverged')
     .map((result) => result.outcome === 'diverged'
     ? `commitlore: notes mirror (${result.remote}) diverged: ${oneLine(result.detail)}. The branch was pushed. Your records and the remote's both exist and neither one fast-forwards, so a later push will not settle it — run "commitlore sync" to merge them.`
-    : `commitlore: notes mirror (${result.remote}) failed: ${oneLine(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`);
+    : `commitlore: notes mirror (${result.remote}) failed: ${saidWhy(result.detail)}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.`);
 /**
  * Git itself must not prompt, and the default SSH command refuses interactive
  * authentication. A caller's SSH wrapper is preserved because it may carry
@@ -137,7 +155,7 @@ export const register = (program) => {
             // A push must never fail because the mirror could not be published —
             // and the line must still say where the records ended up, for the same
             // reason `describeSync` does (#632).
-            process.stderr.write(`commitlore: notes mirror failed: ${oneLine(error instanceof Error ? error.message : String(error))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.\n`);
+            process.stderr.write(`commitlore: notes mirror failed: ${saidWhy(error instanceof Error ? error.message : String(error))}. The branch was pushed; the records for these commits are still only local. The next push retries this automatically, or run "commitlore sync" to send them now.\n`);
         }
     });
 };
