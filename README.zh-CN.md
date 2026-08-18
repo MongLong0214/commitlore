@@ -147,7 +147,7 @@ commitlore hooks install
 commitlore doctor
 ```
 
-安装程序无法代劳。它没有办法知道哪些仓库装了钩子，而不触碰仓库的 `.git` 是一项策略而非疏漏。正在运行的会话保留着启动时加载的运行时，因此还需要重启。[完整对照表](docs/COMPATIBILITY.md#after-upgrading-run-doctor-693)
+安装程序无法代劳。它没有办法知道哪些仓库装了钩子，而不触碰仓库的 `.git` 是一项策略而非疏漏。正在运行的会话保留着启动时加载的运行时，因此还需要重启。哪些仓库需要，由 `commitlore doctor` 列出。
 
 ## 看它实际运行
 

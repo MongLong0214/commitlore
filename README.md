@@ -144,7 +144,7 @@ Installed **before v1.0.2**, it names one release directly. Installed
 does not recognise an ordinary upgrade — under the `PATH` git gives a hook it
 refuses the commit. Installed **v1.1.3 or later**, ordinary upgrades are followed
 automatically. The first two need `commitlore hooks install` once, in each
-repository. [Full matrix](docs/COMPATIBILITY.md#after-upgrading-run-doctor-693).
+repository, and `commitlore doctor` names which.
 
 After that:
 
