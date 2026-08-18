@@ -18943,7 +18943,28 @@ var CHAINED_SUFFIX = ".commitlore-chained";
 var HOOK_NAME = "commit-msg";
 var CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
 var HOOK_MODE = 493;
+var containmentRefused = (remedy, code) => [
+  'if [ -n "${commitlore_outside:-}" ]; then',
+  '  if [ -n "${commitlore_unresolved:-}" ]; then',
+  '    echo "commitlore: the recorded install no longer resolves on disk." >&2',
+  '    echo "  commitlore.bin:  $commitlore_outside" >&2',
+  '    echo "  commitlore.root: $commitlore_trusted" >&2',
+  '    echo "  One of those two does not exist, so the trust check could not run" >&2',
+  '    echo "  and nothing was executed. Deleting an old release directory after" >&2',
+  '    echo "  an upgrade does this." >&2',
+  "  else",
+  '    echo "commitlore: commitlore.bin points outside the install this hook trusts." >&2',
+  '    echo "  bin resolves under: $commitlore_outside" >&2',
+  '    echo "  trusted root:       $commitlore_trusted" >&2',
+  '    echo "  Nothing there was run. An upgrade looks like this, and so does a" >&2',
+  '    echo "  repointed commitlore.bin \u2014 this hook cannot tell them apart." >&2',
+  "  fi",
+  `  echo "  ${remedy}" >&2`,
+  `  exit ${code}`,
+  "fi"
+];
 var UNRESOLVED_GATE = [
+  ...containmentRefused("Re-run: <path-to>/commitlore hooks install", "1"),
   "# Passing silently here would report a clean record for a message nothing",
   "# ever read.",
   'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -18951,6 +18972,7 @@ var UNRESOLVED_GATE = [
   "exit 1"
 ];
 var UNRESOLVED_CAPTURE = [
+  ...containmentRefused("Re-run: <path-to>/commitlore init", "0"),
   "# Not the validation gate: nothing was checked and rejected here, the",
   "# checker is absent. Refusing would block a commit over a missing tool.",
   'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -19053,7 +19075,29 @@ var stubText = (unresolved) => [
   '            "$root_dir"|"$root_dir"/*)',
   '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
   "              ;;",
+  "            *)",
+  "              # Resolved and refused without looking at the leaf, which is",
+  "              # what the ending below is careful to claim and no more.",
+  "              # Both sides are already resolved, so these are the physical",
+  "              # paths the comparison actually used rather than what was",
+  "              # recorded -- which is the whole point, since an upgrade is the",
+  "              # difference between the two (#746).",
+  "              commitlore_outside=$recorded_dir",
+  "              commitlore_trusted=$root_dir",
+  "              ;;",
   "          esac",
+  "        else",
+  "          # One side would not resolve, so the comparison never ran and the",
+  "          # recorded pair was abandoned for a different reason. Deleting the",
+  "          # previous release directory after an upgrade lands exactly here,",
+  '          # and without this arm the ending falls through to "cannot find the',
+  `          # CLI" -- #746's wrong sentence reached through a second door.`,
+  "          #",
+  "          # The recorded strings are reported rather than resolved ones,",
+  "          # because resolving is what just failed.",
+  "          commitlore_unresolved=1",
+  "          commitlore_outside=$recorded",
+  "          commitlore_trusted=$recorded_root",
   "        fi",
   "      fi",
   "      ;;",
@@ -19306,11 +19350,16 @@ var checkHookRuntime = (ctx) => {
       );
     }
     if (run.status !== 0) {
-      const said = `${run.stderr ?? ""}`.trim().split("\n")[0] ?? "";
+      const spoke = `${run.stderr ?? ""}`.trim();
+      const said = spoke.split("\n")[0] ?? "";
       const nodeMissing = run.status === 127 || /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
       const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+      const containmentRefused2 = /outside the install this hook trusts/.test(spoke);
       let detail;
-      if (nodeMissing) {
+      if (containmentRefused2) {
+        const where = spoke.split("\n").slice(1, 3).map((line2) => line2.trim()).join("; ");
+        detail = `the hook found its recorded CLI and refused it: it is outside the install this repository was wired to (${where}). An upgrade does this; re-running the fix below re-points it`;
+      } else if (nodeMissing) {
         detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
       } else if (nodeThrew) {
         detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
@@ -22687,6 +22736,7 @@ var versionFreeEntryFor = (bundle) => {
     return null;
   }
 };
+var recordedRootValue = (cwd) => execGit(["config", "--local", "--get", "commitlore.root"], { cwd }).stdout.trim();
 var recordBinPath = (cwd) => {
   const running = resolveEntryForRecord(process.argv[1], cwd);
   if (running === null) return;
@@ -22706,9 +22756,11 @@ var describeChained = (status) => {
 var installHook = (input = {}) => {
   const cwd = input.cwd ?? process.cwd();
   let before;
+  let rootBefore;
   try {
     mkdirSync8(resolveHooksDir(cwd), { recursive: true });
     before = readHookStatus(cwd);
+    rootBefore = recordedRootValue(cwd);
   } catch (error2) {
     return failure4(messageOf5(error2));
   }
@@ -22727,16 +22779,23 @@ var installHook = (input = {}) => {
     return failure4(`could not install the ${HOOK_NAME} hook: ${messageOf5(error2)}`);
   }
   const after = readHookStatus(cwd);
+  const rootAfter = recordedRootValue(cwd);
+  const rootMoved = rootBefore !== rootAfter;
   const repointed = before.recordedTarget.bin !== after.recordedTarget.bin;
+  const changed = repointed || rootMoved;
   const headline = {
     absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
     foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
     outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${repointed ? "file unchanged" : "unchanged"})`
+    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${changed ? "file unchanged" : "unchanged"})`
   }[before.state];
-  const repoint = repointed ? [
-    `recorded CLI repointed: ${before.recordedTarget.bin === "" ? "(none recorded)" : before.recordedTarget.bin} -> ${after.recordedTarget.bin}`
-  ] : [];
+  const transition = (noun, verb, from, to) => from === "" ? `${noun}: ${to}` : `${noun} ${verb}: ${from} -> ${to}`;
+  const repoint = [
+    ...repointed ? [transition("recorded CLI", "repointed", before.recordedTarget.bin, after.recordedTarget.bin)] : [],
+    // Named separately, because after an upgrade this line is the entire repair
+    // and the line above it does not appear at all.
+    ...rootMoved ? [transition("recorded install root", "moved", rootBefore, rootAfter)] : []
+  ];
   return success2(after, [headline, ...repoint, ...describeChained(after)]);
 };
 var CAPTURE_HOOKS = [

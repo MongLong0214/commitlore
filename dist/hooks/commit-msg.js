@@ -30,7 +30,61 @@ export const HOOK_MODE = 0o755;
  * not theirs, and a repository whose CLI had moved could not accept a commit
  * (#354).
  */
+/**
+ * Told apart from having found nothing, because it is not the same thing.
+ *
+ * `hooks install` records `commitlore.bin` through `<data-root>/current` so the
+ * hook follows an upgrade, and `commitlore.root` as the physical tree that
+ * recorded it so the containment boundary follows nothing — a `current` that
+ * someone repoints must not carry the boundary with it. An upgrade therefore
+ * moves one and not the other, the check below refuses, and that refusal is the
+ * fence working.
+ *
+ * What was wrong is what the refusal then said. Falling through to "cannot find
+ * the CLI" sent the operator after a missing file, when what happened is that a
+ * path was resolved and rejected (#746). The remedy is one command, and naming
+ * it here is the difference between a one-line fix and an investigation.
+ *
+ * **It claims only what the comparison established**, which is narrower than it
+ * first looks. This branch checks that `commitlore.node` is executable, that a
+ * root is recorded, that the recorded path is not itself a symlink, and that its
+ * parent resolves — it never looks at the leaf. A machine whose
+ * `commitlore.mjs` was deleted while its parent survived arrives here too. So
+ * the wording is about `commitlore.bin` as a path, not about a CLI being there:
+ * anything stronger would be asserting a fact this code did not check, which is
+ * the shape of the bug it is fixing.
+ *
+ * It also does not name a cause. An upgrade and a repointed `commitlore.bin`
+ * (#71's attack) reach this branch looking identical. Saying "an upgrade did
+ * this" would be reassuring about a path that may be hostile, so it names both
+ * readings and runs neither.
+ *
+ * The exit code stays the caller's policy: the gate still refuses, because the
+ * recorded path leads to a tree this install never verified, and that is
+ * precisely what the boundary exists to stop.
+ */
+const containmentRefused = (remedy, code) => [
+    'if [ -n "${commitlore_outside:-}" ]; then',
+    '  if [ -n "${commitlore_unresolved:-}" ]; then',
+    '    echo "commitlore: the recorded install no longer resolves on disk." >&2',
+    '    echo "  commitlore.bin:  $commitlore_outside" >&2',
+    '    echo "  commitlore.root: $commitlore_trusted" >&2',
+    '    echo "  One of those two does not exist, so the trust check could not run" >&2',
+    '    echo "  and nothing was executed. Deleting an old release directory after" >&2',
+    '    echo "  an upgrade does this." >&2',
+    '  else',
+    '    echo "commitlore: commitlore.bin points outside the install this hook trusts." >&2',
+    '    echo "  bin resolves under: $commitlore_outside" >&2',
+    '    echo "  trusted root:       $commitlore_trusted" >&2',
+    '    echo "  Nothing there was run. An upgrade looks like this, and so does a" >&2',
+    '    echo "  repointed commitlore.bin — this hook cannot tell them apart." >&2',
+    '  fi',
+    `  echo "  ${remedy}" >&2`,
+    `  exit ${code}`,
+    'fi',
+];
 const UNRESOLVED_GATE = [
+    ...containmentRefused('Re-run: <path-to>/commitlore hooks install', '1'),
     '# Passing silently here would report a clean record for a message nothing',
     '# ever read.',
     'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -49,6 +103,7 @@ const UNRESOLVED_GATE = [
  * the gate only, so it is not the command that puts *this* file back.
  */
 const UNRESOLVED_CAPTURE = [
+    ...containmentRefused('Re-run: <path-to>/commitlore init', '0'),
     '# Not the validation gate: nothing was checked and rejected here, the',
     '# checker is absent. Refusing would block a commit over a missing tool.',
     'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -194,7 +249,29 @@ const stubText = (unresolved) => [
     '            "$root_dir"|"$root_dir"/*)',
     '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
     '              ;;',
+    '            *)',
+    '              # Resolved and refused without looking at the leaf, which is',
+    '              # what the ending below is careful to claim and no more.',
+    '              # Both sides are already resolved, so these are the physical',
+    '              # paths the comparison actually used rather than what was',
+    '              # recorded -- which is the whole point, since an upgrade is the',
+    '              # difference between the two (#746).',
+    '              commitlore_outside=$recorded_dir',
+    '              commitlore_trusted=$root_dir',
+    '              ;;',
     '          esac',
+    '        else',
+    '          # One side would not resolve, so the comparison never ran and the',
+    '          # recorded pair was abandoned for a different reason. Deleting the',
+    '          # previous release directory after an upgrade lands exactly here,',
+    '          # and without this arm the ending falls through to "cannot find the',
+    '          # CLI" -- #746\'s wrong sentence reached through a second door.',
+    '          #',
+    '          # The recorded strings are reported rather than resolved ones,',
+    '          # because resolving is what just failed.',
+    '          commitlore_unresolved=1',
+    '          commitlore_outside=$recorded',
+    '          commitlore_trusted=$recorded_root',
     '        fi',
     '      fi',
     '      ;;',
