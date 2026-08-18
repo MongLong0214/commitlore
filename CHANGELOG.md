@@ -4,6 +4,59 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.1.3
+
+**Run `commitlore hooks install` once in every repository you have already set
+up. After that, upgrading stops blocking commits.**
+
+That instruction is the release, and it is not rhetorical: the fix below lives
+in the hook file, and a hook file is written when it is installed. Upgrading to
+1.1.3 does not rewrite the hooks already on disk, so the upgrade that delivers
+this fix is not itself fixed by it.
+
+`hooks install` records two values: `commitlore.bin` through
+`<data-root>/current`, so a hook follows upgrades, and `commitlore.root` as the
+physical `v<x>` that path resolved to at the time. An upgrade moves `current`
+and leaves `root` behind, and the commit-msg hook compares them — so from 1.0.2
+onward, every repository wired before an upgrade stopped using its recorded
+interpreter afterwards.
+
+Under a normal shell that went unnoticed: the hook falls through to a `PATH`
+lookup and commits succeed. Under the `PATH` git actually gives a hook — a GUI
+client, an IDE, anything launched outside a login shell — there is no
+`commitlore` on `PATH`, and the commit was refused.
+
+Three things changed, and they are one repair reported in three places.
+
+**The hook tells an upgrade from a repointed path.** `hooks install` writes
+`commitlore.bin` as a literal string ending `/current/dist/commitlore.mjs`, and
+an upgrade moves an installer-owned symlink to a sibling tree without changing
+that string. A `.git/config` edit — the case `commitlore.root` exists to
+refuse — replaces the string itself, and can write neither the installer's
+symlink nor a directory beside its versioned trees. So the upgrade shape rebinds
+the trusted root to what `current` resolves to now and re-runs the same
+containment check; everything else is refused exactly as before.
+
+**The refusal says what happened.** It used to print `cannot find the CLI this
+hook was installed with` for three different outcomes: nothing resolved, the
+recorded path resolved and was refused, and the recorded install no longer
+exists on disk. The first sentence was false for the other two, and it sent
+operators looking for a missing file that was present and working. Each now has
+its own message naming both recorded paths.
+
+**`hooks install` reports the repair it performs.** It compared only
+`commitlore.bin`, which does not change across an upgrade — so the one command
+that fixes this printed `unchanged` after fixing it.
+
+Separately, `commitlore init` no longer reports that a step needs attention
+because of a process on the machine. `doctor` warns when more than one
+CommitLore MCP server is answering, which is ordinary on a developer machine
+because `<data-root>` keeps previous versions; `init` was treating that as work
+left undone in the repository it had just set up.
+
+Nothing here changes what a record is, how one is validated, or what any command
+outputs on success. Nothing in this release reaches a repository on its own.
+
 ## 1.1.2
 
 Upgrading no longer reports a version it did not install.

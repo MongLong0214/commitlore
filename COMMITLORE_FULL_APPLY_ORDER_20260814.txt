@@ -1,0 +1,67 @@
+첨부한 `COMMITLORE_FINAL_A_TO_Z_REVIEW_AND_IMPROVEMENT_PLAN_2026-08-14.md`를 현재 작업의 최상위 리뷰·개선 SSOT로 사용해 MongLong0214/commitlore를 실제로 정리하고 개선해줘.
+
+목표는 문서에 적힌 현재 결함과 production-readiness gap을 과설계 없이 닫는 것이다. 문서에 없는 새로운 아키텍처를 발명하거나 미래 기능을 선제 구현하지 마라.
+
+실행 전에 반드시 GitHub live state를 다시 조회해 현재 main SHA, 최신 release, 열린 PR, 열린 issue, milestone, required checks, branch protection, 관련 CI 상태를 재확인하라. 문서의 SHA·PR 상태·이슈 상태가 바뀌었다면 live state가 우선이지만, 문서의 제품 불변식과 acceptance criteria는 명시적으로 supersede되지 않는 한 유지한다.
+
+실행 원칙:
+- 계획이나 예시만 출력하지 말고 실제 저장소 작업을 수행한다.
+- 이미 해결된 문제는 다시 구현하거나 중복 이슈로 만들지 않는다.
+- 하나의 root cause를 여러 티켓으로 과도하게 쪼개지 않는다.
+- daemon, hosted control plane, 새 DB, 별도 PKI, 불필요한 상태 머신, 범용 프레임워크를 추가하지 않는다.
+- 기존 Git-native 구조, CLI, pending transaction, hooks, MCP core를 최대한 재사용한다.
+- 문서에서 P0/P1로 분류된 production 경계를 우선 처리하고 P2/P3는 blocker를 모두 닫은 뒤 다룬다.
+- runtime convergence는 CLI, hook, Claude plugin, Codex plugin, MCP, index가 같은 build/version/trust/state를 보도록 최소한으로 해결한다.
+- 자동 Capture는 먼저 Claude Code 한 호스트에서 deterministic initiation → verified-empty/record-staged/failed-degraded terminal outcome → 실제 installed-host certification까지 증명한다. 여러 호스트를 한 번에 일반화하지 않는다.
+- trust는 author string과 authenticated signer authority를 혼동하지 않는다. signer identity binding이 끝나기 전에는 강한 directive authentication을 주장하지 않는다.
+- CDEB/benchmark publication gate와 제품 release gate를 분리한다.
+
+PR 처리:
+- 모든 열린 PR은 최신 head SHA, base SHA, changed files, CI, unresolved review를 다시 읽고 판단한다.
+- 문서가 지적한 범위보다 PR이 넓거나 acceptance를 덜 충족하면 body 수정 또는 changes requested로 남긴다.
+- zero-diff/superseded PR은 live diff 확인 후 close한다.
+- merge는 exact-head required checks가 전부 success이고 unresolved blocking review가 없으며 문서 acceptance를 실제로 충족할 때만 수행한다.
+- merge 후에는 main을 다시 읽고 downstream PR/issue 상태를 재평가한다.
+
+이슈·마일스톤:
+- 기존 이슈가 같은 root cause를 소유하면 그 이슈를 업데이트하고 중복 이슈를 만들지 않는다.
+- 새 이슈는 문서에서 실제로 누락된 원자 작업에만 만든다.
+- field issue #629~#635는 runtime convergence 관점에서 중복 root cause 여부를 재분류하되, 증거는 삭제하지 않는다.
+- 완료된 이슈는 현재 main에서 acceptance가 충족되는지 검증 후 close한다.
+- milestone은 현재 계획과 맞지 않는 과거 구조를 무작정 증식시키지 말고, 필요한 최소 구조만 유지한다.
+
+안전 규칙:
+- force push 금지
+- branch protection 완화 금지
+- admin bypass 금지
+- release/tag/publish는 문서상 해당 gate가 충족되고 현재 요청 범위에 명시적으로 포함되지 않는 한 수행하지 않는다.
+- 실패한 write를 성공으로 보고하지 않는다.
+- API/권한/CI로 막힌 작업은 정확한 원인과 미적용 상태를 남긴다.
+- 각 mutation 후 remote read-back으로 실제 반영을 확인한다.
+
+최종 검증:
+- 현재 main과 latest release 상태
+- required checks
+- P0/P1 blocker 잔여 목록
+- runtime convergence 상태
+- MCP/CLI trust grade 일치 여부
+- capture prepare → verify → stage → commit → next-session readback E2E
+- notes two-clone bootstrap 경계
+- installer/doctor live MCP identity
+- canonical artifact/release evidence
+- README/SECURITY/compatibility claim과 실제 코드의 일치
+- 자동 Capture의 silent-unassessed 0 여부
+
+최종 보고 형식:
+1. 작업 전/후 main SHA
+2. 실제 수행한 변경(performed)
+3. 아직 권고만 한 변경(recommended)
+4. 권한·CI·의존성 때문에 막힌 작업(blocked)
+5. merge/close/update한 PR 목록과 URL
+6. 생성/수정/종료한 issue와 milestone 목록과 URL
+7. 남은 P0/P1 blocker
+8. 현재 production-readiness 판정
+9. 자동 Capture certification 상태
+10. 문서와 live state 사이에서 발견된 불일치
+
+치명적인 모순이 없다면 추가 확인을 기다리지 말고 끝까지 수행해라. 단, 문서에 없는 파괴적 범위 확대나 제품 재설계가 필요해지는 순간에는 구현하지 말고 blocked/recommended로 남겨라.

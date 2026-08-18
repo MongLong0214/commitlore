@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: a coding agent must not revive a decision the repository already reversed.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore carries the repository's decision authority into the next edit: for src/pricing.ts the decision still in force is delivered with the alternative it ruled out, while an earlier, broader limit that has been superseded does not move forward as current guidance.">
 </p>
 
 <p align="center">
@@ -29,10 +29,6 @@ agent does when a change carries a reason the diff cannot show; an ordinary
 `git commit` cannot start it, because a hook has the diff and a capture needs
 the session. [What happens automatically](#what-happens-automatically-and-what-does-not)
 says exactly which hosts do which.
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>Contents</strong></summary>
@@ -89,13 +85,13 @@ Prerequisites for either path: Node.js 22.23.2+ and Git. The script checks both 
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh -s v1.1.3
 ```
 
 **Windows** — the same install, in PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.ps1))) v1.1.3
 ```
 
 Host wiring on Windows requires **v1.1.1 or later**. Before it, detection could not see a `.cmd` shim and the installer could not run one, so a Windows install placed the CLI and wired nothing — reported as `ok: false`, never as success. Verified on a real machine at 1.1.1 for Codex, Gemini CLI and Hermes.
@@ -159,11 +155,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh
-sh install.sh v1.1.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh
+sh install.sh v1.1.3
 
 # Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.1.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.1.3 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
