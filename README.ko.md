@@ -137,6 +137,21 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+### 업그레이드
+
+설치 스크립트를 다시 실행하고, 에이전트 세션을 새로 시작한다.
+
+훅은 설치 시점에 쓰인 파일이라 세대가 셋이다. **v1.0.2 이전**에 설치된 훅은 릴리스 하나를 직접 가리킨다. **v1.0.2 ~ v1.1.2**에 설치된 훅은 `current`를 따라가지만, 그 시절 격리 stub이 통상 업그레이드를 알아보지 못해 git이 훅에 주는 `PATH`에서 커밋을 거부한다. **v1.1.3 이후**에 설치된 훅은 통상 업그레이드를 알아서 따라간다.
+
+앞의 두 세대는 저장소마다 한 번씩 아래를 실행해야 한다.
+
+```bash
+commitlore hooks install
+commitlore doctor
+```
+
+설치 프로그램은 이걸 대신 못 한다. 어느 저장소에 훅이 있는지 알 방법이 없고, 저장소의 `.git`을 건드리지 않는 것은 누락이 아니라 정책이다. 실행 중인 세션은 시작할 때 읽은 런타임을 그대로 들고 있으므로 재시작이 따로 필요하다. [전체 표](docs/COMPATIBILITY.md#after-upgrading-run-doctor-693)
+
 ## 실제로 보기
 
 `src/pricing.ts`를 편집하기 전에 에이전트는 설명이 아니라 record 자체인 이 payload를 받는다:
