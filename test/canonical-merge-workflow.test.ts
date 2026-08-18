@@ -86,6 +86,24 @@ describe('T-1502 canonical-merge.yml safety', () => {
     expect(body).not.toMatch(/ref:\s*\$\{\{\s*github\.event\.pull_request\.head/);
   });
 
+  it('runs the credential script from main, never from the merged tree', () => {
+    // The sharpest hole the first version had. `scripts/` is source, so a
+    // source-only pull request may change `app-installation-token.mjs` — and
+    // the step that runs it has `COMMITLORE_BOT_KEY` in its environment.
+    // Running the merged copy would hand the App private key to whatever the
+    // pull request made that file into, without needing a `postinstall` at all.
+    const body = code();
+    expect(body).toMatch(/git show "\$\{\{ steps\.merge\.outputs\.base \}\}:scripts\/app-installation-token\.mjs"/);
+    // And not from the workspace.
+    expect(body).not.toMatch(/node scripts\/app-installation-token\.mjs/);
+  });
+
+  it('reads main\'s sha before the rebuild, not after', () => {
+    // The rebuild executes contributor code in this workspace, so a value read
+    // from `.git` afterwards is a value that code had the chance to choose.
+    expect(lineOf('base=$(git rev-parse origin/main)')).toBeLessThan(lineOf('build:canonical'));
+  });
+
   it('does not persist the Actions credential over the App token', () => {
     expect(code()).toContain('persist-credentials: false');
   });

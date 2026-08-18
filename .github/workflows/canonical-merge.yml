@@ -91,8 +91,12 @@ jobs:
           fi
 
       - name: Merge the source onto main
+        id: merge
         run: |
           set -euo pipefail
+          # Captured before the rebuild runs anything. Reading it afterwards
+          # would be reading a value the rebuild had the opportunity to choose.
+          echo "base=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
           git config user.name  'commitlore-canonical-build[bot]'
           git config user.email '317873099+commitlore-canonical-build[bot]@users.noreply.github.com'
           git checkout -q -b "canonical/pr-${{ inputs.pull_request_number }}"
@@ -125,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          started="$(git rev-parse "origin/main")"
+          started="${{ steps.merge.outputs.base }}"
           if [ "$now" != "$started" ]; then
             echo "::error::main moved from $started to $now while this rebuilt -- rerun after it settles"
             exit 1
@@ -139,7 +143,19 @@ jobs:
           COMMITLORE_BOT_KEY: ${{ secrets.COMMITLORE_BOT_KEY }}
         run: |
           set -euo pipefail
-          token="$(node scripts/app-installation-token.mjs)"
+          # From `main`, never from the merged tree. The rebuild above executed
+          # the pull request's `package.json` and every dependency lifecycle
+          # script it pulled in, and the merged tree also contains the pull
+          # request's version of this very file -- `scripts/` is source, and a
+          # source-only pull request may change it. Running the merged copy here
+          # would hand the App private key to whatever that copy is.
+          #
+          # Extracted to a path outside the workspace and run from there, so the
+          # workspace's `node_modules` cannot be resolved by it either. The
+          # script itself imports only `node:crypto` and uses global `fetch`.
+          mint="$(mktemp -d)/mint.mjs"
+          git show "${{ steps.merge.outputs.base }}:scripts/app-installation-token.mjs" > "$mint"
+          token="$(cd "$(dirname "$mint")" && NODE_OPTIONS= node "$mint")"
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
