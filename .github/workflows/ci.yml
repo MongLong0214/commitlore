@@ -83,9 +83,11 @@ jobs:
       - name: Every test file actually ran
         run: node scripts/check-test-files-ran.mjs vitest-report.json
 
-      # Fixture conformance, README example sync, and the README vocabulary
-      # table vs SPEC section 3. Documentation claims that can be checked by
-      # machine are checked by machine.
+      # Fixture conformance, the docs/protocol.md example sync, and that
+      # document's vocabulary table vs SPEC section 3. Documentation claims that
+      # can be checked by machine are checked by machine. The owner is one file
+      # rather than four READMEs: the same fixture repeated per translation is
+      # four places for it to drift.
       - name: Conformance suite
         run: bash spec/verify.sh
 

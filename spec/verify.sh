@@ -108,37 +108,46 @@ for txt in "$SCRIPT_DIR"/fixtures/invalid/*.txt; do
   check_fixture "invalid" "$txt"
 done
 
-# 4. README의 대표 예제는 픽스처와 바이트 단위로 같아야 한다.
-#    README가 자기 스펙을 위반한 채 배포되는 것이 이 프로젝트에서 가장 비싼 결함이다
+# 4. 대표 예제는 픽스처와 바이트 단위로 같아야 한다.
+#    문서가 자기 스펙을 위반한 채 배포되는 것이 이 프로젝트에서 가장 비싼 결함이다
 #    (실제로 Certainty: high / Blast: narrow / Undo: clean 이 실려 있었고, 셋 다 우리
 #    자신의 거부 픽스처 값이었다). 예제를 픽스처로 승격하고 동기화를 기계로 강제한다.
+#
+#    소유자는 네 개의 README가 아니라 docs/protocol.md 하나다. 같은 fixture를 네 번
+#    반복하면 번역본마다 드리프트 지점이 생기고, README는 제품 진입 문서가 아니라
+#    스펙 요약본으로 남는다. 위치("마지막 text 블록")가 아니라 마커로 찾는다 —
+#    위치 규칙은 자기가 무엇을 소유하는지 말하지 못하므로, 근처를 편집하면 계약이
+#    조용히 옮겨간다.
 README_FIXTURE="$SCRIPT_DIR/fixtures/valid/11-readme-example.txt"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-for readme in "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md; do
-  [ -f "$readme" ] || continue
-  if ! node -e '
-    const fs = require("fs");
-    const md = fs.readFileSync(process.argv[1], "utf8");
-    const fixture = fs.readFileSync(process.argv[2], "utf8");
-    const m = [...md.matchAll(/```text\n([\s\S]*?)\n```/g)].at(-1);
-    if (!m) { console.error("no ```text example block"); process.exit(1); }
-    if (m[1] + "\n" !== fixture) {
-      console.error("README example drifted from spec/fixtures/valid/11-readme-example.txt");
-      process.exit(1);
-    }
-  ' "$readme" "$README_FIXTURE" 2>/tmp/commitlore-readme-err.$$; then
-    fail "$(basename "$readme"): 대표 예제가 픽스처와 다르다 — README가 스펙을 위반할 수 있다"
-    cat /tmp/commitlore-readme-err.$$ >&2
-  fi
-  rm -f /tmp/commitlore-readme-err.$$
-done
+PROTOCOL_DOC="$REPO_ROOT/docs/protocol.md"
+if [ ! -f "$PROTOCOL_DOC" ]; then
+  fail "docs/protocol.md 이 없다 — 대표 예제의 소유자가 사라졌다"
+elif ! node -e '
+  const fs = require("fs");
+  const md = fs.readFileSync(process.argv[1], "utf8");
+  const fixture = fs.readFileSync(process.argv[2], "utf8");
+  const marker = "<!-- SPEC-FIXTURE:11-readme-example -->";
+  const at = md.indexOf(marker);
+  if (at < 0) { console.error(`no ${marker} marker`); process.exit(1); }
+  const m = /```text\n([\s\S]*?)\n```/.exec(md.slice(at));
+  if (!m) { console.error("no ```text block after the marker"); process.exit(1); }
+  if (m[1] + "\n" !== fixture) {
+    console.error("docs/protocol.md example drifted from spec/fixtures/valid/11-readme-example.txt");
+    process.exit(1);
+  }
+' "$PROTOCOL_DOC" "$README_FIXTURE" 2>/tmp/commitlore-readme-err.$$; then
+  fail "docs/protocol.md: 대표 예제가 픽스처와 다르다 — 문서가 스펙을 위반할 수 있다"
+  cat /tmp/commitlore-readme-err.$$ >&2
+fi
+rm -f /tmp/commitlore-readme-err.$$
 
-# 5. README의 어휘표가 SPEC §3과 일치하는가.
+# 5. docs/protocol.md 의 어휘표가 SPEC §3과 일치하는가.
 #    표에 스펙에 없는 키가 실리면 사용자가 그걸 쓰고 검증기에 거부당한다.
-if ! node "$SCRIPT_DIR/schema/readme-vocab-check.mjs" \
-  "$SCRIPT_DIR/SPEC.md" "$REPO_ROOT"/README.md "$REPO_ROOT"/README.*.md \
+if ! node "$SCRIPT_DIR/schema/protocol-doc-vocab-check.mjs" \
+  "$SCRIPT_DIR/SPEC.md" "$PROTOCOL_DOC" \
   >/tmp/commitlore-vocab.$$ 2>&1; then
-  fail "README 어휘표가 SPEC §3과 다르다"
+  fail "docs/protocol.md 어휘표가 SPEC §3과 다르다"
   cat /tmp/commitlore-vocab.$$ >&2
 fi
 rm -f /tmp/commitlore-vocab.$$
@@ -148,5 +157,5 @@ if [ "$fail_count" -gt 0 ]; then
   exit 1
 fi
 
-echo "OK: $checked_count fixtures + README example sync + vocab table"
+echo "OK: $checked_count fixtures + protocol example sync + vocab table"
 exit 0

@@ -497,50 +497,18 @@ Ask the agent to commit normally and preserve only the decision context the diff
 
 The agent instructions live in `skills/commitlore-commits/`, and the commit-msg hook validates any record the agent adds — it never invents or silently adds one. The `harvest` route, the `capture` transaction, and the escape hatch of writing trailers by hand are all in [docs/capture.md](docs/capture.md).
 
-## A complete record
+## The record protocol
 
-A record can be much smaller than this; most need only a few fields. This one uses the whole vocabulary because it is also a conformance fixture — Git's trailer parser reads the code block identically in every translated README.
+A record is an ordinary set of Git commit trailers, and a small one is usually enough:
 
 ```text
-Prevent silent session drops during long-running operations
+Fix expired-token refresh
 
-The auth service returns inconsistent status codes on token
-expiry, so the interceptor catches all 4xx responses and
-triggers an inline refresh.
-
-Limit: Auth service does not support token introspection
-Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
-Ruled-out: Background refresh on timer | race condition
-Certainty: firm
-Blast: module
-Undo: easy
-Warn: 4xx handling is intentionally broad
-  -- do not narrow without verifying upstream behavior
-Verified: Single expired token refresh (unit)
-Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0.0
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-### Protocol vocabulary
-
-| Trailer | Meaning |
-|---|---|
-| `Limit:` | External condition that constrained the decision |
-| `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
-| `Certainty:` | `firm` \| `tentative` \| `guess` |
-| `Blast:` | `local` \| `module` \| `system` |
-| `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | Warning for a future modifier; trust-graded before delivery |
-| `Verified:` / `Unverified:` | What was and was not checked |
-| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
-| `Expires:` | Date or condition that ends a limit |
-| `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `drafted` \| `inherited <sha>` \| `reconstructed` \| `unknown` |
-| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
-
-Read a path's history with `commitlore context <path>`. Smaller examples, and how to read records with plain Git instead, are in [docs/protocol.md](docs/protocol.md); the normative definitions are in [SPEC §3](spec/SPEC.md).
+The worked example that uses the whole vocabulary, the table of every trailer key, and how to read records with plain Git are in [docs/protocol.md](docs/protocol.md). The normative definitions are in [SPEC §3](spec/SPEC.md).
 
 ## What the repository proves
 

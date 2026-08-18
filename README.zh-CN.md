@@ -382,50 +382,18 @@ warnings
 
 代理说明位于 `skills/commitlore-commits/`，commit-msg hook 只验证代理添加的 record，不会凭空创建或静默添加。`harvest` 路径、`capture` 事务，以及手写 trailer 这条逃生出口，都在 [docs/capture.md](docs/capture.md)。
 
-## 完整 record
+## record 协议
 
-record 可以比这小得多，绝大多数只需要几个 field。这个示例用上全部词汇，是因为它同时也是 conformance fixture —— Git trailer parser 会在所有翻译版 README 中以相同方式读取下面的 code block。
+record 就是一组普通的 Git commit trailer，通常小的就够用:
 
 ```text
-Prevent silent session drops during long-running operations
+Fix expired-token refresh
 
-The auth service returns inconsistent status codes on token
-expiry, so the interceptor catches all 4xx responses and
-triggers an inline refresh.
-
-Limit: Auth service does not support token introspection
-Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
-Ruled-out: Background refresh on timer | race condition
-Certainty: firm
-Blast: module
-Undo: easy
-Warn: 4xx handling is intentionally broad
-  -- do not narrow without verifying upstream behavior
-Verified: Single expired token refresh (unit)
-Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0.0
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-### Protocol vocabulary
-
-| Trailer | Meaning |
-|---|---|
-| `Limit:` | External condition that constrained the decision |
-| `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
-| `Certainty:` | `firm` \| `tentative` \| `guess` |
-| `Blast:` | `local` \| `module` \| `system` |
-| `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | Warning for a future modifier; trust-graded before delivery |
-| `Verified:` / `Unverified:` | What was and was not checked |
-| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
-| `Expires:` | Date or condition that ends a limit |
-| `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
-| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
-
-用 `commitlore context <path>` 读取 path 的历史。更小的示例，以及只用 Git 读取 record 的方法，在 [docs/protocol.md](docs/protocol.md)；规范定义在 [SPEC §3](spec/SPEC.md)。
+使用全部语汇的完整示例、所有 trailer key 的表格，以及不用 CommitLore 直接用 Git 读取的方法，都在 [docs/protocol.md](docs/protocol.md)。规范性定义见 [SPEC §3](spec/SPEC.md)。
 
 ## 仓库能够证明什么
 
