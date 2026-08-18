@@ -40,8 +40,7 @@ An operator learns that a newer release exists, without being asked to remember 
 
 ## Non-goals
 
-- **Reimplementing the installer.** ADR-0037. `install.sh` is the single implementation and it verifies its own work (#735). A second one in TypeScript duplicates both, or worse, duplicates only the first half.
-- **`commitlore update --apply`.** Deferred, not rejected — ADR-0037 records why the revision-1 rejection did not hold and what actually blocks it.
+- **Reimplementing the installer.** ADR-0037. `install.sh` is the single implementation and it verifies its own work (#735). A second one in TypeScript duplicates both, or worse, duplicates only the first half. **Invoking it is not reimplementing it** — `commitlore update --apply` is in scope, and ADR-0038 specifies the two-phase call that keeps the installer the only implementation.
 - Telling anyone anything about the machine. The check is a `git ls-remote`; nothing is sent that it does not carry.
 - Working when the network is gone. It degrades to silence, not to an error.
 - Pinning, channels, or beta streams. One stream: the newest `vMAJOR.MINOR.PATCH` tag.
@@ -66,7 +65,15 @@ So the API was chosen on a false premise, and choosing it would have been a **re
 - `COMMITLORE_INSTALL_SOURCE` is honoured for free, so a mirror-installed fleet checks its mirror instead of a host it may not reach.
 - The tag ordering logic already exists and is already correct about `v10` versus `v9` (`install.sh:396-404`). T-1601 must match it, not invent a second ranking.
 
-The cost is that `git` is spawned rather than a socket opened, so cancellation must kill a child process, not just abort a request.
+The cost is that `git` is spawned rather than a socket opened, and **cancellation therefore has to be specified as a mechanism, not as an outcome.** `gh` aborts an HTTP request; we have to end a process that can outlive us and can have children of its own — `git ls-remote` may spawn an SSH client or a credential helper, and an orphan of either is worse than a missed notice. Revision 2 asserted the property ("a test asserts the process is gone") without saying how, which is a specification that cannot be implemented twice the same way:
+
+- the child is started in **its own process group**, so the signal reaches the helpers as well as `git`
+- a **hard timeout** bounds it regardless of the caller, because the notice's cancel-on-completion is not a bound: `commitlore --version` finishes in milliseconds and would signal a `git` that had barely started
+- termination is `SIGTERM`, then `SIGKILL` after a grace period
+- the child is **reaped**, so a long-running host process does not accumulate zombies
+- `GIT_TERMINAL_PROMPT=0` and a non-interactive credential configuration, so the child can never block waiting for input nobody will type
+
+**The exposed surface is every command that is not a hook subcommand.** Hooks already have the check switched off, so the leak cannot happen there; it is `status`, `query`, `doctor` and the rest that start a check and may finish before it does.
 
 ## What "enterprise-grade" has to mean here, concretely
 
@@ -83,11 +90,19 @@ The cost is that `git` is spawned rather than a socket opened, so cancellation m
 | two processes check at once | last writer wins, and neither fails |
 | `1.1.10` versus `1.1.9` | compared as versions, by the same ordering `install.sh:396-404` uses |
 
-**Negative results are cached, and this is a deliberate departure from `gh`.** `gh` writes its state file only after a successful fetch (`update.go:103`), so a machine that cannot reach the network retries on *every* invocation forever. For a notice that is cancelled at command end that costs no latency — but it is an outbound connection attempt per command, which is exactly what an egress-monitoring organisation notices and exactly what the air-gapped row is trying to avoid. A failed check records the attempt and stays quiet for the interval.
+**Negative results are cached — by kind, and never for as long as a success.** `gh` writes its state file only after a successful fetch (`update.go:103`), so a machine that cannot reach the network retries on *every* invocation forever. Caching failures fixes the outbound-attempt-per-command problem, and revision 2 applied one 24-hour interval to all of them, which was wrong in the other direction: **a five-minute outage would have bought a full day of silence about exactly the staleness this feature exists to expose.** The three failures are not the same event and do not deserve the same interval:
 
-## The two pieces, and they do not share a suppression table
+| what happened | interval | why |
+|---|---|---|
+| the network was unreachable | **1 hour**, doubling to a 24-hour ceiling | transient by default. A laptop that was on a plane should learn on landing, not tomorrow |
+| the remote answered and refused us | **24 hours** | a decision by something upstream. Retrying sooner will not change it |
+| git answered with output no tag matched | **1 hour**, and it is logged under `--debug` | not a network condition at all. This is a bug in the parsing or a repository shaped unexpectedly, and burying it for a day hides it |
 
-Revision 1 gave both pieces one table. That was wrong in both directions, and the split is now the load-bearing part of the design.
+The air-gapped case is not what justifies this, and revision 2 said it was. That case is already served without any cache, by the explicit off-switches below — an organisation that forbids outbound calls sets one, fleet-wide, through the config file. Failure caching is for the machine whose operator set nothing, and it should mute that machine for as short a time as the failure warrants.
+
+## The three pieces, and they do not share a suppression table
+
+Revision 1 gave two pieces one table. That was wrong in both directions, and the split is now the load-bearing part of the design. Revision 2 fixed the split and then left `doctor` in neither class — an omission with a concrete consequence, described below.
 
 **A passive notice** — nobody asked for it, so it defers to everything. One line to stderr after the command completes, naming both versions and the platform's install command. Suppressed by every row above.
 
@@ -97,7 +112,15 @@ Revision 1 gave both pieces one table. That was wrong in both directions, and th
 commitlore update            current, latest, and the exact install command. Exit 0.
 commitlore update --check    the same answer, no prose. Exit 0.
 commitlore update --json     { current, latest, updateAvailable, command, source, checkedAt }
+commitlore update --apply    invokes the installer for the target tag, then verifies
+                             the move itself. ADR-0038. Never implied, never on a timer.
 ```
+
+**`doctor` is a diagnostic, and it is the third class.** It was in neither table, and the gap is not cosmetic: `doctor` already reports a hook interpreter on a different version from the CLI — that report is what found #735 — so a newer release existing is the same kind of fact it exists to state. Yet the notice's rules silence every `--json` invocation, which means the one structured contract anybody consumes could not carry it, while the notice could not appear there either. **The staleness would be invisible in the output built for programs to read.**
+
+So it is neither: staleness becomes **a finding in `doctor`'s own report**, in prose and as a field in `doctor --json`, rather than a line appended after it. It obeys the explicit off-switches like the command does, and it ignores TTY and `CI` like the command does, because a report suppressing part of itself when piped is a report that lies to a script.
+
+`doctor`'s exit code is unchanged by this. A newer release is not a violation, on the same reasoning `--check` exits 0.
 
 ## Resolved by review
 

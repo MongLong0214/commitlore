@@ -16,7 +16,7 @@ Revision 1 decided that `commitlore update` prints the command and rejected a `-
 
 **`commitlore update` reports: current version, latest version, and the exact install command for the platform. It does not fetch, unpack, move, or delete anything, and no second implementation of installing is written in TypeScript.**
 
-`commitlore update --apply` is **out of scope for F16 and not rejected on principle.** The obstacle is named below and belongs to its own ADR.
+`commitlore update --apply` is **permitted, because invoking the installer is not reimplementing it.** [ADR-0038](ADR-0038-update-apply-invokes-the-installer.md) specifies how, and this ADR's two attempts to reject it are recorded below rather than deleted — they are the reason the constraint is now stated as narrowly as the evidence supports.
 
 ## Why the core holds
 
@@ -36,17 +36,19 @@ Both of these forbid **reimplementing** the installer. Neither of them forbids *
 
 That sentence describes `--apply`. The rejection also argued that unasked action differs from reporting — true, and an operator who types `--apply` has asked. And the residual objection, *"fetching and executing a script from the network is the step being avoided"*, does not distinguish the two: the line F16 prints **is** that fetch-and-execute one-liner, and a human pasting it runs the same bytes.
 
-## The obstacle that is real, and it is new
+## The obstacle that looked real, and did not hold either
 
-Every shape `--apply` can take hits one of three walls, and the first was not visible in revision 1:
+Revision 2 of this ADR offered a replacement obstacle: `<data-root>/current/install.sh` is the **old** installer, so upgrading with it inherits its defects, and #735 is the proof rather than a hypothetical — a machine on 1.0.1 would clone the new version, fail to move `current`, and report success.
 
-**Run the installer already on disk.** `<data-root>/current/` is a git clone of the installed tag, so `install.sh` is right there — and it is the **old** one. Upgrading with a stale installer inherits that installer's defects, and #735 is the proof rather than a hypothetical: a machine still on 1.0.1 would clone the new version, fail to move `current`, and report success. **That is precisely the silent staleness F16 exists to expose, reintroduced by F16's own convenience.**
+**That did not survive review either, and the refutation is verified in this repository's own source:**
 
-**Fetch the current installer and run it.** This is the network fetch-and-execute step, now performed by a tool instead of a human. Defensible — the operator asked — but it is a genuine change in what the tool does, and it deserves a decision of its own rather than a flag added to a reporting feature.
+- `install.sh:388` takes a version argument, and with one supplied it skips discovery entirely and goes to `install.sh:548` — `git clone --quiet --depth 1 --branch "$version"`. **The clone of the new tree does not touch `current` and cannot be affected by the move defect.**
+- #735 is a defect in the *move*, and its one observable symptom is a `current` that did not move while the exit code said otherwise. **That is detectable from outside by reading the link.**
+- `install.sh:523-538` reuses an existing checkout after verifying its runtime manifest and requested tag, so the new tree — already on disk from the first call — is not re-cloned by a second one.
 
-**Clone the tag first, then run the new tree's installer.** The clone is then implemented twice, which the surviving core of this ADR forbids.
+So an `--apply` that calls the on-disk installer for the target tag, **verifies the move itself**, and falls back to the newly downloaded tree's installer is neither a second implementation nor a hostage to the old one. [ADR-0038](ADR-0038-update-apply-invokes-the-installer.md) specifies it.
 
-None of these is fatal. All three need an argument F16 does not have, so `--apply` waits for one.
+**This ADR was wrong twice about the same thing, in the same direction — narrowing a request the owner made.** #742 asked for a version check *and* an update capability. Both rejections were reasoned rather than measured, and both dissolved when the source was read. What is left is the part that was never in doubt: no second installer.
 
 ## Consequences
 
