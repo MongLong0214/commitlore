@@ -7179,8 +7179,8 @@ var require_formats = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
-    function fmtDef(validate2, compare) {
-      return { validate: validate2, compare };
+    function fmtDef(validate2, compare2) {
+      return { validate: validate2, compare: compare2 };
     }
     exports.fullFormats = {
       // date: http://tools.ietf.org/html/rfc3339#section-5.6
@@ -7740,7 +7740,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync31 } from "node:fs";
+import { readFileSync as readFileSync32 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -18699,7 +18699,7 @@ var evaluateInjectRun = (run, ctx) => {
   );
 };
 var checkInjectRuntime = (ctx) => {
-  const { opts, spawn: spawn2, env } = ctx;
+  const { opts, spawn: spawn3, env } = ctx;
   const title2 = "PreToolUse hook runtime";
   const id2 = "inject-runtime";
   const category2 = "delivery";
@@ -18845,7 +18845,7 @@ var checkInjectRuntime = (ctx) => {
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
   const args = configured.slice(executable.length + 1).split(" ");
-  const run = spawn2(executable, args, {
+  const run = spawn3(executable, args, {
     shell: false,
     encoding: "utf8",
     cwd,
@@ -19410,7 +19410,7 @@ import { existsSync as existsSync11, rmSync as rmSync2, writeFileSync as writeFi
 import { tmpdir as tmpdirPath } from "node:os";
 import { join as join8, resolve as resolve9 } from "node:path";
 var checkHookRuntime = (ctx) => {
-  const { opts, git: git2, spawn: spawn2, env } = ctx;
+  const { opts, git: git2, spawn: spawn3, env } = ctx;
   const title2 = "hook runtime";
   const id2 = "hook-runtime";
   const category2 = "capture";
@@ -19453,7 +19453,7 @@ var checkHookRuntime = (ctx) => {
   const probe = join8(tmpdirPath(), `commitlore-doctor-${String(process.pid)}.txt`);
   try {
     writeFileSync5(probe, PROBE_MESSAGE);
-    const run = spawn2("/bin/sh", [hook, probe], {
+    const run = spawn3("/bin/sh", [hook, probe], {
       shell: false,
       encoding: "utf8",
       cwd,
@@ -20391,7 +20391,7 @@ var checkUnattendedCaptureInitiator = (ctx) => {
 // src/commands/doctor/checks/delivery-inject-version.ts
 var SEMVER_ISH = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
 var checkInjectVersion = (ctx, dependencies) => {
-  const { opts, spawn: spawn2, env } = ctx;
+  const { opts, spawn: spawn3, env } = ctx;
   const title2 = "PreToolUse hook version";
   const id2 = "inject-version";
   const category2 = "delivery";
@@ -20438,7 +20438,7 @@ var checkInjectVersion = (ctx, dependencies) => {
   }
   const configured = command.replace(` ${CLAUDE_HOOK_MARKER}`, "");
   const executable = configured.slice(0, configured.indexOf(" "));
-  const run = spawn2(executable, ["--version"], {
+  const run = spawn3(executable, ["--version"], {
     shell: false,
     encoding: "utf8",
     cwd,
@@ -34314,7 +34314,7 @@ var formatContext = (result) => {
   return `${[header2, ...body].join("\n")}
 `;
 };
-var emit4 = (name, result, options, render2) => {
+var emit4 = (name, result, options, render3) => {
   const presented = withholdBlocked(result);
   for (const diagnostic of presented.diagnostics) {
     process.stderr.write(`commitlore: ${diagnostic}
@@ -34322,14 +34322,14 @@ var emit4 = (name, result, options, render2) => {
   }
   process.stdout.write(
     options.json === true ? `${JSON.stringify(toJson2(name, presented), null, 2)}
-` : render2(presented)
+` : render3(presented)
   );
   if (presented.history === "unavailable") process.exitCode = USAGE_EXIT_CODE3;
   else if (presented.notes === "unfetched" || presented.unreadCommits > 0) {
     process.exitCode = INCOMPLETE_EXIT_CODE2;
   }
 };
-var define = (program3, name, description, keys, render2) => {
+var define = (program3, name, description, keys, render3) => {
   program3.command(name).description(description).argument("[paths...]", "limit paths; renames follow only when one path is given").option("--json", "emit the answer as JSON").option("--all-history", "include superseded and expired records, each labelled").option("--no-index", "answer from git alone, without the SQLite index").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--limit <n>", "return at most n records").option(
     "--trusted-author <author>",
     "an author string whose records may render as instructions (repeatable; not identity proof)",
@@ -34340,7 +34340,7 @@ var define = (program3, name, description, keys, render2) => {
     "\nExit codes: 0 answered (with or without records), 2 could not run (no repository, a bad flag), 3 answered, but the notes mirror is unfetched or the scan was truncated (SPEC \xA710)."
   ).action((paths, options) => {
     try {
-      emit4(name, runQuery(queryOptions(paths, options, keys)), options, render2);
+      emit4(name, runQuery(queryOptions(paths, options, keys)), options, render3);
     } catch (error2) {
       process.stderr.write(
         `commitlore: ${error2 instanceof Error ? error2.message : String(error2)}
@@ -35682,6 +35682,263 @@ var register23 = (program3) => {
   });
 };
 
+// src/core/latest-release.ts
+import { spawn as spawn2 } from "node:child_process";
+import { mkdirSync as mkdirSync13, readFileSync as readFileSync29, renameSync as renameSync11, rmSync as rmSync7, writeFileSync as writeFileSync20 } from "node:fs";
+import { homedir as homedir4, tmpdir as tmpdir2 } from "node:os";
+import { dirname as dirname14, join as join20 } from "node:path";
+
+// src/core/release-version.ts
+var RELEASE_TAG = /^v?(\d+)\.(\d+)\.(\d+)$/;
+var parseReleaseVersion = (value) => {
+  const match = RELEASE_TAG.exec(value.trim());
+  if (match === null) return null;
+  const [, major = "", minor = "", patch = ""] = match;
+  return { major: Number(major), minor: Number(minor), patch: Number(patch) };
+};
+var compare = (left, right) => {
+  if (left.major !== right.major) return left.major < right.major ? -1 : 1;
+  if (left.minor !== right.minor) return left.minor < right.minor ? -1 : 1;
+  if (left.patch !== right.patch) return left.patch < right.patch ? -1 : 1;
+  return 0;
+};
+var isNewerRelease = (candidate, running) => {
+  const a = parseReleaseVersion(candidate);
+  const b = parseReleaseVersion(running);
+  if (a === null || b === null) return false;
+  return compare(a, b) > 0;
+};
+var newestRelease = (tags) => {
+  let best = null;
+  for (const tag of tags) {
+    const version2 = parseReleaseVersion(tag);
+    if (version2 === null) continue;
+    if (best === null || compare(version2, best.version) > 0) best = { tag, version: version2 };
+  }
+  return best?.tag ?? null;
+};
+
+// src/core/latest-release.ts
+var DEFAULT_SOURCE = "https://github.com/MongLong0214/commitlore.git";
+var HOUR_MS = 60 * 60 * 1e3;
+var DAY_MS2 = 24 * HOUR_MS;
+var CACHE_VERSION = 1;
+var OFF_SWITCHES = [
+  "COMMITLORE_NO_UPDATE_CHECK",
+  // Its stated scope names autoupdates, not only analytics.
+  "DO_NOT_TRACK",
+  // The de-facto convention; honouring it costs one line.
+  "NO_UPDATE_NOTIFIER"
+];
+var disabledBy = (env) => {
+  for (const name of OFF_SWITCHES) {
+    const value = env[name];
+    if (value !== void 0 && value !== "" && value !== "0") return name;
+  }
+  return null;
+};
+var sourceUrl = (env = process.env) => {
+  const configured = env["COMMITLORE_INSTALL_SOURCE"];
+  return configured !== void 0 && configured !== "" ? configured : DEFAULT_SOURCE;
+};
+var cachePath = (home) => join20(home !== void 0 && home !== "" ? home : homedir4(), ".cache", "commitlore", "latest-release.json");
+var readCache = (path2) => {
+  try {
+    const parsed = JSON.parse(readFileSync29(path2, "utf8"));
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const entry = parsed;
+    if (entry.version !== CACHE_VERSION) return null;
+    if (typeof entry.checkedAt !== "number" || typeof entry.ttlMs !== "number") return null;
+    if (typeof entry.outcome !== "object" || entry.outcome === null) return null;
+    return entry;
+  } catch {
+    return null;
+  }
+};
+var writeCache = (path2, entry) => {
+  try {
+    mkdirSync13(dirname14(path2), { recursive: true });
+    const scratch = `${path2}.${process.pid}.tmp`;
+    writeFileSync20(scratch, `${JSON.stringify(entry)}
+`, "utf8");
+    renameSync11(scratch, path2);
+  } catch {
+  }
+};
+var ttlFor = (outcome, previous) => {
+  switch (outcome.kind) {
+    case "resolved":
+    case "disabled":
+      return DAY_MS2;
+    case "refused":
+      return DAY_MS2;
+    case "no-tag-matched":
+      return HOUR_MS;
+    case "unreachable": {
+      const last = previous?.outcome.kind === "unreachable" ? previous.ttlMs : 0;
+      return Math.min(DAY_MS2, Math.max(HOUR_MS, last * 2));
+    }
+  }
+};
+var DEFAULT_TIMEOUT_MS = 3e3;
+var GRACE_MS = 500;
+var fetchTags = async (url, opts = {}) => {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
+  return await new Promise((resolve23) => {
+    let settled = false;
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimer(killTimer);
+      clearTimer(graceTimer);
+      resolve23(outcome);
+    };
+    let child;
+    try {
+      child = spawn2("git", ["ls-remote", "--tags", "--refs", url], {
+        detached: process.platform !== "win32",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...opts.env ?? process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_ASKPASS: "",
+          GCM_INTERACTIVE: "never"
+        }
+      });
+    } catch (error2) {
+      resolve23({ kind: "unreachable", detail: `git could not be started: ${String(error2)}` });
+      return;
+    }
+    const signalGroup = (signal) => {
+      try {
+        if (child.pid === void 0) return;
+        if (process.platform !== "win32") process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch {
+      }
+    };
+    let graceTimer = null;
+    const killTimer = setTimer(() => {
+      signalGroup("SIGTERM");
+      graceTimer = setTimer(() => signalGroup("SIGKILL"), GRACE_MS);
+      finish({ kind: "unreachable", detail: `no answer within ${timeoutMs}ms` });
+    }, timeoutMs);
+    let out = "";
+    let err = "";
+    child.stdout?.on("data", (chunk) => {
+      out += chunk.toString("utf8");
+    });
+    child.stderr?.on("data", (chunk) => {
+      err += chunk.toString("utf8");
+    });
+    child.on("error", (error2) => {
+      finish({ kind: "unreachable", detail: `git could not be started: ${error2.message}` });
+    });
+    child.on("close", (code) => {
+      if (code === 0) {
+        const tags = out.split("\n").map((line2) => line2.split("	")[1] ?? "").map((ref) => ref.replace(/^refs\/tags\//, "").trim()).filter((tag) => tag !== "");
+        const newest = newestRelease(tags);
+        finish(
+          newest === null ? { kind: "no-tag-matched", detail: `${tags.length} ref(s), none a release tag` } : { kind: "resolved", tag: newest }
+        );
+        return;
+      }
+      finish({ kind: "refused", detail: err.trim().split("\n")[0] ?? `git exited ${String(code)}` });
+    });
+  });
+};
+var latestRelease = async (opts = {}) => {
+  const env = opts.env ?? process.env;
+  const now = opts.now ?? Date.now;
+  const path2 = cachePath(opts.home ?? env["HOME"]);
+  const off = disabledBy(env);
+  if (off !== null) {
+    return { outcome: { kind: "disabled", by: off }, cached: false, checkedAt: now() };
+  }
+  const previous = opts.fresh === true ? null : readCache(path2);
+  if (previous !== null && now() - previous.checkedAt < previous.ttlMs) {
+    return { outcome: previous.outcome, cached: true, checkedAt: previous.checkedAt };
+  }
+  const outcome = await fetchTags(sourceUrl(env), opts);
+  const checkedAt = now();
+  if (opts.fresh !== true) {
+    writeCache(path2, { version: CACHE_VERSION, checkedAt, outcome, ttlMs: ttlFor(outcome, previous) });
+  }
+  return { outcome, cached: false, checkedAt };
+};
+
+// src/commands/update.ts
+var installCommand = (tag, platform = process.platform) => {
+  const readme = readInstalledFile("README.md");
+  const script = platform === "win32" ? "install.ps1" : "install.sh";
+  const line2 = readme.split("\n").map((l) => l.trim()).find((l) => l.includes(script) && (l.startsWith("curl ") || l.startsWith("& (")));
+  if (line2 === void 0) return "";
+  return line2.replace(/v\d+\.\d+\.\d+/g, tag);
+};
+var describe2 = (outcome) => {
+  switch (outcome.kind) {
+    case "disabled":
+      return `checking is disabled by ${outcome.by}`;
+    case "unreachable":
+      return `the release list could not be reached (${outcome.detail})`;
+    case "refused":
+      return `the remote declined the request (${outcome.detail})`;
+    case "no-tag-matched":
+      return `no release tag was found (${outcome.detail})`;
+    case "resolved":
+      return "";
+  }
+};
+var buildReport3 = async (env = process.env) => {
+  const current = packageVersion();
+  const { outcome, checkedAt } = await latestRelease({ env });
+  const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
+  const unknown2 = describe2(outcome);
+  return {
+    current,
+    latest: latest2,
+    // "We could not look" is not "you are up to date", and only one of them is
+    // true. `updateAvailable` stays false either way; `unknown` is what
+    // separates them.
+    updateAvailable: latest2 !== null && isNewerRelease(latest2, current),
+    command: installCommand(latest2 ?? `v${current}`),
+    source: sourceUrl(env),
+    checkedAt: new Date(checkedAt).toISOString(),
+    ...unknown2 === "" ? {} : { unknown: unknown2 }
+  };
+};
+var render2 = (report) => {
+  const lines = [`installed  ${report.current}`];
+  if (report.unknown !== void 0) {
+    lines.push(`latest     unknown \u2014 ${report.unknown}`);
+    return `${lines.join("\n")}
+`;
+  }
+  lines.push(`latest     ${report.latest ?? "unknown"}`);
+  lines.push(
+    report.updateAvailable ? `
+a newer release is available. To upgrade:
+
+  ${report.command}` : "\nthis is the newest release."
+  );
+  return `${lines.join("\n")}
+`;
+};
+var register24 = (program3) => {
+  program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").addHelpText(
+    "after",
+    "\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC \xA710)."
+  ).action(async (options) => {
+    const report = await buildReport3();
+    process.stdout.write(
+      options.json === true ? `${JSON.stringify(report, null, 2)}
+` : render2(report)
+    );
+  });
+};
+
 // src/commands/sync.ts
 var SYNC_ATTENTION_EXIT = 2;
 var line = (result) => {
@@ -35711,7 +35968,7 @@ var runSync = (options = {}) => {
 `
   };
 };
-var register24 = (program3) => {
+var register25 = (program3) => {
   program3.command("sync").description("publish and collect the notes mirror (the pre-push hook runs this for you)").option("--remote <name>", "sync only this remote (repeatable)", (value, previous = []) => [
     ...previous,
     value
@@ -35723,7 +35980,7 @@ var register24 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync29, rmSync as rmSync7 } from "node:fs";
+import { readFileSync as readFileSync30, rmSync as rmSync8 } from "node:fs";
 import { resolve as resolve22 } from "node:path";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
@@ -35932,14 +36189,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync29(path2, "utf8");
+    return readFileSync30(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync29(0, "utf8");
+    return readFileSync30(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
   }
@@ -36008,8 +36265,8 @@ var consumeAmendMarker = (cwd) => {
   if (located.code !== 0) return null;
   const path2 = resolve22(cwd, located.stdout.trim());
   try {
-    const recorded = readFileSync29(path2, "utf8").trim();
-    rmSync7(path2, { force: true });
+    const recorded = readFileSync30(path2, "utf8").trim();
+    rmSync8(path2, { force: true });
     return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
   } catch {
     return null;
@@ -36243,7 +36500,7 @@ var runValidate = (input = {}) => {
     checks
   };
 };
-var register25 = (program3) => {
+var register26 = (program3) => {
   program3.command("validate").description("check commit trailers against the protocol (SPEC \xA76)").option("-f, --message-file <file>", "validate a commit message file (a commit-msg hook passes one)").option("-c, --commit <sha>", "validate the message of one commit").option("-r, --range <a..b>", "validate every commit message in a range").option("--json", "emit violations as JSON for the repair loop").addHelpText(
     "after",
     "\nWith no input flag the message is read from stdin.\nExit codes: 0 clean, 1 violations found, 2 usage or input error (SPEC \xA710),\n3 this installation is missing a file it ships, so nothing was examined."
@@ -36266,9 +36523,9 @@ var register25 = (program3) => {
 
 // src/commands/uninstall.ts
 import { spawnSync as spawnSync9 } from "node:child_process";
-import { existsSync as existsSync25, readFileSync as readFileSync30, rmSync as rmSync8, writeFileSync as writeFileSync20 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { join as join20 } from "node:path";
+import { existsSync as existsSync25, readFileSync as readFileSync31, rmSync as rmSync9, writeFileSync as writeFileSync21 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { join as join21 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
 var isRecord3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var withoutJsonEntry = (parsed, format, wrapper) => {
@@ -36311,8 +36568,8 @@ var listCodexMcp = (command) => {
 };
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
-  const home = options.home ?? homedir4();
-  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join20(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join20(home, ".local", "share"));
+  const home = options.home ?? homedir5();
+  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join21(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join21(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
@@ -36320,11 +36577,11 @@ var runUninstall = async (options = {}) => {
   const kept = [];
   const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
-  const wrapper = join20(home, ".local", "bin", "commitlore");
+  const wrapper = join21(home, ".local", "bin", "commitlore");
   if (existsSync25(wrapper)) {
     let contents;
     try {
-      contents = readFileSync30(wrapper, "utf8");
+      contents = readFileSync31(wrapper, "utf8");
     } catch {
       kept.push(wrapper);
       failures.push(wrapper);
@@ -36332,7 +36589,7 @@ var runUninstall = async (options = {}) => {
       contents = "";
     }
     if (contents.includes(WRAPPER_MARKER)) {
-      if (!dryRun) rmSync8(wrapper, { force: true });
+      if (!dryRun) rmSync9(wrapper, { force: true });
       removed.push(wrapper);
       report.push(`${say}: ${wrapper}`);
     } else if (!failures.includes(wrapper)) {
@@ -36380,13 +36637,13 @@ var runUninstall = async (options = {}) => {
     removeCodexPluginMarker(config3, dataHome);
     removed.push(`${selector} (Codex plugin)`);
   }
-  const dataRoot = join20(dataHome, "commitlore");
+  const dataRoot = join21(dataHome, "commitlore");
   if (existsSync25(dataRoot)) {
     if (retainDataRoot) {
       kept.push(dataRoot);
       report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
     } else {
-      if (!dryRun) rmSync8(dataRoot, { recursive: true, force: true });
+      if (!dryRun) rmSync9(dataRoot, { recursive: true, force: true });
       removed.push(dataRoot);
       report.push(`${say}: ${dataRoot}`);
     }
@@ -36395,7 +36652,7 @@ var runUninstall = async (options = {}) => {
   const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
   const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
   if (codexConfig !== void 0 && codexList !== null) {
-    const path2 = join20(home, ...codexConfig.homeRelativePath);
+    const path2 = join21(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
       failures.push(path2);
@@ -36426,11 +36683,11 @@ var runUninstall = async (options = {}) => {
   for (const config3 of AGENT_CONFIGS) {
     if (!isMcpAgentConfig(config3)) continue;
     if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
-    const path2 = join20(home, ...config3.homeRelativePath);
+    const path2 = join21(home, ...config3.homeRelativePath);
     if (!existsSync25(path2)) continue;
     let contents;
     try {
-      contents = readFileSync30(path2, "utf8");
+      contents = readFileSync31(path2, "utf8");
     } catch {
       kept.push(path2);
       failures.push(path2);
@@ -36440,19 +36697,19 @@ var runUninstall = async (options = {}) => {
     if (config3.format === "toml-mcp_servers") {
       const next2 = withoutTomlBlock(contents, wrapper);
       if (next2 === null) continue;
-      if (!dryRun) writeFileSync20(path2, next2);
+      if (!dryRun) writeFileSync21(path2, next2);
       removed.push(`${path2} (${SERVER_KEY} entry)`);
       report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
       continue;
     }
     if (config3.format === "yaml-mcp_servers") {
       const next2 = removeHermesConfig(contents, {
-        wrapperPath: [wrapper, join20(dataRoot, "bin", "commitlore.cmd")],
+        wrapperPath: [wrapper, join21(dataRoot, "bin", "commitlore.cmd")],
         dataRoot,
         installedSkillsDir: installedPath("hermes", "skills")
       });
       if (next2.removed.length === 0) continue;
-      if (!dryRun) writeFileSync20(path2, next2.contents);
+      if (!dryRun) writeFileSync21(path2, next2.contents);
       removed.push(`${path2} (${next2.removed.join(" and ")} ${SERVER_KEY} entries)`);
       report.push(`${say}: the ${next2.removed.join(" and ")} ${SERVER_KEY} entries in ${path2}`);
       continue;
@@ -36468,7 +36725,7 @@ var runUninstall = async (options = {}) => {
     }
     const next = withoutJsonEntry(parsed, config3.format, wrapper);
     if (next === null) continue;
-    if (!dryRun) writeFileSync20(path2, `${JSON.stringify(next, null, 2)}
+    if (!dryRun) writeFileSync21(path2, `${JSON.stringify(next, null, 2)}
 `);
     removed.push(`${path2} (${SERVER_KEY} entry)`);
     report.push(`${say}: the ${SERVER_KEY} entry in ${path2}`);
@@ -36519,11 +36776,11 @@ if (internalArguments[0] === "internal" && internalArguments[1] === "mcp-probe")
   process.exit(0);
 }
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync31(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync32(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync31(STDIN_FD2, "utf8");
+  return readFileSync32(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {
@@ -36590,14 +36847,15 @@ program2.command("parse").description("Parse a commit message into its CommitLor
 program2.command("internal", { hidden: true }).command("mcp-probe", { hidden: true }).requiredOption("--command <command>", "MCP command to verify").requiredOption("--args-json <json>", "JSON array of MCP command arguments").action(async (options) => {
   await internalMcpProbe(options.command, options.argsJson);
 });
-register24(program2);
-register7(program2);
 register25(program2);
+register7(program2);
+register26(program2);
 registerUninstall(program2);
 register9(program2);
 register16(program2);
 register19(program2);
 register20(program2);
+register24(program2);
 register5(program2);
 register10(program2);
 register2(program2);

@@ -18,6 +18,7 @@ Installing the CLI is in [install.md](install.md). Without the wrapper on
 | `commitlore ruled-out [paths...]` | the active `Ruled-out:` records for a path |
 | `commitlore warnings [paths...]` | the active `Warn:` records for a path |
 | `commitlore stale` | records that are superseded, expired, or flagged for review |
+| `commitlore upgrade` | the installed release, the newest one, and the command that moves between them |
 | `commitlore guard [paths...]` | *experimental advisory* — flags a proposal that may revive a ruled-out alternative |
 
 `context`, `limits`, `ruled-out` and `warnings` take the same flags: `--json`

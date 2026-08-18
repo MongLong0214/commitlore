@@ -102,8 +102,8 @@ interface CacheEntry {
   readonly ttlMs: number;
 }
 
-export const cachePath = (home: string = homedir()): string =>
-  join(home, '.cache', 'commitlore', 'latest-release.json');
+export const cachePath = (home?: string): string =>
+  join(home !== undefined && home !== '' ? home : homedir(), '.cache', 'commitlore', 'latest-release.json');
 
 const readCache = (path: string): CacheEntry | null => {
   try {
@@ -301,7 +301,12 @@ export interface LatestReleaseOptions extends SpawnOptions {
 export const latestRelease = async (opts: LatestReleaseOptions = {}): Promise<CheckResult> => {
   const env = opts.env ?? process.env;
   const now = opts.now ?? Date.now;
-  const path = cachePath(opts.home);
+  // The home comes from the env this call was handed, not from the process.
+  // A module that takes its switches from `env` and its cache location from
+  // `process` is one that writes to the developer's real cache from inside a
+  // test -- which is how two of these tests first passed by reading each
+  // other's answer.
+  const path = cachePath(opts.home ?? env['HOME']);
 
   const off = disabledBy(env);
   if (off !== null) {
