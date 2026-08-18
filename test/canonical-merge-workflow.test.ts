@@ -37,12 +37,30 @@ const lineOf = (needle: string): number => {
 };
 
 describe('T-1502 canonical-merge.yml safety', () => {
-  it('mints the App token only after the contributor code has already run', () => {
-    // The rebuild runs `npm ci` and `build:canonical` on the merged tree, which
-    // executes whatever the pull request put in `package.json`. Minting first
-    // would put a credential that can push to this repository into that
-    // environment.
-    expect(lineOf('build:canonical')).toBeLessThan(lineOf('app-installation-token.mjs'));
+  it('mints the App token in a job that never ran contributor code', () => {
+    // Step order inside one job is not a boundary. `$GITHUB_ENV` and
+    // `$GITHUB_PATH` written during `npm ci` persist into every later step of
+    // the same job, so a dependency lifecycle script can set `NODE_OPTIONS` or
+    // put its own `git` on `PATH` and be running inside the step that holds the
+    // App key -- whichever file that step chose to execute. Extracting the
+    // credential script from `main` fixed *what* ran, not *how it was launched*.
+    const body = code();
+    const rebuildJob = body.slice(body.indexOf('  canonicalise:'), body.indexOf('  publish:'));
+    const publishJob = body.slice(body.indexOf('  publish:'));
+
+    expect(rebuildJob, 'the rebuild job can reach the App key').not.toContain('COMMITLORE_BOT_KEY');
+    expect(rebuildJob).not.toContain('app-installation-token.mjs');
+    expect(publishJob, 'the publishing job runs npm').not.toMatch(/\bnpm (ci|run)\b/);
+    expect(publishJob).toContain('app-installation-token.mjs');
+  });
+
+  it('hands the tree over as bytes rather than by rerunning the build', () => {
+    // A bundle moves the commits the first job produced. Rebuilding in the
+    // second job would put contributor code back on the runner that holds the
+    // credential, which is the boundary this exists to keep.
+    const body = code();
+    expect(body).toContain('git bundle create');
+    expect(body).toMatch(/needs:\s*canonicalise/);
   });
 
   it('does not put the App token in the rebuild step', () => {
@@ -93,15 +111,18 @@ describe('T-1502 canonical-merge.yml safety', () => {
     // Running the merged copy would hand the App private key to whatever the
     // pull request made that file into, without needing a `postinstall` at all.
     const body = code();
-    expect(body).toMatch(/git show "\$\{\{ steps\.merge\.outputs\.base \}\}:scripts\/app-installation-token\.mjs"/);
+    expect(body).toMatch(/git show "\$\{\{ steps\.take\.outputs\.base \}\}:scripts\/app-installation-token\.mjs"/);
     // And not from the workspace.
     expect(body).not.toMatch(/node scripts\/app-installation-token\.mjs/);
   });
 
-  it('reads main\'s sha before the rebuild, not after', () => {
+  it('reads main\'s sha before the rebuild, and carries it across the job boundary', () => {
     // The rebuild executes contributor code in this workspace, so a value read
     // from `.git` afterwards is a value that code had the chance to choose.
     expect(lineOf('base=$(git rev-parse origin/main)')).toBeLessThan(lineOf('build:canonical'));
+    // And the second job takes it from the artifact rather than re-deriving it
+    // in a workspace the first job could have edited.
+    expect(code()).toContain('cat /tmp/canonical/canonical.base');
   });
 
   it('does not persist the Actions credential over the App token', () => {
