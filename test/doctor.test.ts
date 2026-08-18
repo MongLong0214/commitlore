@@ -551,7 +551,7 @@ describe('doctor: the pinned CLI is a different version than the running one (#3
     // 17 since runtime-identity joined the registry. The count is asserted so
     // a check cannot be dropped without someone noticing; when it moves, it
     // should move because a check was deliberately added or removed.
-    expect(report.checks).toHaveLength(19);
+    expect(report.checks).toHaveLength(20);
   });
 });
 
@@ -1062,6 +1062,7 @@ describe('doctor: report', () => {
       'cli-runtime',
       'runtime-identity',
       'installation-integrity',
+      'release-freshness',
       'notes-refspec',
       'notes-push',
       'commit-msg-hook',
@@ -1122,7 +1123,7 @@ describe('doctor: report', () => {
     const parsed = JSON.parse(JSON.stringify(report, null, 2)) as DoctorReport;
 
     expect(parsed).toEqual(report);
-    expect(parsed.checks).toHaveLength(19);
+    expect(parsed.checks).toHaveLength(20);
     for (const entry of parsed.checks) {
       expect(entry.status).toBeTypeOf('string');
       expect(entry.id).toBeTypeOf('string');

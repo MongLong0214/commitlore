@@ -21,6 +21,7 @@ import { checkIndex } from './checks/index-index-health.js';
 import { checkRuntime } from './checks/runtime-cli-runtime.js';
 import { checkRuntimeIdentity } from './checks/runtime-runtime-identity.js';
 import { checkInstallationIntegrity } from './checks/runtime-installation-integrity.js';
+import { checkReleaseFreshness } from './checks/runtime-release-freshness.js';
 import { checkGit } from './checks/runtime-git-trailers.js';
 import { checkPush } from './checks/transport-notes-push.js';
 import { checkRefspec } from './checks/transport-notes-refspec.js';
@@ -54,6 +55,7 @@ export const CHECK_REGISTRY = [
     { id: 'cli-runtime', title: 'cli runtime', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntime(ctx) },
     { id: 'runtime-identity', title: 'runtime identity', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkRuntimeIdentity(ctx) },
     { id: 'installation-integrity', title: 'installation integrity', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkInstallationIntegrity(ctx) },
+    { id: 'release-freshness', title: 'release freshness', category: 'runtime', dependencies: [], optional: false, run: (ctx) => checkReleaseFreshness(ctx) },
     { id: 'notes-refspec', title: 'notes fetch refspec', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkRefspec(ctx) },
     { id: 'notes-push', title: 'notes push', category: 'transport', dependencies: [], optional: false, run: (ctx) => checkPush(ctx) },
     { id: 'commit-msg-hook', title: 'commit-msg hook', category: 'capture', dependencies: [], optional: false, run: (ctx) => checkHook(ctx, selectedHookRuntimeOf(ctx)) },

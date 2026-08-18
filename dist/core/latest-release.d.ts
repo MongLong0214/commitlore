@@ -120,4 +120,20 @@ export declare const latestRelease: (opts?: LatestReleaseOptions) => Promise<Che
 export declare const forgetCachedRelease: (home?: string) => void;
 /** Where a test puts a cache without touching a real home. */
 export declare const scratchHome: (label: string) => string;
+/**
+ * The same answer, fetched without a promise (T-1605).
+ *
+ * `doctor`'s checks are synchronous and making the registry async to carry one
+ * of them would rewrite every other check for a caller that is allowed to
+ * take a moment. The cache, the switches, the ranking and the back-off are
+ * shared -- only the spawn differs -- so this cannot drift into a second
+ * answer.
+ *
+ * `spawnSync`'s own `timeout` and `killSignal` are the bound here. That is
+ * weaker than the async path's process group and SIGTERM-then-SIGKILL, and it
+ * is the right trade: `doctor` is an invited, foreground report where a stuck
+ * child is visible, while the notice is an uninvited line that must never cost
+ * a command anything.
+ */
+export declare const latestReleaseSync: (opts?: LatestReleaseOptions) => CheckResult;
 export {};

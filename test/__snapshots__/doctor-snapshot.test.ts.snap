@@ -5,6 +5,7 @@ exports[`#462 doctor text report, pinned > pins the check set and its order inde
   "cli-runtime",
   "runtime-identity",
   "installation-integrity",
+  "release-freshness",
   "notes-refspec",
   "notes-push",
   "commit-msg-hook",
@@ -33,6 +34,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
+skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
@@ -63,6 +65,7 @@ exports[`#462 doctor text report, pinned > renders a stable report on a reposito
 ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
+skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
@@ -89,6 +92,7 @@ exports[`#470 doctor text report header > keeps the per-check tail byte-identica
   "broken": "ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
+skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)
@@ -111,6 +115,7 @@ skipped squash conservation — no local branch looks like the source of a squas
   "working": "ok      cli runtime — <root><path> runs (<version>)
 ok      runtime identity — all observed runtimes match CLI: v<version>; entry <root><path> root <root>; schema v4
 ok      installation integrity — 3 shipped files are present and readable
+skipped release freshness — not checked: COMMITLORE_NO_UPDATE_CHECK is set
 warn    notes fetch refspec — origin does not fetch refs<path> so records pushed by others stay invisible here
         fix: git config --add remote.origin.fetch 'refs/notes/*:refs/notes/*'
 ok      notes push — no local mirror yet — nothing to push (git push origin refs<path> once there is)

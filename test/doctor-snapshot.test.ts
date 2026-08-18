@@ -65,9 +65,18 @@ const PINNED_HOME = mkdtempSync(join(realpathSync(tmpdir()), 'cl-snap-home-'));
 const AMBIENT_HOME = process.env['HOME'];
 process.env['HOME'] = PINNED_HOME;
 
+// `release-freshness` asks a remote for its tags (T-1605). Left alone it
+// reports one thing on a connected laptop and another on an air-gapped runner,
+// which is not a pin. Switched off here, so the row is the deterministic
+// "not checked" one; T-1605's own suite covers the answers.
+const AMBIENT_NO_CHECK = process.env['COMMITLORE_NO_UPDATE_CHECK'];
+process.env['COMMITLORE_NO_UPDATE_CHECK'] = '1';
+
 afterAll(() => {
   if (AMBIENT_HOME === undefined) delete process.env['HOME'];
   else process.env['HOME'] = AMBIENT_HOME;
+  if (AMBIENT_NO_CHECK === undefined) delete process.env['COMMITLORE_NO_UPDATE_CHECK'];
+  else process.env['COMMITLORE_NO_UPDATE_CHECK'] = AMBIENT_NO_CHECK;
   rmSync(PINNED_HOME, { recursive: true, force: true });
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
 });

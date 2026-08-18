@@ -24,7 +24,7 @@
  * feature exists to expose. Hence three intervals rather than one.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -165,6 +165,19 @@ export const ttlFor = (outcome: CheckOutcome, previous: CacheEntry | null): numb
 
 /** Long enough for a slow remote, short enough that no command waits on it. */
 export const DEFAULT_TIMEOUT_MS = 3_000;
+
+/** Shared by both spawns, so one ranking answers for both. */
+const outcomeFromRefs = (stdout: string): CheckOutcome => {
+  const tags = stdout
+    .split('\n')
+    .map((line) => line.split('\t')[1] ?? '')
+    .map((ref) => ref.replace(/^refs\/tags\//, '').trim())
+    .filter((tag) => tag !== '');
+  const newest = newestRelease(tags);
+  return newest === null
+    ? { kind: 'no-tag-matched', detail: `${tags.length} ref(s), none a release tag` }
+    : { kind: 'resolved', tag: newest };
+};
 /** Between asking the child to stop and making it. */
 const GRACE_MS = 500;
 
@@ -261,17 +274,7 @@ export const fetchTags = async (
     // `commitlore mcp` from accumulating zombies.
     child.on('close', (code) => {
       if (code === 0) {
-        const tags = out
-          .split('\n')
-          .map((line) => line.split('\t')[1] ?? '')
-          .map((ref) => ref.replace(/^refs\/tags\//, '').trim())
-          .filter((tag) => tag !== '');
-        const newest = newestRelease(tags);
-        finish(
-          newest === null
-            ? { kind: 'no-tag-matched', detail: `${tags.length} ref(s), none a release tag` }
-            : { kind: 'resolved', tag: newest },
-        );
+        finish(outcomeFromRefs(out));
         return;
       }
       // git answered and declined: auth, a repository that is not there, a
@@ -338,3 +341,65 @@ export const forgetCachedRelease = (home?: string): void => {
 /** Where a test puts a cache without touching a real home. */
 export const scratchHome = (label: string): string =>
   join(tmpdir(), `commitlore-${label}-${String(process.pid)}`);
+
+// ---------------------------------------------------------------------------
+// The synchronous form, for doctor
+// ---------------------------------------------------------------------------
+
+/**
+ * The same answer, fetched without a promise (T-1605).
+ *
+ * `doctor`'s checks are synchronous and making the registry async to carry one
+ * of them would rewrite every other check for a caller that is allowed to
+ * take a moment. The cache, the switches, the ranking and the back-off are
+ * shared -- only the spawn differs -- so this cannot drift into a second
+ * answer.
+ *
+ * `spawnSync`'s own `timeout` and `killSignal` are the bound here. That is
+ * weaker than the async path's process group and SIGTERM-then-SIGKILL, and it
+ * is the right trade: `doctor` is an invited, foreground report where a stuck
+ * child is visible, while the notice is an uninvited line that must never cost
+ * a command anything.
+ */
+export const latestReleaseSync = (opts: LatestReleaseOptions = {}): CheckResult => {
+  const env = opts.env ?? process.env;
+  const now = opts.now ?? Date.now;
+  const path = cachePath(opts.home ?? env['HOME']);
+
+  const off = disabledBy(env);
+  if (off !== null) {
+    return { outcome: { kind: 'disabled', by: off }, cached: false, checkedAt: now() };
+  }
+
+  const previous = opts.fresh === true ? null : readCache(path);
+  if (previous !== null && now() - previous.checkedAt < previous.ttlMs) {
+    return { outcome: previous.outcome, cached: true, checkedAt: previous.checkedAt };
+  }
+
+  let outcome: CheckOutcome;
+  try {
+    const run = spawnSync('git', ['ls-remote', '--tags', '--refs', sourceUrl(env)], {
+      encoding: 'utf8',
+      timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      env: { ...env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never' },
+    });
+    if (run.error !== undefined) {
+      outcome = { kind: 'unreachable', detail: run.error.message };
+    } else if (run.status === 0) {
+      outcome = outcomeFromRefs(run.stdout ?? '');
+    } else if (run.signal !== null) {
+      outcome = { kind: 'unreachable', detail: `no answer within the timeout (${run.signal})` };
+    } else {
+      outcome = { kind: 'refused', detail: (run.stderr ?? '').trim().split('\n')[0] ?? `git exited ${String(run.status)}` };
+    }
+  } catch (error) {
+    outcome = { kind: 'unreachable', detail: `git could not be started: ${String(error)}` };
+  }
+
+  const checkedAt = now();
+  if (opts.fresh !== true) {
+    writeCache(path, { version: CACHE_VERSION, checkedAt, outcome, ttlMs: ttlFor(outcome, previous) });
+  }
+  return { outcome, cached: false, checkedAt };
+};

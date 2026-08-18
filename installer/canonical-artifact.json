@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "9ec903f2e8bfb6990f408928eafdf6b1eb8804b8388ac072066f82d02d110b45"
+    "sha256": "42e93a5537075a4a5d0d446aba8438332e2dfbd1ca3565ba684eed40743fd834"
   },
   "artifact": {
-    "sha256": "d99e0ac6be61ee17b7ec6b67b56a4daa4a027069381aa97b3a67a60c0e2f02b6",
+    "sha256": "cedf29896dbb90f5aeb86206b0e0870ac28ed3a4213a63218e9af1e7e5b25a6b",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -285,6 +285,18 @@
         "sha256": "8cb2ce86852513f03772e4d1deda36ba1e4b41040ac2c8196af35bfe23639f95"
       },
       {
+        "path": "dist/commands/doctor/checks/runtime-release-freshness.d.ts",
+        "sha256": "996b9083fe78cadd8247c602b498bd2de1a99675fd6c7593bfc11fe214fa24eb"
+      },
+      {
+        "path": "dist/commands/doctor/checks/runtime-release-freshness.js",
+        "sha256": "966e61b6f71102e4782c51dd06a9fd6e60d600428940003344de831afedaccc6"
+      },
+      {
+        "path": "dist/commands/doctor/checks/runtime-release-freshness.js.map",
+        "sha256": "977f3a30aa6e5a8896fdff2a1d8f65b93e3f3ad5f577d40fbde5bfa5493d1357"
+      },
+      {
         "path": "dist/commands/doctor/checks/runtime-runtime-identity.d.ts",
         "sha256": "5a21a0fff75124c59cca2509f9f87f77496f3219507ceda4c3f1acf310b7662e"
       },
@@ -338,11 +350,11 @@
       },
       {
         "path": "dist/commands/doctor/registry.js",
-        "sha256": "6151172eecec9cc300dc21720319645ee2ca3107940a3b7b74bf2cb5969d0949"
+        "sha256": "dd4a0042f8297d163fdae3b88086a8bdc1ec4995759437a1a282adac03f889d9"
       },
       {
         "path": "dist/commands/doctor/registry.js.map",
-        "sha256": "d607b80ae44ca1e5c4991cc80fc8784adcff460a4662e7736678d80a8bc898a7"
+        "sha256": "c5a7d9bd6efe37b2f5d9c7ebe17f055d33e044e53a6f2a1a6c5ce1b25338f3cf"
       },
       {
         "path": "dist/commands/doctor/render.d.ts",
@@ -610,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "34b9bb02984337678ee7a17f03d0cfb13da669a189a4ae90c785784a8b65bca5"
+        "sha256": "2a0ddb3d379c25c4cb8e73837e3319d3637589bb73b4e6bf5df086197008734f"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -854,15 +866,15 @@
       },
       {
         "path": "dist/core/latest-release.d.ts",
-        "sha256": "2e30256752a1fd1b3b5c0b9df3e89dd5cdf0ae695ac82c177c6da915d02796b9"
+        "sha256": "d5ff0e72d1847218696541b4c70d7fda93602172f08934be38fdb8faa8d746e9"
       },
       {
         "path": "dist/core/latest-release.js",
-        "sha256": "07878f3e52c293f197350da7728b041c3fdd03a7cd6cc27086ec273f4e8673a8"
+        "sha256": "20c485baeadd887fa93d8be02938b5dc7faf60c7d0558113c11b91e5e2542f65"
       },
       {
         "path": "dist/core/latest-release.js.map",
-        "sha256": "6946b1c075e6b340641e256985aef8604b0f3aa93d39ff995125ddd40dab3dee"
+        "sha256": "d809b04c224ade573386d92f1a7fa92c4e4bff712f0aae2571032168ca81d35d"
       },
       {
         "path": "dist/core/mcp-probe.d.ts",
