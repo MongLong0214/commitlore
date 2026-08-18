@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs commitlore from source, for any agent that is not Claude Code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh -s v1.1.3
 #
 # **Claude Code users do not need this script.** The repository is itself a
 # plugin marketplace (ADR-0011), so two `/plugin` commands register the MCP
@@ -737,4 +737,24 @@ fi
 log ""
 log "Next: cd into a repository and run 'commitlore init' to install its git hook and index."
 log "(install.sh never runs init for you -- it only installs the tool and wires agents, never touches a repository's .git.)"
+
+# Said here because this is the only moment anything sees an upgrade happen, and
+# it is the moment the instruction is actionable.
+#
+# The commit-msg hook is a file written into a repository's `.git/hooks` when
+# `hooks install` runs there. Upgrading replaces the bundle and moves `current`;
+# it cannot rewrite hooks already on disk, and this script does not go looking
+# for them -- it has no record of which repositories exist and does not touch a
+# repository's `.git` (#749). So a fix that lives in the hook reaches a
+# repository only on its next visit.
+#
+# Printed on every install rather than only on an upgrade: this script does not
+# know whether the repositories on this machine were set up before or after
+# whatever it just replaced, and a message that guesses wrong in the reassuring
+# direction is the one that costs something.
+log ""
+log "Already set up a repository with an earlier release? Run 'commitlore hooks install'"
+log "in it once. The hook is a file written at install time, so upgrading cannot reach"
+log "one already on disk -- and until it is re-run there, a hook installed before this"
+log "may refuse commits under the PATH git gives it (a GUI client, an IDE, a launcher)."
 exit "$host_status"
