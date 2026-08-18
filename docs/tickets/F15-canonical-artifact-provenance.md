@@ -134,18 +134,25 @@ comment cannot satisfy them. At minimum:
   falsifies the property this ticket actually claims — *the bytes that land match the
   source that landed with them* — rather than the workflow's internal step list.
 
-**Known limitation — the merge method is not enforceable from here.** The canonical pull
-request's body asks for a merge commit, because a squash lands new bytes and leaves the
-source pull request open with nothing to point at. That request is a check somebody has to
-read. The repository allows squash, merge and rebase, and GitHub's merge button remembers
-whichever was used last, so the wrong one is a click away — measured on #760, where five
-of six pull requests closed as merged and the sixth did not.
+**The merge method is enforced by the repository, not by this workflow (2026-08-18).**
+`allow_squash_merge` and `allow_rebase_merge` are off; a merge commit is the only method
+GitHub offers here. That matters because the canonical pull request depends on its head
+commit staying an ancestor: a squash lands new bytes instead, leaving the source pull
+request open with nothing to point at.
 
-Two ways to close it, and both are the owner's call rather than this ticket's:
-`gh api -X PUT .../pulls/N/merge -f merge_method=merge` names the method per merge, and
-turning off `allow_squash_merge` / `allow_rebase_merge` names it once for the repository.
-The second is the one that fits a repository that commits `dist/`, since a squash breaks
-the ancestry every integration pull request here depends on.
+This paragraph previously said the method was not enforceable and left the choice to the
+owner. It was enforceable; it just was not enforced. Until it was, the canonical body's
+"merge this with a merge commit" was a check somebody had to read — the shape that cost
+#752 its `merged` label during the 1.1.3 release, in the sentence next to it rather than
+in this one.
+
+The body still says it, for a reader who wants to know why the branch is shaped this way.
+It is no longer what holds the property.
+
+**What this moves rather than removes.** The guarantee now lives in a repository setting,
+which nothing in this repository reads. A future owner can re-enable squash and no test,
+workflow or gate here will notice — only a canonical pull request quietly failing to close
+its source. That is a smaller surface than a sentence in a body, and it is not zero.
 
 **Not in scope** — removing `dist/` from pull request requirements. That is T-1503, and
 doing it here means a failure in this ticket has no fallback.
