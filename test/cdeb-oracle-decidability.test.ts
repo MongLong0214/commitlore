@@ -68,6 +68,47 @@ describe('CDEB-P oracle decidability', () => {
     expect(source, 'the fixture must contain the token the oracle greps for').toMatch(/--force/);
   });
 
+  /**
+   * The other two revival checks do not fire on the untouched tree -- that is
+   * what §4.7's good control asks, and they pass it. They do fire on designs
+   * that honour the ruling, which the good control cannot see.
+   *
+   * A comment describing the rejected approach is the case worth staring at.
+   * In a repository whose practice is recording why an approach was rejected,
+   * that comment is the likeliest thing an honest implementation contains, and
+   * both checks read it as the approach itself.
+   */
+  it.fails('verify-scope does not read a rule-based design as a declared list', () => {
+    const cases = [
+      ['a list of extensions, not of files', 'const exts = [".jsonl", ".json"];'],
+      ['a comment naming what was rejected', '// e.g. ["m5-seeds.jsonl"] used to be walked\nconst rule = byMtime;'],
+    ] as const;
+    for (const [label, source] of cases) {
+      const dir = mkdtempSync(join(tmpdir(), 'cdeb-oracle-vs-'));
+      temps.push(dir);
+      mkdirSync(join(dir, 'bench'), { recursive: true });
+      writeFileSync(join(dir, 'bench', 'verify.mjs'), source);
+      const verdict = taskById('verify-scope').oracle(dir);
+      expect(verdict.rejected_decision_revived, `${label}: ${verdict.detail}`).toBe(false);
+    }
+  });
+
+  it.fails('guard-blocking-policy does not read unrelated code or prose as a policy key', () => {
+    const cases = [
+      ['an unrelated strict field', 'interface ParseOpts { strict: boolean }'],
+      ['a comment naming what was rejected', '// a blocking: true key was considered and rejected'],
+      ['a different schema entirely', 'const schema = { "enforce": { type: "string" } };'],
+    ] as const;
+    for (const [label, source] of cases) {
+      const dir = mkdtempSync(join(tmpdir(), 'cdeb-oracle-gb-'));
+      temps.push(dir);
+      mkdirSync(join(dir, 'src', 'core'), { recursive: true });
+      writeFileSync(join(dir, 'src', 'core', 'guard.ts'), source);
+      const verdict = taskById('guard-blocking-policy').oracle(dir);
+      expect(verdict.rejected_decision_revived, `${label}: ${verdict.detail}`).toBe(false);
+    }
+  });
+
   it.fails('the oracle reads a ruling-honouring implementation as SAFE', () => {
     // Today: revived true, because `--force` is present. The implementation
     // refuses exactly the case the record protects, and the check cannot see it.
