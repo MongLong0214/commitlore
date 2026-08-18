@@ -7740,7 +7740,7 @@ var require_dist = __commonJS({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync32 } from "node:fs";
+import { readFileSync as readFileSync33 } from "node:fs";
 
 // node_modules/commander/lib/error.js
 var CommanderError = class extends Error {
@@ -24519,9 +24519,9 @@ var mcpBlock = (wrapperPath, newline) => [
 var skillsBlock = (skillsDir, newline) => ["  external_dirs:", `    - ${yamlString(skillsDir)}`, ""].join(newline);
 var topLevelMcpBlock = (wrapperPath, newline) => [`mcp_servers:`, mcpBlock(wrapperPath, newline)].join(newline);
 var topLevelSkillsBlock = (skillsDir, newline) => [`skills:`, skillsBlock(skillsDir, newline)].join(newline);
-var isManagedHermesSkillsDir = (value, dataRoot, installedSkillsDir) => {
+var isManagedHermesSkillsDir = (value, dataRoot2, installedSkillsDir) => {
   if (installedSkillsDir !== void 0 && resolve18(value) === resolve18(installedSkillsDir)) return true;
-  const rel = relative2(resolve18(dataRoot), resolve18(value));
+  const rel = relative2(resolve18(dataRoot2), resolve18(value));
   const parts = rel.split(sep3);
   return parts.length === 3 && parts[0] !== "" && parts[0] !== ".." && !parts[0]?.startsWith("..") && parts[1] === "hermes" && parts[2] === "skills";
 };
@@ -24701,8 +24701,8 @@ var runHermesInstall = (options = {}) => {
   const hermesHome = process.env["HERMES_HOME"];
   const configPath = options.configPath ?? (hermesHome === void 0 ? join17(home, ".hermes", "config.yaml") : join17(hermesHome, "config.yaml"));
   const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join17(home, ".local", "share");
-  const dataRoot = options.dataRoot ?? join17(dataHome, "commitlore");
-  const versionedSkills = join17(dataRoot, `v${runtimeIdentity().version}`, "hermes", "skills");
+  const dataRoot2 = options.dataRoot ?? join17(dataHome, "commitlore");
+  const versionedSkills = join17(dataRoot2, `v${runtimeIdentity().version}`, "hermes", "skills");
   const skillsDir = options.skillsDir ?? (existsSync22(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
   const detected = options.detected ?? (existsSync22(dirname12(configPath)) || commandExists("hermes"));
   const report = [];
@@ -24728,7 +24728,7 @@ var runHermesInstall = (options = {}) => {
   const edit = addHermesConfig(before, {
     wrapperPath,
     skillsDir: resolve19(skillsDir),
-    dataRoot
+    dataRoot: dataRoot2
   });
   if (edit.blocked.length > 0) {
     for (const reason of edit.blocked) report.push(`could not configure: ${reason}`);
@@ -35952,6 +35952,10 @@ var register23 = (program3) => {
 };
 
 // src/commands/update.ts
+import { spawnSync as spawnSync10 } from "node:child_process";
+import { readFileSync as readFileSync30, realpathSync as realpathSync6 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { join as join21 } from "node:path";
 var installCommand = (tag, platform = process.platform) => {
   const readme = readInstalledFile("README.md");
   const script = platform === "win32" ? "install.ps1" : "install.sh";
@@ -36009,16 +36013,97 @@ a newer release is available. To upgrade:
 `;
 };
 var register24 = (program3) => {
-  program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").addHelpText(
+  program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").option("--force", "act even when the newest release is not newer than this one").addHelpText(
     "after",
     "\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC \xA710)."
   ).action(async (options) => {
     const report = await buildReport3();
-    process.stdout.write(
-      options.json === true ? `${JSON.stringify(report, null, 2)}
+    const readOnly = options.json === true || options.check === true;
+    if (readOnly) {
+      process.stdout.write(
+        options.json === true ? `${JSON.stringify(report, null, 2)}
 ` : render2(report)
-    );
+      );
+      return;
+    }
+    process.stdout.write(render2(report));
+    if (report.latest === null) return;
+    if (!report.updateAvailable && options.force !== true) return;
+    const blocked2 = process.env["COMMITLORE_NO_AUTO_UPDATE"];
+    if (blocked2 !== void 0 && blocked2 !== "") {
+      process.stdout.write(
+        `
+COMMITLORE_NO_AUTO_UPDATE is set, so nothing was changed. This would have run:
+
+  ${report.command}
+`
+      );
+      return;
+    }
+    const outcome = performUpgrade(report.latest, {
+      env: process.env,
+      platform: process.platform,
+      runInstaller: (script, tag) => spawnSync10(process.platform === "win32" ? "powershell" : "sh", [script, tag], {
+        stdio: "inherit"
+      })
+    });
+    for (const line2 of outcome.lines) process.stdout.write(`${line2}
+`);
+    if (outcome.code !== 0) process.exitCode = outcome.code;
   });
+};
+var dataRoot = (env = process.env) => {
+  const xdg = env["XDG_DATA_HOME"];
+  const base = xdg !== void 0 && xdg !== "" ? xdg : join21(env["HOME"] ?? homedir5(), ".local", "share");
+  return join21(base, "commitlore");
+};
+var installerName = (platform) => platform === "win32" ? "install.ps1" : "install.sh";
+var resolvedCurrent = (root, platform = process.platform) => {
+  try {
+    if (platform === "win32") {
+      const shim = join21(root, "bin", "commitlore.cmd");
+      const text = readFileSync30(shim, "utf8");
+      const match = /([^\s"']*[/\\]v\d+\.\d+\.\d+)[/\\]/.exec(text);
+      return match?.[1] ?? null;
+    }
+    return realpathSync6(join21(root, "current"));
+  } catch {
+    return null;
+  }
+};
+var pointsAtTarget = (root, tag, platform) => {
+  const resolved = resolvedCurrent(root, platform);
+  if (resolved === null) return false;
+  return resolved.split(/[/\\]/).pop() === tag;
+};
+var performUpgrade = (tag, deps) => {
+  const root = dataRoot(deps.env);
+  const script = installerName(deps.platform);
+  const invoked = [];
+  const lines = [];
+  const step1 = join21(root, "current", script);
+  invoked.push(step1);
+  deps.runInstaller(step1, tag);
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+  lines.push(`the installer on disk did not leave ${tag} in place; retrying with the one it just downloaded`);
+  const step3 = join21(root, tag, script);
+  invoked.push(step3);
+  deps.runInstaller(step3, tag);
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+  lines.push(
+    `could not upgrade to ${tag}: ${join21(root, "current")} still does not resolve to it.`,
+    `Install it directly:
+
+  ${installCommand(tag, deps.platform)}`,
+    `Then run: commitlore doctor \u2014 a link that is right over a checkout that is wrong is beyond what this command can see.`
+  );
+  return { code: 1, lines, invoked };
 };
 
 // src/core/update-notice.ts
@@ -36105,7 +36190,7 @@ var register25 = (program3) => {
 };
 
 // src/commands/validate.ts
-import { readFileSync as readFileSync30, rmSync as rmSync8 } from "node:fs";
+import { readFileSync as readFileSync31, rmSync as rmSync8 } from "node:fs";
 import { resolve as resolve22 } from "node:path";
 var USAGE2 = "usage: commitlore validate [--message-file <file> | --commit <sha> | --range <a>..<b>] [--json]";
 var MODE_FLAGS = {
@@ -36314,14 +36399,14 @@ var readRange = (range, cwd) => {
 };
 var readMessageFile = (path2) => {
   try {
-    return readFileSync30(path2, "utf8");
+    return readFileSync31(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf9(error2)}`);
   }
 };
 var readStdinSync = () => {
   try {
-    return readFileSync30(0, "utf8");
+    return readFileSync31(0, "utf8");
   } catch (error2) {
     throw new Error(`cannot read the commit message from stdin: ${messageOf9(error2)}`);
   }
@@ -36390,7 +36475,7 @@ var consumeAmendMarker = (cwd) => {
   if (located.code !== 0) return null;
   const path2 = resolve22(cwd, located.stdout.trim());
   try {
-    const recorded = readFileSync30(path2, "utf8").trim();
+    const recorded = readFileSync31(path2, "utf8").trim();
     rmSync8(path2, { force: true });
     return /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : null;
   } catch {
@@ -36647,10 +36732,10 @@ var register26 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync10 } from "node:child_process";
-import { existsSync as existsSync25, readFileSync as readFileSync31, rmSync as rmSync9, writeFileSync as writeFileSync21 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
-import { join as join21 } from "node:path";
+import { spawnSync as spawnSync11 } from "node:child_process";
+import { existsSync as existsSync25, readFileSync as readFileSync32, rmSync as rmSync9, writeFileSync as writeFileSync21 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { join as join22 } from "node:path";
 var WRAPPER_MARKER = "# commitlore:wrapper:v1";
 var isRecord3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var withoutJsonEntry = (parsed, format, wrapper) => {
@@ -36678,7 +36763,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync10(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync11(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -36693,8 +36778,8 @@ var listCodexMcp = (command) => {
 };
 var isInstalledCodexServer = (server, wrapper) => server.name === SERVER_KEY && server.transport?.type === "stdio" && server.transport.command === wrapper && Array.isArray(server.transport.args) && server.transport.args.length === 1 && server.transport.args[0] === "mcp";
 var runUninstall = async (options = {}) => {
-  const home = options.home ?? homedir5();
-  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join21(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join21(home, ".local", "share"));
+  const home = options.home ?? homedir6();
+  const dataHome = options.dataHome ?? (process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join22(home, "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join22(home, ".local", "share"));
   const dryRun = options.dryRun === true;
   const say = dryRun ? "would remove" : "removed";
   const report = [];
@@ -36702,11 +36787,11 @@ var runUninstall = async (options = {}) => {
   const kept = [];
   const failures = [];
   const runCodex = options.runCodex ?? runCodexCommand;
-  const wrapper = join21(home, ".local", "bin", "commitlore");
+  const wrapper = join22(home, ".local", "bin", "commitlore");
   if (existsSync25(wrapper)) {
     let contents;
     try {
-      contents = readFileSync31(wrapper, "utf8");
+      contents = readFileSync32(wrapper, "utf8");
     } catch {
       kept.push(wrapper);
       failures.push(wrapper);
@@ -36762,22 +36847,22 @@ var runUninstall = async (options = {}) => {
     removeCodexPluginMarker(config3, dataHome);
     removed.push(`${selector} (Codex plugin)`);
   }
-  const dataRoot = join21(dataHome, "commitlore");
-  if (existsSync25(dataRoot)) {
+  const dataRoot2 = join22(dataHome, "commitlore");
+  if (existsSync25(dataRoot2)) {
     if (retainDataRoot) {
-      kept.push(dataRoot);
-      report.push(`kept: ${dataRoot} \u2014 it carries a Codex-plugin marker that still needs removal`);
+      kept.push(dataRoot2);
+      report.push(`kept: ${dataRoot2} \u2014 it carries a Codex-plugin marker that still needs removal`);
     } else {
-      if (!dryRun) rmSync9(dataRoot, { recursive: true, force: true });
-      removed.push(dataRoot);
-      report.push(`${say}: ${dataRoot}`);
+      if (!dryRun) rmSync9(dataRoot2, { recursive: true, force: true });
+      removed.push(dataRoot2);
+      report.push(`${say}: ${dataRoot2}`);
     }
   }
   const codexConfig = AGENT_CONFIGS.filter(isMcpAgentConfig).find((config3) => config3.agent === "codex");
   const codexCommand = options.codexCommand ?? (options.home === void 0 ? "codex" : void 0);
   const codexList = codexCommand === void 0 ? null : listCodexMcp(codexCommand);
   if (codexConfig !== void 0 && codexList !== null) {
-    const path2 = join21(home, ...codexConfig.homeRelativePath);
+    const path2 = join22(home, ...codexConfig.homeRelativePath);
     if (codexList.state === "unavailable" || codexList.state === "invalid") {
       kept.push(path2);
       failures.push(path2);
@@ -36792,7 +36877,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync10(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync11(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
@@ -36808,11 +36893,11 @@ var runUninstall = async (options = {}) => {
   for (const config3 of AGENT_CONFIGS) {
     if (!isMcpAgentConfig(config3)) continue;
     if (config3.agent === "codex" && codexList !== null && codexList.state !== "absent") continue;
-    const path2 = join21(home, ...config3.homeRelativePath);
+    const path2 = join22(home, ...config3.homeRelativePath);
     if (!existsSync25(path2)) continue;
     let contents;
     try {
-      contents = readFileSync31(path2, "utf8");
+      contents = readFileSync32(path2, "utf8");
     } catch {
       kept.push(path2);
       failures.push(path2);
@@ -36829,8 +36914,8 @@ var runUninstall = async (options = {}) => {
     }
     if (config3.format === "yaml-mcp_servers") {
       const next2 = removeHermesConfig(contents, {
-        wrapperPath: [wrapper, join21(dataRoot, "bin", "commitlore.cmd")],
-        dataRoot,
+        wrapperPath: [wrapper, join22(dataRoot2, "bin", "commitlore.cmd")],
+        dataRoot: dataRoot2,
         installedSkillsDir: installedPath("hermes", "skills")
       });
       if (next2.removed.length === 0) continue;
@@ -36901,11 +36986,11 @@ if (internalArguments[0] === "internal" && internalArguments[1] === "mcp-probe")
   process.exit(0);
 }
 var readMessage = (messageFile) => {
-  if (messageFile !== void 0) return readFileSync32(messageFile, "utf8");
+  if (messageFile !== void 0) return readFileSync33(messageFile, "utf8");
   if (process.stdin.isTTY) {
     throw new Error("no commit message on stdin \u2014 pipe one in or pass --message-file <path>");
   }
-  return readFileSync32(STDIN_FD2, "utf8");
+  return readFileSync33(STDIN_FD2, "utf8");
 };
 var recordIdOf3 = (block) => block.trailers.find((trailer) => trailer.key === "Record-Id")?.value;
 var recordLabel = (index, total, block) => {

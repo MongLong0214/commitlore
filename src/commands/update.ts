@@ -25,6 +25,11 @@
  * scripts run.
  */
 
+import { spawnSync } from 'node:child_process';
+import { readFileSync, realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Command } from 'commander';
 
 import { latestRelease, sourceUrl, type CheckOutcome } from '../core/latest-release.js';
@@ -120,14 +125,163 @@ export const register = (program: Command): void => {
     .description('report the installed and newest CommitLore release')
     .option('--check', 'report only; make no change (the default in this build)')
     .option('--json', 'the same answer as JSON')
+    .option('--force', 'act even when the newest release is not newer than this one')
     .addHelpText(
       'after',
       '\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC §10).',
     )
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { json?: boolean; check?: boolean; force?: boolean }) => {
       const report = await buildReport();
-      process.stdout.write(
-        options.json === true ? `${JSON.stringify(report, null, 2)}\n` : render(report),
-      );
+      const readOnly = options.json === true || options.check === true;
+      if (readOnly) {
+        // The read-only form stays read-only, asserted separately from the
+        // acting form: these two must not be one code path with a flag.
+        process.stdout.write(
+          options.json === true ? `${JSON.stringify(report, null, 2)}\n` : render(report),
+        );
+        return;
+      }
+
+      process.stdout.write(render(report));
+      if (report.latest === null) return;
+
+      // A typo must not silently downgrade a machine.
+      if (!report.updateAvailable && options.force !== true) return;
+
+      const blocked = process.env['COMMITLORE_NO_AUTO_UPDATE'];
+      if (blocked !== undefined && blocked !== '') {
+        // Stops the action and not the report: it says what it would have done
+        // and exits 0, because declining automatic action is not an error.
+        process.stdout.write(
+          `\nCOMMITLORE_NO_AUTO_UPDATE is set, so nothing was changed. This would have run:\n\n  ${report.command}\n`,
+        );
+        return;
+      }
+
+      const outcome = performUpgrade(report.latest, {
+        env: process.env,
+        platform: process.platform,
+        runInstaller: (script, tag) =>
+          spawnSync(process.platform === 'win32' ? 'powershell' : 'sh', [script, tag], {
+            stdio: 'inherit',
+          }),
+      });
+      for (const line of outcome.lines) process.stdout.write(`${line}\n`);
+      if (outcome.code !== 0) process.exitCode = outcome.code;
     });
+};
+
+// ---------------------------------------------------------------------------
+// The upgrade itself (T-1606, ADR-0038)
+// ---------------------------------------------------------------------------
+
+/** Matches `install.sh:448`. */
+export const dataRoot = (env: NodeJS.ProcessEnv = process.env): string => {
+  const xdg = env['XDG_DATA_HOME'];
+  const base = xdg !== undefined && xdg !== '' ? xdg : join(env['HOME'] ?? homedir(), '.local', 'share');
+  return join(base, 'commitlore');
+};
+
+const installerName = (platform: string): string =>
+  platform === 'win32' ? 'install.ps1' : 'install.sh';
+
+/**
+ * What `current` points at, or `null`.
+ *
+ * On Windows `install.ps1` writes no `current` symlink at all -- activation is
+ * a `.cmd` shim whose last line names the versioned `dist\commitlore.mjs`. So
+ * the same question is asked of the shim's contents there. ADR-0038 calls this
+ * "expressed the way that platform allows"; reading a link that is never
+ * created would report every Windows upgrade as failed.
+ */
+export const resolvedCurrent = (
+  root: string,
+  platform: string = process.platform,
+): string | null => {
+  try {
+    if (platform === 'win32') {
+      const shim = join(root, 'bin', 'commitlore.cmd');
+      const text = readFileSync(shim, 'utf8');
+      const match = /([^\s"']*[/\\]v\d+\.\d+\.\d+)[/\\]/.exec(text);
+      return match?.[1] ?? null;
+    }
+    return realpathSync(join(root, 'current'));
+  } catch {
+    return null;
+  }
+};
+
+/** Step 2 and step 4: *is it the target*, not *did it move*. */
+export const pointsAtTarget = (root: string, tag: string, platform?: string): boolean => {
+  const resolved = resolvedCurrent(root, platform);
+  if (resolved === null) return false;
+  // `realpath` may differ from the literal path by symlinked parents, so the
+  // comparison is on the final segment the installer names.
+  return resolved.split(/[/\\]/).pop() === tag;
+};
+
+export interface UpgradeOutcome {
+  readonly code: 0 | 1 | 2;
+  readonly lines: readonly string[];
+  /** Which installers were invoked, in order. Asserted by a test. */
+  readonly invoked: readonly string[];
+}
+
+export interface UpgradeDeps {
+  readonly env: NodeJS.ProcessEnv;
+  readonly platform: string;
+  /** Runs one installer. Injected so a test can supply a #735 fixture. */
+  readonly runInstaller: (script: string, tag: string) => { status: number | null };
+}
+
+/**
+ * ADR-0038's four steps.
+ *
+ * Step 1 runs the installer already on disk, which may be old. Its clone is
+ * sound regardless: `install.sh` takes a version argument and clones that tag
+ * directly, never reading `current`. Step 3 exists for exactly one named
+ * defect -- the #735 move that reported success while leaving `current`
+ * behind -- and reruns the installer the first step just downloaded, which
+ * carries the fix.
+ *
+ * This is a retry across one defect, not a general recovery. A release whose
+ * *own* move is broken is not saved by anything here, which is why step 4
+ * fails loudly with a command that comes from neither failed installer.
+ */
+export const performUpgrade = (tag: string, deps: UpgradeDeps): UpgradeOutcome => {
+  const root = dataRoot(deps.env);
+  const script = installerName(deps.platform);
+  const invoked: string[] = [];
+  const lines: string[] = [];
+
+  const step1 = join(root, 'current', script);
+  invoked.push(step1);
+  deps.runInstaller(step1, tag);
+
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+
+  // Not "the link did not move" -- a move to some other installed version
+  // changes it and still leaves the machine wrong. Revision 1 said the former
+  // and the retry would never have fired.
+  lines.push(`the installer on disk did not leave ${tag} in place; retrying with the one it just downloaded`);
+  const step3 = join(root, tag, script);
+  invoked.push(step3);
+  deps.runInstaller(step3, tag);
+
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+
+  // The canonical one-liner, fetched fresh -- not the local script, which is
+  // the bytes that just failed twice.
+  lines.push(
+    `could not upgrade to ${tag}: ${join(root, 'current')} still does not resolve to it.`,
+    `Install it directly:\n\n  ${installCommand(tag, deps.platform)}`,
+    `Then run: commitlore doctor — a link that is right over a checkout that is wrong is beyond what this command can see.`,
+  );
+  return { code: 1, lines, invoked };
 };

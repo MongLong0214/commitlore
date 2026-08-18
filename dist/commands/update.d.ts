@@ -46,3 +46,46 @@ export interface UpgradeReport {
 }
 export declare const buildReport: (env?: NodeJS.ProcessEnv) => Promise<UpgradeReport>;
 export declare const register: (program: Command) => void;
+/** Matches `install.sh:448`. */
+export declare const dataRoot: (env?: NodeJS.ProcessEnv) => string;
+/**
+ * What `current` points at, or `null`.
+ *
+ * On Windows `install.ps1` writes no `current` symlink at all -- activation is
+ * a `.cmd` shim whose last line names the versioned `dist\commitlore.mjs`. So
+ * the same question is asked of the shim's contents there. ADR-0038 calls this
+ * "expressed the way that platform allows"; reading a link that is never
+ * created would report every Windows upgrade as failed.
+ */
+export declare const resolvedCurrent: (root: string, platform?: string) => string | null;
+/** Step 2 and step 4: *is it the target*, not *did it move*. */
+export declare const pointsAtTarget: (root: string, tag: string, platform?: string) => boolean;
+export interface UpgradeOutcome {
+    readonly code: 0 | 1 | 2;
+    readonly lines: readonly string[];
+    /** Which installers were invoked, in order. Asserted by a test. */
+    readonly invoked: readonly string[];
+}
+export interface UpgradeDeps {
+    readonly env: NodeJS.ProcessEnv;
+    readonly platform: string;
+    /** Runs one installer. Injected so a test can supply a #735 fixture. */
+    readonly runInstaller: (script: string, tag: string) => {
+        status: number | null;
+    };
+}
+/**
+ * ADR-0038's four steps.
+ *
+ * Step 1 runs the installer already on disk, which may be old. Its clone is
+ * sound regardless: `install.sh` takes a version argument and clones that tag
+ * directly, never reading `current`. Step 3 exists for exactly one named
+ * defect -- the #735 move that reported success while leaving `current`
+ * behind -- and reruns the installer the first step just downloaded, which
+ * carries the fix.
+ *
+ * This is a retry across one defect, not a general recovery. A release whose
+ * *own* move is broken is not saved by anything here, which is why step 4
+ * fails loudly with a command that comes from neither failed installer.
+ */
+export declare const performUpgrade: (tag: string, deps: UpgradeDeps) => UpgradeOutcome;
