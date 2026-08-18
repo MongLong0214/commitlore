@@ -8,6 +8,7 @@ import {
   CANONICAL_ARTIFACT_FORMAT,
   CANONICAL_ARTIFACT_MANIFEST,
   CANONICAL_BUILD_COMMAND,
+  CANONICAL_BUILD_IMAGE,
   RUNTIME_DIST_ASSETS,
   SOURCE_INPUTS,
   artifactManifest,
@@ -35,7 +36,7 @@ const actual = artifactManifest(root);
 if (recorded !== undefined) {
   if (recorded.format !== CANONICAL_ARTIFACT_FORMAT) fail(`manifest format is ${JSON.stringify(recorded.format)}`);
   if (recorded.builder?.platform !== 'linux/amd64') fail('manifest does not declare linux/amd64');
-  if (recorded.builder?.image !== 'node:24-bookworm') fail('manifest does not declare node:24-bookworm');
+  if (recorded.builder?.image !== CANONICAL_BUILD_IMAGE) fail(`manifest does not declare ${CANONICAL_BUILD_IMAGE}`);
   if (recorded.builder?.command !== CANONICAL_BUILD_COMMAND) fail('manifest does not record the canonical build command');
   if (!same(recorded.runtimeAssets, RUNTIME_DIST_ASSETS)) {
     fail(`runtime asset list must be exactly ${RUNTIME_DIST_ASSETS.join(', ')}`);

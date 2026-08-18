@@ -4,7 +4,19 @@ import { join, relative } from 'node:path';
 
 export const CANONICAL_ARTIFACT_FORMAT = 'commitlore-canonical-artifact-v1';
 export const CANONICAL_ARTIFACT_MANIFEST = 'installer/canonical-artifact.json';
-export const CANONICAL_BUILD_COMMAND = 'docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w node:24-bookworm sh -c "npm ci && npm run build"';
+/**
+ * The builder, pinned by digest rather than by tag.
+ *
+ * `node:24-bookworm` is mutable: the same source built on two dates can pick up
+ * a different base image, Node patch or OS package. Building twice in one job
+ * proves the builder is deterministic *now*, and says nothing about a rebuild
+ * next month -- which is the claim `installer/canonical-artifact.json` is for.
+ *
+ * The tag is kept in the digest's own string so a reader can still see which
+ * Node line this is. Updating it is a deliberate change, like a dependency bump.
+ */
+export const CANONICAL_BUILD_IMAGE = 'node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584';
+export const CANONICAL_BUILD_COMMAND = `docker run --rm --platform linux/amd64 -v "$PWD":/w -w /w ${CANONICAL_BUILD_IMAGE} sh -c "npm ci && npm run build"`;
 
 // The installer starts only this file from dist/. The TypeScript outputs remain
 // tracked for now (see docs/CANONICAL-BUILD.md), but are not runtime inputs.
@@ -37,7 +49,7 @@ export const artifactManifest = (root) => ({
   format: CANONICAL_ARTIFACT_FORMAT,
   builder: {
     platform: 'linux/amd64',
-    image: 'node:24-bookworm',
+    image: CANONICAL_BUILD_IMAGE,
     command: CANONICAL_BUILD_COMMAND,
   },
   runtimeAssets: [...RUNTIME_DIST_ASSETS],
