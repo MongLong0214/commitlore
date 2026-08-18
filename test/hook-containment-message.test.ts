@@ -133,12 +133,35 @@ describe('#746 a containment refusal says so, instead of claiming the CLI is mis
       'a containment refusal is still being reported as a missing CLI (#746)',
     ).not.toMatch(/cannot find the CLI/);
 
-    expect(result.stderr).toMatch(/outside the install this hook trusts/);
+    expect(result.stderr).toMatch(/points outside the install this hook trusts/);
     // Both sides of the comparison, because either one alone leaves the
     // operator guessing which of the two moved.
     expect(result.stderr).toContain(realpathSync(REPO_ROOT));
     expect(result.stderr).toContain(realpathSync(elsewhere));
     expect(result.stderr, 'the remedy is not named').toMatch(/hooks install/);
+  }, 60_000);
+
+  it('says the recorded install is gone when it cannot be resolved at all', async () => {
+    // The second door to the same wrong sentence. When either side of the
+    // comparison fails to resolve, the check never runs — and before this it
+    // fell through to "cannot find the CLI", which is nearly true and still the
+    // wrong instruction. Deleting an old release directory after an upgrade is
+    // the ordinary way to arrive here.
+    const dir = await repoWithGate('cont-gone');
+    const gone = join(temp('cont-gone-parent'), 'deleted-release');
+    git(dir, ['config', '--local', 'commitlore.root', gone]);
+
+    const result = await runHook(dir, 'commit-msg', VALID);
+
+    expect(result.stderr).toMatch(/no longer resolves on disk/);
+    expect(result.stderr).toContain(gone);
+    // Distinct from the outside-the-boundary case: they need the same command
+    // but describe different machines, and telling them apart is the point.
+    expect(result.stderr).not.toMatch(/points outside the install/);
+    expect(result.stderr, 'still the absence message, by a second door').not.toMatch(
+      /cannot find the CLI/,
+    );
+    expect(result.stderr).toMatch(/hooks install/);
   }, 60_000);
 
   it('still refuses the commit — the fence is not what is being changed', async () => {
@@ -163,7 +186,7 @@ describe('#746 a containment refusal says so, instead of claiming the CLI is mis
 
     const result = await runHook(dir, 'post-commit', VALID);
 
-    expect(result.stderr).toMatch(/outside the install this hook trusts/);
+    expect(result.stderr).toMatch(/points outside the install this hook trusts/);
     expect(result.stderr).toContain(realpathSync(elsewhere));
     // A capture hook holds no verdict back, so the same cause must not block a
     // commit here. The two endings share the diagnosis and not the policy.
@@ -207,6 +230,31 @@ describe('#746 hooks install reports the root it moved, not only the bin it did 
     );
     expect(said).toContain(elsewhere);
     expect(said).toContain(realpathSync(REPO_ROOT));
+  }, 60_000);
+
+  it('does not call a first write a move', async () => {
+    // The line added for the upgrade case runs on every install, and on a first
+    // one there is no previous value — `moved: (none recorded) -> x` describes a
+    // transition that did not happen. `r-repointsays629` already rejected
+    // reporting the target on every install for this reason: "on a first install
+    // there is nothing to compare against".
+    //
+    // It is the third member of the #629 family in this area — reporting only
+    // the file, then only the bin, then a move that was a first write — which is
+    // why it gets a test rather than a careful reading.
+    const dir = createTestRepo({ path: temp('cont-first') });
+    git(dir, ['config', 'user.email', 'first@example.invalid']);
+    git(dir, ['config', 'user.name', 'first']);
+
+    const first = await run(process.execPath, [BUNDLE, 'hooks', 'install'], { cwd: dir });
+    const said = `${first.stdout}${first.stderr}`;
+
+    expect(said, 'a first write was reported as a move').not.toMatch(/moved: \(none recorded\)/);
+    expect(said, 'a first write was reported as a repoint').not.toMatch(/repointed: \(none recorded\)/);
+    // The values are still worth stating on a first install; only the verb was
+    // wrong. Silence here would lose which CLI and which root got wired.
+    expect(said).toMatch(/recorded CLI recorded:|recorded CLI:/);
+    expect(said).toMatch(/recorded install root recorded:|recorded install root:/);
   }, 60_000);
 
   it('the repair actually clears the refusal it was prescribed for', async () => {

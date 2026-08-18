@@ -18945,12 +18945,21 @@ var CHAINED_HOOK_NAME = `${HOOK_NAME}${CHAINED_SUFFIX}`;
 var HOOK_MODE = 493;
 var containmentRefused = (remedy, code) => [
   'if [ -n "${commitlore_outside:-}" ]; then',
-  '  echo "commitlore: the recorded CLI is outside the install this hook trusts." >&2',
-  '  echo "  recorded: $commitlore_outside" >&2',
-  '  echo "  trusted:  $commitlore_trusted" >&2',
-  '  echo "  It was not run. An upgrade looks like this, and so does a repointed" >&2',
-  '  echo "  commitlore.bin \u2014 this hook cannot tell them apart, so it runs neither." >&2',
-  `  echo "  If you upgraded, ${remedy}" >&2`,
+  '  if [ -n "${commitlore_unresolved:-}" ]; then',
+  '    echo "commitlore: the recorded install no longer resolves on disk." >&2',
+  '    echo "  commitlore.bin:  $commitlore_outside" >&2',
+  '    echo "  commitlore.root: $commitlore_trusted" >&2',
+  '    echo "  One of those two does not exist, so the trust check could not run" >&2',
+  '    echo "  and nothing was executed. Deleting an old release directory after" >&2',
+  '    echo "  an upgrade does this." >&2',
+  "  else",
+  '    echo "commitlore: commitlore.bin points outside the install this hook trusts." >&2',
+  '    echo "  bin resolves under: $commitlore_outside" >&2',
+  '    echo "  trusted root:       $commitlore_trusted" >&2',
+  '    echo "  Nothing there was run. An upgrade looks like this, and so does a" >&2',
+  '    echo "  repointed commitlore.bin \u2014 this hook cannot tell them apart." >&2',
+  "  fi",
+  `  echo "  ${remedy}" >&2`,
   `  exit ${code}`,
   "fi"
 ];
@@ -19067,7 +19076,8 @@ var stubText = (unresolved) => [
   '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
   "              ;;",
   "            *)",
-  "              # Found and refused, which the ending below reports as itself.",
+  "              # Resolved and refused without looking at the leaf, which is",
+  "              # what the ending below is careful to claim and no more.",
   "              # Both sides are already resolved, so these are the physical",
   "              # paths the comparison actually used rather than what was",
   "              # recorded -- which is the whole point, since an upgrade is the",
@@ -19076,6 +19086,18 @@ var stubText = (unresolved) => [
   "              commitlore_trusted=$root_dir",
   "              ;;",
   "          esac",
+  "        else",
+  "          # One side would not resolve, so the comparison never ran and the",
+  "          # recorded pair was abandoned for a different reason. Deleting the",
+  "          # previous release directory after an upgrade lands exactly here,",
+  '          # and without this arm the ending falls through to "cannot find the',
+  `          # CLI" -- #746's wrong sentence reached through a second door.`,
+  "          #",
+  "          # The recorded strings are reported rather than resolved ones,",
+  "          # because resolving is what just failed.",
+  "          commitlore_unresolved=1",
+  "          commitlore_outside=$recorded",
+  "          commitlore_trusted=$recorded_root",
   "        fi",
   "      fi",
   "      ;;",
@@ -22767,12 +22789,12 @@ var installHook = (input = {}) => {
     outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
     installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${changed ? "file unchanged" : "unchanged"})`
   }[before.state];
-  const named = (value) => value === "" ? "(none recorded)" : value;
+  const transition = (noun, verb, from, to) => from === "" ? `${noun}: ${to}` : `${noun} ${verb}: ${from} -> ${to}`;
   const repoint = [
-    ...repointed ? [`recorded CLI repointed: ${named(before.recordedTarget.bin)} -> ${after.recordedTarget.bin}`] : [],
+    ...repointed ? [transition("recorded CLI", "repointed", before.recordedTarget.bin, after.recordedTarget.bin)] : [],
     // Named separately, because after an upgrade this line is the entire repair
     // and the line above it does not appear at all.
-    ...rootMoved ? [`recorded install root moved: ${named(rootBefore)} -> ${named(rootAfter)}`] : []
+    ...rootMoved ? [transition("recorded install root", "moved", rootBefore, rootAfter)] : []
   ];
   return success2(after, [headline, ...repoint, ...describeChained(after)]);
 };

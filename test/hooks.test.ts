@@ -782,7 +782,7 @@ describe('hooks — a real commit', () => {
     // the refusal and deliberately does not say which cause it was: an upgrade
     // and this planted path are indistinguishable from inside the hook, so
     // vouching for either would be reassuring about the wrong one.
-    expect(result.output).toContain('outside the install this hook trusts');
+    expect(result.output).toContain('points outside the install this hook trusts');
     expect(result.output).not.toContain('cannot find the CLI');
     expect(existsSync(witness)).toBe(false);
   });

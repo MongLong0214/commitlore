@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "68f496ee9fc6802d5f20ff23924e29951a4886f08f7669dc1575d1f272217f00"
+    "sha256": "c2a9710550e0fa33bfb97945d73d6743a9d42234d6b38c56da9d3644bd1aa5b8"
   },
   "artifact": {
-    "sha256": "9a26ffe7ebda1e6a1777b44679cd048408db18b402e0ea9590349770855556a8",
+    "sha256": "b9e7110c64788123ec3b20ad93cd6fb97af35c7523c4c1275060e193a1849e45",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -434,11 +434,11 @@
       },
       {
         "path": "dist/commands/hooks.js",
-        "sha256": "3bc2af644156f2bb4ad16bf3e123c774d42f4ddd0d4e37f09cae2d1dcb4d9597"
+        "sha256": "bd67080bc2c22070d2c3bc263c00501d5b09629efa9c50eea99ecbc6dacc3069"
       },
       {
         "path": "dist/commands/hooks.js.map",
-        "sha256": "8f98dae2ca3246702b2f27da4767a9953c82b9001e226d46b72c30c5a6c51ad8"
+        "sha256": "3330b85454c35037681159a941c060c55bda93fabd0958ec1c4f013e59d18b65"
       },
       {
         "path": "dist/commands/index-cmd.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "8217f529052fa1f2a248420c3d05ef697b0ede8566ebfd6f1505fd9f52a1883e"
+        "sha256": "47fff7597a38bb2188943debd59bf90bdc8e80060a7d4acd21590b2a64b6a236"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1074,11 +1074,11 @@
       },
       {
         "path": "dist/hooks/commit-msg.js",
-        "sha256": "81f6dfae58067c7b50be60326520382678c2fbbc5621289bbf11660993a81cbb"
+        "sha256": "ad314ead4a0242a10fb052e018b2755cb5f61bae7b2e9aa2c677a138b4ce3d9b"
       },
       {
         "path": "dist/hooks/commit-msg.js.map",
-        "sha256": "8d7457128f339369c1e56c2edd300c37ddf9b8dab62b3780980a35879e532971"
+        "sha256": "c6a71203f9f80305d9b42f576eee18e2d7c4bc65b7ae4585e540295148612f29"
       },
       {
         "path": "dist/hooks/post-commit.d.ts",

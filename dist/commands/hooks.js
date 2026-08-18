@@ -288,16 +288,20 @@ export const installHook = (input = {}) => {
         outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
         installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${changed ? 'file unchanged' : 'unchanged'})`,
     }[before.state];
-    const named = (value) => (value === '' ? '(none recorded)' : value);
+    // A first write is not a move, and saying it moved is the same class of
+    // untruth this whole area keeps producing: `repointed: (none recorded) -> x`
+    // and `moved: (none recorded) -> x` both describe a transition that did not
+    // happen. `r-repointsays629` already rejected reporting the target on every
+    // install, because "on a first install there is nothing to compare against" —
+    // the line survives here only when it is genuinely comparing.
+    const transition = (noun, verb, from, to) => from === '' ? `${noun}: ${to}` : `${noun} ${verb}: ${from} -> ${to}`;
     const repoint = [
         ...(repointed
-            ? [`recorded CLI repointed: ${named(before.recordedTarget.bin)} -> ${after.recordedTarget.bin}`]
+            ? [transition('recorded CLI', 'repointed', before.recordedTarget.bin, after.recordedTarget.bin)]
             : []),
         // Named separately, because after an upgrade this line is the entire repair
         // and the line above it does not appear at all.
-        ...(rootMoved
-            ? [`recorded install root moved: ${named(rootBefore)} -> ${named(rootAfter)}`]
-            : []),
+        ...(rootMoved ? [transition('recorded install root', 'moved', rootBefore, rootAfter)] : []),
     ];
     return success(after, [headline, ...repoint, ...describeChained(after)]);
 };
