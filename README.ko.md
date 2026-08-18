@@ -400,50 +400,18 @@ lifecycle — `Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을
 
 에이전트 지침은 `skills/commitlore-commits/`에 있고, commit-msg hook은 에이전트가 추가한 record를 검증할 뿐 record를 발명하거나 조용히 추가하지 않는다. `harvest` 경로, `capture` 트랜잭션, 그리고 사람이 trailer를 직접 쓰는 탈출구는 모두 [docs/capture.md](docs/capture.md)에 있다.
 
-## 완전한 record
+## record 프로토콜
 
-record는 이보다 훨씬 작을 수 있고, 대부분은 몇 개 field면 충분하다. 이 예시가 어휘 전체를 쓰는 이유는 conformance fixture이기도 하기 때문이다 — Git trailer parser는 모든 번역 README에서 아래 code block을 동일하게 읽는다.
+record는 평범한 Git commit trailer 묶음이고, 대개는 작은 것으로 충분합니다:
 
 ```text
-Prevent silent session drops during long-running operations
+Fix expired-token refresh
 
-The auth service returns inconsistent status codes on token
-expiry, so the interceptor catches all 4xx responses and
-triggers an inline refresh.
-
-Limit: Auth service does not support token introspection
-Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
-Ruled-out: Background refresh on timer | race condition
-Certainty: firm
-Blast: module
-Undo: easy
-Warn: 4xx handling is intentionally broad
-  -- do not narrow without verifying upstream behavior
-Verified: Single expired token refresh (unit)
-Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0.0
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-### 프로토콜 어휘
-
-| Trailer | Meaning |
-|---|---|
-| `Limit:` | External condition that constrained the decision |
-| `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
-| `Certainty:` | `firm` \| `tentative` \| `guess` |
-| `Blast:` | `local` \| `module` \| `system` |
-| `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | Warning for a future modifier; trust-graded before delivery |
-| `Verified:` / `Unverified:` | What was and was not checked |
-| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
-| `Expires:` | Date or condition that ends a limit |
-| `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
-| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
-
-경로의 이력은 `commitlore context <path>`로 읽는다. 더 작은 예시와 Git만으로 record를 읽는 방법은 [docs/protocol.md](docs/protocol.md)에, 규범적 정의는 [SPEC §3](spec/SPEC.md)에 있다.
+어휘 전체를 쓰는 완전한 예제, 모든 trailer key 표, 그리고 CommitLore 없이 순수 Git으로 읽는 방법은 [docs/protocol.md](docs/protocol.md)에 있습니다. 규범적 정의는 [SPEC §3](spec/SPEC.md)입니다.
 
 ## 저장소가 증명하는 것
 
