@@ -20643,7 +20643,8 @@ var checkMcpRuntimeIdentity = (ctx) => {
       `could not enumerate live CommitLore MCP runtimes: ${scan2.detail}`,
       null,
       false,
-      void 0,
+      // Machine state, not this repository's -- see the note above.
+      false,
       { evidence: { discovery: "unavailable", detail: scan2.detail } }
     );
   }
@@ -20658,7 +20659,8 @@ var checkMcpRuntimeIdentity = (ctx) => {
       `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`,
       null,
       false,
-      void 0,
+      // Machine state, not this repository's -- see the note above.
+      false,
       {
         evidence: {
           discovery: scan2.detail,
@@ -20678,7 +20680,8 @@ var checkMcpRuntimeIdentity = (ctx) => {
       `${identities.length} distinct live CommitLore runtimes are answering MCP \u2014 runtime mismatch: ` + identities.map(identityOf2).join("; "),
       null,
       false,
-      void 0,
+      // Machine state, not this repository's -- see the note above.
+      false,
       {
         evidence: {
           discovery: scan2.detail,
