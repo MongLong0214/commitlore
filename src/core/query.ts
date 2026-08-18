@@ -386,13 +386,43 @@ const openSource = (
         ? {}
         : { budget: { deadline: clock() + budgetMs, now: clock }, cost }),
     });
+    // `ensureIndex` is inside the `try`; `fetch` runs after it returns, so a
+    // database that goes bad between opening and reading escapes this catch.
+    // That used to be masked: `healthProblem` walked every b-tree before any
+    // answer, so damage was turned into a rebuild before a query could hit
+    // it. With that walk moved off the read path (#782) the escape is real,
+    // and it lands in the worst possible place -- `inject --hook-input`
+    // fail-opens to empty stdout, so a corrupt index would read to the agent
+    // exactly like a path with no records.
+    //
+    // Corruption is not an outage here (ADR-0003); it is a reason to stop
+    // trusting the derived cache. So the first bad read falls back to the
+    // scan for the rest of this query, and says so.
+    const diagnostics: string[] = [];
+    let fallback: RowSource | null = null;
+    const scanInstead = (error: unknown): RowSource => {
+      if (fallback === null) {
+        fallback = scanSource(cwd, [], budgetMs, now);
+        diagnostics.push(
+          `the index could not be read (${errorMessage(error)}); answering with a full scan`,
+        );
+      }
+      return fallback;
+    };
     return {
-      fetch: (query) => queryTrailers(handle, query),
+      fetch: (query) => {
+        if (fallback !== null) return fallback.fetch(query);
+        try {
+          return queryTrailers(handle, query);
+        } catch (error) {
+          return scanInstead(error).fetch(query);
+        }
+      },
       fromIndex: true,
       corpusPasses: () => 0,
       unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
       close: () => closeIndex(handle),
-      diagnostics: [],
+      diagnostics,
     };
   } catch (error) {
     return scanSource(

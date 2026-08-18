@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "5339bda3a55a9feda424c2a148c9b84f8e867a4ec7db41c2cdb59086bfd04371"
+    "sha256": "63192d2d8dc6884df7a08d25f3ba707d1fd78699280dc6b703665f470d508675"
   },
   "artifact": {
-    "sha256": "8d458ff71dff027a8c1e7876ecf05f023a08678d184098a663bb9a7ee0f89084",
+    "sha256": "ba9b397c4fc1bf88f146424bdab39ebb0662c13d97b8f69ce801db01c86df1dc",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "48f915e33aec91edbda4b0cce1cf5a4f112aacb79e96865462741287d5ecad57"
+        "sha256": "ad1ed9462d66276b8d085b0564f9e256e607c952c0bf4b3059b4af7fa9b84392"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -818,15 +818,15 @@
       },
       {
         "path": "dist/core/index-db.d.ts",
-        "sha256": "809fe40a8fdf23756f4455d21c22affa5fe6e0e64b93894999b85c2860b607cd"
+        "sha256": "58fcda105b497182af4f2b440dfb7da731b1c9d1a82695dea0c1386a9c561490"
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "9aec04ad9a71fbab246aaf248d741302e3974f83eb52a806aefbd72e5089429f"
+        "sha256": "19c0223ed3c77c409c0c025a02ff9c5e225b05e12e75c4043fdc56c237179839"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "d23b7bc10b606d04f8d212b7d61e5d15119b2df92360d387c46273bc42aebc9b"
+        "sha256": "ab6fa7a4b74b738d8fd5f21a76dc83755aade1b6aa17464ade65ffa17e3465b1"
       },
       {
         "path": "dist/core/inject.d.ts",
@@ -930,11 +930,11 @@
       },
       {
         "path": "dist/core/query.js",
-        "sha256": "620837060b80e71cff1aed64d124fd38231ecfee36e7021234abb39a546fe75d"
+        "sha256": "79b041c7ce1306a95f63ffabdaad3862465ec874c8a3d7c84aa09f1de93eff4d"
       },
       {
         "path": "dist/core/query.js.map",
-        "sha256": "40941bdd6c7f35636b21b3ada0acacef71fb663fd23a4e10633640bfcf4666ef"
+        "sha256": "3d99073b7f82a6dd896f8c81cd6c658c935ebdbbc555c07da6e35faf255e7dc3"
       },
       {
         "path": "dist/core/runtime-identity.d.ts",

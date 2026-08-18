@@ -12874,6 +12874,13 @@ var healthProblem = (db, verifierGeneration) => {
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
     }
+    return null;
+  } catch (error2) {
+    return `index is unreadable: ${errorMessage(error2)}`;
+  }
+};
+var integrityProblem = (db) => {
+  try {
     const check2 = db.prepare("PRAGMA quick_check(1)").get();
     if (check2?.quick_check !== "ok") {
       return `sqlite quick_check reported: ${String(check2?.quick_check)}`;
@@ -13035,6 +13042,7 @@ var requireWritable = (handle) => {
 };
 var rebuildIndex = (handle, opts = {}) => {
   requireWritable(handle);
+  if (integrityProblem(handle.db) !== null) resetIndexFile(handle);
   const stale = schemaMismatch(handle.db);
   if (stale !== null) resetIndexFile(handle);
   const started = Date.now();
@@ -15348,13 +15356,31 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
       cwd,
       ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
     });
+    const diagnostics = [];
+    let fallback = null;
+    const scanInstead = (error2) => {
+      if (fallback === null) {
+        fallback = scanSource(cwd, [], budgetMs, now);
+        diagnostics.push(
+          `the index could not be read (${errorMessage3(error2)}); answering with a full scan`
+        );
+      }
+      return fallback;
+    };
     return {
-      fetch: (query) => queryTrailers(handle, query),
+      fetch: (query) => {
+        if (fallback !== null) return fallback.fetch(query);
+        try {
+          return queryTrailers(handle, query);
+        } catch (error2) {
+          return scanInstead(error2).fetch(query);
+        }
+      },
       fromIndex: true,
       corpusPasses: () => 0,
       unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
       close: () => closeIndex(handle),
-      diagnostics: []
+      diagnostics
     };
   } catch (error2) {
     return scanSource(
