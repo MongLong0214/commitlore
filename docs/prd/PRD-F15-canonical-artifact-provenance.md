@@ -120,18 +120,45 @@ the same checks. The second matters most — a workflow that does not fire for A
 pull requests would leave the rebuild green with nothing having run, which is #722's empty
 runner in a new place.
 
-## Success
+## Success — final, and each line names the run that shows it
 
-- No pull request carries `dist/` or `installer/canonical-artifact.json`.
-- Every commit on `main` matches the bundle its own source produces, verified by a check
-  that can fail.
-- A contributor on any platform can complete a source change without a maintainer.
-- The tag gate is unchanged: `canonical-artifact`, `version-consistency` and
-  `exact-head-ci` still hold, and no tag is reachable without them.
+Rewritten 2026-08-18, when the work shipped. The first version said *"no pull request
+carries `dist/`"*, which the built thing contradicts: the **canonical** pull request carries
+exactly that, and carrying it is how all eleven required contexts run on the tree that
+lands. The criterion had described a shape rather than a property.
 
-## What reopens the schedule
+1. **A contributor never produces the canonical artifact.** #761 carried `src/` and
+   `test/`; `linux/amd64` ran only in a container on a GitHub runner.
+2. **A source-only pull request becomes a merge candidate.** `canonical-merge` opened #762
+   from #761 with no human step between them.
+3. **Every required check runs against that candidate.** Twelve contexts attached to #762,
+   which is an App-opened pull request — the assumption ADR-0036 named and did not measure.
+4. **The candidate's artifact matches the source landing with it.** At `e4e5154`, with no
+   local build: `canonical artifact verified: fcd0832f…` and `git diff --exit-code -- dist/
+   installer/canonical-artifact.json` clean.
+5. **A mismatched artifact is refused.** #763 was #762's rebuild with `dist/commitlore.mjs`
+   edited by hand; both `check` jobs failed. `artifact:verify` *passed* there — the manifest
+   binds `src/`, which was untouched — so the rebuild-and-diff is what caught it, and the
+   two checks are not one check twice.
+6. **The contributor's head reaches `main` with nobody rebuilding by hand.** #761 is
+   recorded merged, by reachability rather than by keyword, and the bundle commit's author
+   is `commitlore-canonical-build[bot]`.
+7. **No branch-protection bypass, and the tag gate is untouched.** `canonical-artifact`,
+   `version-consistency` and `exact-head-ci` still hold, and no tag is reachable without
+   them.
 
-Either one:
+**Limit — external contributor experience is unobserved.** Nobody outside this repository
+has yet taken this path. That is adoption evidence rather than a correctness gate: it
+measures whether anyone has arrived, not whether the mechanism works. Holding the feature
+open for it would leave the work permanently unfinished for a reason unrelated to the work.
+A real-world failure reopens #719 or opens a defect issue of its own.
+
+## What reopened the schedule
+
+Both conditions below were written while this was deferred. Condition 2 is what happened —
+the same contributor blocked twice on a maintainer-only `build:canonical` — and rather than
+wait for a second person to confirm a pattern already visible, the work was scheduled. The
+conditions are kept for the record.
 
 1. Three or more overlapping source-PR rebuilds in an ordinary week with no release.
    2026-08-17's four were a release-day spike; the same rate on a quiet week is the

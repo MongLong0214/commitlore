@@ -57,61 +57,22 @@ jobs:
       # amd64 Node 24 Bookworm container is the one builder that can update it.
       # Build twice and compare every dist byte: matching git only once would
       # not notice a builder that changes its output between invocations.
-      # T-1502 lands the rebuild after merge, so a pull request no longer has to
-      # carry one -- but only a pull request that carries none. A pull request
-      # that does touch `dist/` or the manifest is checked exactly as before,
-      # which keeps the old path intact as the fallback rather than replacing it.
-      #
-      # The decision is made from the commit range, not from the working tree:
-      # `build:canonical` below rewrites `dist/`, so anything read afterwards
-      # describes what this job just built rather than what the author pushed.
-      - name: Decide which artifact contract this run can check
-        id: contract
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          mode=strict
-          if [ "${{ github.event_name }}" = 'pull_request' ]; then
-            carried="$(git diff --name-only "$BASE_SHA"...HEAD -- dist/ installer/canonical-artifact.json)"
-            if [ -z "$carried" ]; then
-              mode=contract-only
-            else
-              echo "--- this pull request carries the artifact, so it is checked in full:"
-              echo "$carried" | sed 's/^/    /'
-            fi
-          fi
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "--- artifact contract mode: $mode"
-
       - name: Canonical dist is reproducible and matches its manifest
-        env:
-          MODE: ${{ steps.contract.outputs.mode }}
         run: |
           set -euo pipefail
           first="$(mktemp)"
           second="$(mktemp)"
-          verify() {
-            if [ "$MODE" = 'strict' ]; then npm run artifact:verify; else npm run artifact:verify -- --contract-only; fi
-          }
           npm run build:canonical
-          verify
+          npm run artifact:verify
           find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$first"
           npm run build:canonical
-          verify
+          npm run artifact:verify
           find dist -type f -print0 | sort -z | xargs -0 sha256sum > "$second"
-          # Reproducibility is checked in both modes. It asks whether the builder
-          # is deterministic, which has nothing to do with what the author pushed.
           cmp "$first" "$second" || {
             echo "::error::canonical builder produced different dist bytes"
             exit 1
           }
-          if [ "$MODE" = 'strict' ]; then
-            git diff --exit-code -- dist/ installer/canonical-artifact.json
-          else
-            echo "--- source-only pull request: the committed bundle is not compared."
-            echo "--- canonical-merge.yml rebuilds it after merge, and the push and tag paths still check it in full."
-          fi
+          git diff --exit-code -- dist/ installer/canonical-artifact.json
 
       - name: Unit and dogfooding tests
         run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-report.json

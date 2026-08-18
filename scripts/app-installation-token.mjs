@@ -85,8 +85,22 @@ if (typeof installation.id !== 'number') {
   die(`no installation for ${repository} — install the App on it before running this`);
 }
 
+// Asked for narrowly rather than taken whole. A body-less request mints a
+// token carrying every permission the installation holds on every repository
+// it is installed on -- and this token is handed to a job whose input came
+// from a rebuild of somebody else's change. The installation may grow later
+// (another repository, another permission) and a token minted without a scope
+// would grow with it silently.
+//
+// These two are what the caller does and nothing else: push the rebuilt branch,
+// and open or update the pull request that carries it.
 const minted = await api(`/app/installations/${installation.id}/access_tokens`, jwt, {
   method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({
+    repositories: [repository.slice(repository.indexOf('/') + 1)],
+    permissions: { contents: 'write', pull_requests: 'write' },
+  }),
 });
 if (typeof minted.token !== 'string') die('the installation token response carried no token');
 
