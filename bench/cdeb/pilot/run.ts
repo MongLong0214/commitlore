@@ -178,6 +178,30 @@ const runOne = (
   gitOrThrow(workdir, ["config", "user.name", "operator"]);
   gitOrThrow(workdir, ["config", "--add", "commitlore.trustedAuthor", owner]);
 
+  // The index has to be finished before the agent starts, in BOTH arms.
+  //
+  // A materialized worktree has no index, so the first `inject` builds one under
+  // the three-second consumer budget and stops partway. Which records that
+  // budget reaches depends on where the scan got to, so an ON run could deliver
+  // four records or none for the same task -- measured here: the same worktree
+  // and the same command returned 0 bytes with `588 commit(s) unread`, and 3201
+  // bytes containing the expected record after `index --rebuild` finished
+  // (23s). An arm that receives nothing is not the arm the study names.
+  //
+  // Run in both arms so the two differ only in whether a hook reads the index.
+  // Its cost is outside the agent session either way, and leaving it out of OFF
+  // would make the arms differ in setup as well as in treatment.
+  const indexed = spawnSync("node", [CLI_ENTRY, "index", "--rebuild"], {
+    cwd: workdir,
+    encoding: "utf8",
+    timeout: 5 * 60 * 1000,
+  });
+  if (indexed.status !== 0) {
+    throw new Error(
+      `index --rebuild failed in ${workdir} (status ${String(indexed.status)}): ${indexed.stderr ?? ""}`,
+    );
+  }
+
   const exposureLog = join(scratch, "exposure.log");
   const settingsPath = armSettings(scratch, condition, exposureLog);
   const mcpPath = emptyMcpConfig(scratch);
