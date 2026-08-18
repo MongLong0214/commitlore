@@ -268,6 +268,14 @@ const versionFreeEntryFor = (bundle: string): string | null => {
   }
 };
 
+/**
+ * The recorded install root, read directly rather than through
+ * `readRecordedHookTarget` — that function reports *problems* with the root and
+ * never surfaces the value, and the value is what a repair has to compare.
+ */
+const recordedRootValue = (cwd: string): string =>
+  execGit(['config', '--local', '--get', 'commitlore.root'], { cwd }).stdout.trim();
+
 const recordBinPath = (cwd: string): void => {
   const running = resolveEntryForRecord(process.argv[1], cwd);
   if (running === null) return;
@@ -311,9 +319,11 @@ export const installHook = (input: HookInput = {}): HookResult => {
   const cwd = input.cwd ?? process.cwd();
 
   let before: HookStatus;
+  let rootBefore: string;
   try {
     mkdirSync(resolveHooksDir(cwd), { recursive: true });
     before = readHookStatus(cwd);
+    rootBefore = recordedRootValue(cwd);
   } catch (error) {
     return failure(messageOf(error));
   }
@@ -341,19 +351,40 @@ export const installHook = (input: HookInput = {}): HookResult => {
   // command repoints it, and reporting only the file said the repair had not
   // happened (#629). The recorded target decides which CLI validates every
   // commit here, so a change to it is the headline rather than a footnote.
+  // And the root, for the same reason one level down (#746). `recordBinPath`
+  // writes `commitlore.bin` *and* `commitlore.root`, and after an upgrade only
+  // the second moves: `bin` points through `<data-root>/current`, so its string
+  // is identical before and after, while `root` goes from the old versioned tree
+  // to the new one. Comparing `bin` alone therefore reported `unchanged` for the
+  // one repair this command exists to perform — the procedure denying it had
+  // done anything, which is #629's defect repeated inside its own fix.
+  const rootAfter = recordedRootValue(cwd);
+  const rootMoved = rootBefore !== rootAfter;
   const repointed = before.recordedTarget.bin !== after.recordedTarget.bin;
+  const changed = repointed || rootMoved;
   const headline = {
     absent: `installed ${HOOK_NAME} hook: ${after.hookPath}`,
     foreign: `installed ${HOOK_NAME} hook: ${after.hookPath} (previous hook preserved and chained)`,
     outdated: `updated ${HOOK_NAME} hook: ${after.hookPath}`,
-    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${repointed ? 'file unchanged' : 'unchanged'})`,
+    installed: `${HOOK_NAME} hook already installed: ${after.hookPath} (${changed ? 'file unchanged' : 'unchanged'})`,
   }[before.state];
 
-  const repoint = repointed
-    ? [
-        `recorded CLI repointed: ${before.recordedTarget.bin === '' ? '(none recorded)' : before.recordedTarget.bin} -> ${after.recordedTarget.bin}`,
-      ]
-    : [];
+  // A first write is not a move, and saying it moved is the same class of
+  // untruth this whole area keeps producing: `repointed: (none recorded) -> x`
+  // and `moved: (none recorded) -> x` both describe a transition that did not
+  // happen. `r-repointsays629` already rejected reporting the target on every
+  // install, because "on a first install there is nothing to compare against" —
+  // the line survives here only when it is genuinely comparing.
+  const transition = (noun: string, verb: string, from: string, to: string): string =>
+    from === '' ? `${noun}: ${to}` : `${noun} ${verb}: ${from} -> ${to}`;
+  const repoint = [
+    ...(repointed
+      ? [transition('recorded CLI', 'repointed', before.recordedTarget.bin, after.recordedTarget.bin)]
+      : []),
+    // Named separately, because after an upgrade this line is the entire repair
+    // and the line above it does not appear at all.
+    ...(rootMoved ? [transition('recorded install root', 'moved', rootBefore, rootAfter)] : []),
+  ];
 
   return success(after, [headline, ...repoint, ...describeChained(after)]);
 };
