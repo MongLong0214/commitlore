@@ -20,12 +20,12 @@ CommitLore는 그런 결정을 Git에 보관하고, 파일을 편집하기 전�
 에이전트에게 전달합니다.
 
 CommitLore에는 호스팅 서비스가 없고 record를 Git에 보관합니다. MCP 서버나 hook이
-맥락을 반환한 뒤에는 host가 자신의 정책에 따라 그 맥락을 처리하며, CommitLore는 그
+맥락을 반환한 뒤에는 host가 자신의 정책에 따라 그 맥락을 처리합니다. CommitLore는 그
 데이터 흐름을 제어하지 않습니다.
 
-**두 절반이 있고, 자동인 것은 하나입니다.** *delivery* — 에이전트가 경로를 편집하기
-전에 아직 유효한 결정을 건네주는 것 — 는 설치하면 알아서 됩니다. *capture* — 새
-결정을 기록하는 것 — 는 변경에 diff가 보여줄 수 없는 이유가 있을 때 에이전트가
+**두 절반이 있고, 자동인 것은 하나입니다.** *delivery*, 곧 에이전트가 경로를 편집하기
+전에 아직 유효한 결정을 건네주는 일은 설치하면 알아서 됩니다. *capture*, 곧 새
+결정을 기록하는 일은 변경에 diff가 보여줄 수 없는 이유가 있을 때 에이전트가
 합니다. 평범한 `git commit`은 이것을 시작할 수 없습니다. hook에는 diff가 있고
 capture에는 세션이 필요하기 때문입니다.
 
@@ -76,7 +76,7 @@ capture에는 세션이 필요하기 때문입니다.
 commitlore plugin install-codex
 ```
 
-Codex의 자체 CLI로 marketplace와 plugin을 등록하며, 설정이나 cache를 직접 고치지 않는다. 아래의 표준 설치 스크립트도 Codex를 감지하면 같은 명령을 실행한다. 설치 뒤에는 새 Codex session을 시작한다 — plugin의 skill과 MCP server는 설치 시점이 아니라 session 시작 시점에 로드된다. 아래 CLI가 repository command를 제공한다.
+Codex의 자체 CLI로 marketplace와 plugin을 등록한다. 설정이나 cache를 직접 고치지 않는다. 아래의 표준 설치 스크립트도 Codex를 감지하면 같은 명령을 실행한다. 설치 뒤에는 새 Codex session을 시작한다 — plugin의 skill과 MCP server는 설치 시점이 아니라 session 시작 시점에 로드된다. 아래 CLI가 repository command를 제공한다.
 
 두 경로 모두의 전제 조건: Node.js 22.23.2+ 와 Git. 스크립트는 무엇이든 쓰기 전에 둘을 확인한다.
 
@@ -161,10 +161,10 @@ Ruled-out
 기본 author-string 모드에서 `[directive]`는 저장소가 그 문자열을 제약으로 취급하기로
 정했다는 뜻일 뿐 신원 증명은 아니다. commit 작성자가 문자열을 고르므로 commit을 쓸 수
 있는 누구나 위조할 수 있다. `commitlore.requireSignedDirective=true`를 설정하면 Git이
-검증자의 trust store에 대해 확인한 서명과 Git이 보고한 `%GF` 지문이 repository-local
-`commitlore.trustedSigner` allowlist에 있어야 한다. allowlist가 없거나 비어 있거나 읽을 수
+검증자의 trust store에 대해 확인한 서명이 있어야 하고, Git이 보고한 `%GF` 지문이
+repository-local `commitlore.trustedSigner` allowlist에 있어야 한다. allowlist가 없거나 비어 있거나 읽을 수
 없으면 누구도 권한을 얻지 않는다. 그 서명 역시 권한이나 record의 진실을 증명하지는 않는다.
-delivery는 맥락을 주며, 편집을 막지 않는다.
+delivery는 맥락을 준다. 편집을 막지는 않는다.
 
 ## 자동으로 되는 것과 아닌 것
 
@@ -191,14 +191,14 @@ hook은 record가 있으면 검증하지만, 새로 만들지는 않는다.
 
 설치하기 전에 읽어보세요.
 
-- **측정된 것은 약한 쪽 등급입니다.** 1,160회 연구에서 모든 레코드는 `[claim]`으로
-  렌더링되었고, 이는 에이전트에게 명령이 아니라 정보로 다루라고 말합니다.
-  `[directive]` 등급은 그 뒤에야 도달 가능해졌고 여기서 측정되지 않았습니다 —
-  연구 자신의 판정문이 이 수치는 "강한 쪽으로 전이되지 않는다"고 적습니다.
-  directive가 더 나은지 못한지 같은지는 **양방향 모두 측정되지 않았습니다**.
-- **모델 하나, 하니스 하나, 구성된 픽스처 열 개입니다.** 오라클은 최종 구현
-  상태를 읽습니다. 따라서 레코드를 받은 에이전트가 배제된 접근을 덜 제안했다는
-  것은 보여주지만, 그중 누군가가 무언가를 읽었다는 것은 보여주지 않습니다.
+- **측정된 것은 약한 쪽 등급이다.** 1,160회 연구에서 모든 레코드는 `[claim]`으로
+  렌더링되었고, 이는 에이전트에게 명령이 아니라 정보로 다루라고 말한다.
+  `[directive]` 등급은 그 뒤에야 도달 가능해졌고 여기서 측정되지 않았다 —
+  연구 자신의 판정문이 이 수치는 "강한 쪽으로 전이되지 않는다"고 적는다.
+  directive가 더 나은지 못한지 같은지는 **양방향 모두 측정되지 않았다**.
+- **모델 하나, 하니스 하나, 구성된 픽스처 열 개다.** 오라클은 최종 구현
+  상태를 읽는다. 따라서 레코드를 받은 에이전트가 배제된 접근을 덜 제안했다는
+  것은 보여주지만, 그중 누군가가 무언가를 읽었다는 것은 보여주지 않는다.
 - 암호학적 작성자 검증, 저장소 전체 record coverage, symbol anchor, interactive record builder는 아직 구현되지 않았다: [#28](https://github.com/MongLong0214/commitlore/issues/28), [#32](https://github.com/MongLong0214/commitlore/issues/32), [#33](https://github.com/MongLong0214/commitlore/issues/33), [#34](https://github.com/MongLong0214/commitlore/issues/34).
 - M4는 guard 효과를 시험하지 못했다. row에 `guard_exposure`가 없어 treatment exposure를 검증할 수 없다: [#122](https://github.com/MongLong0214/commitlore/issues/122).
 - Guard(ruled-out alternative matching)는 실험적 참고 자료이다: precision 44.8%(95% Wilson CI 32.7%–57.5%), recall 22.0%, 417-decision corpus 기준([ADR-0020](docs/adr/ADR-0020-guard-is-an-experimental-advisory.md)). 빈 guard 결과는 제안이 모든 ruled-out alternative를 피했다는 보장이 아니다 — recall 22%에서 누락이 일반적이다.
@@ -217,8 +217,8 @@ hook은 record가 있으면 검증하지만, 새로 만들지는 않는다.
 calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 ```
 
-이제 팀에는 flag 하나, wrapper 하나, 그 함수가 애초에 맡을 생각이 없던 사용처를
-지키는 compatibility branch 하나가 더 생겼다. 리뷰어는 "이건 이미 기각했다"를 두 번째로 쓴다.
+이제 팀에는 flag 하나, wrapper 하나, compatibility branch 하나가 더 생겼다. 그 branch가
+지키는 사용처는 애초에 그 함수가 맡을 생각이 없던 것이다. 리뷰어는 "이건 이미 기각했다"를 두 번째로 쓴다.
 
 **CommitLore와 함께.** 편집 전에 에이전트는 위에 보인 active record를 받아,
 리뷰 코멘트에서 재구성한 지시를 받지 않는다.
@@ -227,19 +227,19 @@ calculatePrice(input, { isAdminPreview: true, skipCoupon: true });
 놓인다.
 
 등록된 실행 1,160회에서 이는 기각된 방안을 다시 제안하는 비율을 **18.8%**에서
-**2.8%**로 낮췄습니다. 이 수치가 보여 주지 않는 것은 위의
+**2.8%**로 낮췄다. 이 수치가 보여 주지 않는 것은 위의
 [이것이 도움이 되지 않는 경우](#이것이-도움이-되지-않는-경우)에 있다.
 
 ## CommitLore를 자세히 보면
 
 **코딩 에이전트를 위한 Git 네이티브 decision layer.**
 
-새 에이전트는 구현을 물려받습니다. 하지만 제약도, 팀이 기각한 대안도, 경고도, 검증 공백도
-물려받지 못합니다 — 무언가가 실어 나르지 않는 한 코드와 함께 이동하지 않습니다.
+새 에이전트는 구현을 물려받는다. 하지만 제약도, 팀이 기각한 대안도, 경고도, 검증 공백도
+물려받지 못한다 — 무언가가 실어 나르지 않는 한 코드와 함께 이동하지 않는다.
 
 CommitLore는 그 엔지니어링 판단을 Git에 보존하고, 다음 편집 전에 **지금도 유효한 결정만**
-전달합니다. 이후 대체되거나 만료된 결정은 여전히 유효한 것처럼 에이전트에게 도달하지
-않습니다.
+전달한다. 이후 대체되거나 만료된 결정은 여전히 유효한 것처럼 에이전트에게 도달하지
+않는다.
 
 **저장소 소유 · lifecycle 인식 · 근거 검증 · 에이전트 비종속**
 
@@ -260,7 +260,7 @@ clone 뒤 notes fetch를 구성해야 한다.
 commitlore context install.sh
 ```
 
-출력에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 record와 그 이유가 들어 있다. hook은 맥락을 제공하며, 편집을 막는다고 주장하지 않는다.
+출력에는 installer 결함의 수정안으로 `-musl` target을 배포하는 방안을 제외한 활성 record와 그 이유가 들어 있다. hook은 맥락을 제공한다. 편집을 막는다고 주장하지는 않는다.
 
 ```console
 context for install.sh as of <timestamp> — 0 limits, 1 ruled-out, 1 warnings, 2 other in 1 record (no index, 1 commit record(s) scanned)
@@ -276,14 +276,14 @@ warnings
 
 ## 이 저장소 자체가 데모입니다
 
-이미 결론 난 질문을 에이전트가 다시 결정하지 못하게 한다고 주장하는 도구라면, 스스로에게서 무엇을 잡아냈는지도 보여줄 수 있어야 합니다. 이 도구는 그 목록을 공개로 유지하며, 이 프로젝트가 이미 공개한 내용 중 나중에 틀렸음이 밝혀진 것들도 포함합니다.
+이미 결론 난 질문을 에이전트가 다시 결정하지 못하게 한다고 주장하는 도구라면, 스스로에게서 무엇을 잡아냈는지도 보여줄 수 있어야 한다. 이 도구는 그 목록을 공개로 유지한다. 이 프로젝트가 이미 공개한 내용 중 나중에 틀렸음이 밝혀진 것들도 포함한다.
 
-- **어떤 설치도 README의 주장이 근거한 신뢰 등급을 만들 수 없었다.** record는 에이전트에게 `directive` 또는 `claim` 등급으로 전달됩니다. 설치된 어느 표면도 신뢰된 작성자를 구성하지 않았으므로, 등급은 모두 `claim`으로 fail-closed 되었지만 주입된 범례는 누구도 도달할 수 없는 등급을 알리고 있었습니다. 두 이전 benchmark는 `claim` 등급 전달을 측정했습니다 ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
-- **등록된 benchmark 분석은 한 번에 서로 다른 네 실험을 읽었을 것이며**, 중단 규칙이 행 수였기 때문에 그 오염은 연구가 자체 완전성 관문을 *통과*하게 만들었을 것입니다 ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
-- **result-schema gate는 아무것도 실행하지 않았습니다.** 그래서 schema는 runner보다 다섯 필드 뒤처졌고 이틀 동안 아무도 알아차리지 못했습니다 ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
-- **배포된 pre-push hook은 모든 `git push`를 멈추게 했습니다.** 40초에 hook 호출 1,240회였습니다. 함수는 열한 번 시험했지만 hook path는 한 번도 시험하지 않았기 때문입니다 ([#422](https://github.com/MongLong0214/commitlore/issues/422)).
+- **어떤 설치도 README의 주장이 근거한 신뢰 등급을 만들 수 없었다.** record는 에이전트에게 `directive` 또는 `claim` 등급으로 전달된다. 설치된 어느 표면도 신뢰된 작성자를 구성하지 않았으므로, 등급은 모두 `claim`으로 fail-closed 되었지만 주입된 범례는 누구도 도달할 수 없는 등급을 알리고 있었다. 두 이전 benchmark는 `claim` 등급 전달을 측정했다 ([#415](https://github.com/MongLong0214/commitlore/issues/415)).
+- **등록된 benchmark 분석은 한 번에 서로 다른 네 실험을 읽었을 것이며**, 중단 규칙이 행 수였기 때문에 그 오염은 연구가 자체 완전성 관문을 *통과*하게 만들었을 것이다 ([#441](https://github.com/MongLong0214/commitlore/issues/441)).
+- **result-schema gate는 아무것도 실행하지 않았다.** 그래서 schema는 runner보다 다섯 필드 뒤처졌고 이틀 동안 아무도 알아차리지 못했다 ([#392](https://github.com/MongLong0214/commitlore/issues/392)).
+- **배포된 pre-push hook은 모든 `git push`를 멈추게 했다.** 40초에 hook 호출 1,240회였다. 함수는 열한 번 시험했지만 hook path는 한 번도 시험하지 않았기 때문이다 ([#422](https://github.com/MongLong0214/commitlore/issues/422)).
 
-이들 모두는 이 프로젝트가 설치를 권하는 hook이 검증하는 커밋 trailer의 `Ruled-out:`, `Warn:`, `Limit:` 줄이며, 다른 곳에서 실행하는 것과 같은 `commitlore context`로 읽을 수 있습니다.
+이들 모두는 커밋 trailer의 `Ruled-out:`, `Warn:`, `Limit:` 줄이다. 이 프로젝트가 설치를 권하는 hook이 그 줄을 검증한다. 다른 곳에서 실행하는 것과 같은 `commitlore context`로 읽을 수 있다.
 
 **각 항목이 치른 대가를 포함한 전체 목록: [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md).**
 
@@ -298,17 +298,17 @@ warnings
 | **CommitLore 경로 범위** | **800** | **81.7%** | **0** | **511,412** |
 | CommitLore, 상한 해제 | 없음 | 92.3% | 0 | 741,429 |
 
-상한을 풀면 경로 범위는 저장소 전체 덤프가 회수하는 것과 정확히 같은 2,217쌍 중 2,047쌍을 회수합니다. 덤프의 92,175,612 토큰 중 일부만 쓰고, 덤프가 함께 실어 나르는 뒤집힌 레코드 7,322개는 하나도 전달하지 않습니다. **범위는 아무 대가도 치르지 않습니다.** 상한이 10.6포인트를 씁니다. 남은 170쌍은 신뢰 등급자가 보류한 레코드입니다.
+상한을 풀면 경로 범위는 저장소 전체 덤프가 회수하는 것과 정확히 같은 2,217쌍 중 2,047쌍을 회수한다. 덤프의 92,175,612 토큰 중 일부만 쓰고, 덤프가 함께 실어 나르는 뒤집힌 레코드 7,322개는 하나도 전달하지 않는다. **범위는 아무 대가도 치르지 않는다.** 상한이 10.6포인트를 쓴다. 남은 170쌍은 신뢰 등급자가 보류한 레코드다.
 
-**이것은 전달을 잰 것이지 효과를 잰 것이 아닙니다.** 에이전트를 돌리지 않았으므로 회수할 수 *있는* 양의 상한이지 실제로 회수하는 양이 아닙니다. 그리고 검색 지표는 예측해야 할 결과가 나빠지는 동안에도 올라갈 수 있습니다. SWE-bench는 컨텍스트 예산을 늘릴 때 BM25 recall이 29.58에서 51.06으로 오르는 것을 측정하고도, "BM25의 최대 컨텍스트 크기를 늘리면 oracle 파일에 대한 recall이 올라가는 경우에도 성능은 떨어진다 … 모델이 문제 코드를 국소화하는 데 그저 서툴기 때문"이라고 보고했습니다 ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). 코퍼스 하나, 저장소 하나입니다. 대체된 레코드는 7개, 만료된 레코드는 0개이므로 "뒤집힌 결정 0건 전달"은 만료에 대해서는 아직 아무것도 말하지 않습니다. 방법과 전체 표: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
+**이것은 전달을 잰 것이지 효과를 잰 것이 아니다.** 에이전트를 돌리지 않았으므로 회수할 수 *있는* 양의 상한이지 실제로 회수하는 양이 아니다. 그리고 검색 지표는 예측해야 할 결과가 나빠지는 동안에도 올라갈 수 있다. SWE-bench는 컨텍스트 예산을 늘릴 때 BM25 recall이 29.58에서 51.06으로 오르는 것을 측정하고도, "BM25의 최대 컨텍스트 크기를 늘리면 oracle 파일에 대한 recall이 올라가는 경우에도 성능은 떨어진다 … 모델이 문제 코드를 국소화하는 데 그저 서툴기 때문"이라고 보고했다 ([arXiv:2310.06770](https://arxiv.org/abs/2310.06770)). 코퍼스 하나, 저장소 하나다. 대체된 레코드는 7개, 만료된 레코드는 0개이므로 "뒤집힌 결정 0건 전달"은 만료에 대해서는 아직 아무것도 말하지 않는다. 방법과 전체 표: [bench/DECISION-DELIVERY.md](bench/DECISION-DELIVERY.md).
 
-**`git log` 기준선은 우리가 우리를 재서 나온 값이 아닙니다.** 같은 측정을 이 프로젝트가 쓰지 않은 저장소 넷 — Django, SymPy, scikit-learn, Requests — 에 고정 커밋으로 적용하면, 한 경로의 이력 중 800토큰 절단에서 살아남는 비율이 **37.4%에서 55.6%** 사이입니다. 위의 42.0%가 그 구간 안에 들어갑니다. 고정 예산이 한 파일 이력의 절반 가까이를 잘라내는 것은 크고 오래된 저장소에서 `git log`가 일반적으로 하는 일이지, 이 저장소만의 특이점이 아닙니다. **이전되지 않은 것은 메커니즘입니다.** 우리 경로는 중앙값 1커밋에 687토큰인데 Django는 8커밋에 213토큰이라, 긴 커밋 메시지가 고정 예산에서 평범한 Git 기준선을 더 나쁘게 만듭니다 — 이 프로젝트 자체 관행이 치르는 비용입니다. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md)는 그 저장소들에 대한 전달 수치도 보고하지만 §9.0과 §9.5를 먼저 읽으십시오. 거기 레코드는 revert 커밋에서 프로그램이 생성한 것이고, 헤드라인 숫자는 검색 결과가 아니라 부착 술어가 강제하는 값입니다.
+**`git log` 기준선은 우리가 우리를 재서 나온 값이 아니다.** 같은 측정을 이 프로젝트가 쓰지 않은 저장소 넷(Django, SymPy, scikit-learn, Requests)에 고정 커밋으로 적용하면, 한 경로의 이력 중 800토큰 절단에서 살아남는 비율이 **37.4%에서 55.6%** 사이이다. 위의 42.0%가 그 구간 안에 들어간다. 고정 예산이 한 파일 이력의 절반 가까이를 잘라내는 것은 크고 오래된 저장소에서 `git log`가 일반적으로 하는 일이지, 이 저장소만의 특이점이 아니다. **이전되지 않은 것은 메커니즘이다.** 우리 경로는 중앙값 1커밋에 687토큰인데 Django는 8커밋에 213토큰이라, 긴 커밋 메시지가 고정 예산에서 평범한 Git 기준선을 더 나쁘게 만든다 — 이 프로젝트 자체 관행이 치르는 비용이다. [bench/EXTERNAL-CORPUS.md](bench/EXTERNAL-CORPUS.md)는 그 저장소들에 대한 전달 수치도 보고하지만 §9.0과 §9.5를 먼저 읽으십시오. 거기 레코드는 revert 커밋에서 프로그램이 생성한 것이고, 헤드라인 숫자는 검색 결과가 아니라 부착 술어가 강제하는 값이다.
 
-레코드 하나를 놓치면 모델은 맥락을 잃습니다. 이미 뒤집힌 결정을 건네면 정확성을 잃습니다. 이 [검색 측정](bench/retrieval/result.md)에서 방해 레코드가 0개부터 10,000개까지인 모든 크기에서 BM25, 임베딩 top-k, 하이브리드 RRF, 경로 필터를 적용한 임베딩은 각각 대체되어 폐기된 레코드 하나를 반환했습니다. 수명 주기를 적용한 CommitLore 경로 범위는 오래된 레코드를 0개 반환하고 현재 레코드 둘(2/2)을 모두 반환했습니다.
+레코드 하나를 놓치면 모델은 맥락을 잃는다. 이미 뒤집힌 결정을 건네면 정확성을 잃는다. 이 [검색 측정](bench/retrieval/result.md)에서 방해 레코드가 0개부터 10,000개까지인 모든 크기에서 BM25, 임베딩 top-k, 하이브리드 RRF, 경로 필터를 적용한 임베딩은 각각 대체되어 폐기된 레코드 하나를 반환했다. 수명 주기를 적용한 CommitLore 경로 범위는 오래된 레코드를 0개 반환하고 현재 레코드 둘(2/2)을 모두 반환했다.
 
-재현율은 보조 결과입니다. 검색은 대체로 어느 쪽이든 같은 레코드를 찾지만, 현재 유효한 결정을 아는 경로는 하나뿐입니다. 결정이 뒤집혔을 때 차이가 나타나며, 바로 이 경우를 위해 이 제품이 존재합니다.
+재현율은 보조 결과다. 검색은 대체로 어느 쪽이든 같은 레코드를 찾지만, 현재 유효한 결정을 아는 경로는 하나뿐이다. 결정이 뒤집혔을 때 차이가 나타난다. 이 제품은 바로 그 경우를 위해 존재한다.
 
-별도의 #167 노출 실행도 중요합니다. 10,002개 레코드 중 모델에 닿은 것은 2개뿐입니다.
+별도의 #167 노출 실행도 중요하다. 10,002개 레코드 중 모델에 닿은 것은 2개뿐이다.
 
 | 경로 | 모델에 보인 레코드 | 관련 레코드 | 모델에 보인 토큰 |
 |---|---:|---:|---:|
@@ -316,7 +316,7 @@ warnings
 | top-k 어휘 검색 | 2 | 1/2 | 190 |
 | CommitLore 경로 범위 | 2 | 2/2 | 335 |
 
-이는 고정된 두 레코드 출력 예산에서 노출과 재현율을 측정한 것이며, 토큰 비용, 청구 비용, 정확도나 에이전트 행동을 측정하지 않습니다. 코퍼스 하나, 쿼리 하나, 고정된 임베딩 모델 하나의 결과입니다. 재현율이 동률인 지점과 그 밖에 무엇이 측정됐고 무엇이 측정되지 않았는지는 [docs/evidence.md](docs/evidence.md)에 있습니다.
+이는 고정된 두 레코드 출력 예산에서 노출과 재현율을 측정한 것이다. 토큰 비용, 청구 비용, 정확도나 에이전트 행동은 측정하지 않는다. 코퍼스 하나, 쿼리 하나, 고정된 임베딩 모델 하나의 결과다. 재현율이 동률인 지점과 그 밖에 무엇이 측정됐고 무엇이 측정되지 않았는지는 [docs/evidence.md](docs/evidence.md)에 있다.
 
 ## 어떻게 동작하나
 
@@ -365,8 +365,8 @@ warnings
 저장소가 생기기 넉 달 전에 native git trailer에 결정 레코드를 담는 방식을 제안했고, 그
 어휘는 이쪽과 거의 일대일로 대응한다. **프로토콜 발상은 여기서 새로운 것이 아니며**,
 아니라고 말해봐야 논문을 읽는 사람 앞에서 버티지 못한다. Lore에 대응물이 없는 것은
-lifecycle — `Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참으로 만드는 필터링 —
-과 신뢰 등급이고, 논문 자신은 "empirical validation path를 *제시한다*"고 쓴다. 실행하지는
+lifecycle(`Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참으로 만드는 필터링)과
+신뢰 등급이고, 논문 자신은 "empirical validation path를 *제시한다*"고 쓴다. 실행하지는
 않는다. 그 검증을 실패한 부분까지 포함해 가진 것이 이 프로젝트가 논문보다 가진 것이다
 ([ADR-0029](docs/adr/ADR-0029-lore-is-prior-art-and-this-is-what-differs.md)).
 
@@ -415,7 +415,7 @@ Warn: Do not narrow the 4xx handler without verifying upstream behavior
 
 ## 저장소가 증명하는 것
 
-- 테스트한 Git workflow에서 결정 이력은 rebase, remote transfer, 경로 rename을 거쳐도 유지된다. squash merge는 여느 trailer와 마찬가지로 trailer block을 버리며, `commitlore squash-preserve` 또는 그 GitHub Action이 기록을 옮긴다 — 테스트가 그 경로를 덮는다.
+- 테스트한 Git workflow에서 결정 이력은 rebase, remote transfer, 경로 rename을 거쳐도 유지된다. squash merge는 여느 trailer와 마찬가지로 trailer block을 버린다. `commitlore squash-preserve` 또는 그 GitHub Action이 기록을 옮긴다 — 테스트가 그 경로를 덮는다.
 - 모든 route는 같은 trust grading을 써서 신뢰하지 않는 텍스트를 지시가 아닌 정보로 전달한다.
 - 자유 형식 trailer의 injection 같은 텍스트는 model-readable route에서 보류된다.
 - 읽을 수 있는 저장소의 기록 없음은 불완전한 history나 fetch하지 않은 notes mirror와 구별된다.
@@ -426,7 +426,7 @@ Warn: Do not narrow the 4xx handler without verifying upstream behavior
 
 112회 실험은 기록됐지만 M4에는 run별 `guard_exposure` 기록이 없다. treatment가 있었는지 검증할 수 없으므로 agent behavior 주장을 시험하거나 뒷받침하거나 반박하지 못한다. 위의 더 좁은 제품 주장은 독립적으로 검증 가능한 동작에 근거한다. 깨끗한 데이터셋과 철회 내용은 [M4 verdict](bench/VERDICT-M4.md)에서 읽을 수 있다.
 
-무엇이 측정됐는지 — 검색, 노출, 지연 시간과 확장, hook 오버헤드 — 그리고 무엇이 측정되지 않았는지 — 손익분기, 그리고 에이전트 행동에 대한 효과 — 는 [docs/evidence.md](docs/evidence.md)에 정리돼 있다.
+무엇이 측정됐고 무엇이 측정되지 않았는지는 [docs/evidence.md](docs/evidence.md)에 정리돼 있다. 측정된 쪽은 검색, 노출, 지연 시간과 확장, hook 오버헤드이고, 측정되지 않은 쪽은 손익분기와 에이전트 행동에 대한 효과다.
 
 <details>
 <summary>전체 benchmark 기록 (112회 실험)</summary>
@@ -495,7 +495,7 @@ commitlore uninstall
 ```
 
 `install.sh` 또는 `install.ps1`이 쓴 것을 제거한다 — wrapper, 고정된 checkout,
-각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않으며,
+각 agent config에 추가한 MCP 항목. 자신이 쓰지 않은 것은 제거하지 않는다.
 남기는 것을 명시한다: 저장소별 hook, agent hook, Claude Code plugin.
 `--dry-run`은 아무것도 바꾸지 않고 보고만 한다. 각각을 무엇이 제거하는지, 그리고
 소스 체크아웃에서 실행하는 방법은 [docs/install.md](docs/install.md)에 있다.
