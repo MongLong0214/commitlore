@@ -12904,6 +12904,14 @@ var openDatabaseFile = (path2, readonly2) => {
 var removeDatabaseFile = (path2) => {
   for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path2}${suffix}`, { force: true });
 };
+var syncFtsOrDiscard = (db, requested, writable, discard2) => {
+  try {
+    return syncFts(db, requested, writable);
+  } catch (error2) {
+    discard2(`the index full-text table could not be rebuilt (${errorMessage(error2)})`);
+    return false;
+  }
+};
 var openIndex = (opts = {}) => {
   const cwd = opts.cwd ?? process.cwd();
   const readonly2 = opts.readonly ?? false;
@@ -12926,14 +12934,28 @@ var openIndex = (opts = {}) => {
     db = openDatabaseFile(path2, readonly2);
   }
   if (!readonly2) createSchema(db);
+  let ftsDiscard = null;
+  const fts = syncFtsOrDiscard(db, ftsRequested, !readonly2, (reason) => {
+    ftsDiscard = reason;
+  });
   const handle = {
     db,
     path: path2,
     cwd,
     readonly: readonly2,
     ftsRequested,
-    discardedReason,
-    fts: syncFts(db, ftsRequested, !readonly2)
+    discardedReason: ftsDiscard ?? discardedReason,
+    // Rebuilding the FTS table on open is how a damaged index became
+    // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
+    // caller gets a handle, so `commitlore index --rebuild` threw on the file
+    // it exists to replace, and ADR-0003's "corruption is a reason to rebuild"
+    // had no path to act on (#785).
+    //
+    // A failure here is routed into the same `discardedReason` the open
+    // already has rather than thrown: every caller that knows what to do with
+    // a discarded index -- reset it, rebuild it, or fall back to a scan --
+    // then does that, and none of them needed to learn a second failure shape.
+    fts
   };
   return handle;
 };
