@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "3a36086a57299dc71d73065f6bd26f9eef10a45f114b95eeb4f59af615fd899a"
+    "sha256": "9ec903f2e8bfb6990f408928eafdf6b1eb8804b8388ac072066f82d02d110b45"
   },
   "artifact": {
-    "sha256": "feb49898b4ab9257b14c27429cc805ad382e362f523670a4c528628066942492",
+    "sha256": "d99e0ac6be61ee17b7ec6b67b56a4daa4a027069381aa97b3a67a60c0e2f02b6",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -26,11 +26,11 @@
       },
       {
         "path": "dist/cli.js",
-        "sha256": "82a07ad415984c731e930d5b9061d8cd2e66a51d3fbc88228d3c70a96bbb461f"
+        "sha256": "51541b1881dc2029d8d79105c850083c1f7e588e965c825634c8992f8e0db027"
       },
       {
         "path": "dist/cli.js.map",
-        "sha256": "d64ff2f4272ff152ac64cc27ae8ec59ac4470280dc4ebeb8efa3a0273254485f"
+        "sha256": "0d40e4dcd4443fa09708fa5b36a7c83ebf52b41ee6d6d87930628ffb9974a54f"
       },
       {
         "path": "dist/commands/auto.d.ts",
@@ -610,7 +610,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "d9de0c7fecbc43f3f806222fcb73a6708df7ee98790e7ea1dc9a82c18696b13a"
+        "sha256": "34b9bb02984337678ee7a17f03d0cfb13da669a189a4ae90c785784a8b65bca5"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1079,6 +1079,18 @@
       {
         "path": "dist/core/types.js.map",
         "sha256": "9db0e40f68da438f302fb225314df4e2a1ea3e0d248f58dca65e2004ec28267a"
+      },
+      {
+        "path": "dist/core/update-notice.d.ts",
+        "sha256": "6fd2635dea25da7606cde6407266fcee548dfacb399219cac29bbabae6f4cca4"
+      },
+      {
+        "path": "dist/core/update-notice.js",
+        "sha256": "658c6521c9aa663f73f3fd04fc630a166f1dcd2661ae6bab35d6fbc3c47f37fd"
+      },
+      {
+        "path": "dist/core/update-notice.js.map",
+        "sha256": "97ddefc7f07bc5ce4d2a94be7f9e9052dd6418ac8f57a90561247df80667ed04"
       },
       {
         "path": "dist/demo/fixture.d.ts",

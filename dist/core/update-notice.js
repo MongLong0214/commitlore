@@ -1,0 +1,106 @@
+/**
+ * The passive notice (T-1604, #742): one line, on stderr, at most once a day,
+ * and never when it would be in the way.
+ *
+ * **This module owns the context gates, and T-1602 deliberately does not.**
+ * They apply to an uninvited line, not to an answered question -- `commitlore
+ * upgrade --check` must keep working inside CI, and a module that applied
+ * these to the check itself is one that command could not use.
+ *
+ * **Latency is zero by construction, not by timeout.** `gh` starts its check
+ * concurrently and cancels before reading the result, so a slow network aborts
+ * and the notice is simply skipped rather than waited for. Same shape here:
+ * `beginUpdateCheck` starts the work, the command runs, and `finishUpdateCheck`
+ * prints only what has already resolved. A check that never finishes never
+ * delays anything, because nothing ever awaits it.
+ */
+import { isNewerRelease } from './release-version.js';
+import { latestRelease } from './latest-release.js';
+/**
+ * Subcommands that must never see a stray line.
+ *
+ * Named individually rather than matched by a pattern: `prepare-commit-msg`
+ * writes the commit message file, so a stray line is a corrupted commit, and
+ * `mcp` speaks a protocol where one is a parse error. A future command added
+ * here cannot be quietly dropped from the test if each is its own case.
+ */
+export const SILENT_SUBCOMMANDS = [
+    'prepare-commit-msg',
+    'post-commit',
+    'pre-push',
+    'mcp',
+    // `doctor` carries staleness inside its own report (T-1605). It is silent
+    // here so the two mechanisms cannot both fire and say it twice.
+    'doctor',
+];
+/** Why the notice stayed quiet. `null` means it may speak. */
+export const suppressedBecause = (ctx) => {
+    if (ctx.env['CI'] !== undefined && ctx.env['CI'] !== '')
+        return 'CI';
+    // `gh` requires both streams to be terminals. The notice goes to stderr, so
+    // a redirected stderr is a polluted log even when stdout is a terminal.
+    if (!ctx.stdoutTty || !ctx.stderrTty)
+        return 'not a terminal';
+    if (ctx.argv.includes('--json'))
+        return '--json';
+    const subcommand = ctx.argv.find((arg) => !arg.startsWith('-'));
+    if (subcommand !== undefined && SILENT_SUBCOMMANDS.includes(subcommand))
+        return subcommand;
+    return null;
+};
+let pending = null;
+let settled = null;
+/**
+ * Starts the check without awaiting it. Nothing downstream may await this
+ * promise: that would trade the property this design exists for.
+ */
+export const beginUpdateCheck = (ctx) => {
+    if (pending !== null)
+        return;
+    if (suppressedBecause(ctx) !== null)
+        return;
+    pending = latestRelease({ env: ctx.env })
+        .then((result) => {
+        settled = result;
+        return result;
+    })
+        .catch(() => null);
+    // A rejected check must never surface as an unhandled rejection that changes
+    // the command's exit code.
+    void pending;
+};
+/**
+ * Prints the line if the check already finished and there is something to say.
+ *
+ * `failed` is passed rather than inferred: when the command itself failed the
+ * operator is already reading an error, and `gh` stays quiet for the same
+ * reason.
+ */
+export const finishUpdateCheck = (ctx, current, failed, write) => {
+    const result = settled;
+    pending = null;
+    settled = null;
+    if (failed)
+        return;
+    if (result === null)
+        return;
+    if (suppressedBecause(ctx) !== null)
+        return;
+    if (result.outcome.kind !== 'resolved')
+        return;
+    if (!isNewerRelease(result.outcome.tag, current))
+        return;
+    write(`\ncommitlore ${result.outcome.tag} is available (running ${current}). Run: commitlore upgrade\n`);
+};
+/**
+ * Test seam: reports whether an answer has landed, without offering a way to
+ * *wait* for one. Awaiting the check is the single thing this design forbids,
+ * so the seam a test needs must not be one production code can misuse.
+ */
+export const hasSettledCheck = () => settled !== null;
+/** Test seam: forgets any in-flight or settled check. */
+export const resetUpdateCheck = () => {
+    pending = null;
+    settled = null;
+};
+//# sourceMappingURL=update-notice.js.map

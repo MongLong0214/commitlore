@@ -38,6 +38,7 @@ import { register as registerQuery } from './commands/query.js';
 import { register as registerSquashPreserve } from './commands/squash-preserve.js';
 import { register as registerStale } from './commands/stale.js';
 import { register as registerUpgrade } from './commands/update.js';
+import { beginUpdateCheck, finishUpdateCheck } from './core/update-notice.js';
 import { register as registerSync } from './commands/sync.js';
 import { register as registerValidate } from './commands/validate.js';
 import { registerUninstall } from './commands/uninstall.js';
@@ -262,9 +263,32 @@ const USAGE_ERRORS = new Set([
 program.exitOverride();
 for (const command of program.commands) command.exitOverride();
 
+// Started here and never awaited. The notice's whole property is that a slow
+// or hanging check costs the command nothing: `gh` starts its check
+// concurrently and cancels before reading, and this is the same shape. Awaiting
+// this anywhere would trade away the reason it exists (T-1604).
+const noticeContext = {
+  argv: process.argv.slice(2),
+  env: process.env,
+  stdoutTty: process.stdout.isTTY === true,
+  stderrTty: process.stderr.isTTY === true,
+};
+beginUpdateCheck(noticeContext);
+
+const speak = (failed: boolean): void => {
+  try {
+    finishUpdateCheck(noticeContext, packageVersion(), failed, (line) => process.stderr.write(line));
+  } catch {
+    // A broken check leaves every command's behaviour unchanged. That is
+    // asserted by a test that injects a throwing one.
+  }
+};
+
 try {
   await program.parseAsync(process.argv);
+  speak(false);
 } catch (error) {
+  speak(true);
   const code = (error as { code?: string }).code ?? '';
   if (code === 'commander.helpDisplayed' || code === 'commander.version' || code === 'commander.help') {
     process.exit(0);

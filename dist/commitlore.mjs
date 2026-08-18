@@ -16639,7 +16639,7 @@ var prepareCaptureContext = (opts) => {
 var prepareCaptureContextReadOnly = (opts) => {
   const prepared = prepareValues({ ...opts, readOnly: true });
   const nonce = randomBytes2(16).toString("hex");
-  const pending = makePreparedPending({
+  const pending2 = makePreparedPending({
     cwd: opts.cwd,
     nonce,
     base_head: prepared.base_head,
@@ -16659,7 +16659,7 @@ var prepareCaptureContextReadOnly = (opts) => {
     prompt: prepared.prompt,
     policy_error: prepared.policy_error,
     guard_advisory: prepared.guard_advisory,
-    pending
+    pending: pending2
   };
 };
 
@@ -16789,8 +16789,8 @@ var runVerifyCaptureRecords = (opts) => {
     };
   };
   try {
-    const pending = opts.pending ?? readPending(nonce, { cwd });
-    if (!pending) {
+    const pending2 = opts.pending ?? readPending(nonce, { cwd });
+    if (!pending2) {
       return {
         accepted: [],
         rejected: [],
@@ -16801,7 +16801,7 @@ var runVerifyCaptureRecords = (opts) => {
     }
     const transcriptHash = sha2562(transcript);
     const diffHash = sha2562(diff);
-    if (pending.source_hashes.transcript !== transcriptHash) {
+    if (pending2.source_hashes.transcript !== transcriptHash) {
       for (const record2 of draft) {
         rejected.push({
           record: record2,
@@ -16818,7 +16818,7 @@ var runVerifyCaptureRecords = (opts) => {
       };
       return settle(result2);
     }
-    if (pending.source_hashes.diff !== diffHash) {
+    if (pending2.source_hashes.diff !== diffHash) {
       for (const record2 of draft) {
         rejected.push({
           record: record2,
@@ -18417,12 +18417,12 @@ var probeMcp = async (command, args) => {
   const resolved = commandPath(command);
   if (typeof resolved !== "string") return resolved;
   return new Promise((resolve23) => {
-    let settled = false;
+    let settled2 = false;
     let child;
     let timer;
     const finish = (problem) => {
-      if (settled) return;
-      settled = true;
+      if (settled2) return;
+      settled2 = true;
       if (timer !== void 0) clearTimeout(timer);
       void (async () => {
         const cleanup = child === void 0 ? "not-needed" : await stopProbeChild(child);
@@ -18455,7 +18455,7 @@ var probeMcp = async (command, args) => {
     );
     child.once("error", (error2) => finish(failure2("command-could-not-start", `could not start command: ${error2.message}`)));
     child.once("exit", (code) => {
-      if (!settled) finish(failure2("command-exited", `command exited before MCP verification (status ${String(code)})`));
+      if (!settled2) finish(failure2("command-exited", `command exited before MCP verification (status ${String(code)})`));
     });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -19706,8 +19706,8 @@ var renderList = (result, now) => {
 `;
 };
 var register4 = (program3) => {
-  const pending = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
-  pending.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
+  const pending2 = program3.command("pending").description("inspect or remove capture transactions that have not reached a commit yet");
+  pending2.command("ls").description("list pending capture transactions").option("--json", "emit structured JSON output").action((options) => {
     const result = runPendingList({});
     if (options.json === true) {
       process.stdout.write(`${JSON.stringify(result, null, 2)}
@@ -19718,7 +19718,7 @@ var register4 = (program3) => {
     process.stdout.write(renderList(result, Date.now()));
     if (result.state === "unreadable") process.exitCode = 1;
   });
-  pending.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
+  pending2.command("show").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("print one capture transaction, with whether it is stale").option("--json", "emit structured JSON output").action((nonce, options) => {
     const result = runPendingShow({ nonce });
     if (options.json === true) {
       process.stdout.write(`${JSON.stringify(result, null, 2)}
@@ -19735,7 +19735,7 @@ var register4 = (program3) => {
     process.stdout.write(`${JSON.stringify(result.transaction, null, 2)}
 `);
   });
-  pending.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
+  pending2.command("rm").argument("<nonce>", "the transaction nonce, or enough of its start to be unambiguous").description("delete one capture transaction; refuses a staged or applied one").option("--json", "emit structured JSON output").action((nonce, options) => {
     const result = runPendingRemove({ nonce });
     if (options.json === true) {
       process.stdout.write(`${JSON.stringify(result, null, 2)}
@@ -22332,18 +22332,18 @@ var runPostCommitFinaliser = (cwd) => {
   const commitMessage = msgResult.stdout;
   for (const file of files) {
     const filePath = resolve12(pendingDirPath, file);
-    const pending = readPendingFile(filePath);
-    if (!pending) continue;
-    if (pending.phase !== "applied") continue;
-    if (pending.consumed) continue;
-    if (pending.base_head !== firstParent && !isAmendedBase(pending.base_head, firstParent, cwd)) continue;
-    if (pending.staged_tree_oid !== committedTree) continue;
-    if (!allRecordIdsPresent(commitMessage, pending.records)) continue;
-    const canonicalBlock = buildCanonicalTrailerBlock(pending.records);
+    const pending2 = readPendingFile(filePath);
+    if (!pending2) continue;
+    if (pending2.phase !== "applied") continue;
+    if (pending2.consumed) continue;
+    if (pending2.base_head !== firstParent && !isAmendedBase(pending2.base_head, firstParent, cwd)) continue;
+    if (pending2.staged_tree_oid !== committedTree) continue;
+    if (!allRecordIdsPresent(commitMessage, pending2.records)) continue;
+    const canonicalBlock = buildCanonicalTrailerBlock(pending2.records);
     const expectedHash = createHash7("sha256").update(canonicalBlock).digest("hex");
-    if (pending.applied_record_hash !== expectedHash) continue;
+    if (pending2.applied_record_hash !== expectedHash) continue;
     try {
-      consumePending(pending.nonce, headSha2, { cwd });
+      consumePending(pending2.nonce, headSha2, { cwd });
     } catch (error2) {
       captureHookFailOpen("post-commit finalisation error", error2);
     }
@@ -22656,8 +22656,8 @@ var messageContainsRecordId = (message, records) => {
   }
   return false;
 };
-var captureLabel = (pending) => {
-  for (const rec of pending.records) {
+var captureLabel = (pending2) => {
+  for (const rec of pending2.records) {
     if (typeof rec !== "object" || rec === null) continue;
     const trailers = rec.trailers;
     if (!Array.isArray(trailers)) continue;
@@ -22665,7 +22665,7 @@ var captureLabel = (pending) => {
       if (trailer.key === "Record-Id") return trailer.value;
     }
   }
-  return pending.nonce;
+  return pending2.nonce;
 };
 var usesTemporaryCommitIndex = (cwd) => {
   const currentIndex = process.env.GIT_INDEX_FILE;
@@ -22674,8 +22674,8 @@ var usesTemporaryCommitIndex = (cwd) => {
   if (gitDir.code !== 0) return false;
   return resolve14(cwd, currentIndex) !== resolve14(cwd, gitDir.stdout.trim(), "index");
 };
-var reportDiffMismatch = (pending, cwd) => {
-  const label = captureLabel(pending);
+var reportDiffMismatch = (pending2, cwd) => {
+  const label = captureLabel(pending2);
   const detail = usesTemporaryCommitIndex(cwd) ? "this commit uses a temporary index whose staged diff differs from the verified capture" : "the staged diff differs from the verified capture";
   process.stderr.write(
     `commitlore: staged capture ${label} was not attached: ${detail}; the record remains pending.
@@ -22714,31 +22714,31 @@ var applyCaptureRecord = (messageFile, cwd) => {
   const eligible = [];
   for (const file of files) {
     const filePath = resolve14(pendingDirPath, file);
-    const pending2 = readPendingFile2(filePath);
-    if (!pending2) continue;
-    if (pending2.phase !== "staged" && pending2.phase !== "applied") continue;
-    if (pending2.consumed) continue;
-    if (pending2.base_head !== currentHead) continue;
-    if (pending2.staged_diff_hash !== currentDiffHash) {
-      reportDiffMismatch(pending2, cwd);
+    const pending3 = readPendingFile2(filePath);
+    if (!pending3) continue;
+    if (pending3.phase !== "staged" && pending3.phase !== "applied") continue;
+    if (pending3.consumed) continue;
+    if (pending3.base_head !== currentHead) continue;
+    if (pending3.staged_diff_hash !== currentDiffHash) {
+      reportDiffMismatch(pending3, cwd);
       continue;
     }
-    if (!pending2.expires_at) continue;
-    if (now >= new Date(pending2.expires_at).getTime()) continue;
-    if (pending2.policy_identity_hash !== currentPolicyHash) continue;
-    eligible.push(pending2);
+    if (!pending3.expires_at) continue;
+    if (now >= new Date(pending3.expires_at).getTime()) continue;
+    if (pending3.policy_identity_hash !== currentPolicyHash) continue;
+    eligible.push(pending3);
   }
   eligible.sort(compareCaptureCandidates);
-  const pending = eligible[0];
-  if (!pending) return;
-  if (messageContainsRecordId(currentMessage, pending.records)) return;
-  const trailerBlock = buildTrailerBlock(pending.records);
+  const pending2 = eligible[0];
+  if (!pending2) return;
+  if (messageContainsRecordId(currentMessage, pending2.records)) return;
+  const trailerBlock = buildTrailerBlock(pending2.records);
   if (!trailerBlock) return;
   const separator = currentMessage.endsWith("\n\n") ? "" : currentMessage.endsWith("\n") ? "\n" : "\n\n";
   writeFileSync10(messageFile, `${currentMessage}${separator}${trailerBlock}`);
   const recordHash = createHash8("sha256").update(trailerBlock).digest("hex");
   try {
-    markApplied(pending.nonce, recordHash, { cwd });
+    markApplied(pending2.nonce, recordHash, { cwd });
   } catch {
   }
 };
@@ -23513,10 +23513,10 @@ var askUnattended = async () => {
   for (; ; ) {
     const answer = await new Promise((resolveAnswer) => {
       const readlineInterface = createInterface({ input: process.stdin, output: process.stdout });
-      let settled = false;
+      let settled2 = false;
       const settle = (value) => {
-        if (settled) return;
-        settled = true;
+        if (settled2) return;
+        settled2 = true;
         readlineInterface.close();
         resolveAnswer(value);
       };
@@ -35787,10 +35787,10 @@ var fetchTags = async (url, opts = {}) => {
   const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = opts.clearTimer ?? ((handle) => clearTimeout(handle));
   return await new Promise((resolve23) => {
-    let settled = false;
+    let settled2 = false;
     const finish = (outcome) => {
-      if (settled) return;
-      settled = true;
+      if (settled2) return;
+      settled2 = true;
       clearTimer(killTimer);
       clearTimer(graceTimer);
       resolve23(outcome);
@@ -35937,6 +35937,49 @@ var register24 = (program3) => {
 ` : render2(report)
     );
   });
+};
+
+// src/core/update-notice.ts
+var SILENT_SUBCOMMANDS = [
+  "prepare-commit-msg",
+  "post-commit",
+  "pre-push",
+  "mcp",
+  // `doctor` carries staleness inside its own report (T-1605). It is silent
+  // here so the two mechanisms cannot both fire and say it twice.
+  "doctor"
+];
+var suppressedBecause = (ctx) => {
+  if (ctx.env["CI"] !== void 0 && ctx.env["CI"] !== "") return "CI";
+  if (!ctx.stdoutTty || !ctx.stderrTty) return "not a terminal";
+  if (ctx.argv.includes("--json")) return "--json";
+  const subcommand = ctx.argv.find((arg) => !arg.startsWith("-"));
+  if (subcommand !== void 0 && SILENT_SUBCOMMANDS.includes(subcommand)) return subcommand;
+  return null;
+};
+var pending = null;
+var settled = null;
+var beginUpdateCheck = (ctx) => {
+  if (pending !== null) return;
+  if (suppressedBecause(ctx) !== null) return;
+  pending = latestRelease({ env: ctx.env }).then((result) => {
+    settled = result;
+    return result;
+  }).catch(() => null);
+  void pending;
+};
+var finishUpdateCheck = (ctx, current, failed, write2) => {
+  const result = settled;
+  pending = null;
+  settled = null;
+  if (failed) return;
+  if (result === null) return;
+  if (suppressedBecause(ctx) !== null) return;
+  if (result.outcome.kind !== "resolved") return;
+  if (!isNewerRelease(result.outcome.tag, current)) return;
+  write2(`
+commitlore ${result.outcome.tag} is available (running ${current}). Run: commitlore upgrade
+`);
 };
 
 // src/commands/sync.ts
@@ -36886,9 +36929,24 @@ var USAGE_ERRORS = /* @__PURE__ */ new Set([
 ]);
 program2.exitOverride();
 for (const command of program2.commands) command.exitOverride();
+var noticeContext = {
+  argv: process.argv.slice(2),
+  env: process.env,
+  stdoutTty: process.stdout.isTTY === true,
+  stderrTty: process.stderr.isTTY === true
+};
+beginUpdateCheck(noticeContext);
+var speak = (failed) => {
+  try {
+    finishUpdateCheck(noticeContext, packageVersion(), failed, (line2) => process.stderr.write(line2));
+  } catch {
+  }
+};
 try {
   await program2.parseAsync(process.argv);
+  speak(false);
 } catch (error2) {
+  speak(true);
   const code = error2.code ?? "";
   if (code === "commander.helpDisplayed" || code === "commander.version" || code === "commander.help") {
     process.exit(0);
