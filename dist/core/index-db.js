@@ -902,6 +902,28 @@ export const closeIndex = (handle) => {
  * file is unreadable — dropping tables is not enough, because a file written
  * by a future version may hold objects this build has never heard of.
  */
+/**
+ * The schema half of `healthProblem`, on its own.
+ *
+ * `healthProblem` also reports a missing table and a stale signature verifier,
+ * and a rebuild answers those by rebuilding. Only a version mismatch needs the
+ * file recreated first, so only that question is asked here.
+ */
+const schemaMismatch = (db) => {
+    try {
+        if (!tableExists(db, 'meta'))
+            return 'index has no meta table';
+        const version = readMeta(db, 'schema_version');
+        if (version === null)
+            return 'index has no schema version';
+        return version === String(SCHEMA_VERSION)
+            ? null
+            : `index was built by schema v${version}, this build expects v${String(SCHEMA_VERSION)}`;
+    }
+    catch {
+        return 'index schema could not be read';
+    }
+};
 const resetIndexFile = (handle) => {
     handle.db.close();
     removeDatabaseFile(handle.path);
@@ -1003,6 +1025,26 @@ const requireWritable = (handle) => {
  */
 export const rebuildIndex = (handle, opts = {}) => {
     requireWritable(handle);
+    // A rebuild clears rows and keeps the tables, so on a database written by an
+    // older schema there is nothing it can do with them: the first insert dies on
+    // a column that does not exist, and the message names a SQLite constraint
+    // rather than the situation. `DELETE FROM meta WHERE k <> 'schema_version'`
+    // below even preserves the stale version, so the state survives its own
+    // repair.
+    //
+    // Measured: a worktree whose index.db came from v1.0.2 has zero
+    // `signature_status` columns in `trailers`, and `--rebuild` there reported
+    // `NOT NULL constraint failed: trailers.signature_status` -- a constraint on
+    // a column the table does not have. Deleting the file made the identical
+    // command succeed; restoring it made it fail again.
+    //
+    // Here rather than at the `force` branch in `ensureIndex`, because that is
+    // not the path `commitlore index --rebuild` takes: `index-cmd.ts` opens the
+    // index and calls this function directly. Every caller of a rebuild needs
+    // the reset, so the reset belongs to the rebuild.
+    const stale = schemaMismatch(handle.db);
+    if (stale !== null)
+        resetIndexFile(handle);
     const started = Date.now();
     const head = revParse(handle.cwd, 'HEAD');
     const shas = head === null ? [] : revList(handle.cwd, 'HEAD');
