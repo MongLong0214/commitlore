@@ -136,12 +136,28 @@ where `PATH` may carry no `node` at all.
 
 Since v1.0.2 that path is version-free: `install.sh` maintains
 `<data-root>/current` beside the versioned checkouts, and a hook installed after
-that records it. New installs follow upgrades on their own.
+that records it.
 
-**Hooks installed before it do not.** They still name the release they were
-installed from, and the installer cannot fix them — it has no way to know which
-repositories have hooks. `doctor` reports the mismatch and names
-`commitlore hooks install` as the repair.
+That is the path. The **stub** is a second thing, and it moved later — so there
+are three generations, not two. This section said "New installs follow upgrades
+on their own", which was true of the path and false of the stub for every hook
+installed between v1.0.2 and v1.1.2.
+
+| installed with | what it records | what an upgrade does | what to run |
+|---|---|---|---|
+| before v1.0.2 | one release directly | the hook keeps naming a release you no longer have | `commitlore hooks install`, once per repository |
+| v1.0.2 – v1.1.2 | `current`, with the pre-1.1.3 containment stub | the stub does not recognise an ordinary upgrade and refuses the commit under the `PATH` git gives a hook | `commitlore hooks install`, once per repository |
+| v1.1.3 or later | `current`, with the rebinding stub | ordinary upgrades are followed automatically | nothing |
+
+The middle row is the one that surprises. Under a login shell the hook falls
+through to a `PATH` lookup and commits succeed, so nothing looks wrong. Under the
+`PATH` a hook actually gets — a GUI client, an IDE, a launcher — there is no
+`commitlore` on `PATH`, and the commit is refused.
+
+**The installer cannot repair any of them.** It has no way to know which
+repositories have hooks, and not touching a repository's `.git` is policy rather
+than omission. `doctor` reports the mismatch and names `commitlore hooks install`
+as the repair; from v1.1.3 the installer also says so on every install.
 
 The `bin` wrapper cannot serve as that path, and this was measured rather than
 reasoned: recording it made hooks fail under the restricted `PATH` a hook

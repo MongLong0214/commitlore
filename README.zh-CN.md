@@ -134,6 +134,21 @@ node commitlore/dist/commitlore.mjs --version
 
 </details>
 
+### 升级
+
+重新运行安装脚本，并开启一个新的 agent 会话。
+
+钩子是安装时写下的文件，因此有三个世代。**v1.0.2 之前**安装的钩子直接指向某一个发布版本。**v1.0.2 到 v1.1.2** 之间安装的钩子会跟随 `current`，但当时的隔离 stub 认不出一次普通升级，在 git 交给钩子的 `PATH` 下会拒绝提交。**v1.1.3 及之后**安装的钩子会自动跟随普通升级。
+
+前两个世代需要在每个仓库里各执行一次：
+
+```bash
+commitlore hooks install
+commitlore doctor
+```
+
+安装程序无法代劳。它没有办法知道哪些仓库装了钩子，而不触碰仓库的 `.git` 是一项策略而非疏漏。正在运行的会话保留着启动时加载的运行时，因此还需要重启。哪些仓库需要，由 `commitlore doctor` 列出。
+
 ## 看它实际运行
 
 在编辑 `src/pricing.ts` 前，代理会收到这份 payload——record 本身，而不是对它的描述：
