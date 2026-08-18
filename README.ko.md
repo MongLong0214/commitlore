@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore는 저장소의 결정 권위를 다음 편집으로 나른다: src/pricing.ts에서 아직 유효한 결정이 그것이 기각한 대안과 함께 전달되고, 대체된 이전의 더 넓은 limit은 현재 지침으로 넘어가지 않는다.">
 </p>
 
 <p align="center">
@@ -28,10 +28,6 @@ CommitLore에는 호스팅 서비스가 없고 record를 Git에 보관합니다.
 결정을 기록하는 일은 변경에 diff가 보여줄 수 없는 이유가 있을 때 에이전트가
 합니다. 평범한 `git commit`은 이것을 시작할 수 없습니다. hook에는 diff가 있고
 capture에는 세션이 필요하기 때문입니다.
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>목차</strong></summary>

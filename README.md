@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: a coding agent must not revive a decision the repository already reversed.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore carries the repository's decision authority into the next edit: for src/pricing.ts the decision still in force is delivered with the alternative it ruled out, while an earlier, broader limit that has been superseded does not move forward as current guidance.">
 </p>
 
 <p align="center">
@@ -29,10 +29,6 @@ agent does when a change carries a reason the diff cannot show; an ordinary
 `git commit` cannot start it, because a hook has the diff and a capture needs
 the session. [What happens automatically](#what-happens-automatically-and-what-does-not)
 says exactly which hosts do which.
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>Contents</strong></summary>

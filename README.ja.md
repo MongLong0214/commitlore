@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: コーディングエージェントはリポジトリがすでに覆した決定を復活させてはならない。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore はリポジトリの意思決定の権威を次の編集へ運ぶ: src/pricing.ts でまだ有効な決定が、それが退けた代替案とともに届き、置き換えられた以前のより広い limit は現在の指針として先へ進まない。">
 </p>
 
 <p align="center">
@@ -28,10 +28,6 @@ CommitLore にホスティングサービスはなく、record は Git に保管
 *capture* — 新しい決定を書き残すこと — は、変更に diff では示せない理由があると
 エージェントが判断したときに行われます。通常の `git commit` はこれを開始できません。
 hook には diff があり、capture にはセッションが必要だからです。
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>目次</strong></summary>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：编程代理不得复活仓库已经推翻的决策。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore 将仓库的决策权威带入下一次编辑：src/pricing.ts 中仍然有效的决策连同它已排除的替代方案一起交付，而被取代的、此前更宽泛的 limit 不会作为当前指引继续向前。">
 </p>
 
 <p align="center">
@@ -25,10 +25,6 @@ CommitLore 没有托管服务；它把 record 保存在 Git 中。其 MCP 服务
 决策交给它 —— 安装后即自动进行。*capture* —— 记录新的决策 —— 由代理在变更带有
 diff 无法展示的理由时执行。普通的 `git commit` 无法启动它：hook 拿到的是 diff，
 而 capture 需要会话。
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>目录</strong></summary>
