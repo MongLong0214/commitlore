@@ -271,18 +271,22 @@ const main = () => {
   // The markers are whatever the generator emits, read off its own output.
   const begin = expectedLines[0];
   const end = expectedLines[expectedLines.length - 1];
-  // The block is compared where it lives, which is not a README.
-  if (!fs.existsSync(EVIDENCE_DOC)) {
-    process.stderr.write(`check-readme-numbers: no such file: ${relativePath(EVIDENCE_DOC)}\n`);
+  // The block is compared where it lives, which is not a README. `--readme` is
+  // the test seam and names its own target, so a fixture is checked as itself
+  // rather than sending every fixture run at the real evidence page.
+  const blockTarget = args.readme ?? EVIDENCE_DOC;
+  if (!fs.existsSync(blockTarget)) {
+    process.stderr.write(`check-readme-numbers: no such file: ${relativePath(blockTarget)}\n`);
     return 1;
   }
-  const readme = EVIDENCE_DOC;
-  const markdown = fs.readFileSync(EVIDENCE_DOC, 'utf8');
-  const relative = relativePath(EVIDENCE_DOC);
+  const readme = blockTarget;
+  const markdown = fs.readFileSync(blockTarget, 'utf8');
+  const relative = relativePath(blockTarget);
 
   // A README that still carries a block would be a second copy of a generated
   // artifact, which is the thing this moved to stop.
   for (const other of readmes) {
+    if (other.file === blockTarget) continue;
     if (other.markdown.includes(begin) || other.markdown.includes(end)) {
       process.stderr.write(
         `${other.relative}: carries a generated block. ${relative} owns it now — a second copy is a copy that drifts.\n`,
