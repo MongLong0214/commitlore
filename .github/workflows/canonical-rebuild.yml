@@ -55,34 +55,22 @@ jobs:
       - run: npm ci
 
       # The loop this has to not enter. A rebuild pull request touches exactly
-      # these two paths, so its own merge would otherwise ask for another
-      # rebuild of a tree that is already correct.
+      # `dist/` and the manifest, so its own merge would otherwise ask for
+      # another rebuild of a tree that is already correct.
+      #
+      # The decision lives in a script rather than here because the shape it
+      # recognises does not exist in this repository yet -- every pull request
+      # currently carries its own `dist/`, which is #719's complaint. A guard
+      # with no observation behind it needs a test that drives the same code,
+      # and an inline `case` in YAML cannot be driven by one. The first draft
+      # was inline and read `bd297e1` as artifacts-only: it is a merge, and
+      # `git show` on a merge prints the combined diff, which lists only files
+      # that differ from *every* parent. Against its first parent it changed 30.
       - name: Stop if this push is itself a rebuild
         id: guard
         run: |
           set -euo pipefail
-          changed="$(git show --name-only --format= HEAD | sed '/^$/d' | sort -u)"
-          if [ -z "$changed" ]; then
-            # No paths at all. That is not "only artifacts" -- it is no evidence,
-            # and reading it as a skip would silently pass over a push that does
-            # need a rebuild. Fall through and let the build decide.
-            echo "--- this commit reports no changed paths; letting the build decide"
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          only_artifacts=1
-          while IFS= read -r path; do
-            case "$path" in
-              dist/*|installer/canonical-artifact.json) ;;
-              *) only_artifacts=0 ;;
-            esac
-          done <<< "$changed"
-          if [ "$only_artifacts" = "1" ]; then
-            echo "--- this commit touches only dist/ and the manifest; nothing to do"
-            echo "skip=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=0" >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/canonical-rebuild-guard.mjs "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Rebuild and see whether the committed bundle is behind
         id: build
