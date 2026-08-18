@@ -31,8 +31,14 @@ const isHistoryOrGenerated = (path: string): boolean =>
   // A handoff record describing what an already-published release did. The
   // release history is true and stays; what it must not do is describe the
   // current plan, which is why the paragraph claiming the binary code was still
-  // present had to change in this same commit.
-  path === 'HANDOFF.md' ||
+  // present had to change when this exemption was written.
+  //
+  // It lived at the repository root, where nothing linked it and its name read
+  // as current guidance. Moving it under the archive is what made this line
+  // move — and the exemption is narrower there, because the file now opens by
+  // saying it is a historical snapshot rather than leaving a reader to work
+  // that out from its date.
+  path === 'docs/handoff/archive/20260731-handoff.md' ||
   path.startsWith('dist/') ||
   path.startsWith('bench/results/') ||
   path === 'docs/adr/ADR-0015-single-executable-binary.md' ||
