@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: コーディングエージェントはリポジトリがすでに覆した決定を復活させてはならない。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore はリポジトリの意思決定の権威を次の編集へ運ぶ: src/pricing.ts でまだ有効な決定が、それが退けた代替案とともに届き、置き換えられた以前のより広い limit は現在の指針として先へ進まない。">
 </p>
 
 <p align="center">
@@ -28,10 +28,6 @@ CommitLore にホスティングサービスはなく、record は Git に保管
 *capture* — 新しい決定を書き残すこと — は、変更に diff では示せない理由があると
 エージェントが判断したときに行われます。通常の `git commit` はこれを開始できません。
 hook には diff があり、capture にはセッションが必要だからです。
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>目次</strong></summary>
@@ -83,13 +79,13 @@ Codex 自身の CLI を通じて marketplace と plugin を登録し、設定や
 **その他のコーディングエージェント** — CLI をインストールします:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh -s v1.1.3
 ```
 
 **Windows** — PowerShell で同じインストールを行います:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.ps1))) v1.1.3
 ```
 
 Windows での host 配線には **v1.1.1 以降**が必要です。それ以前は検出が `.cmd` shim を見つけられず、インストーラーもそれを実行できなかったため、Windows へのインストールは CLI を置くだけで何も配線しませんでした — 成功としてではなく `ok: false` として報告されます。1.1.1 で Codex、Gemini CLI、Hermes について実機で確認しました。
@@ -131,11 +127,11 @@ commitlore context .
 
 ```bash
 # installer を固定してダウンロードし、確認してから実行します。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh
-sh install.sh v1.1.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh
+sh install.sh v1.1.3
 
 # あるいはスクリプトを使わずに。スクリプトが作るチェックアウトは自分でも作れます。
-git clone --depth 1 --branch v1.1.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.1.3 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 

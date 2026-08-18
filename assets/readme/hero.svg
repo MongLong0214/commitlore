@@ -1,17 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title" aria-describedby="desc">
-  <title id="title">CommitLore delivers current decisions for a file to the next agent</title>
-  <desc id="desc">Active Limit and Ruled-out records for src/pricing.ts are delivered to the next agent; an earlier superseded Limit is not delivered as current guidance.</desc>
-  <rect width="1200" height="340" fill="#F4EFE6"/>
-  <rect x="0" y="0" width="6" height="220" fill="#3E6A4C"/>
-  <text x="48" y="40" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" fill="#4A453E">src/pricing.ts</text>
-  <rect x="48" y="54" width="142" height="38" fill="#3E6A4C"/>
-  <text x="68" y="80" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="1.6" fill="#F4EFE6">ACTIVE</text>
-  <text x="48" y="124" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" fill="#1A1814"><tspan fill="#4A453E">Limit — </tspan><tspan font-weight="600">calculatePrice owns final checkout pricing only</tspan></text>
-  <text x="48" y="160" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#1A1814"><tspan fill="#4A453E">Ruled-out — </tspan><tspan font-weight="600">Reuse checkout pricing for admin quotes — eligibility and rounding differ</tspan></text>
-  <text x="48" y="198" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22"><tspan fill="#4A453E">delivered to the </tspan><tspan fill="#3E6A4C" font-weight="700">next agent</tspan></text>
-  <line x1="48" y1="220" x2="1152" y2="220" stroke="#D9D3C8" stroke-width="1.5"/>
-  <rect x="0" y="220" width="6" height="120" fill="#D9D3C8"/>
-  <text x="48" y="256" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="1.5" fill="#4A453E">SUPERSEDED</text>
-  <text x="48" y="290" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#4A453E">Earlier Limit — calculatePrice also served admin quotes</text>
-  <text x="48" y="322" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="24" fill="#4A453E">not delivered as current guidance</text>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="840"
+  height="340"
+  viewBox="0 0 840 340"
+  role="img"
+  aria-labelledby="commitlore-hero-title commitlore-hero-desc"
+>
+  <title id="commitlore-hero-title">CommitLore delivers only current decisions to the next edit</title>
+  <desc id="commitlore-hero-desc">For src/pricing.ts, the decision still in force moves from Git history into current context and reaches the next edit, carrying both its limit and the alternative it ruled out. An earlier, broader limit that also covered admin quotes has been superseded and does not move forward as current guidance.</desc>
+
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .section { font-size: 18px; font-weight: 700; letter-spacing: 1.2px; fill: #8B949E; }
+    .state { font-size: 18px; font-weight: 700; letter-spacing: 1.2px; }
+    .row-primary { font-size: 24px; font-weight: 600; }
+    .row-secondary { font-size: 20px; font-weight: 500; }
+    .key { font-size: 18px; font-weight: 600; fill: #8B949E; }
+    .value { font-size: 24px; font-weight: 650; fill: #F0F6FC; }
+    .outcome { font-size: 22px; font-weight: 650; fill: #F0F6FC; }
+  </style>
+
+  <rect width="840" height="340" rx="8" fill="#0D1117"/>
+  <rect x="0.75" y="0.75" width="838.5" height="338.5" rx="7.25" fill="none" stroke="#30363D" stroke-width="1.5"/>
+
+  <!-- The file every column is talking about. -->
+  <text x="30" y="34" class="mono" font-size="20" font-weight="500" fill="#F0F6FC">src/pricing.ts</text>
+
+  <text x="30" y="70" class="mono section">GIT HISTORY</text>
+  <text x="292" y="70" class="mono section">CURRENT CONTEXT</text>
+  <text x="660" y="70" class="mono section">NEXT EDIT</text>
+
+  <line x1="46" y1="102" x2="46" y2="279" stroke="#30363D" stroke-width="2"/>
+
+  <!-- Active first. The handoff's coordinate map put SUPERSEDED in the top
+       slot, which contradicts its own rule that the superseded row must not
+       take the eye first — and the hero being replaced already had it the
+       right way round. Newest-first also matches what `git log` shows, so a
+       column labelled GIT HISTORY reads the way the tool it names does.
+
+       Solid node, solid connector, arrow into the panel. -->
+  <circle cx="46" cy="132" r="6" fill="#3FB950"/>
+  <text x="66" y="126" class="mono state" fill="#3FB950">ACTIVE</text>
+  <text x="66" y="157" class="sans row-primary" fill="#F0F6FC">Checkout</text>
+  <text x="66" y="184" class="sans row-secondary" fill="#F0F6FC">pricing only</text>
+  <path d="M222 148 H278" fill="none" stroke="#3FB950" stroke-width="2.5"/>
+  <path d="M274 141 L282 148 L274 155" fill="none" stroke="#3FB950" stroke-width="2.5"/>
+
+  <!-- Superseded: hollow node, dashed connector, X. Three signals, so the
+       state does not depend on colour alone. Grey rather than red — a
+       superseded decision is a lifecycle state, not a failure. -->
+  <circle cx="46" cy="230" r="6" fill="#0D1117" stroke="#8B949E" stroke-width="2"/>
+  <text x="66" y="224" class="mono state" fill="#8B949E">SUPERSEDED</text>
+  <text x="66" y="255" class="sans row-primary" fill="#8B949E">Also served</text>
+  <text x="66" y="282" class="sans row-secondary" fill="#8B949E">admin quotes</text>
+  <path d="M220 229 H262" fill="none" stroke="#6E7681" stroke-width="2" stroke-dasharray="5 6"/>
+  <path d="M266 222 L278 234 M278 222 L266 234" stroke="#8B949E" stroke-width="2"/>
+
+  <!-- Inner padding is 16 rather than 22 on both sides. "Checkout pricing only"
+       at 24px lands within about two pixels of the old 284px limit on a wide
+       system font, and this stack resolves to whatever the reader's OS provides
+       — so the margin was thin on somebody else's machine, not on mine. 296px
+       of room removes the case. Symmetric, and inside the spacing allowance. -->
+  <rect x="292" y="92" width="328" height="188" rx="5" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+  <text x="308" y="124" class="mono key">Limit</text>
+  <text x="308" y="156" class="sans value">Checkout pricing only</text>
+  <line x1="308" y1="186" x2="604" y2="186" stroke="#30363D" stroke-width="1.5"/>
+  <text x="308" y="216" class="mono key">Ruled out</text>
+  <text x="308" y="248" class="sans value">Admin quote reuse</text>
+
+  <!-- Panel to next edit. Aimed at the middle line of the block on the right
+       rather than at the panel's own centre, so the arrow reads as pointing
+       at something. -->
+  <path d="M620 188 H652" fill="none" stroke="#3FB950" stroke-width="2.5"/>
+  <path d="M648 181 L656 188 L648 195" fill="none" stroke="#3FB950" stroke-width="2.5"/>
+
+  <!-- Three lines because the column is 150px wide and "active context" does
+       not fit on one at 22px. Left-aligned with the heading above them: the
+       skeleton's bullet dot was a fourth green mark competing with the arrow
+       that already carries the accent, and the eye order here is fourth. -->
+  <text x="660" y="158" class="sans outcome">active</text>
+  <text x="660" y="188" class="sans outcome">context</text>
+  <text x="660" y="218" class="sans outcome">delivered</text>
+
+  <text x="420" y="316" text-anchor="middle" class="sans" font-size="20" font-weight="550" fill="#8B949E">Only decisions still in force move forward.</text>
 </svg>

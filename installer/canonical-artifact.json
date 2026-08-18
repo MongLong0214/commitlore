@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "c2a9710550e0fa33bfb97945d73d6743a9d42234d6b38c56da9d3644bd1aa5b8"
+    "sha256": "4451def8cea5f0d71b9d7602d6227a0e64811e7c27367c098def3098f0e0a202"
   },
   "artifact": {
-    "sha256": "b9e7110c64788123ec3b20ad93cd6fb97af35c7523c4c1275060e193a1849e45",
+    "sha256": "5c4ccc6450c63bb997c1036d408312d9e3b25aac64c669d0ebb140b31cf050f1",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -206,11 +206,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js",
-        "sha256": "fdffba5ca699114a20f68e0447825724114555341b38b9616d19e16597f5e759"
+        "sha256": "6038899e6b1e95ef69c6768d84f2696d0eb7543b3ce4f314f3ea990699d71d25"
       },
       {
         "path": "dist/commands/doctor/checks/delivery-mcp-runtime-identity.js.map",
-        "sha256": "50649021182ca4a30476c9f5580aff92345e85b03ea3f63bc83c798630a02b32"
+        "sha256": "b611a531784f09d7e88553d51d68253cb6e74efa10b161d3a77f5c5143dd030a"
       },
       {
         "path": "dist/commands/doctor/checks/history-history-depth.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "47fff7597a38bb2188943debd59bf90bdc8e80060a7d4acd21590b2a64b6a236"
+        "sha256": "707c000d1b28b53e1bf72f32f6a3a0679d108d4965239b30e80e71e445a18dd8"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1074,11 +1074,11 @@
       },
       {
         "path": "dist/hooks/commit-msg.js",
-        "sha256": "ad314ead4a0242a10fb052e018b2755cb5f61bae7b2e9aa2c677a138b4ce3d9b"
+        "sha256": "b2260805e270db23bb0f7c886e41bcb5862ff0f44fea61f7d049a9d37dbcb36b"
       },
       {
         "path": "dist/hooks/commit-msg.js.map",
-        "sha256": "c6a71203f9f80305d9b42f576eee18e2d7c4bc65b7ae4585e540295148612f29"
+        "sha256": "1a341e4f3d17e02498c662be004b4215c16ccd13a7aad574d800c466d2be4f36"
       },
       {
         "path": "dist/hooks/post-commit.d.ts",

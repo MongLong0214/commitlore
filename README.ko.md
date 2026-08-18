@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore: 코딩 에이전트는 저장소가 이미 뒤집은 결정을 되살려서는 안 된다.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore는 저장소의 결정 권위를 다음 편집으로 나른다: src/pricing.ts에서 아직 유효한 결정이 그것이 기각한 대안과 함께 전달되고, 대체된 이전의 더 넓은 limit은 현재 지침으로 넘어가지 않는다.">
 </p>
 
 <p align="center">
@@ -28,10 +28,6 @@ CommitLore에는 호스팅 서비스가 없고 record를 Git에 보관합니다.
 결정을 기록하는 일은 변경에 diff가 보여줄 수 없는 이유가 있을 때 에이전트가
 합니다. 평범한 `git commit`은 이것을 시작할 수 없습니다. hook에는 diff가 있고
 capture에는 세션이 필요하기 때문입니다.
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>목차</strong></summary>
@@ -83,13 +79,13 @@ Codex의 자체 CLI로 marketplace와 plugin을 등록한다. 설정이나 cache
 **그 밖의 코딩 에이전트** — CLI를 설치한다:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh -s v1.1.3
 ```
 
 **Windows** — PowerShell에서 같은 설치를 한다:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.ps1))) v1.1.3
 ```
 
 Windows에서 host 배선은 **v1.1.1 이상**이 필요하다. 그 전에는 탐지가 `.cmd` shim을 보지 못하고 설치기가 그것을 실행하지도 못해서, Windows 설치는 CLI만 놓고 아무것도 배선하지 않았다 — 성공이 아니라 `ok: false`로 보고됐다. 1.1.1에서 Codex, Gemini CLI, Hermes에 대해 실기로 확인했다.
@@ -131,11 +127,11 @@ commitlore context .
 
 ```bash
 # 설치기를 고정해 내려받고 살펴본 뒤 실행한다.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh
-sh install.sh v1.1.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh
+sh install.sh v1.1.3
 
 # 또는 스크립트를 건너뛴다. 스크립트가 만드는 체크아웃은 직접 만들 수 있는 것과 같다.
-git clone --depth 1 --branch v1.1.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.1.3 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
@@ -402,7 +398,7 @@ lifecycle(`Supersedes:`와 `Expires:`, 그리고 위 표의 마지막 행을 참
 
 ## record 프로토콜
 
-record는 평범한 Git commit trailer 묶음이고, 대개는 작은 것으로 충분합니다:
+record는 평범한 Git commit trailer 묶음이고, 대개는 작은 것으로 충분하다:
 
 ```text
 Fix expired-token refresh
@@ -411,7 +407,7 @@ Ruled-out: Extend token TTL to 24h | security policy violation
 Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-어휘 전체를 쓰는 완전한 예제, 모든 trailer key 표, 그리고 CommitLore 없이 순수 Git으로 읽는 방법은 [docs/protocol.md](docs/protocol.md)에 있습니다. 규범적 정의는 [SPEC §3](spec/SPEC.md)입니다.
+어휘 전체를 쓰는 완전한 예제, 모든 trailer key 표, 그리고 CommitLore 없이 순수 Git으로 읽는 방법은 [docs/protocol.md](docs/protocol.md)에 있다. 규범적 정의는 [SPEC §3](spec/SPEC.md)이다.
 
 ## 저장소가 증명하는 것
 

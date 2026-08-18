@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore：编程代理不得复活仓库已经推翻的决策。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore 将仓库的决策权威带入下一次编辑：src/pricing.ts 中仍然有效的决策连同它已排除的替代方案一起交付，而被取代的、此前更宽泛的 limit 不会作为当前指引继续向前。">
 </p>
 
 <p align="center">
@@ -25,10 +25,6 @@ CommitLore 没有托管服务；它把 record 保存在 Git 中。其 MCP 服务
 决策交给它 —— 安装后即自动进行。*capture* —— 记录新的决策 —— 由代理在变更带有
 diff 无法展示的理由时执行。普通的 `git commit` 无法启动它：hook 拿到的是 diff，
 而 capture 需要会话。
-
-<p align="center">
-  <img src="./assets/readme/commitlore-demo.svg" width="100%" alt="commitlore demo: lifecycle filtering shows only active decisions">
-</p>
 
 <details>
 <summary><strong>目录</strong></summary>
@@ -80,13 +76,13 @@ commitlore plugin install-codex
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh | sh -s v1.1.2
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh | sh -s v1.1.3
 ```
 
 **Windows** — 在 PowerShell 中执行同样的安装：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.ps1))) v1.1.2
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.ps1))) v1.1.3
 ```
 
 在 Windows 上配置 host 需要 **v1.1.1 或更高版本**。在此之前，检测看不到 `.cmd` shim，安装器也无法运行它，因此 Windows 安装只放下 CLI 而不配置任何 host —— 报告为 `ok: false`，而不是成功。已在 1.1.1 上于真实机器验证 Codex、Gemini CLI 与 Hermes。
@@ -128,11 +124,11 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.2/install.sh
-sh install.sh v1.1.2
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.3/install.sh
+sh install.sh v1.1.3
 
 # 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.1.2 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.1.3 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
