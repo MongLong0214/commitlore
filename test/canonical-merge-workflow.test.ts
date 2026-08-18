@@ -48,13 +48,15 @@ describe('T-1502 canonical-merge.yml safety', () => {
     // ref -- neither writable from the first job -- and allows a difference
     // only inside `dist/` and the manifest.
     const publishJob = code().slice(code().indexOf('  publish:'));
-    expect(publishJob).toContain('git merge-tree --write-tree');
-    expect(publishJob).toMatch(/git diff --name-only "\$expected" "\$tip"/);
-    expect(publishJob).toContain("':(exclude)dist'");
-    expect(publishJob).toContain("':(exclude)installer/canonical-artifact.json'");
-    // Both parents pinned: a bundle whose branch is not a merge of exactly
-    // those two commits is a different history wearing the same branch name.
-    expect(publishJob).toMatch(/git rev-list --parents -n1 "\$tip"/);
+    expect(publishJob).toContain('scripts/verify-canonical-handoff.mjs');
+    expect(publishJob).toMatch(/--base "\$\{\{ steps\.take\.outputs\.base \}\}"/);
+    expect(publishJob).toMatch(/--source "\$\{\{ steps\.take\.outputs\.head \}\}"/);
+
+    // The graph rules live in `test/verify-canonical-handoff.test.ts`, run
+    // against real repositories. This file can only read text, and reading text
+    // is what let the first inline version ship requiring two parents on a tip
+    // that has one. Assert the inline form is gone so it cannot come back.
+    expect(publishJob).not.toMatch(/git rev-list --parents -n1 "\$tip"/);
   });
 
   it('refuses a pull request that moved while the rebuild ran, not only a moved main', () => {
@@ -205,7 +207,7 @@ describe('T-1502 canonical-merge.yml safety', () => {
     expect(lineOf('Refuse if either side moved while the rebuild ran')).toBeLessThan(
       lineOf('app-installation-token.mjs'),
     );
-    expect(lineOf('The bundle differs from an honest merge only where a rebuild may')).toBeLessThan(
+    expect(lineOf('The bundle is that merge, plus at most a rebuild')).toBeLessThan(
       lineOf('app-installation-token.mjs'),
     );
   });

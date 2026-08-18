@@ -255,31 +255,25 @@ jobs:
       # lifecycle script during `npm ci` could have added a commit touching
       # `src/`, `scripts/` or `.github/`, and this job would have force-pushed
       # it under the App's identity for a reviewer to see as a rebuild.
-      - name: The bundle differs from an honest merge only where a rebuild may
+      # The bundle is checked against a merge this job computes itself, from
+      # `main` and from the pull request ref -- neither of which the rebuild
+      # could write. A tampered bundle can therefore differ from what a merge
+      # would have produced only inside `dist/` and the manifest, which is the
+      # whole of what a rebuild is entitled to change.
+      #
+      # In a script rather than inline, because the invariant is about a commit
+      # graph and a graph is testable. The first inline version of this required
+      # the branch tip to have two parents; a real tip has one, because the
+      # rebuild commits on top of the merge whenever `dist/` actually changes.
+      # No amount of reading the workflow as text finds that -- only running it
+      # against a repository does.
+      - name: The bundle is that merge, plus at most a rebuild
         run: |
           set -euo pipefail
-          branch="${{ steps.take.outputs.branch }}"
-          base="${{ steps.take.outputs.base }}"
-          head="${{ steps.take.outputs.head }}"
-          tip="$(git rev-parse "$branch")"
-
-          parents="$(git rev-list --parents -n1 "$tip" | cut -d' ' -f2-)"
-          [ "$parents" = "$base $head" ] || {
-            echo "::error::$branch is not a merge of $base and $head -- parents are: $parents"
-            exit 1
-          }
-
-          expected="$(git merge-tree --write-tree "$base" "$head")" || {
-            echo "::error::could not recompute the merge of $base and $head here"
-            exit 1
-          }
-          changed="$(git diff --name-only "$expected" "$tip" -- . ':(exclude)dist' ':(exclude)installer/canonical-artifact.json')"
-          if [ -n "$changed" ]; then
-            echo "::error::the rebuild changed paths it is not entitled to change:"
-            echo "$changed" | sed 's/^/    /'
-            exit 1
-          fi
-          echo "--- $branch matches a merge of $base and $head outside dist/ and the manifest"
+          node scripts/verify-canonical-handoff.mjs \
+            --base "${{ steps.take.outputs.base }}" \
+            --source "${{ steps.take.outputs.head }}" \
+            --tip "${{ steps.take.outputs.branch }}"
 
       - name: Mint an installation token
         id: token
