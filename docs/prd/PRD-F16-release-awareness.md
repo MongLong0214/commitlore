@@ -1,8 +1,8 @@
 # PRD F16 — Knowing a newer release exists (#742)
 
-- ADR: 0037 (no second installer), 0038 (`update` updates, by invoking the installer), 0011 (distribution is a git clone)
+- ADR: 0037 (no second installer), 0038 (`upgrade` upgrades, by invoking the installer), 0011 (distribution is a git clone)
 - Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
-- Status: specified — revision 2, after the references below were read rather than recalled
+- Status: specified — revision 5. Every claim below was read at its source; the corrections that changed the design are kept in place rather than deleted.
 
 ## The problem is not "no upgrade command"
 
@@ -108,15 +108,19 @@ Revision 1 gave two pieces one table. That was wrong in both directions, and the
 
 **A passive notice** — nobody asked for it, so it defers to everything. One line to stderr after the command completes, naming both versions and the platform's install command. Suppressed by every row above.
 
-**`commitlore update`** — the operator typed it, so it is not a notification and does not inherit the notification's rules. **`CI`, TTY, and the hook-subcommand rules do not apply**: a nightly job running `commitlore update --check` has `CI` set and no terminal by construction, and under revision 1's shared table it would have returned a silent "unknown" — defeating the one command whose entire purpose is to be scripted. Only the explicit off-switches (`COMMITLORE_NO_UPDATE_CHECK`, `DO_NOT_TRACK`, the config file) apply, because those express a decision rather than a context.
+**`commitlore upgrade`** — the operator typed it, so it is not a notification and does not inherit the notification's rules. **`CI`, TTY, and the hook-subcommand rules do not apply**: a nightly job running `commitlore upgrade --check` has `CI` set and no terminal by construction, and under revision 1's shared table it would have returned a silent "unknown" — defeating the one command whose entire purpose is to be scripted. Only the explicit off-switches (`COMMITLORE_NO_UPDATE_CHECK`, `DO_NOT_TRACK`, the config file) apply, because those express a decision rather than a context.
 
 ```
-commitlore update            performs the upgrade, by invoking the installer. ADR-0038.
-commitlore update --check    read-only: current, latest, and the install command. Exit 0.
-commitlore update --json     { current, latest, updateAvailable, command, source, checkedAt }
+commitlore upgrade           performs the upgrade, by invoking the installer. ADR-0038.
+commitlore upgrade --check    read-only: current, latest, and the install command. Exit 0.
+commitlore upgrade --json     { current, latest, updateAvailable, command, source, checkedAt }
 ```
 
-**The verb acts, and it does not need a flag to.** `brew update`, `rustup update` and `npm update` all update; revision 3's `--apply` was this repository inventing a convention, which is the thing the survey above exists to prevent. `--check` is the read-only form, and it is the one a script uses.
+**The verb acts, and it does not need a flag to.** Revision 4 dropped `--apply` on the ground that *"`brew update`, `rustup update` and `npm update` all update"* — and two of those three are the wrong comparison. `brew update` refreshes Homebrew and its formula index; **`brew upgrade`** is what replaces installed packages. `npm update` updates a project's dependencies, not npm. Only `rustup update` self-updates, and it does so as a side effect of updating the toolchains it manages.
+
+**The tools shaped like this one both use `upgrade`.** `brew` and `rustup` are managers with an inventory, so `update` means "refresh what I manage" and self-replacement rides along. CommitLore manages nothing — it is a single tree that gets replaced, which is exactly `deno` and `bun`, and both of those name it `upgrade` while reserving `update` for dependencies.
+
+So the command is **`commitlore upgrade`**. Dropping `--apply` was right for the reason revision 4 gave badly: a verb should not need a flag to perform its verb. `--check` is the read-only form, and it is the one a script uses.
 
 **`commitlore init` updates first, then does its work** — the highest-value point in the feature. `init` writes `commitlore.bin` pointing through `<data-root>/current`, verified on this machine:
 
@@ -127,7 +131,7 @@ $ git config --local --get commitlore.bin
 
 So the repository validates every commit with whatever `current` resolves to, and a stale install at `init` time wires a repository to a stale protocol. Updating after that is too late.
 
-**Where the acting tools act is the whole standard.** Homebrew does not auto-update on every `brew` call — it updates on `brew install`, a moment already about package management. The rule is not "auto everywhere"; it is **auto at the moment that is already about installation**, which here is `init` and `update` and nothing else. The opt-out is `COMMITLORE_NO_AUTO_UPDATE`, mirroring `HOMEBREW_NO_AUTO_UPDATE` in name and meaning — the naming convention is itself part of the standard.
+**Where the acting tools act is the whole standard.** Homebrew does not auto-update on every `brew` call — it updates on `brew install`, a moment already about package management. The rule is not "auto everywhere"; it is **auto at the moment that is already about installation**, which here is `init` and `upgrade` and nothing else. The opt-out is `COMMITLORE_NO_AUTO_UPDATE`, mirroring `HOMEBREW_NO_AUTO_UPDATE` in name and meaning — the naming convention is itself part of the standard.
 
 **Nobody prompts.** A y/n prompt in a CLI either blocks forever or collects a keystroke nobody typed, in scripts, CI, pipes and hooks alike. Every surveyed tool that acts, acts without asking and provides a switch.
 
@@ -152,7 +156,7 @@ So it is neither: staleness becomes **a finding in `doctor`'s own report**, in p
 - An operator running any interactive command on a stale install learns so within a day, once, in one line.
 - No command's exit code changes because of the check, and no command's latency does either.
 - No network call happens in CI, in tests, on a non-TTY, in a hook subcommand, or when switched off — and no *repeated* call happens on a machine that cannot reach the network.
-- `commitlore update --check` answers inside CI and off a terminal, because that is where scripts run.
+- `commitlore upgrade --check` answers inside CI and off a terminal, because that is where scripts run.
 - The cache file is readable, hand-editable, and its absence costs one `git ls-remote`.
 
 ## Sources

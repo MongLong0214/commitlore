@@ -1,7 +1,7 @@
 # F16 tickets — Knowing a newer release exists (#742)
 
 > PRD: [PRD-F16-release-awareness.md](../prd/PRD-F16-release-awareness.md)
-> ADR: [0037](../adr/ADR-0037-the-cli-does-not-replace-itself.md) (no second installer), [0038](../adr/ADR-0038-update-invokes-the-installer.md) (`update` updates, by invoking the installer)
+> ADR: [0037](../adr/ADR-0037-the-cli-does-not-replace-itself.md) (no second installer), [0038](../adr/ADR-0038-upgrade-invokes-the-installer.md) (`upgrade` upgrades, by invoking the installer)
 > Issue: [#742](https://github.com/MongLong0214/commitlore/issues/742)
 > Baseline head: `5433704`. Revision 4 — see PRD-F16 "What the prior art actually does" for what changed and why.
 
@@ -9,7 +9,7 @@
 
 **Nothing in this feature may make a command fail.** Every ticket's acceptance includes a case that breaks its own dependency and requires the command to succeed anyway. A release check that can break `commit` is worse than no release check.
 
-**The notice and the command do not share a suppression table.** This is the correction that revision 1 most needed: a notice nobody asked for defers to context (`CI`, no TTY, hook subcommand), and a command the operator typed does not. Wiring both to one table makes `commitlore update --check` return a silent "unknown" inside the nightly job it exists to serve. T-1602 owns the mechanism; T-1603 and T-1604 own their own gates.
+**The notice and the command do not share a suppression table.** This is the correction that revision 1 most needed: a notice nobody asked for defers to context (`CI`, no TTY, hook subcommand), and a command the operator typed does not. Wiring both to one table makes `commitlore upgrade --check` return a silent "unknown" inside the nightly job it exists to serve. T-1602 owns the mechanism; T-1603 and T-1604 own their own gates.
 
 ---
 
@@ -52,7 +52,7 @@
 
 ```
 COMMITLORE_NO_UPDATE_CHECK set   no check at all
-COMMITLORE_NO_AUTO_UPDATE set    the check still runs and still reports; `init` and `update`
+COMMITLORE_NO_AUTO_UPDATE set    the check still runs and still reports; `init` and `upgrade`
                                  do not act. Named for HOMEBREW_NO_AUTO_UPDATE, and it means
                                  the same thing -- the naming convention is part of the standard
 DO_NOT_TRACK set                 off        its stated scope names autoupdates, not just analytics
@@ -62,9 +62,9 @@ a config-file switch             off        an org can ship a file to a fleet; i
 cache younger than 24h           no request; the cached answer, with its age
 ```
 
-**The two switches are not the same switch**, and a test asserts it: `COMMITLORE_NO_AUTO_UPDATE` must still let the notice and `update --check` report, because an operator who declines automatic action has not asked to stop being told.
+**The two switches are not the same switch**, and a test asserts it: `COMMITLORE_NO_AUTO_UPDATE` must still let the notice and `upgrade --check` report, because an operator who declines automatic action has not asked to stop being told.
 
-**Context-dependent gates (`CI`, TTY, hook subcommand) are NOT here.** They belong to the notice, and T-1604 owns them. A module that applies them is a module `commitlore update --check` cannot use.
+**Context-dependent gates (`CI`, TTY, hook subcommand) are NOT here.** They belong to the notice, and T-1604 owns them. A module that applies them is a module `commitlore upgrade --check` cannot use.
 
 **Acceptance**
 
@@ -82,7 +82,7 @@ cache younger than 24h           no request; the cached answer, with its age
 
 ---
 
-## T-1603 `commitlore update --check` — the read-only form (S)
+## T-1603 `commitlore upgrade --check` — the read-only form (S)
 
 **Owns**
 
@@ -96,8 +96,8 @@ cache younger than 24h           no request; the cached answer, with its age
 **Behaviour**
 
 ```
-commitlore update --check    current, latest, and the install command. Reports only. Exit 0.
-commitlore update --json     { current, latest, updateAvailable, command, source, checkedAt }
+commitlore upgrade --check    current, latest, and the install command. Reports only. Exit 0.
+commitlore upgrade --json     { current, latest, updateAvailable, command, source, checkedAt }
 ```
 
 **The acting form is T-1606's**, and it must not be reachable from here: this ticket ships the read-only half first so that the reporting is trustworthy before anything acts on it. A test asserts `--check` and `--json` spawn no installer.
@@ -107,7 +107,7 @@ commitlore update --json     { current, latest, updateAvailable, command, source
 - **`--check` exits 0 whether or not an update exists**, and the decision is made here rather than deferred. `src/commands/auto.ts:16` settled the shape — *"with 0 whether the setting is on or off (the answer is not a finding)"* — and `stale` exits 0 even when it finds something. A version query has no violation to report. Scripts branch on `--json`, as they do with `doctor`. Non-zero remains reserved for a check that could not be performed at all (2, usage) — never for "you are out of date".
 - **It answers inside CI and off a terminal.** A test runs it with `CI=1` and no TTY and asserts a real answer, not silence. This is the revision-1 defect: the shared suppression table would have made the one scriptable command unusable in the one place scripts run.
 - It still honours the explicit off-switches, and says so: with `COMMITLORE_NO_UPDATE_CHECK` set, it reports that checking is disabled rather than reporting "up to date".
-- With the check unavailable, `update` says it **does not know** rather than "you are up to date". Those are different answers and only one of them is true.
+- With the check unavailable, `upgrade --check` says it **does not know** rather than "you are up to date". Those are different answers and only one of them is true.
 - ADR-0037 is enforced, not merely stated: **a test asserts the command spawns no process other than the `git ls-remote` the check owns, and writes nothing outside the cache.** A comment saying it does not self-update is not the guard; #723 is the precedent for putting the rule where it is enforced.
 - The printed command matches the README's install one-liner exactly, asserted against the README rather than duplicated as a literal — the two drifting is #727's shape. **And it is the right platform's line**: a test asserts the Windows path prints the `install.ps1` invocation, because naming a command that cannot work is the failure `gh` avoids by printing a URL instead, and we only get to be more helpful than `gh` if the command is correct.
 
@@ -171,14 +171,14 @@ the command itself failed         silent      gh's cmd.go:253; they are already 
 
 ---
 
-## T-1606 `commitlore update` performs the upgrade (M)
+## T-1606 `commitlore upgrade` performs the upgrade (M)
 
 **Owns**
 
 - `src/commands/update.ts` — the four-step call
 - `test/update-apply.test.ts` (new)
 
-**Depends on** — T-1603, and [ADR-0038](../adr/ADR-0038-update-invokes-the-installer.md).
+**Depends on** — T-1603, and [ADR-0038](../adr/ADR-0038-upgrade-invokes-the-installer.md).
 
 **Why last.** It is the first part of F16 that changes the machine, and it is worth nothing until the version it targets is resolved correctly by everything above it.
 
@@ -213,8 +213,8 @@ That is a half-upgraded machine where `commitlore --version` reports the new bui
 - After a successful update, `current` resolves to the target tag, asserted by reading the link rather than by the command's own report.
 - When both steps leave `current` wrong, the command exits non-zero and prints **the canonical install one-liner**, not the local `install.sh` — those are the bytes that just failed twice. The failure text names `doctor`, because a link that is right over a checkout that is wrong is beyond what this command can see.
 - **No clone, move, or unpack is implemented here.** A test asserts the only processes spawned are the installer invocations — ADR-0037's narrowed core, enforced where it can fail rather than stated in a comment (#723's precedent).
-- `update --check` and `update --json` spawn no installer, asserted separately. The read-only form must stay read-only.
-- `COMMITLORE_NO_AUTO_UPDATE` stops the action and **not** the report: `update` says what it would have done and exits 0.
+- `upgrade --check` and `upgrade --json` spawn no installer, asserted separately. The read-only form must stay read-only.
+- `COMMITLORE_NO_AUTO_UPDATE` stops the action and **not** the report: `upgrade` says what it would have done and exits 0.
 - It refuses to act when the target is not newer, unless `--force` is passed, so a typo cannot silently downgrade a machine.
 - The Windows path invokes `install.ps1` through the same four steps, with the link check expressed the way that platform allows — and it is the platform CI can run that must fail on a regression here (`guard-a-platform-ci-cannot-run`).
 
@@ -245,4 +245,4 @@ The repository then validates every commit with whatever `current` resolves to. 
 - **It says what it did**, in one line, before its own output. A command that silently changes what validates commits on the whole machine is the thing this feature exists to prevent, and doing it quietly here would be that failure wearing the fix's clothes.
 - `COMMITLORE_NO_AUTO_UPDATE` makes `init` report and continue, never act, and **still succeed**.
 - **A failed update does not fail `init`.** The repository still gets wired, with the older build and a stated warning. This is the ticket where "nothing in this feature may make a command fail" is most tempting to break and most important to keep.
-- A test asserts `init` is the only command besides `update` that can act. `status`, `query`, `doctor` and every hook subcommand spawn no installer.
+- A test asserts `init` is the only command besides `upgrade` that can act. `status`, `query`, `doctor` and every hook subcommand spawn no installer.

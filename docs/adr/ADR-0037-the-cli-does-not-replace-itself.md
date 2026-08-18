@@ -10,13 +10,13 @@
 
 F16 wants an operator to learn that a newer release exists. The obvious next step is for the tool to install it — "auto-update" is what the request usually means.
 
-Revision 1 decided that `commitlore update` prints the command and rejected a `--apply` flag alongside it. **Two of the three arguments for that rejection did not survive review, and one of them was an error of fact.** This revision keeps what held and withdraws what did not.
+Revision 1 decided that `commitlore upgrade` prints the command and rejected a `--apply` flag alongside it. **Two of the three arguments for that rejection did not survive review, and one of them was an error of fact.** This revision keeps what held and withdraws what did not.
 
 ## Decision
 
 **The clone, the manifest and tag verification, the host wiring and the move are never written a second time.** No TypeScript reimplementation of installing, in any command, behind any flag.
 
-That is the whole of this ADR now. **Upgrading itself is permitted** — invoking the installer is not reimplementing it, and checking what the invocation did is not either. [ADR-0038](ADR-0038-update-invokes-the-installer.md) specifies `commitlore update`.
+That is the whole of this ADR now. **Upgrading itself is permitted** — invoking the installer is not reimplementing it, and checking what the invocation did is not either. [ADR-0038](ADR-0038-upgrade-invokes-the-installer.md) specifies `commitlore upgrade`.
 
 This ADR's two attempts to forbid upgrading are recorded below rather than deleted. They are why the rule is now stated as narrowly as the evidence supports, and they are the reason to distrust the next wide version of it.
 
@@ -52,7 +52,7 @@ Revision 2 of this ADR offered a replacement obstacle: `<data-root>/current/inst
 - #735 is a defect in the *move*, and its one observable symptom is a `current` that did not move while the exit code said otherwise. **That is detectable from outside by reading the link.**
 - `install.sh:523-538` reuses an existing checkout after verifying its runtime manifest and requested tag, so the new tree — already on disk from the first call — is not re-cloned by a second one.
 
-So an `--apply` that calls the on-disk installer for the target tag, **verifies the move itself**, and falls back to the newly downloaded tree's installer is neither a second implementation nor a hostage to the old one. [ADR-0038](ADR-0038-update-invokes-the-installer.md) specifies it.
+So an `--apply` that calls the on-disk installer for the target tag, **verifies the move itself**, and falls back to the newly downloaded tree's installer is neither a second implementation nor a hostage to the old one. [ADR-0038](ADR-0038-upgrade-invokes-the-installer.md) specifies it.
 
 **This ADR was wrong twice about the same thing, in the same direction — narrowing a request the owner made.** #742 asked for a version check *and* an update capability. Both rejections were reasoned rather than measured, and both dissolved when the source was read. What is left is the part that was never in doubt: no second installer.
 

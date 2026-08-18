@@ -1,4 +1,4 @@
-# ADR-0038: `commitlore update` updates, by invoking the installer and checking the link
+# ADR-0038: `commitlore upgrade` upgrades, by invoking the installer and checking the link
 
 - Status: Accepted (2026-08-18) — revision 2, after a third review round broke revision 1's mechanism three ways
 - Owner: CTO
@@ -12,13 +12,17 @@
 
 Revision 1 of this ADR restored it as `commitlore update --apply`. Two things then landed:
 
-**The verb should not need a flag.** `brew update`, `rustup update` and `npm update` all update. Requiring `--apply` to make an update command update is the part that is not standard — and the survey in PRD-F16 exists precisely to stop this repository inventing conventions.
+**The verb should not need a flag** — a command whose verb is the action should perform it, and `--apply` was this repository inventing a convention.
+
+**But the verb was the wrong one, and the argument for it was the survey misread.** Revision 1 wrote that *"`brew update`, `rustup update` and `npm update` all update"*. Two of those three are a different operation: `brew update` refreshes Homebrew and its formula index — **`brew upgrade`** replaces installed packages — and `npm update` updates a project's dependencies, not npm. Only `rustup update` self-replaces, and only as a side effect of updating the toolchains it manages.
+
+**`brew` and `rustup` are managers with an inventory; this is not.** CommitLore has no dependencies and no toolchains — it is one tree that gets replaced, which is exactly the shape of `deno` and `bun`. Both of those call it **`upgrade`** and keep `update` for dependencies. So does this.
 
 **Where the acting tools act is more specific than "always".** Homebrew does not auto-update on every `brew` invocation; it updates on `brew install`, a moment already about package management. `rustup update` is the update command. **The standard is not "auto everywhere" — it is "auto at the moment that is already about installation."**
 
 ## Decision
 
-**`commitlore update` performs the upgrade** by invoking `install.sh` / `install.ps1`. `--check` is the read-only form. There is no `--apply`.
+**`commitlore upgrade` performs the upgrade** by invoking `install.sh` / `install.ps1`. `--check` is the read-only form. There is no `--apply`.
 
 **`commitlore init` updates first, then does its work.** This is the highest-value point in the feature and the reason #742 exists: `init` writes `commitlore.bin` pointing through `<data-root>/current`, so the repository validates every commit with whatever `current` resolves to — verified on this machine, where `commitlore.bin` is `…/commitlore/current/dist/commitlore.mjs`. A stale install at `init` time is a repository wired to a stale protocol.
 
@@ -64,7 +68,7 @@ Revision 1 of this ADR restored it as `commitlore update --apply`. Two things th
 
 **`init` can now change what every repository on the machine validates with.** That is a real blast radius for a repository-scoped command, and it is the cost of this decision rather than an oversight. Three things bound it: it happens only when an update exists, only outside CI and off a pipe, and it says what it did. `COMMITLORE_NO_AUTO_UPDATE` declines it. Homebrew makes the same trade at `brew install`.
 
-**A machine that never runs `init` or `update` still goes stale.** The passive notice is what makes that visible; this ADR does not replace it.
+**A machine that never runs `init` or `upgrade` still goes stale.** The passive notice is what makes that visible; this ADR does not replace it.
 
 **`doctor` remains the check for a split**, and after an update it is what confirms the hooks resolve to the new build. #382 is the reason that is a separate question: an upgrade does not visit the repositories that pinned an old root.
 
