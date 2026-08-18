@@ -23,8 +23,11 @@
  */
 /** The hook event that fires before a tool runs (PRD-F4 requirement 2). */
 export declare const CLAUDE_HOOK_EVENT = "PreToolUse";
-/** The tools that touch a path, and therefore the tools worth injecting for. */
-export declare const CLAUDE_HOOK_MATCHER = "Read|Edit|Write";
+/**
+ * The tools that touch a path, and therefore the tools worth injecting for.
+ * Derived, not restated: `core/path-tools.ts` owns the set (#775).
+ */
+export declare const CLAUDE_HOOK_MATCHER: string;
 /** How our entry is recognised. A shell comment to the runner, identity to us. */
 export declare const CLAUDE_HOOK_MARKER = "# commitlore-inject-hook";
 /** The command the hook runs. `--hook-input` reads the event payload on stdin. */
