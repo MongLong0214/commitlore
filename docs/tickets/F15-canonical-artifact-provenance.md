@@ -92,8 +92,16 @@ comment cannot satisfy them. At minimum:
 
 - the App token is minted from `COMMITLORE_BOT_APP_ID` / `COMMITLORE_BOT_KEY` and never
   echoed;
-- the job never checks out or executes a pull request's head — the same rule #723 fixed for
-  `preserve`, and the same reason;
+- the job that holds the App credential never checks out or executes a pull request's
+  head. **Amended 2026-08-18** — it read "the job never …", borrowed wholesale from the
+  rule #723 fixed for `preserve`. `preserve` only reads a pull request; this one *rebuilds*
+  it, and rebuilding somebody's change means running it: their `package.json`, their
+  lockfile, every dependency lifecycle script it pulls in. Written the old way the
+  assertion is unsatisfiable by any implementation of this feature, so it would have been
+  quietly dropped rather than met. What is achievable, and what the split into
+  `canonicalise` → `publish` exists to hold, is that the runner executing that code holds
+  no credential — the token is minted in a second job, from `main`'s copy of the mint
+  script, outside the workspace;
 - the rebuild is `build:canonical`, not a local `npm run build`, or the pushed bytes are
   not the canonical ones.
 
@@ -102,8 +110,32 @@ comment cannot satisfy them. At minimum:
 - A source-only pull request merges and the commit that lands on `main` passes
   `artifact:verify` and `git diff --exit-code -- dist/` **without anyone rebuilding by
   hand**.
-- Deliberately breaking the rebuild — e.g. skipping `artifact:manifest` — produces a red
-  check, not a green merge. **A fixture that cannot fail is not evidence** (#722).
+- Deliberately breaking the rebuild produces a red check, not a green merge. **A fixture
+  that cannot fail is not evidence** (#722) — and the example this ticket first gave was
+  one. **Amended 2026-08-18**: "skipping `artifact:manifest`" cannot be produced from a
+  pull request. That step is hard-coded in the workflow, which is loaded from the default
+  branch, and the source-only filter refuses any change under `.github/workflows/`,
+  `dist/` or `installer/canonical-artifact.json`. A negative control nobody can perform is
+  the same defect it was written to prevent.
+
+  The producible one: after the workflow pushes `canonical/pr-N`, add a commit to that
+  branch that edits `dist/` without rebuilding. `ci.yml`'s `git diff --exit-code -- dist/
+  installer/canonical-artifact.json` must go red on the canonical pull request. That
+  falsifies the property this ticket actually claims — *the bytes that land match the
+  source that landed with them* — rather than the workflow's internal step list.
+
+**Known limitation — the merge method is not enforceable from here.** The canonical pull
+request's body asks for a merge commit, because a squash lands new bytes and leaves the
+source pull request open with nothing to point at. That request is a check somebody has to
+read. The repository allows squash, merge and rebase, and GitHub's merge button remembers
+whichever was used last, so the wrong one is a click away — measured on #760, where five
+of six pull requests closed as merged and the sixth did not.
+
+Two ways to close it, and both are the owner's call rather than this ticket's:
+`gh api -X PUT .../pulls/N/merge -f merge_method=merge` names the method per merge, and
+turning off `allow_squash_merge` / `allow_rebase_merge` names it once for the repository.
+The second is the one that fits a repository that commits `dist/`, since a squash breaks
+the ancestry every integration pull request here depends on.
 
 **Not in scope** — removing `dist/` from pull request requirements. That is T-1503, and
 doing it here means a failure in this ticket has no fallback.

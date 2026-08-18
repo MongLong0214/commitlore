@@ -1,0 +1,263 @@
+name: Canonical merge
+
+# T-1502 (#719). A contributor opens a pull request carrying source only. This
+# builds the commit that will land: main + that source + a canonical rebuild,
+# as its own pull request, so all eleven required contexts run on the tree that
+# actually merges rather than on one that resembles it.
+#
+# #720 is what this is for. `build:canonical` is a `linux/amd64` Docker build,
+# and that pull request arrived from a Windows machine with `src/` and `test/`
+# only -- correctly -- and waited on a maintainer twice.
+#
+# It does not push to `main`. ADR-0036: `main` requires eleven contexts and the
+# eleventh is `lint`, which no push can produce -- `demo-lint.yml`'s push
+# trigger is scoped to `dev` and its `lint` job is gated on
+# `github.event_name == 'pull_request'`. Every push-shaped design needs a
+# bypass, and a bypass is not the check passing. Measured 2026-08-18: an
+# App-opened pull request attaches all eleven (run 32082467906).
+#
+# Run by hand, and the reason changed. It was security: an automatic trigger
+# would let a fork's push decide when this repository's App token sits in an
+# environment building that fork's code. The job split below removed that --
+# the token is never in the job that runs contributor code -- so what is left
+# is cost. Every dispatch is a Docker `npm ci` plus a canonical build, and a
+# trigger on pull-request events would run one per push from anybody.
+#
+# `without a maintainer` in PRD-F15's success line means without a maintainer
+# *rebuilding*, which is what #720 waited on twice. Nobody rebuilds here.
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: The source-only pull request to canonicalise
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One at a time. Each rebuild is of `main` as it stands when the job starts, so
+# two running together would each produce a tree the other invalidates. This
+# orders the jobs; it does not order the merges, and the staleness check below
+# is what covers the gap.
+concurrency:
+  group: canonical-merge
+  cancel-in-progress: false
+
+jobs:
+  canonicalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          # The checkout otherwise leaves an `http.<url>.extraheader` holding the
+          # Actions token, and that header beats credentials in a push URL -- a
+          # valid App token then pushes as `github-actions[bot]` and is refused.
+          # Measured on this repository (#741).
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+          cache: npm
+
+      # Fetched, not checked out. Nothing from the pull request runs until the
+      # source-only check below has passed.
+      - name: Fetch the pull request without running it
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
+          base="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .base.ref)"
+          [ "$base" = "main" ] || { echo "::error::#${PR} targets $base, not main"; exit 1; }
+          git fetch --quiet origin "pull/${PR}/head:pr-${PR}"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "--- #${PR} head $head"
+
+      # A scope filter, not a security control, and the difference matters.
+      # It rejects three path prefixes. It does not stop a pull request from
+      # running code during the rebuild -- `package.json` scripts, a lockfile
+      # pointing anywhere, `.npmrc`, a patched dependency -- and nothing here
+      # can, because rebuilding somebody's change means running it. What keeps
+      # that contained is the job split below, not this list.
+      #
+      # `.github/workflows/` is in it for tidiness rather than safety: this
+      # workflow is loaded from the default branch, so a pull request cannot
+      # change the file that is running.
+      - name: Refuse anything that is not a source-only pull request
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only main..."pr-${{ inputs.pull_request_number }}")"
+          echo "--- changed paths:"; echo "$changed" | sed 's/^/    /'
+          bad="$(echo "$changed" | grep -E '^(dist/|installer/canonical-artifact\.json$|\.github/workflows/)' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::not source-only -- refusing:"; echo "$bad" | sed 's/^/    /'
+            exit 1
+          fi
+
+      - name: Merge the source onto main
+        id: merge
+        run: |
+          set -euo pipefail
+          # Captured before the rebuild runs anything. Reading it afterwards
+          # would be reading a value the rebuild had the opportunity to choose.
+          echo "base=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
+          git config user.name  'commitlore-canonical-build[bot]'
+          git config user.email '317873099+commitlore-canonical-build[bot]@users.noreply.github.com'
+          git checkout -q -b "canonical/pr-${{ inputs.pull_request_number }}"
+          git merge --no-ff --no-edit "pr-${{ inputs.pull_request_number }}"
+
+      # This step executes the pull request's own `package.json` and build
+      # scripts. The App token is deliberately not minted yet and is not in this
+      # environment: a rebuild of somebody else's change must not be able to
+      # read the credential that would let it push.
+      - name: Rebuild the bundle from the merged tree
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:canonical
+          npm run artifact:manifest
+          npm run artifact:verify
+          git add dist/ installer/canonical-artifact.json
+          if git diff --cached --quiet; then
+            echo "--- the merged source produces the committed bundle; nothing to add"
+          else
+            git commit --quiet -m "$(printf 'Rebuild the canonical bundle for #%s\n\n`build:canonical` on the merged tree, so the commit that lands matches the source it lands with. The pull request carried source only, which is what a contributor on a host that cannot run a linux/amd64 Docker build can produce (#720).\n\nLimit: this proves the bundle matches this tree; whether this tree is what a reviewer wants is what the pull request is for\nBlast: system\nUndo: easy\nCertainty: firm\nRecord-Id: r-canonmerge%s\nProvenance: authored\nVerified: artifact:verify passed against the regenerated manifest in the same job, before any credential was available to it\nCommitLore-Version: 2.0.0' "${{ inputs.pull_request_number }}" "${{ inputs.pull_request_number }}")"
+          fi
+
+      # `main` may have moved while the rebuild ran, and a rebuild of a tree that
+      # is no longer main's is exactly what the concurrency group cannot prevent
+      # -- it orders jobs, not merges. Checked here rather than hoped for.
+      - name: Refuse if main moved while this ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          started="${{ steps.merge.outputs.base }}"
+          if [ "$now" != "$started" ]; then
+            echo "::error::main moved from $started to $now while this rebuilt -- rerun after it settles"
+            exit 1
+          fi
+          echo "--- main is still $now"
+
+      - name: Hand the result over as a bundle
+        run: |
+          set -euo pipefail
+          git bundle create /tmp/canonical.bundle main.."canonical/pr-${{ inputs.pull_request_number }}"
+          echo "${{ steps.merge.outputs.base }}" > /tmp/canonical.base
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: canonical-tree
+          path: |
+            /tmp/canonical.bundle
+            /tmp/canonical.base
+          retention-days: 1
+
+  # A second runner that has never executed anything from the pull request.
+  #
+  # The order of steps inside one job is not a boundary. `$GITHUB_ENV` and
+  # `$GITHUB_PATH` written during `npm ci` persist into every later step of the
+  # same job, so a dependency's lifecycle script can set `NODE_OPTIONS` or put a
+  # `git` of its own on `PATH` and be running inside the step that holds the App
+  # key -- whichever file that step chose to execute. Extracting the credential
+  # script from `main` fixed *what* ran and not *how it was launched*.
+  #
+  # So the credential lives on the other side of a job boundary. This job never
+  # runs `npm`, never runs contributor code, and only moves bytes it verifies.
+  publish:
+    needs: canonicalise
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: canonical-tree
+          path: /tmp/canonical
+
+      - name: Take the branch from the bundle
+        id: take
+        run: |
+          set -euo pipefail
+          base="$(cat /tmp/canonical/canonical.base)"
+          branch="canonical/pr-${{ inputs.pull_request_number }}"
+          git fetch --quiet /tmp/canonical/canonical.bundle "$branch:$branch"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "--- took $branch from the bundle, built on $base"
+
+      - name: Refuse if main moved while the rebuild ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [ "$now" != "${{ steps.take.outputs.base }}" ]; then
+            echo "::error::main moved from ${{ steps.take.outputs.base }} to $now while this rebuilt -- rerun after it settles"
+            exit 1
+          fi
+          echo "--- main is still $now"
+
+      - name: Mint an installation token
+        id: token
+        env:
+          COMMITLORE_BOT_APP_ID: ${{ secrets.COMMITLORE_BOT_APP_ID }}
+          COMMITLORE_BOT_KEY: ${{ secrets.COMMITLORE_BOT_KEY }}
+        run: |
+          set -euo pipefail
+          # From `main`, never from the merged tree. The rebuild above executed
+          # the pull request's `package.json` and every dependency lifecycle
+          # script it pulled in, and the merged tree also contains the pull
+          # request's version of this very file -- `scripts/` is source, and a
+          # source-only pull request may change it. Running the merged copy here
+          # would hand the App private key to whatever that copy is.
+          #
+          # Extracted to a path outside the workspace and run from there, so the
+          # workspace's `node_modules` cannot be resolved by it either. The
+          # script itself imports only `node:crypto` and uses global `fetch`.
+          mint="$(mktemp -d)/mint.mjs"
+          git show "${{ steps.take.outputs.base }}:scripts/app-installation-token.mjs" > "$mint"
+          token="$(cd "$(dirname "$mint")" && NODE_OPTIONS= node "$mint")"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Open the canonical pull request
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          PR: ${{ inputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          branch="${{ steps.take.outputs.branch }}"
+          # Force, because a rerun after `main` moved has to replace the branch
+          # rather than update it: `.gitattributes` marks `dist/**` as `-merge`,
+          # so an update would conflict on the one file this exists to produce.
+          git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+
+          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$(git rev-parse HEAD)" --jq '.committer.login // "unknown"')"
+          echo "--- pushed $branch; committer on the server: $pusher"
+
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
+          if [ -n "$existing" ]; then
+            echo "--- #$existing already open for $branch; the force-push updated it"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "Canonical merge of #${PR}" \
+              --body "$(printf 'The commit that will land for #%s: `main` plus that source plus a canonical rebuild, built together so all eleven required contexts run on the tree that merges rather than on one that resembles it.\n\n#%s carries source only, which is what a contributor on a host that cannot run a `linux/amd64` Docker build can produce (#720). Nothing was rebuilt by hand.\n\n**Merge this with a merge commit, not a squash.** This branch merged #%s with `--no-ff`, so its head commit is an ancestor here: a merge commit lands that commit on `main`, and GitHub then records #%s as merged because its head is reachable -- which is what T-1502 asks for. A squash lands new bytes instead, and #%s stays open with nothing to point at.\n\nThis body deliberately carries no closing keyword. GitHub binds one only to the number straight after it, and a pull request closed by keyword is recorded closed rather than merged -- the opposite of the line above. Reachability does the closing here.\n\nOpened by `canonical-merge.yml` for #719.' "$PR" "$PR" "$PR" "$PR" "$PR")"
+          fi
