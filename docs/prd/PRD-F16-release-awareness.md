@@ -226,6 +226,21 @@ available and it is deliberately not counted. The installed plugin sat pinned at
 releases behind — but it was pinned by a distribution defect, not by an operator who did not
 know. F16 addresses the second and would not have helped with the first.
 
+The same sentence that establishes this also explains why the gap is not closed anywhere else.
+[ADR-0032](../adr/ADR-0032-doctor-diagnostic-model.md), the only ADR that names #433, closes
+the door deliberately:
+
+> doctor's own process opens no socket — no HTTP client, **no update lookup** (… we do not
+> ship the lookup at all), no telemetry, on any flag. […] Version skew is checked against
+> *local* executables (inject-version), and **the #433 class of staleness is a distribution
+> defect whose fix lives in distribution** — `installSource` exists so the report can name
+> which channel to update, not so doctor can go ask the internet.
+
+So `doctor` will not learn that a release exists, by decision rather than by omission, and
+**F16 is the distribution that sentence points at.** That does not make F16 due — this release
+does not need it — but it is why nothing else will quietly cover the gap while it waits, and
+it is why the conditions above have to be written down rather than left to be noticed.
+
 Recorded here so a reader does not have to reconstruct why the obvious evidence is absent from
-the counts above, and so that citing it later as occurrence 1 is visibly wrong rather than
-merely unsupported.
+the counts, and so that citing #433 later as occurrence 1 is visibly wrong rather than merely
+unsupported — the same passage that supports the design refuses it as an occurrence.
