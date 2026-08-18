@@ -1,17 +1,20 @@
 #!/usr/bin/env node
-// README의 어휘표가 SPEC §3과 일치하는지 검사한다.
+// docs/protocol.md 의 어휘표가 SPEC §3과 일치하는지 검사한다.
 //
-// 이 프로젝트에서 README는 마케팅 문서가 아니라 스펙의 요약본이다. 표에 스펙에 없는
+// 표는 사용자가 실제로 보고 쓰는 요약본이다. 표에 스펙에 없는
 // 키가 실리면 사용자가 그걸 쓰고 검증기에 거부당한다(`Decision-Id:` 가 실제로 그랬다).
 // 반대로 키가 빠지면 그 필드는 존재하지 않는 것과 같다.
 //
-// 사용: node spec/schema/readme-vocab-check.mjs <SPEC.md> <README.md> [README.*.md ...]
+// 소유자는 네 개의 README가 아니라 docs/protocol.md 하나다 — 같은 표를 네 번
+// 반복하면 번역본마다 드리프트 지점이 하나씩 생긴다.
+//
+// 사용: node spec/schema/protocol-doc-vocab-check.mjs <SPEC.md> <docs/protocol.md>
 
 import fs from 'node:fs';
 
-const [specPath, ...readmes] = process.argv.slice(2);
-if (!specPath || readmes.length === 0) {
-  console.error('usage: readme-vocab-check.mjs <SPEC.md> <README.md> [more...]');
+const [specPath, ...docs] = process.argv.slice(2);
+if (!specPath || docs.length === 0) {
+  console.error('usage: protocol-doc-vocab-check.mjs <SPEC.md> <docs/protocol.md>');
   process.exit(2);
 }
 
@@ -36,8 +39,8 @@ if (specKeys.size === 0) {
 
 let failed = false;
 
-for (const readmePath of readmes) {
-  const md = fs.readFileSync(readmePath, 'utf8');
+for (const docPath of docs) {
+  const md = fs.readFileSync(docPath, 'utf8');
   // 어휘표 행에서만 키를 뽑는다. 산문 속 백틱 언급(`feat:` 등)은 세지 않는다.
   const found = new Set();
   for (const m of md.matchAll(/^\|\s*`([A-Za-z][A-Za-z0-9-]*):`/gm)) found.add(m[1]);
@@ -52,11 +55,11 @@ for (const readmePath of readmes) {
 
   if (missing.length || extra.length) {
     failed = true;
-    console.error(`${readmePath}:`);
-    if (missing.length) console.error(`  SPEC에 있으나 README 표에 없음: ${missing.join(', ')}`);
-    if (extra.length) console.error(`  README 표에 있으나 SPEC에 없음: ${extra.join(', ')}`);
+    console.error(`${docPath}:`);
+    if (missing.length) console.error(`  SPEC에 있으나 표에 없음: ${missing.join(', ')}`);
+    if (extra.length) console.error(`  표에 있으나 SPEC에 없음: ${extra.join(', ')}`);
   }
 }
 
 if (failed) process.exit(1);
-console.log(`vocab table matches SPEC (${specKeys.size} keys × ${readmes.length} READMEs)`);
+console.log(`vocab table matches SPEC (${specKeys.size} keys, owner: ${docs.join(', ')})`);

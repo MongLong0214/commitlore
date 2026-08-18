@@ -406,50 +406,18 @@ lifecycle — `Supersedes:` と `Expires:`、そして上の表の最終行を�
 
 エージェント向けの指針は `skills/commitlore-commits/` にあり、commit-msg hook はエージェントが追加した record を検証するだけで、record を発明したり黙って追加したりしません。`harvest` の経路、`capture` トランザクション、そして人が trailer を手書きする逃げ道は、いずれも [docs/capture.md](docs/capture.md) にあります。
 
-## 完全な record
+## record プロトコル
 
-record はこれよりずっと小さくできますし、ほとんどは数個の field で足ります。この例が語彙のすべてを使うのは、conformance fixture でもあるからです — Git trailer parser は、すべての翻訳 README で下の code block を同じように読みます。
+record は普通の Git commit trailer の集まりで、たいていは小さいもので足ります:
 
 ```text
-Prevent silent session drops during long-running operations
+Fix expired-token refresh
 
-The auth service returns inconsistent status codes on token
-expiry, so the interceptor catches all 4xx responses and
-triggers an inline refresh.
-
-Limit: Auth service does not support token introspection
-Record-Id: r-4b7e21
 Ruled-out: Extend token TTL to 24h | security policy violation
-Ruled-out: Background refresh on timer | race condition
-Certainty: firm
-Blast: module
-Undo: easy
-Warn: 4xx handling is intentionally broad
-  -- do not narrow without verifying upstream behavior
-Verified: Single expired token refresh (unit)
-Unverified: Auth service cold-start > 500ms behavior
-CommitLore-Version: 2.0.0
+Warn: Do not narrow the 4xx handler without verifying upstream behavior
 ```
 
-### Protocol vocabulary
-
-| Trailer | Meaning |
-|---|---|
-| `Limit:` | External condition that constrained the decision |
-| `Record-Id:` | Stable identity across rewritten commit hashes |
-| `Ruled-out:` | `alternative \| reason` — the first `\|` separates; there is no escape, so an alternative may not contain one |
-| `Certainty:` | `firm` \| `tentative` \| `guess` |
-| `Blast:` | `local` \| `module` \| `system` |
-| `Undo:` | `easy` \| `costly` \| `permanent` |
-| `Warn:` | Warning for a future modifier; trust-graded before delivery |
-| `Verified:` / `Unverified:` | What was and was not checked |
-| `Follows:` / `Supersedes:` | Decision-chain and lifecycle links |
-| `Expires:` | Date or condition that ends a limit |
-| `Evidence:` | Path, anchor, or URL supporting a claim |
-| `Provenance:` | `authored` \| `inherited <sha>` \| `reconstructed` |
-| `CommitLore-Version:` / `X-*:` | Protocol identity and extensions |
-
-path の履歴は `commitlore context <path>` で読みます。より小さな例と、Git だけで record を読む方法は [docs/protocol.md](docs/protocol.md) に、規範的な定義は [SPEC §3](spec/SPEC.md) にあります。
+語彙をすべて使う完全な例、すべての trailer key の表、そして CommitLore なしで素の Git から読む方法は [docs/protocol.md](docs/protocol.md) にあります。規範的な定義は [SPEC §3](spec/SPEC.md) です。
 
 ## リポジトリが証明すること
 
