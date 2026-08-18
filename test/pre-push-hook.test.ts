@@ -208,6 +208,14 @@ describe('the pre-push hook publishes the mirror without re-entering itself', ()
     expect(lines).toHaveLength(1);
     expect(lines[0], 'the operator is told the branch went out').toContain('The branch was pushed');
     expect(lines[0], 'and what became of the records, and whether to act').toContain('retries this automatically');
+    // The budget is this hook's, so the line has to own it. `spawnSync git
+    // ETIMEDOUT` names the call that returned rather than the decision that was
+    // made, and it reads as git having failed -- which sends an operator to look
+    // at a transport that is fine. #746 is the same shape in the commit-msg hook.
+    expect(lines[0], 'the line still leaks the raw child-process code').not.toMatch(/ETIMEDOUT|spawnSync/);
+    expect(lines[0], 'and it does not say whose budget ran out').toContain(
+      `the ${PRE_PUSH_NOTES_SYNC_TIMEOUT_MS / 1000}s this hook waits for the remote ran out`,
+    );
   }, 60_000);
 
   it('disables terminal credential prompts and still lets the branch push through', async () => {
