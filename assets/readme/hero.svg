@@ -7,7 +7,7 @@
   aria-labelledby="commitlore-hero-title commitlore-hero-desc"
 >
   <title id="commitlore-hero-title">CommitLore delivers only current decisions to the next edit</title>
-  <desc id="commitlore-hero-desc">For src/pricing.ts, the active checkout-pricing decision moves from Git history into current context and reaches the next edit. An earlier decision to reuse pricing for admin quotes is superseded and does not move forward.</desc>
+  <desc id="commitlore-hero-desc">For src/pricing.ts, the decision still in force moves from Git history into current context and reaches the next edit, carrying both its limit and the alternative it ruled out. An earlier, broader limit that also covered admin quotes has been superseded and does not move forward as current guidance.</desc>
 
   <style>
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
@@ -52,7 +52,7 @@
        superseded decision is a lifecycle state, not a failure. -->
   <circle cx="46" cy="230" r="6" fill="#0D1117" stroke="#8B949E" stroke-width="2"/>
   <text x="66" y="224" class="mono state" fill="#8B949E">SUPERSEDED</text>
-  <text x="66" y="255" class="sans row-primary" fill="#8B949E">Reuse for</text>
+  <text x="66" y="255" class="sans row-primary" fill="#8B949E">Also served</text>
   <text x="66" y="282" class="sans row-secondary" fill="#8B949E">admin quotes</text>
   <path d="M220 229 H262" fill="none" stroke="#6E7681" stroke-width="2" stroke-dasharray="5 6"/>
   <path d="M266 222 L278 234 M278 222 L266 234" stroke="#8B949E" stroke-width="2"/>

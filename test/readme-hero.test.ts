@@ -146,6 +146,29 @@ describe('the hero is reachable without sight and without colour', () => {
     expect(source).toMatch(/stroke-dasharray/);
   });
 
+  it('does not show a ruled-out alternative as filtered out', () => {
+    // The first screen taught the product backwards for one draft. "Reuse for
+    // admin quotes" went in the SUPERSEDED row, stopped by a dashed connector
+    // and an X — but README:177-181 shows it as the `Ruled-out:` trailer on
+    // `r-price01`, the record that is still in force. It is *delivered*, and
+    // delivering it is the point: it is how an agent learns the reuse was
+    // already considered and rejected.
+    //
+    // So the superseded row is an earlier Limit that a later one replaced, and
+    // the ruled-out line belongs in the panel that reaches the next edit.
+    const source = hero();
+    const supersededBlock = source.slice(
+      source.indexOf('>SUPERSEDED<'),
+      source.indexOf('<rect x="292"'),
+    );
+    expect(supersededBlock, 'a ruled-out alternative is being shown as filtered out').not.toMatch(
+      /Reuse for/,
+    );
+    // And it is still present where it belongs.
+    expect(source).toMatch(/>Ruled out</);
+    expect(source).toMatch(/>Admin quote reuse</);
+  });
+
   it('reads the active decision before the superseded one', () => {
     // Vertical order is the eye's order, and the row that still applies is the
     // one worth seeing first. The hero this replaced had it this way; an

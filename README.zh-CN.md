@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore 将仓库的决策权威带入下一次编辑：src/pricing.ts 的有效决策被交付，被取代的决策不会作为当前指引继续向前。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore 将仓库的决策权威带入下一次编辑：src/pricing.ts 中仍然有效的决策连同它已排除的替代方案一起交付，而被取代的、此前更宽泛的 limit 不会作为当前指引继续向前。">
 </p>
 
 <p align="center">

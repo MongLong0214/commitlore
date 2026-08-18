@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore carries the repository's decision authority into the next edit: for src/pricing.ts the active decision is delivered, and a superseded one does not move forward as current guidance.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="CommitLore carries the repository's decision authority into the next edit: for src/pricing.ts the decision still in force is delivered with the alternative it ruled out, while an earlier, broader limit that has been superseded does not move forward as current guidance.">
 </p>
 
 <p align="center">
