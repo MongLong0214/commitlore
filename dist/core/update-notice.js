@@ -29,9 +29,11 @@ export const SILENT_SUBCOMMANDS = [
     'post-commit',
     'pre-push',
     'mcp',
-    // `doctor` carries staleness inside its own report (T-1605). It is silent
-    // here so the two mechanisms cannot both fire and say it twice.
+    // `doctor` carries staleness inside its own report (T-1605), and `init`
+    // names what it pinned (T-1607). Both are silent here so no fact is
+    // reported twice by two mechanisms that each think they own it.
     'doctor',
+    'init',
 ];
 /** Why the notice stayed quiet. `null` means it may speak. */
 export const suppressedBecause = (ctx) => {

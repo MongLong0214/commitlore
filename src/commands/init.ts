@@ -51,6 +51,12 @@ import {
 } from '../core/capture-policy.js';
 import { claudeSettingsPath, installClaudeHook, type ClaudeHookResult } from '../hooks/claude-settings.js';
 import { pluginDeliveryProof } from '../hooks/claude-plugin.js';
+import { spawnSync } from 'node:child_process';
+
+import { latestReleaseSync } from '../core/latest-release.js';
+import { packageVersion } from '../core/paths.js';
+import { isNewerRelease } from '../core/release-version.js';
+import { performUpgrade } from './update.js';
 import { installPrepareCommitMsgHook, type PrepareCommitMsgHookResult } from '../hooks/prepare-commit-msg.js';
 import { installPostCommitHook, type PostCommitHookResult } from '../hooks/post-commit.js';
 import { installPrePushHook, type PrePushHookResult } from '../hooks/pre-push.js';
@@ -66,6 +72,8 @@ export interface InitOptions {
   cwd?: string;
   /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
   force?: boolean;
+  /** Upgrade to the newest release before wiring. `init` alone never moves `current`. */
+  upgrade?: boolean;
   /**
    * Whether to also write CommitLore's capture procedure into `AGENTS.md`.
    *
@@ -97,7 +105,7 @@ export interface InitOptions {
  */
 export type UnattendedChoice = 'enable' | 'decline' | 'no-tty' | 'no-answer';
 
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy' | 'release';
 
 export interface InitStep {
   step: StepName;
@@ -106,7 +114,7 @@ export interface InitStep {
   code: 0 | 1 | 2;
   /** Human-readable lines this step contributes to the report. */
   lines: string[];
-  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+  detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | ReleaseStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 
 interface IndexStepDetail {
@@ -557,15 +565,94 @@ const runPolicyStep = (opts: InitOptions): InitStep => {
  * last costs nothing and makes its report describe the state `init` actually
  * leaves behind, not the state it started from.
  */
+export interface ReleaseStepDetail {
+  readonly current: string;
+  readonly latest: string | null;
+  readonly updateAvailable: boolean;
+  /** Whether `--upgrade` actually invoked an installer. */
+  readonly acted: boolean;
+}
+
+/**
+ * What `init` pinned, and whether something newer exists (T-1607, #742).
+ *
+ * `init` writes `commitlore.bin` through `<data-root>/current`, so the
+ * repository then validates every commit with whatever that resolves to.
+ * Initialising on a stale install wires a repository to a stale protocol,
+ * which is #742's opening sentence.
+ *
+ * **A bare `init` reports and does not move `current`.** That was the plan for
+ * two revisions on the Homebrew analogy, and the analogy does not reach:
+ * `brew install` refreshes an index, `brew upgrade` replaces packages, and
+ * moving `current` is the second. `terraform init` -- the closest analogue by
+ * name -- says re-running it "will not change any already-installed modules.
+ * Use `-upgrade` to override this behavior." And #746 makes it concrete: an
+ * upgrade leaves `commitlore.root` on the old version while `current` moves,
+ * so it invalidates the recorded path in every already-wired repository. A
+ * repository-scoped command must not do that to repositories nobody named.
+ */
+const runReleaseStep = (opts: InitOptions): InitStep => {
+  const env = process.env;
+  const current = packageVersion();
+  const { outcome } = latestReleaseSync({ env });
+  const latest = outcome.kind === 'resolved' ? outcome.tag : null;
+  const updateAvailable = latest !== null && isNewerRelease(latest, current);
+  const lines: string[] = [];
+  let code: 0 | 1 | 2 = 0;
+  let acted = false;
+
+  if (opts.upgrade !== true) {
+    lines.push(
+      updateAvailable
+        ? `this repository is pinned to ${current}; ${String(latest)} is available. To move it: commitlore upgrade`
+        : `this repository is pinned to ${current}`,
+    );
+    return { step: 'release', title: 'release', code, lines, detail: { current, latest, updateAvailable, acted } };
+  }
+
+  // `--upgrade` is the acting form, and the three ways it can fail are three
+  // different facts. Collapsing them into one `catch` is what the ticket names
+  // three cases to prevent.
+  const blocked = env['COMMITLORE_NO_AUTO_UPDATE'];
+  if (blocked !== undefined && blocked !== '') {
+    lines.push(`COMMITLORE_NO_AUTO_UPDATE is set; wiring with ${current} and changing nothing`);
+  } else if (outcome.kind === 'unreachable' || outcome.kind === 'disabled') {
+    // Offline still needs a working repository.
+    lines.push(`could not check for a newer release; wiring with ${current}`);
+  } else if (outcome.kind === 'refused' || outcome.kind === 'no-tag-matched') {
+    // A different fact from offline, and named as one.
+    lines.push(`the release list was reachable but gave no usable answer; wiring with ${current}`);
+  } else if (!updateAvailable) {
+    lines.push(`${current} is already the newest release`);
+  } else {
+    acted = true;
+    const result = performUpgrade(String(latest), {
+      env,
+      platform: process.platform,
+      runInstaller: (script, tag) =>
+        spawnSync(process.platform === 'win32' ? 'powershell' : 'sh', [script, tag], { stdio: 'inherit' }),
+    });
+    lines.push(...result.lines);
+    // An installer that ran and failed is not "offline", and the explicit verb
+    // is allowed to exit non-zero.
+    if (result.code !== 0) code = 2;
+  }
+
+  return { step: 'release', title: 'release', code, lines, detail: { current, latest, updateAvailable, acted } };
+};
+
 export const runInit = (opts: InitOptions = {}): InitReport => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
+  // First, so `--upgrade` has moved `current` before anything records a
+  // path through it.
+  const steps = [runReleaseStep(opts), runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode: exitCode as 0 | 1 | 2 };
 };
 
 /** User-facing step labels — no internal command names. */
 const STEP_LABEL: Record<StepName, string> = {
+  release: 'Release',
   hooks: 'Hooks',
   trust: 'Trust',
   index: 'Index',
@@ -577,6 +664,7 @@ const STEP_LABEL: Record<StepName, string> = {
 
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export const STEP_HEADING: Record<StepName, string> = {
+  release: 'Release',
   trust: 'directive author string',
   hooks: '[1/4] hooks install',
   index: '[2/4] index --rebuild',
@@ -640,7 +728,13 @@ const stepLabel = (step: InitStep): string =>
     ? `${STEP_LABEL.policy} — ${policyOutcome(step)}`
     : step.step === 'mcp-registration'
       ? `${STEP_LABEL['mcp-registration']} — ${mcpRegistrationOutcome(step)}`
-      : STEP_LABEL[step.step];
+      : // The pinned version belongs in the compact report, not only the
+        // verbose one: an operator who wired a repository to a stale build has
+        // to learn it at the moment it happened, and the summary is what they
+        // read (T-1607).
+        step.step === 'release'
+        ? `${STEP_LABEL.release} — ${step.lines[0] ?? ''}`
+        : STEP_LABEL[step.step];
 
 /**
  * Result-oriented default output: a concise summary telling the user what is
@@ -809,6 +903,7 @@ export const register = (program: Command): void => {
     .option('--force', 'forward to hooks install — replace an already-preserved foreign hook')
     .option('--verbose', 'show step-by-step detail output instead of the result summary')
     .option('--json', 'emit the report as JSON')
+    .option('--upgrade', 'upgrade to the newest release before wiring this repository')
     .option(
       '--unattended',
       'enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)',
@@ -847,11 +942,12 @@ export const register = (program: Command): void => {
         'AGENTS.md, and only when `--agents-md` asks for it: the capture procedure ships in the MCP server\'s instructions, which every wired host receives on initialize, so the file is not how the procedure travels. A repository MCP registration that cannot be written leaves the ' +
         'install degraded rather than broken; doctor reports it when unattended capture needs an initiator.',
     )
-    .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean; agentsMd?: boolean }) => {
+    .action(async (options: { force?: boolean; json?: boolean; verbose?: boolean; unattended?: boolean; agentsMd?: boolean; upgrade?: boolean }) => {
       const choice = await resolveUnattendedChoice(options);
       const initOptions: InitOptions = options.force === undefined ? {} : { force: options.force };
       initOptions.unattended = choice;
       if (options.agentsMd === true) initOptions.agentsGuidance = true;
+      if (options.upgrade === true) initOptions.upgrade = true;
       const report = runInit(initOptions);
       let output: string;
       if (options.json === true) {

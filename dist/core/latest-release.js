@@ -124,6 +124,16 @@ export const ttlFor = (outcome, previous) => {
 // ---------------------------------------------------------------------------
 /** Long enough for a slow remote, short enough that no command waits on it. */
 export const DEFAULT_TIMEOUT_MS = 3_000;
+/**
+ * Whether a non-zero `git` exit was the network failing or the remote
+ * answering.
+ *
+ * The distinction is not cosmetic: an unreachable remote waits an hour and a
+ * refusal waits a day, so classifying a DNS failure as a refusal buys a day of
+ * silence about exactly the staleness this feature exists to expose. `git`
+ * exits non-zero for both and says which in its stderr.
+ */
+const looksUnreachable = (stderr) => /could not resolve host|couldn't resolve host|connection refused|connection timed out|network is unreachable|failed to connect|operation timed out|temporary failure in name resolution/i.test(stderr);
 /** Shared by both spawns, so one ranking answers for both. */
 const outcomeFromRefs = (stdout) => {
     const tags = stdout
@@ -226,7 +236,8 @@ export const fetchTags = async (url, opts = {}) => {
             }
             // git answered and declined: auth, a repository that is not there, a
             // protocol it will not speak. Settled, so it waits the full day.
-            finish({ kind: 'refused', detail: err.trim().split('\n')[0] ?? `git exited ${String(code)}` });
+            const detail = err.trim().split('\n')[0] ?? `git exited ${String(code)}`;
+            finish(looksUnreachable(err) ? { kind: 'unreachable', detail } : { kind: 'refused', detail });
         });
     });
 };
@@ -319,7 +330,9 @@ export const latestReleaseSync = (opts = {}) => {
             outcome = { kind: 'unreachable', detail: `no answer within the timeout (${run.signal})` };
         }
         else {
-            outcome = { kind: 'refused', detail: (run.stderr ?? '').trim().split('\n')[0] ?? `git exited ${String(run.status)}` };
+            const stderr = run.stderr ?? '';
+            const detail = stderr.trim().split('\n')[0] ?? `git exited ${String(run.status)}`;
+            outcome = looksUnreachable(stderr) ? { kind: 'unreachable', detail } : { kind: 'refused', detail };
         }
     }
     catch (error) {

@@ -70,9 +70,18 @@ describe('T-1602 resolving the newest release', () => {
     expect(outcome.kind).toBe('refused');
   });
 
-  it('says unreachable rather than throwing when git cannot resolve the host', async () => {
+  // Not "either is fine". An unreachable remote waits an hour and a refusal
+  // waits a day, so calling a DNS failure a refusal buys a day of silence
+  // about the staleness this feature exists to expose. `git` exits non-zero
+  // for both and says which in its stderr.
+  it('calls a name that does not resolve unreachable, not refused', async () => {
     const outcome = await fetchTags('https://commitlore.invalid/x.git', { timeoutMs: 8_000 });
-    expect(['unreachable', 'refused']).toContain(outcome.kind);
+    expect(outcome.kind).toBe('unreachable');
+  });
+
+  it('calls a remote that answered and declined refused, not unreachable', async () => {
+    const outcome = await fetchTags(join(scratch('declined'), 'not-a-repository.git'));
+    expect(outcome.kind).toBe('refused');
   });
 
   it('never throws, whatever it is handed', async () => {

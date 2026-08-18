@@ -48,6 +48,8 @@ export interface InitOptions {
     cwd?: string;
     /** Forwarded to `hooks install --force` — replace an already-preserved foreign hook. */
     force?: boolean;
+    /** Upgrade to the newest release before wiring. `init` alone never moves `current`. */
+    upgrade?: boolean;
     /**
      * Whether to also write CommitLore's capture procedure into `AGENTS.md`.
      *
@@ -77,7 +79,7 @@ export interface InitOptions {
  * anything, kept distinct so the output can state which one happened.
  */
 export type UnattendedChoice = 'enable' | 'decline' | 'no-tty' | 'no-answer';
-type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy';
+type StepName = 'doctor' | 'hooks' | 'index' | 'claude-hook' | 'mcp-registration' | 'trust' | 'policy' | 'release';
 export interface InitStep {
     step: StepName;
     title: string;
@@ -85,7 +87,7 @@ export interface InitStep {
     code: 0 | 1 | 2;
     /** Human-readable lines this step contributes to the report. */
     lines: string[];
-    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
+    detail: DoctorReport | HookResult | IndexStepDetail | ClaudeHookResult | McpRegistrationResult | TrustSeedResult | PolicyStepDetail | AgentIntegrationStepDetail | ReleaseStepDetail | readonly [HookResult, PrepareCommitMsgHookResult, PostCommitHookResult, PrePushHookResult];
 }
 interface IndexStepDetail {
     ok: boolean;
@@ -141,6 +143,13 @@ export interface InitReport {
  * last costs nothing and makes its report describe the state `init` actually
  * leaves behind, not the state it started from.
  */
+export interface ReleaseStepDetail {
+    readonly current: string;
+    readonly latest: string | null;
+    readonly updateAvailable: boolean;
+    /** Whether `--upgrade` actually invoked an installer. */
+    readonly acted: boolean;
+}
 export declare const runInit: (opts?: InitOptions) => InitReport;
 /** Verbose format headings (preserved for --verbose, T-1013). */
 export declare const STEP_HEADING: Record<StepName, string>;

@@ -17931,7 +17931,7 @@ var register3 = (program3) => {
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync as rmSync6, writeFileSync as writeFileSync14, mkdirSync as mkdirSync10 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { dirname as dirname11, join as join16, resolve as resolve17 } from "node:path";
+import { dirname as dirname11, join as join17, resolve as resolve17 } from "node:path";
 
 // src/demo/fixture.ts
 var targetPath = "src/pricing.ts";
@@ -21688,6 +21688,9 @@ var ttlFor = (outcome, previous) => {
   }
 };
 var DEFAULT_TIMEOUT_MS = 3e3;
+var looksUnreachable = (stderr) => /could not resolve host|couldn't resolve host|connection refused|connection timed out|network is unreachable|failed to connect|operation timed out|temporary failure in name resolution/i.test(
+  stderr
+);
 var outcomeFromRefs = (stdout) => {
   const tags = stdout.split("\n").map((line2) => line2.split("	")[1] ?? "").map((ref) => ref.replace(/^refs\/tags\//, "").trim()).filter((tag) => tag !== "");
   const newest = newestRelease(tags);
@@ -21753,7 +21756,8 @@ var fetchTags = async (url, opts = {}) => {
         finish(outcomeFromRefs(out));
         return;
       }
-      finish({ kind: "refused", detail: err.trim().split("\n")[0] ?? `git exited ${String(code)}` });
+      const detail = err.trim().split("\n")[0] ?? `git exited ${String(code)}`;
+      finish(looksUnreachable(err) ? { kind: "unreachable", detail } : { kind: "refused", detail });
     });
   });
 };
@@ -21803,7 +21807,9 @@ var latestReleaseSync = (opts = {}) => {
     } else if (run.signal !== null) {
       outcome = { kind: "unreachable", detail: `no answer within the timeout (${run.signal})` };
     } else {
-      outcome = { kind: "refused", detail: (run.stderr ?? "").trim().split("\n")[0] ?? `git exited ${String(run.status)}` };
+      const stderr = run.stderr ?? "";
+      const detail = stderr.trim().split("\n")[0] ?? `git exited ${String(run.status)}`;
+      outcome = looksUnreachable(stderr) ? { kind: "unreachable", detail } : { kind: "refused", detail };
     }
   } catch (error2) {
     outcome = { kind: "unreachable", detail: `git could not be started: ${String(error2)}` };
@@ -23322,9 +23328,167 @@ var register9 = (program3) => {
   });
 };
 
+// src/commands/init.ts
+import { spawnSync as spawnSync8 } from "node:child_process";
+
+// src/commands/update.ts
+import { spawnSync as spawnSync7 } from "node:child_process";
+import { readFileSync as readFileSync21, realpathSync as realpathSync5 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join15 } from "node:path";
+var installCommand = (tag, platform = process.platform) => {
+  const readme = readInstalledFile("README.md");
+  const script = platform === "win32" ? "install.ps1" : "install.sh";
+  const line2 = readme.split("\n").map((l) => l.trim()).find((l) => l.includes(script) && (l.startsWith("curl ") || l.startsWith("& (")));
+  if (line2 === void 0) return "";
+  return line2.replace(/v\d+\.\d+\.\d+/g, tag);
+};
+var describe = (outcome) => {
+  switch (outcome.kind) {
+    case "disabled":
+      return `checking is disabled by ${outcome.by}`;
+    case "unreachable":
+      return `the release list could not be reached (${outcome.detail})`;
+    case "refused":
+      return `the remote declined the request (${outcome.detail})`;
+    case "no-tag-matched":
+      return `no release tag was found (${outcome.detail})`;
+    case "resolved":
+      return "";
+  }
+};
+var buildReport2 = async (env = process.env) => {
+  const current = packageVersion();
+  const { outcome, checkedAt } = await latestRelease({ env });
+  const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
+  const unknown2 = describe(outcome);
+  return {
+    current,
+    latest: latest2,
+    // "We could not look" is not "you are up to date", and only one of them is
+    // true. `updateAvailable` stays false either way; `unknown` is what
+    // separates them.
+    updateAvailable: latest2 !== null && isNewerRelease(latest2, current),
+    command: installCommand(latest2 ?? `v${current}`),
+    source: sourceUrl(env),
+    checkedAt: new Date(checkedAt).toISOString(),
+    ...unknown2 === "" ? {} : { unknown: unknown2 }
+  };
+};
+var render = (report) => {
+  const lines = [`installed  ${report.current}`];
+  if (report.unknown !== void 0) {
+    lines.push(`latest     unknown \u2014 ${report.unknown}`);
+    return `${lines.join("\n")}
+`;
+  }
+  lines.push(`latest     ${report.latest ?? "unknown"}`);
+  lines.push(
+    report.updateAvailable ? `
+a newer release is available. To upgrade:
+
+  ${report.command}` : "\nthis is the newest release."
+  );
+  return `${lines.join("\n")}
+`;
+};
+var register10 = (program3) => {
+  program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").option("--force", "act even when the newest release is not newer than this one").addHelpText(
+    "after",
+    "\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC \xA710)."
+  ).action(async (options) => {
+    const report = await buildReport2();
+    const readOnly = options.json === true || options.check === true;
+    if (readOnly) {
+      process.stdout.write(
+        options.json === true ? `${JSON.stringify(report, null, 2)}
+` : render(report)
+      );
+      return;
+    }
+    process.stdout.write(render(report));
+    if (report.latest === null) return;
+    if (!report.updateAvailable && options.force !== true) return;
+    const blocked2 = process.env["COMMITLORE_NO_AUTO_UPDATE"];
+    if (blocked2 !== void 0 && blocked2 !== "") {
+      process.stdout.write(
+        `
+COMMITLORE_NO_AUTO_UPDATE is set, so nothing was changed. This would have run:
+
+  ${report.command}
+`
+      );
+      return;
+    }
+    const outcome = performUpgrade(report.latest, {
+      env: process.env,
+      platform: process.platform,
+      runInstaller: (script, tag) => spawnSync7(process.platform === "win32" ? "powershell" : "sh", [script, tag], {
+        stdio: "inherit"
+      })
+    });
+    for (const line2 of outcome.lines) process.stdout.write(`${line2}
+`);
+    if (outcome.code !== 0) process.exitCode = outcome.code;
+  });
+};
+var dataRoot = (env = process.env) => {
+  const xdg = env["XDG_DATA_HOME"];
+  const base = xdg !== void 0 && xdg !== "" ? xdg : join15(env["HOME"] ?? homedir3(), ".local", "share");
+  return join15(base, "commitlore");
+};
+var installerName = (platform) => platform === "win32" ? "install.ps1" : "install.sh";
+var resolvedCurrent = (root, platform = process.platform) => {
+  try {
+    if (platform === "win32") {
+      const shim = join15(root, "bin", "commitlore.cmd");
+      const text = readFileSync21(shim, "utf8");
+      const match = /([^\s"']*[/\\]v\d+\.\d+\.\d+)[/\\]/.exec(text);
+      return match?.[1] ?? null;
+    }
+    return realpathSync5(join15(root, "current"));
+  } catch {
+    return null;
+  }
+};
+var pointsAtTarget = (root, tag, platform) => {
+  const resolved = resolvedCurrent(root, platform);
+  if (resolved === null) return false;
+  return resolved.split(/[/\\]/).pop() === tag;
+};
+var performUpgrade = (tag, deps) => {
+  const root = dataRoot(deps.env);
+  const script = installerName(deps.platform);
+  const invoked = [];
+  const lines = [];
+  const step1 = join15(root, "current", script);
+  invoked.push(step1);
+  deps.runInstaller(step1, tag);
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+  lines.push(`the installer on disk did not leave ${tag} in place; retrying with the one it just downloaded`);
+  const step3 = join15(root, tag, script);
+  invoked.push(step3);
+  deps.runInstaller(step3, tag);
+  if (pointsAtTarget(root, tag, deps.platform)) {
+    lines.push(`upgraded to ${tag}`);
+    return { code: 0, lines, invoked };
+  }
+  lines.push(
+    `could not upgrade to ${tag}: ${join15(root, "current")} still does not resolve to it.`,
+    `Install it directly:
+
+  ${installCommand(tag, deps.platform)}`,
+    `Then run: commitlore doctor \u2014 a link that is right over a checkout that is wrong is beyond what this command can see.`
+  );
+  return { code: 1, lines, invoked };
+};
+
 // src/core/agents-guidance.ts
-import { existsSync as existsSync20, readFileSync as readFileSync21, renameSync as renameSync9, rmSync as rmSync5, statSync as statSync8, writeFileSync as writeFileSync13 } from "node:fs";
-import { basename as basename3, dirname as dirname10, join as join15, resolve as resolve16 } from "node:path";
+import { existsSync as existsSync20, readFileSync as readFileSync22, renameSync as renameSync9, rmSync as rmSync5, statSync as statSync8, writeFileSync as writeFileSync13 } from "node:fs";
+import { basename as basename3, dirname as dirname10, join as join16, resolve as resolve16 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var AGENTS_SECTION_BEGIN = "<!-- commitlore:begin -->";
 var AGENTS_SECTION_END = "<!-- commitlore:end -->";
@@ -23335,7 +23499,7 @@ var shippedAgentsPath = () => {
   return basename3(here) === "dist" ? resolve16(here, "..", "AGENTS.md") : resolve16(here, "..", "..", "AGENTS.md");
 };
 var readCommitloreAgentsSection = () => {
-  const contents = readFileSync21(shippedAgentsPath(), "utf8");
+  const contents = readFileSync22(shippedAgentsPath(), "utf8");
   const start = contents.indexOf(AGENTS_SECTION_BEGIN);
   const end = contents.indexOf(AGENTS_SECTION_END);
   if (start === -1 || end === -1 || end < start) {
@@ -23359,7 +23523,7 @@ var replaceFile = (path2, contents) => {
   }
 };
 var installAgentsGuidance = (cwd) => {
-  const path2 = join15(cwd, "AGENTS.md");
+  const path2 = join16(cwd, "AGENTS.md");
   let section2;
   try {
     section2 = readCommitloreAgentsSection();
@@ -23376,7 +23540,7 @@ var installAgentsGuidance = (cwd) => {
   }
   let contents;
   try {
-    contents = readFileSync21(path2, "utf8");
+    contents = readFileSync22(path2, "utf8");
   } catch (error2) {
     return { state: "write-failed", path: path2, error: messageOf6(error2) };
   }
@@ -23658,13 +23822,50 @@ var runPolicyStep = (opts) => {
     detail: { state: choice === "decline" ? "declined" : choice, path: path2, unattended: false, error: null }
   };
 };
+var runReleaseStep = (opts) => {
+  const env = process.env;
+  const current = packageVersion();
+  const { outcome } = latestReleaseSync({ env });
+  const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
+  const updateAvailable = latest2 !== null && isNewerRelease(latest2, current);
+  const lines = [];
+  let code = 0;
+  let acted = false;
+  if (opts.upgrade !== true) {
+    lines.push(
+      updateAvailable ? `this repository is pinned to ${current}; ${String(latest2)} is available. To move it: commitlore upgrade` : `this repository is pinned to ${current}`
+    );
+    return { step: "release", title: "release", code, lines, detail: { current, latest: latest2, updateAvailable, acted } };
+  }
+  const blocked2 = env["COMMITLORE_NO_AUTO_UPDATE"];
+  if (blocked2 !== void 0 && blocked2 !== "") {
+    lines.push(`COMMITLORE_NO_AUTO_UPDATE is set; wiring with ${current} and changing nothing`);
+  } else if (outcome.kind === "unreachable" || outcome.kind === "disabled") {
+    lines.push(`could not check for a newer release; wiring with ${current}`);
+  } else if (outcome.kind === "refused" || outcome.kind === "no-tag-matched") {
+    lines.push(`the release list was reachable but gave no usable answer; wiring with ${current}`);
+  } else if (!updateAvailable) {
+    lines.push(`${current} is already the newest release`);
+  } else {
+    acted = true;
+    const result = performUpgrade(String(latest2), {
+      env,
+      platform: process.platform,
+      runInstaller: (script, tag) => spawnSync8(process.platform === "win32" ? "powershell" : "sh", [script, tag], { stdio: "inherit" })
+    });
+    lines.push(...result.lines);
+    if (result.code !== 0) code = 2;
+  }
+  return { step: "release", title: "release", code, lines, detail: { current, latest: latest2, updateAvailable, acted } };
+};
 var runInit = (opts = {}) => {
   const notesBefore = notesAvailability(cwdOption(opts));
-  const steps = [runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
+  const steps = [runReleaseStep(opts), runHooksStep(opts), runTrustStep(opts), runIndexStep(opts), runAgentIntegrationStep(opts), runMcpRegistrationStep(opts), runPolicyStep(opts), runDoctorStep(opts)];
   const exitCode = steps.some((s) => s.code === 2) ? 2 : steps.some((s) => s.code === 1) ? 1 : 0;
   return { steps, notesBefore, exitCode };
 };
 var STEP_LABEL = {
+  release: "Release",
   hooks: "Hooks",
   trust: "Trust",
   index: "Index",
@@ -23674,6 +23875,7 @@ var STEP_LABEL = {
   doctor: "Final check"
 };
 var STEP_HEADING = {
+  release: "Release",
   trust: "directive author string",
   hooks: "[1/4] hooks install",
   index: "[2/4] index --rebuild",
@@ -23719,7 +23921,13 @@ var mcpRegistrationOutcome = (step) => {
       return "already registered for repository-scoped hosts \u2014 left unchanged";
   }
 };
-var stepLabel = (step) => step.step === "policy" ? `${STEP_LABEL.policy} \u2014 ${policyOutcome(step)}` : step.step === "mcp-registration" ? `${STEP_LABEL["mcp-registration"]} \u2014 ${mcpRegistrationOutcome(step)}` : STEP_LABEL[step.step];
+var stepLabel = (step) => step.step === "policy" ? `${STEP_LABEL.policy} \u2014 ${policyOutcome(step)}` : step.step === "mcp-registration" ? `${STEP_LABEL["mcp-registration"]} \u2014 ${mcpRegistrationOutcome(step)}` : (
+  // The pinned version belongs in the compact report, not only the
+  // verbose one: an operator who wired a repository to a stale build has
+  // to learn it at the moment it happened, and the summary is what they
+  // read (T-1607).
+  step.step === "release" ? `${STEP_LABEL.release} \u2014 ${step.lines[0] ?? ""}` : STEP_LABEL[step.step]
+);
 var formatInitReport = (report) => {
   const failed = report.steps.filter((step) => step.code === 2);
   const needsAttention = report.steps.filter((step) => step.code === 1);
@@ -23822,10 +24030,10 @@ The answer is written to ${POLICY_FILE_NAME} and committed \u2014 enabling it ap
   }
   return "no-tty";
 };
-var register10 = (program3) => {
+var register11 = (program3) => {
   program3.command("init").description(
     "one-command onboarding: hooks install, directive author string, index --rebuild, agent integration, repository MCP registration, capture policy, doctor --fix"
-  ).option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").option(
+  ).option("--force", "forward to hooks install \u2014 replace an already-preserved foreign hook").option("--verbose", "show step-by-step detail output instead of the result summary").option("--json", "emit the report as JSON").option("--upgrade", "upgrade to the newest release before wiring this repository").option(
     "--unattended",
     "enable unattended capture if the repository has no policy file yet (skips the prompt; for scripts)"
   ).option(
@@ -23842,6 +24050,7 @@ var register10 = (program3) => {
     const initOptions = options.force === void 0 ? {} : { force: options.force };
     initOptions.unattended = choice;
     if (options.agentsMd === true) initOptions.agentsGuidance = true;
+    if (options.upgrade === true) initOptions.upgrade = true;
     const report = runInit(initOptions);
     let output;
     if (options.json === true) {
@@ -23898,7 +24107,7 @@ var runDemo = async (opts = {}) => {
   process.prependOnceListener("SIGINT", onSignal);
   process.prependOnceListener("SIGTERM", onSignal);
   try {
-    tmpDir = mkdtempSync(join16(opts.tmpRoot ?? tmpdir2(), "commitlore-demo-"));
+    tmpDir = mkdtempSync(join17(opts.tmpRoot ?? tmpdir2(), "commitlore-demo-"));
     const userCwd = resolve17(opts.cwd ?? process.cwd());
     const tmpResolved = resolve17(tmpDir);
     if (tmpResolved === userCwd || tmpResolved.startsWith(userCwd + "/") || userCwd.startsWith(tmpResolved + "/")) {
@@ -23908,7 +24117,7 @@ var runDemo = async (opts = {}) => {
     git(["config", "user.name", "CommitLore Demo"], tmpDir);
     git(["config", "user.email", "demo@commitlore.example"], tmpDir);
     git(["config", "commit.gpgsign", "false"], tmpDir);
-    const targetFullPath = join16(tmpDir, targetPath);
+    const targetFullPath = join17(tmpDir, targetPath);
     mkdirSync10(dirname11(targetFullPath), { recursive: true });
     writeFileSync14(targetFullPath, "export const calculatePrice = () => {};\n");
     git(["add", "."], tmpDir);
@@ -23962,7 +24171,7 @@ var runDemo = async (opts = {}) => {
     process.removeListener("SIGTERM", onSignal);
   }
 };
-var register11 = (program3) => {
+var register12 = (program3) => {
   program3.command("demo").description("run a self-contained lifecycle demo in a temporary repository (no network, no model)").action(async () => {
     const result = await runDemo();
     if (result.exitCode !== 0) {
@@ -23976,7 +24185,7 @@ var register11 = (program3) => {
 };
 
 // src/commands/harvest.ts
-import { readFileSync as readFileSync22, writeFileSync as writeFileSync15 } from "node:fs";
+import { readFileSync as readFileSync23, writeFileSync as writeFileSync15 } from "node:fs";
 var PREFIX2 = "commitlore:";
 var USAGE_EXIT_CODE = 2;
 var skip2 = (reason) => ({
@@ -23987,7 +24196,7 @@ var skip2 = (reason) => ({
 });
 var readTextFile = (path2, label) => {
   try {
-    return readFileSync22(path2, "utf8");
+    return readFileSync23(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -24059,7 +24268,7 @@ var runHarvest = (options) => {
 `, exitCode: USAGE_EXIT_CODE };
   }
 };
-var register12 = (program3) => {
+var register13 = (program3) => {
   program3.command("harvest").description("build the harvest prompt contract, or check a draft a session produced").option("--transcript <file>", "agent session transcript to harvest from").option("--diff <file>", "diff to harvest from (default: the staged diff)").option("--out <file>", "write the output here instead of stdout").option("--prompt-only", "print the prompt contract for the session and exit").option("--draft <file>", "check a draft the session produced and print what survived").addHelpText(
     "after",
     "\nExit codes: 0 ran (nothing to harvest counts as ran), 2 a usage error -- an unreadable path or a draft that is not a draft (SPEC \xA710)."
@@ -24072,7 +24281,7 @@ var register12 = (program3) => {
 };
 
 // src/commands/guard.ts
-import { readFileSync as readFileSync23 } from "node:fs";
+import { readFileSync as readFileSync24 } from "node:fs";
 var FLAGGED_EXIT_CODE = 1;
 var USAGE_EXIT_CODE2 = 2;
 var INCOMPLETE_EXIT_CODE = 3;
@@ -24080,8 +24289,8 @@ var STDIN_FD = 0;
 var readProposal = (raw) => {
   if (!raw.startsWith("@")) return raw;
   const path2 = raw.slice(1);
-  if (path2 === "-") return readFileSync23(STDIN_FD, "utf8");
-  return readFileSync23(path2, "utf8");
+  if (path2 === "-") return readFileSync24(STDIN_FD, "utf8");
+  return readFileSync24(path2, "utf8");
 };
 var matchThreshold = (raw) => {
   if (raw === void 0) return void 0;
@@ -24216,7 +24425,7 @@ var runAsHook = async (options) => {
 `
   );
 };
-var register13 = (program3) => {
+var register14 = (program3) => {
   program3.command("guard").description("[experimental advisory] flag a proposal that may revive a ruled-out alternative \u2014 a lead to inspect, not evidence the proposal is wrong (precision 44.8%, recall 22.0%)").argument("[paths...]", "limit the check to records touching these paths").option(
     "--proposal <text>",
     "the proposal to check; @<file> reads a file, @- reads stdin (required outside --hook-input)"
@@ -24278,12 +24487,12 @@ var register13 = (program3) => {
 };
 
 // src/commands/harvest-verify.ts
-import { readFileSync as readFileSync24, writeFileSync as writeFileSync16 } from "node:fs";
+import { readFileSync as readFileSync25, writeFileSync as writeFileSync16 } from "node:fs";
 var PREFIX3 = "commitlore:";
 var BAD_INPUT = 2;
 var readTextFile2 = (path2, label) => {
   try {
-    return readFileSync24(path2, "utf8");
+    return readFileSync25(path2, "utf8");
   } catch (error2) {
     const detail = error2 instanceof Error ? error2.message : String(error2);
     throw new Error(`cannot read ${label}: ${detail}`);
@@ -24361,7 +24570,7 @@ var runHarvestVerify = (options) => {
 `, exitCode: BAD_INPUT };
   }
 };
-var register14 = (program3) => {
+var register15 = (program3) => {
   program3.command("harvest-verify").description("check a harvested draft against the transcript and diff it claims to quote").option("--draft <file>", "the draft a session produced").option("--transcript <file>", "the transcript the draft was harvested from").option("--diff <file>", "the diff the draft was harvested from").option("--out <file>", "write the output here instead of stdout").option("--json", "emit the full report, discarded records included").option("--repair-prompt", "emit the feedback prompt for another draft attempt").addHelpText(
     "after",
     "\nExit codes: 0 ran (a fully rejected draft still exits 0), 2 a usage error -- a missing option, an unreadable path, a draft that is not a draft (SPEC \xA710)."
@@ -24374,10 +24583,10 @@ var register14 = (program3) => {
 };
 
 // src/commands/hermes.ts
-import { spawnSync as spawnSync7 } from "node:child_process";
-import { copyFileSync, existsSync as existsSync22, mkdirSync as mkdirSync11, readFileSync as readFileSync25, renameSync as renameSync10, statSync as statSync9, writeFileSync as writeFileSync17 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { basename as basename4, dirname as dirname12, join as join17, resolve as resolve19 } from "node:path";
+import { spawnSync as spawnSync9 } from "node:child_process";
+import { copyFileSync, existsSync as existsSync22, mkdirSync as mkdirSync11, readFileSync as readFileSync26, renameSync as renameSync10, statSync as statSync9, writeFileSync as writeFileSync17 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { basename as basename4, dirname as dirname12, join as join18, resolve as resolve19 } from "node:path";
 
 // src/core/hermes-config.ts
 import { relative as relative2, resolve as resolve18, sep as sep3 } from "node:path";
@@ -24646,7 +24855,7 @@ var removeHermesConfig = (contents, options) => {
 
 // src/commands/hermes.ts
 var commandExists = (command) => {
-  const result = spawnSync7(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
+  const result = spawnSync9(command, ["--version"], { encoding: "utf8", timeout: 5e3, stdio: "ignore" });
   return result.error === void 0;
 };
 var backupPathFor = (configPath) => {
@@ -24658,7 +24867,7 @@ var backupPathFor = (configPath) => {
   }
 };
 var atomicallyWrite = (path2, contents, mode) => {
-  const temporary = join17(dirname12(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
+  const temporary = join18(dirname12(path2), `.${basename4(path2)}.commitlore-${process.pid}.tmp`);
   try {
     if (mode === void 0) writeFileSync17(temporary, contents, "utf8");
     else writeFileSync17(temporary, contents, { encoding: "utf8", mode });
@@ -24672,7 +24881,7 @@ var runVerification = (report, verified) => {
     report.push("unverified: Hermes is not on PATH, so start a fresh session to load the configured profile");
     return;
   }
-  const skills = spawnSync7("hermes", ["skills", "list", "--source", "all"], {
+  const skills = spawnSync9("hermes", ["skills", "list", "--source", "all"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -24684,7 +24893,7 @@ var runVerification = (report, verified) => {
   } else {
     report.push("unverified: Hermes did not list every CommitLore skill; start a fresh session and run `hermes skills list --source all`");
   }
-  const mcp = spawnSync7("hermes", ["mcp", "test", "commitlore"], {
+  const mcp = spawnSync9("hermes", ["mcp", "test", "commitlore"], {
     encoding: "utf8",
     timeout: 15e3
   });
@@ -24697,12 +24906,12 @@ var runVerification = (report, verified) => {
   }
 };
 var runHermesInstall = (options = {}) => {
-  const home = options.home ?? homedir3();
+  const home = options.home ?? homedir4();
   const hermesHome = process.env["HERMES_HOME"];
-  const configPath = options.configPath ?? (hermesHome === void 0 ? join17(home, ".hermes", "config.yaml") : join17(hermesHome, "config.yaml"));
-  const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join17(home, ".local", "share");
-  const dataRoot2 = options.dataRoot ?? join17(dataHome, "commitlore");
-  const versionedSkills = join17(dataRoot2, `v${runtimeIdentity().version}`, "hermes", "skills");
+  const configPath = options.configPath ?? (hermesHome === void 0 ? join18(home, ".hermes", "config.yaml") : join18(hermesHome, "config.yaml"));
+  const dataHome = options.dataHome ?? process.env["XDG_DATA_HOME"] ?? join18(home, ".local", "share");
+  const dataRoot2 = options.dataRoot ?? join18(dataHome, "commitlore");
+  const versionedSkills = join18(dataRoot2, `v${runtimeIdentity().version}`, "hermes", "skills");
   const skillsDir = options.skillsDir ?? (existsSync22(versionedSkills) ? versionedSkills : installedPath("hermes", "skills"));
   const detected = options.detected ?? (existsSync22(dirname12(configPath)) || commandExists("hermes"));
   const report = [];
@@ -24723,8 +24932,8 @@ var runHermesInstall = (options = {}) => {
       verified
     };
   }
-  const wrapperPath = options.wrapperPath ?? join17(home, ".local", "bin", "commitlore");
-  const before = existsSync22(configPath) ? readFileSync25(configPath, "utf8") : "";
+  const wrapperPath = options.wrapperPath ?? join18(home, ".local", "bin", "commitlore");
+  const before = existsSync22(configPath) ? readFileSync26(configPath, "utf8") : "";
   const edit = addHermesConfig(before, {
     wrapperPath,
     skillsDir: resolve19(skillsDir),
@@ -24764,7 +24973,7 @@ var runHermesInstall = (options = {}) => {
     verified
   };
 };
-var register15 = (program3) => {
+var register16 = (program3) => {
   const hermes = program3.command("hermes").description("configure the active Hermes profile with CommitLore MCP tools and skills");
   hermes.command("install").description("wire Hermes host configuration; repository setup remains `commitlore init`").option("--config <path>", "Hermes config.yaml path (defaults to the active profile)").option("--command <path>", "CommitLore wrapper Hermes should execute (defaults to ~/.local/bin/commitlore)").option("--data-root <path>", "CommitLore install data root, used when replacing an older skill bundle").option("--verify", "probe skill discovery and MCP tools after configuring").action((options) => {
     const result = runHermesInstall({
@@ -24851,7 +25060,7 @@ var runIndex = (options) => {
     closeIndex(handle);
   }
 };
-var register16 = (program3) => {
+var register17 = (program3) => {
   program3.command("index").description("build or refresh the derived record index (.git/commitlore/index.db)").option("--rebuild", "discard the index and rebuild it from git").option("--no-index", "answer from git alone, writing nothing (the fallback path)").option("--json", "emit the run as JSON").option("--stats", "report what the index currently holds").addHelpText(
     "after",
     "\nExit codes: 0 built or refreshed, 2 could not run -- conflicting flags, or the SQLite binding is unavailable, in which case every read still answers from git with --no-index (SPEC \xA710)."
@@ -24875,8 +25084,8 @@ var register16 = (program3) => {
 };
 
 // src/commands/inject.ts
-import { readFileSync as readFileSync26, realpathSync as realpathSync5 } from "node:fs";
-import { basename as basename5, dirname as dirname13, isAbsolute as isAbsolute3, join as join18, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
+import { readFileSync as readFileSync27, realpathSync as realpathSync6 } from "node:fs";
+import { basename as basename5, dirname as dirname13, isAbsolute as isAbsolute3, join as join19, relative as relative3, resolve as resolve20, sep as sep4 } from "node:path";
 
 // src/core/inject.ts
 import { createHash as createHash9 } from "node:crypto";
@@ -25034,7 +25243,7 @@ var unreadLine = (unreadCommits) => {
     `incomplete: the scan stopped at its time budget with ${String(unreadCommits)} commit(s) unread. treat the list above as some of what applies here, not all of it: records in those commits are missing, and because supersession and expiry are recorded in commits like any other record, one shown as active may since have been withdrawn. run \`commitlore init\` once to finish the index, after which this answer is both complete and fast.`
   ];
 };
-var render = (input) => {
+var render2 = (input) => {
   const sections = TIERS.flatMap((tier, index) => {
     const lines = input.kept.filter((entry) => entry.tier === index).map((entry) => entry.line);
     return lines.length === 0 ? [] : ["", tier.label, ...lines];
@@ -25066,7 +25275,7 @@ var fit = (input, entries, budgetChars) => {
   for (let keep = upper; keep > 0; keep -= 1) {
     const kept = entries.slice(0, keep);
     const cut = entries.length - keep;
-    const text = render({
+    const text = render2({
       ...input,
       kept,
       cut,
@@ -25168,7 +25377,7 @@ var buildInjection = (opts) => {
   const active = ablation.noLifecycle ? result.records : result.records.filter((record2) => record2.lifecycle === "active");
   const silentOrIncomplete = () => result.unreadCommits === 0 ? empty : {
     ...empty,
-    text: render({
+    text: render2({
       path: path2,
       kept: [],
       withheld: [],
@@ -25213,7 +25422,7 @@ var buildInjection = (opts) => {
   const cut = entries.length - keep;
   const cutTier = cut === 0 ? void 0 : TIERS[entries[keep]?.tier ?? OTHER_TIER]?.name;
   const kept = entries.slice(0, keep);
-  const text = render({ ...base, kept, cut, cutTier });
+  const text = render2({ ...base, kept, cut, cutTier });
   const rendered = new Set(kept.map((entry) => entry.identity));
   return {
     text,
@@ -25256,7 +25465,7 @@ var MAX_PAYLOAD_PATH_LENGTH = 4096;
 var isPlainObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var readStdin = () => {
   try {
-    return readFileSync26(0, "utf8");
+    return readFileSync27(0, "utf8");
   } catch {
     return "";
   }
@@ -25284,8 +25493,8 @@ var canonical = (target) => {
   let current = absolute;
   for (; ; ) {
     try {
-      const real = realpathSync5(current);
-      return tail.length === 0 ? real : join18(real, ...tail);
+      const real = realpathSync6(current);
+      return tail.length === 0 ? real : join19(real, ...tail);
     } catch {
       const parent = dirname13(current);
       if (parent === current) return absolute;
@@ -25413,7 +25622,7 @@ var hookInput = (options) => ({
   settingsPath: settingsFile(options),
   ...options.command === void 0 ? {} : { command: options.command }
 });
-var register17 = (program3) => {
+var register18 = (program3) => {
   const inject = program3.command("inject").description("the deterministic, path-scoped projection an agent is given before it edits").option("--path <path>", "the path to project (required outside --hook-input)").option("--budget <tokens>", "token budget for the payload (default: 800)").option("--json", "emit the projection object, including its cache key").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: current UTC day)").option(
     "--trusted-author <author>",
     "an author string whose records may render as instructions (repeatable; not identity proof)",
@@ -25448,10 +25657,10 @@ var register17 = (program3) => {
 };
 
 // src/commands/installer-hosts.ts
-import { accessSync as accessSync2, constants as constants2, existsSync as existsSync23, mkdirSync as mkdirSync12, renameSync as renameSync11, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync18, readFileSync as readFileSync27 } from "node:fs";
-import { delimiter as delimiter2, dirname as dirname14, extname, isAbsolute as isAbsolute4, join as join19 } from "node:path";
+import { accessSync as accessSync2, constants as constants2, existsSync as existsSync23, mkdirSync as mkdirSync12, renameSync as renameSync11, statSync as statSync10, unlinkSync as unlinkSync6, writeFileSync as writeFileSync18, readFileSync as readFileSync28 } from "node:fs";
+import { delimiter as delimiter2, dirname as dirname14, extname, isAbsolute as isAbsolute4, join as join20 } from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawnSync as spawnSync8 } from "node:child_process";
+import { spawnSync as spawnSync10 } from "node:child_process";
 var INSTALLER_HOSTS_SCHEMA = "commitlore_installer_hosts.v1";
 var isObject3 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var ownEntry = (format, entry, wrapper) => {
@@ -25475,14 +25684,14 @@ var entryFor = (format, wrapper) => format === "json-mcp" ? { type: "local", com
 var atomicTemporaryName = (target, unique) => `.${target.split(/[/\\]/).pop() ?? target}.commitlore-${unique}.tmp`;
 var atomicJsonWrite = (path2, value) => {
   mkdirSync12(dirname14(path2), { recursive: true });
-  const temporary = join19(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
+  const temporary = join20(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
   try {
     writeFileSync18(temporary, `${JSON.stringify(value, null, 2)}
 `, { encoding: "utf8", mode: 384 });
     if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") {
       throw new Error("interrupted before atomic rename");
     }
-    JSON.parse(readFileSync27(temporary, "utf8"));
+    JSON.parse(readFileSync28(temporary, "utf8"));
     renameSync11(temporary, path2);
   } finally {
     try {
@@ -25495,7 +25704,7 @@ var jsonHost = async (host, path2, format, wrapper) => {
   let config3;
   let existed = true;
   try {
-    config3 = JSON.parse(readFileSync27(path2, "utf8"));
+    config3 = JSON.parse(readFileSync28(path2, "utf8"));
     if (!isObject3(config3)) throw new Error("root is not an object");
   } catch (error2) {
     if (!existsSync23(path2)) {
@@ -25543,7 +25752,7 @@ var tomlRegistration = (source) => {
 var tomlHost = async (path2, wrapper) => {
   let source = "";
   try {
-    source = readFileSync27(path2, "utf8");
+    source = readFileSync28(path2, "utf8");
   } catch (error2) {
     if (existsSync23(path2)) return { host: "codex", requested: true, outcome: "failed", healthy: false, detail: `${path2} could not be read: ${String(error2)}` };
   }
@@ -25565,11 +25774,11 @@ args = ["mcp"]
 `;
   try {
     mkdirSync12(dirname14(path2), { recursive: true });
-    const temporary = join19(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
+    const temporary = join20(dirname14(path2), atomicTemporaryName(path2, `${process.pid}-${randomUUID()}`));
     try {
       writeFileSync18(temporary, next, { encoding: "utf8", mode: 384 });
       if (process.env.COMMITLORE_INSTALLER_TEST_INTERRUPT_WRITE === "1") throw new Error("interrupted before atomic rename");
-      tomlRegistration(readFileSync27(temporary, "utf8"));
+      tomlRegistration(readFileSync28(temporary, "utf8"));
       renameSync11(temporary, path2);
     } finally {
       try {
@@ -25586,7 +25795,7 @@ args = ["mcp"]
 var isWindowsPath = () => process.platform === "win32";
 var pathEntriesFor = (command) => {
   if (isAbsolute4(command) || command.includes("/") || command.includes("\\")) return [command];
-  return (process.env.PATH ?? "").split(isWindowsPath() ? ";" : delimiter2).map((directory) => join19(directory, command));
+  return (process.env.PATH ?? "").split(isWindowsPath() ? ";" : delimiter2).map((directory) => join20(directory, command));
 };
 var executableExtensions = (command) => {
   if (!isWindowsPath() || extname(command) !== "") return [""];
@@ -25616,7 +25825,7 @@ var resolveCommand = (command) => {
 var hasCommand = (command) => resolveCommand(command) !== null;
 var commandInterpreter = () => {
   const root = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
-  const candidate = join19(root, "System32", "cmd.exe");
+  const candidate = join20(root, "System32", "cmd.exe");
   return isAbsolute4(candidate) && isExecutableFile2(candidate) ? candidate : "C:\\Windows\\System32\\cmd.exe";
 };
 var cmdEnvironmentValue = (value) => {
@@ -25640,7 +25849,7 @@ var spawnResolved = (command, args, timeout) => {
   if (command.usesCommandInterpreter && invocation === null) {
     return { status: null, error: new Error("batch command contains a quote, line break, or NUL byte"), stdout: "", stderr: "" };
   }
-  const result = command.usesCommandInterpreter ? spawnSync8(commandInterpreter(), invocation?.args ?? [], { encoding: "utf8", env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true }) : spawnSync8(command.path, args, { encoding: "utf8", shell: false, timeout });
+  const result = command.usesCommandInterpreter ? spawnSync10(commandInterpreter(), invocation?.args ?? [], { encoding: "utf8", env: invocation?.env, shell: false, timeout, windowsVerbatimArguments: true }) : spawnSync10(command.path, args, { encoding: "utf8", shell: false, timeout });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -25724,21 +25933,21 @@ var inspectAndApplyHosts = async (options) => {
         (result) => result.healthy ? codexResultWithPlugin(result, codexPluginOutcome(options.wrapper)) : result
       )
     );
-  } else if (existsSync23(join19(home, ".codex"))) {
-    requested.push(tomlHost(join19(home, ".codex", "config.toml"), options.wrapper));
+  } else if (existsSync23(join20(home, ".codex"))) {
+    requested.push(tomlHost(join20(home, ".codex", "config.toml"), options.wrapper));
   } else notDetected.push("codex");
   const candidates = [
-    ["gemini-cli", join19(home, ".gemini", "settings.json"), "json-mcpServers", hasCommand("gemini") || existsSync23(join19(home, ".gemini"))],
-    ["cursor", join19(home, ".cursor", "mcp.json"), "json-mcpServers", hasCommand("cursor") || existsSync23(join19(home, ".cursor"))],
-    ["windsurf", join19(home, ".codeium", "windsurf", "mcp_config.json"), "json-mcpServers", hasCommand("windsurf") || existsSync23(join19(home, ".codeium", "windsurf"))],
-    ["opencode", join19(home, ".config", "opencode", "opencode.json"), "json-mcp", hasCommand("opencode") || existsSync23(join19(home, ".config", "opencode"))]
+    ["gemini-cli", join20(home, ".gemini", "settings.json"), "json-mcpServers", hasCommand("gemini") || existsSync23(join20(home, ".gemini"))],
+    ["cursor", join20(home, ".cursor", "mcp.json"), "json-mcpServers", hasCommand("cursor") || existsSync23(join20(home, ".cursor"))],
+    ["windsurf", join20(home, ".codeium", "windsurf", "mcp_config.json"), "json-mcpServers", hasCommand("windsurf") || existsSync23(join20(home, ".codeium", "windsurf"))],
+    ["opencode", join20(home, ".config", "opencode", "opencode.json"), "json-mcp", hasCommand("opencode") || existsSync23(join20(home, ".config", "opencode"))]
   ];
   for (const [host, path2, format, present2] of candidates) {
     if (present2) requested.push(jsonHost(host, path2, format, options.wrapper));
     else notDetected.push(host);
   }
-  if (hasCommand("hermes") || existsSync23(join19(home, ".hermes"))) {
-    const result = commandStatus(options.wrapper, ["hermes", "install", "--config", join19(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], 3e4);
+  if (hasCommand("hermes") || existsSync23(join20(home, ".hermes"))) {
+    const result = commandStatus(options.wrapper, ["hermes", "install", "--config", join20(home, ".hermes", "config.yaml"), "--command", options.wrapper, "--data-root", options.dataRoot, "--verify"], 3e4);
     requested.push(Promise.resolve(result.status === 0 ? { host: "hermes", requested: true, outcome: "installed", healthy: true, detail: "Hermes setup verified" } : { host: "hermes", requested: true, outcome: "failed", healthy: false, detail: failureMessage("Hermes setup failed", result.detail) }));
   } else notDetected.push("hermes");
   if (hasCommand("claude")) {
@@ -25747,7 +25956,7 @@ var inspectAndApplyHosts = async (options) => {
   const hosts = await Promise.all(requested);
   return { schema: INSTALLER_HOSTS_SCHEMA, runtimeIdentity: runtimeIdentity(), ok: hosts.every((host) => host.healthy), hosts, notDetected };
 };
-var register18 = (program3) => {
+var register19 = (program3) => {
   program3.command("installer-hosts").description("inspect, apply, and live-verify detected CommitLore host registrations").requiredOption("--wrapper <path>", "the verified CommitLore wrapper path").requiredOption("--data-root <path>", "the CommitLore data root").requiredOption("--home <path>", "the target user home directory").option("--json", "emit the installer host summary as JSON").action(async (options) => {
     const summary2 = await inspectAndApplyHosts(options);
     process.stdout.write(`${JSON.stringify(summary2)}
@@ -34619,7 +34828,7 @@ var define = (program3, name, description, keys, render3) => {
     }
   });
 };
-var register19 = (program3) => {
+var register20 = (program3) => {
   define(
     program3,
     "context",
@@ -34719,7 +34928,7 @@ var withheldIfInjection = (record2) => {
     ...record2.expiresAt === void 0 ? {} : { expiresAt: withheld }
   };
 };
-var buildReport2 = (scan2, at) => {
+var buildReport3 = (scan2, at) => {
   const ordered = oldestFirst2(scan2.records);
   const states = foldLifecycle(ordered, { at });
   const stale = states.filter(isStale).map((state) => {
@@ -34797,7 +35006,7 @@ var evaluationInstant4 = (raw) => {
   }
   return parsed;
 };
-var register20 = (program3) => {
+var register21 = (program3) => {
   program3.command("stale").description("list records that are superseded, expired, or flagged for review").option("--json", "emit the report as JSON").option("--at <instant>", "evaluate as of an ISO 8601 instant (default: now)").option("--all-history", `scan the whole history instead of the most recent ${DEFAULT_SCAN_LIMIT} commits`).addHelpText(
     "after",
     "\nExit codes: 0 ran (stale reports findings in its output, it does not gate on them), 2 a usage error -- an unparseable --at, or git could not answer (SPEC \xA710)."
@@ -34807,7 +35016,7 @@ var register20 = (program3) => {
       const scan2 = collectRecords(
         options.allHistory === true ? { allHistory: true } : { allHistory: false }
       );
-      const report = buildReport2(scan2, at);
+      const report = buildReport3(scan2, at);
       process.stdout.write(
         options.json === true ? `${JSON.stringify(report, null, 2)}
 ` : formatReport2(report)
@@ -35286,7 +35495,7 @@ Recording: when a change carries decision context the diff cannot show \u2014 a 
       const kind = kindArg(args);
       return asText(contextJson(root, kind, pathArg(root, args)));
     },
-    [STALE_TOOL]: () => asText(buildReport2(collectRecords({ cwd: root }), /* @__PURE__ */ new Date())),
+    [STALE_TOOL]: () => asText(buildReport3(collectRecords({ cwd: root }), /* @__PURE__ */ new Date())),
     [GUARD_TOOL]: (args) => {
       const proposal = requiredString(args, "proposal");
       const path2 = pathArg(root, args);
@@ -35503,7 +35712,7 @@ var startStdioServer = async (opts = {}) => {
 };
 
 // src/commands/mcp.ts
-var register21 = (program3) => {
+var register22 = (program3) => {
   program3.command("mcp").description("serve CommitLore over stdio MCP: commitlore://context/<path> and query tools").addHelpText("after", "\nExit codes: 0 the session ended cleanly, 2 the server could not start (SPEC \xA710).").action(() => {
     startStdioServer().catch((error2) => {
       process.stderr.write(
@@ -35516,10 +35725,10 @@ var register21 = (program3) => {
 };
 
 // src/core/codex-plugin.ts
-import { spawnSync as spawnSync9 } from "node:child_process";
-import { existsSync as existsSync24, mkdirSync as mkdirSync13, readFileSync as readFileSync28, rmSync as rmSync7, writeFileSync as writeFileSync19 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { join as join20 } from "node:path";
+import { spawnSync as spawnSync11 } from "node:child_process";
+import { existsSync as existsSync24, mkdirSync as mkdirSync13, readFileSync as readFileSync29, rmSync as rmSync7, writeFileSync as writeFileSync19 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { join as join21 } from "node:path";
 
 // src/core/agent-configs.ts
 var AGENT_CONFIGS = [
@@ -35594,14 +35803,14 @@ var isCommitloreEntry = (format, entry, wrapperPath) => {
 
 // src/core/codex-plugin.ts
 var MARKER_VERSION = 1;
-var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join20(homedir4(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join20(homedir4(), ".local", "share");
+var defaultDataHome = () => process.platform === "win32" ? process.env["LOCALAPPDATA"] ?? join21(homedir5(), "AppData", "Local") : process.env["XDG_DATA_HOME"] ?? join21(homedir5(), ".local", "share");
 var codexSaid = (result) => {
   const said = (result.stderr.trim() || result.stdout.trim()).split("\n")[0]?.trim() ?? "";
   if (said === "") return [];
   return [`codex said: ${said}`];
 };
 var runCodexCommand = (args) => {
-  const result = spawnSync9("codex", args, { encoding: "utf8", timeout: 3e4 });
+  const result = spawnSync11("codex", args, { encoding: "utf8", timeout: 3e4 });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -35616,7 +35825,7 @@ var config2 = () => {
 };
 var codexPluginSelector = (plugin = config2()) => `${plugin.plugin}@${plugin.marketplace}`;
 var codexPluginInstallCommand = () => "commitlore plugin install-codex";
-var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join20(dataHome, ...plugin.dataRelativePath);
+var codexPluginMarkerPath = (plugin = config2(), dataHome = defaultDataHome()) => join21(dataHome, ...plugin.dataRelativePath);
 var successful = (result) => result.status === 0 && result.error === void 0;
 var readMarketplaceState = (json, plugin) => {
   const namedInText = () => json.split("\n").some((line2) => line2.trim().startsWith(`${plugin.marketplace} `)) ? { kind: "unverifiable-present" } : { kind: "unverifiable-absent" };
@@ -35655,7 +35864,7 @@ var readCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome()) =
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
   if (!existsSync24(markerPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync28(markerPath, "utf8"));
+    const parsed = JSON.parse(readFileSync29(markerPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
     const marker = parsed;
     const expected = markerFor(plugin);
@@ -35669,7 +35878,7 @@ var removeCodexPluginMarker = (plugin = config2(), dataHome = defaultDataHome())
 };
 var writeCodexPluginMarker = (plugin, dataHome) => {
   const markerPath = codexPluginMarkerPath(plugin, dataHome);
-  mkdirSync13(join20(markerPath, ".."), { recursive: true });
+  mkdirSync13(join21(markerPath, ".."), { recursive: true });
   writeFileSync19(markerPath, `${JSON.stringify(markerFor(plugin), null, 2)}
 `);
 };
@@ -35765,7 +35974,7 @@ var installCodexPlugin = (options = {}) => {
 };
 
 // src/commands/plugin.ts
-var register22 = (program3) => {
+var register23 = (program3) => {
   const plugin = program3.command("plugin").description("manage CommitLore coding-agent plugins");
   plugin.command("install-codex").description("install or repair the CommitLore Codex plugin through the Codex CLI").option("--print", "print the one command instead of running it").addHelpText(
     "after",
@@ -35782,7 +35991,7 @@ var register22 = (program3) => {
 };
 
 // src/commands/squash-preserve.ts
-import { readFileSync as readFileSync29, writeFileSync as writeFileSync20 } from "node:fs";
+import { readFileSync as readFileSync30, writeFileSync as writeFileSync20 } from "node:fs";
 var PREFIX4 = "commitlore:";
 var USAGE = "usage: commitlore squash-preserve <base>..<head> [--target <sha>] [--message-file <file>] [--json] [--force]";
 var SHORT_SHA = 8;
@@ -35823,7 +36032,7 @@ var warningsFor = (plan) => {
 };
 var readDraft2 = (path2) => {
   try {
-    return readFileSync29(path2, "utf8");
+    return readFileSync30(path2, "utf8");
   } catch (error2) {
     throw new Error(`cannot read ${JSON.stringify(path2)}: ${messageOf8(error2)}`);
   }
@@ -35927,7 +36136,7 @@ var runSquashPreserve = (input = {}) => {
   return { code: 0, stdout: "", stderr: `${warnings}${summary2} \u2014 wrote ${wrote.join(" and ")}
 `, plan };
 };
-var register23 = (program3) => {
+var register24 = (program3) => {
   program3.command("squash-preserve").description("carry the records of a squashed branch onto the merge commit (ADR-0004)").argument("<range>", "<base>..<head> \u2014 the commits the squash collapses").option("--target <sha>", "mirror the inherited record onto this merge commit").option("--message-file <file>", "rewrite this merge message draft with the inherited trailers").option("--json", "emit the plan as JSON").option("--force", "replace an existing note on --target").option(
     "--exclude-record-id <id>",
     "do not apply a record identity the destination already carries (repeatable)",
@@ -35951,170 +36160,17 @@ var register23 = (program3) => {
   });
 };
 
-// src/commands/update.ts
-import { spawnSync as spawnSync10 } from "node:child_process";
-import { readFileSync as readFileSync30, realpathSync as realpathSync6 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
-import { join as join21 } from "node:path";
-var installCommand = (tag, platform = process.platform) => {
-  const readme = readInstalledFile("README.md");
-  const script = platform === "win32" ? "install.ps1" : "install.sh";
-  const line2 = readme.split("\n").map((l) => l.trim()).find((l) => l.includes(script) && (l.startsWith("curl ") || l.startsWith("& (")));
-  if (line2 === void 0) return "";
-  return line2.replace(/v\d+\.\d+\.\d+/g, tag);
-};
-var describe2 = (outcome) => {
-  switch (outcome.kind) {
-    case "disabled":
-      return `checking is disabled by ${outcome.by}`;
-    case "unreachable":
-      return `the release list could not be reached (${outcome.detail})`;
-    case "refused":
-      return `the remote declined the request (${outcome.detail})`;
-    case "no-tag-matched":
-      return `no release tag was found (${outcome.detail})`;
-    case "resolved":
-      return "";
-  }
-};
-var buildReport3 = async (env = process.env) => {
-  const current = packageVersion();
-  const { outcome, checkedAt } = await latestRelease({ env });
-  const latest2 = outcome.kind === "resolved" ? outcome.tag : null;
-  const unknown2 = describe2(outcome);
-  return {
-    current,
-    latest: latest2,
-    // "We could not look" is not "you are up to date", and only one of them is
-    // true. `updateAvailable` stays false either way; `unknown` is what
-    // separates them.
-    updateAvailable: latest2 !== null && isNewerRelease(latest2, current),
-    command: installCommand(latest2 ?? `v${current}`),
-    source: sourceUrl(env),
-    checkedAt: new Date(checkedAt).toISOString(),
-    ...unknown2 === "" ? {} : { unknown: unknown2 }
-  };
-};
-var render2 = (report) => {
-  const lines = [`installed  ${report.current}`];
-  if (report.unknown !== void 0) {
-    lines.push(`latest     unknown \u2014 ${report.unknown}`);
-    return `${lines.join("\n")}
-`;
-  }
-  lines.push(`latest     ${report.latest ?? "unknown"}`);
-  lines.push(
-    report.updateAvailable ? `
-a newer release is available. To upgrade:
-
-  ${report.command}` : "\nthis is the newest release."
-  );
-  return `${lines.join("\n")}
-`;
-};
-var register24 = (program3) => {
-  program3.command("upgrade").description("report the installed and newest CommitLore release").option("--check", "report only; make no change (the default in this build)").option("--json", "the same answer as JSON").option("--force", "act even when the newest release is not newer than this one").addHelpText(
-    "after",
-    "\nExit codes: 0 the check ran, whether or not a newer release exists (SPEC \xA710)."
-  ).action(async (options) => {
-    const report = await buildReport3();
-    const readOnly = options.json === true || options.check === true;
-    if (readOnly) {
-      process.stdout.write(
-        options.json === true ? `${JSON.stringify(report, null, 2)}
-` : render2(report)
-      );
-      return;
-    }
-    process.stdout.write(render2(report));
-    if (report.latest === null) return;
-    if (!report.updateAvailable && options.force !== true) return;
-    const blocked2 = process.env["COMMITLORE_NO_AUTO_UPDATE"];
-    if (blocked2 !== void 0 && blocked2 !== "") {
-      process.stdout.write(
-        `
-COMMITLORE_NO_AUTO_UPDATE is set, so nothing was changed. This would have run:
-
-  ${report.command}
-`
-      );
-      return;
-    }
-    const outcome = performUpgrade(report.latest, {
-      env: process.env,
-      platform: process.platform,
-      runInstaller: (script, tag) => spawnSync10(process.platform === "win32" ? "powershell" : "sh", [script, tag], {
-        stdio: "inherit"
-      })
-    });
-    for (const line2 of outcome.lines) process.stdout.write(`${line2}
-`);
-    if (outcome.code !== 0) process.exitCode = outcome.code;
-  });
-};
-var dataRoot = (env = process.env) => {
-  const xdg = env["XDG_DATA_HOME"];
-  const base = xdg !== void 0 && xdg !== "" ? xdg : join21(env["HOME"] ?? homedir5(), ".local", "share");
-  return join21(base, "commitlore");
-};
-var installerName = (platform) => platform === "win32" ? "install.ps1" : "install.sh";
-var resolvedCurrent = (root, platform = process.platform) => {
-  try {
-    if (platform === "win32") {
-      const shim = join21(root, "bin", "commitlore.cmd");
-      const text = readFileSync30(shim, "utf8");
-      const match = /([^\s"']*[/\\]v\d+\.\d+\.\d+)[/\\]/.exec(text);
-      return match?.[1] ?? null;
-    }
-    return realpathSync6(join21(root, "current"));
-  } catch {
-    return null;
-  }
-};
-var pointsAtTarget = (root, tag, platform) => {
-  const resolved = resolvedCurrent(root, platform);
-  if (resolved === null) return false;
-  return resolved.split(/[/\\]/).pop() === tag;
-};
-var performUpgrade = (tag, deps) => {
-  const root = dataRoot(deps.env);
-  const script = installerName(deps.platform);
-  const invoked = [];
-  const lines = [];
-  const step1 = join21(root, "current", script);
-  invoked.push(step1);
-  deps.runInstaller(step1, tag);
-  if (pointsAtTarget(root, tag, deps.platform)) {
-    lines.push(`upgraded to ${tag}`);
-    return { code: 0, lines, invoked };
-  }
-  lines.push(`the installer on disk did not leave ${tag} in place; retrying with the one it just downloaded`);
-  const step3 = join21(root, tag, script);
-  invoked.push(step3);
-  deps.runInstaller(step3, tag);
-  if (pointsAtTarget(root, tag, deps.platform)) {
-    lines.push(`upgraded to ${tag}`);
-    return { code: 0, lines, invoked };
-  }
-  lines.push(
-    `could not upgrade to ${tag}: ${join21(root, "current")} still does not resolve to it.`,
-    `Install it directly:
-
-  ${installCommand(tag, deps.platform)}`,
-    `Then run: commitlore doctor \u2014 a link that is right over a checkout that is wrong is beyond what this command can see.`
-  );
-  return { code: 1, lines, invoked };
-};
-
 // src/core/update-notice.ts
 var SILENT_SUBCOMMANDS = [
   "prepare-commit-msg",
   "post-commit",
   "pre-push",
   "mcp",
-  // `doctor` carries staleness inside its own report (T-1605). It is silent
-  // here so the two mechanisms cannot both fire and say it twice.
-  "doctor"
+  // `doctor` carries staleness inside its own report (T-1605), and `init`
+  // names what it pinned (T-1607). Both are silent here so no fact is
+  // reported twice by two mechanisms that each think they own it.
+  "doctor",
+  "init"
 ];
 var suppressedBecause = (ctx) => {
   if (ctx.env["CI"] !== void 0 && ctx.env["CI"] !== "") return "CI";
@@ -36732,7 +36788,7 @@ var register26 = (program3) => {
 };
 
 // src/commands/uninstall.ts
-import { spawnSync as spawnSync11 } from "node:child_process";
+import { spawnSync as spawnSync12 } from "node:child_process";
 import { existsSync as existsSync25, readFileSync as readFileSync32, rmSync as rmSync9, writeFileSync as writeFileSync21 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { join as join22 } from "node:path";
@@ -36763,7 +36819,7 @@ var withoutTomlBlock = (contents, wrapper) => {
   return [...lines.slice(0, from), ...lines.slice(end)].join("\n");
 };
 var listCodexMcp = (command) => {
-  const listed = spawnSync11(command, ["mcp", "list", "--json"], { encoding: "utf8" });
+  const listed = spawnSync12(command, ["mcp", "list", "--json"], { encoding: "utf8" });
   if (listed.error?.code === "ENOENT") {
     return { state: "absent", servers: [] };
   }
@@ -36877,7 +36933,7 @@ var runUninstall = async (options = {}) => {
           removed.push(`${path2} (${SERVER_KEY} entry)`);
           report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
         } else {
-          const removedByCli = spawnSync11(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
+          const removedByCli = spawnSync12(codexCommand, ["mcp", "remove", SERVER_KEY], { encoding: "utf8" });
           if (removedByCli.error === void 0 && removedByCli.status === 0) {
             removed.push(`${path2} (${SERVER_KEY} entry)`);
             report.push(`${say}: the ${SERVER_KEY} entry through codex mcp remove`);
@@ -37062,28 +37118,28 @@ register7(program2);
 register26(program2);
 registerUninstall(program2);
 register9(program2);
-register16(program2);
-register19(program2);
+register17(program2);
 register20(program2);
-register24(program2);
-register5(program2);
+register21(program2);
 register10(program2);
+register5(program2);
+register11(program2);
 register2(program2);
-register12(program2);
-register14(program2);
+register13(program2);
 register15(program2);
-register23(program2);
+register16(program2);
+register24(program2);
 register8(program2);
 register6(program2);
-register13(program2);
-register17(program2);
+register14(program2);
+register18(program2);
 register(program2);
 register3(program2);
-register11(program2);
-register21(program2);
-register4(program2);
+register12(program2);
 register22(program2);
-register18(program2);
+register4(program2);
+register23(program2);
+register19(program2);
 var USAGE_ERRORS = /* @__PURE__ */ new Set([
   "commander.unknownOption",
   "commander.unknownCommand",
