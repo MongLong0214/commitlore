@@ -137,7 +137,14 @@ commitlore hooks install   # in each repository doctor names
 ```
 
 Neither is a defect in the release; both are state a release cannot reach.
-Hooks installed from v1.0.2 onward follow upgrades on their own.
+
+A hook is a file written at install time, so there are three generations.
+Installed **before v1.0.2**, it names one release directly. Installed
+**v1.0.2 through v1.1.2**, it follows `current` but its older containment stub
+does not recognise an ordinary upgrade — under the `PATH` git gives a hook it
+refuses the commit. Installed **v1.1.3 or later**, ordinary upgrades are followed
+automatically. The first two need `commitlore hooks install` once, in each
+repository, and `commitlore doctor` names which.
 
 After that:
 

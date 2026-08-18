@@ -2,8 +2,8 @@
   "format": "commitlore-canonical-artifact-v1",
   "builder": {
     "platform": "linux/amd64",
-    "image": "node:24-bookworm",
-    "command": "docker run --rm --platform linux/amd64 -v \"$PWD\":/w -w /w node:24-bookworm sh -c \"npm ci && npm run build\""
+    "image": "node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584",
+    "command": "docker run --rm --platform linux/amd64 -v \"$PWD\":/w -w /w node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 sh -c \"npm ci && npm run build\""
   },
   "runtimeAssets": [
     "dist/commitlore.mjs"
@@ -15,7 +15,7 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "5769b00b1f160aa379bceb58ee6ab0f902f67f6d8b959f4896b99c8389bfb597"
+    "sha256": "d3f037443ce152a29c7259cb953c45057e3ff2a47da00b56e9280f644a2d77cf"
   },
   "artifact": {
     "sha256": "fcd0832fed28ef33c18591a93d743c918b3af2eda7d311e7bc321d34b5921e8a",

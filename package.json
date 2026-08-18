@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run bundle",
-    "build:canonical": "docker run --rm --platform linux/amd64 -v \"$PWD\":/w -w /w node:24-bookworm sh -c \"npm ci && npm run build\"",
+    "build:canonical": "docker run --rm --platform linux/amd64 -v \"$PWD\":/w -w /w node:24-bookworm@sha256:934240a162082fd8b8a2f90cd5114446443f1eba1c5378f6687167ca405e6584 sh -c \"npm ci && npm run build\"",
     "artifact:manifest": "node scripts/write-canonical-artifact-manifest.mjs",
     "artifact:verify": "node scripts/verify-canonical-artifact.mjs",
     "bench:deterministic": "npm run build && node --experimental-strip-types bench/deterministic.ts",
