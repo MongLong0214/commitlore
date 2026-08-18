@@ -397,11 +397,11 @@ jobs:
           # the same tree under a different name is not enough:
           # `verify_incoming_smoke` runs the incoming bundle's `--version` and
           # dies when the tag and the report disagree (install.sh:577-589).
-          older="v0.0.1-upgradetest"
+          older="v0.0.1-ci"
           node -e '
             const fs = require("node:fs");
             const m = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            m.version = "0.0.1-upgradetest";
+            m.version = "0.0.1-ci";
             fs.writeFileSync("package.json", JSON.stringify(m, null, 2) + "\n");
           '
           git add package.json
@@ -437,9 +437,13 @@ jobs:
 
           # The #735 symptom itself: `mv` moved the temporary link into the old
           # release directory instead of replacing the link, and left it there.
-          strays="$(ls -A "$previous" | grep -E '^current' || true)"
-          test -z "$strays" || {
-            echo "::error::the swap left $strays inside $previous -- the rename went into the old release"
+          #
+          # The same `current.commitlore-install.` prefix `test/install-script.test.ts`
+          # filters on for the GNU leg, so the two assert one contract rather
+          # than two that happen to agree.
+          stray="$(find "$previous" -name 'current.commitlore-install.*' -print -quit)"
+          test -z "$stray" || {
+            echo "::error::the swap left $stray inside $previous -- the rename went into the old release"
             exit 1
           }
           echo "--- no stray link in the previous release directory"
