@@ -184,10 +184,21 @@ describe('T-1015: README section order', () => {
     }
   });
 
-  it('BENCH block is present and intact in README.md', () => {
-    const content = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
-    expect(content).toContain('<!-- BENCH:BEGIN -->');
-    expect(content).toContain('<!-- BENCH:END -->');
+  it('BENCH block is present and intact where it lives, and nowhere else', () => {
+    // It lived in README.md, and in the other three, and only the first was
+    // ever regenerated against the logs -- `check-readme-numbers.mjs` took
+    // `readmes[0]` and stopped. `docs/evidence.md` owns it now; a README that
+    // grows one again is a second copy of a generated artifact.
+    const evidence = fs.readFileSync(path.join(REPO_ROOT, 'docs/evidence.md'), 'utf8');
+    expect(evidence).toContain('<!-- BENCH:BEGIN -->');
+    expect(evidence).toContain('<!-- BENCH:END -->');
+
+    for (const file of FILES) {
+      const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      expect(content, `${file} carries a second copy of the generated block`).not.toContain(
+        '<!-- BENCH:BEGIN -->',
+      );
+    }
   });
 
   it('exposure table is present in all files', () => {
