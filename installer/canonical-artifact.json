@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "8befa4a047123f61bdb30470aa907e3fde35102f739c87c86aff15be26925a2d"
+    "sha256": "68f496ee9fc6802d5f20ff23924e29951a4886f08f7669dc1575d1f272217f00"
   },
   "artifact": {
-    "sha256": "60cabca7420d9e687418acd7a6b3e62b792afadc2744edfb39c7af9a7a33335b",
+    "sha256": "9a26ffe7ebda1e6a1777b44679cd048408db18b402e0ea9590349770855556a8",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -110,11 +110,11 @@
       },
       {
         "path": "dist/commands/doctor/checks/capture-hook-runtime.js",
-        "sha256": "d6b9a928ca8e536de9da76874126839796fd55cd424c0a7d569205c28fac9ea4"
+        "sha256": "9c667bd16d77fa003d5506c555a9cd69b00c3e5a312283ccc5f00d6bc6178b50"
       },
       {
         "path": "dist/commands/doctor/checks/capture-hook-runtime.js.map",
-        "sha256": "0b80ebdd86fd5749ae4f5f190b721978a9453f92e8002f464a71d50fcad284c4"
+        "sha256": "5a45d54178c0defbccc3d69b57e0d1d3d5dbfc3b05873dd7d7547ae4228a5f75"
       },
       {
         "path": "dist/commands/doctor/checks/capture-pending-backlog.d.ts",
@@ -434,11 +434,11 @@
       },
       {
         "path": "dist/commands/hooks.js",
-        "sha256": "33d6ebc8e69684983b258b3253423eef7085a49ce44e7579116bed4f7644c5e2"
+        "sha256": "3bc2af644156f2bb4ad16bf3e123c774d42f4ddd0d4e37f09cae2d1dcb4d9597"
       },
       {
         "path": "dist/commands/hooks.js.map",
-        "sha256": "21f2746932ed945e5260d4d688b5da6ee6d591ee95a5472fd17d3098681c8958"
+        "sha256": "8f98dae2ca3246702b2f27da4767a9953c82b9001e226d46b72c30c5a6c51ad8"
       },
       {
         "path": "dist/commands/index-cmd.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "96141692eaeff0d8a711fe5e54c2d26dadf9c96045847db2d8e65ed245cee62f"
+        "sha256": "8217f529052fa1f2a248420c3d05ef697b0ede8566ebfd6f1505fd9f52a1883e"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -1074,11 +1074,11 @@
       },
       {
         "path": "dist/hooks/commit-msg.js",
-        "sha256": "5aab9fdeeed5993afacd87ec4b9c5826b435cbb4af92c5691e60bc4e2161d91e"
+        "sha256": "81f6dfae58067c7b50be60326520382678c2fbbc5621289bbf11660993a81cbb"
       },
       {
         "path": "dist/hooks/commit-msg.js.map",
-        "sha256": "5418d82e98abbb670ba4b317d71e1c74d7af654486f120fdf2cf6d47aca4a206"
+        "sha256": "8d7457128f339369c1e56c2edd300c37ddf9b8dab62b3780980a35879e532971"
       },
       {
         "path": "dist/hooks/post-commit.d.ts",

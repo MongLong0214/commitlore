@@ -776,7 +776,14 @@ describe('hooks — a real commit', () => {
       PATH: PATH_WITHOUT_COMMITLORE,
     });
     expect(result.status).not.toBe(0);
-    expect(result.output).toContain('cannot find the CLI');
+    // #746 changed what this says, not what it does. The old sentence was
+    // "cannot find the CLI", which is false here — the recorded file exists and
+    // is executable, and the root check is what stopped it. The new one names
+    // the refusal and deliberately does not say which cause it was: an upgrade
+    // and this planted path are indistinguishable from inside the hook, so
+    // vouching for either would be reassuring about the wrong one.
+    expect(result.output).toContain('outside the install this hook trusts');
+    expect(result.output).not.toContain('cannot find the CLI');
     expect(existsSync(witness)).toBe(false);
   });
 

@@ -30,7 +30,44 @@ export const HOOK_MODE = 0o755;
  * not theirs, and a repository whose CLI had moved could not accept a commit
  * (#354).
  */
+/**
+ * Told apart from having found nothing, because it is not the same thing.
+ *
+ * `hooks install` records `commitlore.bin` through `<data-root>/current` so the
+ * hook follows an upgrade, and `commitlore.root` as the physical tree that
+ * recorded it so the containment boundary follows nothing — a `current` that
+ * someone repoints must not carry the boundary with it. An upgrade therefore
+ * moves one and not the other, the check below refuses, and that refusal is the
+ * fence working.
+ *
+ * What was wrong is what the refusal then said. The recorded file is present and
+ * executable; falling through to "cannot find the CLI" sent the operator after a
+ * missing file that is not missing (#746). The remedy is one command, and naming
+ * it here is the difference between a one-line fix and an investigation.
+ *
+ * It does not vouch for the file, and the wording is careful about that: an
+ * upgrade and a repointed `commitlore.bin` (#71's attack) reach this branch
+ * looking identical, and the hook has no way to tell them apart. Saying "an
+ * upgrade did this" would be reassuring about a path that may be hostile, so it
+ * names both readings and runs neither.
+ *
+ * The exit code stays the caller's policy: the gate still refuses, because the
+ * recorded path leads to a tree this install never verified, and that is
+ * precisely what the boundary exists to stop.
+ */
+const containmentRefused = (remedy, code) => [
+    'if [ -n "${commitlore_outside:-}" ]; then',
+    '  echo "commitlore: the recorded CLI is outside the install this hook trusts." >&2',
+    '  echo "  recorded: $commitlore_outside" >&2',
+    '  echo "  trusted:  $commitlore_trusted" >&2',
+    '  echo "  It was not run. An upgrade looks like this, and so does a repointed" >&2',
+    '  echo "  commitlore.bin — this hook cannot tell them apart, so it runs neither." >&2',
+    `  echo "  If you upgraded, ${remedy}" >&2`,
+    `  exit ${code}`,
+    'fi',
+];
 const UNRESOLVED_GATE = [
+    ...containmentRefused('Re-run: <path-to>/commitlore hooks install', '1'),
     '# Passing silently here would report a clean record for a message nothing',
     '# ever read.',
     'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -49,6 +86,7 @@ const UNRESOLVED_GATE = [
  * the gate only, so it is not the command that puts *this* file back.
  */
 const UNRESOLVED_CAPTURE = [
+    ...containmentRefused('Re-run: <path-to>/commitlore init', '0'),
     '# Not the validation gate: nothing was checked and rejected here, the',
     '# checker is absent. Refusing would block a commit over a missing tool.',
     'echo "commitlore: cannot find the CLI this hook was installed with." >&2',
@@ -193,6 +231,15 @@ const stubText = (unresolved) => [
     '          case "$recorded_dir" in',
     '            "$root_dir"|"$root_dir"/*)',
     '              exec "$recorded_node" "$recorded" validate --message-file "$1"',
+    '              ;;',
+    '            *)',
+    '              # Found and refused, which the ending below reports as itself.',
+    '              # Both sides are already resolved, so these are the physical',
+    '              # paths the comparison actually used rather than what was',
+    '              # recorded -- which is the whole point, since an upgrade is the',
+    '              # difference between the two (#746).',
+    '              commitlore_outside=$recorded_dir',
+    '              commitlore_trusted=$root_dir',
     '              ;;',
     '          esac',
     '        fi',
