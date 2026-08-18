@@ -165,7 +165,9 @@ const runOne = (
   identity: ReturnType<typeof createRepositoryBundle>,
   studyId: string,
   offIdentityByTask: Map<string, MaterializedIdentity>,
+  sessionDir: string | null,
 ): PilotRow => {
+  const logicalRunId = `${task.task_id}__${condition}__r${String(repeat)}`;
   const scratch = mkdtempSync(join(tmpdir(), `cdeb-p-${task.task_id}-`));
   const workdir = join(scratch, "wt");
   const materialized = materializeBundle(identity, bundlePath, workdir);
@@ -225,6 +227,22 @@ const runOne = (
   );
   const wallMs = Date.now() - start;
 
+  // The session, not only the usage inside it.
+  //
+  // `--output-format json` means stdout is the whole session, and this used to
+  // read `usage` out of it and drop the rest. That left every row able to say
+  // what was delivered and what landed, and unable to say whether the agent
+  // read the record, named the alternative it was warned about, or went past
+  // it -- which is exactly the ambiguity a `[claim]` payload creates, because
+  // it tells the agent not to act on the record as an order.
+  //
+  // Written before the JSON is parsed, so a session that fails to parse is
+  // still on disk to be looked at.
+  if (sessionDir !== null && result.stdout !== undefined && result.stdout !== "") {
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, `${logicalRunId}.session.json`), result.stdout);
+  }
+
   let usage: Record<string, number> | null = null;
   let stopReason: PilotRow["stop_reason"] = "agent_error";
   if (result.error !== undefined && (result.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
@@ -255,7 +273,7 @@ const runOne = (
     schema_version: 1,
     benchmark: "cdeb-pilot",
     study_id: studyId,
-    logical_run_id: `${task.task_id}__${condition}__r${String(repeat)}`,
+    logical_run_id: logicalRunId,
     task_id: task.task_id,
     record_ids: task.record_ids,
     condition,
@@ -293,6 +311,11 @@ const main = (): void => {
   const outPath = arg("out") ?? join(REPO_ROOT, "bench", "results", "cdeb", "pilot", `${studyId}.jsonl`);
   mkdirSync(dirname(outPath), { recursive: true });
 
+  // Off by default: a session holds prompts, file contents and model output from
+  // the studied repository, and that belongs in the authorization before it is
+  // written anywhere by default (PRD §3.3).
+  const sessionDir = arg("sessions") ?? null;
+
   const onlyTask = arg("task");
   const onlyCond = arg("cond") as Condition | undefined;
   const onlyRepeat = arg("repeat") === undefined ? undefined : Number(arg("repeat"));
@@ -310,7 +333,7 @@ const main = (): void => {
       if (onlyRepeat !== undefined && repeat !== onlyRepeat) continue;
       for (const condition of CONDITIONS) {
         if (onlyCond !== undefined && condition !== onlyCond) continue;
-        const row = runOne(task, condition, repeat, bundlePath, identity, studyId, offIdentityByTask);
+        const row = runOne(task, condition, repeat, bundlePath, identity, studyId, offIdentityByTask, sessionDir);
         appendFileSync(outPath, `${JSON.stringify(row)}\n`);
         // §18.4: the cell and nothing else. No outcome field is reachable here.
         process.stdout.write(`cdeb-p: ${row.logical_run_id} done (${String(Math.round(row.wall_ms / 1000))}s)\n`);
