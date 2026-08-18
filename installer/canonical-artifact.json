@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "f8787a4e53b522a675e5b5fae95470c51806e136673f4cf412f15bf471ec445f"
+    "sha256": "599bac20f4cd61326709727ae9ecaea83e93738db25b2fddbaa8e2b970928bb7"
   },
   "artifact": {
-    "sha256": "194fc64740240ac42341fe918fed07a238d6c4015bed82d61026c7a24b3073d7",
+    "sha256": "84dcf1e41607204b1fa34817ee8a703f4ef5152d0e487575adcf97e84f0d6423",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -598,7 +598,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "ae0411fae0095dc9c1bce9f6761830178412148913f90b3c40dfd323ada8d473"
+        "sha256": "99289d4bd84109fdf4a8fc822e2a0aa585c0f0504f3de22f9b2e5da02128d45b"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -834,11 +834,11 @@
       },
       {
         "path": "dist/core/inject.js",
-        "sha256": "a97550252c03a0d7b00d7c7cf24f8d79affdc042d6bc747f3ef4c524cef85714"
+        "sha256": "7109e08e0f9e61e90afe2d8056f8f9b68609d4ee56987d25d51227e9a81abf2a"
       },
       {
         "path": "dist/core/inject.js.map",
-        "sha256": "b195e0942ce3a342093db21cd45f56cd7ec14263bdaf1e1a4b7b538dad762a33"
+        "sha256": "2aabf309abdd79771746c80e03950750a68dd27cd03c520ea5c3ebf9c91b027c"
       },
       {
         "path": "dist/core/mcp-probe.d.ts",

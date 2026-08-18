@@ -24801,7 +24801,20 @@ var buildInjection = (opts) => {
     diagnostics
   };
   const active = ablation.noLifecycle ? result.records : result.records.filter((record2) => record2.lifecycle === "active");
-  if (active.length === 0) return empty;
+  const silentOrIncomplete = () => result.unreadCommits === 0 ? empty : {
+    ...empty,
+    text: render({
+      path: path2,
+      kept: [],
+      withheld: [],
+      cut: 0,
+      cutTier: void 0,
+      totalEntries: 0,
+      unreadCommits: result.unreadCommits,
+      ablation
+    })
+  };
+  if (active.length === 0) return silentOrIncomplete();
   const authors = ablation.noGrade ? /* @__PURE__ */ new Map() : authorsOf(cwd, active.flatMap((record2) => record2.shas));
   const signerFingerprints = ablation.noGrade || opts.requireSignedDirective !== true ? /* @__PURE__ */ new Map() : signerFingerprintsOf(cwd, active.flatMap((record2) => record2.shas));
   const noteAuthors = ablation.noGrade || !active.some((record2) => record2.sources.includes("notes")) ? /* @__PURE__ */ new Map() : noteAuthorsOf(cwd);
@@ -24827,7 +24840,7 @@ var buildInjection = (opts) => {
     ])
   );
   const { entries, withheld, withheldValues } = project(active, grades);
-  if (entries.length === 0 && withheld.length === 0) return empty;
+  if (entries.length === 0 && withheld.length === 0) return silentOrIncomplete();
   const totalEntries = entries.length + withheldValues;
   const budgetChars = budgetTokens * CHARS_PER_TOKEN2;
   const base = { path: path2, withheld, totalEntries, ablation, unreadCommits: result.unreadCommits };
