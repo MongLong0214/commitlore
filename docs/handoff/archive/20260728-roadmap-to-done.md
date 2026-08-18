@@ -1,3 +1,6 @@
+> **Historical snapshot. Not current operating guidance.** Kept for the reasoning
+> in it; `docs/PRODUCTION-READINESS-SSOT.md` owns the shipped product contract.
+
 # Final roadmap — three goals, decidable completion conditions
 
 > Basis for update: all 7 production re-review blockers closed, gitseed v0.2 PRD received, branch

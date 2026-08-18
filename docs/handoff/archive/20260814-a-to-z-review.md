@@ -1,3 +1,6 @@
+> **Historical snapshot. Not current operating guidance.** Kept for the reasoning
+> in it; `docs/PRODUCTION-READINESS-SSOT.md` owns the shipped product contract.
+
 ---
 document_id: commitlore-final-a-to-z-review-and-improvement-plan
 document_version: 4.1.0
