@@ -35,18 +35,30 @@ afterEach(() => {
 });
 
 describe('README benchmark publication state', () => {
-  it('publishes the generated numbers block in all four READMEs now that the declared M4 dataset has provenance', () => {
+  it('publishes the generated numbers block in the one file that owns it', () => {
     // README_SOURCES (bench/report.ts) declares bench/results/t702-m4-final.jsonl, and
     // every row in that file carries a uniform harness_commit and dist_digest — the M1/M1-b/M2
     // datasets it replaced did not, which is why the withdrawal notice existed at all.
+    //
+    // This asserted the block in all four READMEs, which is what it used to be.
+    // Only the first was ever compared: the checker took `readmes[0]` and
+    // stopped, so three hand-regenerated copies were checked by nobody. The
+    // block now lives in `docs/evidence.md` and the READMEs must not carry one,
+    // because a second copy is a copy that drifts.
     const result = runChecker();
 
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
+
+    const evidence = fs.readFileSync(path.join(REPO_ROOT, 'docs/evidence.md'), 'utf8');
+    expect(evidence).toContain(GENERATED_BEGIN);
+
     for (const readme of PUBLIC_READMES) {
       const markdown = fs.readFileSync(path.join(REPO_ROOT, readme), 'utf8');
       expect(markdown).not.toContain(WITHDRAWAL_MARKER);
-      expect(markdown).toContain(GENERATED_BEGIN);
+      expect(markdown, `${readme} carries a second copy of the generated block`).not.toContain(
+        GENERATED_BEGIN,
+      );
     }
   });
 

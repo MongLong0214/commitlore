@@ -120,10 +120,16 @@ describe('README positioning (ADR-0022)', () => {
     }
   });
 
-  it('BENCH block is untouched (check-readme-numbers.mjs passes)', () => {
-    // Verify the BENCH markers exist and are well-formed in README.md
-    const en = heroes.find((h) => h.lang === 'English')!;
-    expect(en.content).toContain('<!-- BENCH:BEGIN -->');
-    expect(en.content).toContain('<!-- BENCH:END -->');
+  it('no README carries the generated block', () => {
+    // It was in all four and regenerated against the logs in one:
+    // `check-readme-numbers.mjs` took `readmes[0]` and stopped. `docs/evidence.md`
+    // owns it now, and a README that grows one again is a second copy of a
+    // generated artifact — which is the thing the move removed.
+    for (const hero of heroes) {
+      expect(
+        hero.content,
+        `${hero.lang} README carries a second copy of the generated block`,
+      ).not.toContain('<!-- BENCH:BEGIN -->');
+    }
   });
 });
