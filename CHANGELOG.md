@@ -4,6 +4,65 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.1.4
+
+One line changed for anyone using the tool, and the rest is the repository
+telling the truth about itself.
+
+**The pre-push hook says whose two seconds ran out.** Pushing a tag printed
+`notes mirror (origin) failed: spawnSync git ETIMEDOUT`. Nothing was wrong with
+the transport and nothing needed doing that the rest of the line did not already
+say, but the sentence named the call that returned rather than the decision that
+was made -- so it read as git having failed and sent whoever got it to look at a
+remote that was fine. The budget is this hook's, and the line now says so, with
+the value interpolated from the constant so the sentence cannot drift from what
+it describes. Every other failure detail is untouched: a refused connection
+still reports as a refused connection, because that one really is about the
+transport.
+
+Then the parts a user does not run but does rely on.
+
+**A source-only pull request can become a product commit without anyone
+rebuilding by hand.** `canonical-merge.yml` merges a contributor's source onto
+`main`, runs the canonical build, and opens a second pull request carrying the
+result -- so every required check runs on the tree that lands rather than one
+resembling it. Observed end to end rather than argued: a source-only pull
+request went in, the rebuilt commit came out matching its own source, and a
+deliberately tampered bundle was refused by the same path.
+
+**The job holding the App credential now checks what the rebuild handed it.**
+The rebuild executes a contributor's `package.json` and every lifecycle script
+it pulls in. The publishing job recomputes the merge itself from `main` and the
+pull request ref, pins both parents, and allows a difference only inside `dist/`
+and the manifest; it refuses a pull request that moved while the rebuild ran,
+reads the pushed branch back by sha, and mints a token scoped to this
+repository with two permissions rather than whatever the installation holds.
+
+**The canonical builder is pinned by digest.** `node:24-bookworm` is a mutable
+tag, so building twice in one job proved the builder deterministic that morning
+and nothing about next month.
+
+**The upgrade contract is three generations, not two.** `docs/COMPATIBILITY.md`
+said hooks installed from v1.0.2 follow upgrades on their own, which was true of
+the recorded path and false of the stub: one installed between v1.0.2 and v1.1.2
+follows `current` and still refuses the commit under the `PATH` git gives a hook.
+All four READMEs now carry the same table; three of them said nothing about
+upgrading at all.
+
+**`docs/PRODUCTION-READINESS-SSOT.md` is version 5.** It named a release two
+versions old, said no feature work was planned on a day feature work shipped,
+and listed a fixed defect as a current limitation. It now owns the contract and
+nothing that moves on its own.
+
+Also: the generated benchmark block has one owner instead of four copies of
+which one was checked; a credential-bearing workflow that had answered its
+question is retired; a guard describing a workflow that does not exist is gone;
+and four historical documents that sat at the repository root reading as current
+guidance are in the archive that already existed for them.
+
+Nothing here changes what a record is, how one is validated, or what any command
+outputs on success.
+
 ## 1.1.3
 
 **Run `commitlore hooks install` once in every repository you have already set
