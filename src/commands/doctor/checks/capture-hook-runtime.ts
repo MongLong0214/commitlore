@@ -109,14 +109,32 @@ export const checkHookRuntime = (ctx: DoctorContext): DoctorCheck => {
       );
     }
     if (run.status !== 0) {
-      const said = `${run.stderr ?? ''}`.trim().split('\n')[0] ?? '';
+      const spoke = `${run.stderr ?? ''}`.trim();
+      const said = spoke.split('\n')[0] ?? '';
       const nodeMissing =
         run.status === 127 ||
         /\bnode\b.*not found|ENOENT|command not found.*\bnode\b/i.test(said);
       const nodeThrew = /^\s*at\s|\.js:\d+/.test(said);
+      // The stub says this when the recorded pair resolved and the containment
+      // check refused it: present, executable, and under a tree this install
+      // did not record. An upgrade produces it, because `commitlore.bin` follows
+      // `<data-root>/current` while `commitlore.root` stays on the tree that
+      // wrote the pin -- deliberately, so a repointed `current` cannot carry the
+      // boundary with it (#746).
+      //
+      // Reported here instead of as `cause unclear`, which is what it fell to
+      // while the answer was in the two lines underneath: this needs
+      // `hooks install`, not a node on PATH, and those are different days of
+      // work if the operator has to find it themselves.
+      const containmentRefused = /outside the install this hook trusts/.test(spoke);
 
       let detail: string;
-      if (nodeMissing) {
+      if (containmentRefused) {
+        // The paths are on the lines below the first, and they are the whole
+        // answer -- which recorded value moved and which did not.
+        const where = spoke.split('\n').slice(1, 3).map((line) => line.trim()).join('; ');
+        detail = `the hook found its recorded CLI and refused it: it is outside the install this repository was wired to (${where}). An upgrade does this; re-running the fix below re-points it`;
+      } else if (nodeMissing) {
         detail = `the hook cannot find a node interpreter on git's PATH: ${said || `exit ${String(run.status)}`}`;
       } else if (nodeThrew) {
         detail = `the hook's node process ran but threw (exit ${String(run.status)}): ${said}`;
