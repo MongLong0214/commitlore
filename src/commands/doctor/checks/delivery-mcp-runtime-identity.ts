@@ -3,6 +3,22 @@
 import type { LiveMcpRuntime } from '../../../core/mcp-probe.js';
 import { check, type Category, type DoctorCheck, type DoctorContext } from '../model.js';
 
+/**
+ * None of the `warn` rows below claims attention, and the reason is the one this
+ * file already gives for refusing to `fail`: what it observes is the machine,
+ * not this repository. A server another session left running, from an install
+ * that may since have been deleted, is not something a checkout can act on --
+ * which is the same test the two existing `needsAttention` overrides use (#192,
+ * #221: "neither is something the user can act on here").
+ *
+ * It matters beyond `doctor`, which exits 0 for a `warn` anyway. `init` is
+ * stricter on purpose and treats any check needing attention as a step that did
+ * not complete, so without this a repository-scoped command reports failure
+ * because of an unrelated process on the developer's machine -- and it did:
+ * six cases in `test/init.test.ts` failed for every developer with an editor
+ * session open, and passed on CI runners, which is a suite that stops carrying
+ * information (#750).
+ */
 const identityOf = (runtime: LiveMcpRuntime): string =>
   `${runtime.entrypointRealpath} (root ${runtime.packageRoot})`;
 
@@ -31,7 +47,8 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
       `could not enumerate live CommitLore MCP runtimes: ${scan.detail}`,
       null,
       false,
-      undefined,
+      // Machine state, not this repository's -- see the note above.
+      false,
       { evidence: { discovery: 'unavailable', detail: scan.detail } },
     );
   }
@@ -55,7 +72,8 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
       `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`,
       null,
       false,
-      undefined,
+      // Machine state, not this repository's -- see the note above.
+      false,
       {
         evidence: {
           discovery: scan.detail,
@@ -77,7 +95,8 @@ export const checkMcpRuntimeIdentity = (ctx: DoctorContext): DoctorCheck => {
         identities.map(identityOf).join('; '),
       null,
       false,
-      undefined,
+      // Machine state, not this repository's -- see the note above.
+      false,
       {
         evidence: {
           discovery: scan.detail,

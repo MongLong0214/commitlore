@@ -1,5 +1,21 @@
 /** The live-process identity check for MCP servers (#F-001). */
 import { check } from '../model.js';
+/**
+ * None of the `warn` rows below claims attention, and the reason is the one this
+ * file already gives for refusing to `fail`: what it observes is the machine,
+ * not this repository. A server another session left running, from an install
+ * that may since have been deleted, is not something a checkout can act on --
+ * which is the same test the two existing `needsAttention` overrides use (#192,
+ * #221: "neither is something the user can act on here").
+ *
+ * It matters beyond `doctor`, which exits 0 for a `warn` anyway. `init` is
+ * stricter on purpose and treats any check needing attention as a step that did
+ * not complete, so without this a repository-scoped command reports failure
+ * because of an unrelated process on the developer's machine -- and it did:
+ * six cases in `test/init.test.ts` failed for every developer with an editor
+ * session open, and passed on CI runners, which is a suite that stops carrying
+ * information (#750).
+ */
 const identityOf = (runtime) => `${runtime.entrypointRealpath} (root ${runtime.packageRoot})`;
 const missingAssets = (runtime) => [
     ...(runtime.bundlePresent ? [] : ['dist/commitlore.mjs']),
@@ -16,7 +32,9 @@ export const checkMcpRuntimeIdentity = (ctx) => {
     const category = 'delivery';
     const scan = ctx.liveMcpRuntimes();
     if (!scan.available) {
-        return check(id, category, title, 'warn', `could not enumerate live CommitLore MCP runtimes: ${scan.detail}`, null, false, undefined, { evidence: { discovery: 'unavailable', detail: scan.detail } });
+        return check(id, category, title, 'warn', `could not enumerate live CommitLore MCP runtimes: ${scan.detail}`, null, false, 
+        // Machine state, not this repository's -- see the note above.
+        false, { evidence: { discovery: 'unavailable', detail: scan.detail } });
     }
     const unusable = scan.runtimes.filter((runtime) => missingAssets(runtime).length > 0);
     if (unusable.length > 0) {
@@ -29,7 +47,9 @@ export const checkMcpRuntimeIdentity = (ctx) => {
         // must not decide its exit code. Making it fail also made this suite's
         // result depend on what happened to be running while it ran, which is the
         // defect class this check exists to surface.
-        return check(id, category, title, 'warn', `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`, null, false, undefined, {
+        return check(id, category, title, 'warn', `${unusable.length} live CommitLore MCP runtime(s) are unusable: ${detail}`, null, false, 
+        // Machine state, not this repository's -- see the note above.
+        false, {
             evidence: {
                 discovery: scan.detail,
                 runtime_count: String(scan.runtimes.length),
@@ -40,7 +60,9 @@ export const checkMcpRuntimeIdentity = (ctx) => {
     const identities = [...new Map(scan.runtimes.map((runtime) => [identityOf(runtime), runtime])).values()];
     if (identities.length > 1) {
         return check(id, category, title, 'warn', `${identities.length} distinct live CommitLore runtimes are answering MCP — runtime mismatch: ` +
-            identities.map(identityOf).join('; '), null, false, undefined, {
+            identities.map(identityOf).join('; '), null, false, 
+        // Machine state, not this repository's -- see the note above.
+        false, {
             evidence: {
                 discovery: scan.detail,
                 runtime_count: String(scan.runtimes.length),
