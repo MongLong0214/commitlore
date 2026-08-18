@@ -1,0 +1,168 @@
+name: Canonical merge
+
+# T-1502 (#719). A contributor opens a pull request carrying source only. This
+# builds the commit that will land: main + that source + a canonical rebuild,
+# as its own pull request, so all eleven required contexts run on the tree that
+# actually merges rather than on one that resembles it.
+#
+# #720 is what this is for. `build:canonical` is a `linux/amd64` Docker build,
+# and that pull request arrived from a Windows machine with `src/` and `test/`
+# only -- correctly -- and waited on a maintainer twice.
+#
+# It does not push to `main`. ADR-0036: `main` requires eleven contexts and the
+# eleventh is `lint`, which no push can produce -- `demo-lint.yml`'s push
+# trigger is scoped to `dev` and its `lint` job is gated on
+# `github.event_name == 'pull_request'`. Every push-shaped design needs a
+# bypass, and a bypass is not the check passing. Measured 2026-08-18: an
+# App-opened pull request attaches all eleven (run 32082467906).
+#
+# Run by hand. An automatic trigger on pull-request events would make a fork's
+# first push decide when this repository's App token is in an environment
+# building that fork's code, and #723 is the record of why a workflow must not
+# take direction from a pull request head.
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: The source-only pull request to canonicalise
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One at a time. Each rebuild is of `main` as it stands when the job starts, so
+# two running together would each produce a tree the other invalidates. This
+# orders the jobs; it does not order the merges, and the staleness check below
+# is what covers the gap.
+concurrency:
+  group: canonical-merge
+  cancel-in-progress: false
+
+jobs:
+  canonicalise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          # The checkout otherwise leaves an `http.<url>.extraheader` holding the
+          # Actions token, and that header beats credentials in a push URL -- a
+          # valid App token then pushes as `github-actions[bot]` and is refused.
+          # Measured on this repository (#741).
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+          cache: npm
+
+      # Fetched, not checked out. Nothing from the pull request runs until the
+      # source-only check below has passed.
+      - name: Fetch the pull request without running it
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
+          base="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .base.ref)"
+          [ "$base" = "main" ] || { echo "::error::#${PR} targets $base, not main"; exit 1; }
+          git fetch --quiet origin "pull/${PR}/head:pr-${PR}"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "--- #${PR} head $head"
+
+      # The one refusal that has to happen before anything from the pull request
+      # is executed. A pull request that carries `dist/` is not source-only and
+      # canonicalising it would rebuild on top of somebody else's bundle; one
+      # that carries a workflow is asking this job to run a file it wrote.
+      - name: Refuse anything that is not a source-only pull request
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only main..."pr-${{ inputs.pull_request_number }}")"
+          echo "--- changed paths:"; echo "$changed" | sed 's/^/    /'
+          bad="$(echo "$changed" | grep -E '^(dist/|installer/canonical-artifact\.json$|\.github/workflows/)' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::not source-only -- refusing:"; echo "$bad" | sed 's/^/    /'
+            exit 1
+          fi
+
+      - name: Merge the source onto main
+        run: |
+          set -euo pipefail
+          git config user.name  'commitlore-canonical-build[bot]'
+          git config user.email '317873099+commitlore-canonical-build[bot]@users.noreply.github.com'
+          git checkout -q -b "canonical/pr-${{ inputs.pull_request_number }}"
+          git merge --no-ff --no-edit "pr-${{ inputs.pull_request_number }}"
+
+      # This step executes the pull request's own `package.json` and build
+      # scripts. The App token is deliberately not minted yet and is not in this
+      # environment: a rebuild of somebody else's change must not be able to
+      # read the credential that would let it push.
+      - name: Rebuild the bundle from the merged tree
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:canonical
+          npm run artifact:manifest
+          npm run artifact:verify
+          git add dist/ installer/canonical-artifact.json
+          if git diff --cached --quiet; then
+            echo "--- the merged source produces the committed bundle; nothing to add"
+          else
+            git commit --quiet -m "$(printf 'Rebuild the canonical bundle for #%s\n\n`build:canonical` on the merged tree, so the commit that lands matches the source it lands with. The pull request carried source only, which is what a contributor on a host that cannot run a linux/amd64 Docker build can produce (#720).\n\nLimit: this proves the bundle matches this tree; whether this tree is what a reviewer wants is what the pull request is for\nBlast: system\nUndo: easy\nCertainty: firm\nRecord-Id: r-canonmerge%s\nProvenance: authored\nVerified: artifact:verify passed against the regenerated manifest in the same job, before any credential was available to it\nCommitLore-Version: 2.0.0' "${{ inputs.pull_request_number }}" "${{ inputs.pull_request_number }}")"
+          fi
+
+      # `main` may have moved while the rebuild ran, and a rebuild of a tree that
+      # is no longer main's is exactly what the concurrency group cannot prevent
+      # -- it orders jobs, not merges. Checked here rather than hoped for.
+      - name: Refuse if main moved while this ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          started="$(git rev-parse "origin/main")"
+          if [ "$now" != "$started" ]; then
+            echo "::error::main moved from $started to $now while this rebuilt -- rerun after it settles"
+            exit 1
+          fi
+          echo "--- main is still $now"
+
+      - name: Mint an installation token
+        id: token
+        env:
+          COMMITLORE_BOT_APP_ID: ${{ secrets.COMMITLORE_BOT_APP_ID }}
+          COMMITLORE_BOT_KEY: ${{ secrets.COMMITLORE_BOT_KEY }}
+        run: |
+          set -euo pipefail
+          token="$(node scripts/app-installation-token.mjs)"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Open the canonical pull request
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          PR: ${{ inputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          branch="canonical/pr-${PR}"
+          # Force, because a rerun after `main` moved has to replace the branch
+          # rather than update it: `.gitattributes` marks `dist/**` as `-merge`,
+          # so an update would conflict on the one file this exists to produce.
+          git push --quiet --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+
+          pusher="$(gh api "repos/${GITHUB_REPOSITORY}/commits/$(git rev-parse HEAD)" --jq '.committer.login // "unknown"')"
+          echo "--- pushed $branch; committer on the server: $pusher"
+
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
+          if [ -n "$existing" ]; then
+            echo "--- #$existing already open for $branch; the force-push updated it"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "Canonical merge of #${PR}" \
+              --body "$(printf 'The commit that will land for #%s: `main` plus that source plus a canonical rebuild, built together so all eleven required contexts run on the tree that merges rather than on one that resembles it.\n\n#%s carries source only, which is what a contributor on a host that cannot run a `linux/amd64` Docker build can produce (#720). Nothing was rebuilt by hand.\n\nOpened by `canonical-merge.yml` for #719. Close #%s when this merges.' "$PR" "$PR" "$PR")"
+          fi
