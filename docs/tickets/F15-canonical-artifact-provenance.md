@@ -10,8 +10,18 @@ The App does not push to `main`; it opens a pull request. `main`'s protection re
 `lint`, which runs only on `pull_request`, so no push can satisfy protection on its merits
 and every push-shaped option needs a bypass. Going through a pull request needs none.
 
-T-1502 onward remain **unscheduled**: the decision answers how a bot merge is verified, not
-whether to build one, and #719's reopening conditions are unchanged.
+**T-1502 is done, and was built rather than deferred (2026-08-18).** It read "unscheduled"
+here because ADR-0036 answered how a bot merge is verified without deciding to build one. A
+contributor still had to run a `linux/amd64` Docker build to open any pull request, which
+is what #720 waited on a maintainer for twice.
+
+It was observed rather than argued: #761 carried source only, `canonical-merge` rebuilt it
+into #762, and `e4e5154` landed with `artifact:verify` and `git diff -- dist/` both clean
+and the bundle commit authored by the build App. #763 is the control that went red.
+
+**T-1503 is rejected**, after being shipped and reverted the same day — see below.
+**T-1504's acceptance was rewritten** from a person-observation to the system properties it
+was standing in for.
 
 **Ordering is strict.** T-1501 → T-1502 → T-1503 → T-1504. Each removes something the next
 depends on not existing.
@@ -65,7 +75,7 @@ run, which is #722's empty runner in a new place.
 
 ---
 
-## T-1502 The rebuild arrives as a pull request (M)
+## T-1502 The rebuild arrives as a pull request (M) — **done**, observed on #761 → #762 → `e4e5154`
 
 **Owns**
 
@@ -124,25 +134,50 @@ comment cannot satisfy them. At minimum:
   falsifies the property this ticket actually claims — *the bytes that land match the
   source that landed with them* — rather than the workflow's internal step list.
 
-**Known limitation — the merge method is not enforceable from here.** The canonical pull
-request's body asks for a merge commit, because a squash lands new bytes and leaves the
-source pull request open with nothing to point at. That request is a check somebody has to
-read. The repository allows squash, merge and rebase, and GitHub's merge button remembers
-whichever was used last, so the wrong one is a click away — measured on #760, where five
-of six pull requests closed as merged and the sixth did not.
+**The merge method is enforced by the repository, not by this workflow (2026-08-18).**
+`allow_squash_merge` and `allow_rebase_merge` are off; a merge commit is the only method
+GitHub offers here. That matters because the canonical pull request depends on its head
+commit staying an ancestor: a squash lands new bytes instead, leaving the source pull
+request open with nothing to point at.
 
-Two ways to close it, and both are the owner's call rather than this ticket's:
-`gh api -X PUT .../pulls/N/merge -f merge_method=merge` names the method per merge, and
-turning off `allow_squash_merge` / `allow_rebase_merge` names it once for the repository.
-The second is the one that fits a repository that commits `dist/`, since a squash breaks
-the ancestry every integration pull request here depends on.
+This paragraph previously said the method was not enforceable and left the choice to the
+owner. It was enforceable; it just was not enforced. Until it was, the canonical body's
+"merge this with a merge commit" was a check somebody had to read — the shape that cost
+#752 its `merged` label during the 1.1.3 release, in the sentence next to it rather than
+in this one.
+
+The body still says it, for a reader who wants to know why the branch is shaped this way.
+It is no longer what holds the property.
+
+**What this moves rather than removes.** The guarantee now lives in a repository setting,
+which nothing in this repository reads. A future owner can re-enable squash and no test,
+workflow or gate here will notice — only a canonical pull request quietly failing to close
+its source. That is a smaller surface than a sentence in a body, and it is not zero.
 
 **Not in scope** — removing `dist/` from pull request requirements. That is T-1503, and
 doing it here means a failure in this ticket has no fallback.
 
 ---
 
-## T-1503 Stop requiring pull requests to carry the artifact (S)
+## T-1503 Stop requiring pull requests to carry the artifact (S) — **rejected**, shipped and reverted
+
+**Rejected 2026-08-18, after shipping and reverting it.** `532c30f4` made a source-only
+pull request green, and green is mergeable. The button then lands `src/` with no rebuilt
+`dist/`, and `main` carries a bundle that does not match its source until the next push run
+goes red — after the fact rather than before it.
+
+A red source pull request was not friction to be removed. It was the thing forcing the
+canonical path, which is the path this feature exists to build. #761 was red, and that is
+why it went through `canonical-merge` rather than through its own merge button.
+
+What T-1503 was written to fix — *a contributor cannot open a pull request without running
+a `linux/amd64` Docker build* — is already fixed by T-1502, and without this risk: the
+contributor opens the source-only pull request and never rebuilds anything. Its checks
+being red is a signal about the artifact, not a demand on them.
+
+The measurement it produced stands, and anyone reopening this starts there: "drop the diff
+line" was wrong, because CI rebuilds before it verifies, so a source-only pull request dies
+at `artifact:verify` and never reaches the diff.
 
 **Owns**
 
@@ -179,13 +214,35 @@ pull request path. Say so in the commit record.
   against observations, not intentions
 - #719
 
-**Depends on** — T-1503 merged and at least one non-Linux contributor completing a source
-change unaided. **That last one is an observation, not a test**, and it is what the issue
-is actually about: #720 waited on a maintainer twice.
+**Depends on** — T-1502, and the canonical handoff hardened against a contributor who is
+not the owner.
 
-**Acceptance**
+**Amended 2026-08-18.** This read *"at least one non-Linux contributor completing a source
+change unaided"*, and called that an observation rather than a test. It is both — and it is
+the wrong kind for a completion gate. What #719 asks is whether a contributor can land a
+change without producing the canonical artifact. Whether somebody has yet turned up to do
+so measures the project's audience, not its behaviour, and a correctness gate that cannot
+be satisfied from inside the repository leaves the work permanently unfinished for a reason
+unrelated to the work.
 
-- Every success criterion in the PRD is either met with the run that shows it, or
-  explicitly not met and recorded.
-- If a property was given up — most likely blocking-before-merge — the issue says which,
-  and where the compensating check lives.
+The old wording was also indifferent to what it named. The canonical build never runs on a
+contributor's machine — `linux/amd64` appears only in a container on a GitHub runner — so
+"a non-Linux contributor" was a proxy for "somebody who cannot run the canonical build",
+and the mechanism does not distinguish the two.
+
+**Acceptance** — each met with the run that shows it:
+
+- A contributor can submit a source-only change without producing the canonical
+  `linux/amd64` artifact.
+- The canonical workflow produces the merge candidate, and all required checks run against
+  that candidate rather than against a tree resembling it.
+- The candidate's artifact matches the source that lands with it, and a mismatched one is
+  refused.
+- The contributor's source head becomes reachable from `main` with no maintainer rebuilding
+  `dist/` by hand, and no branch-protection bypass.
+- The handoff between the job that runs contributor code and the job that holds the
+  credential is checked rather than trusted, with a negative control for each check.
+
+**Limit.** External contributor experience has not been observed in the field after this
+change. That is adoption evidence, not a correctness gate. A real-world failure reopens
+this issue, or opens a defect issue of its own.
