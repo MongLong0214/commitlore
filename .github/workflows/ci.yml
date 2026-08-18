@@ -359,6 +359,91 @@ jobs:
           "$wrapper" doctor >/dev/null
           "$wrapper" context src/app.js >/dev/null
 
+      # #747. Everything above is a fresh install, and `current` never
+      # pre-exists on a fresh install -- so the branch #735 shipped in is
+      # unreachable here, on the one platform whose `mv` diverges.
+      #
+      # The other side of that gap is what the upgrade in `install-script`
+      # asserts. It runs on `ubuntu-latest`, where GNU `mv` never follows a
+      # symlink, and it reads `wrapper --version` -- and the wrapper binds
+      # `$candidate/dist/commitlore.mjs`, the versioned path, so it reported the
+      # new release throughout the incident while every installed hook kept
+      # executing the old build through `current`. A regression of the 1.1.2
+      # rename would pass both.
+      #
+      # Isolated on Darwin, the mechanism is this:
+      #
+      #     $ ln -s v1.0.2 current && ln -s v1.1.1 current.tmp
+      #     $ mv current.tmp current; echo $?
+      #     0
+      #     $ readlink current
+      #     v1.0.2
+      #     $ ls v1.0.2
+      #     current.tmp
+      #
+      # Exit 0, link unchanged, the temporary link swallowed by the old release
+      # directory. So this leg installs a fake older release, installs the real
+      # one over it, and asserts through the path hooks actually record rather
+      # than through the wrapper.
+      - name: Upgrade over an existing install, and read the link hooks use
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/upgrade-home"
+          mkdir -p "$HOME"
+          export COMMITLORE_INSTALL_SOURCE="$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+
+          # A tag whose `package.json` really carries the lower version. Tagging
+          # the same tree under a different name is not enough:
+          # `verify_incoming_smoke` runs the incoming bundle's `--version` and
+          # dies when the tag and the report disagree (install.sh:577-589).
+          older="v0.0.1-upgradetest"
+          node -e '
+            const fs = require("node:fs");
+            const m = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            m.version = "0.0.1-upgradetest";
+            fs.writeFileSync("package.json", JSON.stringify(m, null, 2) + "\n");
+          '
+          git add package.json
+          older_commit="$(git -c user.name=ci -c user.email=ci@example.invalid commit-tree "$(git write-tree)" -p HEAD -m 'older release fixture')"
+          git tag -f "$older" "$older_commit"
+          # From HEAD, not from the index. `git add` above staged the lowered
+          # version, and `git checkout -- <path>` restores from the index -- so
+          # the plain form leaves the workspace on the fixture version, and
+          # `COMMITLORE_INSTALL_SOURCE` points at this workspace.
+          git reset -q HEAD package.json
+          git checkout HEAD -- package.json
+
+          sh install.sh "$older"
+          data_root="$HOME/.local/share/commitlore"
+          test -L "$data_root/current"
+          previous="$(cd "$data_root/current" && pwd -P)"
+          echo "--- installed $older; current -> $previous"
+
+          # The upgrade. `current` now pre-exists as a symlink to a directory,
+          # which is the only state that reaches the branch under test.
+          sh install.sh "$COMMITLORE_CI_VERSION"
+
+          # Through the link, not through the wrapper. `commitlore.bin` is
+          # recorded as `<data-root>/current/dist/commitlore.mjs`, so this is
+          # the interpreter every installed hook actually runs.
+          node_bin="$(command -v node)"
+          through_link="$("$node_bin" "$data_root/current/dist/commitlore.mjs" --version)"
+          echo "--- through the link: $through_link"
+          test "$through_link" = "${COMMITLORE_CI_VERSION#v}" || {
+            echo "::error::current still resolves to $through_link -- the installer reported an upgrade it did not perform (#735)"
+            exit 1
+          }
+
+          # The #735 symptom itself: `mv` moved the temporary link into the old
+          # release directory instead of replacing the link, and left it there.
+          strays="$(ls -A "$previous" | grep -E '^current' || true)"
+          test -z "$strays" || {
+            echo "::error::the swap left $strays inside $previous -- the rename went into the old release"
+            exit 1
+          }
+          echo "--- no stray link in the previous release directory"
+
   # The musl row claimed execution on two architectures. Only one of them can
   # run natively here; the other goes through QEMU, which is what makes the
   # claim true rather than smaller.
