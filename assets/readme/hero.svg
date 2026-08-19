@@ -1,87 +1,51 @@
 <svg
   xmlns="http://www.w3.org/2000/svg"
-  width="840"
-  height="340"
-  viewBox="0 0 840 340"
+  width="720"
+  height="360"
+  viewBox="0 0 720 360"
   role="img"
   aria-labelledby="commitlore-hero-title commitlore-hero-desc"
 >
-  <title id="commitlore-hero-title">CommitLore delivers only current decisions to the next edit</title>
-  <desc id="commitlore-hero-desc">For src/pricing.ts, the decision still in force moves from Git history into current context and reaches the next edit, carrying both its limit and the alternative it ruled out. An earlier, broader limit that also covered admin quotes has been superseded and does not move forward as current guidance.</desc>
+  <title id="commitlore-hero-title">Only decisions still in force reach the next edit</title>
+  <desc id="commitlore-hero-desc">For src/pricing.ts, Git history holds two decisions. The active one carries its limit and the alternative it ruled out into the context delivered before the next edit. An earlier decision that also covered admin quotes has been superseded and stays in history without moving forward as current guidance.</desc>
 
   <style>
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
-    .section { font-size: 18px; font-weight: 700; letter-spacing: 1.2px; fill: #8B949E; }
-    .state { font-size: 18px; font-weight: 700; letter-spacing: 1.2px; }
-    .row-primary { font-size: 24px; font-weight: 600; }
-    .row-secondary { font-size: 20px; font-weight: 500; }
-    .key { font-size: 18px; font-weight: 600; fill: #8B949E; }
-    .value { font-size: 24px; font-weight: 650; fill: #F0F6FC; }
-    .outcome { font-size: 22px; font-weight: 650; fill: #F0F6FC; }
+    .label   { font-size: 24px; font-weight: 700; letter-spacing: 0.6px; fill: #8B949E; }
+    .state   { font-size: 24px; font-weight: 700; letter-spacing: 0.6px; }
+    .body    { font-size: 24px; font-weight: 500; fill: #F0F6FC; }
+    .keyname { font-size: 24px; font-weight: 700; fill: #8B949E; }
+    .value   { font-size: 24px; font-weight: 600; fill: #F0F6FC; }
+    .foot    { font-size: 24px; font-weight: 600; fill: #8B949E; }
   </style>
 
-  <rect width="840" height="340" rx="8" fill="#0D1117"/>
-  <rect x="0.75" y="0.75" width="838.5" height="338.5" rx="7.25" fill="none" stroke="#30363D" stroke-width="1.5"/>
+  <rect width="720" height="360" fill="#0D1117"/>
 
-  <!-- The file every column is talking about. -->
-  <text x="30" y="34" class="mono" font-size="20" font-weight="500" fill="#F0F6FC">src/pricing.ts</text>
+  <text class="mono label" x="28" y="42">src/pricing.ts</text>
 
-  <text x="30" y="70" class="mono section">GIT HISTORY</text>
-  <text x="292" y="70" class="mono section">CURRENT CONTEXT</text>
-  <text x="660" y="70" class="mono section">NEXT EDIT</text>
+  <text class="sans label" x="28" y="86">GIT HISTORY</text>
+  <text class="sans label" x="396" y="86">BEFORE NEXT EDIT</text>
 
-  <line x1="46" y1="102" x2="46" y2="279" stroke="#30363D" stroke-width="2"/>
+  <circle cx="38" cy="124" r="8" fill="#3FB950"/>
+  <text class="sans state" x="58" y="132" fill="#3FB950">ACTIVE</text>
+  <text class="sans body" x="58" y="164">Checkout pricing only</text>
 
-  <!-- Active first. The handoff's coordinate map put SUPERSEDED in the top
-       slot, which contradicts its own rule that the superseded row must not
-       take the eye first — and the hero being replaced already had it the
-       right way round. Newest-first also matches what `git log` shows, so a
-       column labelled GIT HISTORY reads the way the tool it names does.
+  <path d="M196 126 H360" stroke="#3FB950" stroke-width="3" stroke-linecap="round"/>
+  <path d="M352 119 L362 126 L352 133 Z" fill="#3FB950"/>
 
-       Solid node, solid connector, arrow into the panel. -->
-  <circle cx="46" cy="132" r="6" fill="#3FB950"/>
-  <text x="66" y="126" class="mono state" fill="#3FB950">ACTIVE</text>
-  <text x="66" y="157" class="sans row-primary" fill="#F0F6FC">Checkout</text>
-  <text x="66" y="184" class="sans row-secondary" fill="#F0F6FC">pricing only</text>
-  <path d="M222 148 H278" fill="none" stroke="#3FB950" stroke-width="2.5"/>
-  <path d="M274 141 L282 148 L274 155" fill="none" stroke="#3FB950" stroke-width="2.5"/>
+  <circle cx="38" cy="228" r="8" fill="none" stroke="#8B949E" stroke-width="3"/>
+  <text class="sans state" x="58" y="236" fill="#8B949E">SUPERSEDED</text>
+  <text class="sans body" x="58" y="268" fill="#8B949E">Also served admin quotes</text>
 
-  <!-- Superseded: hollow node, dashed connector, X. Three signals, so the
-       state does not depend on colour alone. Grey rather than red — a
-       superseded decision is a lifecycle state, not a failure. -->
-  <circle cx="46" cy="230" r="6" fill="#0D1117" stroke="#8B949E" stroke-width="2"/>
-  <text x="66" y="224" class="mono state" fill="#8B949E">SUPERSEDED</text>
-  <text x="66" y="255" class="sans row-primary" fill="#8B949E">Also served</text>
-  <text x="66" y="282" class="sans row-secondary" fill="#8B949E">admin quotes</text>
-  <path d="M220 229 H262" fill="none" stroke="#6E7681" stroke-width="2" stroke-dasharray="5 6"/>
-  <path d="M266 222 L278 234 M278 222 L266 234" stroke="#8B949E" stroke-width="2"/>
+  <path d="M228 230 H300" stroke="#8B949E" stroke-width="3" stroke-dasharray="7 7" stroke-linecap="round"/>
+  <path d="M312 220 L332 240 M332 220 L312 240" stroke="#8B949E" stroke-width="4" stroke-linecap="round"/>
 
-  <!-- Inner padding is 16 rather than 22 on both sides. "Checkout pricing only"
-       at 24px lands within about two pixels of the old 284px limit on a wide
-       system font, and this stack resolves to whatever the reader's OS provides
-       — so the margin was thin on somebody else's machine, not on mine. 296px
-       of room removes the case. Symmetric, and inside the spacing allowance. -->
-  <rect x="292" y="92" width="328" height="188" rx="5" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
-  <text x="308" y="124" class="mono key">Limit</text>
-  <text x="308" y="156" class="sans value">Checkout pricing only</text>
-  <line x1="308" y1="186" x2="604" y2="186" stroke="#30363D" stroke-width="1.5"/>
-  <text x="308" y="216" class="mono key">Ruled out</text>
-  <text x="308" y="248" class="sans value">Admin quote reuse</text>
+  <rect x="396" y="102" width="296" height="176" rx="8" fill="#161B22" stroke="#30363D" stroke-width="2"/>
+  <text class="sans keyname" x="420" y="140">Limit</text>
+  <text class="sans value"   x="420" y="172">Checkout pricing only</text>
+  <text class="sans keyname" x="420" y="216">Ruled out</text>
+  <text class="sans value"   x="420" y="248">Admin quote reuse</text>
 
-  <!-- Panel to next edit. Aimed at the middle line of the block on the right
-       rather than at the panel's own centre, so the arrow reads as pointing
-       at something. -->
-  <path d="M620 188 H652" fill="none" stroke="#3FB950" stroke-width="2.5"/>
-  <path d="M648 181 L656 188 L648 195" fill="none" stroke="#3FB950" stroke-width="2.5"/>
-
-  <!-- Three lines because the column is 150px wide and "active context" does
-       not fit on one at 22px. Left-aligned with the heading above them: the
-       skeleton's bullet dot was a fourth green mark competing with the arrow
-       that already carries the accent, and the eye order here is fourth. -->
-  <text x="660" y="158" class="sans outcome">active</text>
-  <text x="660" y="188" class="sans outcome">context</text>
-  <text x="660" y="218" class="sans outcome">delivered</text>
-
-  <text x="420" y="316" text-anchor="middle" class="sans" font-size="20" font-weight="550" fill="#8B949E">Only decisions still in force move forward.</text>
+  <text class="sans foot" x="28" y="330">Only decisions still in force move forward.</text>
 </svg>
