@@ -4,6 +4,58 @@ Release notes for 1.0.0, 1.0.1 and 1.0.2 are on the
 [GitHub releases page](https://github.com/MongLong0214/commitlore/releases); they
 were not written here.
 
+## 1.2.0
+
+> **Recorded as held for want of a reviewer, not as reviewed.** Every change in
+> this release passed the gate — 3,359 tests, the canonical artifact check, and
+> CI at the released commit — and none of it had a cross-provider review. The
+> reviewers this project uses were out of quota on the day it shipped, and
+> Claude reviewing Claude is not a second opinion: the same model family shares
+> its blind spots. Two of today's conclusions were reversed by an outside
+> reviewer earlier in the day, so this is a real gap and not a formality.
+
+The release that makes releases discoverable, and three places where the tool
+was doing work nobody read.
+
+**`commitlore upgrade`.** There was no way to find out that a newer CommitLore
+existed. `--version` reported what was running and nothing compared it to
+anything, so a repository initialised on a stale install kept validating every
+commit with a stale protocol and nothing said so. `upgrade --check` reports the
+installed and newest release; the bare form performs the upgrade by invoking the
+installer and then reading the link back to confirm it points at the tag that
+was asked for -- not merely that it moved, which an installer that moved it
+somewhere wrong would satisfy. `--json` is the scriptable form and answers
+inside CI on purpose. A passive notice appears at most once a day and is silent
+for hooks, `--json`, non-terminals, and any command that failed; `doctor`
+carries staleness as a finding, because the notice is silent for `--json` and
+that is the one output built for programs to read. `init` names the version it
+pinned and does not move `current`; `init --upgrade` does.
+
+**Both installers register the same hook, and only one of them.** The CLI wrote
+`Read|Edit|Write` and the plugin shipped `Edit|Write|MultiEdit|NotebookEdit`, so
+a CLI install delivered nothing when the agent edited with MultiEdit and a
+plugin install delivered nothing when it read a file before deciding. A matcher
+of only letters and `|` is a list of exact strings rather than a regular
+expression, so `Edit` never covered `MultiEdit`. Both now register all five.
+And `init` no longer writes its hook when the Claude Code plugin already covers
+the repository -- before this, following the README to the plugin and then
+running `init` answered every matched tool call twice.
+
+**A hook fire costs a third less, and a rebuild an order of magnitude.** Every
+fire ran `PRAGMA quick_check` over the whole index -- 62 ms on a 15 MB one,
+before an answer that usually has nothing to deliver. Nothing promises it,
+SQLite documents that it does not catch the desynchronised-index case that
+would actually hurt, and across 85 corruption trials it never prevented a wrong
+answer. It runs on rebuild and in `doctor` now, and a read that meets corruption
+falls back to a scan rather than failing open to silence. Separately, a rebuild
+started 4,345 git subprocesses, 4,329 of them parsing trailer paragraphs whose
+results were then discarded: 45 s to 2.3 s on this repository, and a
+10,000-commit repository from over two minutes to 2.2 s.
+
+**Fixed:** a partial index answered with silence, which reads as "no records
+here" (#778); a rebuild could not rebuild past a schema change (#779) and could
+not open a structurally damaged index at all (#785).
+
 ## 1.1.4
 
 One line changed for anyone using the tool, and the rest is the repository
