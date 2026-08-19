@@ -40,7 +40,7 @@ const CI_WORKFLOW_FILE_PATH = fileURLToPath(new URL(`../${CI_WORKFLOW_PATH}`, im
 // shell command; without this lock replacing every job body with `true` would
 // still look like a real successful run. Update deliberately with the CI
 // workflow when its reviewed job contract changes.
-export const EXPECTED_CI_WORKFLOW_SHA256 = '473b1fc06750384875d7236986b34b9564b3ff250c3f6da8b4572be50d75c48a';
+export const EXPECTED_CI_WORKFLOW_SHA256 = '93d93eed99727fd422c4f462da93b9eab42b55aeab063675a59dbda4818a28b7';
 
 // Fixed rather than inferred from returned jobs: absence must fail rather
 // than define itself away. `lint` only runs for pull requests and is therefore
@@ -59,6 +59,12 @@ export const EXPECTED_CI_WORKFLOW_SHA256 = '473b1fc06750384875d7236986b34b9564b3
 // linted, and saying only the first invites someone to add `lint` to this
 // list, which would block every release.
 export const REQUIRED_CHECKS = Object.freeze([
+  // `gate` fans in from the ten below and fails unless every one succeeded. It
+  // is listed here as well rather than instead: this gate reads the API's job
+  // list, so an entry it does not know about is reported as an unexpected job,
+  // and a `gate` that is not named here would fail every release the moment it
+  // started running.
+  'gate',
   'check (22.23.2)',
   'check (24)',
   'audit',
