@@ -34,10 +34,26 @@ const commit = (cwd: string, subject: string): void => {
   git(cwd, ['commit', '--no-verify', '--quiet', '-m', subject]);
 };
 
-/** A content snapshot includes `.git`; metadata is deliberately excluded. */
+/**
+ * A content snapshot includes `.git`; metadata is deliberately excluded.
+ *
+ * Entries that vanish between the `readdir` and the `lstat` are skipped rather
+ * than fatal. Git writes and removes its own lock files under `.git/objects`
+ * while this walks them, and a snapshot that dies because git tidied up is
+ * reporting on the walker rather than on the thing under test -- CI hit
+ * exactly that on `maintenance.lock`. Anything that survives long enough to be
+ * stat'd is still compared byte for byte, so this cannot hide a change the
+ * shadow run made: a file it wrote would still be there.
+ */
 const byteSnapshot = (root: string): string[] => {
   const walk = (path: string, relative: string): string[] => {
-    const stat = lstatSync(path);
+    let stat;
+    try {
+      stat = lstatSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
     if (stat.isSymbolicLink()) return [`link ${relative} ${readlinkSync(path)}`];
     if (stat.isFile()) {
       return [
@@ -45,9 +61,16 @@ const byteSnapshot = (root: string): string[] => {
       ];
     }
     if (!stat.isDirectory()) return [`other ${relative}`];
-    return readdirSync(path)
-      .sort()
-      .flatMap((entry) => walk(join(path, entry), relative === '' ? entry : `${relative}/${entry}`));
+    let entries: string[];
+    try {
+      entries = readdirSync(path).sort();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+    return entries.flatMap((entry) =>
+      walk(join(path, entry), relative === '' ? entry : `${relative}/${entry}`),
+    );
   };
   return walk(root, '');
 };
