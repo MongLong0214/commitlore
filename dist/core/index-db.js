@@ -451,7 +451,28 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
  * recorded anything. A third pass (`explodeRecordBlocks`) recovers additional
  * record blocks for that same sliver of commits (SPEC §2.4).
  */
+/**
+ * `%G?` in the scan format, or an empty field outside signature mode.
+ *
+ * Asking git for it makes it verify every commit's signature, which on this
+ * repository is 2.7s of a rebuild. Nothing reads the answer unless signature
+ * mode is on: `grade.ts` consults `signatureStatus` only behind
+ * `requireSignedDirective`, and `trusted-authors.ts` says as much where the
+ * verifier generation is defined -- "Only signature mode pays for it: the
+ * setting is opt-in". The rebuild was paying for it always.
+ *
+ * Turning the setting on is safe afterwards rather than a stale-cache hazard:
+ * `signatureVerifierGeneration` goes from `null` to a hash, `healthProblem`
+ * compares it against the one recorded in `meta`, and the mismatch rebuilds
+ * the index -- which is the same mechanism that already handles a changed
+ * keyring (#653).
+ *
+ * The field is emitted empty rather than removed so the positional destructure
+ * below keeps its shape; a shifted field is a silent wrong answer.
+ */
+export const signatureAtom = (verifierGeneration) => verifierGeneration === null ? '' : '%G?';
 const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
+    const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
     const records = [];
     let read = 0;
     // A batch is the unit all three passes below share, so a deadline can only be
@@ -468,7 +489,7 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
             return records;
         }
         read += batch.length;
-        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`, []);
+        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00${signatureField}%x00${TRAILERS_ATOM}%x00`, []);
         if (result.code !== 0) {
             throw Object.assign(new Error(`git log failed: ${result.stderr.trim()}`), {
                 code: result.code,

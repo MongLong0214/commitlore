@@ -12645,7 +12645,9 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
     ];
   });
 };
+var signatureAtom = (verifierGeneration) => verifierGeneration === null ? "" : "%G?";
 var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
+  const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
   const records = [];
   let read = 0;
   const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
@@ -12658,7 +12660,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     const result = gitLogByShas(
       cwd,
       batch,
-      `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`,
+      `%x01%H%x00%ct%x00%cI%x00${signatureField}%x00${TRAILERS_ATOM}%x00`,
       []
     );
     if (result.code !== 0) {

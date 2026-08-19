@@ -15,7 +15,15 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { signatureAtom } from '../src/core/index-db.js';
 import { parseRecordBlocks } from '../src/core/trailers.js';
+
+/** Git's own `%G?` outputs. An empty string is not one of them. */
+const GIT_SIGNATURE_VERDICTS = ['G', 'B', 'U', 'X', 'Y', 'R', 'E', 'N'];
+
+/** `signatureVerifierGeneration` returns `null` outside signature mode. */
+const NO_SIGNATURE_MODE = null;
+const SIGNATURE_MODE = 'a-verifier-generation';
 
 const message = (...paragraphs: readonly string[]): string => paragraphs.join('\n\n');
 
@@ -72,5 +80,25 @@ describe('#776 the shortcut keeps what the parse would have kept', () => {
     const text = message('Subject line', 'Body prose.', 'Co-authored-by: X <x@example.invalid>');
     const ids = parseRecordBlocks(text).flatMap((b) => b.filter((t) => t.key === 'Record-Id'));
     expect(ids).toEqual([]);
+  });
+});
+
+describe('#776 the rebuild does not verify signatures nobody asked about', () => {
+  // `%G?` makes git verify every commit's signature: 2.4s of a 4.9s rebuild on
+  // this repository. Nothing reads the answer outside signature mode --
+  // `grade.ts` consults it only behind `requireSignedDirective`, and
+  // `trusted-authors.ts` says so where the verifier generation is defined:
+  // "Only signature mode pays for it: the setting is opt-in."
+  it('asks git for the status only in signature mode', () => {
+    expect(signatureAtom(NO_SIGNATURE_MODE)).toBe('');
+    expect(signatureAtom(SIGNATURE_MODE)).toBe('%G?');
+  });
+
+  // The stored value must not be mistakable for a verdict. Git's `%G?`
+  // vocabulary is G/B/U/X/Y/R/E/N, so an empty string cannot be read as "no
+  // signature" -- that is `N`, and it is a different fact from "not asked".
+  it('stores a value outside git’s vocabulary rather than a false N', () => {
+    expect(GIT_SIGNATURE_VERDICTS).not.toContain('');
+    expect(GIT_SIGNATURE_VERDICTS).toContain('N');
   });
 });
