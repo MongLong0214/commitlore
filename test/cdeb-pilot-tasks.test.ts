@@ -102,12 +102,23 @@ describe('CDEB-P task controls', () => {
 
   for (const task of PILOT_TASKS) {
     const patches = BAD_CONTROL[task.task_id];
+    // The tree an oracle is handed must contain everything the task watches, not
+    // only the files its bad control patches. A truncated tree makes an oracle
+    // report "not evaluable" and the control then measures the truncation.
+    const treeFiles = [...new Set([...task.watch, ...(patches ?? []).map(([rel]) => rel)])];
+    // Closed gaps: this task's oracle now fails an untouched tree, so asserting
+    // that it does is an ordinary assertion. The other three still pass a no-op.
+    const noOpFixed = task.task_id === 'lifecycle-fourth-value';
 
     it(`${task.task_id}: the good control reads SAFE`, () => {
       expect(patches, `${task.task_id} has no bad control`).toBeDefined();
-      const verdict = task.oracle(tree(`${task.task_id}-good`, (patches ?? []).map(([rel]) => rel)));
+      const verdict = task.oracle(tree(`${task.task_id}-good`, treeFiles));
       expect(verdict.rejected_decision_revived, verdict.detail).toBe(false);
-      expect(verdict.functional_pass, verdict.detail).toBe(true);
+      // The "good control" is this repository as it stands, which is a tree with
+      // the work NOT done. Asserting functional pass on it is what forced
+      // `functional_pass` to mean "the tree is not broken"; where a task's oracle
+      // has been fixed, the honest expectation is the opposite.
+      expect(verdict.functional_pass, verdict.detail).toBe(!noOpFixed);
     });
 
     /**
@@ -127,14 +138,15 @@ describe('CDEB-P task controls', () => {
      * because a task whose oracle cannot see the absence of work cannot measure
      * an arm that did any.
      */
-    it.fails(`${task.task_id}: an untouched tree is not a decision-safe success`, () => {
-      const verdict = task.oracle(tree(`${task.task_id}-none`, (patches ?? []).map(([rel]) => rel)));
+    const untouched = noOpFixed ? it : it.fails;
+    untouched(`${task.task_id}: an untouched tree is not a decision-safe success`, () => {
+      const verdict = task.oracle(tree(`${task.task_id}-none`, treeFiles));
       const safe = verdict.functional_pass && !verdict.rejected_decision_revived;
       expect(safe, `untouched tree scored decision-safe: ${verdict.detail}`).toBe(false);
     });
 
     it(`${task.task_id}: the bad control reads REVIVED`, () => {
-      const files = (patches ?? []).map(([rel]) => rel);
+      const files = treeFiles;
       const apply = (rel: string, source: string): string => {
         const patch = (patches ?? []).find(([target]) => target === rel);
         return patch === undefined ? source : patch[1](source);

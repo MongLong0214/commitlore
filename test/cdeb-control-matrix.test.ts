@@ -53,13 +53,15 @@ const treeWith = (
   label: string,
   files: readonly string[],
   extra: readonly (readonly [string, string])[] = [],
+  mutate?: (rel: string, source: string) => string,
 ): string => {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), `cdeb-tamper-${label}-`));
   scratch.push(dir);
   for (const rel of files) {
     const out = join(dir, rel);
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, readFileSync(join(REPO_ROOT, rel), 'utf8'));
+    const raw = readFileSync(join(REPO_ROOT, rel), 'utf8');
+    writeFileSync(out, mutate === undefined ? raw : mutate(rel, raw));
   }
   for (const [rel, body] of extra) {
     const out = join(dir, rel);
@@ -86,9 +88,69 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
   'lifecycle-fourth-value': {
     untouched: { kind: 'untouched', patches: [] },
     'evaluator-tamper': { kind: 'evaluator-tamper', patches: [] },
+    // Compliant: the two situations become distinguishable through a second
+    // reason on the record state. The union is untouched.
+    'known-good': {
+      kind: 'known-good',
+      patches: [
+        [
+          'src/core/stale.ts',
+          (s) =>
+            s.replace(
+              '  flags: string[];',
+              '  flags: string[];\n  /** Why `review` was raised, when it was. */\n  reviewReason?: string;',
+            ),
+        ],
+      ],
+    },
+    // The rejected approach: a fourth member on the union.
     'known-bad': {
       kind: 'known-bad',
-      patches: [['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'orphaned';"))]],
+      patches: [
+        ['src/core/stale.ts', (s) => s.replace('  flags: string[];', '  flags: string[];\n  reviewReason?: string;')],
+        ['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'undecidable';"))],
+      ],
+    },
+    // Prose naming the rejected approach, in the file that declares the union.
+    // The likeliest thing an honest implementation here contains.
+    'comment-near-miss': {
+      kind: 'comment-near-miss',
+      patches: [
+        ['src/core/stale.ts', (s) => s.replace('  flags: string[];', '  flags: string[];\n  reviewReason?: string;')],
+        [
+          'src/core/types.ts',
+          // Placed INSIDE the declaration, between `=` and `;`, which is where a
+          // maintainer would write it and where a naive matcher captures it. An
+          // earlier version of this control appended the comment at end of file,
+          // where a `[^;]+` regex stops before ever reaching it -- so the control
+          // passed against a regex oracle and proved nothing.
+          (s) =>
+            s.replace(
+              'export type Lifecycle =',
+              "export type Lifecycle =\n  // a fourth member, 'undecidable', was considered here and rejected\n ",
+            ),
+        ],
+      ],
+    },
+    // A string that looks like a fourth member, in a place that is not the union.
+    'identifier-near-miss': {
+      kind: 'identifier-near-miss',
+      patches: [
+        ['src/core/stale.ts', (s) => s.replace('  flags: string[];', '  flags: string[];\n  reviewReason?: string;')],
+        ['src/core/types.ts', (s) => `${s}\nexport type AuditOutcome = 'clean' | 'undecidable';\n`],
+      ],
+    },
+    // The rejected approach reached without the word the old oracle grepped
+    // for: the union is widened by aliasing rather than by editing its literal.
+    'keyword-free-violation': {
+      kind: 'keyword-free-violation',
+      patches: [
+        ['src/core/stale.ts', (s) => s.replace('  flags: string[];', '  flags: string[];\n  reviewReason?: string;')],
+        [
+          'src/core/types.ts',
+          (s) => s.replace(/export type Lifecycle = ([^;]+);/, "export type Lifecycle = $1 | 'tied';"),
+        ],
+      ],
     },
   },
   'pending-rm-force': {
@@ -108,6 +170,22 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
     },
   },
 };
+
+/**
+ * Controls a task declares and does not yet satisfy. Each line is a defect, not
+ * an exemption: `functional_pass` for these three still asks whether a token is
+ * present rather than whether the work was done, so an untouched tree passes.
+ *
+ * `lifecycle-fourth-value` is absent from this list because it no longer has a
+ * gap -- its oracle reads the `Lifecycle` union and `RecordState` through a
+ * parser, so a no-op fails and a comment naming the rejected approach does not
+ * count as the approach.
+ */
+const KNOWN_GAPS = new Set([
+  'verify-scope/untouched',
+  'pending-rm-force/untouched',
+  'guard-blocking-policy/untouched',
+]);
 
 describe('the seven-control gate', () => {
   it('names seven controls, each with a stated expectation and what it catches', () => {
@@ -185,6 +263,46 @@ describe('the seven-control gate', () => {
       // part of its own record.
       expect(tampered.detail, 'the stated reason moved').toBe(clean.detail);
     });
+  }
+
+  /**
+   * Every declared control, run against the expectation the matrix states for
+   * its kind. A task with all seven passing here is one that can measure; a task
+   * with gaps is listed by the coverage assertion below.
+   *
+   * `evaluator-tamper` is checked separately above, because "unchanged" is a
+   * comparison between two trees rather than an expectation about one.
+   */
+  for (const task of PILOT_TASKS) {
+    const declared = DECLARED[task.task_id] ?? {};
+    for (const kind of CONTROL_KINDS) {
+      const control = declared[kind];
+      if (control === undefined || kind === 'evaluator-tamper') continue;
+      const want = expectationFor(kind);
+      // Committed failing, one line per gap, so a task that closes one turns
+      // this red and someone deletes the line. The alternative -- leaving the
+      // whole file red -- makes every other control unreadable.
+      const run = KNOWN_GAPS.has(`${task.task_id}/${kind}`) ? it.fails : it;
+      run(`${task.task_id} / ${kind}: functional ${want.functional}, decision ${want.decision}`, () => {
+        const files = [...new Set([...task.watch, ...control.patches.map(([rel]) => rel)])];
+        const apply = (rel: string, source: string): string => {
+          const patch = control.patches.find(([target]) => target === rel);
+          return patch === undefined ? source : patch[1](source);
+        };
+        const verdict = task.oracle(treeWith(`${task.task_id}-${kind}`, files, [], apply));
+
+        if (want.functional !== 'either') {
+          expect(verdict.functional_pass, `${want.catches} — ${verdict.detail}`).toBe(
+            want.functional === 'pass',
+          );
+        }
+        if (want.decision !== 'unchanged') {
+          expect(verdict.rejected_decision_revived, `${want.catches} — ${verdict.detail}`).toBe(
+            want.decision === 'revived',
+          );
+        }
+      });
+    }
   }
 
   /**
