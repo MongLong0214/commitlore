@@ -809,6 +809,43 @@ const healthProblem = (db, verifierGeneration) => {
             if (!tableExists(db, table))
                 return `index is missing the ${table} table`;
         }
+        return null;
+    }
+    catch (error) {
+        return `index is unreadable: ${errorMessage(error)}`;
+    }
+};
+/**
+ * The b-tree walk, kept off the read path (#782).
+ *
+ * `PRAGMA quick_check(1)` bounds the errors it *reports*, not the work it
+ * does: it walks every b-tree, so its cost grows with the database. Measured
+ * on a 1106-commit repository with a 15 MB index it is 62 ms median (112 ms
+ * cold) against 0.04 ms for the `meta` reads beside it, and it was running
+ * before every hook answer -- about a third of a ~390 ms fire that usually
+ * has nothing to deliver.
+ *
+ * Three things say it does not belong there:
+ *
+ * - Nothing promises it. ADR-0003: "Index corruption is a reason to rebuild,
+ *   not an outage." SPEC section 1 requires the index be *rebuildable*, not
+ *   integrity-checked per read. PRD-F2 says `--rebuild` on corruption.
+ * - It does not cover the case that would hurt. SQLite documents that
+ *   `quick_check` skips UNIQUE constraints and does not verify that index
+ *   content matches table content -- a desynchronised secondary index, the
+ *   textbook silent wrong answer, passes it. Only `integrity_check`, which is
+ *   slower still, catches that.
+ * - Measured, it caught nothing that mattered. Across 85 trials against a
+ *   copy of a real index -- 60 single-byte flips and 25 of 200 bytes -- not
+ *   one produced a silently different answer. It fired on 55 of them and the
+ *   query result was correct every time; on single-byte damage it missed half
+ *   the trials outright.
+ *
+ * So it runs where a rebuild can act on it: `rebuildIndex`, the explicit
+ * `index` command, and `doctor`. `ensureIndex` no longer calls it.
+ */
+export const integrityProblem = (db) => {
+    try {
         // `node:sqlite` has no `.pragma()` shorthand (ADR-0012); a pragma is a
         // normal query here rather than the `{ simple: true }` scalar
         // better-sqlite3 gave.
@@ -861,6 +898,21 @@ const removeDatabaseFile = (path) => {
  * Opens the index, creating it if absent. A file that SQLite refuses to open
  * at all is deleted and recreated rather than reported: the bytes are a cache.
  */
+/**
+ * `syncFts`, with a failure turned into a discard rather than a throw (#785).
+ *
+ * The table is derived from `trailers` and is rebuilt on the next open, so
+ * losing it costs nothing a rebuild does not already replace.
+ */
+const syncFtsOrDiscard = (db, requested, writable, discard) => {
+    try {
+        return syncFts(db, requested, writable);
+    }
+    catch (error) {
+        discard(`the index full-text table could not be rebuilt (${errorMessage(error)})`);
+        return false;
+    }
+};
 export const openIndex = (opts = {}) => {
     const cwd = opts.cwd ?? process.cwd();
     const readonly = opts.readonly ?? false;
@@ -883,14 +935,32 @@ export const openIndex = (opts = {}) => {
     }
     if (!readonly)
         createSchema(db);
+    // Computed before the literal below. An assignment made inside one is
+    // invisible to a property that was already evaluated above it, which is how
+    // the first attempt at this left the discard unset and the caller still
+    // walking into a corrupt read.
+    let ftsDiscard = null;
+    const fts = syncFtsOrDiscard(db, ftsRequested, !readonly, (reason) => {
+        ftsDiscard = reason;
+    });
     const handle = {
         db,
         path,
         cwd,
         readonly,
         ftsRequested,
-        discardedReason,
-        fts: syncFts(db, ftsRequested, !readonly),
+        discardedReason: ftsDiscard ?? discardedReason,
+        // Rebuilding the FTS table on open is how a damaged index became
+        // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
+        // caller gets a handle, so `commitlore index --rebuild` threw on the file
+        // it exists to replace, and ADR-0003's "corruption is a reason to rebuild"
+        // had no path to act on (#785).
+        //
+        // A failure here is routed into the same `discardedReason` the open
+        // already has rather than thrown: every caller that knows what to do with
+        // a discarded index -- reset it, rebuild it, or fall back to a scan --
+        // then does that, and none of them needed to learn a second failure shape.
+        fts,
     };
     return handle;
 };
@@ -1025,6 +1095,12 @@ const requireWritable = (handle) => {
  */
 export const rebuildIndex = (handle, opts = {}) => {
     requireWritable(handle);
+    // The b-tree walk lives here rather than on the read path (#782). This is
+    // the one place that can do something about what it finds: a structural
+    // defect means the rows are already being thrown away, so the file is reset
+    // instead of rebuilt in place.
+    if (integrityProblem(handle.db) !== null)
+        resetIndexFile(handle);
     // A rebuild clears rows and keeps the tables, so on a database written by an
     // older schema there is nothing it can do with them: the first insert dies on
     // a column that does not exist, and the message names a SQLite constraint

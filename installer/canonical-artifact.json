@@ -15,10 +15,10 @@
       "tsconfig.json",
       "src"
     ],
-    "sha256": "e438603d2e388df3f2e82d0d74e5376a99703660bb61bce69e5e0166d9dcde3a"
+    "sha256": "91015f0f00f3bc4cdb43b522e771d19ab20c4bac82adf12cf99c0d6e9577eb88"
   },
   "artifact": {
-    "sha256": "93c7c348875a5cf34750d65667c7e8fe7584ae2d52ff5407e534a1bcdba2c441",
+    "sha256": "f346283c404d33edf6f9253087e1bab30753e72ae14edf23e4b6d16e6df479fb",
     "files": [
       {
         "path": "dist/cli.d.ts",
@@ -622,7 +622,7 @@
       },
       {
         "path": "dist/commitlore.mjs",
-        "sha256": "2966e5a24143fdacefb5d6ca55ea2da8effbad98e049c169713939712c9df011"
+        "sha256": "d7cd896a2895b5069436d566c523ef4d5b637cfb56cb35b893e30173afb876ae"
       },
       {
         "path": "dist/core/agent-configs.d.ts",
@@ -842,15 +842,15 @@
       },
       {
         "path": "dist/core/index-db.d.ts",
-        "sha256": "809fe40a8fdf23756f4455d21c22affa5fe6e0e64b93894999b85c2860b607cd"
+        "sha256": "0fab4d7046a456c3f5ada66da1759bee944054d684daa4dabc0383a0edb3c6f9"
       },
       {
         "path": "dist/core/index-db.js",
-        "sha256": "9aec04ad9a71fbab246aaf248d741302e3974f83eb52a806aefbd72e5089429f"
+        "sha256": "92dfc4c6c19ba029c3c3db4fdb0aa9251dc6bcbc4b057e67e18f5be42271fa23"
       },
       {
         "path": "dist/core/index-db.js.map",
-        "sha256": "d23b7bc10b606d04f8d212b7d61e5d15119b2df92360d387c46273bc42aebc9b"
+        "sha256": "d78660348765e21bec4bf1079ea3050616d91929fcefd2a78a1083fc3f7c872e"
       },
       {
         "path": "dist/core/inject.d.ts",
@@ -966,11 +966,11 @@
       },
       {
         "path": "dist/core/query.js",
-        "sha256": "620837060b80e71cff1aed64d124fd38231ecfee36e7021234abb39a546fe75d"
+        "sha256": "79b041c7ce1306a95f63ffabdaad3862465ec874c8a3d7c84aa09f1de93eff4d"
       },
       {
         "path": "dist/core/query.js.map",
-        "sha256": "40941bdd6c7f35636b21b3ada0acacef71fb663fd23a4e10633640bfcf4666ef"
+        "sha256": "3d99073b7f82a6dd896f8c81cd6c658c935ebdbbc555c07da6e35faf255e7dc3"
       },
       {
         "path": "dist/core/release-version.d.ts",

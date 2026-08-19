@@ -12874,6 +12874,13 @@ var healthProblem = (db, verifierGeneration) => {
     for (const table of REQUIRED_TABLES) {
       if (!tableExists(db, table)) return `index is missing the ${table} table`;
     }
+    return null;
+  } catch (error2) {
+    return `index is unreadable: ${errorMessage(error2)}`;
+  }
+};
+var integrityProblem = (db) => {
+  try {
     const check2 = db.prepare("PRAGMA quick_check(1)").get();
     if (check2?.quick_check !== "ok") {
       return `sqlite quick_check reported: ${String(check2?.quick_check)}`;
@@ -12897,6 +12904,14 @@ var openDatabaseFile = (path2, readonly2) => {
 var removeDatabaseFile = (path2) => {
   for (const suffix of ["", "-wal", "-shm"]) rmSync(`${path2}${suffix}`, { force: true });
 };
+var syncFtsOrDiscard = (db, requested, writable, discard2) => {
+  try {
+    return syncFts(db, requested, writable);
+  } catch (error2) {
+    discard2(`the index full-text table could not be rebuilt (${errorMessage(error2)})`);
+    return false;
+  }
+};
 var openIndex = (opts = {}) => {
   const cwd = opts.cwd ?? process.cwd();
   const readonly2 = opts.readonly ?? false;
@@ -12919,14 +12934,28 @@ var openIndex = (opts = {}) => {
     db = openDatabaseFile(path2, readonly2);
   }
   if (!readonly2) createSchema(db);
+  let ftsDiscard = null;
+  const fts = syncFtsOrDiscard(db, ftsRequested, !readonly2, (reason) => {
+    ftsDiscard = reason;
+  });
   const handle = {
     db,
     path: path2,
     cwd,
     readonly: readonly2,
     ftsRequested,
-    discardedReason,
-    fts: syncFts(db, ftsRequested, !readonly2)
+    discardedReason: ftsDiscard ?? discardedReason,
+    // Rebuilding the FTS table on open is how a damaged index became
+    // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
+    // caller gets a handle, so `commitlore index --rebuild` threw on the file
+    // it exists to replace, and ADR-0003's "corruption is a reason to rebuild"
+    // had no path to act on (#785).
+    //
+    // A failure here is routed into the same `discardedReason` the open
+    // already has rather than thrown: every caller that knows what to do with
+    // a discarded index -- reset it, rebuild it, or fall back to a scan --
+    // then does that, and none of them needed to learn a second failure shape.
+    fts
   };
   return handle;
 };
@@ -13035,6 +13064,7 @@ var requireWritable = (handle) => {
 };
 var rebuildIndex = (handle, opts = {}) => {
   requireWritable(handle);
+  if (integrityProblem(handle.db) !== null) resetIndexFile(handle);
   const stale = schemaMismatch(handle.db);
   if (stale !== null) resetIndexFile(handle);
   const started = Date.now();
@@ -15348,13 +15378,31 @@ var openSource = (cwd, noIndex, budgetMs, now) => {
       cwd,
       ...budgetMs === void 0 ? {} : { budget: { deadline: clock() + budgetMs, now: clock }, cost }
     });
+    const diagnostics = [];
+    let fallback = null;
+    const scanInstead = (error2) => {
+      if (fallback === null) {
+        fallback = scanSource(cwd, [], budgetMs, now);
+        diagnostics.push(
+          `the index could not be read (${errorMessage3(error2)}); answering with a full scan`
+        );
+      }
+      return fallback;
+    };
     return {
-      fetch: (query) => queryTrailers(handle, query),
+      fetch: (query) => {
+        if (fallback !== null) return fallback.fetch(query);
+        try {
+          return queryTrailers(handle, query);
+        } catch (error2) {
+          return scanInstead(error2).fetch(query);
+        }
+      },
       fromIndex: true,
       corpusPasses: () => 0,
       unreadCommits: () => Math.max(indexUnread(handle), cost.unreadCommits + cost.unreadNotes),
       close: () => closeIndex(handle),
-      diagnostics: []
+      diagnostics
     };
   } catch (error2) {
     return scanSource(

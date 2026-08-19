@@ -242,9 +242,35 @@ export interface ScanCost {
  */
 export declare const indexUnread: (handle: IndexHandle) => number;
 /**
- * Opens the index, creating it if absent. A file that SQLite refuses to open
- * at all is deleted and recreated rather than reported: the bytes are a cache.
+ * The b-tree walk, kept off the read path (#782).
+ *
+ * `PRAGMA quick_check(1)` bounds the errors it *reports*, not the work it
+ * does: it walks every b-tree, so its cost grows with the database. Measured
+ * on a 1106-commit repository with a 15 MB index it is 62 ms median (112 ms
+ * cold) against 0.04 ms for the `meta` reads beside it, and it was running
+ * before every hook answer -- about a third of a ~390 ms fire that usually
+ * has nothing to deliver.
+ *
+ * Three things say it does not belong there:
+ *
+ * - Nothing promises it. ADR-0003: "Index corruption is a reason to rebuild,
+ *   not an outage." SPEC section 1 requires the index be *rebuildable*, not
+ *   integrity-checked per read. PRD-F2 says `--rebuild` on corruption.
+ * - It does not cover the case that would hurt. SQLite documents that
+ *   `quick_check` skips UNIQUE constraints and does not verify that index
+ *   content matches table content -- a desynchronised secondary index, the
+ *   textbook silent wrong answer, passes it. Only `integrity_check`, which is
+ *   slower still, catches that.
+ * - Measured, it caught nothing that mattered. Across 85 trials against a
+ *   copy of a real index -- 60 single-byte flips and 25 of 200 bytes -- not
+ *   one produced a silently different answer. It fired on 55 of them and the
+ *   query result was correct every time; on single-byte damage it missed half
+ *   the trials outright.
+ *
+ * So it runs where a rebuild can act on it: `rebuildIndex`, the explicit
+ * `index` command, and `doctor`. `ensureIndex` no longer calls it.
  */
+export declare const integrityProblem: (db: IndexDatabase) => string | null;
 export declare const openIndex: (opts?: OpenIndexOptions) => IndexHandle;
 export declare const closeIndex: (handle: IndexHandle) => void;
 /**
