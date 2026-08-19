@@ -47,8 +47,13 @@ interface StudyOptions {
 const frozenRowFiles = (): string[] =>
   Array.from({ length: 180 }, (_unused, index) => `rows/block-${String(index).padStart(3, '0')}.json`);
 
-const categoryFor = (repository: number, task: number): string => {
-  const index = repository * 6 + task;
+/**
+ * Categories are assigned by a task's position in the whole corpus, not by
+ * `repository * 6 + task`. With four repositories carrying eight, eight, seven
+ * and seven, that arithmetic no longer names a unique task, and the quota it
+ * feeds is checked against the corpus rather than against any repository.
+ */
+const categoryFor = (index: number): string => {
   if (index < 12) return 'rejected-architecture';
   if (index < 20) return 'rejected-workaround';
   if (index < 25) return 'compatibility-constraint';
@@ -62,7 +67,7 @@ const freezeFor = (rowFiles: readonly string[]): Record<string, unknown> => ({
   protocol_version: '1.3.0',
   study_id: 'cdeb-control-01',
   sealed_task_bundle_sha256: HEX64,
-  repository_bundles: Array.from({ length: 5 }, (_unused, index) => ({
+  repository_bundles: Array.from({ length: 4 }, (_unused, index) => ({
     repository_id: `repo-${String(index)}`,
     bundle_sha256: HEX64,
     snapshot_commit: OID,
@@ -95,6 +100,7 @@ const rowFor = (
   freezeSha: string,
   repository: number,
   task: number,
+  ordinal: number,
   arm: 'on' | 'off',
   repeat: number,
 ): Record<string, unknown> => {
@@ -139,7 +145,7 @@ const rowFor = (
     logical_run_id: `repo-${String(repository)}__task-${String(task)}__${arm}__r${String(repeat)}`,
     repository_id: `repo-${String(repository)}`,
     task_id: `task-${String(task)}`,
-    category: categoryFor(repository, task),
+    category: categoryFor(ordinal),
     condition: arm === 'on' ? 'commitlore-on' : 'commitlore-off',
     repeat,
     freeze_manifest_sha256: freezeSha,
@@ -181,17 +187,24 @@ const writeStudy = (options: StudyOptions): string => {
   mkdirSync(join(directory, 'rows'));
   const freezeSha = sha256(freezeText);
   let rowIndex = 0;
-  for (let repository = 0; repository < 5; repository += 1) {
-    for (let task = 0; task < 6; task += 1) {
+  // Four repositories carrying thirty tasks (PRD §3.3, amended 2026-08-19).
+  // Uneven on purpose: thirty does not divide by four, and the amendment reads
+  // "six per repository" as a floor rather than an equal share. A fixture that
+  // quietly used twenty-four would stop representing a corpus the gate accepts.
+  const TASKS_PER_REPOSITORY = [8, 8, 7, 7];
+  let ordinal = 0;
+  for (let repository = 0; repository < TASKS_PER_REPOSITORY.length; repository += 1) {
+    for (let task = 0; task < (TASKS_PER_REPOSITORY[repository] ?? 0); task += 1) {
       for (const arm of ['on', 'off'] as const) {
         for (let repeat = 1; repeat <= 3; repeat += 1) {
           writeFileSync(
             join(directory, rowFiles[rowIndex] as string),
-            `${JSON.stringify(rowFor(options, freezeSha, repository, task, arm, repeat))}\n`,
+            `${JSON.stringify(rowFor(options, freezeSha, repository, task, ordinal, arm, repeat))}\n`,
           );
           rowIndex += 1;
         }
       }
+      ordinal += 1;
     }
   }
   return directory;

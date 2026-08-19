@@ -73,8 +73,8 @@ CDEB는 다음 하나만 검증한다.
 고정 matrix는 다음과 같다.
 
 ```text
-5 repositories
-× 6 tasks per repository
+4 repositories
+× 6-9 tasks per repository (합계 30, repository당 최소 6)
 × 2 conditions: CommitLore ON / OFF
 × 3 fresh runs per condition
 = 30 decision-sensitive tasks
@@ -135,7 +135,7 @@ CDEB 결과가 허용하는 최대 주장은 다음 범위다.
 
 ```text
 30 frozen decision-sensitive tasks
-5 named repositories
+4 named repositories
 1 pinned model
 1 pinned agent harness
 CommitLore shipping delivery ON/OFF
@@ -153,7 +153,7 @@ CDEB는 "CommitLore가 모든 coding agent를 더 좋게 만든다"를 증명하
 - 180 runs는 stochastic variance를 줄이기 위한 반복이며 독립적인 engineering cases 180개로 해석하지 않는다.
 - 각 task는 ON 3회, OFF 3회를 가진다.
 - task는 동일 가중치다.
-- repository당 정확히 6개 task를 사용한다.
+- repository당 최소 6개 task를 사용하고, 합계는 30개다 (2026-08-19 개정, §3.3). 30은 4로 나뉘지 않으므로 8·8·7·7이며, `analyze.ts`는 저장소별 하한과 합계를 따로 검사한다 — 저장소별 등식 검사는 이 모양 자체를 거부한다.
 
 ### 2.2 Reference model and harness
 
@@ -282,10 +282,59 @@ rejection_reason: null
 
 ### 3.3 Repository composition
 
+> **개정 2026-08-19 (#771): 5개 → 4개.** 이 저장소를 제외한 로컬 census를 다 훑은 결과
+> 기록이 있는 저장소는 여섯이고 저장소당 6과제를 낼 밀도가 있는 것은 넷이다.
+> `candidate-registry.ts` 로 센 값이며, §3.1이 요구하는 대로 snapshot ref를 못박는다:
+>
+> | repository | snapshot | 후보 | rejection reason 명시 |
+> |---|---|---:|---:|
+> | `gitseed` | `3fa2c3f` | 84 | 71 |
+> | `agent-operator-score` | `bd56d45` | 119 | 29 |
+> | `logic-pro-mcp` | `c8764dd3` | 53 | 29 |
+> | `agent-control-plane` | `6cf4dbd` | 80 | 17 |
+> | `stock-ai-newsletter` | `9041ef8` | 3 | 2 |
+> | `repo-factory` | `4b8f299` | 1 | 0 |
+>
+> 아래 둘은 3건과 1건이라 6과제를 못 낸다. 초안은 `agent-operator-score`를 106/27로
+> 적었는데 어느 ref에서도 재현되지 않았다 — ref 없이 인용한 수는 검산할 수 없는 수다. 다섯 번째는 채택이지 코드가 아니며, 그것을 기다리는 동안 study는
+> 시작될 수 없다.
+>
+> **사전등록 문턱을 낮추는 것이므로 값이 없지 않다.** 사전등록이 막으려는 것은 *결과를
+> 본 뒤에* 문턱을 고르는 일인데, 이 study는 아직 유효하게 실행된 적이 없다 — §4.7의
+> 좋은 control이 손대지 않은 트리를 네 과제 모두에서 성공으로 채점하고, 분산 7회와
+> 파일럿 재실행 2회가 확인된 적 없는 REVIVED 라벨을 달고 있다. 계측을 다시 만드는 중에
+> corpus 크기를 함께 정하는 것과, 측정된 결과를 보고 문턱을 옮기는 것은 다른 행위다.
+>
+> **task 수는 줄이지 않는다.** 처음 초안은 4 × 6 = 24로 쿼터를 줄였는데, 그러면 §16.3의
+> 사전등록 검정력 시뮬레이션이 무효가 된다 — 검출 가능 효과의 바닥은 30 task 기준으로
+> 계산됐고 §13의 CI 해석도 "30 tasks" 안의 재표집 안정성으로 적혀 있다. 재료는 충분하다
+> (rejection reason이 명시된 후보만 71·27·29·17건). 그러므로 **저장소만 4개로 줄고
+> task 합계 30과 §3.4 쿼터는 그대로**이며, repository당 6은 하한으로 읽는다. 바뀌는 것은
+> repository 다양성이다.
+>
+> **"검정력이 아니다" 는 너무 강한 말이라 쓰지 않는다.** task 30을 유지해도 cluster가
+> 5에서 4로 줄면 cluster당 task가 6에서 7.5로 늘고 design effect `1+(m-1)ρ` 가 오른다:
+> ICC 0.05 에서 유효 n 24.0→22.6, 0.10 에서 20.0→18.2, 0.20 에서 15.0→13.0. 검정력이
+> 보존되는 것은 §16.2의 등록된 bootstrap이 repository를 고정하고 between-repository
+> 분산을 전파하지 않기 때문이며, §16.7이 그 한계를 이미 적어두었다. 즉 등록된 게이트에
+> 대해서는 참이고, 읽는 사람이 가져갈 일반적 의미로는 거짓이다.
+>
+> **§3.2 rule 5 를 읽고 넘어간다, 모르고 지나치는 것이 아니다.** 그 규칙은
+> *"candidate가 부족하면 기준을 낮추거나 새 record를 만들지 않고 study를 중단한다"* 이다.
+> 그 조건은 발동하지 않는다 — 부족한 것은 candidate가 아니라 repository다. rejection
+> reason이 명시된 후보만 71·27·29·17건이고 §3.4가 요구하는 것은 30이다. rule 5가 막는
+> 것은 약한 task로 수를 채우는 일이고, 여기서는 §4의 자격 심사도 쿼터도 그대로다. 새
+> record를 만들지도 않는다.
+>
+> **결과 문구는 이 개정을 나른다.** independence tier 문구는 "five"가 아니라
+> **"four author-operated repositories"** 이며, 이 개정과 그 이유를 함께 공개하지 않고
+> 결과를 인용할 수 없다. repository가 넷이면 repository-level 변동의 추정 근거가 하나
+> 줄어든다는 사실도 함께 적는다 — task 수가 같다고 이 손실이 사라지지는 않는다.
+
 Primary corpus는 다음을 만족한다.
 
-- 5 named repositories
-- repository당 6 tasks
+- 4 named repositories
+- repository당 **최소** 6 tasks, 합계 30 tasks
 - CommitLore repository 자체는 primary corpus에서 제외
 - 최소 3개의 서로 다른 application/domain repository
 - repository ownership과 decision authorship 공개
@@ -293,9 +342,9 @@ Primary corpus는 다음을 만족한다.
 **Independence tier**
 
 - **Tier A**: 최소 2개 repository에서 decision author 또는 accepting reviewer가 benchmark/product author와 다름
-- **Tier B**: 5개 모두 author-operated repository
+- **Tier B**: 4개 모두 author-operated repository
 
-Tier B도 실행할 수 있으나 결과 문구는 반드시 "five author-operated repositories"라고 명시하며 independent external validation이라고 표현하지 않는다.
+Tier B도 실행할 수 있으나 결과 문구는 반드시 "four author-operated repositories"라고 명시하며 independent external validation이라고 표현하지 않는다.
 
 ### 3.4 Category quota
 
@@ -1298,9 +1347,9 @@ OFF revival이 0이면 relative reduction은 undefined다.
 
 10,000회 repository-stratified paired task bootstrap을 사용한다.
 
-- 각 repository의 6 tasks를 replacement로 6개 재표집
+- 각 repository의 task를 그 repository의 task 수만큼 replacement로 재표집한다 (8·8·7·7이면 8·8·7·7개, 합계 30). 문자 그대로 "6개"를 쓰면 24-task replicate가 되어 §16.3의 검정력 시뮬레이션이 계산된 30을 벗어난다 — `analyze.ts`는 `stratum.length`로 재표집하므로 코드는 이미 30이다
 - ON/OFF와 3 repeats는 task와 함께 이동
-- 5 repositories는 항상 유지
+- 4 repositories는 항상 유지 (2026-08-19 개정, §3.3)
 - fixed PRNG algorithm과 seed를 analysis source에 고정
 - percentile 2.5%, 97.5% interval
 
@@ -1441,7 +1490,7 @@ Gate 실패는 더 작은 효과가 전혀 없음을 증명하지 않는다.
 
 참 효과가 문턱값(10pp)에 정확히 걸쳐 있어도 gate는 열에 일곱 번 실패하고, 80% 통과에는 약 20pp가 필요하다. 이 study가 인증하는 효과는 대략 20pp 이상이다. Performance gate FAIL을 "효과 없음"으로 읽는 것은 이 검출 바닥을 무시한 오독이다 — FAIL은 검출 가능한 효과의 바닥 아래 효과를 배제하지 않는다.
 
-CI는 5 fixed repositories / 30 tasks 내의 task-resampling stability를 표현하며 모든 software repository의 population CI로 해석하지 않는다.
+CI는 4 fixed repositories / 30 tasks 내의 task-resampling stability를 표현하며 모든 software repository의 population CI로 해석하지 않는다.
 
 ### 16.8 Prohibited analysis
 
@@ -1463,12 +1512,12 @@ CI는 5 fixed repositories / 30 tasks 내의 task-resampling stability를 표현
 NOT MEASURABLE이면 이 문장은 생성되지 않으며, `CoreBehaviorHeadline`의 X·Z 문장이
 그 자리를 대신하고 Token 상태가 그 옆에 표시된다.
 
-> Across 30 frozen decision-sensitive tasks from five named repositories, the same pinned coding agent with CommitLore produced **X percentage points more first-pass patches that worked without reviving a previously rejected decision**, used **Y% less provider-reported task-execution token volume per decision-safe success**, and revived rejected approaches **Z% less often** than the same agent with ordinary Git access.
+> Across 30 frozen decision-sensitive tasks from four named repositories, the same pinned coding agent with CommitLore produced **X percentage points more first-pass patches that worked without reviving a previously rejected decision**, used **Y% less provider-reported task-execution token volume per decision-safe success**, and revived rejected approaches **Z% less often** than the same agent with ordinary Git access.
 
 항상 바로 옆에 표시:
 
 ```text
-30 tasks · 5 repositories · 90 runs per condition
+30 tasks · 4 repositories · 90 runs per condition
 one pinned model and agent harness
 corpus independence tier
 records delivered [claim]-graded — fixture property, not product: bundles carry no trusted-author git config (§9.2); a shipping install grades owner-authored records [directive]
@@ -1512,7 +1561,7 @@ Measured run 전에 다음을 고정한다.
 protocol source and digest
 candidate registry commitment
 sealed task bundle commitment
-5 repository bundle digests
+4 repository bundle digests
 all snapshot/refs/notes digests
 30 task IDs/categories (sealed; commitment only in public freeze)
 randomization order (opaque block indices)
@@ -1898,7 +1947,7 @@ Scientific overrides 없음.
 
 ```text
 CommitLore Decision Efficiency Benchmark v1
-30 frozen decision-sensitive tasks · 5 named repositories · 180 fresh runs
+30 frozen decision-sensitive tasks · 4 named repositories · 180 fresh runs
 Same pinned model · same agent harness · byte-identical repository states
 90 runs per condition · corpus independence tier A/B
 Records delivered [claim]-graded — fixture property, not product (§9.2) · delivery surface only
@@ -2405,7 +2454,7 @@ Depends on: CDEB-10
 
 - ☐ cutoff frozen (per-repository snapshot refs)
 - ☐ candidate registry frozen
-- ☐ 5 repositories / 30 tasks
+- ☐ 4 repositories / 30 tasks
 - ☐ CommitLore repo excluded from primary
 - ☐ exact category quota
 - ☐ all records natural and pre-cutoff
@@ -2444,7 +2493,7 @@ Depends on: CDEB-10
 Implementation 중 다음을 다시 열지 않는다.
 
 1. 이름은 **CommitLore Decision Efficiency Benchmark (CDEB)**다.
-2. matrix는 5 repositories / 30 tasks / 180 runs다.
+2. matrix는 4 repositories / 30 tasks / 180 runs다.
 3. model과 agent harness는 하나다.
 4. conditions는 ON/OFF 두 개뿐이다.
 5. repository state는 두 arm에서 byte-identical하다.

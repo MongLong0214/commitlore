@@ -52,6 +52,14 @@ Three questions, in order of what they block:
 
 ## 3. Deliberate departures from CDEB v1, and their cost
 
+> **Note (2026-08-19, #771).** The left column records what CDEB v1 required
+> when this pilot departed from it, and it is left as written — a departure
+> table that silently tracks later amendments stops being a record of what was
+> departed from. §3.3 has since been amended to four repositories; the
+> departure this table describes (one repository, CommitLore itself) is
+> unchanged by that and is still below Tier B.
+
+
 | CDEB v1 | CDEB-P | Cost |
 |---|---|---|
 | 5 named repositories | **1** — CommitLore itself | Below Tier B. No repository-level generalization is available, not even the weak kind. |

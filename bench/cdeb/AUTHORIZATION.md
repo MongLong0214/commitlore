@@ -43,7 +43,7 @@ methodological exclusion rather than a permission one.
 
 Every authorized repository is operated by the same person who authored this
 benchmark and the product it measures. That is §3.3's **Tier B**, and the rule
-attached to it is not optional: the result must read *"five author-operated
+attached to it is not optional: the result must read *"four author-operated
 repositories"* and must not describe itself as independent external validation.
 
 Tier A would require at least two repositories where the decision author or
@@ -52,8 +52,21 @@ reaches that, and no wording may imply otherwise.
 
 ## Corpus arithmetic, stated plainly
 
-§3.3 requires five repositories, and the exclusion of the CommitLore repository
-leaves four authorized ones. A fifth is needed before the corpus can be sealed,
+> **Amended 2026-08-19 (#771): §3.3 now requires four.** The paragraph below
+> described the state under the original five, and the arithmetic it reports is
+> still what was counted. What changed is the requirement, not the census —
+> and the task quota did not move, so §3.2 rule 5 is not what this went around:
+> candidates are abundant (71, 27, 29 and 17 with an explicit rejection reason
+> against a quota of 30), and it is repositories that were short.
+>
+> The rule-5 argument is not what this rests on, and §3.3's amendment says so:
+> a threshold was lowered, and the reason it is not post-hoc selection is that
+> no valid result has ever been produced — `test/cdeb-pilot-tasks.test.ts`
+> carries a deliberately failing control showing an untouched tree scores a
+> success. Read that paragraph, not this one, for the load-bearing claim.
+
+§3.3 required five repositories, and the exclusion of the CommitLore repository
+leaves four authorized ones. A fifth was needed before the corpus could be sealed,
 and §3.2's rule 5 is explicit about what may not be done to close that gap:
 when candidates are short, the study stops rather than lowering the bar or
 creating records for it.
