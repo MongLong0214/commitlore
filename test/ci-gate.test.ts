@@ -91,6 +91,17 @@ describe('the CI fan-in gate', () => {
     // version bump renames it.
     const demo = workflow('demo-lint.yml');
     expect(demo.jobs.lint, 'demo-lint.yml has no lint job').toBeDefined();
+    // The required context is the check-run NAME, which GitHub takes from an
+    // explicit `name:` when there is one and from the job id otherwise. Renaming
+    // the id is caught here and in action-lint.test.ts; ADDING a `name:` was
+    // not, and it breaks the context exactly as thoroughly -- `lint` would stop
+    // reporting while a job called `lint` still sits in the file. `gate` pins
+    // its name above; this is the same pin, which was missing on the other half
+    // of the required pair.
+    expect(
+      demo.jobs.lint?.name,
+      'lint must not carry an explicit name: the required context is derived from the job id',
+    ).toBeUndefined();
     for (const [file, id] of [['ci.yml', 'gate'], ['demo-lint.yml', 'lint']] as const) {
       const body = readFileSync(join(REPO_ROOT, '.github/workflows', file), 'utf8');
       const job = body.slice(body.indexOf(`  ${id}:`));
