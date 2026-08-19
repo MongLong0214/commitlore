@@ -77,14 +77,6 @@ const treeWith = (
  * applied. Everything else is undeclared, which is the point of this file.
  */
 const DECLARED: Readonly<Record<string, TaskControls>> = {
-  'verify-scope': {
-    untouched: { kind: 'untouched', patches: [] },
-    'evaluator-tamper': { kind: 'evaluator-tamper', patches: [] },
-    'known-bad': {
-      kind: 'known-bad',
-      patches: [['bench/verify.mjs', (s) => `const GATED = ["m5-seeds-21-30.jsonl", "t703-ablation.jsonl"];\n${s}`]],
-    },
-  },
   'lifecycle-fourth-value': {
     untouched: { kind: 'untouched', patches: [] },
     'evaluator-tamper': { kind: 'evaluator-tamper', patches: [] },
@@ -238,14 +230,6 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
       ],
     },
   },
-  'guard-blocking-policy': {
-    untouched: { kind: 'untouched', patches: [] },
-    'evaluator-tamper': { kind: 'evaluator-tamper', patches: [] },
-    'known-bad': {
-      kind: 'known-bad',
-      patches: [['src/core/guard.ts', (s) => `${s}\nexport interface GuardPolicy { blocking: boolean }\n`]],
-    },
-  },
 };
 
 /**
@@ -258,10 +242,9 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
  * parser, so a no-op fails and a comment naming the rejected approach does not
  * count as the approach.
  */
-const KNOWN_GAPS = new Set([
-  'verify-scope/untouched',
-  'guard-blocking-policy/untouched',
-]);
+// Empty: both remaining tasks satisfy every control they declare. A task that
+// regresses turns its own line red rather than hiding behind a file-level gap.
+const KNOWN_GAPS = new Set<string>([]);
 
 describe('the seven-control gate', () => {
   it('names seven controls, each with a stated expectation and what it catches', () => {
@@ -382,12 +365,13 @@ describe('the seven-control gate', () => {
   }
 
   /**
-   * Committed failing. Every task needs all seven before the corpus can be
-   * sealed; today each has two. Turning this green means writing the compliant
-   * implementation, the two near misses and the keyword-free violation for each
-   * task -- not relaxing the assertion.
+   * Green as of 2026-08-20, and it was committed failing until it was not. It
+   * turned green by two tasks gaining their five missing controls and by two
+   * tasks being removed for a reason -- their records were already implemented,
+   * so no oracle could make a no-op fail there. Neither half was a relaxation of
+   * this assertion, which is the thing to check if it ever goes red again.
    */
-  it.fails('every task declares all seven controls', () => {
+  it('every task declares all seven controls', () => {
     for (const task of PILOT_TASKS) {
       const missing = missingControls(DECLARED[task.task_id] ?? {});
       expect(missing, `${task.task_id} is missing: ${missing.join(', ')}`).toHaveLength(0);

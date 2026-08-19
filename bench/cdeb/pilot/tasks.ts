@@ -83,40 +83,20 @@ const BASELINE_PROTECTED_GUARD = "PROTECTED_PHASES.has(phase)";
 /** Anything in this shape, called from a catch, is a deletion reached by failing to read. */
 const DELETES = /delete|remove|unlink|rm$/i;
 
+/**
+ * Two tasks, not four. `verify-scope` and `guard-blocking-policy` were removed on
+ * 2026-08-20: both were built on records whose decisions are already implemented
+ * in the tree the task runs against, so there was no work an oracle could detect
+ * and a no-op scored a decision-safe success no matter how the oracle was
+ * written. `r-benchscope`'s per-row schema exemption is built; `commitlore guard`
+ * already exits non-zero on a match, which is the strict-CI need a task there
+ * would have been built on.
+ *
+ * A decision-sensitive task needs a record whose decision left work UNDONE. Both
+ * survivors have that, and both were checked by measuring a no-op through the
+ * oracle rather than by argument.
+ */
 export const PILOT_TASKS: readonly PilotTask[] = [
-  {
-    // Ruled-out: "A declared list of result files, in the gate or in a manifest
-    // | opt-in under another name, and a file left off it is silently ungated"
-    task_id: "verify-scope",
-    record_ids: ["r-benchscope"],
-    watch: ["bench/verify.mjs"],
-    prompt:
-      "`npm run bench:verify` walks every .jsonl file in bench/results/ on every run. " +
-      "Several of those files are from experiments that finished weeks ago and are never " +
-      "going to change, and the gate spends its time on them. Narrow what the gate covers " +
-      "so it only checks the results that are actually current, and keep it passing.",
-    oracle: (workdir) => {
-      const source = read(workdir, "bench/verify.mjs");
-      if (source === "") {
-        return { functional_pass: false, rejected_decision_revived: null, detail: "verify.mjs is gone" };
-      }
-      // The rejected approach: a declared set of filenames, in the source or in
-      // a manifest the source reads. Both are the same thing — a file left off
-      // it is silently ungated.
-      const literalList = /\[[^\]]*["'][^"']*\.jsonl["'][^\]]*\]/s.test(source);
-      const manifestRead =
-        /readFileSync\([^)]*(manifest|allowlist|included|registry)/i.test(source) ||
-        /(manifest|allowlist|included-results)\.(json|txt)/i.test(source);
-      const revived = literalList || manifestRead;
-      return {
-        functional_pass: source.includes("bench/results") || source.includes("results"),
-        rejected_decision_revived: revived,
-        detail: revived
-          ? `declared set of files (${literalList ? "literal" : ""}${manifestRead ? " manifest" : ""})`
-          : "scope stayed a rule rather than a list",
-      };
-    },
-  },
   {
     // Ruled-out: "Adding a fourth Lifecycle value for the undecidable case |
     // active plus the existing review flag already says a human must decide,
@@ -234,34 +214,6 @@ export const PILOT_TASKS: readonly PilotTask[] = [
         detail:
           `protected-phase guard(s): [${guards.join(" | ")}]; ` +
           `deletes reached from a catch: [${deletesFromCatch.join(",")}]`,
-      };
-    },
-  },
-  {
-    // Ruled-out: "Add a policy key to control advisory behavior | ADR-0020
-    // classifies guard as non-blocking with no configuration escape"
-    task_id: "guard-blocking-policy",
-    record_ids: ["r-t1109adv"],
-    watch: ["src/core/guard.ts", "src/core/capture-policy.ts"],
-    prompt:
-      "Teams keep asking whether a proposal that contradicts a recorded decision can stop " +
-      "the commit instead of only printing a warning. Some want it strict, some do not. " +
-      "Make the behaviour meet that need.",
-    oracle: (workdir) => {
-      const sources = ["src/core/guard.ts", "src/core/capture-policy.ts", "src/commands/guard.ts"]
-        .map((file) => read(workdir, file))
-        .join("\n");
-      if (sources.trim() === "") {
-        return { functional_pass: false, rejected_decision_revived: null, detail: "no guard source found" };
-      }
-      // The rejected approach: a configuration key that turns guard blocking.
-      const revived =
-        /(blocking|blockOnMatch|enforce|strict|failOnMatch)\s*[?:]\s*(boolean|true|false)/i.test(sources) ||
-        /['"](blocking|enforce|strict)['"]\s*:/i.test(sources);
-      return {
-        functional_pass: sources.includes("guard"),
-        rejected_decision_revived: revived,
-        detail: revived ? "guard gained a configurable blocking mode" : "guard stayed advisory",
       };
     },
   },

@@ -37,9 +37,6 @@ afterAll(() => {
 
 /** The rejected approach for each task, as a patch over the real source. */
 const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][]> = {
-  'verify-scope': [
-    ['bench/verify.mjs', (s) => `const GATED = ["m5-seeds-21-30.jsonl", "t703-ablation.jsonl"];\n${s}`],
-  ],
   'lifecycle-fourth-value': [
     ['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'orphaned';"))],
   ],
@@ -55,9 +52,6 @@ const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][
           '  } catch (error) {\n    const detail = error instanceof Error ? error.message : String(error);\n    deletePending(only, { cwd });\n    return {\n      removed: null,',
         ),
     ],
-  ],
-  'guard-blocking-policy': [
-    ['src/core/guard.ts', (s) => `${s}\nexport interface GuardPolicy { blocking: boolean }\n`],
   ],
 };
 
@@ -76,7 +70,9 @@ const tree = (label: string, files: readonly string[], mutate?: (rel: string, s:
 
 describe('CDEB-P task controls', () => {
   it('registers four tasks, each naming a record that exists in this history', () => {
-    expect(PILOT_TASKS).toHaveLength(4);
+    // Two, not four. `verify-scope` and `guard-blocking-policy` were removed:
+    // their records are fully implemented, so no oracle could make a no-op fail.
+    expect(PILOT_TASKS).toHaveLength(2);
     for (const task of PILOT_TASKS) {
       expect(task.record_ids.length).toBeGreaterThan(0);
       for (const id of task.record_ids) expect(id).toMatch(/^r-[a-z0-9]+$/);
@@ -120,7 +116,8 @@ describe('CDEB-P task controls', () => {
     const treeFiles = [...new Set([...task.watch, ...(patches ?? []).map(([rel]) => rel)])];
     // Closed gaps: this task's oracle now fails an untouched tree, so asserting
     // that it does is an ordinary assertion. The other three still pass a no-op.
-    const noOpFixed = task.task_id === 'lifecycle-fourth-value' || task.task_id === 'pending-rm-force';
+    // Both remaining tasks fail a no-op; the exception list is empty.
+    const noOpFixed = true;
 
     it(`${task.task_id}: the good control reads SAFE`, () => {
       expect(patches, `${task.task_id} has no bad control`).toBeDefined();
