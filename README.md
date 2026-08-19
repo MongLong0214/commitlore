@@ -217,6 +217,10 @@ guidance. Relevance and authority are different questions.
 Most commits carry no record. The commit hook validates a record when one is
 present; it does not invent one.
 
+An existing hook is not overwritten. `commitlore init` honours `core.hooksPath`,
+moves any hook already installed to `<hook>.commitlore-chained`, and calls it
+first; `commitlore hooks uninstall` puts it back.
+
 <!-- README:CAPABILITY -->
 ## What happens automatically
 
@@ -260,6 +264,10 @@ conversation archive, or vector database replacement.
 | Did lifecycle filtering deliver retired records in the measured active projection? | **0 retired records** | superseded records were present; expiry was not |
 | Does indexed lookup scale? | **496 ms p50 at 100k commits** | the no-index fallback is much slower |
 
+Index build time follows the number of *records*, not the number of commits: the
+expensive pass runs once per record, so a long history that has recorded little
+builds faster than a short one dense with records.
+
 Path scope is what keeps a large history from reaching the model. On the #167
 corpus, only 2 of 10,002 records did:
 
@@ -289,6 +297,12 @@ proof that a model read or followed a record.
   Signature mode additionally requires Git's own verified status and a match in
   the repository-local `commitlore.trustedSigner` allowlist; an absent, empty, or unreadable signer allowlist authorizes nobody, so the mode fails closed.
 - **Guard is an experimental advisory**, not a safety net: precision 44.8% (95% Wilson CI 32.7%–57.5%), recall 22.0% on the 417-decision corpus. An empty guard result is not a safety verdict.
+- **Delivery spends tokens on every matching tool call.** The pre-edit hook
+  fires on `Read` as well as `Edit`, `Write`, `MultiEdit` and `NotebookEdit`, so
+  it runs far more often than an editing agent commits. Each fire spends up to
+  the payload budget — 800 tokens by default, changed with `--budget`. A
+  repository with no records spends nothing, which means this is a cost that
+  arrives with adoption rather than with installation.
 - **An answer may be partial.** Coverage is disclosed; absence from a partial
   result is not proof that no record exists. Repository-wide coverage, symbol anchors,
   and an interactive record builder remain open:
