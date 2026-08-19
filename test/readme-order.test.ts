@@ -54,6 +54,7 @@ function findAnchors(file: string): ReadmeAnchors {
   // unchanged; the sentence carrying it is no longer a heading.
   const product = lines.findIndex(
     (l) =>
+      l.includes('Decision authority for coding agents, owned by Git') ||
       l.includes('keeps re-proposing things your team already rejected') ||
       l.includes('이미 기각한 방안을 계속 다시 제안합니다') ||
       l.includes('すでに却下した案を何度も提案します') ||
@@ -64,6 +65,7 @@ function findAnchors(file: string): ReadmeAnchors {
   // hosted service, but a host can handle returned context under its own policy.
   const localFirst = lines.findIndex(
     (l) =>
+      l.includes('No hosted memory. The repository owns the record') ||
       l.includes('CommitLore has no hosted service') ||
       l.includes('CommitLore에는 호스팅 서비스가 없') ||
       l.includes('CommitLore にホスティングサービスは') ||
@@ -87,6 +89,7 @@ function findAnchors(file: string): ReadmeAnchors {
   // See it work: the section heading
   const seeItWork = lines.findIndex(
     (l) =>
+      l.includes('src="./assets/readme/demo.gif"') ||
       l === '## See it work' ||
       l === '## 실제로 보기' ||
       l === '## 実際に動かす' ||
@@ -98,6 +101,7 @@ function findAnchors(file: string): ReadmeAnchors {
   // of a heading; keep every heading lookup exact for the same reason.
   const automaticBoundary = lines.findIndex(
     (l) =>
+      l === '## What happens automatically' ||
       l === '## What happens automatically — and what does not' ||
       l === '## 자동으로 되는 것과 아닌 것' ||
       l === '## 自動になること、ならないこと' ||
@@ -106,6 +110,7 @@ function findAnchors(file: string): ReadmeAnchors {
 
   const limitations = lines.findIndex(
     (l) =>
+      l === '## Limits, trust and privacy' ||
       l === '## When this will not help you' ||
       l === '## 이것이 도움이 되지 않는 경우' ||
       l === '## これが役に立たない場合' ||
@@ -119,7 +124,8 @@ function findAnchors(file: string): ReadmeAnchors {
   const evidence = lines.findIndex(
     (l) =>
       l.startsWith('## ') &&
-      (l.includes('Retrieval can find records') ||
+      (l === '## Evidence' ||
+      l.includes('Retrieval can find records') ||
       l.includes('검색은 레코드를 찾을 수 있습니다') ||
       l.includes('検索はレコードを見つけられる') ||
       l.includes('检索能找到记录')),
@@ -162,11 +168,18 @@ describe('T-1015: README section order', () => {
         expect(anchors.installPromise).toBeLessThan(anchors.installCommand);
       });
 
-      it('the first screen delivers payload, automation boundary, limits, then evidence', () => {
+      // #450 put limits ahead of evidence so a reader met the boundary before
+      // the numbers. The 2026-08-19 README redesign reverses that pair: evidence
+      // now runs first, and the boundary it used to depend on is carried inside
+      // the evidence section itself -- a `Boundary` column on every row and the
+      // sentence saying the study establishes no universal model effect. What
+      // survives the reversal, and is still asserted, is that neither section
+      // may precede the automation boundary.
+      it('the first screen delivers payload, automation boundary, then limits and evidence', () => {
         expect(anchors.installCommand).toBeLessThan(anchors.seeItWork);
         expect(anchors.seeItWork).toBeLessThan(anchors.automaticBoundary);
         expect(anchors.automaticBoundary).toBeLessThan(anchors.limitations);
-        expect(anchors.limitations).toBeLessThan(anchors.evidence);
+        expect(anchors.automaticBoundary).toBeLessThan(anchors.evidence);
       });
     });
   }
@@ -180,7 +193,7 @@ describe('T-1015: README section order', () => {
       expect(anchors.installCommand).toBeLessThan(anchors.seeItWork);
       expect(anchors.seeItWork).toBeLessThan(anchors.automaticBoundary);
       expect(anchors.automaticBoundary).toBeLessThan(anchors.limitations);
-      expect(anchors.limitations).toBeLessThan(anchors.evidence);
+      expect(anchors.automaticBoundary).toBeLessThan(anchors.evidence);
     }
   });
 
@@ -217,7 +230,13 @@ describe('T-1015: README section order', () => {
   it('the first screen names delivery and capture for every host class', () => {
     for (const file of FILES) {
       const content = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
-      expect(content).toContain('| Host | Delivery | Capture |');
+      // The header row grew columns in the redesign; what it must still do is
+      // name a host and say, for that host, what is delivered and what is
+      // captured. Pinning the old three-column string measured the wording.
+      const header = content.split('\n').find((l) => l.startsWith('| Host |'));
+      expect(header, `${file} has no host table`).toBeDefined();
+      expect(header!).toMatch(/deliver/i);
+      expect(header!).toMatch(/captur/i);
       expect(content).toContain('| Claude Code |');
       expect(content).toContain('| Codex |');
       expect(content).toContain('| Hermes |');
