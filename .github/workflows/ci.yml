@@ -1590,3 +1590,61 @@ jobs:
             exit 1
           fi
           echo "attack 2 refused: the unallowed-extension target never ran"
+
+  # A fan-in so branch protection can require ONE stable context instead of
+  # eleven, several of which are matrix-interpolated.
+  #
+  # `check (22.23.2)` carries the exact pinned floor, and the comment on that
+  # matrix says why: a declared floor must name the exact release CI executes.
+  # Raising the floor therefore RENAMES the required context. With admins
+  # exempt today that is survivable; the moment `enforce_admins` is true, a
+  # renamed context means no commit can satisfy protection and `main` freezes
+  # with no exit except editing the settings by hand.
+  #
+  # `if: always()` is load-bearing. Without it a failed dependency SKIPS this
+  # job rather than failing it, and a skipped required check is not a failure
+  # to GitHub -- the gate would wave through exactly the runs it exists to
+  # stop. Each result is compared to `success` rather than to `failure` for the
+  # same reason: `skipped` and `cancelled` are not success.
+  #
+  # This covers `ci.yml` only. `lint` lives in `demo-lint.yml` and cannot be a
+  # `needs:` from here, so protection requires two contexts: `gate` and `lint`.
+  # Neither is matrix-interpolated, so neither can be renamed by a version bump.
+  gate:
+    name: gate
+    if: always()
+    needs:
+      - check
+      - audit
+      - git-matrix
+      - install-macos
+      - install-alpine
+      - install-script
+      - install-ps1
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job this gate fans in from succeeded
+        env:
+          RESULTS: >-
+            check=${{ needs.check.result }}
+            audit=${{ needs.audit.result }}
+            git-matrix=${{ needs.git-matrix.result }}
+            install-macos=${{ needs.install-macos.result }}
+            install-alpine=${{ needs.install-alpine.result }}
+            install-script=${{ needs.install-script.result }}
+            install-ps1=${{ needs.install-ps1.result }}
+        run: |
+          set -eu
+          failed=0
+          for pair in $RESULTS; do
+            job=${pair%%=*}
+            result=${pair#*=}
+            if [ "$result" != "success" ]; then
+              echo "::error::$job did not succeed (result: $result)"
+              failed=1
+            else
+              echo "$job: success"
+            fi
+          done
+          [ "$failed" -eq 0 ] || exit 1
+          echo "all fanned-in jobs succeeded"
