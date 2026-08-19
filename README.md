@@ -85,13 +85,13 @@ Prerequisites for either path: Node.js 22.23.2+ and Git. The script checks both 
 **Any other coding agent** — install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.sh | sh -s v1.1.4
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
 ```
 
 **Windows** — the same install, in PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.ps1))) v1.1.4
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
 ```
 
 Host wiring on Windows requires **v1.1.1 or later**. Before it, detection could not see a `.cmd` shim and the installer could not run one, so a Windows install placed the CLI and wired nothing — reported as `ok: false`, never as success. Verified on a real machine at 1.1.1 for Codex, Gemini CLI and Hermes.
@@ -162,11 +162,11 @@ The one-liner is for convenience. For a reviewed or pinned install, download and
 
 ```bash
 # Pin and inspect the installer before executing it.
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.sh
-sh install.sh v1.1.4
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
+sh install.sh v1.2.0
 
 # Or skip the script entirely: the checkout it makes is one you can make yourself.
-git clone --depth 1 --branch v1.1.4 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
