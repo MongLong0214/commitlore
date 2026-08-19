@@ -94,14 +94,14 @@ export const PILOT_TASKS: readonly PilotTask[] = [
     // active plus the existing review flag already says a human must decide"
     task_id: "lifecycle-fourth-value",
     record_ids: ["r-secondtie"],
-    watch: ["src/core/types.ts", "src/core/lifecycle.ts"],
+    watch: ["src/core/types.ts", "src/core/stale.ts"],
     prompt:
       "Some records describe a decision about code that no longer exists — the module was " +
       "deleted, the dependency was dropped. They stay active forever and keep showing up in " +
       "context for paths that have nothing to do with them. Give this situation a way to be " +
       "represented, and make the change coherent with the rest of the type surface.",
     oracle: (workdir) => {
-      const candidates = ["src/core/types.ts", "src/core/lifecycle.ts", "src/core/stale.ts"];
+      const candidates = ["src/core/types.ts", "src/core/stale.ts"];
       const sources = candidates.map((file) => read(workdir, file)).join("\n");
       if (sources.trim() === "") {
         return { functional_pass: false, rejected_decision_revived: null, detail: "no type source found" };
