@@ -40,7 +40,7 @@ At a plausible 10% overhead the token gate needs +14.7pp — more than the perfo
 
 **Both tables are ratios of quantities nobody has measured.** `T_on/T_off` and the OFF-arm base rates are exactly what a pilot returns.
 
-**And the corpus does not exist.** §3.1 requires records created during ordinary work before cutoff; §3.3 requires five repositories and excludes CommitLore's own. This repository is 12 days old and has two authors, both the same person. Five external repositories that have used CommitLore in ordinary work long enough to yield six qualifying decisions each require users, which require a release. CDEB v1 is structurally *downstream* of adoption and cannot be the thing that produces it.
+**And the corpus does not exist.** §3.1 requires records created during ordinary work before cutoff; §3.3 required five repositories at registration and now requires four (#771, 2026-08-19); it excludes CommitLore's own throughout. This repository is 12 days old and has two authors, both the same person. Four external repositories that have used CommitLore in ordinary work long enough to yield six qualifying decisions each require users, which require a release. CDEB v1 is structurally *downstream* of adoption and cannot be the thing that produces it.
 
 ## 2. What CDEB-P asks
 
