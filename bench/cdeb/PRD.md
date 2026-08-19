@@ -282,6 +282,11 @@ rejection_reason: null
 
 ### 3.3 Repository composition
 
+> **어느 넷인지는 `AUTHORIZATION.md`의 "The four, named once" 가 단일 출처다:**
+> `gitseed` · `agent-operator-score` · `logic-pro-mcp` · `agent-control-plane`.
+> 이 문서는 그 목록을 인용하며 다시 적지 않는다 — 넷이라는 *수*만 정하고 *어느 넷*을
+> 정하지 않았던 것이 이 절과 승인 문서가 서로 다른 넷을 가리키게 만든 원인이다.
+
 > **개정 2026-08-19 (#771): 5개 → 4개.** 이 저장소를 제외한 로컬 census를 다 훑은 결과
 > 기록이 있는 저장소는 여섯이고 저장소당 6과제를 낼 밀도가 있는 것은 넷이다.
 > `candidate-registry.ts` 로 센 값이며, §3.1이 요구하는 대로 snapshot ref를 못박는다:
@@ -308,7 +313,7 @@ rejection_reason: null
 > **task 수는 줄이지 않는다.** 처음 초안은 4 × 6 = 24로 쿼터를 줄였는데, 그러면 §16.3의
 > 사전등록 검정력 시뮬레이션이 무효가 된다 — 검출 가능 효과의 바닥은 30 task 기준으로
 > 계산됐고 §13의 CI 해석도 "30 tasks" 안의 재표집 안정성으로 적혀 있다. 재료는 충분하다
-> (rejection reason이 명시된 후보만 71·27·29·17건). 그러므로 **저장소만 4개로 줄고
+> (rejection reason이 명시된 후보만 71·29·29·17건). 그러므로 **저장소만 4개로 줄고
 > task 합계 30과 §3.4 쿼터는 그대로**이며, repository당 6은 하한으로 읽는다. 바뀌는 것은
 > repository 다양성이다.
 >
@@ -322,7 +327,7 @@ rejection_reason: null
 > **§3.2 rule 5 를 읽고 넘어간다, 모르고 지나치는 것이 아니다.** 그 규칙은
 > *"candidate가 부족하면 기준을 낮추거나 새 record를 만들지 않고 study를 중단한다"* 이다.
 > 그 조건은 발동하지 않는다 — 부족한 것은 candidate가 아니라 repository다. rejection
-> reason이 명시된 후보만 71·27·29·17건이고 §3.4가 요구하는 것은 30이다. rule 5가 막는
+> reason이 명시된 후보만 71·29·29·17건이고 §3.4가 요구하는 것은 30이다. rule 5가 막는
 > 것은 약한 task로 수를 채우는 일이고, 여기서는 §4의 자격 심사도 쿼터도 그대로다. 새
 > record를 만들지도 않는다.
 >
@@ -2379,7 +2384,7 @@ Scope
 
 Acceptance
 
-- 5 × 6 = 30
+- 30 tasks across the 4 repositories named in `AUTHORIZATION.md`, at least 6 from each
 - exact category quota
 - all records pre-cutoff
 - no benchmark-authored record
