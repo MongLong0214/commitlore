@@ -130,7 +130,7 @@ const validFreeze = (overrides: Record<string, unknown> = {}): Record<string, un
   protocol_digest: HEX64,
   candidate_registry_commitment: HEX64,
   sealed_task_bundle_sha256: HEX64,
-  repository_bundles: Array.from({ length: 5 }, (_unused, index) => ({
+  repository_bundles: Array.from({ length: 4 }, (_unused, index) => ({
     repository_id: `repo-${String(index)}`,
     bundle_sha256: HEX64,
     snapshot_commit: OID,

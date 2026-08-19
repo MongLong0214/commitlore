@@ -267,11 +267,27 @@ interface PlanOptions {
   readonly task_id?: string;
 }
 
+/**
+ * Four repositories carrying thirty tasks (PRD §3.3, amended 2026-08-19).
+ *
+ * Uneven because thirty does not divide by four and the amendment kept the
+ * total rather than the equal share -- shrinking to twenty-four would have
+ * invalidated §16.3's preregistered power simulation, which is computed on
+ * thirty. Six per repository is a floor here, not a quota.
+ */
+const TASKS_PER_REPOSITORY = [8, 8, 7, 7] as const;
+
 const smokePlan = ({ source, cells, task_id: fixedTaskId }: PlanOptions): CdebStudyPlan => {
   const descriptors = cells.flatMap((cell, block) => {
     const repository_id = `repo-${String(cell.repository)}`;
     const task_id = fixedTaskId ?? `task-${String(cell.task).padStart(2, "0")}`;
-    const category = categoryFor(cell.task + cell.repository * 6);
+    // Position in the corpus, not `repository * 6 + task`: with eight, eight,
+    // seven and seven that arithmetic stops naming a unique task and the
+    // category quota it feeds is counted across the corpus, not per
+    // repository.
+    const category = categoryFor(
+      TASKS_PER_REPOSITORY.slice(0, cell.repository).reduce((sum, n) => sum + n, 0) + cell.task,
+    );
     return (["commitlore-on", "commitlore-off"] as const).map((condition, arm) => ({
       ...cell,
       repository_id,
@@ -283,7 +299,7 @@ const smokePlan = ({ source, cells, task_id: fixedTaskId }: PlanOptions): CdebSt
     }));
   });
   const rows = descriptors.map((descriptor) => descriptor.analysis_row_file);
-  const repository_bundles = Array.from({ length: 5 }, (_unused, repository) => ({
+  const repository_bundles = Array.from({ length: 4 }, (_unused, repository) => ({
     repository_id: `repo-${String(repository)}`,
     bundle_sha256: HEX,
     snapshot_commit: source.commit,
@@ -422,11 +438,11 @@ const smokePlan = ({ source, cells, task_id: fixedTaskId }: PlanOptions): CdebSt
 };
 
 const matrixCells = (): PlanOptions["cells"] =>
-  Array.from({ length: 5 }, (_unused, repository) =>
-    Array.from({ length: 6 }, (_task, task) =>
+  TASKS_PER_REPOSITORY.flatMap((taskCount, repository) =>
+    Array.from({ length: taskCount }, (_task, task) =>
       ([1, 2, 3] as const).map((repeat) => ({ repository, task, repeat })),
     ).flat(),
-  ).flat();
+  );
 
 const pairCells = (): PlanOptions["cells"] => [{ repository: 0, task: 0, repeat: 1 }];
 

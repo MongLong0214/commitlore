@@ -133,6 +133,13 @@ things only a run produces.
 not *whether it can run*. §3.3 wants five repositories that are not this one,
 and those require users. CDEB v1 stays downstream of adoption.
 
+> **Note (2026-08-19, #771).** §3.3 was amended to four repositories after a
+> census of every local repository carrying records. This paragraph is left as
+> written: it reports what was true when the pilot concluded, and a result
+> document that silently tracks a later amendment stops being a record of what
+> was found. The instrument objection above is unaffected and remains the
+> reason not to start.
+
 ---
 
 ## Deviations

@@ -23,6 +23,32 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/**
+ * How many repositories a freeze must name (PRD §3.3).
+ *
+ * Four since 2026-08-19. The census of every local repository that carries
+ * records found six, and four with the density to supply the six tasks each
+ * that §3.3 also requires; the other two hold three records and one. A fifth
+ * is adoption rather than code.
+ *
+ * Named once here because the number is a corpus decision, and it was
+ * previously written out twice as the word "five" in two failure messages --
+ * so the document could be amended while the gate went on refusing.
+ */
+const CORPUS_REPOSITORIES = 4;
+
+/**
+ * The per-repository floor, and the corpus total it has to add up to.
+ *
+ * Thirty does not divide by four, and the 2026-08-19 amendment kept the total
+ * rather than the equal share: shrinking to twenty-four would have invalidated
+ * §16.3's preregistered power simulation, which is computed on thirty tasks.
+ * So six is a floor and the total is checked separately -- an equality check
+ * per repository would refuse the very shape the amendment describes.
+ */
+const MIN_TASKS_PER_REPOSITORY = 6;
+const CORPUS_TASKS = 30;
+
 export const BOOTSTRAP_REPLICATES = 10_000;
 export const MIN_FINITE_TOKEN_REPLICATES = 9_900;
 export const TOKEN_VOLUME_REDUCTION_THRESHOLD = 0.15;
@@ -401,7 +427,8 @@ const parseFreeze = (value: unknown, path: string): Freeze => {
   }
 
   const repositories = has(freeze, "repository_bundles");
-  if (!Array.isArray(repositories) || repositories.length !== 5) return fail(`${path}.repository_bundles must name five repositories`);
+  if (!Array.isArray(repositories) || repositories.length !== CORPUS_REPOSITORIES)
+    return fail(`${path}.repository_bundles must name ${String(CORPUS_REPOSITORIES)} repositories`);
   const parsedRepositories = repositories.map((item, index) => {
     const repository = requireRecord(item, `${path}.repository_bundles[${index}]`);
     return {
@@ -411,7 +438,7 @@ const parseFreeze = (value: unknown, path: string): Freeze => {
       snapshot_tree_oid: requireString(has(repository, "snapshot_tree_oid"), `${path}.repository_bundles[${index}].snapshot_tree_oid`),
     };
   });
-  if (new Set(parsedRepositories.map((repository) => repository.repository_id)).size !== 5) {
+  if (new Set(parsedRepositories.map((repository) => repository.repository_id)).size !== CORPUS_REPOSITORIES) {
     fail(`${path}.repository_bundles contains duplicate repository IDs`);
   }
   const thresholds = requireRecord(has(freeze, "claim_thresholds"), `${path}.claim_thresholds`);
@@ -542,9 +569,16 @@ const buildTaskUnits = (rows: readonly Row[]): readonly TaskUnit[] => {
     }
     tasks.push({ repository_id: first.repository_id, task_id: first.task_id, category: first.category, on, off });
   }
-  if (repositories.size !== 5) fail(`matrix has ${repositories.size} repositories, not the required five`);
+  if (repositories.size !== CORPUS_REPOSITORIES)
+    fail(`matrix has ${String(repositories.size)} repositories, not the required ${String(CORPUS_REPOSITORIES)}`);
+  const totalTasks = [...repositories.values()].reduce((sum, count) => sum + count, 0);
+  if (totalTasks !== CORPUS_TASKS)
+    fail(`matrix has ${String(totalTasks)} tasks, not the required ${String(CORPUS_TASKS)}`);
   for (const [repository, count] of repositories) {
-    if (count !== 6) fail(`repository ${repository} has ${count} tasks, not the required six`);
+    if (count < MIN_TASKS_PER_REPOSITORY)
+      fail(
+        `repository ${repository} has ${String(count)} tasks, fewer than the required ${String(MIN_TASKS_PER_REPOSITORY)}`,
+      );
   }
   for (const category of CATEGORIES) {
     const actual = tasks.filter((task) => task.category === category).length;
