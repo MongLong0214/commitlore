@@ -251,8 +251,13 @@ export interface AnalysisResult {
       readonly evaluable_off: number;
       readonly assigned_per_arm: number;
       readonly relative_reduction: number | null;
-      /** ON rate − OFF rate: the inferential metric (§16.5). */
+      /**
+       * ON rate − OFF rate with every unjudged run counted safe: the LOWER
+       * bound. `upper_absolute_difference` counts them revived instead. The
+       * two coincide when nothing was unevaluable.
+       */
       readonly absolute_difference: number;
+      readonly upper_absolute_difference: number;
     };
   };
   readonly bootstrap: {
@@ -627,6 +632,8 @@ interface TokenSample {
 interface Sample {
   readonly safeLift: number;
   readonly revivalDifference: number;
+  /** Same difference with every unjudged run counted as a revival. */
+  readonly revivalUpperDifference: number;
   readonly token: TokenSample | null;
 }
 
@@ -634,6 +641,7 @@ const calculateSample = (tasks: readonly TaskUnit[], hasCompleteUsage: boolean):
   const repeatCount = 3;
   let lift = 0;
   let revivalDifference = 0;
+  let revivalUpper = 0;
   let onSuccesses = 0;
   let offSuccesses = 0;
   let onVolume = 0;
@@ -643,6 +651,14 @@ const calculateSample = (tasks: readonly TaskUnit[], hasCompleteUsage: boolean):
     const offSafe = taskSafe(task, "commitlore-off");
     lift += (onSafe - offSafe) / repeatCount;
     revivalDifference += (taskRevived(task, "commitlore-on") - taskRevived(task, "commitlore-off")) / repeatCount;
+    // Upper bound on the same difference: every run the evaluator could not
+    // judge is counted as a revival. The lower bound is the line above, where
+    // those runs are counted safe. Reporting only one of the two would be the
+    // same missing-data claim this file just stopped making elsewhere.
+    revivalUpper += (
+      (taskRevived(task, "commitlore-on") + (repeatCount - taskRevivalEvaluable(task, "commitlore-on")))
+      - (taskRevived(task, "commitlore-off") + (repeatCount - taskRevivalEvaluable(task, "commitlore-off")))
+    ) / repeatCount;
     onSuccesses += onSafe;
     offSuccesses += offSafe;
     if (hasCompleteUsage) {
@@ -652,13 +668,15 @@ const calculateSample = (tasks: readonly TaskUnit[], hasCompleteUsage: boolean):
   }
   const safeLift = lift / tasks.length;
   const absoluteDifference = revivalDifference / tasks.length;
-  if (!hasCompleteUsage) return { safeLift, revivalDifference: absoluteDifference, token: null };
+  const upperDifference = revivalUpper / tasks.length;
+  if (!hasCompleteUsage) return { safeLift, revivalDifference: absoluteDifference, revivalUpperDifference: upperDifference, token: null };
 
   const onTvpdss = onSuccesses === 0 ? null : onVolume / onSuccesses;
   const offTvpdss = offSuccesses === 0 ? null : offVolume / offSuccesses;
   return {
     safeLift,
     revivalDifference: absoluteDifference,
+    revivalUpperDifference: upperDifference,
     token: {
       onVolume,
       offVolume,
@@ -931,6 +949,7 @@ export const analyzeRows = (freeze: Freeze, freezeSha: string, rows: readonly Ro
       assigned_per_arm: byArm["commitlore-on"],
       relative_reduction: revivalOff === 0 ? null : 1 - revivalOn / revivalOff,
       absolute_difference: point.revivalDifference,
+      upper_absolute_difference: point.revivalUpperDifference,
     },
   };
   const bootstrapMetrics = bootstrap(tasks, freeze.bootstrap_seed, completeUsage);
@@ -1040,10 +1059,10 @@ TOKEN VOLUME PER DECISION-SAFE SUCCESS
 ${tokenLines.join("\n")}
 
 REJECTED-DECISION REVIVALS
-OFF  ${metrics.revival.off} / ${metrics.revival.assigned_per_arm} (${percent(metrics.revival.off / metrics.revival.assigned_per_arm)})
-ON   ${metrics.revival.on} / ${metrics.revival.assigned_per_arm} (${percent(metrics.revival.on / metrics.revival.assigned_per_arm)})
+OFF  ${metrics.revival.off} / ${metrics.revival.evaluable_off} judged (${percent(metrics.revival.evaluable_off === 0 ? 0 : metrics.revival.off / metrics.revival.evaluable_off)}) · ${metrics.revival.assigned_per_arm - metrics.revival.evaluable_off} not judged
+ON   ${metrics.revival.on} / ${metrics.revival.evaluable_on} judged (${percent(metrics.revival.evaluable_on === 0 ? 0 : metrics.revival.on / metrics.revival.evaluable_on)}) · ${metrics.revival.assigned_per_arm - metrics.revival.evaluable_on} not judged
 Relative reduction ${percent(metrics.revival.relative_reduction)}
-Absolute difference (ON - OFF) ${pp(metrics.revival.absolute_difference, true)} · task-bootstrap 95% CI ${interval(distributions.revival_absolute_difference.interval_95)} · tail p ${tailP(distributions.revival_absolute_difference.tail_p)}
+Absolute difference (ON - OFF) ${pp(metrics.revival.absolute_difference, true)} (unjudged counted safe) · upper bound ${pp(metrics.revival.upper_absolute_difference, true)} (unjudged counted revived) · task-bootstrap 95% CI ${interval(distributions.revival_absolute_difference.interval_95)} · tail p ${tailP(distributions.revival_absolute_difference.tail_p)}
 
 CLAIM GATES
 Performance             ${reportGate(gates.performance)}

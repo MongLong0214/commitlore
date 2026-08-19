@@ -417,7 +417,7 @@ const smokePlan = ({ source, cells, task_id: fixedTaskId }: PlanOptions): CdebSt
           rejected_decision_revived: evaluator.rejected_decision_revived,
           normalized_result_sha256: normalizedResultSha256(evaluator),
         },
-        decision_safe_success: agent.stop_reason === "completed" && evaluator.functional_pass && !evaluator.rejected_decision_revived,
+        decision_safe_success: agent.stop_reason === "completed" && evaluator.functional_pass && evaluator.rejected_decision_revived === false,
         simulated: false,
       }),
     };
