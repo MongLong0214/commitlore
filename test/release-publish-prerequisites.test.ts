@@ -364,7 +364,18 @@ describe('the release gate requires every job CI runs on a push', () => {
 
     for (const [name, job] of Object.entries(workflow.jobs)) {
       if (name === 'lint') continue;
-      expect(job.if, `${name} may not be skipped`).toBeUndefined();
+      // The rule is that a release-required job cannot be skipped, not that it
+      // cannot carry a condition. `always()` is the one expression that makes a
+      // job unskippable: it runs whatever its dependencies did. Every other
+      // condition can evaluate false, and a required job that never reported is
+      // indistinguishable here from one that was never run.
+      //
+      // The fan-in gate needs exactly that guarantee for the opposite reason:
+      // without `always()` a failed dependency SKIPS it rather than failing it,
+      // and GitHub does not treat a skipped required check as a failure.
+      if (job.if !== undefined) {
+        expect(job.if, `${name}'s condition must be always(), or the job can skip`).toBe('always()');
+      }
       expect(job['continue-on-error'], `${name} may not be allowed to fail`).toBeUndefined();
       expect(job.steps, `${name} needs executable work`).toEqual(expect.any(Array));
       expect(job.steps!.length, `${name} may not be empty`).toBeGreaterThan(0);
