@@ -76,13 +76,13 @@ commitlore plugin install-codex
 **其他编程代理** — 安装 CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.sh | sh -s v1.1.4
+curl -fsSL https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh | sh -s v1.2.0
 ```
 
 **Windows** — 在 PowerShell 中执行同样的安装：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.ps1))) v1.1.4
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.ps1))) v1.2.0
 ```
 
 在 Windows 上配置 host 需要 **v1.1.1 或更高版本**。在此之前，检测看不到 `.cmd` shim，安装器也无法运行它，因此 Windows 安装只放下 CLI 而不配置任何 host —— 报告为 `ok: false`，而不是成功。已在 1.1.1 上于真实机器验证 Codex、Gemini CLI 与 Hermes。
@@ -124,11 +124,11 @@ commitlore context .
 
 ```bash
 # 固定版本并检查 installer 后再执行。
-curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.1.4/install.sh
-sh install.sh v1.1.4
+curl -fsSLO https://raw.githubusercontent.com/MongLong0214/commitlore/v1.2.0/install.sh
+sh install.sh v1.2.0
 
 # 或者完全不用脚本：它创建的检出，你自己也能创建。
-git clone --depth 1 --branch v1.1.4 https://github.com/MongLong0214/commitlore
+git clone --depth 1 --branch v1.2.0 https://github.com/MongLong0214/commitlore
 node commitlore/dist/commitlore.mjs --version
 ```
 
