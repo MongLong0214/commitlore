@@ -160,12 +160,19 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
     // staged transaction becomes collectable only once HEAD has moved past the
     // base it was prepared for, which is when the hook can no longer finalise
     // it -- the condition the record's reason turns on.
+    //
+    // `headHasMovedPast` is the real predicate: already imported by this file
+    // and already used further down, where the comment reads "this is the point
+    // past which it can never be finalised". An earlier version of this control
+    // invented a `headMovedPast(record)` that does not exist, which made the
+    // known-good a sketch rather than an implementation -- the oracle reads the
+    // guard's shape and cannot tell the difference.
     'known-good': {
       kind: 'known-good',
       patches: [
         [
           'src/core/pending-gc.ts',
-          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headMovedPast(record)) {'),
+          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headHasMovedPast(record[\'base_head\'], head)) {'),
         ],
       ],
     },
@@ -176,7 +183,7 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
       patches: [
         [
           'src/core/pending-gc.ts',
-          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headMovedPast(record)) {'),
+          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headHasMovedPast(record[\'base_head\'], head)) {'),
         ],
         [
           'src/commands/pending.ts',
@@ -197,7 +204,7 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
       patches: [
         [
           'src/core/pending-gc.ts',
-          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headMovedPast(record)) {'),
+          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headHasMovedPast(record[\'base_head\'], head)) {'),
         ],
         [
           'src/commands/pending.ts',
@@ -211,7 +218,7 @@ const DECLARED: Readonly<Record<string, TaskControls>> = {
       patches: [
         [
           'src/core/pending-gc.ts',
-          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headMovedPast(record)) {'),
+          (s) => s.replace('if (PROTECTED_PHASES.has(phase)) {', 'if (PROTECTED_PHASES.has(phase) && !headHasMovedPast(record[\'base_head\'], head)) {'),
         ],
         [
           'src/commands/pending.ts',
