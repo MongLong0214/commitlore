@@ -6,25 +6,132 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "task_id", "functional_pass", "rejected_decision_revived",
-    "functional_checks", "decision_oracle_code", "evaluator_image_digest", "candidate_tree_oid"
+    "schema_version",
+    "task_id",
+    "functional_pass",
+    "rejected_decision_revived",
+    "functional_checks",
+    "decision_oracle_code",
+    "evaluator_image_digest",
+    "candidate_tree_oid"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "task_id": { "type": "string", "minLength": 1 },
-    "functional_pass": { "type": "boolean" },
-    "rejected_decision_revived": { "type": "boolean" },
+    "schema_version": {
+      "const": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "functional_pass": {
+      "type": "boolean"
+    },
+    "rejected_decision_revived": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "functional_checks": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["passed", "failed"],
+      "required": [
+        "passed",
+        "failed"
+      ],
       "properties": {
-        "passed": { "type": "integer", "minimum": 0 },
-        "failed": { "type": "integer", "minimum": 0 }
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
-    "decision_oracle_code": { "enum": ["SAFE", "REVIVED"] },
-    "evaluator_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "candidate_tree_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
-  }
+    "decision_oracle_code": {
+      "enum": [
+        "SAFE",
+        "REVIVED",
+        "NOT_EVALUABLE"
+      ]
+    },
+    "evaluator_image_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "candidate_tree_oid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "NOT_EVALUABLE and a boolean cannot coexist: the boolean is a claim about the tree, and NOT_EVALUABLE says the tree was never judged. Widening the enum and the type independently made four contradictory pairs representable, including the unread-as-SAFE shape this field exists to prevent.",
+      "if": {
+        "properties": {
+          "decision_oracle_code": {
+            "const": "NOT_EVALUABLE"
+          }
+        },
+        "required": [
+          "decision_oracle_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rejected_decision_revived": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "rejected_decision_revived": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "$comment": "The code and the boolean are one fact written twice; they must agree.",
+      "if": {
+        "properties": {
+          "decision_oracle_code": {
+            "const": "REVIVED"
+          }
+        },
+        "required": [
+          "decision_oracle_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rejected_decision_revived": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision_oracle_code": {
+            "const": "SAFE"
+          }
+        },
+        "required": [
+          "decision_oracle_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rejected_decision_revived": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
 }

@@ -163,7 +163,7 @@
         "evaluator_image_digest": { "$ref": "#/$defs/ociDigest" },
         "evaluator_attempts": { "type": "integer", "minimum": 1 },
         "functional_pass": { "type": "boolean" },
-        "rejected_decision_revived": { "type": "boolean" },
+        "rejected_decision_revived": { "type": ["boolean", "null"] },
         "normalized_result_sha256": { "$ref": "#/$defs/sha256" }
       }
     },

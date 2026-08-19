@@ -36,7 +36,7 @@
  * controls (good/bad/no-op evaluated repeatedly) are the mechanical catch.
  */
 
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, normalize, relative, sep } from "node:path";
 
@@ -132,18 +132,29 @@ export const evaluateTask = (input: EvaluationInput): EvaluatorOutput => {
   const functional_pass = checks.length > 0 && failed === 0 && tree.refusal === null;
 
   // The oracle is static — it reads bytes, never runs candidate code. A
-  // refused tree gets an EMPTY view: the extraction may be partial, and the
-  // oracle must not read half-extracted attack payloads. A REVIVED approach
-  // is judged REVIVED from the full tree or not at all.
-  let oracleView: TreeView;
-  if (tree.refusal === null) {
-    oracleView = treeView(tree.root);
-  } else {
-    const emptyRoot = join(input.scratchDir, "empty-tree");
-    mkdirSync(emptyRoot, { recursive: true });
-    oracleView = treeView(emptyRoot);
+  // refused tree is not judged at all: the extraction may be partial, so the
+  // oracle must not read half-extracted attack payloads, and a REVIVED
+  // approach is judged from the full tree or not at all.
+  //
+  // "Not at all" used to be written as SAFE, by running the oracle against an
+  // empty directory. An empty tree contains no revival, so every refused run
+  // recorded a positive finding that the rejected approach was absent — a
+  // claim about bytes nobody read. It is NOT_EVALUABLE now, and the boolean
+  // beside it is null rather than false.
+  if (tree.refusal !== null) {
+    return {
+      schema_version: 1,
+      task_id: task.task_id,
+      functional_pass,
+      rejected_decision_revived: null,
+      functional_checks: { passed, failed },
+      decision_oracle_code: "NOT_EVALUABLE",
+      evaluator_image_digest: input.evaluator_image_digest,
+      candidate_tree_oid: tree.candidate_tree_oid,
+    };
   }
-  const oracleCode = task.decision_oracle(oracleView);
+
+  const oracleCode = task.decision_oracle(treeView(tree.root));
 
   return {
     schema_version: 1,
