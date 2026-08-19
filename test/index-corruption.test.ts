@@ -85,16 +85,32 @@ describe('#782 a damaged index', () => {
 
     damage(path, 400);
 
-    // Opened directly rather than through `openIndex`, which rebuilds the FTS
-    // table on open and therefore throws on a smashed file before any check
-    // runs. That throw predates this change and is filed separately; what is
-    // asserted here is only that the scan `rebuildIndex` now consults still
-    // recognises damage.
+    // Opened directly so this asserts the scan itself rather than the repair
+    // path around it; the repair path is the case below, which #785 made
+    // reachable.
     const broken = new DatabaseSync(path, { readOnly: true });
     try {
       expect(integrityProblem(broken as never)).not.toBeNull();
     } finally {
       broken.close();
+    }
+  });
+
+  // #785: this used to be impossible. `openIndex` rebuilt the FTS table before
+  // any caller got a handle, so `commitlore index --rebuild` threw on the file
+  // it exists to replace, and ADR-0003's "corruption is a reason to rebuild"
+  // had no path to act on. The earlier version of this suite opened the
+  // database directly to work around it and said so.
+  it('can be opened and rebuilt through the path the documents name', () => {
+    const repo = populated('rebuild');
+    damage(indexDbPath(repo), 400);
+
+    const { handle } = ensureIndex({ cwd: repo });
+    try {
+      rebuildIndex(handle);
+      expect(integrityProblem(handle.db)).toBeNull();
+    } finally {
+      closeIndex(handle);
     }
   });
 

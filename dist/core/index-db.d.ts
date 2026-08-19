@@ -271,10 +271,6 @@ export declare const indexUnread: (handle: IndexHandle) => number;
  * `index` command, and `doctor`. `ensureIndex` no longer calls it.
  */
 export declare const integrityProblem: (db: IndexDatabase) => string | null;
-/**
- * Opens the index, creating it if absent. A file that SQLite refuses to open
- * at all is deleted and recreated rather than reported: the bytes are a cache.
- */
 export declare const openIndex: (opts?: OpenIndexOptions) => IndexHandle;
 export declare const closeIndex: (handle: IndexHandle) => void;
 /**

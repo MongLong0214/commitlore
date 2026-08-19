@@ -1191,6 +1191,26 @@ const removeDatabaseFile = (path: string): void => {
  * Opens the index, creating it if absent. A file that SQLite refuses to open
  * at all is deleted and recreated rather than reported: the bytes are a cache.
  */
+/**
+ * `syncFts`, with a failure turned into a discard rather than a throw (#785).
+ *
+ * The table is derived from `trailers` and is rebuilt on the next open, so
+ * losing it costs nothing a rebuild does not already replace.
+ */
+const syncFtsOrDiscard = (
+  db: IndexDatabase,
+  requested: boolean,
+  writable: boolean,
+  discard: (reason: string) => void,
+): boolean => {
+  try {
+    return syncFts(db, requested, writable);
+  } catch (error) {
+    discard(`the index full-text table could not be rebuilt (${errorMessage(error)})`);
+    return false;
+  }
+};
+
 export const openIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
   const cwd = opts.cwd ?? process.cwd();
   const readonly = opts.readonly ?? false;
@@ -1217,14 +1237,33 @@ export const openIndex = (opts: OpenIndexOptions = {}): IndexHandle => {
 
   if (!readonly) createSchema(db);
 
+  // Computed before the literal below. An assignment made inside one is
+  // invisible to a property that was already evaluated above it, which is how
+  // the first attempt at this left the discard unset and the caller still
+  // walking into a corrupt read.
+  let ftsDiscard: string | null = null;
+  const fts = syncFtsOrDiscard(db, ftsRequested, !readonly, (reason) => {
+    ftsDiscard = reason;
+  });
+
   const handle: IndexHandle = {
     db,
     path,
     cwd,
     readonly,
     ftsRequested,
-    discardedReason,
-    fts: syncFts(db, ftsRequested, !readonly),
+    discardedReason: ftsDiscard ?? discardedReason,
+    // Rebuilding the FTS table on open is how a damaged index became
+    // unopenable: `DELETE FROM trailers_fts` and the reinsert run before any
+    // caller gets a handle, so `commitlore index --rebuild` threw on the file
+    // it exists to replace, and ADR-0003's "corruption is a reason to rebuild"
+    // had no path to act on (#785).
+    //
+    // A failure here is routed into the same `discardedReason` the open
+    // already has rather than thrown: every caller that knows what to do with
+    // a discarded index -- reset it, rebuild it, or fall back to a scan --
+    // then does that, and none of them needed to learn a second failure shape.
+    fts,
   };
   return handle;
 };
