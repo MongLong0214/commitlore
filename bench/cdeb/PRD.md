@@ -135,7 +135,7 @@ CDEB 결과가 허용하는 최대 주장은 다음 범위다.
 
 ```text
 30 frozen decision-sensitive tasks
-5 named repositories
+4 named repositories
 1 pinned model
 1 pinned agent harness
 CommitLore shipping delivery ON/OFF
@@ -153,7 +153,7 @@ CDEB는 "CommitLore가 모든 coding agent를 더 좋게 만든다"를 증명하
 - 180 runs는 stochastic variance를 줄이기 위한 반복이며 독립적인 engineering cases 180개로 해석하지 않는다.
 - 각 task는 ON 3회, OFF 3회를 가진다.
 - task는 동일 가중치다.
-- repository당 정확히 6개 task를 사용한다.
+- repository당 최소 6개 task를 사용하고, 합계는 30개다 (2026-08-19 개정, §3.3). 30은 4로 나뉘지 않으므로 8·8·7·7이며, `analyze.ts`는 저장소별 하한과 합계를 따로 검사한다 — 저장소별 등식 검사는 이 모양 자체를 거부한다.
 
 ### 2.2 Reference model and harness
 
@@ -283,10 +283,20 @@ rejection_reason: null
 ### 3.3 Repository composition
 
 > **개정 2026-08-19 (#771): 5개 → 4개.** 이 저장소를 제외한 로컬 census를 다 훑은 결과
-> 기록이 있는 저장소는 여섯이고 저장소당 6과제를 낼 밀도가 있는 것은 넷이다 —
-> `gitseed`(후보 84, rejection reason 명시 71), `agent-operator-score`(106/27),
-> `logic-pro-mcp`(53/29), `agent-control-plane`(80/17). 나머지 둘은 3건과 1건이라
-> 6과제를 못 낸다. 다섯 번째는 채택이지 코드가 아니며, 그것을 기다리는 동안 study는
+> 기록이 있는 저장소는 여섯이고 저장소당 6과제를 낼 밀도가 있는 것은 넷이다.
+> `candidate-registry.ts` 로 센 값이며, §3.1이 요구하는 대로 snapshot ref를 못박는다:
+>
+> | repository | snapshot | 후보 | rejection reason 명시 |
+> |---|---|---:|---:|
+> | `gitseed` | `3fa2c3f` | 84 | 71 |
+> | `agent-operator-score` | `bd56d45` | 119 | 29 |
+> | `logic-pro-mcp` | `c8764dd3` | 53 | 29 |
+> | `agent-control-plane` | `6cf4dbd` | 80 | 17 |
+> | `stock-ai-newsletter` | `9041ef8` | 3 | 2 |
+> | `repo-factory` | `4b8f299` | 1 | 0 |
+>
+> 아래 둘은 3건과 1건이라 6과제를 못 낸다. 초안은 `agent-operator-score`를 106/27로
+> 적었는데 어느 ref에서도 재현되지 않았다 — ref 없이 인용한 수는 검산할 수 없는 수다. 다섯 번째는 채택이지 코드가 아니며, 그것을 기다리는 동안 study는
 > 시작될 수 없다.
 >
 > **사전등록 문턱을 낮추는 것이므로 값이 없지 않다.** 사전등록이 막으려는 것은 *결과를
@@ -300,7 +310,14 @@ rejection_reason: null
 > 계산됐고 §13의 CI 해석도 "30 tasks" 안의 재표집 안정성으로 적혀 있다. 재료는 충분하다
 > (rejection reason이 명시된 후보만 71·27·29·17건). 그러므로 **저장소만 4개로 줄고
 > task 합계 30과 §3.4 쿼터는 그대로**이며, repository당 6은 하한으로 읽는다. 바뀌는 것은
-> repository 다양성이지 검정력이 아니다.
+> repository 다양성이다.
+>
+> **"검정력이 아니다" 는 너무 강한 말이라 쓰지 않는다.** task 30을 유지해도 cluster가
+> 5에서 4로 줄면 cluster당 task가 6에서 7.5로 늘고 design effect `1+(m-1)ρ` 가 오른다:
+> ICC 0.05 에서 유효 n 24.0→22.6, 0.10 에서 20.0→18.2, 0.20 에서 15.0→13.0. 검정력이
+> 보존되는 것은 §16.2의 등록된 bootstrap이 repository를 고정하고 between-repository
+> 분산을 전파하지 않기 때문이며, §16.7이 그 한계를 이미 적어두었다. 즉 등록된 게이트에
+> 대해서는 참이고, 읽는 사람이 가져갈 일반적 의미로는 거짓이다.
 >
 > **§3.2 rule 5 를 읽고 넘어간다, 모르고 지나치는 것이 아니다.** 그 규칙은
 > *"candidate가 부족하면 기준을 낮추거나 새 record를 만들지 않고 study를 중단한다"* 이다.
@@ -1330,7 +1347,7 @@ OFF revival이 0이면 relative reduction은 undefined다.
 
 10,000회 repository-stratified paired task bootstrap을 사용한다.
 
-- 각 repository의 6 tasks를 replacement로 6개 재표집
+- 각 repository의 task를 그 repository의 task 수만큼 replacement로 재표집한다 (8·8·7·7이면 8·8·7·7개, 합계 30). 문자 그대로 "6개"를 쓰면 24-task replicate가 되어 §16.3의 검정력 시뮬레이션이 계산된 30을 벗어난다 — `analyze.ts`는 `stratum.length`로 재표집하므로 코드는 이미 30이다
 - ON/OFF와 3 repeats는 task와 함께 이동
 - 4 repositories는 항상 유지 (2026-08-19 개정, §3.3)
 - fixed PRNG algorithm과 seed를 analysis source에 고정
@@ -1495,7 +1512,7 @@ CI는 4 fixed repositories / 30 tasks 내의 task-resampling stability를 표현
 NOT MEASURABLE이면 이 문장은 생성되지 않으며, `CoreBehaviorHeadline`의 X·Z 문장이
 그 자리를 대신하고 Token 상태가 그 옆에 표시된다.
 
-> Across 30 frozen decision-sensitive tasks from five named repositories, the same pinned coding agent with CommitLore produced **X percentage points more first-pass patches that worked without reviving a previously rejected decision**, used **Y% less provider-reported task-execution token volume per decision-safe success**, and revived rejected approaches **Z% less often** than the same agent with ordinary Git access.
+> Across 30 frozen decision-sensitive tasks from four named repositories, the same pinned coding agent with CommitLore produced **X percentage points more first-pass patches that worked without reviving a previously rejected decision**, used **Y% less provider-reported task-execution token volume per decision-safe success**, and revived rejected approaches **Z% less often** than the same agent with ordinary Git access.
 
 항상 바로 옆에 표시:
 
@@ -1544,7 +1561,7 @@ Measured run 전에 다음을 고정한다.
 protocol source and digest
 candidate registry commitment
 sealed task bundle commitment
-5 repository bundle digests
+4 repository bundle digests
 all snapshot/refs/notes digests
 30 task IDs/categories (sealed; commitment only in public freeze)
 randomization order (opaque block indices)
@@ -1930,7 +1947,7 @@ Scientific overrides 없음.
 
 ```text
 CommitLore Decision Efficiency Benchmark v1
-30 frozen decision-sensitive tasks · 5 named repositories · 180 fresh runs
+30 frozen decision-sensitive tasks · 4 named repositories · 180 fresh runs
 Same pinned model · same agent harness · byte-identical repository states
 90 runs per condition · corpus independence tier A/B
 Records delivered [claim]-graded — fixture property, not product (§9.2) · delivery surface only
