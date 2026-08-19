@@ -67,7 +67,16 @@ const doneTree = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'cdeb-oracle-done-'));
   temps.push(dir);
   mkdirSync(join(dir, 'src', 'commands'), { recursive: true });
+  mkdirSync(join(dir, 'src', 'core'), { recursive: true });
   writeFileSync(join(dir, 'src', 'commands', 'pending.ts'), readFileSync(DONE, 'utf8'));
+  // The task watches the collector as well, and an oracle handed a tree that is
+  // missing a watched file reports it unevaluable -- which is the right answer to
+  // a different question. The tree has to contain everything the task watches or
+  // the assertion measures the truncation.
+  writeFileSync(
+    join(dir, 'src', 'core', 'pending-gc.ts'),
+    readFileSync(join(REPO_ROOT, 'src', 'core', 'pending-gc.ts'), 'utf8'),
+  );
   return dir;
 };
 
