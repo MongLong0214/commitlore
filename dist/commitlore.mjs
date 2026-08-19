@@ -12465,6 +12465,21 @@ var SCHEMA_VERSION = 4;
 var NOTES_REF2 = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var BUDGETED_LOG_BATCH = 64;
+var budgetedBatchSizes = function* () {
+  let size = BUDGETED_LOG_BATCH;
+  for (; ; ) {
+    yield size;
+    size = Math.min(LOG_BATCH, size * 2);
+  }
+};
+var chunkedGrowing = function* (items, sizes) {
+  let at = 0;
+  while (at < items.length) {
+    const size = sizes.next().value ?? LOG_BATCH;
+    yield items.slice(at, at + size);
+    at += size;
+  }
+};
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
 var GIT_NO_SUCH_REF2 = 1;
 var RECORD_SEP = "";
@@ -12650,8 +12665,8 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
   const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
   const records = [];
   let read = 0;
-  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
-  for (const batch of chunked(shas, batchSize)) {
+  const batches = budget === void 0 ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
+  for (const batch of batches) {
     if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read;
       return records;
@@ -12716,8 +12731,8 @@ var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
   if (commits.length === 0) return [];
   const records = [];
   let read = 0;
-  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
-  for (const batch of chunked(commits, batchSize)) {
+  const noteBatches = budget === void 0 ? chunked(commits, LOG_BATCH) : chunkedGrowing(commits, budgetedBatchSizes());
+  for (const batch of noteBatches) {
     if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadNotes = commits.length - read;
       return records;

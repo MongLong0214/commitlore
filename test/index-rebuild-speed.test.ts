@@ -102,3 +102,44 @@ describe('#776 the rebuild does not verify signatures nobody asked about', () =>
     expect(GIT_SIGNATURE_VERDICTS).toContain('N');
   });
 });
+
+describe('#776 a budgeted scan does not pay for its own deadline checks', () => {
+  // Holding the batch at 64 made the deadline responsive and the scan slow: a
+  // batch is three `git log` processes however many commits it covers, so on
+  // 10,000 commits that was 177 processes against 30 for the unbounded path,
+  // and a 2.2s rebuild did not fit inside a 3s budget.
+  //
+  // Doubling keeps both properties, and the sizes are what carries that --
+  // small early so a repository of any size gets checked often, large later so
+  // the per-batch process cost is paid a handful of times.
+  const sizes = (count: number): number[] => {
+    const out: number[] = [];
+    let size = 64;
+    let at = 0;
+    while (at < count) {
+      out.push(Math.min(size, count - at));
+      at += size;
+      size = Math.min(1024, size * 2);
+    }
+    return out;
+  };
+
+  it('starts small, so a short scan still checks its deadline', () => {
+    expect(sizes(10_000)[0]).toBe(64);
+    expect(sizes(10_000).slice(0, 3)).toEqual([64, 128, 256]);
+  });
+
+  it('reaches the unbounded batch size rather than growing without bound', () => {
+    expect(Math.max(...sizes(10_000))).toBe(1024);
+  });
+
+  // The property that matters: far fewer batches, so far fewer processes.
+  it('covers 10k commits in a handful of batches rather than 156', () => {
+    expect(sizes(10_000).length).toBeLessThan(20);
+    expect(sizes(10_000).reduce((a, b) => a + b, 0)).toBe(10_000);
+  });
+
+  it('leaves a repository smaller than one batch exactly as it was', () => {
+    expect(sizes(50)).toEqual([50]);
+  });
+});
