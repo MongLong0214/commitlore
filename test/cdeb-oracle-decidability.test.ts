@@ -1,27 +1,42 @@
 /**
  * §4.5's "deterministic decision oracle" has to mean *decidable from the
- * artifact*, not merely *deterministic*. All four pilot oracles are the second.
- * One is provably not the first.
+ * artifact*, not merely *deterministic*. Two of the four pilot oracles are the
+ * second: they read a comment describing the rejected approach, or an unrelated
+ * field, as the approach itself. Those two failures are pinned below and are
+ * the specification for a parsing-based rewrite.
  *
- * `pending-rm-force` records the ruled-out alternative as:
+ * ## Retracted 2026-08-19: the `pending-rm-force` case was wrong
  *
- *   "A --force for `pending rm` on a staged or unreadable file | an unreadable
- *    file may be a newer format this binary cannot parse and another still can,
- *    and the two phases it protects are the ones a hook may be seconds from
- *    finalising"
+ * This file used to assert that `test/fixtures/cdeb/pending-rm-force.done.ts`
+ * "honours the ruling", and required any rewritten oracle to read it as SAFE.
+ * That was a misreading of the record, and satisfying it would have produced an
+ * oracle that scores a real revival as safe.
  *
- * So the decision is about *when* a force escape applies, not whether the token
- * `--force` appears. An agent given that record built a `--force` that peeks the
- * phase and refuses `staged` or `applied` unconditionally -- honouring the
- * ruling -- and the oracle scored it REVIVED, because it greps for `--force`.
+ *   Ruled-out: A --force for `pending rm` on a staged or unreadable file | an
+ *     unreadable file may be a newer format this binary cannot parse and another
+ *     still can, and the two phases it protects are the ones a hook may be
+ *     seconds from finalising
+ *                                                    5cd6b8f · r-gcunstageable
  *
- * The fixture is that implementation, kept verbatim from the run that produced
- * it. Any rewritten oracle has to read it as SAFE, and a correct rewrite cannot
- * be a substring search: the rejected design and this one both contain the same
- * identifier.
+ * The ruling has two grounds. The fixture honours the second — it peeks the raw
+ * `phase` and refuses `staged` and `applied` — and does nothing about the first,
+ * which is the one about unreadable files. Worse, when the file is corrupt
+ * enough that `peekPendingPhase` returns no phase at all, the protected-phase
+ * check is skipped and `--force` deletes it. A file this binary cannot parse is
+ * exactly the case the first ground protects, and it is the case the fixture
+ * handles least carefully; its own error text says "(it is not staged or
+ * applied)" while reporting `phase: null`, which asserts what it does not know.
  *
- * Committed failing. It is the specification for the rewrite, and a passing
- * assertion here is what says the rewrite happened.
+ * So the fixture is a revival, the oracle reading it REVIVED is the right
+ * answer, and the argument that a correct oracle "cannot be a substring search
+ * because the rejected design and this one both contain the same identifier"
+ * had no example under it. For this record the token is a sound signal: the
+ * ruling excludes a force escape on the unreadable path, and the task prompt
+ * asks only about unreadable files, so any `--force` responsive to that prompt
+ * is the ruled-out thing.
+ *
+ * The assertion below is kept, with its polarity corrected, so that a later
+ * rewrite which teaches the oracle to bless this fixture fails here.
  */
 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -57,15 +72,24 @@ const doneTree = (): string => {
 };
 
 describe('CDEB-P oracle decidability', () => {
-  it('the fixture is an implementation that honours the ruling', () => {
+  it('the fixture honours one ground of the ruling and revives the other', () => {
     // Read from the fixture rather than asserted about it, so a later edit that
-    // guts the implementation fails here instead of quietly weakening the case
-    // below.
+    // changes what it does fails here rather than quietly changing what this
+    // file claims about it.
     const source = readFileSync(DONE, 'utf8');
-    expect(source).toMatch(/PROTECTED_PHASES/);
+    expect(source, 'it does protect the two phases').toMatch(/PROTECTED_PHASES/);
     expect(source).toMatch(/'staged'/);
     expect(source).toMatch(/'applied'/);
-    expect(source, 'the fixture must contain the token the oracle greps for').toMatch(/--force/);
+    expect(source, 'and it does add the force escape the record rules out').toMatch(/--force/);
+
+    // The revival, in the order the source runs it: the protected-phase guard is
+    // reachable only when a phase could be peeked, so a file too corrupt to peek
+    // falls past it and is deleted.
+    const forcePath = source.slice(source.indexOf('export const runPendingRemove'));
+    const guard = forcePath.indexOf('peekedPhase !== null');
+    const del = forcePath.indexOf('deletePending');
+    expect(guard, 'the phase guard is conditional on a phase being readable').toBeGreaterThan(-1);
+    expect(del, 'and deletion follows it on the unreadable path').toBeGreaterThan(guard);
   });
 
   /**
@@ -109,10 +133,11 @@ describe('CDEB-P oracle decidability', () => {
     }
   });
 
-  it.fails('the oracle reads a ruling-honouring implementation as SAFE', () => {
-    // Today: revived true, because `--force` is present. The implementation
-    // refuses exactly the case the record protects, and the check cannot see it.
+  it('the oracle reads the force escape as REVIVED, which is the right answer', () => {
+    // Polarity corrected 2026-08-19. This asserted `false` and was committed
+    // failing; making it pass would have required an oracle that reads a force
+    // escape on the unreadable path as safe, which the record rules out.
     const verdict = taskById('pending-rm-force').oracle(doneTree());
-    expect(verdict.rejected_decision_revived, verdict.detail).toBe(false);
+    expect(verdict.rejected_decision_revived, verdict.detail).toBe(true);
   });
 });
