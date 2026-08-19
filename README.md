@@ -240,6 +240,33 @@ every commit. The remaining limitation is host initiation, not a required
 per-record user command.
 
 
+## A field report, not a measurement
+
+One run, on an unrelated repository, by someone installing v1.2.0 for the first
+time. Nothing here was measured and none of it is in the evidence logs. It is on
+this page because the paragraph above asserts a loop that no table here covers.
+
+They asked an agent to fix a rounding bug, mentioned in passing that a decimal
+library had already been considered and dropped, and ended with "commit it".
+CommitLore was never named. Part of what the commit carried:
+
+```
+Ruled-out: adopting a decimal library such as Decimal.js | the backend is a
+  number contract, so it is meaningless
+Warn: do not revert the test file to console.assert: it exits 0 even on
+  failure, so CI passes silently
+Provenance: drafted
+```
+
+The `Warn` was not dictated to the agent. It hit the trap while working and left
+it for whoever came next. `Provenance: drafted` records that no human read the
+record, which grades it `claim` — delivered as a report to weigh, not an order.
+
+A later session with no shared history was asked to adopt the decimal library
+after all. It did not, and named the record as its reason. It also read the
+grade: a `claim` is not an instruction, so it checked the stated reason against
+the code before agreeing with it.
+
 ## Unlike memory storage
 
 | | General memory / RAG | **CommitLore** |
