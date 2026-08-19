@@ -126,13 +126,46 @@ export const NOTES_REF = 'refs/notes/commitlore';
 /** Commits per `git log` invocation. Bounds peak output size, not correctness. */
 const LOG_BATCH = 1024;
 /**
- * Batch size once a scan is running against a deadline.
+ * First batch size once a scan is running against a deadline.
  *
  * Small enough that the deadline is checked often enough to be a deadline —
  * `LOG_BATCH` exceeds the commit count of most repositories, so a budgeted scan
  * using it never reached a second iteration and never stopped.
  */
 const BUDGETED_LOG_BATCH = 64;
+/**
+ * ...and it grows from there, doubling to `LOG_BATCH`.
+ *
+ * Holding it at 64 made the deadline responsive and the scan slow, because a
+ * batch is three `git log` processes however many commits it covers. On a
+ * 10,000-commit repository that was 177 processes against 30 for the
+ * unbounded path, and the budgeted scan managed a quarter of the commits per
+ * second that a full rebuild did — so a 2.2s rebuild did not fit inside a 3s
+ * budget.
+ *
+ * Doubling keeps both properties. The first iterations are small, so a
+ * repository of any size still gets its deadline checked early and often --
+ * which is the whole reason 64 was chosen. Later iterations are large, so the
+ * per-batch process cost is paid a handful of times rather than a hundred. A
+ * repository smaller than 64 commits never reaches the second iteration and is
+ * unaffected either way.
+ */
+const budgetedBatchSizes = function* () {
+    let size = BUDGETED_LOG_BATCH;
+    for (;;) {
+        yield size;
+        size = Math.min(LOG_BATCH, size * 2);
+    }
+};
+/** `chunked`, with the sizes coming from a sequence rather than a constant. */
+const chunkedGrowing = function* (items, sizes) {
+    let at = 0;
+    while (at < items.length) {
+        const size = sizes.next().value ?? LOG_BATCH;
+        yield items.slice(at, at + size);
+        at += size;
+    }
+};
 /** `git log` output can be large; 256 MiB leaves room for a wide merge commit. */
 const LOG_MAX_BUFFER = 256 * 1024 * 1024;
 const GIT_NO_SUCH_REF = 1;
@@ -383,11 +416,45 @@ const readFullMessages = (cwd, shas) => {
  * `excluded`. Only the *earlier* blocks are new here, so only they are
  * stripped in this pass.
  */
+/**
+ * Whether the atom pass already holds everything this message has to give.
+ *
+ * ADR-0014 says a message with at most one `Record-Id` anywhere has exactly
+ * one block -- but that is a statement about how many record blocks exist,
+ * not about whether the one git handed the atom pass is it. `%(trailers)`
+ * returns the *last* paragraph, and a commit whose final paragraph is
+ * `Co-authored-by:` leaves the real record one paragraph earlier. Gating on
+ * the count alone dropped nine rows from such a commit here, which is why the
+ * position is checked too.
+ *
+ * So the parse is skipped only when the message names the key exactly once
+ * *and* that mention is in the last paragraph, or when it never names it at
+ * all. Everything else pays the parse.
+ */
+const atomPassHasEverything = (message) => {
+    const matches = message.match(/record-id/gi);
+    if (matches === null)
+        return true;
+    if (matches.length > 1)
+        return false;
+    const paragraphs = message.trimEnd().split(/\n[ \t]*\n/);
+    const last = paragraphs[paragraphs.length - 1] ?? '';
+    return /record-id/i.test(last);
+};
 const explodeRecordBlocks = (cwd, records, excluded) => {
     const messages = readFullMessages(cwd, records.map((record) => record.sha));
     return records.flatMap((record) => {
         const message = messages.get(record.sha);
         if (message === undefined)
+            return [record];
+        // Most messages have nothing here to recover, and finding that out used
+        // to cost a `git interpret-trailers` process each. The test is loose on
+        // purpose -- case-insensitive, unanchored -- so prose that merely says
+        // "record-id" pushes a message *into* the parse rather than out of it.
+        // Being wrong toward an extra parse costs milliseconds; being wrong the
+        // other way loses a record, which is exactly what a first version of this
+        // did.
+        if (atomPassHasEverything(message))
             return [record];
         const blocks = parseRecordBlocks(message);
         if (blocks.length <= 1)
@@ -417,7 +484,32 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
  * recorded anything. A third pass (`explodeRecordBlocks`) recovers additional
  * record blocks for that same sliver of commits (SPEC §2.4).
  */
+/**
+ * `%G?` in the scan format, or an empty field outside signature mode.
+ *
+ * Asking git for it makes it verify every commit's signature, which on this
+ * repository is 2.7s of a rebuild. Nothing reads the answer unless signature
+ * mode is on: `grade.ts` consults `signatureStatus` only behind
+ * `requireSignedDirective`, and `trusted-authors.ts` says as much where the
+ * verifier generation is defined -- "Only signature mode pays for it: the
+ * setting is opt-in". The rebuild was paying for it always.
+ *
+ * Turning the setting on is safe afterwards rather than a stale-cache hazard:
+ * `signatureVerifierGeneration` goes from `null` to a hash, `healthProblem`
+ * compares it against the one recorded in `meta`, and the mismatch rebuilds
+ * the index -- which is the same mechanism that already handles a changed
+ * keyring (#653).
+ *
+ * The field is emitted empty rather than removed so the positional destructure
+ * below keeps its shape; a shifted field is a silent wrong answer.
+ */
+export const signatureAtom = (verifierGeneration) => verifierGeneration === null ? '' : '%G?';
 const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
+    // Resolved on the first batch, not on entry. Working out whether signature
+    // mode is on costs a `git config`, and a scan with nothing to read -- which
+    // is every hook fire against an index that is already current -- would pay
+    // it for an answer it never uses.
+    let signatureField = null;
     const records = [];
     let read = 0;
     // A batch is the unit all three passes below share, so a deadline can only be
@@ -426,15 +518,16 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     // unreachable. Under a budget the work is cut into slices small enough for
     // the deadline to mean something, at the cost of more `git log` invocations
     // on a run that has already decided it would rather stop early than wait.
-    const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
-    for (const batch of chunked(shas, batchSize)) {
+    const batches = budget === undefined ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
+    for (const batch of batches) {
+        signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
         if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
             if (cost !== undefined)
                 cost.unreadCommits = shas.length - read;
             return records;
         }
         read += batch.length;
-        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`, []);
+        const result = gitLogByShas(cwd, batch, `%x01%H%x00%ct%x00%cI%x00${signatureField}%x00${TRAILERS_ATOM}%x00`, []);
         if (result.code !== 0) {
             throw Object.assign(new Error(`git log failed: ${result.stderr.trim()}`), {
                 code: result.code,
@@ -558,8 +651,10 @@ const readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
     // notes pass unbounded, and `scanTrailers` always runs it afterwards — so a
     // repository with many notes could stall an edit well past the budget while
     // the number reported as "unread" stayed 0.
-    const batchSize = budget === undefined ? LOG_BATCH : BUDGETED_LOG_BATCH;
-    for (const batch of chunked(commits, batchSize)) {
+    const noteBatches = budget === undefined
+        ? chunked(commits, LOG_BATCH)
+        : chunkedGrowing(commits, budgetedBatchSizes());
+    for (const batch of noteBatches) {
         if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
             if (cost !== undefined)
                 cost.unreadNotes = commits.length - read;

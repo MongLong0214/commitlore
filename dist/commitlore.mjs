@@ -11282,6 +11282,7 @@ var PARSE_ARGS = [
   "--parse",
   "--no-divider"
 ];
+var MENTIONS_RECORD_ID = /record-id/i;
 var CONTINUATION_INDENT = "  ";
 var parseOutputLine = (line2) => {
   const separator = line2.indexOf(": ");
@@ -11343,6 +11344,7 @@ var parseRecordBlocks = (message) => {
   const earlier = paragraphs.slice(0, -1);
   const extra = [];
   for (const paragraph of earlier) {
+    if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
     const candidate = asIsolatedBlock(paragraph);
     if (candidate.length === 0) continue;
     if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
@@ -12463,6 +12465,21 @@ var SCHEMA_VERSION = 4;
 var NOTES_REF2 = "refs/notes/commitlore";
 var LOG_BATCH = 1024;
 var BUDGETED_LOG_BATCH = 64;
+var budgetedBatchSizes = function* () {
+  let size = BUDGETED_LOG_BATCH;
+  for (; ; ) {
+    yield size;
+    size = Math.min(LOG_BATCH, size * 2);
+  }
+};
+var chunkedGrowing = function* (items, sizes) {
+  let at = 0;
+  while (at < items.length) {
+    const size = sizes.next().value ?? LOG_BATCH;
+    yield items.slice(at, at + size);
+    at += size;
+  }
+};
 var LOG_MAX_BUFFER = 256 * 1024 * 1024;
 var GIT_NO_SUCH_REF2 = 1;
 var RECORD_SEP = "";
@@ -12617,6 +12634,14 @@ var readFullMessages = (cwd, shas) => {
   }
   return byCommit;
 };
+var atomPassHasEverything = (message) => {
+  const matches = message.match(/record-id/gi);
+  if (matches === null) return true;
+  if (matches.length > 1) return false;
+  const paragraphs = message.trimEnd().split(/\n[ \t]*\n/);
+  const last = paragraphs[paragraphs.length - 1] ?? "";
+  return /record-id/i.test(last);
+};
 var explodeRecordBlocks = (cwd, records, excluded) => {
   const messages = readFullMessages(
     cwd,
@@ -12625,6 +12650,7 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
   return records.flatMap((record2) => {
     const message = messages.get(record2.sha);
     if (message === void 0) return [record2];
+    if (atomPassHasEverything(message)) return [record2];
     const blocks = parseRecordBlocks(message);
     if (blocks.length <= 1) return [record2];
     const earlierBlocks = blocks.slice(0, -1).map((block) => stripConventional(block, excluded)).filter((trailers) => trailers.length > 0);
@@ -12634,11 +12660,14 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
     ];
   });
 };
+var signatureAtom = (verifierGeneration) => verifierGeneration === null ? "" : "%G?";
 var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
+  let signatureField = null;
   const records = [];
   let read = 0;
-  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
-  for (const batch of chunked(shas, batchSize)) {
+  const batches = budget === void 0 ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
+  for (const batch of batches) {
+    signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
     if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read;
       return records;
@@ -12647,7 +12676,7 @@ var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     const result = gitLogByShas(
       cwd,
       batch,
-      `%x01%H%x00%ct%x00%cI%x00%G?%x00${TRAILERS_ATOM}%x00`,
+      `%x01%H%x00%ct%x00%cI%x00${signatureField}%x00${TRAILERS_ATOM}%x00`,
       []
     );
     if (result.code !== 0) {
@@ -12703,8 +12732,8 @@ var readNoteRecords = (cwd, reachable, excluded, budget, cost) => {
   if (commits.length === 0) return [];
   const records = [];
   let read = 0;
-  const batchSize = budget === void 0 ? LOG_BATCH : BUDGETED_LOG_BATCH;
-  for (const batch of chunked(commits, batchSize)) {
+  const noteBatches = budget === void 0 ? chunked(commits, LOG_BATCH) : chunkedGrowing(commits, budgetedBatchSizes());
+  for (const batch of noteBatches) {
     if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadNotes = commits.length - read;
       return records;
