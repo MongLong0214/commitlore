@@ -113,3 +113,41 @@ describe('commitlore demo', () => {
     expect(elapsed).toBeLessThan(30_000);
   });
 });
+
+describe('the demo does not claim more than the product does', () => {
+  // `commitlore demo` is the first thing many people run, so it is the last
+  // place to overstate. It used to end with "the agent cannot revive it" -- an
+  // absolute about a model's reasoning, from a tool that controls what is
+  // delivered and nothing else. Nothing owned that sentence, so it survived
+  // every run until a reader caught it. These tests own it now.
+  let repo: string;
+  let root: string;
+
+  beforeAll(() => {
+    repo = mkdtempSync(join(tmpdir(), 'demo-claims-repo-'));
+    root = mkdtempSync(join(tmpdir(), 'demo-claims-root-'));
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', repo]);
+    execFileSync('git', ['-C', repo, 'config', 'user.email', 'test@example.invalid']);
+    execFileSync('git', ['-C', repo, 'config', 'user.name', 'Test']);
+    execFileSync('git', ['-C', repo, 'commit', '--allow-empty', '--quiet', '-m', 'root']);
+  });
+
+  afterAll(() => {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it.each(['cannot revive', 'prevents', 'never forgets', 'blocks the edit'])(
+    'does not say %o',
+    async (claim) => {
+      const { output } = await runDemo({ cwd: repo, tmpRoot: root });
+      expect(output.toLowerCase()).not.toContain(claim);
+    },
+  );
+
+  it('says what actually happens to the superseded record', async () => {
+    const { output } = await runDemo({ cwd: repo, tmpRoot: root });
+    expect(output).toContain('remains in Git');
+    expect(output).toContain('not delivered as current guidance');
+  });
+});

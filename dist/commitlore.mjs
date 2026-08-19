@@ -24238,7 +24238,7 @@ var runDemo = async (opts = {}) => {
     }
     lines.push("");
     lines.push(`Only the active decision (${expectedActiveRecordId}) is shown.`);
-    lines.push("The superseded reuse decision is filtered out \u2014 the agent cannot revive it.");
+    lines.push("The superseded reuse decision remains in Git, but is not delivered as current guidance.");
     lines.push("");
     const output = lines.join("\n");
     return { exitCode: 0, output };
