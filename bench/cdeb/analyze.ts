@@ -126,7 +126,8 @@ interface Row {
     readonly evaluator_image_digest: string;
     readonly evaluator_attempts: number;
     readonly functional_pass: boolean;
-    readonly rejected_decision_revived: boolean;
+    /** Null when the evaluator could not judge the tree at all. */
+    readonly rejected_decision_revived: boolean | null;
   };
   readonly exposure: {
     readonly hook_opportunities: number;
@@ -245,6 +246,9 @@ export interface AnalysisResult {
     readonly revival: {
       readonly on: number;
       readonly off: number;
+      /** Runs whose decision was judged at all; the denominator these rest on. */
+      readonly evaluable_on: number;
+      readonly evaluable_off: number;
       readonly assigned_per_arm: number;
       readonly relative_reduction: number | null;
       /** ON rate − OFF rate: the inferential metric (§16.5). */
@@ -369,8 +373,16 @@ const parseRow = (value: unknown, path: string): Row => {
   const repeat = requireInteger(has(row, "repeat"), `${path}.repeat`, 1);
   if (repeat > 3) fail(`${path}.repeat must be at most 3`);
   const functionalPass = requireBoolean(has(evaluation, "functional_pass"), `${path}.evaluation.functional_pass`);
-  const revived = requireBoolean(has(evaluation, "rejected_decision_revived"), `${path}.evaluation.rejected_decision_revived`);
-  const expectedSafe = stopReason === "completed" && functionalPass && !revived;
+  // Null means the tree could not be judged. It is deliberately not folded to
+  // `false` here: `false` is the claim that the rejected approach is absent,
+  // and an unread tree supports no claim either way.
+  const revivedRaw = has(evaluation, "rejected_decision_revived");
+  const revived = revivedRaw === null ? null
+    : requireBoolean(revivedRaw, `${path}.evaluation.rejected_decision_revived`);
+  // A run whose decision could not be evaluated is not a decision-safe success:
+  // DSS requires an evaluable final tree, so `revived === false` rather than
+  // `!revived`, which would let null through.
+  const expectedSafe = stopReason === "completed" && functionalPass && revived === false;
   const declaredSafe = requireBoolean(has(row, "decision_safe_success"), `${path}.decision_safe_success`);
   if (declaredSafe !== expectedSafe) fail(`${path}.decision_safe_success does not match raw stop/evaluator fields`);
 
@@ -593,7 +605,11 @@ const count = (rows: readonly Row[], predicate: (row: Row) => boolean): number =
 
 const taskSafe = (task: TaskUnit, arm: Arm): number => count(arm === "commitlore-on" ? task.on : task.off, (row) => row.decision_safe_success);
 const taskRevived = (task: TaskUnit, arm: Arm): number =>
-  count(arm === "commitlore-on" ? task.on : task.off, (row) => row.evaluation.rejected_decision_revived);
+  count(arm === "commitlore-on" ? task.on : task.off, (row) => row.evaluation.rejected_decision_revived === true);
+
+/** Runs whose decision the evaluator actually judged, either way. */
+const taskRevivalEvaluable = (task: TaskUnit, arm: Arm): number =>
+  count(arm === "commitlore-on" ? task.on : task.off, (row) => row.evaluation.rejected_decision_revived !== null);
 
 const measuredUsage = (rows: readonly Row[]): rows is readonly (Row & { readonly usage: MeasuredUsage })[] =>
   rows.every((row) => row.usage.availability === "measured");
@@ -857,8 +873,10 @@ export const analyzeRows = (freeze: Freeze, freezeSha: string, rows: readonly Ro
   const point = calculateSample(tasks, completeUsage);
   const safeOn = count(rows, (row) => row.condition === "commitlore-on" && row.decision_safe_success);
   const safeOff = count(rows, (row) => row.condition === "commitlore-off" && row.decision_safe_success);
-  const revivalOn = count(rows, (row) => row.condition === "commitlore-on" && row.evaluation.rejected_decision_revived);
-  const revivalOff = count(rows, (row) => row.condition === "commitlore-off" && row.evaluation.rejected_decision_revived);
+  const revivalOn = count(rows, (row) => row.condition === "commitlore-on" && row.evaluation.rejected_decision_revived === true);
+  const revivalOff = count(rows, (row) => row.condition === "commitlore-off" && row.evaluation.rejected_decision_revived === true);
+  const revivalEvaluableOn = count(rows, (row) => row.condition === "commitlore-on" && row.evaluation.rejected_decision_revived !== null);
+  const revivalEvaluableOff = count(rows, (row) => row.condition === "commitlore-off" && row.evaluation.rejected_decision_revived !== null);
   const unavailableRuns: UsageGap[] = rows.flatMap((row) => row.usage.availability === "unavailable"
     ? [{ logical_run_id: row.logical_run_id, reasons: row.usage.reasons }]
     : []);
@@ -908,6 +926,8 @@ export const analyzeRows = (freeze: Freeze, freezeSha: string, rows: readonly Ro
     revival: {
       on: revivalOn,
       off: revivalOff,
+      evaluable_on: revivalEvaluableOn,
+      evaluable_off: revivalEvaluableOff,
       assigned_per_arm: byArm["commitlore-on"],
       relative_reduction: revivalOff === 0 ? null : 1 - revivalOn / revivalOff,
       absolute_difference: point.revivalDifference,

@@ -13,7 +13,7 @@
     "schema_version": { "const": 1 },
     "task_id": { "type": "string", "minLength": 1 },
     "functional_pass": { "type": "boolean" },
-    "rejected_decision_revived": { "type": "boolean" },
+    "rejected_decision_revived": { "type": ["boolean", "null"] },
     "functional_checks": {
       "type": "object",
       "additionalProperties": false,
@@ -23,7 +23,7 @@
         "failed": { "type": "integer", "minimum": 0 }
       }
     },
-    "decision_oracle_code": { "enum": ["SAFE", "REVIVED"] },
+    "decision_oracle_code": { "enum": ["SAFE", "REVIVED", "NOT_EVALUABLE"] },
     "evaluator_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "candidate_tree_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
   }
