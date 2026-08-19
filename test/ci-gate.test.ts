@@ -66,6 +66,25 @@ describe('the CI fan-in gate', () => {
     expect(gate).not.toMatch(/=\s*"failure"/);
   });
 
+  it('lint reports on pull requests, which is the only place protection can see it', () => {
+    // `lint` does not report on `main` commits and is not supposed to: a squash
+    // produces a commit carrying no `lint` context, which is why the release
+    // gate requires ten jobs and not eleven. It reports on PR heads, and a PR
+    // head is what branch protection evaluates.
+    //
+    // So the `pull_request` trigger is load-bearing for protection. Remove it
+    // and `lint` becomes a required context that can never report on a pull
+    // request, and every pull request blocks -- the same shape as requiring a
+    // context from a workflow that only runs on another branch, reached from
+    // the other direction. Nothing else guards this.
+    const body = readFileSync(join(REPO_ROOT, '.github/workflows/demo-lint.yml'), 'utf8');
+    const on = (load(body) as { on?: Record<string, unknown> }).on ?? {};
+    expect(
+      Object.keys(on),
+      'demo-lint.yml must trigger on pull_request while `lint` is a required context',
+    ).toContain('pull_request');
+  });
+
   it('lint stays a separate required context, and is not matrix-interpolated', () => {
     // `lint` lives in another workflow and cannot be a `needs:` from ci.yml, so
     // protection requires two contexts. Neither may carry a matrix value, or a
