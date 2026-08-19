@@ -12662,11 +12662,12 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
 };
 var signatureAtom = (verifierGeneration) => verifierGeneration === null ? "" : "%G?";
 var readCommitRecords = (cwd, shas, excluded, budget, cost) => {
-  const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
+  let signatureField = null;
   const records = [];
   let read = 0;
   const batches = budget === void 0 ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
   for (const batch of batches) {
+    signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
     if (budget !== void 0 && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== void 0) cost.unreadCommits = shas.length - read;
       return records;

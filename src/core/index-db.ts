@@ -754,7 +754,11 @@ const readCommitRecords = (
   budget?: ScanBudget,
   cost?: ScanCost,
 ): RawRecord[] => {
-  const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
+  // Resolved on the first batch, not on entry. Working out whether signature
+  // mode is on costs a `git config`, and a scan with nothing to read -- which
+  // is every hook fire against an index that is already current -- would pay
+  // it for an answer it never uses.
+  let signatureField: string | null = null;
   const records: RawRecord[] = [];
   let read = 0;
 
@@ -768,6 +772,7 @@ const readCommitRecords = (
     budget === undefined ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
 
   for (const batch of batches) {
+    signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
     if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
       if (cost !== undefined) cost.unreadCommits = shas.length - read;
       return records;

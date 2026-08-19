@@ -505,7 +505,11 @@ const explodeRecordBlocks = (cwd, records, excluded) => {
  */
 export const signatureAtom = (verifierGeneration) => verifierGeneration === null ? '' : '%G?';
 const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
-    const signatureField = signatureAtom(signatureVerifierGeneration(cwd));
+    // Resolved on the first batch, not on entry. Working out whether signature
+    // mode is on costs a `git config`, and a scan with nothing to read -- which
+    // is every hook fire against an index that is already current -- would pay
+    // it for an answer it never uses.
+    let signatureField = null;
     const records = [];
     let read = 0;
     // A batch is the unit all three passes below share, so a deadline can only be
@@ -516,6 +520,7 @@ const readCommitRecords = (cwd, shas, excluded, budget, cost) => {
     // on a run that has already decided it would rather stop early than wait.
     const batches = budget === undefined ? chunked(shas, LOG_BATCH) : chunkedGrowing(shas, budgetedBatchSizes());
     for (const batch of batches) {
+        signatureField ??= signatureAtom(signatureVerifierGeneration(cwd));
         if (budget !== undefined && (budget.now ?? Date.now)() > budget.deadline) {
             if (cost !== undefined)
                 cost.unreadCommits = shas.length - read;
