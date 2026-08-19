@@ -223,3 +223,44 @@ describe('every supported install path is documented and pinned to this release'
     });
   }
 });
+
+describe('README local assets exist and are what they claim', () => {
+  const asset = (name: string): string => path.join(REPO_ROOT, 'assets', 'readme', name);
+
+  it.each(['commitlore-mark.svg', 'hero.svg', 'demo.gif', 'demo.tape'])(
+    '%s exists',
+    (name) => {
+      expect(fs.existsSync(asset(name)), `${name} is referenced but missing`).toBe(true);
+    },
+  );
+
+  // A GIF is the one asset a reader cannot check by reading the diff, so the
+  // things that make it unusable are checked here: not a GIF at all, empty, or
+  // large enough that GitHub declines to animate it.
+  it('demo.gif is a real GIF and small enough to animate', () => {
+    const bytes = fs.readFileSync(asset('demo.gif'));
+    expect(bytes.length).toBeGreaterThan(0);
+    expect(['GIF87a', 'GIF89a']).toContain(bytes.subarray(0, 6).toString('ascii'));
+    expect(bytes.length).toBeLessThanOrEqual(4 * 1024 * 1024);
+  });
+
+  // The tape is committed beside the GIF on purpose: a recording whose source
+  // is thrown away cannot be checked against the command it claims to show.
+  it('demo.tape names the command the GIF shows', () => {
+    expect(fs.readFileSync(asset('demo.tape'), 'utf8')).toContain('commitlore demo');
+  });
+
+  it.each(['commitlore-mark.svg', 'hero.svg'])('%s carries no active content', (name) => {
+    const svg = fs.readFileSync(asset(name), 'utf8');
+    for (const banned of ['<script', '<foreignObject', '<image', '<animate', '<set ', 'linearGradient', 'radialGradient']) {
+      expect(svg, `${name} contains ${banned}`).not.toContain(banned);
+    }
+  });
+
+  it.each(['commitlore-mark.svg', 'hero.svg'])('%s is labelled for a screen reader', (name) => {
+    const svg = fs.readFileSync(asset(name), 'utf8');
+    for (const needed of ['role="img"', 'aria-labelledby', '<title', '<desc']) {
+      expect(svg, `${name} is missing ${needed}`).toContain(needed);
+    }
+  });
+});

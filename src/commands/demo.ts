@@ -196,7 +196,12 @@ export const runDemo = async (opts: DemoOptions = {}): Promise<DemoResult> => {
 
     lines.push('');
     lines.push(`Only the active decision (${expectedActiveRecordId}) is shown.`);
-    lines.push('The superseded reuse decision is filtered out — the agent cannot revive it.');
+    // "the agent cannot revive it" was a claim the product does not make. What
+    // CommitLore does is decline to deliver a superseded record as current
+    // guidance; whether a model then proposes the same idea from its own
+    // reasoning is outside anything this tool controls. The demo is the first
+    // thing many people run, so it is the last place to overstate.
+    lines.push('The superseded reuse decision remains in Git, but is not delivered as current guidance.');
     lines.push('');
 
     const output = lines.join('\n');
