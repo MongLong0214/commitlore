@@ -6,6 +6,14 @@ were not written here.
 
 ## 1.2.0
 
+> **Recorded as held for want of a reviewer, not as reviewed.** Every change in
+> this release passed the gate — 3,359 tests, the canonical artifact check, and
+> CI at the released commit — and none of it had a cross-provider review. The
+> reviewers this project uses were out of quota on the day it shipped, and
+> Claude reviewing Claude is not a second opinion: the same model family shares
+> its blind spots. Two of today's conclusions were reversed by an outside
+> reviewer earlier in the day, so this is a real gap and not a formality.
+
 The release that makes releases discoverable, and three places where the tool
 was doing work nobody read.
 
