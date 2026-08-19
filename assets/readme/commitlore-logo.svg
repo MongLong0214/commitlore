@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 116" width="720" height="116"
+     role="img" aria-labelledby="commitlore-logo-title commitlore-logo-desc">
+  <title id="commitlore-logo-title">CommitLore</title>
+  <desc id="commitlore-logo-desc">CommitLore logo showing an active decision path continuing forward while a superseded branch remains in history.</desc>
+
+  <style>
+    /* Motion states the model: the in-force path keeps advancing, the
+       superseded branch is drawn once and never moves again. */
+    @keyframes cl-flow  { from { stroke-dashoffset: 0 } to { stroke-dashoffset: -54 } }
+    @keyframes cl-alive { 0%, 100% { transform: scale(1);    opacity: .88 }
+                          50%      { transform: scale(1.07); opacity: 1 } }
+
+    .cl-flow  { animation: cl-flow 2.8s linear infinite }
+    .cl-alive { animation: cl-alive 2.6s ease-in-out infinite;
+                transform-box: fill-box; transform-origin: center; opacity: 1 }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cl-flow  { animation: none !important; opacity: 0 }
+      .cl-alive { animation: none !important; opacity: 1 }
+    }
+  </style>
+
+  <g fill="none" stroke-linecap="round">
+    <!-- history that remains: the rail already committed -->
+    <path d="M 30 46 H 122" stroke="#8B949E" stroke-width="6"/>
+    <!-- superseded: diverges, stops short, keeps its place in history -->
+    <path d="M 76 46 L 100 70" stroke="#8B949E" stroke-width="5"
+          stroke-dasharray="7 7" opacity=".75"/>
+    <circle cx="108" cy="78" r="8" stroke="#8B949E" stroke-width="5" opacity=".75"/>
+    <!-- still in force: the only path that continues -->
+    <path d="M 122 46 H 176" stroke="#2EA043" stroke-width="7"/>
+    <path class="cl-flow" d="M 122 46 H 176" stroke="#3FB950" stroke-width="7.5"
+          stroke-dasharray="17 37"/>
+    <circle cx="176" cy="46" r="18" stroke="#3FB950" stroke-width="2" opacity=".4"/>
+  </g>
+
+  <g fill="#8B949E">
+    <circle cx="30" cy="46" r="7"/>
+    <circle cx="76" cy="46" r="7"/>
+    <circle cx="122" cy="46" r="7"/>
+  </g>
+  <circle class="cl-alive" cx="176" cy="46" r="11" fill="#3FB950"/>
+
+  <g fill="none" stroke="#6E7781" stroke-width="6" stroke-linecap="butt" stroke-linejoin="miter">
+    <g transform="translate(216 33)"><path d="M 30.93 4.61 A 17 24 0 1 0 30.93 41.39"/></g>
+    <g transform="translate(264 33)"><path d="M 3 23 A 17 24 0 1 0 37 23 A 17 24 0 1 0 3 23"/></g>
+    <g transform="translate(312 33)"><path d="M 4 46 L 4 3 L 20 27 L 36 3 L 36 46"/></g>
+    <g transform="translate(360 33)"><path d="M 4 46 L 4 3 L 20 27 L 36 3 L 36 46"/></g>
+    <g transform="translate(408 33)"><path d="M 9 0 H 31 M 20 0 V 46 M 9 46 H 31"/></g>
+    <g transform="translate(456 33)"><path d="M 3 0 H 37 M 20 0 V 46"/></g>
+    <g transform="translate(504 33)"><path d="M 5 0 V 46 H 36"/></g>
+    <g transform="translate(552 33)"><path d="M 3 23 A 17 24 0 1 0 37 23 A 17 24 0 1 0 3 23"/></g>
+    <g transform="translate(600 33)"><path d="M 5 46 V 0 H 22 A 11.5 11.5 0 0 1 22 23 H 5 M 21 23 L 36 46"/></g>
+    <g transform="translate(648 33)"><path d="M 37 0 H 5 V 46 H 37 M 5 23 H 30"/></g>
+  </g>
+</svg>

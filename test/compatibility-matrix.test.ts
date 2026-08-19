@@ -110,8 +110,10 @@ describe('T-1122 the compatibility statement exists and is the authoritative one
   });
 
   it.each(README_FILES)('%s points at it exactly once', (file) => {
-    const hits = readFile(join(REPO_ROOT, file)).split('docs/COMPATIBILITY.md').length - 1;
-    expect(hits, `${file} must carry exactly one pointer`).toBe(2);
+    // Count link targets, not raw substrings: `[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)`
+    // is one pointer that reads as two, so a readable link text used to fail this.
+    const hits = readFile(join(REPO_ROOT, file)).split('](docs/COMPATIBILITY.md)').length - 1;
+    expect(hits, `${file} must carry exactly one pointer`).toBe(1);
   });
 });
 

@@ -101,7 +101,7 @@ describe('T-1021: Known limitations discloses guard precision and recall', () =>
       // it must disclose is unchanged; only where the test looks for it moved.
       // Extract the section (between its heading and the next ## heading)
       const knownLimStart = content.search(
-        /^## (When this will not help you|이것이 도움이 되지 않는 경우|これが役に立たない場合|这在什么情况下帮不上忙)/m,
+        /^## (Limits, trust and privacy|When this will not help you|이것이 도움이 되지 않는 경우|これが役に立たない場合|这在什么情况下帮不上忙)/m,
       );
       const afterStart = content.slice(knownLimStart + 1);
       const nextSection = afterStart.search(/^## /m);
@@ -137,7 +137,7 @@ describe('T-1021 mutation oracles', () => {
   const enContent = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
 
   // Extract that section for English
-  const knownLimStart = enContent.search(/^## When this will not help you/m);
+  const knownLimStart = enContent.search(/^## (Limits, trust and privacy|When this will not help you)/m);
   const afterStart = enContent.slice(knownLimStart + 1);
   const nextSection = afterStart.search(/^## /m);
   const knownLimSection = nextSection === -1 ? afterStart : afterStart.slice(0, nextSection);
@@ -227,7 +227,7 @@ describe('every supported install path is documented and pinned to this release'
 describe('README local assets exist and are what they claim', () => {
   const asset = (name: string): string => path.join(REPO_ROOT, 'assets', 'readme', name);
 
-  it.each(['commitlore-mark.svg', 'hero.svg', 'demo.gif', 'demo.tape'])(
+  it.each(['commitlore-logo.svg', 'hero.svg', 'demo.gif', 'demo.tape'])(
     '%s exists',
     (name) => {
       expect(fs.existsSync(asset(name)), `${name} is referenced but missing`).toBe(true);
@@ -250,17 +250,73 @@ describe('README local assets exist and are what they claim', () => {
     expect(fs.readFileSync(asset('demo.tape'), 'utf8')).toContain('commitlore demo');
   });
 
-  it.each(['commitlore-mark.svg', 'hero.svg'])('%s carries no active content', (name) => {
+  it.each(['commitlore-logo.svg', 'hero.svg'])('%s carries no active content', (name) => {
     const svg = fs.readFileSync(asset(name), 'utf8');
     for (const banned of ['<script', '<foreignObject', '<image', '<animate', '<set ', 'linearGradient', 'radialGradient']) {
       expect(svg, `${name} contains ${banned}`).not.toContain(banned);
     }
   });
 
-  it.each(['commitlore-mark.svg', 'hero.svg'])('%s is labelled for a screen reader', (name) => {
+  it.each(['commitlore-logo.svg', 'hero.svg'])('%s is labelled for a screen reader', (name) => {
     const svg = fs.readFileSync(asset(name), 'utf8');
     for (const needed of ['role="img"', 'aria-labelledby', '<title', '<desc']) {
       expect(svg, `${name} is missing ${needed}`).toContain(needed);
+    }
+  });
+});
+
+/**
+ * The brand logo is the first thing a reader meets, and it is the one asset
+ * whose motion has to survive a reader who asked their machine for less of it.
+ * These check the properties a diff cannot show: that the motion exists, that
+ * it can be turned off, and that turning it off leaves a whole logo behind.
+ */
+describe('the animated brand logo', () => {
+  const LOGO = path.join(REPO_ROOT, 'assets', 'readme', 'commitlore-logo.svg');
+  const svg = fs.existsSync(LOGO) ? fs.readFileSync(LOGO, 'utf8') : '';
+
+  it('exists', () => {
+    expect(fs.existsSync(LOGO), 'assets/readme/commitlore-logo.svg is missing').toBe(true);
+  });
+
+  it('animates with CSS keyframes rather than a runtime', () => {
+    expect(svg).toContain('@keyframes');
+  });
+
+  it('honours prefers-reduced-motion', () => {
+    expect(svg).toContain('prefers-reduced-motion');
+    // Turning the motion off must be a rule about animation, not a rule that
+    // hides the mark: a stopped logo is still the logo.
+    const reduced = svg.slice(svg.indexOf('prefers-reduced-motion'));
+    expect(reduced).toContain('animation: none');
+  });
+
+  it('loads nothing from off the page', () => {
+    for (const banned of ['href="http', 'xlink:href', 'url(http', '@import']) {
+      expect(svg, `logo reaches out via ${banned}`).not.toContain(banned);
+    }
+  });
+
+  it('paints no background, so it reads on GitHub light and dark alike', () => {
+    // A full-bleed rect is the usual way a logo ends up as a dark slab on a
+    // white README. The palette is chosen to carry both grounds instead.
+    expect(svg).not.toMatch(/<rect[^>]*fill="#(0d1117|0D1117|fff|FFF|ffffff|FFFFFF)"/);
+  });
+
+  it('is referenced by the README exactly once', () => {
+    const readme = fs.readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8');
+    const hits = readme.split('./assets/readme/commitlore-logo.svg').length - 1;
+    expect(hits, 'README must point at the logo exactly once').toBe(1);
+  });
+
+  it('leaves no dangling reference to the retired mark', () => {
+    const retired = 'commitlore-mark.svg';
+    expect(fs.existsSync(path.join(REPO_ROOT, 'assets', 'readme', retired))).toBe(false);
+    for (const file of [...README_FILES, 'CONTRIBUTING.md']) {
+      const full = path.join(REPO_ROOT, file);
+      if (!fs.existsSync(full)) continue;
+      expect(fs.readFileSync(full, 'utf8'), `${file} still points at ${retired}`)
+        .not.toContain(retired);
     }
   });
 });
