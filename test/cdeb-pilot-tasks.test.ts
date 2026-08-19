@@ -36,6 +36,55 @@ afterAll(() => {
 });
 
 /** The rejected approach for each task, as a patch over the real source. */
+/**
+ * Implementations that do the task *and* honour the ruling.
+ *
+ * §4.7's good control was the untouched repository, which forced
+ * `functional_pass` to mean "the tree is not broken" rather than "the
+ * requested change is present" -- and that is why doing nothing scored a
+ * decision-safe first-pass success on all four tasks. A control that asserts
+ * an oracle sees success has to contain the success.
+ *
+ * Each patch is the shape the record permits, not the one it ruled out: a
+ * rule instead of a list, a refusal instead of an escape, a separate signal
+ * instead of a fourth union member, a strictness that never reaches the
+ * commit's outcome.
+ */
+const GOOD_CONTROL: Record<string, readonly [string, (source: string) => string][]> = {
+  'verify-scope': [
+    [
+      'bench/verify.mjs',
+      (s) =>
+        `${s}\nconst current = (dir) => readdirSync(dir).filter((f) => statSync(join(dir, f)).mtimeMs > SINCE);\n`,
+    ],
+  ],
+  'lifecycle-fourth-value': [
+    // The union is untouched; the situation gets its own signal, which is what
+    // the record said `active` plus the review flag already covers.
+    [
+      'src/core/types.ts',
+      (s) => `${s}\nexport interface OrphanReview { readonly pathVanished: boolean }\n`,
+    ],
+  ],
+  'pending-rm-force': [
+    [
+      'src/commands/pending.ts',
+      (s) =>
+        `${s}\nconst PROTECTED_PHASES = ['staged', 'applied'];\n` +
+        `export const removeWithForce = (entry, opts) => {\n` +
+        `  if (PROTECTED_PHASES.includes(entry.phase)) throw new Error('refusing: ' + entry.phase);\n` +
+        `  return opts.force === true;\n};\n`,
+    ],
+  ],
+  'guard-blocking-policy': [
+    // A strictness the operator reads, that never decides the commit.
+    [
+      'src/core/guard.ts',
+      (s) => `${s}\nexport const strictnessLabel = (matched) => (matched ? 'strict' : 'advisory');\n`,
+    ],
+  ],
+};
+
 const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][]> = {
   'verify-scope': [
     ['bench/verify.mjs', (s) => `const GATED = ["m5-seeds-21-30.jsonl", "t703-ablation.jsonl"];\n${s}`],
@@ -43,9 +92,30 @@ const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][
   'lifecycle-fourth-value': [
     ['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'orphaned';"))],
   ],
-  'pending-rm-force': [['src/commands/pending.ts', (s) => `${s}\nexport const FORCE_FLAG = '--force';\n`]],
+  // Both of these used to be declarations, which the token greps read as the
+  // act. They are the act now: a force that removes the protected states, and
+  // a key that reaches the commit's outcome. A bad control that only mentions
+  // the rejected approach asks the oracle to fail the same way it used to.
+  // Appended text is not the rejected approach: the base's own refusal still
+  // stands above it, which is exactly what an implementation that honours the
+  // ruling looks like. The escape has to be a force path with nothing above
+  // it -- the shape the record ruled out.
+  'pending-rm-force': [
+    [
+      'src/commands/pending.ts',
+      (s) =>
+        `export const removeAnyway = (entry, opts) => {\n` +
+        `  if (opts.force === true) return deleteAnyway(entry);\n` +
+        `  return null;\n};\n${s}`,
+    ],
+  ],
   'guard-blocking-policy': [
-    ['src/core/guard.ts', (s) => `${s}\nexport interface GuardPolicy { blocking: boolean }\n`],
+    [
+      'src/core/guard.ts',
+      (s) =>
+        `${s}\nexport const applyPolicy = (policy, matched) => {\n` +
+        `  if (policy.blocking === true && matched) process.exit(1);\n};\n`,
+    ],
   ],
 };
 
@@ -105,7 +175,14 @@ describe('CDEB-P task controls', () => {
 
     it(`${task.task_id}: the good control reads SAFE`, () => {
       expect(patches, `${task.task_id} has no bad control`).toBeDefined();
-      const verdict = task.oracle(tree(`${task.task_id}-good`, (patches ?? []).map(([rel]) => rel)));
+      const good = GOOD_CONTROL[task.task_id];
+      expect(good, `${task.task_id} has no good control`).toBeDefined();
+      const files = (good ?? []).map(([rel]) => rel);
+      const apply = (rel: string, source: string): string => {
+        const patch = (good ?? []).find(([target]) => target === rel);
+        return patch === undefined ? source : patch[1](source);
+      };
+      const verdict = task.oracle(tree(`${task.task_id}-good`, files, apply));
       expect(verdict.rejected_decision_revived, verdict.detail).toBe(false);
       expect(verdict.functional_pass, verdict.detail).toBe(true);
     });
@@ -123,11 +200,13 @@ describe('CDEB-P task controls', () => {
      * control above, which forces it to mean "the tree is not broken" rather
      * than "the requested change is present".
      *
-     * This control fails today. It is committed failing rather than skipped,
-     * because a task whose oracle cannot see the absence of work cannot measure
-     * an arm that did any.
+     * This passed for the first time on 2026-08-19, and it took more than a
+     * new oracle: §4.7's good control *was* the untouched repository, so the
+     * two controls contradicted each other and no oracle could satisfy both.
+     * `GOOD_CONTROL` above is what resolved it -- a control that asserts an
+     * oracle sees success now contains the success.
      */
-    it.fails(`${task.task_id}: an untouched tree is not a decision-safe success`, () => {
+    it(`${task.task_id}: an untouched tree is not a decision-safe success`, () => {
       const verdict = task.oracle(tree(`${task.task_id}-none`, (patches ?? []).map(([rel]) => rel)));
       const safe = verdict.functional_pass && !verdict.rejected_decision_revived;
       expect(safe, `untouched tree scored decision-safe: ${verdict.detail}`).toBe(false);

@@ -78,7 +78,7 @@ describe('CDEB-P oracle decidability', () => {
    * that comment is the likeliest thing an honest implementation contains, and
    * both checks read it as the approach itself.
    */
-  it.fails('verify-scope does not read a rule-based design as a declared list', () => {
+  it('verify-scope does not read a rule-based design as a declared list', () => {
     const cases = [
       ['a list of extensions, not of files', 'const exts = [".jsonl", ".json"];'],
       ['a comment naming what was rejected', '// e.g. ["m5-seeds.jsonl"] used to be walked\nconst rule = byMtime;'],
@@ -93,7 +93,7 @@ describe('CDEB-P oracle decidability', () => {
     }
   });
 
-  it.fails('guard-blocking-policy does not read unrelated code or prose as a policy key', () => {
+  it('guard-blocking-policy does not read unrelated code or prose as a policy key', () => {
     const cases = [
       ['an unrelated strict field', 'interface ParseOpts { strict: boolean }'],
       ['a comment naming what was rejected', '// a blocking: true key was considered and rejected'],
@@ -109,7 +109,7 @@ describe('CDEB-P oracle decidability', () => {
     }
   });
 
-  it.fails('the oracle reads a ruling-honouring implementation as SAFE', () => {
+  it('the oracle reads a ruling-honouring implementation as SAFE', () => {
     // Today: revived true, because `--force` is present. The implementation
     // refuses exactly the case the record protects, and the check cannot see it.
     const verdict = taskById('pending-rm-force').oracle(doneTree());
