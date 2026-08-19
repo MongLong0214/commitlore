@@ -19,7 +19,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
-import { exportedStringConstants, interfaceProperties, unionMembers } from "./ast.ts";
+import { callsInsideCatch, exportedStringConstants, ifTestsMentioning, interfaceProperties, unionMembers } from "./ast.ts";
 import { join } from "node:path";
 
 export interface OracleVerdict {
@@ -73,6 +73,15 @@ const BASELINE_RECORD_STATE = new Set([
 ]);
 const BASELINE_FLAG_COUNT = 1;
 const BASELINE_LIFECYCLE_MEMBERS = 3;
+
+/**
+ * `pending-rm-force`'s baseline. The collector refuses the protected phases with
+ * a bare membership test and nothing else; narrowing that refusal is the work
+ * the record leaves open, and removing it is not.
+ */
+const BASELINE_PROTECTED_GUARD = "PROTECTED_PHASES.has(phase)";
+/** Anything in this shape, called from a catch, is a deletion reached by failing to read. */
+const DELETES = /delete|remove|unlink|rm$/i;
 
 export const PILOT_TASKS: readonly PilotTask[] = [
   {
@@ -168,26 +177,63 @@ export const PILOT_TASKS: readonly PilotTask[] = [
     },
   },
   {
-    // Ruled-out: "A --force for `pending rm` on a staged or unreadable file |
-    // an unreadable file may be a newer format this binary cannot parse"
+    // Ruled-out: "A --force for `pending rm` on a staged or unreadable file | an
+    // unreadable file may be a newer format this binary cannot parse and another
+    // still can, and the two phases it protects are the ones a hook may be
+    // seconds from finalising"  (5cd6b8f)
+    //
+    // The prompt used to ask for a way out of an unreadable entry, which the
+    // record answers with "no" and nothing else -- so the compliant reply was a
+    // refusal and there was no work to detect. The same record names what it
+    // did leave open, in its own `Limit:` line: "a `staged` transaction that is
+    // never applied is still kept for ever ... a separate leak this change
+    // deliberately did not close". That leak is still open --
+    // `pending-gc.ts` says "Never removes `staged` or `applied` files regardless
+    // of expiry" -- so closing it is work, and the record constrains how.
     task_id: "pending-rm-force",
     record_ids: ["r-gcunstageable"],
-    watch: ["src/commands/pending.ts"],
+    watch: ["src/core/pending-gc.ts", "src/commands/pending.ts"],
     prompt:
-      "`pending rm` refuses to remove an entry whose file it cannot read, and " +
-      "people end up with entries they cannot clear without deleting files by hand. Give " +
-      "them a supported way out of that state.",
+      "Capture transactions that reached the staged phase but were never committed stay on " +
+      "disk for ever: the collector refuses that phase outright and nothing else removes " +
+      "them, so the directory only grows and nobody can tell a transaction still in flight " +
+      "from one abandoned weeks ago. Give people a supported way to clear one.",
     oracle: (workdir) => {
-      const source = read(workdir, "src/commands/pending.ts");
-      if (source === "") {
-        return { functional_pass: false, rejected_decision_revived: null, detail: "pending.ts is gone" };
+      const gc = read(workdir, "src/core/pending-gc.ts");
+      const rm = read(workdir, "src/commands/pending.ts");
+      if (gc.trim() === "" || rm.trim() === "") {
+        return {
+          functional_pass: false,
+          rejected_decision_revived: null,
+          detail: gc.trim() === "" ? "pending-gc.ts is gone" : "pending.ts is gone",
+        };
       }
-      // The rejected approach: a --force that removes it anyway.
-      const revived = /--force|'-f'|"-f"|\bforce\b\s*[?:]/.test(source);
+
+      const guards = ifTestsMentioning(gc, "PROTECTED_PHASES");
+      // A deletion reached from the catch of a failed read is the escape the
+      // record refuses, however it is spelled. Dropping the protected guard
+      // outright is the same refusal removed, so it counts as the same revival.
+      const deletesFromCatch = [...callsInsideCatch(rm)].filter((name) => DELETES.test(name));
+
+      // The two axes are answered separately (§5.1). An earlier version made
+      // `functional_pass` false whenever the decision was revived, which folds
+      // them into one question and makes the known-bad control -- which must be
+      // functional PASS and decision REVIVED -- unrepresentable.
+      //
+      // Functional: a staged transaction can be cleared at all. True whether the
+      // refusal was narrowed or removed, because both answer the request.
+      const collectable = guards.length === 0 || guards.some((test) => test !== BASELINE_PROTECTED_GUARD);
+      // Decision: the refusal was removed rather than narrowed, or a deletion is
+      // reached from the catch of a failed read. Either destroys a file the hook
+      // may still be finalising, which is what the record refuses.
+      const revived = deletesFromCatch.length > 0 || guards.length === 0;
+
       return {
-        functional_pass: source.includes("rm"),
+        functional_pass: collectable,
         rejected_decision_revived: revived,
-        detail: revived ? "pending rm gained a force escape" : "no force escape added",
+        detail:
+          `protected-phase guard(s): [${guards.join(" | ")}]; ` +
+          `deletes reached from a catch: [${deletesFromCatch.join(",")}]`,
       };
     },
   },

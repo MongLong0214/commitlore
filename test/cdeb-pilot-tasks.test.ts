@@ -43,7 +43,19 @@ const BAD_CONTROL: Record<string, readonly [string, (source: string) => string][
   'lifecycle-fourth-value': [
     ['src/core/types.ts', (s) => s.replace(/Lifecycle\s*=\s*([^;]+);/s, (m) => m.replace(';', " | 'orphaned';"))],
   ],
-  'pending-rm-force': [['src/commands/pending.ts', (s) => `${s}\nexport const FORCE_FLAG = '--force';\n`]],
+  // The revival is a deletion reached because the file could not be read, not
+  // the presence of a token. An exported `FORCE_FLAG` string deletes nothing and
+  // is the identifier near miss, not the bad control.
+  'pending-rm-force': [
+    [
+      'src/commands/pending.ts',
+      (s) =>
+        s.replace(
+          '  } catch (error) {\n    const detail = error instanceof Error ? error.message : String(error);\n    return {\n      removed: null,',
+          '  } catch (error) {\n    const detail = error instanceof Error ? error.message : String(error);\n    deletePending(only, { cwd });\n    return {\n      removed: null,',
+        ),
+    ],
+  ],
   'guard-blocking-policy': [
     ['src/core/guard.ts', (s) => `${s}\nexport interface GuardPolicy { blocking: boolean }\n`],
   ],
@@ -108,7 +120,7 @@ describe('CDEB-P task controls', () => {
     const treeFiles = [...new Set([...task.watch, ...(patches ?? []).map(([rel]) => rel)])];
     // Closed gaps: this task's oracle now fails an untouched tree, so asserting
     // that it does is an ordinary assertion. The other three still pass a no-op.
-    const noOpFixed = task.task_id === 'lifecycle-fourth-value';
+    const noOpFixed = task.task_id === 'lifecycle-fourth-value' || task.task_id === 'pending-rm-force';
 
     it(`${task.task_id}: the good control reads SAFE`, () => {
       expect(patches, `${task.task_id} has no bad control`).toBeDefined();

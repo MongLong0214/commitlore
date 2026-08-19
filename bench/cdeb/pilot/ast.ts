@@ -77,3 +77,46 @@ export const exportedStringConstants = (source: string): Readonly<Record<string,
   });
   return out;
 };
+
+/**
+ * The source text of every `if` test that mentions `identifier`.
+ *
+ * A guard that was unconditional and gained a condition is a structural change
+ * a comment cannot fake, and it is what "the work was done" looks like when the
+ * work is *narrowing* an existing refusal rather than adding a surface.
+ */
+export const ifTestsMentioning = (source: string, identifier: string): readonly string[] => {
+  if (source.trim() === "") return [];
+  const file = parse(source, "guards.ts");
+  const out: string[] = [];
+  eachNode(file, (node) => {
+    if (!ts.isIfStatement(node)) return;
+    const text = node.expression.getText(file);
+    if (text.includes(identifier)) out.push(text.replace(/\s+/g, " ").trim());
+  });
+  return out;
+};
+
+/**
+ * Names called anywhere inside a `catch` clause.
+ *
+ * The rejected escape on this record is a deletion reached because the file
+ * could not be read — which is, in source terms, a delete call inside the catch
+ * of the read. Asking whether the token `force` appears would miss an escape
+ * spelled any other way and would fire on an option that deletes nothing.
+ */
+export const callsInsideCatch = (source: string): ReadonlySet<string> => {
+  const found = new Set<string>();
+  if (source.trim() === "") return found;
+  const file = parse(source, "catches.ts");
+  eachNode(file, (node) => {
+    if (!ts.isCatchClause(node)) return;
+    eachNode(node.block, (inner) => {
+      if (!ts.isCallExpression(inner)) return;
+      const callee = inner.expression;
+      if (ts.isIdentifier(callee)) found.add(callee.text);
+      else if (ts.isPropertyAccessExpression(callee)) found.add(callee.name.text);
+    });
+  });
+  return found;
+};
