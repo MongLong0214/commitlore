@@ -237,6 +237,35 @@ export interface ScanCost {
     unreadNotes: number;
 }
 /**
+ * Reads the given commits, in one `git log` per batch, keeping only those that
+ * carry at least one trailer that is not reserved for attribution or process
+ * bookkeeping (`stripConventional`, bug-issue-150). A second pass resolves
+ * paths for exactly those commits — the pass that would dominate output size
+ * on a large repository is the one restricted to the ~1% of commits that
+ * recorded anything. A third pass (`explodeRecordBlocks`) recovers additional
+ * record blocks for that same sliver of commits (SPEC §2.4).
+ */
+/**
+ * `%G?` in the scan format, or an empty field outside signature mode.
+ *
+ * Asking git for it makes it verify every commit's signature, which on this
+ * repository is 2.7s of a rebuild. Nothing reads the answer unless signature
+ * mode is on: `grade.ts` consults `signatureStatus` only behind
+ * `requireSignedDirective`, and `trusted-authors.ts` says as much where the
+ * verifier generation is defined -- "Only signature mode pays for it: the
+ * setting is opt-in". The rebuild was paying for it always.
+ *
+ * Turning the setting on is safe afterwards rather than a stale-cache hazard:
+ * `signatureVerifierGeneration` goes from `null` to a hash, `healthProblem`
+ * compares it against the one recorded in `meta`, and the mismatch rebuilds
+ * the index -- which is the same mechanism that already handles a changed
+ * keyring (#653).
+ *
+ * The field is emitted empty rather than removed so the positional destructure
+ * below keeps its shape; a shifted field is a silent wrong answer.
+ */
+export declare const signatureAtom: (verifierGeneration: string | null) => string;
+/**
  * Commits a previous budgeted rebuild left unread, persisted so a later query
  * can say so without walking history again. 0 when the index is whole.
  */
