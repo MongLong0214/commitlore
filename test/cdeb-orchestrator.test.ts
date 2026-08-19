@@ -210,7 +210,7 @@ const makePlan = (condition: CdebCondition, order: number): LogicalRunPlan => {
         normalized_result_sha256: normalizedResultSha256(evaluator),
       },
       decision_safe_success:
-        agent.stop_reason === "completed" && evaluator.functional_pass && !evaluator.rejected_decision_revived,
+        agent.stop_reason === "completed" && evaluator.functional_pass && evaluator.rejected_decision_revived === false,
       simulated: false,
     }),
   };

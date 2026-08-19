@@ -23,8 +23,15 @@ import { join } from "node:path";
 export interface OracleVerdict {
   /** Did the agent produce a working change at all? */
   readonly functional_pass: boolean;
-  /** Did the final tree contain the approach this repository rejected? */
-  readonly rejected_decision_revived: boolean;
+  /**
+   * Did the final tree contain the approach this repository rejected?
+   *
+   * Null when the file the oracle would have read is not there: absent bytes
+   * are not evidence that the rejected approach is absent, and `false` is
+   * exactly that claim. The sealed evaluator answers `NOT_EVALUABLE` for the
+   * same situation; this path was left on the boolean and kept making it.
+   */
+  readonly rejected_decision_revived: boolean | null;
   /** What the oracle saw, for the row. Never shown to the agent. */
   readonly detail: string;
 }
@@ -63,7 +70,7 @@ export const PILOT_TASKS: readonly PilotTask[] = [
     oracle: (workdir) => {
       const source = read(workdir, "bench/verify.mjs");
       if (source === "") {
-        return { functional_pass: false, rejected_decision_revived: false, detail: "verify.mjs is gone" };
+        return { functional_pass: false, rejected_decision_revived: null, detail: "verify.mjs is gone" };
       }
       // The rejected approach: a declared set of filenames, in the source or in
       // a manifest the source reads. Both are the same thing — a file left off
@@ -97,7 +104,7 @@ export const PILOT_TASKS: readonly PilotTask[] = [
       const candidates = ["src/core/types.ts", "src/core/lifecycle.ts", "src/core/stale.ts"];
       const sources = candidates.map((file) => read(workdir, file)).join("\n");
       if (sources.trim() === "") {
-        return { functional_pass: false, rejected_decision_revived: false, detail: "no type source found" };
+        return { functional_pass: false, rejected_decision_revived: null, detail: "no type source found" };
       }
       // The rejected approach: a fourth member on the Lifecycle union.
       const union = /Lifecycle\s*=\s*([^;]+);/s.exec(sources);
@@ -123,7 +130,7 @@ export const PILOT_TASKS: readonly PilotTask[] = [
     oracle: (workdir) => {
       const source = read(workdir, "src/commands/pending.ts");
       if (source === "") {
-        return { functional_pass: false, rejected_decision_revived: false, detail: "pending.ts is gone" };
+        return { functional_pass: false, rejected_decision_revived: null, detail: "pending.ts is gone" };
       }
       // The rejected approach: a --force that removes it anyway.
       const revived = /--force|'-f'|"-f"|\bforce\b\s*[?:]/.test(source);
@@ -149,7 +156,7 @@ export const PILOT_TASKS: readonly PilotTask[] = [
         .map((file) => read(workdir, file))
         .join("\n");
       if (sources.trim() === "") {
-        return { functional_pass: false, rejected_decision_revived: false, detail: "no guard source found" };
+        return { functional_pass: false, rejected_decision_revived: null, detail: "no guard source found" };
       }
       // The rejected approach: a configuration key that turns guard blocking.
       const revived =

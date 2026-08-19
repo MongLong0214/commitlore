@@ -84,7 +84,7 @@ interface PilotRow {
   readonly exposure: { readonly hook_invocations: number; readonly delivered_record_ids: readonly string[] };
   readonly final_tree_oid: string | null;
   readonly functional_pass: boolean;
-  readonly rejected_decision_revived: boolean;
+  readonly rejected_decision_revived: boolean | null;
   readonly oracle_detail: string;
   readonly decision_safe_success: boolean;
   readonly simulated: false;
@@ -295,7 +295,7 @@ const runOne = (
     rejected_decision_revived: verdict.rejected_decision_revived,
     oracle_detail: verdict.detail,
     decision_safe_success:
-      stopReason === "completed" && verdict.functional_pass && !verdict.rejected_decision_revived,
+      stopReason === "completed" && verdict.functional_pass && verdict.rejected_decision_revived === false,
     simulated: false,
   };
 };

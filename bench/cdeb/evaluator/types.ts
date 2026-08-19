@@ -26,12 +26,24 @@ export interface EvaluatorOutput {
   readonly schema_version: 1;
   readonly task_id: string;
   readonly functional_pass: boolean;
-  readonly rejected_decision_revived: boolean;
+  /**
+   * Null when the decision could not be judged at all -- see
+   * `decision_oracle_code`. It is not `false`, because `false` is the positive
+   * claim that the rejected approach is absent from the tree, and a tree the
+   * evaluator could not read supports no such claim.
+   */
+  readonly rejected_decision_revived: boolean | null;
   readonly functional_checks: {
     readonly passed: number;
     readonly failed: number;
   };
-  readonly decision_oracle_code: "SAFE" | "REVIVED";
+  /**
+   * `NOT_EVALUABLE` when the tree was refused: the extraction may be partial,
+   * so the oracle is not run at all rather than run against what arrived. The
+   * older shape had no third value and recorded these as `SAFE`, which counted
+   * an unread tree as evidence that nothing was revived.
+   */
+  readonly decision_oracle_code: "SAFE" | "REVIVED" | "NOT_EVALUABLE";
   readonly evaluator_image_digest: string;
   readonly candidate_tree_oid: string;
 }
