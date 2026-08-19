@@ -16,12 +16,29 @@ The owner of the repositories below authorized their use as CDEB source data,
 and authorized publishing the result transparently, including repository
 ownership and decision authorship, on 2026-08-11.
 
-| authorization_id | repository | owner |
-|---|---|---|
-| `auth-owner-2026-08-11` | agent-operator-score | MongLong0214 |
-| `auth-owner-2026-08-11` | logic-pro-mcp | MongLong0214 |
-| `auth-owner-2026-08-11` | stock-ai-newsletter | MongLong0214 |
-| `auth-owner-2026-08-11` | hermes-agent (fork) | MongLong0214 |
+| authorization_id | repository | owner | in the sealed corpus |
+|---|---|---|---|
+| `auth-owner-2026-08-11` | agent-operator-score | MongLong0214 | yes |
+| `auth-owner-2026-08-11` | logic-pro-mcp | MongLong0214 | yes |
+| `auth-owner-2026-08-19` | gitseed | MongLong0214 | yes |
+| `auth-owner-2026-08-19` | agent-control-plane | MongLong0214 | yes |
+| `auth-owner-2026-08-11` | stock-ai-newsletter | MongLong0214 | no — 2 candidates, below the floor of 6 |
+| `auth-owner-2026-08-11` | hermes-agent (fork) | MongLong0214 | no — absent from the density census |
+
+## The four, named once
+
+§3.3 requires four repositories. This is where the four are named, and every
+other document cites this list rather than restating it — the amendment that
+set the count to four established *how many* without establishing *which*, and
+two documents then filled that blank differently.
+
+    gitseed · agent-operator-score · logic-pro-mcp · agent-control-plane
+
+Authorization and corpus membership are separate. `stock-ai-newsletter` and
+`hermes-agent` remain authorized and are not in the corpus: the first cannot
+reach §3.3's floor of six tasks, and the second is not in the census the
+selection was made from. Both stay in the table so that a later reader can see
+the corpus was chosen from a wider grant rather than fitted to it.
 
 ## What the authorization does not extend to
 
@@ -56,7 +73,7 @@ reaches that, and no wording may imply otherwise.
 > described the state under the original five, and the arithmetic it reports is
 > still what was counted. What changed is the requirement, not the census —
 > and the task quota did not move, so §3.2 rule 5 is not what this went around:
-> candidates are abundant (71, 27, 29 and 17 with an explicit rejection reason
+> candidates are abundant (71, 29, 29 and 17 with an explicit rejection reason
 > against a quota of 30), and it is repositories that were short.
 >
 > The rule-5 argument is not what this rests on, and §3.3's amendment says so:
