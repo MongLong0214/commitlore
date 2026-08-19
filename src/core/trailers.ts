@@ -32,6 +32,9 @@ const PARSE_ARGS = [
   '--no-divider',
 ];
 
+/** Loose on purpose: see `parseRecordBlocks`. */
+const MENTIONS_RECORD_ID = /record-id/i;
+
 /** Continuation lines in a canonical block are indented by two spaces (SPEC §2.3). */
 const CONTINUATION_INDENT = '  ';
 
@@ -227,6 +230,19 @@ export const parseRecordBlocks = (message: string): Trailer[][] => {
 
   const extra: Trailer[][] = [];
   for (const paragraph of earlier) {
+    // The `Record-Id` test used to run *after* `asIsolatedBlock`, so every
+    // earlier paragraph paid a `git interpret-trailers` process to be told no
+    // and have its answer discarded. On this repository that was 3900 spawns
+    // to keep 33 blocks, and it is most of what made a rebuild take 23s.
+    //
+    // Checking the raw text first cannot skip a block the parse would have
+    // kept: a trailer key is always at the start of a line in the source, and
+    // folding continues *values*, so a paragraph whose text does not mention
+    // the key at all cannot yield a trailer that has it. The match is
+    // deliberately loose -- case-insensitive, unanchored -- because being
+    // wrong in the direction of one extra parse costs 8ms and being wrong the
+    // other way loses a record.
+    if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
     const candidate = asIsolatedBlock(paragraph);
     if (candidate.length === 0) continue;
     if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;

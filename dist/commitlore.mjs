@@ -11282,6 +11282,7 @@ var PARSE_ARGS = [
   "--parse",
   "--no-divider"
 ];
+var MENTIONS_RECORD_ID = /record-id/i;
 var CONTINUATION_INDENT = "  ";
 var parseOutputLine = (line2) => {
   const separator = line2.indexOf(": ");
@@ -11343,6 +11344,7 @@ var parseRecordBlocks = (message) => {
   const earlier = paragraphs.slice(0, -1);
   const extra = [];
   for (const paragraph of earlier) {
+    if (!MENTIONS_RECORD_ID.test(paragraph)) continue;
     const candidate = asIsolatedBlock(paragraph);
     if (candidate.length === 0) continue;
     if (!candidate.some((trailer) => trailer.key === RECORD_ID_KEY)) continue;
@@ -12617,6 +12619,14 @@ var readFullMessages = (cwd, shas) => {
   }
   return byCommit;
 };
+var atomPassHasEverything = (message) => {
+  const matches = message.match(/record-id/gi);
+  if (matches === null) return true;
+  if (matches.length > 1) return false;
+  const paragraphs = message.trimEnd().split(/\n[ \t]*\n/);
+  const last = paragraphs[paragraphs.length - 1] ?? "";
+  return /record-id/i.test(last);
+};
 var explodeRecordBlocks = (cwd, records, excluded) => {
   const messages = readFullMessages(
     cwd,
@@ -12625,6 +12635,7 @@ var explodeRecordBlocks = (cwd, records, excluded) => {
   return records.flatMap((record2) => {
     const message = messages.get(record2.sha);
     if (message === void 0) return [record2];
+    if (atomPassHasEverything(message)) return [record2];
     const blocks = parseRecordBlocks(message);
     if (blocks.length <= 1) return [record2];
     const earlierBlocks = blocks.slice(0, -1).map((block) => stripConventional(block, excluded)).filter((trailers) => trailers.length > 0);

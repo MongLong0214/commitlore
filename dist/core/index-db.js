@@ -383,11 +383,45 @@ const readFullMessages = (cwd, shas) => {
  * `excluded`. Only the *earlier* blocks are new here, so only they are
  * stripped in this pass.
  */
+/**
+ * Whether the atom pass already holds everything this message has to give.
+ *
+ * ADR-0014 says a message with at most one `Record-Id` anywhere has exactly
+ * one block -- but that is a statement about how many record blocks exist,
+ * not about whether the one git handed the atom pass is it. `%(trailers)`
+ * returns the *last* paragraph, and a commit whose final paragraph is
+ * `Co-authored-by:` leaves the real record one paragraph earlier. Gating on
+ * the count alone dropped nine rows from such a commit here, which is why the
+ * position is checked too.
+ *
+ * So the parse is skipped only when the message names the key exactly once
+ * *and* that mention is in the last paragraph, or when it never names it at
+ * all. Everything else pays the parse.
+ */
+const atomPassHasEverything = (message) => {
+    const matches = message.match(/record-id/gi);
+    if (matches === null)
+        return true;
+    if (matches.length > 1)
+        return false;
+    const paragraphs = message.trimEnd().split(/\n[ \t]*\n/);
+    const last = paragraphs[paragraphs.length - 1] ?? '';
+    return /record-id/i.test(last);
+};
 const explodeRecordBlocks = (cwd, records, excluded) => {
     const messages = readFullMessages(cwd, records.map((record) => record.sha));
     return records.flatMap((record) => {
         const message = messages.get(record.sha);
         if (message === undefined)
+            return [record];
+        // Most messages have nothing here to recover, and finding that out used
+        // to cost a `git interpret-trailers` process each. The test is loose on
+        // purpose -- case-insensitive, unanchored -- so prose that merely says
+        // "record-id" pushes a message *into* the parse rather than out of it.
+        // Being wrong toward an extra parse costs milliseconds; being wrong the
+        // other way loses a record, which is exactly what a first version of this
+        // did.
+        if (atomPassHasEverything(message))
             return [record];
         const blocks = parseRecordBlocks(message);
         if (blocks.length <= 1)
