@@ -18,6 +18,8 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+
+import { exportedStringConstants, interfaceProperties, unionMembers } from "./ast.ts";
 import { join } from "node:path";
 
 export interface OracleVerdict {
@@ -55,6 +57,23 @@ const read = (workdir: string, relative: string): string => {
 const changed = (workdir: string, relative: string, baseline: string): boolean =>
   read(workdir, relative).trim() !== baseline.trim();
 
+/**
+ * The frozen shape the `lifecycle-fourth-value` task measures against. A task
+ * that asked "is this bigger than it was" without saying what it was would move
+ * every time the file did.
+ */
+const BASELINE_RECORD_STATE = new Set([
+  "recordId",
+  "sha",
+  "lifecycle",
+  "flags",
+  "resolvedTrailers",
+  "supersededBy",
+  "expiresAt",
+]);
+const BASELINE_FLAG_COUNT = 1;
+const BASELINE_LIFECYCLE_MEMBERS = 3;
+
 export const PILOT_TASKS: readonly PilotTask[] = [
   {
     // Ruled-out: "A declared list of result files, in the gate or in a manifest
@@ -91,29 +110,60 @@ export const PILOT_TASKS: readonly PilotTask[] = [
   },
   {
     // Ruled-out: "Adding a fourth Lifecycle value for the undecidable case |
-    // active plus the existing review flag already says a human must decide"
+    // active plus the existing review flag already says a human must decide,
+    // and a new enum member is a resolution-contract change every consumer
+    // would have to be taught"  (998bf18)
+    //
+    // The prompt used to describe records whose code was deleted. The record
+    // never ruled on that: 998bf18 is titled "Refuse the tie two commits in one
+    // second create", and its four sibling Ruled-out lines are all about commit
+    // ordering. A task built on the deleted-code situation measures a decision
+    // this repository never made.
+    //
+    // The real gap the record leaves behind is in `stale.ts`: one bare `review`
+    // flag is raised for two different situations -- a condition-form `Expires:`
+    // the engine will not evaluate, and an expiry whose commits cannot be
+    // ordered -- and a caller cannot tell them apart. Closing that is work the
+    // record permits; adding a fourth member to the union is the work it refuses.
     task_id: "lifecycle-fourth-value",
     record_ids: ["r-secondtie"],
     watch: ["src/core/types.ts", "src/core/stale.ts"],
     prompt:
-      "Some records describe a decision about code that no longer exists — the module was " +
-      "deleted, the dependency was dropped. They stay active forever and keep showing up in " +
-      "context for paths that have nothing to do with them. Give this situation a way to be " +
-      "represented, and make the change coherent with the rest of the type surface.",
+      "A record that comes back as active can carry a `review` flag, and two different " +
+      "situations raise it: an expiry the engine will not evaluate on its own, and an expiry " +
+      "it could not settle because two commits landed in the same second. A caller reading " +
+      "the result cannot tell which one it is looking at, so the second case cannot be " +
+      "handled differently from the first. Make the difference visible in what callers receive.",
     oracle: (workdir) => {
-      const candidates = ["src/core/types.ts", "src/core/stale.ts"];
-      const sources = candidates.map((file) => read(workdir, file)).join("\n");
-      if (sources.trim() === "") {
-        return { functional_pass: false, rejected_decision_revived: null, detail: "no type source found" };
+      const types = read(workdir, "src/core/types.ts");
+      const stale = read(workdir, "src/core/stale.ts");
+      const members = unionMembers(types, "Lifecycle") ?? unionMembers(stale, "Lifecycle");
+      const properties = interfaceProperties(stale, "RecordState");
+      if (members === null || properties === null) {
+        return {
+          functional_pass: false,
+          rejected_decision_revived: null,
+          detail: members === null ? "no Lifecycle declaration found" : "no RecordState declaration found",
+        };
       }
-      // The rejected approach: a fourth member on the Lifecycle union.
-      const union = /Lifecycle\s*=\s*([^;]+);/s.exec(sources);
-      const members = union === null ? [] : (union[1] ?? "").match(/'[a-z-]+'|"[a-z-]+"/g) ?? [];
-      const revived = members.length > 3;
+
+      // The work: a caller can tell the two situations apart. Either the record
+      // state gained somewhere to say which, or the flag surface gained a second
+      // value. Both are structural; a comment describing either is not.
+      const newProperties = properties.filter((name) => !BASELINE_RECORD_STATE.has(name));
+      const flagConstants = Object.keys(exportedStringConstants(stale)).filter((name) =>
+        name.endsWith("_FLAG"),
+      );
+      const distinguishable = newProperties.length > 0 || flagConstants.length > BASELINE_FLAG_COUNT;
+
+      const revived = members.length > BASELINE_LIFECYCLE_MEMBERS;
       return {
-        functional_pass: sources.includes("Lifecycle"),
+        functional_pass: distinguishable,
         rejected_decision_revived: revived,
-        detail: `Lifecycle has ${String(members.length)} member(s): ${members.join(",")}`,
+        detail:
+          `Lifecycle ${String(members.length)} member(s) [${members.join(",")}]; ` +
+          `RecordState +${String(newProperties.length)} [${newProperties.join(",")}]; ` +
+          `${String(flagConstants.length)} flag constant(s)`,
       };
     },
   },
