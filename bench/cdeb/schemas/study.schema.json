@@ -24,7 +24,7 @@
     "candidate_registry_commitment": { "$ref": "#/$defs/sha256" },
     "sealed_task_bundle_sha256": { "$ref": "#/$defs/sha256" },
     "repository_bundles": {
-      "type": "array", "minItems": 5, "maxItems": 5,
+      "type": "array", "minItems": 4, "maxItems": 4,
       "items": {
         "type": "object",
         "additionalProperties": false,
