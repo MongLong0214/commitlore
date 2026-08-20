@@ -127,7 +127,18 @@ const locate = (instancePath) => {
  * `Constraint:`, must keep failing as `unknown-key`: that is the case
  * spec/fixtures/invalid/03-unknown-key.txt exists to pin.
  */
-const WELL_KNOWN_FOREIGN_KEYS = new Set(['Signed-off-by', 'Co-authored-by']);
+/**
+ * Matched case-insensitively. `types.ts` already documents that
+ * `Co-authored-by`, `Co-Authored-By` and `Co-authored-By` all reach a commit
+ * message for the identical trailer, and matches them that way; this set held
+ * one spelling and compared it exactly, so the casing the flagship host writes
+ * was refused as `unknown-key` and blocked the commit.
+ *
+ * SPEC §3 matches protocol keys case-sensitively and `KNOWN_KEYS` still does.
+ * These are not protocol vocabulary — they are trailers CommitLore does not own
+ * and should not judge, which is the whole reason they are exempt.
+ */
+const WELL_KNOWN_FOREIGN_KEYS = new Set(['Signed-off-by', 'Co-authored-by'].map((key) => key.toLowerCase()));
 /**
  * Whether the key is one the protocol defines, a well-formed extension, or a
  * trailer CommitLore does not own and should not judge.
@@ -144,7 +155,7 @@ const WELL_KNOWN_FOREIGN_KEYS = new Set(['Signed-off-by', 'Co-authored-by']);
  */
 const isDefinedKey = (key) => KNOWN_KEYS.includes(key) ||
     EXTENSION_KEY_RE.test(key) ||
-    WELL_KNOWN_FOREIGN_KEYS.has(key);
+    WELL_KNOWN_FOREIGN_KEYS.has(key.toLowerCase());
 const violationFor = (trailer, field) => {
     if (field === 'key') {
         if (isDefinedKey(trailer.key))
