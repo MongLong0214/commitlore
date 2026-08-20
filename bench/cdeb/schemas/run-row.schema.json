@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "study_id",
+    "run_id",
+    "task_id",
+    "repository_id",
+    "arm",
+    "repeat",
+    "block_id",
+    "status",
+    "release_tag",
+    "model_id",
+    "base_tree_oid",
+    "final_tree_oid",
+    "functional_pass",
+    "revived",
+    "decision_safe_success",
+    "functionally_viable_revival",
+    "opportunity",
+    "exposure_outcome",
+    "delivery",
+    "explicit_uptake_observed",
+    "usage",
+    "turns",
+    "tool_calls",
+    "files_read",
+    "wall_ms",
+    "row_sha256"
+  ],
+  "properties": {
+    "study_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "repository_id": { "type": "string", "minLength": 1 },
+    "arm": { "enum": ["delivery-on", "delivery-suppressed"] },
+    "repeat": { "type": "integer", "minimum": 1 },
+    "block_id": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": [
+        "completed",
+        "timeout",
+        "over-turns",
+        "over-tokens",
+        "agent-error",
+        "provider-error",
+        "infrastructure-prestart",
+        "not-evaluable"
+      ]
+    },
+    "release_tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "model_id": { "type": "string", "minLength": 1 },
+    "base_tree_oid": { "$ref": "#/$defs/git_oid" },
+    "final_tree_oid": { "$ref": "#/$defs/git_oid" },
+    "functional_pass": { "type": "boolean" },
+    "revived": { "type": ["boolean", "null"] },
+    "decision_safe_success": { "type": "boolean" },
+    "functionally_viable_revival": { "type": "boolean" },
+    "opportunity": {
+      "type": "object",
+      "required": ["read", "mutation"],
+      "properties": {
+        "read": { "type": "integer", "minimum": 0 },
+        "mutation": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "exposure_outcome": {
+      "enum": [
+        "delivered",
+        "no-mutation-opportunity",
+        "product-failure",
+        "runtime-failure-before-opportunity"
+      ]
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "expected_record_ids",
+        "delivered_record_ids",
+        "before_first_mutation",
+        "critical_ruling_visible",
+        "grade",
+        "coverage",
+        "stale_as_current"
+      ],
+      "properties": {
+        "expected_record_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^r-[a-z0-9]{4,}$" }
+        },
+        "delivered_record_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^r-[a-z0-9]{4,}$" }
+        },
+        "before_first_mutation": { "type": "boolean" },
+        "critical_ruling_visible": { "type": "boolean" },
+        "grade": { "enum": ["claim", "directive", "blocked", "mixed"] },
+        "coverage": { "enum": ["complete", "partial", "none"] },
+        "stale_as_current": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^r-[a-z0-9]{4,}$" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "explicit_uptake_observed": { "type": "boolean" },
+    "usage": {
+      "type": "object",
+      "required": ["input", "output", "cache_creation", "cache_read"],
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "cache_creation": { "type": "integer", "minimum": 0 },
+        "cache_read": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "turns": { "type": "integer", "minimum": 0 },
+    "tool_calls": { "type": "integer", "minimum": 0 },
+    "files_read": { "type": "integer", "minimum": 0 },
+    "wall_ms": { "type": "integer", "minimum": 0 },
+    "row_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "not-evaluable" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "revived": { "type": "null" },
+          "decision_safe_success": { "const": false },
+          "functionally_viable_revival": { "const": false }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "completed" } }, "required": ["status"] },
+      "else": {
+        "properties": {
+          "decision_safe_success": { "const": false },
+          "functionally_viable_revival": { "const": false }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "git_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

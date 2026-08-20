@@ -1,4 +1,332 @@
 {
   "schema_version": 1,
-  "roles": []
+  "roles": [
+    {
+      "role_id": "LIT-A",
+      "prompt_path": "roles/lit-a.md",
+      "version": 1,
+      "prompt_sha256": "1af6d1a2183b586d7a10cf9c8ae08414de77ce6b78a1f822a9b19b4b00755371",
+      "allowed_inputs": [
+        "original PDFs"
+      ],
+      "forbidden_inputs": [
+        "provided document conclusions",
+        "LIT-B output"
+      ],
+      "output_schema": "bench/cdeb/schemas/evidence-matrix.schema.json",
+      "stop_conditions": [
+        "Stop and mark the claim unresolved if an original PDF is unavailable or does not support an extraction."
+      ]
+    },
+    {
+      "role_id": "LIT-B",
+      "prompt_path": "roles/lit-b.md",
+      "version": 1,
+      "prompt_sha256": "be4b7d3f7cfd54cb9e8b26861f5a48fe7ae13c71a1b0c450e1b52148baf22ccb",
+      "allowed_inputs": [
+        "original PDFs"
+      ],
+      "forbidden_inputs": [
+        "LIT-A output"
+      ],
+      "output_schema": "bench/cdeb/schemas/evidence-matrix.schema.json",
+      "stop_conditions": [
+        "Stop and mark the claim unresolved if an original PDF is unavailable or does not support an extraction."
+      ]
+    },
+    {
+      "role_id": "LIT-C",
+      "prompt_path": "roles/lit-c.md",
+      "version": 1,
+      "prompt_sha256": "f67231148e8f21cd573acbe53028cc30f6c10814376c9846ca8d5ce601e8911a",
+      "allowed_inputs": [
+        "A/B disagreement",
+        "source spans"
+      ],
+      "forbidden_inputs": [
+        "product desired conclusion"
+      ],
+      "output_schema": "bench/cdeb/schemas/evidence-matrix.schema.json",
+      "stop_conditions": [
+        "Stop and leave the evidence row unresolved when the source spans cannot settle the disagreement."
+      ]
+    },
+    {
+      "role_id": "SRC",
+      "prompt_path": "roles/src.md",
+      "version": 1,
+      "prompt_sha256": "d1904edc268a40dbbe45718d8ccb39bdfd2b804958cee03b80ced7912b53aedf",
+      "allowed_inputs": [
+        "ordinary repo sources"
+      ],
+      "forbidden_inputs": [
+        "CommitLore records",
+        "treatment results"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and drop the candidate if redaction cannot remove every CommitLore record and treatment result."
+      ]
+    },
+    {
+      "role_id": "GOLD-A",
+      "prompt_path": "roles/gold-a.md",
+      "version": 1,
+      "prompt_sha256": "70b01b3ca4cfdca5e37d35da038b71783c550a1d31814278a6c812f819c50083",
+      "allowed_inputs": [
+        "source packet"
+      ],
+      "forbidden_inputs": [
+        "GOLD-B",
+        "record payload"
+      ],
+      "output_schema": "bench/cdeb/schemas/gold.schema.json",
+      "stop_conditions": [
+        "Mark an atom undecidable and stop rather than guess when the packet lacks an exact source anchor or reason."
+      ]
+    },
+    {
+      "role_id": "GOLD-B",
+      "prompt_path": "roles/gold-b.md",
+      "version": 1,
+      "prompt_sha256": "30e01347bf48dadedb914fd308637e0fa5d978c6416345a1c00f0e8cf80c5aaa",
+      "allowed_inputs": [
+        "source packet"
+      ],
+      "forbidden_inputs": [
+        "GOLD-A",
+        "record payload"
+      ],
+      "output_schema": "bench/cdeb/schemas/gold.schema.json",
+      "stop_conditions": [
+        "Mark an atom undecidable and stop rather than guess when the packet lacks an exact source anchor or reason."
+      ]
+    },
+    {
+      "role_id": "GOLD-C",
+      "prompt_path": "roles/gold-c.md",
+      "version": 1,
+      "prompt_sha256": "6ad2abf150fb2c7158e621da5d5df7bf0244db5b22c7198c419f6ea1f95296ea",
+      "allowed_inputs": [
+        "disagreements",
+        "source packet"
+      ],
+      "forbidden_inputs": [
+        "future arm result"
+      ],
+      "output_schema": "bench/cdeb/schemas/gold.schema.json",
+      "stop_conditions": [
+        "Stop and return unresolved when the source packet cannot resolve the disagreement."
+      ]
+    },
+    {
+      "role_id": "TASK",
+      "prompt_path": "roles/task.md",
+      "version": 1,
+      "prompt_sha256": "fabb944369b14d8065a210f53a4f2768798a0474d30bd8af888791ea80f33383",
+      "allowed_inputs": [
+        "base tree",
+        "maintenance-need contract"
+      ],
+      "forbidden_inputs": [
+        "record text",
+        "oracle controls",
+        "run results"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and reject the draft if it reveals the repository decision or admits fewer than two functionally valid approaches."
+      ]
+    },
+    {
+      "role_id": "LEAK",
+      "prompt_path": "roles/leak.md",
+      "version": 1,
+      "prompt_sha256": "3471648fd24765e77b0cd6b6bd9db17d368bd267897e596945d98a546b577548",
+      "allowed_inputs": [
+        "task prompt",
+        "base tree",
+        "old benchmark index"
+      ],
+      "forbidden_inputs": [
+        "arm results"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and drop the task when it leaks a prohibited dependency",
+        "rejection reason",
+        "record vocabulary",
+        "answer",
+        "unnecessary path",
+        "oracle hint",
+        "or old benchmark collision."
+      ]
+    },
+    {
+      "role_id": "ORACLE",
+      "prompt_path": "roles/oracle.md",
+      "version": 1,
+      "prompt_sha256": "fdea96a785fa1534674c780b910c43ea0fb58826db1f096f6162756c539a45c7",
+      "allowed_inputs": [
+        "frozen gold",
+        "task",
+        "hidden fixture"
+      ],
+      "forbidden_inputs": [
+        "arm",
+        "delivery logs",
+        "trajectories"
+      ],
+      "output_schema": "bench/cdeb/schemas/evaluator.schema.json",
+      "stop_conditions": [
+        "Stop and block the task if any required control is missing or the evaluator cannot distinguish functional pass from decision revival."
+      ]
+    },
+    {
+      "role_id": "REDTEAM",
+      "prompt_path": "roles/redteam.md",
+      "version": 1,
+      "prompt_sha256": "139fed97b0d087563ec9d65bb9e41642b6dc269978e3885d1abf5f61d94cc1be",
+      "allowed_inputs": [
+        "evaluator",
+        "controls"
+      ],
+      "forbidden_inputs": [
+        "arm",
+        "result"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop with a blocker for every unresolved reproducible attack."
+      ]
+    },
+    {
+      "role_id": "FREEZE",
+      "prompt_path": "roles/freeze.md",
+      "version": 1,
+      "prompt_sha256": "9b8e0fea05d83f4d4af022cab2c9fbf48f1aac45ae7c049b9afb9cafff0b7a4f",
+      "allowed_inputs": [
+        "qualified artifacts"
+      ],
+      "forbidden_inputs": [
+        "model outcome"
+      ],
+      "output_schema": "bench/cdeb/schemas/study.schema.json",
+      "stop_conditions": [
+        "Stop and refuse the public freeze when a required qualified artifact or digest is absent."
+      ]
+    },
+    {
+      "role_id": "RUN",
+      "prompt_path": "roles/run.md",
+      "version": 1,
+      "prompt_sha256": "642607bc072ccadb513ec9566965873c68eb190d9a77a9151c47ffd96c1da242",
+      "allowed_inputs": [
+        "sealed manifest"
+      ],
+      "forbidden_inputs": [
+        "gold/oracle source"
+      ],
+      "output_schema": "bench/cdeb/schemas/run-row.schema.json",
+      "stop_conditions": [
+        "Stop and refuse the run when the manifest is unsealed",
+        "invalid",
+        "or a gold/oracle source is offered."
+      ]
+    },
+    {
+      "role_id": "STAT-A",
+      "prompt_path": "roles/stat-a.md",
+      "version": 1,
+      "prompt_sha256": "8f3fdd112daf156800206fc1c6a01b438e48e6a4a7a7c947784043dda36fb6db",
+      "allowed_inputs": [
+        "frozen rows",
+        "SAP"
+      ],
+      "forbidden_inputs": [
+        "narrative conclusion"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and report an analysis failure if frozen rows or SAP are incomplete",
+        "invalid",
+        "or inconsistent."
+      ]
+    },
+    {
+      "role_id": "STAT-B",
+      "prompt_path": "roles/stat-b.md",
+      "version": 1,
+      "prompt_sha256": "5ccbc6f63566d476d1932efb3266e953a035f236873a53575908eb9390b10f6f",
+      "allowed_inputs": [
+        "frozen rows",
+        "formulas only"
+      ],
+      "forbidden_inputs": [
+        "STAT-A code/report"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and seal an analysis failure if the rows",
+        "formulas",
+        "randomization manifest",
+        "or fixed seeds are unavailable or invalid."
+      ]
+    },
+    {
+      "role_id": "PATCH-A",
+      "prompt_path": "roles/patch-a.md",
+      "version": 1,
+      "prompt_sha256": "0bc7e15016a99ae3d183ea16fcf945466161dfea28a8ecd764ec10819c316583",
+      "allowed_inputs": [
+        "blind task+diff+source summary"
+      ],
+      "forbidden_inputs": [
+        "arm",
+        "delivery",
+        "transcript"
+      ],
+      "output_schema": "bench/cdeb/schemas/patch-audit.schema.json",
+      "stop_conditions": [
+        "Stop and return only a closed-code review when the blind bundle is incomplete or contains arm",
+        "delivery",
+        "or transcript data."
+      ]
+    },
+    {
+      "role_id": "PATCH-B",
+      "prompt_path": "roles/patch-b.md",
+      "version": 1,
+      "prompt_sha256": "0da9ff56ba7efe936c75ea1a733e3e017530472c8e953c8854904c1d000174ae",
+      "allowed_inputs": [
+        "blind task+diff+source summary"
+      ],
+      "forbidden_inputs": [
+        "PATCH-A",
+        "arm"
+      ],
+      "output_schema": "bench/cdeb/schemas/patch-audit.schema.json",
+      "stop_conditions": [
+        "Stop and return only a closed-code review when the blind bundle is incomplete or contains PATCH-A output or an arm label."
+      ]
+    },
+    {
+      "role_id": "OWNER",
+      "prompt_path": "roles/owner.md",
+      "version": 1,
+      "prompt_sha256": "af321a19a45fea0f1a680d6dd5d71a7db68a2dc4aaeca5f800430659e4fc9f27",
+      "allowed_inputs": [
+        "blind disagreement bundles"
+      ],
+      "forbidden_inputs": [
+        "arm until applicable freeze"
+      ],
+      "output_schema": null,
+      "stop_conditions": [
+        "Stop and defer adjudication when the bundle exposes confirmatory arm labels before row seal",
+        "interim treatment effects",
+        "or a headline draft before analysis freeze."
+      ]
+    }
+  ]
 }
