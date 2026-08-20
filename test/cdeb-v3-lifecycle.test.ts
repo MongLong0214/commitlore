@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,36 @@ const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const sha = 'a'.repeat(64);
 const oid = 'b'.repeat(40);
+
+const prdGoldSchemaExample = (): unknown => {
+  const prd = readFileSync(join(CDEB_ROOT, 'PRD.md'), 'utf8');
+  const heading = prd.match(/^### 8\.8 Gold schema\s*$/m);
+  if (heading === null || heading.index === undefined) {
+    throw new Error('PRD §8.8 Gold schema section not found');
+  }
+  const afterHeading = prd.slice(heading.index + heading[0].length);
+  const nextHeading = afterHeading.search(/^### /m);
+  const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
+
+  const jsonBlock = section.match(/^```json\s*$\n([\s\S]*?)^```\s*$/m);
+  if (jsonBlock === null) {
+    throw new Error('PRD §8.8 Gold schema JSON block not found');
+  }
+
+  try {
+    return JSON.parse(jsonBlock[1]);
+  } catch (error) {
+    throw new Error(`PRD §8.8 Gold schema JSON block is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+const prdGoldSchemaKeys = (): string[] => {
+  const example = prdGoldSchemaExample();
+  if (typeof example !== 'object' || example === null || Array.isArray(example)) {
+    throw new Error('PRD §8.8 Gold schema JSON block must be an object');
+  }
+  return Object.keys(example);
+};
 
 const transition = (from = 'DRAFT', to = 'LITERATURE_LOCKED') => ({
   from,
@@ -110,7 +140,23 @@ const tempStudy = (id = 'cdeb-test'): string => {
   return directory;
 };
 
+const filesUnder = (directory: string): string[] =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(path) : entry.isFile() ? [path] : [];
+  });
+
 describe('CDEB-Fresh v3 lifecycle', () => {
+  it('keeps bench free of ajv-formats imports', () => {
+    // Bench compiles with verbatim module syntax, where ajv-formats' default
+    // import is an uncallable module namespace rather than the plugin function.
+    const imports = filesUnder(join(ROOT, 'bench')).filter((path) =>
+      /^\s*import(?:[\s\S]*?\s+from)?\s*["']ajv-formats["']/m.test(readFileSync(path, 'utf8')),
+    );
+
+    expect(imports).toEqual([]);
+  });
+
   it('allows each earned forward step and refuses every other direction', () => {
     for (let index = 0; index < STUDY_STATES.length - 1; index += 1) {
       const from = STUDY_STATES[index]!;
@@ -186,7 +232,8 @@ describe('CDEB-Fresh v3 schemas', () => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);
   const transitionSchema = ajv.compile(readJson(join(CDEB_ROOT, 'schemas', 'transition.schema.json')));
-  const goldSchema = ajv.compile(readJson(join(CDEB_ROOT, 'schemas', 'gold.schema.json')));
+  const goldSchemaDocument = readJson(join(CDEB_ROOT, 'schemas', 'gold.schema.json')) as { required: string[] };
+  const goldSchema = ajv.compile(goldSchemaDocument);
   const runRowSchema = ajv.compile(readJson(join(CDEB_ROOT, 'schemas', 'run-row.schema.json')));
   const patchAuditSchema = ajv.compile(readJson(join(CDEB_ROOT, 'schemas', 'patch-audit.schema.json')));
 
@@ -195,6 +242,35 @@ describe('CDEB-Fresh v3 schemas', () => {
     expect(goldSchema(gold())).toBe(true);
     expect(runRowSchema(runRow())).toBe(true);
     expect(patchAuditSchema(patchAudit())).toBe(true);
+  });
+
+  it('keeps the schema required fields aligned with the PRD §8.8 template', () => {
+    const required = new Set(goldSchemaDocument.required);
+    const printed = new Set(prdGoldSchemaKeys());
+    const requiredButNotPrinted = [...required].filter((field) => !printed.has(field));
+    const printedButNotRequired = [...printed].filter((field) => !required.has(field));
+
+    expect(
+      requiredButNotPrinted.length === 0 && printedButNotRequired.length === 0,
+      `schema requires but PRD §8.8 does not print: ${requiredButNotPrinted.join(', ') || '(none)'}; ` +
+        `PRD §8.8 prints but schema does not require: ${printedButNotRequired.join(', ') || '(none)'}`,
+    ).toBe(true);
+  });
+
+  it('validates optional gold provenance when supplied', () => {
+    const invalidStudyId = { ...gold(), study_id: '' };
+    const invalidRecordId = { ...gold(), record_id: 'not-a-record-id' };
+    const invalidAnnotatorA = { ...gold(), annotator_a_id: '' };
+    const invalidAnnotatorB = { ...gold(), annotator_b_id: '' };
+    const invalidResolution = { ...gold(), adjudicated_resolution: 'unresolved' };
+    const invalidSourcePacket = { ...gold(), source_packet_sha256: 'not-a-sha256' };
+
+    expect(goldSchema(invalidStudyId)).toBe(false);
+    expect(goldSchema(invalidRecordId)).toBe(false);
+    expect(goldSchema(invalidAnnotatorA)).toBe(false);
+    expect(goldSchema(invalidAnnotatorB)).toBe(false);
+    expect(goldSchema(invalidResolution)).toBe(false);
+    expect(goldSchema(invalidSourcePacket)).toBe(false);
   });
 
   it('refuses real malformed transition, gold, run, and patch records', () => {

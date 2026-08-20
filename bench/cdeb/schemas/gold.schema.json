@@ -3,10 +3,8 @@
   "type": "object",
   "required": [
     "schema_version",
-    "study_id",
     "task_id",
     "repository_id",
-    "record_id",
     "snapshot_sha",
     "decision_kind",
     "decision",
@@ -19,10 +17,6 @@
     "expected_shipping_grade",
     "violation_contract",
     "compliance_contract",
-    "annotator_a_id",
-    "annotator_b_id",
-    "adjudicated_resolution",
-    "source_packet_sha256",
     "owner_approved"
   ],
   "properties": {

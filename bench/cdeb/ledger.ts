@@ -2,13 +2,17 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Ajv2020 } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 
 import { assertTransition, type StudyState } from "./lifecycle.js";
 
 const TRANSITIONS_FILE = "transitions.jsonl";
 const STUDY_FILE = "study.json";
 const TRANSITION_SCHEMA = join(new URL(".", import.meta.url).pathname, "schemas", "transition.schema.json");
+
+// Keep this sole format check local: study artifacts are validated by a rule
+// this repository can read, and bench tsconfig's verbatim module settings make
+// ajv-formats' default export uncallable.
+const RFC3339_DATE_TIME = /^(?:\d{4})-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 export interface TransitionArtifact {
   readonly from: StudyState;
@@ -49,7 +53,7 @@ export const assertStudyIdentity = (studyDir: string, value: unknown): void => {
 
 const validator = (() => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
-  addFormats(ajv);
+  ajv.addFormat("date-time", RFC3339_DATE_TIME);
   return ajv.compile(JSON.parse(readFileSync(TRANSITION_SCHEMA, "utf8")));
 })();
 
