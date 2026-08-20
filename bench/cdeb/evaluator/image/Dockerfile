@@ -18,10 +18,19 @@
 # read the engine sources or the sealed task module — §12.3's hidden-path
 # prohibition, enforced by file modes instead of by hoping.
 #
-# No package manager runs here: the engine has zero dependencies beyond the
-# node runtime itself, which is exactly why — an `npm install` at image
-# build would be a network fetch whose contents the pin must then vouch for.
+# No npm install runs here: the engine has no JavaScript dependencies, and a
+# network fetch at image build would be contents the pin must then vouch for.
+#
+# It does need `git`. `freeze-tree.ts` and `git-tree.ts` both spawn it, and
+# `node:22-alpine` does not ship it — so every evaluation inside the container
+# died on `git init ... failed`. The comment here used to say the engine had
+# "zero dependencies beyond the node runtime itself", which was a claim about
+# the image nobody had run. `apk` installs exactly one package from the pinned
+# base's own index; that is a smaller surface than an npm tree and it is the
+# only way the engine works at all.
 FROM node:22-alpine
+
+RUN apk add --no-cache git
 
 ENV TZ=UTC LC_ALL=C LANG=C NODE_OPTIONS= HOME=/tmp
 

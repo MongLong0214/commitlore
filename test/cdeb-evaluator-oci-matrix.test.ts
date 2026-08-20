@@ -215,6 +215,46 @@ export const CAN_RUN_MATRIX = dockerDaemonAvailable() && canSealAsRoot();
  * This check needs no daemon, so it holds on every machine rather than only
  * where the matrix can run.
  */
+/**
+ * The image needs more than the engine's imports: it needs the executables the
+ * engine spawns. `freeze-tree.ts` and `git-tree.ts` both call `git`, and
+ * `node:22-alpine` does not ship it, so every evaluation inside the container
+ * died on `git init ... failed`. The Dockerfile comment asserted the opposite --
+ * "zero dependencies beyond the node runtime itself" -- which was a claim about
+ * an image nobody had started.
+ *
+ * Node itself is the base image and is not checked here.
+ */
+describe("the evaluator image carries every executable the engine spawns", () => {
+  it("each spawned binary is installed or is node", () => {
+    const dockerfile = readFileSync(
+      join(REPO_ROOT, "bench", "cdeb", "evaluator", "image", "Dockerfile"),
+      "utf8",
+    );
+    const engineDir = join(REPO_ROOT, "bench", "cdeb", "evaluator");
+    // The runners are in the build context but do not run inside the container:
+    // `runner-oci.ts` spawns `docker` from the host, and an evaluator image that
+    // carried a docker client would hand a compromised evaluator the socket it
+    // is otherwise denied. Only what executes inside is scanned.
+    const HOST_SIDE = new Set(["runner-oci.ts", "runner-local.ts"]);
+    const spawned = new Set<string>();
+    for (const name of ENGINE_CONTEXT_FILES) {
+      if (name.startsWith("image/") || HOST_SIDE.has(name)) continue;
+      const source = readFileSync(join(engineDir, name), "utf8");
+      for (const match of source.matchAll(/spawnSync\(\s*["']([a-z][a-z0-9-]*)["']/g)) {
+        spawned.add(match[1] as string);
+      }
+    }
+    expect(spawned.size, "no spawned executable found; the scan stopped working").toBeGreaterThan(0);
+    for (const binary of spawned) {
+      if (binary === "node") continue;
+      expect(dockerfile, `the engine spawns ${binary} and the image never installs it`).toMatch(
+        new RegExp(`apk add[^\n]*\\b${binary}\\b`),
+      );
+    }
+  });
+});
+
 describe("the evaluator image carries everything the engine imports", () => {
   it("every relative import outside engine/ is copied into the image", () => {
     const dockerfile = readFileSync(
