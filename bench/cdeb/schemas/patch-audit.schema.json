@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "run_id",
+    "reviewer_role",
+    "reviewer_family",
+    "re_explanation_required",
+    "confidence",
+    "reason_code",
+    "adjudicated"
+  ],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "reviewer_role": { "enum": ["PATCH-A", "PATCH-B"] },
+    "reviewer_family": { "type": "string", "minLength": 1 },
+    "re_explanation_required": { "type": "boolean" },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "adjudicated": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

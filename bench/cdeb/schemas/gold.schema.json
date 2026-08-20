@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "repository_id",
+    "snapshot_sha",
+    "decision_kind",
+    "decision",
+    "rejected_approach",
+    "reason",
+    "scope",
+    "lifecycle",
+    "source_anchors",
+    "expected_record_ids",
+    "expected_shipping_grade",
+    "violation_contract",
+    "compliance_contract",
+    "owner_approved"
+  ],
+  "properties": {
+    "schema_version": { "const": 3 },
+    "study_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "repository_id": { "type": "string", "minLength": 1 },
+    "record_id": { "type": "string", "pattern": "^r-[a-z0-9]{4,}$" },
+    "snapshot_sha": { "$ref": "#/$defs/git_oid" },
+    "decision_kind": { "enum": ["ruled-out", "constraint", "lifecycle"] },
+    "decision": { "type": "string", "minLength": 1 },
+    "rejected_approach": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "lifecycle": { "enum": ["active", "superseded", "expired"] },
+    "source_anchors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind", "ref", "quote_hash"],
+        "properties": {
+          "kind": {
+            "enum": [
+              "pull_request_review",
+              "pull_request_discussion",
+              "issue",
+              "commit_message",
+              "adr",
+              "maintainer_explanation",
+              "code_or_test"
+            ]
+          },
+          "ref": { "type": "string", "minLength": 1 },
+          "quote_hash": { "$ref": "#/$defs/sha256" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "expected_record_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^r-[a-z0-9]{4,}$" }
+    },
+    "expected_shipping_grade": { "enum": ["claim", "directive", "blocked", "mixed"] },
+    "violation_contract": { "type": "string", "minLength": 1 },
+    "compliance_contract": { "type": "string", "minLength": 1 },
+    "annotator_a_id": { "type": "string", "minLength": 1 },
+    "annotator_b_id": { "type": "string", "minLength": 1 },
+    "adjudicated_resolution": { "enum": ["resolved", "dropped"] },
+    "source_packet_sha256": { "$ref": "#/$defs/sha256" },
+    "owner_approved": { "type": "boolean" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "git_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

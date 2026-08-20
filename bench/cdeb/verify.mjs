@@ -43,7 +43,6 @@ const zstdDecompressSync = (bytes) => {
 // `ajv`'s default export ships the draft-07 meta-schema only; these schemas
 // declare draft 2020-12, which lives in its own entry point.
 import { Ajv2020 } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = join(HERE, "..", "results", "cdeb");
@@ -51,8 +50,13 @@ const DEFAULT_ROOT = join(HERE, "..", "results", "cdeb");
 const SCHEMA_DIR = join(HERE, "schemas");
 const loadSchema = (name) => JSON.parse(readFileSync(join(SCHEMA_DIR, `${name}.schema.json`), "utf8"));
 
+// Keep this sole format check local: study artifacts are validated by a rule
+// this repository can read, and bench tsconfig's verbatim module settings make
+// ajv-formats' default export uncallable.
+const RFC3339_DATE_TIME = /^(?:\d{4})-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
 const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
+ajv.addFormat("date-time", RFC3339_DATE_TIME);
 const validators = {
   result: ajv.compile(loadSchema("result")),
   evaluator: ajv.compile(loadSchema("evaluator")),

@@ -92,7 +92,6 @@ import path from "node:path";
 import process from "node:process";
 
 import { Ajv } from "ajv";
-import addFormats from "ajv-formats";
 
 const SCHEMA_PATH = path.join(import.meta.dirname, "schema", "result.schema.json");
 const RESULTS_DIR = path.join(import.meta.dirname, "results");
@@ -100,6 +99,11 @@ const RESULTS_DIR = path.join(import.meta.dirname, "results");
 /** Commit 1073fa4, which made both fields below `required`. */
 const PROVENANCE_REQUIRED_FROM = Date.parse("2026-07-27T02:56:12Z");
 const PROVENANCE_FIELDS = ["harness_commit", "dist_digest"];
+
+// Keep this sole format check local: study artifacts are validated by a rule
+// this repository can read, and bench tsconfig's verbatim module settings make
+// ajv-formats' default export uncallable.
+const RFC3339_DATE_TIME = /^(?:\d{4})-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 const formatErrors = (errors) =>
   (errors ?? [])
@@ -145,7 +149,7 @@ const main = () => {
     required: schema.required.filter((name) => !PROVENANCE_FIELDS.includes(name)),
   };
   const ajv = new Ajv({ allErrors: true, strict: true });
-  addFormats(ajv);
+  ajv.addFormat("date-time", RFC3339_DATE_TIME);
   const validate = ajv.compile(schema);
   const validatePreProvenance = ajv.compile(relaxed);
 
