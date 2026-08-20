@@ -6,9 +6,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Ajv2020 } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 import type { AnySchema } from "ajv";
 
+import { addRfc3339DateTimeFormat } from "../ledger.js";
 import {
   enumerateCandidateRegistry,
   type CandidateRegistryCensus,
@@ -60,7 +60,7 @@ const formatValidationErrors = (errors: unknown): string =>
 
 const validatorFor = (schemaPath: string) => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
-  (addFormats as unknown as (instance: Ajv2020) => void)(ajv);
+  addRfc3339DateTimeFormat(ajv);
   return ajv.compile<unknown>(readJson(schemaPath) as AnySchema);
 };
 

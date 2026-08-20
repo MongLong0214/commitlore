@@ -14,6 +14,10 @@ const TRANSITION_SCHEMA = join(new URL(".", import.meta.url).pathname, "schemas"
 // ajv-formats' default export uncallable.
 const RFC3339_DATE_TIME = /^(?:\d{4})-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
+export const addRfc3339DateTimeFormat = (ajv: Ajv2020): void => {
+  ajv.addFormat("date-time", RFC3339_DATE_TIME);
+};
+
 export interface TransitionArtifact {
   readonly from: StudyState;
   readonly to: StudyState;
@@ -53,7 +57,7 @@ export const assertStudyIdentity = (studyDir: string, value: unknown): void => {
 
 const validator = (() => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
-  ajv.addFormat("date-time", RFC3339_DATE_TIME);
+  addRfc3339DateTimeFormat(ajv);
   return ajv.compile(JSON.parse(readFileSync(TRANSITION_SCHEMA, "utf8")));
 })();
 
