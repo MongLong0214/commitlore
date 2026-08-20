@@ -77,6 +77,16 @@ export const buildEvaluatorRunArgs = (request: OciEvaluationRequest): string[] =
     "--memory-swap", `${String(limits.memory_mb)}m`,
     "--pids-limit", String(limits.pids_limit),
     "--cap-drop", "ALL",
+    // The probe's privilege drop protects the sealed oracle. SETUID and
+    // SETGID let the root evaluator make that drop. KILL lets its wall
+    // timeout — the only bound on candidate CPU — signal the probe after it
+    // has dropped to another uid. With CAP_DAC-style blanket root power
+    // dropped, that signal requires CAP_KILL; without it an unkillable probe
+    // hangs the evaluation, which is what happened. These are the only
+    // capabilities restored.
+    "--cap-add", "SETUID",
+    "--cap-add", "SETGID",
+    "--cap-add", "KILL",
     "--security-opt", "no-new-privileges",
     "--env", "TZ=UTC",
     "--env", "LC_ALL=C",
@@ -90,7 +100,10 @@ export const buildEvaluatorRunArgs = (request: OciEvaluationRequest): string[] =
     "--mount", `type=bind,source=${request.archivePath},target=/input/tree.tar.zst,readonly`,
     "--mount", `type=bind,source=${request.tasksDir},target=/sealed,readonly`,
     request.imageRef,
-    "/cdeb/evaluate",
+    // The image's ENTRYPOINT is `/cdeb/evaluate`, so everything after the image
+    // reference is already its argv. Naming the entrypoint here again passed it
+    // to itself as an argument and the parser refused it as unknown -- invisible
+    // until something actually started the container.
     "--tasks", "/sealed",
     "--task", request.taskId,
     "--tree", "/input/tree.tar.zst",

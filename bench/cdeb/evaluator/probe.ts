@@ -108,6 +108,23 @@ export const runProbe = (spec: ProbeSpec, context: ProbeContext): ProbeResult =>
     spawnOptions.gid = PROBE_GID;
   }
   const result = spawnSync(process.execPath, [...flags, ...scriptArgs], spawnOptions);
+  const spawnError = result.error as NodeJS.ErrnoException | undefined;
+  const timedOut =
+    spawnError?.code === "ETIMEDOUT" || (result.signal === "SIGKILL" && result.status === null);
+  // ETIMEDOUT means the running probe exceeded its wall timeout; ENOBUFS
+  // means it ran but exceeded maxBuffer. Both are observations. Other errors
+  // mean no probe started, so refuse rather than turn absent bytes into a
+  // plausible verdict or a false PASS.
+  if (
+    spawnError !== undefined
+    && spawnError.code !== "ETIMEDOUT"
+    && spawnError.code !== "ENOBUFS"
+  ) {
+    const attemptedUid = spawnOptions.uid ?? process.getuid?.() ?? "unknown";
+    throw new Error(
+      `probe could not start: ${spawnError.code ?? "unknown errno"} as uid ${String(attemptedUid)}`,
+    );
+  }
 
   const stdoutRaw = (result.stdout ?? Buffer.alloc(0)) as Buffer;
   const stderrRaw = (result.stderr ?? Buffer.alloc(0)) as Buffer;
@@ -117,7 +134,7 @@ export const runProbe = (spec: ProbeSpec, context: ProbeContext): ProbeResult =>
     exit_code: result.status,
     stdout: stdoutRaw.toString("utf8"),
     stderr: stderrRaw.toString("utf8"),
-    timed_out: result.error !== undefined && (result.error as NodeJS.ErrnoException).code === "ETIMEDOUT" || (result.signal === "SIGKILL" && result.status === null),
+    timed_out: timedOut,
     truncated,
   };
 };
