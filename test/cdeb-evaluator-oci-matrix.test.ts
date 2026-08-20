@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ENGINE_CONTEXT_FILES, EVALUATOR_RESOURCE_LIMITS, buildEvaluatorRunArgs, dockerDaemonAvailable, runEvaluatorOci } from "../bench/cdeb/evaluator/runner-oci.ts";
+import { PROBE_GID, PROBE_UID } from "../bench/cdeb/evaluator/probe.ts";
 import type { OciEvaluationRequest } from "../bench/cdeb/evaluator/runner-oci.ts";
 import type { EvaluatorOutput } from "../bench/cdeb/evaluator/types.ts";
 import {
@@ -326,6 +327,44 @@ describe.skipIf(!CAN_RUN_MATRIX)("CDEB-06 OCI isolation matrix on a real Docker 
     expect(verdict.functional_checks).toEqual({ passed: 4, failed: 0 });
   }, 60_000);
 
+  it("makes the sealed oracle present to the engine and denied to its probe", () => {
+    const sealedMount = `type=bind,source=${sealedTasksDir},target=/sealed,readonly`;
+    const rootRead = docker([
+      "run", "--rm",
+      "--entrypoint", "node",
+      "--mount", sealedMount,
+      IMAGE_TAG,
+      "-e", 'require("node:fs").readFileSync("/sealed/smoke-calc-fix.task.ts", "utf8")',
+    ]);
+    expect(rootRead.status, rootRead.stderr).toBe(0);
+
+    const probeRead = docker([
+      "run", "--rm",
+      "--cap-drop", "ALL",
+      "--cap-add", "SETUID",
+      "--cap-add", "SETGID",
+      "--security-opt", "no-new-privileges",
+      "--entrypoint", "node",
+      "--mount", sealedMount,
+      IMAGE_TAG,
+      "-e",
+      `
+        const { spawnSync } = require("node:child_process");
+        const probe = spawnSync(process.execPath, ["-e", "try { require('node:fs').readFileSync('/sealed/smoke-calc-fix.task.ts', 'utf8'); process.exit(0); } catch (error) { process.stdout.write(String(error.code)); process.exit(1); }"], {
+          uid: ${String(PROBE_UID)},
+          gid: ${String(PROBE_GID)},
+          encoding: "utf8",
+        });
+        if (probe.error) throw probe.error;
+        process.stdout.write(JSON.stringify({ status: probe.status, errno: probe.stdout }));
+      `,
+    ]);
+    expect(probeRead.status, probeRead.stderr).toBe(0);
+    const observed = JSON.parse(probeRead.stdout) as { status: number | null; errno: string };
+    expect(observed.status).toBe(1);
+    expect(observed.errno).toBe("EACCES");
+  }, 60_000);
+
   it("refuses network egress outside the provider allowlist", () => {
     const verdict = evaluate("oci-network", buildTree("oci-network", { "src/calc.js": fixtureFile("attacks", "network-calc.js") }));
     expectRefused(verdict, { passed: 3, failed: 1 });
@@ -351,7 +390,10 @@ describe.skipIf(!CAN_RUN_MATRIX)("CDEB-06 OCI isolation matrix on a real Docker 
       "oci-hidden-read",
       buildTree("oci-hidden-read", { "src/calc.js": fixtureFile("attacks", "hidden-read-calc.js") }),
     );
-    expectRefused(verdict, { passed: 2, failed: 2 });
+    // 3/1 proves the module loaded, its independent behavior passed, and only
+    // the oracle-dependent behavior failed. 2/2 could instead be a module
+    // crash for any reason: the attack's own success criterion, inverted.
+    expectRefused(verdict, { passed: 3, failed: 1 });
   }, 60_000);
 
   it("applies cgroup limits and the probe wall timeout to the CPU hog", async () => {

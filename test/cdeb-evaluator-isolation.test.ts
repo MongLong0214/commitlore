@@ -25,7 +25,7 @@ import { describeZstd as describe } from './cdeb-zstd.ts';
 
 import { HOST_SECRETS_NEVER_PASSED, hermeticEnv } from '../bench/cdeb/evaluator/env.ts';
 import { ingestFinalTree } from '../bench/cdeb/evaluator/ingest.ts';
-import { runProbe } from '../bench/cdeb/evaluator/probe.ts';
+import { PROBE_GID, PROBE_UID, runProbe } from '../bench/cdeb/evaluator/probe.ts';
 import {
   buildEvaluatorRunArgs,
   dockerDaemonAvailable,
@@ -52,11 +52,11 @@ afterAll(() => {
 
 describe('CDEB-06 isolation: network and secrets cannot reach the verdict', () => {
   it('a tree that phones home is judged FAIL', () => {
-    // The fixture only works when a fetch to `cdeb-exfil.invalid` succeeds.
-    // RFC 2606 reserves `.invalid` for names that cannot resolve, so the
-    // fixture fails identically on a networked host and under the image's
-    // `--network none` — and if some resolver ever lies about that, this
-    // test fails, which is the point: the verdict must not depend on reach.
+    // The fixture only works when a socket to `192.0.2.1:443` connects.
+    // RFC 5737 reserves TEST-NET-1 for documentation and it is not routed,
+    // so the fixture fails identically on a networked host and under the
+    // image's `--network none`. Using a literal address also avoids resolver
+    // latency, which cannot be bounded and says nothing about isolation.
     const tree = buildTree('network', { 'src/calc.js': fixtureFile('attacks/network-calc.js') });
     const verdict = expectVerdict(evaluatePrepared(prepareRun('network', tree)));
     expect(verdict.functional_pass).toBe(false);
@@ -141,17 +141,17 @@ describe('CDEB-06 isolation: network and secrets cannot reach the verdict', () =
   });
 
   it('a tree that reads the sealed store path is judged FAIL', () => {
-    // The fixture readFileSyncs /cdeb/sealed/<task>.task.ts and hard-codes
-    // what it finds. Locally the path does not exist; inside the pinned
-    // image it exists but is unreadable by the probe's dropped uid/gid
-    // (probe.ts, PROBE_UID). Either way the probe fails, and so does the
-    // tree. A readable sealed path here would be a host misconfiguration
-    // the next assertion names.
+    // The fixture reads /sealed/<task>.task.ts and /cdeb/engine/engine.ts,
+    // then hard-codes what either yields. Locally neither path exists; inside
+    // the pinned image both exist but are unreadable by the probe's dropped
+    // uid/gid (probe.ts, PROBE_UID). Either way the probe cannot learn the
+    // answer, and the tree fails.
     const tree = buildTree('hidden-read', { 'src/calc.js': fixtureFile('attacks/hidden-read-calc.js') });
     const verdict = expectVerdict(evaluatePrepared(prepareRun('hidden-read', tree)));
     expect(verdict.functional_pass).toBe(false);
     expect(verdict.functional_checks.failed).toBeGreaterThan(0);
-    expect(existsSync('/cdeb/sealed/smoke-calc-fix.task.ts')).toBe(false);
+    expect(existsSync('/sealed/smoke-calc-fix.task.ts')).toBe(false);
+    expect(existsSync('/cdeb/engine/engine.ts')).toBe(false);
   });
 });
 
@@ -175,6 +175,9 @@ describe('CDEB-06 isolation: the OCI containment contract', () => {
       '--memory-swap', `${String(EVALUATOR_RESOURCE_LIMITS.memory_mb)}m`,
       '--pids-limit', String(EVALUATOR_RESOURCE_LIMITS.pids_limit),
       '--cap-drop', 'ALL',
+      '--cap-add', 'SETUID',
+      '--cap-add', 'SETGID',
+      '--cap-add', 'KILL',
       '--security-opt', 'no-new-privileges',
       '--env', 'TZ=UTC',
       '--env', 'LC_ALL=C',
@@ -204,6 +207,34 @@ describe('CDEB-06 isolation: the OCI containment contract', () => {
     expect(args).not.toContain('-v');
     expect(joined).not.toContain('/var/run/docker.sock');
     expect(joined).not.toContain(homedir());
+  });
+
+  it('restores only the capabilities needed for an active probe privilege drop and timeout', () => {
+    const args = buildEvaluatorRunArgs({
+      imageRef: 'registry.example/cdeb-evaluator@sha256:deadbeef',
+      archivePath: '/host/run/final-tree.tar.zst',
+      tasksDir: '/host/sealed',
+      taskId: TASK_ID,
+    });
+    const probeSource = readFileSync(
+      new URL('../bench/cdeb/evaluator/probe.ts', import.meta.url),
+      'utf8',
+    );
+    const requestedCapabilities = args.flatMap((arg, index) =>
+      arg === '--cap-add' ? [args[index + 1]] : [],
+    );
+
+    const probeDropsUid = probeSource.includes('spawnOptions.uid = PROBE_UID');
+    const probeDropsGid = probeSource.includes('spawnOptions.gid = PROBE_GID');
+    const probeSetsTimeout = probeSource.includes('timeout: timeoutMs');
+    const probeSetsKillSignal = probeSource.includes('killSignal: "SIGKILL"');
+    expect(probeDropsUid).toBe(true);
+    expect(probeDropsGid).toBe(true);
+    expect(probeSetsTimeout).toBe(true);
+    expect(probeSetsKillSignal).toBe(true);
+    expect(requestedCapabilities).toEqual(['SETUID', 'SETGID', 'KILL']);
+    expect(PROBE_UID).toBe(65534);
+    expect(PROBE_GID).toBe(65534);
   });
 
   it.skipIf(dockerDaemonAvailable())(

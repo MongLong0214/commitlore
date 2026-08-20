@@ -29,7 +29,7 @@
  *     OID recomputed; a claimed OID is compared, never adopted.
  */
 
-import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -110,6 +110,20 @@ export const main = async (argv: readonly string[]): Promise<number> => {
 
   const tasksDir = realpathSync(parsed.tasksDir);
   const scratch = mkdtempSync(join(tmpdir(), "cdeb-eval-"));
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    // The probe only needs to traverse this root to read its frozen candidate
+    // tree; traversal is not write access. Opening this scratch is safe because
+    // it holds only that tree and probe scratch, unlike root-only /cdeb and
+    // /sealed, which contain evaluator-owned code and the hidden oracle.
+    chmodSync(scratch, 0o755);
+    const probeScratch = join(scratch, "engine");
+    mkdirSync(probeScratch, { recursive: true });
+    // The only other principal in this container is this run's unprivileged
+    // probe, so world-writable here means writable by that one process. The
+    // sticky bit prevents one probe deleting another's files; unlike /cdeb and
+    // /sealed, this scratch contains nothing owned by the evaluator.
+    chmodSync(probeScratch, 0o1777);
+  }
 
   let archiveBytes: Buffer;
   try {
