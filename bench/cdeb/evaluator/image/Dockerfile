@@ -27,6 +27,11 @@ ENV TZ=UTC LC_ALL=C LANG=C NODE_OPTIONS= HOME=/tmp
 
 WORKDIR /cdeb
 COPY engine/ /cdeb/engine/
+# `engine/tree.ts` imports `../runtime/zstd.ts`, so the engine alone is not a
+# runnable image. It was never noticed because nothing built this image and ran
+# it: the isolation tests asserted the `docker run` argv, which is satisfied by
+# an image that cannot start.
+COPY runtime/ /cdeb/runtime/
 COPY cdeb-evaluate.sh /cdeb/evaluate
 RUN chmod 0555 /cdeb/evaluate \
     && chmod -R go-rwx /cdeb \

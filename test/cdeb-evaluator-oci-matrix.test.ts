@@ -71,6 +71,14 @@ const imageBuildContext = (): string => {
     if (name.startsWith("image/")) continue;
     cpSync(join(REPO_ROOT, "bench", "cdeb", "evaluator", name), join(engine, name));
   }
+  // `engine/tree.ts` imports `../runtime/zstd.ts`; without it the image builds
+  // and cannot start, which an argv assertion cannot tell from a working one.
+  const runtime = join(context, "runtime");
+  mkdirSync(runtime, { recursive: true });
+  cpSync(
+    join(REPO_ROOT, "bench", "cdeb", "runtime", "zstd.ts"),
+    join(runtime, "zstd.ts"),
+  );
   cpSync(
     join(REPO_ROOT, "bench", "cdeb", "evaluator", "image", "cdeb-evaluate.sh"),
     join(context, "cdeb-evaluate.sh"),
@@ -198,6 +206,38 @@ export const CAN_RUN_MATRIX = dockerDaemonAvailable() && canSealAsRoot();
  * executed nothing, which is the shape #548 exists to close. So on CI the
  * matrix must be runnable, and saying so is itself an assertion.
  */
+/**
+ * The image was unrunnable and nothing said so. `engine/tree.ts` imports
+ * `../runtime/zstd.ts`, the Dockerfile copied only `engine/`, and every
+ * isolation test asserted the `docker run` argv -- which an image that cannot
+ * start satisfies exactly as well as one that can.
+ *
+ * This check needs no daemon, so it holds on every machine rather than only
+ * where the matrix can run.
+ */
+describe("the evaluator image carries everything the engine imports", () => {
+  it("every relative import outside engine/ is copied into the image", () => {
+    const dockerfile = readFileSync(
+      join(REPO_ROOT, "bench", "cdeb", "evaluator", "image", "Dockerfile"),
+      "utf8",
+    );
+    const engineDir = join(REPO_ROOT, "bench", "cdeb", "evaluator");
+    const outside = new Set<string>();
+    for (const name of ENGINE_CONTEXT_FILES) {
+      if (name.startsWith("image/")) continue;
+      const source = readFileSync(join(engineDir, name), "utf8");
+      for (const match of source.matchAll(/from\s+["']\.\.\/([a-z-]+)\//g)) {
+        outside.add(match[1] as string);
+      }
+    }
+    for (const dir of outside) {
+      expect(dockerfile, `engine imports ../${dir}/ and the image never copies it`).toContain(
+        `COPY ${dir}/ /cdeb/${dir}/`,
+      );
+    }
+  });
+});
+
 describe("the real-runtime matrix is not silently skipped on CI", () => {
   it("runs for real wherever CI runs it", () => {
     if (process.env.CI !== "true") {
