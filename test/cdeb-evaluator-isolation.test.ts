@@ -182,7 +182,11 @@ describe('CDEB-06 isolation: the OCI containment contract', () => {
       '--mount', 'type=bind,source=/host/run/final-tree.tar.zst,target=/input/tree.tar.zst,readonly',
       '--mount', 'type=bind,source=/host/sealed,target=/sealed,readonly',
       'registry.example/cdeb-evaluator@sha256:deadbeef',
-      '/cdeb/evaluate',
+      // No `/cdeb/evaluate` here: the image's ENTRYPOINT is that script, so
+      // everything after the image reference is its argv. This array used to
+      // carry it, which is why the runner passing the entrypoint to itself went
+      // unnoticed -- the expectation was written from the code rather than from
+      // a container that had started.
       '--tasks', '/sealed',
       '--task', TASK_ID,
       '--tree', '/input/tree.tar.zst',

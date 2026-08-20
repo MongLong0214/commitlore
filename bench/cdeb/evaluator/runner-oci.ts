@@ -90,7 +90,10 @@ export const buildEvaluatorRunArgs = (request: OciEvaluationRequest): string[] =
     "--mount", `type=bind,source=${request.archivePath},target=/input/tree.tar.zst,readonly`,
     "--mount", `type=bind,source=${request.tasksDir},target=/sealed,readonly`,
     request.imageRef,
-    "/cdeb/evaluate",
+    // The image's ENTRYPOINT is `/cdeb/evaluate`, so everything after the image
+    // reference is already its argv. Naming the entrypoint here again passed it
+    // to itself as an argument and the parser refused it as unknown -- invisible
+    // until something actually started the container.
     "--tasks", "/sealed",
     "--task", request.taskId,
     "--tree", "/input/tree.tar.zst",
